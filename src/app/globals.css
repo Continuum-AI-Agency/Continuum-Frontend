@@ -1,0 +1,212 @@
+@import "tailwindcss";
+
+:root {
+  /* --- Light Theme (Continuum) --- */
+  color-scheme: light;
+  --background: #ffffff; /* White */
+  --foreground: #1A0F42; /* Dark Blue/Indigo */
+
+  --card: #ffffff; /* White */
+  --card-foreground: #1A0F42; /* Dark Blue/Indigo */
+
+  --popover: #ffffff; /* White */
+  --popover-foreground: #1A0F42; /* Dark Blue/Indigo */
+
+  --primary: #5D2A8E; /* Deep Purple */
+  --primary-foreground: #ffffff; /* White */
+
+  --secondary: #F4F0FB; /* A very light lavender for backgrounds */
+  --secondary-foreground: #5D2A8E; /* Deep Purple */
+
+  --muted: #F4F0FB; /* A very light lavender */
+  --muted-foreground: #5C587A; /* Muted Indigo for less important text */
+
+  --accent: #6FFFB0; /* Aqua Green */
+  --accent-foreground: #1A0F42; /* Dark Blue/Indigo */
+
+  --destructive: #ef4444; /* Standard Red */
+  --destructive-foreground: #ffffff; /* White */
+
+  --border: #E5E0F5; /* Light Lavender Border */
+  --input: #E5E0F5; /* Light Lavender Input Border */
+  --ring: #5D2A8E; /* Deep Purple for focus rings */
+
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --radius: var(--radius);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* --- Dark Theme (Continuum) --- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #121212; /* Primary Dark */
+  --foreground: #E0E0E0; /* Off-White */
+
+  --card: #1F1F1F; /* Secondary Dark */
+  --card-foreground: #E0E0E0; /* Off-White */
+
+  --popover: #1F1F1F; /* Secondary Dark */
+  --popover-foreground: #E0E0E0; /* Off-White */
+
+  --primary: #A08CCF; /* Soft Lavender */
+  --primary-foreground: #121212; /* Primary Dark for contrast */
+
+  --secondary: #2E2257; /* Deep Indigo */
+  --secondary-foreground: #E0E0E0; /* Off-White */
+
+  --muted: #1F1F1F; /* Secondary Dark */
+  --muted-foreground: #808080; /* Subtle Gray for less important text */
+
+  --accent: #53A88A; /* Muted Teal */
+  --accent-foreground: #E0E0E0; /* Off-White */
+  
+  --destructive: #f87171; /* Brighter Red for dark mode */
+  --destructive-foreground: #121212; /* Primary Dark */
+
+  --border: #2E2E2E; /* Dark Gray Border */
+  --input: #2E2E2E; /* Dark Gray Input Border */
+  --ring: #A08CCF; /* Soft Lavender for focus rings */
+  
+  --radius: 0.5rem;
+}
+
+/* System preference fallback when no explicit data-theme is set */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --background: #121212;
+    --foreground: #E0E0E0;
+    --card: #1F1F1F;
+    --card-foreground: #E0E0E0;
+    --popover: #1F1F1F;
+    --popover-foreground: #E0E0E0;
+    --primary: #A08CCF;
+    --primary-foreground: #121212;
+    --secondary: #2E2257;
+    --secondary-foreground: #E0E0E0;
+    --muted: #1F1F1F;
+    --muted-foreground: #808080;
+    --accent: #53A88A;
+    --accent-foreground: #E0E0E0;
+    --destructive: #f87171;
+    --destructive-foreground: #121212;
+    --border: #2E2E2E;
+    --input: #2E2E2E;
+    --ring: #A08CCF;
+    --radius: 0.5rem;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Slow, subtle 3-layer wave background */
+:root {
+  /* Optional: tune opacity/blur globally */
+  --waves-opacity: 0.7;
+  --waves-blur: 80px;
+  --waves-overscan: 25%;
+
+  /* Light theme wave colors (kept brand-consistent) */
+  --wave-1-a: #EDE6FA; /* soft lavender */
+  --wave-1-b: #DDE6FF; /* pale indigo */
+  --wave-2-a: #F6E9FF; /* light lilac */
+  --wave-2-b: #EDE6FA; /* soft lavender */
+  --wave-3-a: #FFE3EC; /* blush */
+  --wave-3-b: #F3E7FF; /* pastel purple */
+}
+
+[data-theme="dark"] {
+  /* Dark theme wave colors (aligned to your palette) */
+  --wave-1-a: #2E2257; /* uses --secondary family */
+  --wave-1-b: #23376B; /* deep indigo */
+  --wave-2-a: #462559; /* deep purple */
+  --wave-2-b: #2E2257; /* deep indigo */
+  --wave-3-a: #8A4374; /* muted magenta */
+  --wave-3-b: #462559; /* deep purple */
+}
+
+/* Container sits behind all content */
+.wave-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Each wave overscans the viewport to hide edges while animating */
+.wave-layer {
+  position: absolute;
+  top: calc(0px - var(--waves-overscan));
+  right: calc(0px - var(--waves-overscan));
+  bottom: calc(0px - var(--waves-overscan));
+  left: calc(0px - var(--waves-overscan));
+  opacity: var(--waves-opacity);
+  filter: blur(var(--waves-blur));
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Gradients + very long, gentle motions */
+.layer-1 {
+  background: linear-gradient(135deg, var(--wave-1-a), var(--wave-1-b));
+  animation: moveWave1 90s ease-in-out infinite alternate;
+}
+
+.layer-2 {
+  background: linear-gradient(150deg, var(--wave-2-a), var(--wave-2-b));
+  animation: moveWave2 120s ease-in-out infinite alternate-reverse;
+}
+
+.layer-3 {
+  background: linear-gradient(165deg, var(--wave-3-a), var(--wave-3-b));
+  animation: moveWave3 150s ease-in-out infinite;
+}
+
+/* Keyframes: slow drift with slight scale */
+@keyframes moveWave1 {
+  0% { transform: translate(-10%, -10%) scale(1.1); }
+  100% { transform: translate(10%, 10%) scale(1.1); }
+}
+@keyframes moveWave2 {
+  0% { transform: translate(-15%, 10%) scale(1.2); }
+  100% { transform: translate(15%, -10%) scale(1.2); }
+}
+@keyframes moveWave3 {
+  0% { transform: translate(10%, -15%) scale(1.3); }
+  100% { transform: translate(-10%, 15%) scale(1.3); }
+}
+
+/* Motion and perf guardrails */
+@media (prefers-reduced-motion: reduce) {
+  .wave-layer {
+    animation: none !important;
+    filter: blur(calc(var(--waves-blur) * 0.5));
+  }
+}
