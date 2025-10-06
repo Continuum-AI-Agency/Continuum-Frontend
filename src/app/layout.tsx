@@ -5,6 +5,7 @@ import "@radix-ui/themes/styles.css";
 import { ThemeProvider } from "../components/theme-provider";
 import ThemeToggle from "../components/theme-toggle";
 import GalaxyBackground from "../components/ui/GalaxyBackground";
+import { ToastProvider } from "../components/ui/ToastProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -56,18 +57,20 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider>
-          <GalaxyBackground intensity={1} speed="glacial" />
-          <div className="wave-background">
-            <div className="wave-layer layer-1" />
-            <div className="wave-layer layer-2" />
-            <div className="wave-layer layer-3" />
-          </div>
-          <div className="fixed top-4 right-4 z-50">
-            <ThemeToggle />
-          </div>
-          <div className="relative z-10">
-            {children}
-          </div>
+          <ToastProvider>
+            <GalaxyBackground intensity={1} speed="glacial" />
+            <div className="wave-background">
+              <div className="wave-layer layer-1" />
+              <div className="wave-layer layer-2" />
+              <div className="wave-layer layer-3" />
+            </div>
+            <div className="fixed top-4 right-4 z-50">
+              <ThemeToggle />
+            </div>
+            <div className="relative z-10">
+              {children}
+            </div>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

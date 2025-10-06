@@ -1,14 +1,20 @@
 "use client";
 
-import { Avatar, Button, DropdownMenu, Flex, Text } from "@radix-ui/themes";
-import { ExitIcon, PersonIcon, GearIcon } from "@radix-ui/react-icons";
+import { Avatar, Button, DropdownMenu, Flex, Text, IconButton } from "@radix-ui/themes";
+import { ExitIcon, PersonIcon, GearIcon, HamburgerMenuIcon } from "@radix-ui/react-icons";
+import React from "react";
 import ThemeToggle from "./theme-toggle";
 
-export function DashboardHeader() {
+export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void }) {
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-      <Flex align="center" justify="between">
-        <div>
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+      <Flex align="center" justify="between" gap="3">
+        <div className="flex items-center gap-3">
+          <div className="sm:hidden">
+            <IconButton variant="ghost" onClick={onOpenMobile} aria-label="Open navigation">
+              <HamburgerMenuIcon />
+            </IconButton>
+          </div>
           <Text size="4" weight="bold">
             Welcome back, User
           </Text>
@@ -17,7 +23,7 @@ export function DashboardHeader() {
           </Text>
         </div>
 
-        <Flex align="center" gap="4">
+        <Flex align="center" gap="3 sm:gap-4">
           <ThemeToggle />
 
           <DropdownMenu.Root>

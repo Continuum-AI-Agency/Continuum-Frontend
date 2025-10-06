@@ -13,31 +13,26 @@ import {
 } from "@radix-ui/react-icons";
 import { Flex, Badge } from "@radix-ui/themes";
 
-const navigationItems = [
+export const navigationItems = [
   {
     name: "Dashboard",
     href: "/dashboard",
     icon: HomeIcon,
   },
   {
-    name: "Campaigns",
-    href: "/campaigns",
+    name: "Organic",
+    href: "/organic",
     icon: BarChartIcon,
   },
   {
-    name: "Content",
-    href: "/content",
+    name: "Paid Media",
+    href: "/paid-media",
     icon: FileTextIcon,
   },
   {
-    name: "Platforms",
-    href: "/platforms",
+    name: "Integrations",
+    href: "/integrations",
     icon: Link2Icon,
-  },
-  {
-    name: "AI Studio",
-    href: "/ai-studio",
-    icon: MagicWandIcon,
   },
   {
     name: "Settings",
