@@ -3,34 +3,34 @@
 :root {
   /* --- Light Theme (Continuum) --- */
   color-scheme: light;
-  --background: #ffffff; /* White */
-  --foreground: #1A0F42; /* Dark Blue/Indigo */
+  --background: #121212; /* Primary Dark */
+  --foreground: #E0E0E0; /* Off-White */
 
-  --card: #ffffff; /* White */
-  --card-foreground: #1A0F42; /* Dark Blue/Indigo */
+  --card: #1F1F1F; /* Secondary Dark */
+  --card-foreground: #E0E0E0; /* Off-White */
 
-  --popover: #ffffff; /* White */
-  --popover-foreground: #1A0F42; /* Dark Blue/Indigo */
+  --popover: #1F1F1F; /* Secondary Dark */
+  --popover-foreground: #E0E0E0; /* Off-White */
 
-  --primary: #5D2A8E; /* Deep Purple */
-  --primary-foreground: #ffffff; /* White */
+  --primary: #A08CCF; /* Soft Lavender */
+  --primary-foreground: #121212; /* Primary Dark for contrast */
 
-  --secondary: #F4F0FB; /* A very light lavender for backgrounds */
-  --secondary-foreground: #5D2A8E; /* Deep Purple */
+  --secondary: #2E2257; /* Deep Indigo */
+  --secondary-foreground: #E0E0E0; /* Off-White */
 
-  --muted: #F4F0FB; /* A very light lavender */
-  --muted-foreground: #5C587A; /* Muted Indigo for less important text */
+  --muted: #1F1F1F; /* Secondary Dark */
+  --muted-foreground: #808080; /* Subtle Gray for less important text */
 
-  --accent: #6FFFB0; /* Aqua Green */
-  --accent-foreground: #1A0F42; /* Dark Blue/Indigo */
+  --accent: #53A88A; /* Muted Teal */
+  --accent-foreground: #E0E0E0; /* Off-White */
+  
+  --destructive: #f87171; /* Brighter Red for dark mode */
+  --destructive-foreground: #121212; /* Primary Dark */
 
-  --destructive: #ef4444; /* Standard Red */
-  --destructive-foreground: #ffffff; /* White */
-
-  --border: #E5E0F5; /* Light Lavender Border */
-  --input: #E5E0F5; /* Light Lavender Input Border */
-  --ring: #5D2A8E; /* Deep Purple for focus rings */
-
+  --border: #2E2E2E; /* Dark Gray Border */
+  --input: #2E2E2E; /* Dark Gray Input Border */
+  --ring: #A08CCF; /* Soft Lavender for focus rings */
+  
   --radius: 0.5rem;
 }
 
@@ -61,34 +61,34 @@
 /* --- Dark Theme (Continuum) --- */
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #121212; /* Primary Dark */
-  --foreground: #E0E0E0; /* Off-White */
+  --background: #ffffff; /* White */
+  --foreground: #1A0F42; /* Dark Blue/Indigo */
 
-  --card: #1F1F1F; /* Secondary Dark */
-  --card-foreground: #E0E0E0; /* Off-White */
+  --card: #ffffff; /* White */
+  --card-foreground: #1A0F42; /* Dark Blue/Indigo */
 
-  --popover: #1F1F1F; /* Secondary Dark */
-  --popover-foreground: #E0E0E0; /* Off-White */
+  --popover: #ffffff; /* White */
+  --popover-foreground: #1A0F42; /* Dark Blue/Indigo */
 
-  --primary: #A08CCF; /* Soft Lavender */
-  --primary-foreground: #121212; /* Primary Dark for contrast */
+  --primary: #5D2A8E; /* Deep Purple */
+  --primary-foreground: #ffffff; /* White */
 
-  --secondary: #2E2257; /* Deep Indigo */
-  --secondary-foreground: #E0E0E0; /* Off-White */
+  --secondary: #F4F0FB; /* A very light lavender for backgrounds */
+  --secondary-foreground: #5D2A8E; /* Deep Purple */
 
-  --muted: #1F1F1F; /* Secondary Dark */
-  --muted-foreground: #808080; /* Subtle Gray for less important text */
+  --muted: #F4F0FB; /* A very light lavender */
+  --muted-foreground: #5C587A; /* Muted Indigo for less important text */
 
-  --accent: #53A88A; /* Muted Teal */
-  --accent-foreground: #E0E0E0; /* Off-White */
-  
-  --destructive: #f87171; /* Brighter Red for dark mode */
-  --destructive-foreground: #121212; /* Primary Dark */
+  --accent: #6FFFB0; /* Aqua Green */
+  --accent-foreground: #1A0F42; /* Dark Blue/Indigo */
 
-  --border: #2E2E2E; /* Dark Gray Border */
-  --input: #2E2E2E; /* Dark Gray Input Border */
-  --ring: #A08CCF; /* Soft Lavender for focus rings */
-  
+  --destructive: #ef4444; /* Standard Red */
+  --destructive-foreground: #ffffff; /* White */
+
+  --border: #E5E0F5; /* Light Lavender Border */
+  --input: #E5E0F5; /* Light Lavender Input Border */
+  --ring: #5D2A8E; /* Deep Purple for focus rings */
+
   --radius: 0.5rem;
 }
 

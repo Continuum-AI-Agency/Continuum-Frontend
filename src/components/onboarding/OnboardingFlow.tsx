@@ -101,7 +101,7 @@ export default function OnboardingFlow() {
 
   async function connectViaPopup(provider: PlatformKey) {
     try {
-      const popup = openCenteredPopup("/oauth/mock", `Connect ${provider}`);
+      const popup = openCenteredPopup(`/oauth/${provider}`, `Connect ${provider}`);
       if (!popup) {
         show({ title: "Popup blocked", description: "Allow popups to continue.", variant: "error" });
         return;

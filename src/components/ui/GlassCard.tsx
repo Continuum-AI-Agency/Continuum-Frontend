@@ -2,6 +2,7 @@
 
 import { Card } from "@radix-ui/themes";
 import { PropsWithChildren, forwardRef } from "react";
+import { motion } from "framer-motion";
 import { cn } from "../../lib/utils";
 
 export type GlassCardProps = PropsWithChildren<{
@@ -13,16 +14,21 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(function Gla
   ref: React.Ref<HTMLDivElement>
 ) {
   return (
-    <Card
+    <motion.div
       ref={ref}
-      className={cn(
-        "bg-white/55 dark:bg-black/30 backdrop-blur-md border-white/40 dark:border-white/10",
-        "shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:shadow-[0_10px_30px_rgba(0,0,0,0.35)]",
-        className
-      )}
+      whileHover={{ scale: 1.025, y: -4 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      className="h-full"
     >
-      {children}
-    </Card>
+      <Card
+        className={cn(
+          "h-full bg-card text-card-foreground border border-border/60 shadow-lg",
+          className
+        )}
+      >
+        {children}
+      </Card>
+    </motion.div>
   );
 });
 
