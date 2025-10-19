@@ -47,8 +47,33 @@ This repository contains the Continuum web application. The app code uses Next.j
 - Radix UI (`@radix-ui/themes`, `@radix-ui/react-icons`) for accessible primitives and theming
 - Framer Motion for animations
 - React Hook Form + Zod for forms and validation
+- Supabase (Auth, Database, Storage)
 - Data fetching via Next.js server `fetch` with caching/revalidation, plus optional client-side stale-while-revalidate when needed
 - ESLint (Next config)
+
+## Quick Start
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Configure environment variables:
+   Create a `.env.local` file with your Supabase credentials:
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
+   ```
+
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:3000](http://localhost:3000)
+
+For detailed authentication setup instructions, see [AUTH_SETUP.md](./AUTH_SETUP.md).
 
 ## Frontend architecture
 
