@@ -3,9 +3,13 @@
 import { Avatar, Button, DropdownMenu, Flex, Text, IconButton } from "@radix-ui/themes";
 import { ExitIcon, PersonIcon, GearIcon, HamburgerMenuIcon } from "@radix-ui/react-icons";
 import React from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { useSession } from "@/hooks/useSession";
 import ThemeToggle from "./theme-toggle";
 
 export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void }) {
+  const { logout, isPending } = useAuth();
+  const { user } = useSession();
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
       <Flex align="center" justify="between" gap="3">
@@ -15,12 +19,14 @@ export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void })
               <HamburgerMenuIcon />
             </IconButton>
           </div>
-          <Text size="4" weight="bold">
-            Welcome back, User
-          </Text>
-          <Text size="2" color="gray">
-            Ready to orchestrate your marketing campaigns
-          </Text>
+          <div className="flex flex-col">
+            <Text size="4" weight="bold">
+              Welcome back, {user?.user_metadata?.name || user?.email?.split('@')[0] || 'User'}
+            </Text>
+            <Text size="2" color="gray" className="hidden sm:block">
+              Ready to orchestrate your marketing campaigns
+            </Text>
+          </div>
         </div>
 
         <Flex align="center" gap="3 sm:gap-4">
@@ -47,9 +53,13 @@ export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void })
                 Settings
               </DropdownMenu.Item>
               <DropdownMenu.Separator />
-              <DropdownMenu.Item color="red">
+              <DropdownMenu.Item 
+                color="red" 
+                onClick={() => logout()}
+                disabled={isPending}
+              >
                 <ExitIcon className="mr-2" />
-                Sign out
+                {isPending ? "Signing out..." : "Sign out"}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Root>

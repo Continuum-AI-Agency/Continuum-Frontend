@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Box, Container, Flex, Badge, Heading, Text, Tabs } from "@radix-ui/themes";
 import GlassCard from "../ui/GlassCard";
 import { MagicWandIcon, BarChartIcon, LayersIcon } from "@radix-ui/react-icons";
 
@@ -57,7 +58,7 @@ export function ProductHighlights() {
             </Badge>
             <Heading size="6" className="mt-3">Everything Alex needs without jumping tabs</Heading>
             <Text size="4" color="gray" className="mt-2 max-w-2xl">
-              Toggle between Continuum's core modules to see how workflows stay orchestrated from planning to launch.
+              Toggle between Continuum&apos;s core modules to see how workflows stay orchestrated from planning to launch.
             </Text>
           </Box>
 
