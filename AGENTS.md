@@ -88,3 +88,28 @@ These rules apply universally to all TypeScript, React, and Next.js code.
 
 * **Stack:** All forms must use the **React Hook Form + Zod stack** for controlled, performant, and type-safe validation.
 * **Dual Validation:** Client-side Zod validation provides fast user feedback. **Server-side validation** (in Server Actions or Route Handlers) is mandatory to enforce invariants and security rules.
+
+---
+
+## 5. Linear Workflow & Project Operations
+
+Our Linear workspace is the source of truth for delivery planning. Treat every interaction as a professional contract with the team.
+
+### Estimation Discipline
+
+* **Always estimate:** Every issue and sub-issue must carry an estimate from the team scale (`1, 2, 4, 8, 16`). Add or adjust the estimate before work begins.
+* **Anchor on scope, not hope:** Estimate only after clarifying acceptance criteria, risks, and dependencies. Escalate unknowns instead of guessing.
+* **Refine continuously:** Update estimates when scope changes. Communicate deltas in the issue comments and relevant standups.
+
+### Issue Shape & Chunking
+
+* **Right-size work:** Break initiatives into issues that fit within a single sprint window (≤16 points). Split anything larger into sequenced sub-issues.
+* **Single outcome per issue:** Each issue should deliver one testable outcome. Use clear titles (`Verb + Object`) and maintain crisp acceptance criteria.
+* **Connect the tree:** Use parent issues or projects to show hierarchy. Ensure sub-issues reference their parent so burndown and rollups stay accurate.
+
+### Projects, Status, and Flow
+
+* **Projects as umbrellas:** Every major initiative belongs to a Linear project. Keep project documents, milestones, and health updated weekly.
+* **Status is signal:** Move issues through the workflow promptly (`Backlog → In Progress → Review → Done`). Leave a comment when blocking or handing off.
+* **Link the work:** Attach related PRs, docs, analytics dashboards, or Looms directly to the issue. Cross-link dependent issues so risk can be tracked.
+* **Close the loop:** Before marking an issue Done, confirm acceptance criteria, tests, and documentation updates are complete. Summarize outcomes in the final comment.

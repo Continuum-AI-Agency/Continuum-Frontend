@@ -14,6 +14,7 @@ export default function IntegrationsPage() {
     return {
       youtube: false,
       instagram: false,
+      facebook: false,
       tiktok: false,
       linkedin: false,
       googleAds: false,
@@ -71,5 +72,4 @@ export default function IntegrationsPage() {
     </Container>
   );
 }
-
 

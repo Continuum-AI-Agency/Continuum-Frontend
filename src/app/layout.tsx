@@ -59,11 +59,6 @@ export default function RootLayout({
         <ThemeProvider>
           <ToastProvider>
             <GalaxyBackground intensity={1} speed="glacial" />
-            <div className="wave-background">
-              <div className="wave-layer layer-1" />
-              <div className="wave-layer layer-2" />
-              <div className="wave-layer layer-3" />
-            </div>
             <div className="fixed top-4 right-4 z-50">
               <ThemeToggle />
             </div>

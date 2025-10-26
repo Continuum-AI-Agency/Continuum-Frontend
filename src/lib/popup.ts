@@ -23,8 +23,17 @@ export function openCenteredPopup(url: string, title: string, width = 480, heigh
   return win;
 }
 
-export function waitForPopupMessage<T = unknown>(expectedType: string, timeoutMs = 120000): Promise<T> {
+type PopupMessageOptions<T> = {
+  timeoutMs?: number;
+  predicate?: (message: T) => boolean;
+};
+
+export function waitForPopupMessage<T = unknown>(
+  expectedType: string,
+  options?: PopupMessageOptions<T>
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    const timeoutMs = options?.timeoutMs ?? 120000;
     const timer = setTimeout(() => {
       window.removeEventListener("message", onMessage);
       reject(new Error("Popup timed out"));
@@ -35,9 +44,13 @@ export function waitForPopupMessage<T = unknown>(expectedType: string, timeoutMs
         if (event.origin !== window.location.origin) return;
         const data = event.data as { type?: string } | undefined;
         if (!data || data.type !== expectedType) return;
+        const payload = event.data as T;
+        if (options?.predicate && !options.predicate(payload)) {
+          return;
+        }
         clearTimeout(timer);
         window.removeEventListener("message", onMessage);
-        resolve(event.data as T);
+        resolve(payload);
       } catch (e) {
         // ignore and continue listening
       }
@@ -46,5 +59,3 @@ export function waitForPopupMessage<T = unknown>(expectedType: string, timeoutMs
     window.addEventListener("message", onMessage);
   });
 }
-
-

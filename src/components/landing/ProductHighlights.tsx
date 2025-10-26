@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Box, Container, Flex, Badge, Heading, Text, Tabs } from "@radix-ui/themes";
 import GlassCard from "../ui/GlassCard";
 import { MagicWandIcon, BarChartIcon, LayersIcon } from "@radix-ui/react-icons";
+import { Box, Container, Flex, Heading, Text, Badge, Button, Tabs } from "@radix-ui/themes";
+import Link from "next/link";
 
 const panels = [
   {
-    value: "organic",
-    label: "Organic content",
+    value: "social",
+    label: "Social+",
     icon: MagicWandIcon,
     kicker: "Campaign-ready in minutes",
     headline: "AI ideation, channel-ready copy, and scheduled handoffs",
@@ -18,10 +20,11 @@ const panels = [
       "Draft captions, video scripts, and asset briefs in one click",
       "Approve and schedule to every connected channel at once",
     ],
+    cta: { label: "Start now", href: "/onboarding" },
   },
   {
-    value: "paid",
-    label: "Paid media",
+    value: "performance",
+    label: "Performance+",
     icon: BarChartIcon,
     kicker: "Unify performance intelligence",
     headline: "Launch paid campaigns with guardrails and anomaly alerts",
@@ -30,18 +33,20 @@ const panels = [
       "Sync creative variations, audiences, and pacing in a single workflow",
       "Receive SLA-aware alerts the moment spend or CPA drifts",
     ],
+    cta: { label: "Contact sales", href: "mailto:hello@continuum.ai" },
   },
   {
-    value: "creative",
-    label: "Creative studio",
+    value: "studio",
+    label: "Studio+",
     icon: LayersIcon,
     kicker: "Accelerate brand visuals",
-    headline: "Generate on-brand visuals and manage your asset library",
+    headline: "Frontier multimodal models, prompt templates, and brand style guides",
     bullets: [
-      "AI prompt generator tuned to your brand identity",
+      "Pay‑as‑you‑go add‑on for any module",
       "Central library with rights tracking and collaborative notes",
       "Drop assets straight into organic or paid playbooks",
     ],
+    cta: { label: "Contact sales", href: "mailto:hello@continuum.ai" },
   },
 ];
 
@@ -49,7 +54,7 @@ export function ProductHighlights() {
   const [active, setActive] = useState(panels[0].value);
 
   return (
-    <Box className="relative">
+    <Box id="product" className="relative">
       <Container size="3" className="py-20">
         <Flex direction="column" gap="6">
           <Box>
@@ -63,7 +68,7 @@ export function ProductHighlights() {
           </Box>
 
           <Tabs.Root value={active} onValueChange={setActive} className="flex flex-col gap-6">
-            <Tabs.List color="purple" className="w-full overflow-x-auto">
+            <Tabs.List className="w-full overflow-x-auto">
               <Flex gap="3" wrap="wrap">
                 {panels.map((panel) => (
                   <Tabs.Trigger key={panel.value} value={panel.value} className="rounded-full px-4 py-2 text-sm font-medium">
@@ -78,7 +83,7 @@ export function ProductHighlights() {
 
             <AnimatePresence mode="wait">
               {panels.map((panel) => (
-                <Tabs.Content key={panel.value} value={panel.value} forceMount className="focus:outline-none">
+                <Tabs.Content key={panel.value} value={panel.value} className="focus:outline-none">
                   {active === panel.value ? (
                     <motion.div
                       key={panel.value}
@@ -104,11 +109,16 @@ export function ProductHighlights() {
                                 </Text>
                               ))}
                             </Box>
+                            <Box className="mt-6">
+                              <Button size="2" asChild variant={panel.value === "social" ? "solid" : "outline"}>
+                                <Link href={panel.cta.href}>{panel.cta.label}</Link>
+                              </Button>
+                            </Box>
                           </Box>
                           <Box className="md:w-5/12">
                             <div className="h-48 rounded-xl border border-dashed border-slate-300/60 bg-white/50 dark:border-slate-600/60 dark:bg-slate-800/60" aria-hidden>
                               <Flex align="center" justify="center" className="h-full text-sm text-slate-500 dark:text-slate-300">
-                                Future module still preview frame
+                                Module preview
                               </Flex>
                             </div>
                           </Box>

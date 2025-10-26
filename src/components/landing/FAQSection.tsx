@@ -17,10 +17,22 @@ const faqItems = [
       "All campaign workflows enforce approval steps, brand voice constraints, and audit logs. Role-based access ensures only designated operators can push paid media live.",
   },
   {
+    value: "pricing",
+    header: "How is Social+ priced?",
+    content:
+      "Social+ is $300 per month or $3,000 per year (2 months free). Studio+ is a pay‑as‑you‑go add‑on. Performance+ and Studio+ (rendering) are available via Contact sales.",
+  },
+  {
     value: "demo",
     header: "Can I try the platform before I commit?",
     content:
       "Yes. Book the walkthrough to access a guided sandbox and an interactive dashboard demo. Stripe hooks will unlock self-serve billing once we flip the switch.",
+  },
+  {
+    value: "support",
+    header: "Do you support enterprise rollouts?",
+    content:
+      "Yes. We support procurement, SSO, and enterprise security review. Reach us at hello@continuum.ai to kick off.",
   },
 ];
 

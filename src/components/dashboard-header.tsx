@@ -30,6 +30,38 @@ export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void })
         </div>
 
         <Flex align="center" gap="3 sm:gap-4">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Button variant="outline" size="2" disabled={isSwitching}>
+                <LayersIcon className="mr-2" />
+                {brandName}
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end">
+              {brandSummaries.map(brand => (
+                <DropdownMenu.Item
+                  key={brand.id}
+                  onSelect={event => {
+                    event.preventDefault();
+                    handleSwitch(brand.id);
+                  }}
+                  disabled={brand.id === activeBrandId || isSwitching}
+                >
+                  {brand.name || "Untitled brand"}
+                  {!brand.completed && (
+                    <Text size="1" color="gray" className="ml-2">
+                      Incomplete
+                    </Text>
+                  )}
+                </DropdownMenu.Item>
+              ))}
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item asChild>
+                <Link href="/settings">Manage brand profiles</Link>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+
           <ThemeToggle />
 
           <DropdownMenu.Root>

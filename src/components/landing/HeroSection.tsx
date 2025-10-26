@@ -20,22 +20,22 @@ export function HeroSection() {
           <Box className="w-full md:w-6/12">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
               <Badge size="2" color="purple" className="mb-4 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-200">
-                AI co-pilot for campaign velocity
+                Hybrid Stripe × Modern Treasury polish
               </Badge>
               <Heading size="9" className="tracking-tight leading-tight">
-                <GradientText>Ship cross-platform stories before trends peak</GradientText>
+                <GradientText>Ship CEO‑grade content and campaigns 10× faster</GradientText>
               </Heading>
               <Text size="4" color="gray" className="mt-4 max-w-xl">
-                Continuum pulls every social, paid, and creative workflow into a single AI command center so Alex and team stay ahead of the feed with clarity and speed.
+                Continuum is your AI copilot for social, performance, and creative—unifying trends, generation, and publishing into one workflow.
               </Text>
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.5 }} className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button size="3" asChild data-stripe-plan="organic-monthly" className="min-w-[200px]">
-                <Link href="#subscribe">Start for $300/month</Link>
+              <Button size="3" asChild className="min-w-[200px]">
+                <Link href="/onboarding">Start now</Link>
               </Button>
               <Button size="3" variant="outline" asChild>
-                <Link href="#book-demo">Book a 15-minute walkthrough</Link>
+                <Link href="mailto:hello@continuum.ai">Contact sales</Link>
               </Button>
             </motion.div>
 
