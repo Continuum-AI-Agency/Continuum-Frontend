@@ -15,7 +15,7 @@ export default function TermsPage() {
           <Separator my="4" size="4" />
 
           <Text as="p" my="3" color="gray">
-            Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the Continuum AI website and service (the "Service") operated by Continuum AI ("us", "we", or "our"). Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms. These Terms apply to all visitors, users and others who access or use the Service.
+            Please read these Terms of Service (&quot;Terms&quot;, &quot;Terms of Service&quot;) carefully before using the Continuum AI website and service (the &quot;Service&quot;) operated by Continuum AI (&quot;us&quot;, &quot;we&quot;, or &quot;our&quot;). Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms. These Terms apply to all visitors, users and others who access or use the Service.
           </Text>
 
           <Heading size="4" mt="5">1. Accounts</Heading>
@@ -34,8 +34,8 @@ export default function TermsPage() {
           </Text>
           <ul>
             <li><Text color="gray">Violate any local, state, national, or international law or regulation.</Text></li>
-            <li><Text color="gray">Transmit any material that is abusive, harassing, tortious, defamatory, vulgar, pornographic, obscene, libelous, invasive of another's privacy, hateful, or racially, ethnically, or otherwise objectionable.</Text></li>
-            <li><Text color="gray">Transmit any unsolicited or unauthorized advertising, promotional materials, "junk mail," "spam," "chain letters," "pyramid schemes," or any other form of solicitation.</Text></li>
+            <li><Text color="gray">Transmit any material that is abusive, harassing, tortious, defamatory, vulgar, pornographic, obscene, libelous, invasive of another&apos;s privacy, hateful, or racially, ethnically, or otherwise objectionable.</Text></li>
+            <li><Text color="gray">Transmit any unsolicited or unauthorized advertising, promotional materials, &quot;junk mail,&quot; &quot;spam,&quot; &quot;chain letters,&quot; &quot;pyramid schemes,&quot; or any other form of solicitation.</Text></li>
             <li><Text color="gray">Knowingly transmit any material that contains adware, malware, spyware, software viruses, or any other computer code, files, or programs designed to interrupt, destroy, or limit the functionality of any computer software or hardware or telecommunications equipment.</Text></li>
           </ul>
 
@@ -56,7 +56,7 @@ export default function TermsPage() {
 
           <Heading size="4" mt="5">7. Disclaimer</Heading>
           <Text as="p" my="3" color="gray">
-            Your use of the Service is at your sole risk. The Service is provided on an "AS IS" and "AS AVAILABLE" basis. The Service is provided without warranties of any kind, whether express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement or course of performance.
+            Your use of the Service is at your sole risk. The Service is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis. The Service is provided without warranties of any kind, whether express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement or course of performance.
           </Text>
 
           <Heading size="4" mt="5">8. Governing Law</Heading>
@@ -66,7 +66,7 @@ export default function TermsPage() {
 
           <Heading size="4" mt="5">9. Changes</Heading>
           <Text as="p" my="3" color="gray">
-            We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material we will try to provide at least 30 days' notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.
+            We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material we will try to provide at least 30 days&apos; notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.
           </Text>
 
           <Heading size="4" mt="5">10. Contact Us</Heading>

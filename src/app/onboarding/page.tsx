@@ -9,13 +9,15 @@ export const metadata = {
 };
 
 type OnboardingPageProps = {
-  searchParams?: {
+  searchParams?: Promise<{
     brand?: string;
-  };
+  }>;
 };
 
 export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
-  const brandIdParam = typeof searchParams?.brand === "string" ? searchParams.brand : undefined;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const brandIdParam =
+    typeof resolvedSearchParams?.brand === "string" ? resolvedSearchParams.brand : undefined;
   const { brandId, state } = await ensureOnboardingState(brandIdParam);
 
   if (isOnboardingComplete(state)) {

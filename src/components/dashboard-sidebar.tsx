@@ -8,7 +8,6 @@ import {
   GearIcon,
   BarChartIcon,
   Link2Icon,
-  MagicWandIcon,
   FileTextIcon,
 } from "@radix-ui/react-icons";
 import { Flex, Badge } from "@radix-ui/themes";

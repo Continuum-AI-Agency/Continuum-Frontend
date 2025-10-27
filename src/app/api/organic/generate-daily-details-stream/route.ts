@@ -1,9 +1,7 @@
-"use server";
-
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getOrganicServiceBaseUrl } from "@/lib/organic/config";
 import { dailyDetailsRequestSchema } from "@/lib/organic/types";
 
@@ -29,7 +27,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const supabase = await createClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

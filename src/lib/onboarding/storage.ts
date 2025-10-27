@@ -1,6 +1,6 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   BRAND_ROLES,
   type BrandInvite,
@@ -44,7 +44,7 @@ function getOwnerMember(user: User): BrandMember {
 }
 
 async function getAuthContext(): Promise<AuthContext> {
-  const supabase = await createClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
     error,

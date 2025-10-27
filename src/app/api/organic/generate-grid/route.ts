@@ -1,10 +1,8 @@
-"use server";
-
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { z } from "zod";
+// z is not used directly here; schemas are imported from types.
 
-import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getOrganicServiceBaseUrl } from "@/lib/organic/config";
 import {
   generationRequestSchema,
@@ -53,7 +51,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const supabase = await createClient();
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
     return NextResponse.json(

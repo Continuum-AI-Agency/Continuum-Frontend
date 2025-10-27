@@ -337,7 +337,8 @@ const formSchema = z
     }
   });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormInputValues = z.input<typeof formSchema>;
+type FormValues = z.output<typeof formSchema>;
 
 export function OrganicExperience({
   brandDescription,
@@ -594,11 +595,11 @@ function useOrganicForm(
   platformAccounts: OrganicPlatformAccount[],
   defaultPrompt: PromptFormValue
 ): {
-  form: UseFormReturn<FormValues>;
+  form: UseFormReturn<FormInputValues, unknown, FormValues>;
   applyPromptPreset: (prompt: string) => void;
   resetForm: () => void;
 } {
-  const form = useForm<FormValues>({
+  const form = useForm<FormInputValues, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: makeDefaultValues(platformAccounts, defaultPrompt),
   });
@@ -836,7 +837,7 @@ function GenerationForm({
   activePlatforms,
   maxTrendSelections,
 }: {
-  form: UseFormReturn<FormValues>;
+  form: UseFormReturn<FormInputValues, unknown, FormValues>;
   platformAccounts: OrganicPlatformAccount[];
   gridError: string | null;
   isGeneratingGrid: boolean;
@@ -1029,8 +1030,8 @@ function GenerationForm({
 }
 
 type PlatformSelectorProps = {
-  control: Control<FormValues>;
-  errors: FieldErrors<FormValues>;
+  control: Control<FormInputValues, unknown, FormValues>;
+  errors: FieldErrors<FormInputValues>;
   platformAccounts: OrganicPlatformAccount[];
 };
 
@@ -1211,7 +1212,7 @@ function buildGenerationPayload(values: FormValues): GenerationRequestPayload {
 }
 
 function buildDailyDetailsPayload(
-  values: FormValues,
+  values: FormInputValues,
   weeklyGrid: WeeklyGrid
 ): DailyDetailsRequestPayload | null {
   const platformAccountIds = Object.entries(values.platforms).reduce<
@@ -1334,7 +1335,7 @@ async function requestDailyTemplates(
 function makeDefaultValues(
   platformAccounts: OrganicPlatformAccount[],
   defaultPrompt: PromptFormValue
-): FormValues {
+): FormInputValues {
   const platformDefaults = ORGANIC_PLATFORM_KEYS.reduce(
     (acc, key) => {
       const account = platformAccounts.find((item) => item.platform === key);

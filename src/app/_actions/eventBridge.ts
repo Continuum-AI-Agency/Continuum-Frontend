@@ -1,32 +1,29 @@
 "use server";
 
-import { z } from "zod";
-
 import {
-  continuumEventPayloadSchemas,
+  getContinuumEventSchema,
   type ContinuumEventName,
+  type ContinuumEventMap,
 } from "@/lib/events/schema";
 import { emitContinuumEvent } from "@/lib/server/events";
 
-type ContinuumEventSchemaMap = typeof continuumEventPayloadSchemas;
-
 export async function broadcastContinuumEvent<K extends ContinuumEventName>(
   type: K,
-  input: z.input<ContinuumEventSchemaMap[K]>
+  input: unknown
 ) {
-  const payload = continuumEventPayloadSchemas[type].parse(input);
-
+  const schema = getContinuumEventSchema(type);
+  const payload = schema.parse(input) as ContinuumEventMap[K];
   emitContinuumEvent(type, payload);
 }
 
 export async function broadcastAiTaskProgress(
-  input: z.input<ContinuumEventSchemaMap["ai.task.progress"]>
+  input: ContinuumEventMap["ai.task.progress"]
 ) {
   await broadcastContinuumEvent("ai.task.progress", input);
 }
 
 export async function broadcastAiTaskCompletion(
-  input: z.input<ContinuumEventSchemaMap["ai.task.completed"]>
+  input: ContinuumEventMap["ai.task.completed"]
 ) {
   await broadcastContinuumEvent("ai.task.completed", input);
 }

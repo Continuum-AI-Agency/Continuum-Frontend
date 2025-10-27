@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@radix-ui/themes/styles.css";
@@ -26,9 +27,11 @@ function NoFlashScript() {
   const script = `
     (function() {
       try {
+        var cookieMatch = document.cookie.match(/(?:^|; )appearance=(dark|light)/);
+        var cookieAppearance = cookieMatch ? cookieMatch[1] : null;
         var stored = localStorage.getItem('theme');
         var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var appearance = stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light';
+        var appearance = cookieAppearance || (stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light');
         var root = document.documentElement;
         if (appearance === 'dark') {
           root.setAttribute('data-theme', 'dark');
@@ -43,11 +46,15 @@ function NoFlashScript() {
   return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const cookieAppearance = cookieStore.get("appearance")?.value;
+  const initialAppearance = cookieAppearance === "dark" || cookieAppearance === "light" ? cookieAppearance : undefined;
+
   return (
     <html lang="en">
       <head>
@@ -56,7 +63,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <ThemeProvider>
+        <ThemeProvider initialAppearance={initialAppearance}>
           <ToastProvider>
             <GalaxyBackground intensity={1} speed="glacial" />
             <div className="fixed top-4 right-4 z-50">

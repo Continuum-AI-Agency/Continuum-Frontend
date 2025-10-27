@@ -52,6 +52,13 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Galaxy background CSS variables for SSR-stable inline styles */
+  --bg-galaxy-c1-light: rgba(255,122,203,0.25);
+  --bg-galaxy-c2-light: rgba(255,255,255,0.22);
+  --bg-galaxy-c3-light: rgba(255,210,238,0.14);
+  --bg-galaxy-vignette-light: rgba(255,255,255,0.06);
+  --bg-galaxy-c1-overlay-light: rgba(255,210,238,0.10);
 }
 
 /* Fluid typography baseline with sensible bounds
@@ -94,6 +101,13 @@ html {
   --ring: #5D2A8E; /* Deep Purple for focus rings */
 
   --radius: 0.5rem;
+
+  /* Galaxy background variables for dark appearance */
+  --bg-galaxy-c1-dark: rgba(160,140,207,0.24);
+  --bg-galaxy-c2-dark: rgba(93,42,142,0.18);
+  --bg-galaxy-c3-dark: rgba(0,0,0,0.18);
+  --bg-galaxy-vignette-dark: rgba(0,0,0,0.25);
+  --bg-galaxy-c1-overlay-dark: rgba(160,140,207,0.06);
 }
 
 /* System preference fallback when no explicit data-theme is set */

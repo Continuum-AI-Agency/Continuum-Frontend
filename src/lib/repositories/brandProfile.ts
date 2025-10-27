@@ -1,0 +1,106 @@
+import type { BrandRole, BrandInvite, BrandMember } from "@/lib/onboarding/state";
+import {
+  createBrandProfile,
+  createMagicLinkInvite,
+  removeMemberFromBrand,
+  renameBrandProfile,
+  revokeInvite,
+  setActiveBrand,
+} from "@/lib/onboarding/storage";
+import { z } from "zod";
+import { http } from "@/lib/api/http";
+
+export type BrandSummary = {
+  id: string;
+  name: string;
+  completed: boolean;
+};
+
+export type BrandSettingsData = {
+  activeBrandId: string;
+  brandSummaries: BrandSummary[];
+  brandName: string;
+  members: BrandMember[];
+  invites: BrandInvite[];
+};
+
+export interface BrandProfileRepository {
+  switchActiveBrand(brandId: string): Promise<void>;
+  renameBrand(brandId: string, name: string): Promise<void>;
+  createBrand(name?: string): Promise<{ brandId: string }>;
+  removeMember(brandId: string, email: string): Promise<void>;
+  createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }>;
+  revokeInvite(brandId: string, inviteId: string): Promise<void>;
+}
+
+// Default implementation leveraging existing Supabase-backed onboarding storage.
+export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
+  return {
+    async switchActiveBrand(brandId: string) {
+      await setActiveBrand(brandId);
+    },
+    async renameBrand(brandId: string, name: string) {
+      await renameBrandProfile(brandId, name);
+    },
+    async createBrand(name?: string) {
+      const { brandId } = await createBrandProfile(name);
+      return { brandId };
+    },
+    async removeMember(brandId: string, email: string) {
+      await removeMemberFromBrand(brandId, email);
+    },
+    async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string) {
+      const { link } = await createMagicLinkInvite(brandId, email, role, siteUrl);
+      return { link };
+    },
+    async revokeInvite(brandId: string, inviteId: string) {
+      await revokeInvite(brandId, inviteId);
+    },
+  };
+}
+
+// Placeholder gateway implementation; wire actual endpoints when ready.
+const brandSettingsSchema = z.object({
+  activeBrandId: z.string(),
+  brandSummaries: z.array(
+    z.object({ id: z.string(), name: z.string(), completed: z.boolean() })
+  ),
+  brandName: z.string(),
+  members: z.array(z.object({ id: z.string(), email: z.string().email(), role: z.string() })),
+  invites: z.array(
+    z.object({ id: z.string(), email: z.string().email(), role: z.string(), token: z.string(), createdAt: z.string() })
+  ),
+});
+
+export function createGatewayBrandProfileRepository(): BrandProfileRepository {
+  return {
+    async switchActiveBrand(brandId: string): Promise<void> {
+      await http.request({ path: `/brands/${brandId}/switch`, method: "POST" });
+    },
+    async renameBrand(brandId: string, name: string): Promise<void> {
+      await http.request({ path: `/brands/${brandId}`, method: "PATCH", body: { name } });
+    },
+    async createBrand(name?: string): Promise<{ brandId: string }> {
+      const schema = z.object({ brandId: z.string() });
+      return await http.request({ path: "/brands", method: "POST", body: { name }, schema });
+    },
+    async removeMember(brandId: string, email: string): Promise<void> {
+      await http.request({ path: `/brands/${brandId}/members`, method: "DELETE", body: { email } });
+    },
+    async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }> {
+      const schema = z.object({ link: z.string().url() });
+      return await http.request({ path: `/brands/${brandId}/invites`, method: "POST", body: { email, role, siteUrl }, schema });
+    },
+    async revokeInvite(brandId: string, inviteId: string): Promise<void> {
+      await http.request({ path: `/brands/${brandId}/invites/${inviteId}`, method: "DELETE" });
+    },
+  };
+}
+
+export function createBrandProfileRepository(): BrandProfileRepository {
+  // Today we use Supabase metadata as source of truth. Swap to gateway by switching the return below.
+  return createSupabaseBrandProfileRepository();
+  // return createGatewayBrandProfileRepository();
+}
+
+

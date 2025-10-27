@@ -38,9 +38,9 @@ function applyDomTheme(appearance: "light" | "dark") {
   }
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({ children, initialAppearance }: { children: React.ReactNode; initialAppearance?: "light" | "dark" }) {
   const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "system");
-  const [appearance, setAppearance] = useState<"light" | "dark">(() => (getStoredMode() === "dark" || (getStoredMode() === null && getSystemPrefersDark()) ? "dark" : "light"));
+  const [appearance, setAppearance] = useState<"light" | "dark">(initialAppearance ?? "light");
 
   // Sync appearance with mode and system preference
   useEffect(() => {
@@ -51,6 +51,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const nextAppearance: "light" | "dark" = resolvedDark ? "dark" : "light";
       setAppearance(nextAppearance);
       applyDomTheme(nextAppearance);
+      try {
+        // Persist current resolved appearance for SSR to pick up on next request
+        document.cookie = `appearance=${nextAppearance}; Path=/; Max-Age=31536000; SameSite=Lax`;
+      } catch {
+        // no-op
+      }
     };
 
     compute();
@@ -71,6 +77,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem("theme");
     } else {
       window.localStorage.setItem("theme", mode);
+    }
+    try {
+      // Persist the selected mode for informational purposes (not used for SSR directly)
+      document.cookie = `themeMode=${mode}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    } catch {
+      // no-op
     }
   }, [mode]);
 

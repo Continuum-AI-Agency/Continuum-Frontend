@@ -40,9 +40,11 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
   const validation = loginSchema.safeParse(input);
   
   if (!validation.success) {
+    const issues = validation.error.flatten().fieldErrors;
+    const first = Object.values(issues).flat()[0];
     return {
       success: false,
-      error: validation.error.errors[0]?.message || "Invalid input",
+      error: first || "Invalid input",
     };
   }
 
@@ -79,9 +81,11 @@ export async function signupAction(input: SignupInput): Promise<ActionResult> {
   const validation = signupSchema.safeParse(input);
   
   if (!validation.success) {
+    const issues = validation.error.flatten().fieldErrors;
+    const first = Object.values(issues).flat()[0];
     return {
       success: false,
-      error: validation.error.errors[0]?.message || "Invalid input",
+      error: first || "Invalid input",
     };
   }
 
@@ -157,9 +161,11 @@ export async function recoveryAction(input: RecoveryInput): Promise<ActionResult
   const validation = recoverySchema.safeParse(input);
   
   if (!validation.success) {
+    const issues = validation.error.flatten().fieldErrors;
+    const first = Object.values(issues).flat()[0];
     return {
       success: false,
-      error: validation.error.errors[0]?.message || "Invalid input",
+      error: first || "Invalid input",
     };
   }
 

@@ -75,7 +75,7 @@ export function PricingSection() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-slate-500" />
-                    <span>Reserved access to Continuum's render studio</span>
+                  <span>Reserved access to Continuum&apos;s render studio</span>
                   </li>
                 </ul>
                 <Button size="3" variant="outline" asChild>

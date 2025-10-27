@@ -14,7 +14,8 @@ export const BRAND_VOICE_TAGS = [
 
 export const BRAND_ROLES = ["owner", "admin", "operator", "viewer"] as const;
 
-const platformKeySchema = z.enum(PLATFORM_KEYS);
+// Note: keep schema definition available for future validation usage if needed
+// const platformKeySchema = z.enum(PLATFORM_KEYS);
 const brandVoiceTagSchema = z.enum(BRAND_VOICE_TAGS);
 const brandRoleSchema = z.enum(BRAND_ROLES);
 
@@ -95,6 +96,7 @@ const onboardingStateSchema = z.object({
   completedAt: z.union([z.string().datetime(), z.null()]).nullable(),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const onboardingPatchSchema = z.object({
   step: z.number().int().min(0).max(2).optional(),
   brand: brandSchema.partial().optional(),

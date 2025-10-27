@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Box, Container, Flex, Badge, Heading, Text, Tabs } from "@radix-ui/themes";
 import GlassCard from "../ui/GlassCard";
 import { MagicWandIcon, BarChartIcon, LayersIcon } from "@radix-ui/react-icons";
-import { Box, Container, Flex, Heading, Text, Badge, Button, Tabs } from "@radix-ui/themes";
+import { Button } from "@radix-ui/themes";
 import Link from "next/link";
 
 const panels = [

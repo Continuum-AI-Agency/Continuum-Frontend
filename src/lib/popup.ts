@@ -1,6 +1,6 @@
 export function openCenteredPopup(url: string, title: string, width = 480, height = 640): Window | null {
-  const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
-  const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+  const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+  const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
 
   const w = window.innerWidth || document.documentElement.clientWidth || screen.width;
   const h = window.innerHeight || document.documentElement.clientHeight || screen.height;
@@ -51,7 +51,7 @@ export function waitForPopupMessage<T = unknown>(
         clearTimeout(timer);
         window.removeEventListener("message", onMessage);
         resolve(payload);
-      } catch (e) {
+      } catch {
         // ignore and continue listening
       }
     }

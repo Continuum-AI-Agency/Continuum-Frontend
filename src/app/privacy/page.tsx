@@ -15,7 +15,7 @@ export default function PrivacyPage() {
           <Separator my="4" size="4" />
 
           <Text as="p" my="3" color="gray">
-            Continuum AI ("us", "we", or "our") operates the Continuum AI website and service (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data. We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy.
+            Continuum AI (&quot;us&quot;, &quot;we&quot;, or &quot;our&quot;) operates the Continuum AI website and service (the &quot;Service&quot;). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data. We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy.
           </Text>
 
           <Heading size="4" mt="5">1. Information Collection and Use</Heading>
@@ -25,10 +25,10 @@ export default function PrivacyPage() {
 
           <Heading size="3" mt="4">Types of Data Collected</Heading>
           <Text as="p" my="2" color="gray">
-            <strong>Personal Data:</strong> While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you ("Personal Data"). This may include, but is not limited to: email address, first name and last name, company name, and usage data.
+            <strong>Personal Data:</strong> While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you (&quot;Personal Data&quot;). This may include, but is not limited to: email address, first name and last name, company name, and usage data.
           </Text>
           <Text as="p" my="2" color="gray">
-            <strong>Usage Data:</strong> We may also collect information on how the Service is accessed and used ("Usage Data"). This Usage Data may include information such as your computer's Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages, unique device identifiers and other diagnostic data.
+            <strong>Usage Data:</strong> We may also collect information on how the Service is accessed and used (&quot;Usage Data&quot;). This Usage Data may include information such as your computer&apos;s Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages, unique device identifiers and other diagnostic data.
           </Text>
           <Text as="p" my="2" color="gray">
             <strong>Tracking & Cookies Data:</strong> We use cookies and similar tracking technologies to track the activity on our Service and hold certain information. You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent. However, if you do not accept cookies, you may not be able to use some portions of our Service.
@@ -72,7 +72,7 @@ export default function PrivacyPage() {
 
           <Heading size="4" mt="5">6. Service Providers</Heading>
           <Text as="p" my="3" color="gray">
-            We may employ third-party companies and individuals to facilitate our Service ("Service Providers"), to provide the Service on our behalf, to perform Service-related services or to assist us in analyzing how our Service is used. These third parties have access to your Personal Data only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.
+            We may employ third-party companies and individuals to facilitate our Service (&quot;Service Providers&quot;), to provide the Service on our behalf, to perform Service-related services or to assist us in analyzing how our Service is used. These third parties have access to your Personal Data only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.
           </Text>
 
           <Heading size="4" mt="5">7. Your Data Protection Rights</Heading>
@@ -80,9 +80,9 @@ export default function PrivacyPage() {
             Depending on your location, you may have the following rights regarding your personal data: the right to access, update or delete the information we have on you; the right of rectification; the right to object; the right of restriction; the right to data portability; and the right to withdraw consent. You can exercise these rights by contacting us.
           </Text>
 
-          <Heading size="4" mt="5">8. Children's Privacy</Heading>
+          <Heading size="4" mt="5">8. Children&apos;s Privacy</Heading>
           <Text as="p" my="3" color="gray">
-            Our Service does not address anyone under the age of 18 ("Children"). We do not knowingly collect personally identifiable information from anyone under the age of 18. If you are a parent or guardian and you are aware that your Children has provided us with Personal Data, please contact us.
+            Our Service does not address anyone under the age of 18 (&quot;Children&quot;). We do not knowingly collect personally identifiable information from anyone under the age of 18. If you are a parent or guardian and you are aware that your Children has provided us with Personal Data, please contact us.
           </Text>
 
           <Heading size="4" mt="5">9. Changes to This Privacy Policy</Heading>

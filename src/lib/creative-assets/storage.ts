@@ -2,7 +2,7 @@
 
 import type { FileObject } from "@supabase/storage-js";
 
-import { createClient } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { getCreativeAssetsBucket, resolveStoragePath } from "./config";
 import type {
@@ -48,7 +48,7 @@ export async function listCreativeAssets(
   folder: string,
   options?: ListOptions
 ): Promise<CreativeAssetListing> {
-  const supabase = createClient();
+  const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const path = resolveStoragePath(brandProfileId, folder);
 
@@ -75,7 +75,7 @@ export async function uploadCreativeAsset(
   folder: string,
   file: File
 ): Promise<UploadResult> {
-  const supabase = createClient();
+  const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const targetPath = resolveStoragePath(brandProfileId, folder, file.name);
 
@@ -108,7 +108,7 @@ export async function renameCreativeAsset(
   fullPath: string,
   newName: string
 ) {
-  const supabase = createClient();
+  const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const segments = fullPath.split("/");
   const currentName = segments.pop();
@@ -129,7 +129,7 @@ export async function renameCreativeAsset(
 }
 
 export async function deleteCreativeAsset(fullPath: string) {
-  const supabase = createClient();
+  const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const { error } = await supabase.storage.from(bucket).remove([fullPath]);
   if (error) {
@@ -141,7 +141,7 @@ export async function createSignedAssetUrl(
   fullPath: string,
   expiresInSeconds: number
 ): Promise<string> {
-  const supabase = createClient();
+  const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const { data, error } = await supabase.storage
     .from(bucket)
