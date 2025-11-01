@@ -48,7 +48,7 @@ const campaignMetricsUpdatedSchema = z
   .object({
     campaignId: z.string(),
     timeframe: z.enum(["24h", "7d", "30d", "lifetime"]),
-    metrics: z.record(z.number()),
+    metrics: z.record(z.string(), z.number()),
   })
   .strict();
 

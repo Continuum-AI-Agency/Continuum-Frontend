@@ -10,7 +10,7 @@ import type {
 import { CONTINUUM_EVENT_TYPES } from "@/lib/events/schema";
 
 type ContinuumEventHandlers = {
-  [K in ContinuumEventName]?: (event: ContinuumEvent<K>) => void;
+  [K in ContinuumEventName]?: (event: ContinuumEvent) => void;
 };
 
 type UseContinuumServerEventsOptions = {

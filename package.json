@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "supabase:gen:types": "node scripts/generate-supabase-types.js",
+    "generate:types": "node scripts/generate-supabase-types.js",
+    "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

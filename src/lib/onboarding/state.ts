@@ -109,7 +109,7 @@ const onboardingPatchSchema = z.object({
 
 const onboardingMetadataSchema = z.object({
   activeBrandId: z.union([z.string(), z.null()]).default(null),
-  brands: z.record(onboardingStateSchema).default({}),
+  brands: z.record(z.string(), onboardingStateSchema).default({}),
 });
 
 export type BrandVoiceTag = z.infer<typeof brandVoiceTagSchema>;

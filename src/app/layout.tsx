@@ -56,7 +56,12 @@ export default async function RootLayout({
   const initialAppearance = cookieAppearance === "dark" || cookieAppearance === "light" ? cookieAppearance : undefined;
 
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-theme={initialAppearance === "dark" ? "dark" : undefined}
+      style={{ colorScheme: initialAppearance === "dark" ? "dark" : "light" }}
+    >
       <head>
         <NoFlashScript />
       </head>

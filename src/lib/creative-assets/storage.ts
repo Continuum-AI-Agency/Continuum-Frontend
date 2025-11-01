@@ -157,7 +157,7 @@ export async function createSignedAssetUrl(
 }
 
 export async function getPublicAssetUrl(fullPath: string): Promise<string> {
-  const supabase = createClient();
+  const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
   const { data } = supabase.storage.from(bucket).getPublicUrl(fullPath);
   if (!data?.publicUrl) {
