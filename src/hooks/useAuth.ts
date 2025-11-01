@@ -8,8 +8,10 @@ import {
   logoutAction,
   recoveryAction,
   signInWithGoogleAction,
+  signInWithLinkedInAction,
+  sendMagicLinkAction,
 } from "@/lib/auth/actions";
-import type { LoginInput, SignupInput, RecoveryInput } from "@/lib/auth/schemas";
+import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "@/lib/auth/schemas";
 
 export function useAuth() {
   const [isPending, startTransition] = useTransition();
@@ -86,15 +88,45 @@ export function useAuth() {
 
   const signInWithGoogle = async () => {
     setError(null);
-    
+
     const result = await signInWithGoogleAction();
-    
+
     if (!result.success) {
       setError(result.error);
       return;
     }
-    
+
     router.push(result.data.url);
+  };
+
+  const signInWithLinkedIn = async () => {
+    setError(null);
+
+    const result = await signInWithLinkedInAction();
+
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+
+    router.push(result.data.url);
+  };
+
+  const sendMagicLink = async (input: MagicLinkInput): Promise<boolean> => {
+    setError(null);
+
+    return new Promise((resolve) => {
+      startTransition(async () => {
+        const result = await sendMagicLinkAction(input);
+
+        if (!result.success) {
+          setError(result.error);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
   };
 
   const clearError = () => setError(null);
@@ -105,6 +137,8 @@ export function useAuth() {
     logout,
     recovery,
     signInWithGoogle,
+    signInWithLinkedIn,
+    sendMagicLink,
     isPending,
     error,
     setError,
