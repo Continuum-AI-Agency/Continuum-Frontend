@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { loginSchema, signupSchema, recoverySchema } from "./schemas";
-import type { LoginInput, SignupInput, RecoveryInput } from "./schemas";
+import { loginSchema, signupSchema, recoverySchema, magicLinkSchema } from "./schemas";
+import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "./schemas";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -200,7 +200,7 @@ export async function recoveryAction(input: RecoveryInput): Promise<ActionResult
 
 export async function signInWithGoogleAction(): Promise<ActionResult<{ url: string }>> {
   const supabase = await createSupabaseServerClient();
-  
+
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -226,6 +226,83 @@ export async function signInWithGoogleAction(): Promise<ActionResult<{ url: stri
     return {
       success: true,
       data: { url: data.url },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: getSafeErrorMessage(error as Error),
+    };
+  }
+}
+
+export async function signInWithLinkedInAction(): Promise<ActionResult<{ url: string }>> {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "linkedin_oidc",
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: getSafeErrorMessage(error),
+      };
+    }
+
+    if (!data.url) {
+      return {
+        success: false,
+        error: "Failed to initialize LinkedIn sign-in. Please try again",
+      };
+    }
+
+    return {
+      success: true,
+      data: { url: data.url },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: getSafeErrorMessage(error as Error),
+    };
+  }
+}
+
+export async function sendMagicLinkAction(input: MagicLinkInput): Promise<ActionResult> {
+  const validation = magicLinkSchema.safeParse(input);
+
+  if (!validation.success) {
+    return {
+      success: false,
+      error: validation.error.errors[0]?.message || "Invalid input",
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: validation.data.email,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        shouldCreateUser: true,
+      },
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: getSafeErrorMessage(error),
+      };
+    }
+
+    return {
+      success: true,
+      data: undefined,
     };
   } catch (error) {
     return {
