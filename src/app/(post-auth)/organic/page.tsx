@@ -1,31 +1,39 @@
-"use client";
+import { Container } from "@radix-ui/themes";
 
-import { Card, Container, Flex, Heading, Text, Callout } from "@radix-ui/themes";
-import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { OrganicExperience } from "@/components/organic/OrganicExperience";
+import { ORGANIC_PLATFORMS, type OrganicPlatformKey } from "@/lib/organic/platforms";
+import { ensureOnboardingState } from "@/lib/onboarding/storage";
 
-export default function OrganicPage() {
+export default async function OrganicPage() {
+  const { brandId, state: onboarding } = await ensureOnboardingState();
+  const brandProfileId = brandId;
+
+  const platformAccounts = ORGANIC_PLATFORMS.map(({ key, label }) => {
+    const connection = onboarding.connections[key] ?? { connected: false, accountId: null };
+    return {
+      platform: key as OrganicPlatformKey,
+      label,
+      connected: Boolean(connection.connected),
+      accountId: connection.accountId ?? null,
+    };
+  });
+
+  const brandDescription = [
+    onboarding.brand.industry,
+    onboarding.brand.targetAudience,
+    onboarding.brand.brandVoice ?? undefined,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
   return (
     <Container size="4">
-      <Flex direction="column" gap="4">
-        <Heading size="6">Organic Module</Heading>
-        <Text color="gray">Plan, publish, and analyze organic social content across platforms.</Text>
-        <Card>
-          <Flex direction="column" gap="3" p="4">
-            <Heading size="4">Coming soon</Heading>
-            <Text color="gray">We’re building scheduling, content calendars, and cross-platform posting.</Text>
-            <Callout.Root color="amber">
-              <Callout.Icon>
-                <ExclamationTriangleIcon />
-              </Callout.Icon>
-              <Callout.Text>
-                Placeholder UI. Functionality will be added as features land.
-              </Callout.Text>
-            </Callout.Root>
-          </Flex>
-        </Card>
-      </Flex>
+      <OrganicExperience
+        brandName={onboarding.brand.name}
+        brandDescription={brandDescription}
+        platformAccounts={platformAccounts}
+        brandProfileId={brandProfileId}
+      />
     </Container>
   );
 }
-
-

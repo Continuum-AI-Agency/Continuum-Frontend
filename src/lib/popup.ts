@@ -1,6 +1,6 @@
 export function openCenteredPopup(url: string, title: string, width = 480, height = 640): Window | null {
-  const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window as any).screenX;
-  const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window as any).screenY;
+  const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+  const dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
 
   const w = window.innerWidth || document.documentElement.clientWidth || screen.width;
   const h = window.innerHeight || document.documentElement.clientHeight || screen.height;
@@ -23,8 +23,17 @@ export function openCenteredPopup(url: string, title: string, width = 480, heigh
   return win;
 }
 
-export function waitForPopupMessage<T = unknown>(expectedType: string, timeoutMs = 120000): Promise<T> {
+type PopupMessageOptions<T> = {
+  timeoutMs?: number;
+  predicate?: (message: T) => boolean;
+};
+
+export function waitForPopupMessage<T = unknown>(
+  expectedType: string,
+  options?: PopupMessageOptions<T>
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    const timeoutMs = options?.timeoutMs ?? 120000;
     const timer = setTimeout(() => {
       window.removeEventListener("message", onMessage);
       reject(new Error("Popup timed out"));
@@ -35,10 +44,14 @@ export function waitForPopupMessage<T = unknown>(expectedType: string, timeoutMs
         if (event.origin !== window.location.origin) return;
         const data = event.data as { type?: string } | undefined;
         if (!data || data.type !== expectedType) return;
+        const payload = event.data as T;
+        if (options?.predicate && !options.predicate(payload)) {
+          return;
+        }
         clearTimeout(timer);
         window.removeEventListener("message", onMessage);
-        resolve(event.data as T);
-      } catch (e) {
+        resolve(payload);
+      } catch {
         // ignore and continue listening
       }
     }
@@ -46,5 +59,3 @@ export function waitForPopupMessage<T = unknown>(expectedType: string, timeoutMs
     window.addEventListener("message", onMessage);
   });
 }
-
-

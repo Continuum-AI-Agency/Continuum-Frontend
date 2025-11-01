@@ -1,13 +1,24 @@
 "use client";
 
 import { Avatar, Button, DropdownMenu, Flex, Text, IconButton } from "@radix-ui/themes";
-import { ExitIcon, PersonIcon, GearIcon, HamburgerMenuIcon } from "@radix-ui/react-icons";
+import { ExitIcon, PersonIcon, GearIcon, HamburgerMenuIcon, LayersIcon } from "@radix-ui/react-icons";
+import Link from "next/link";
 import React from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSession } from "@/hooks/useSession";
 import ThemeToggle from "./theme-toggle";
 
-export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void }) {
+type BrandSummary = { id: string; name: string; completed: boolean };
+
+export function DashboardHeader({
+  onOpenMobile,
+  activeBrandId,
+  brandSummaries = [],
+}: {
+  onOpenMobile?: () => void;
+  activeBrandId?: string;
+  brandSummaries?: BrandSummary[];
+}) {
   const { logout, isPending } = useAuth();
   const { user } = useSession();
   return (
@@ -30,6 +41,36 @@ export function DashboardHeader({ onOpenMobile }: { onOpenMobile?: () => void })
         </div>
 
         <Flex align="center" gap="3 sm:gap-4">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Button variant="outline" size="2">
+                <LayersIcon className="mr-2" />
+                {brandSummaries.find(b => b.id === activeBrandId)?.name || "Brands"}
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end">
+              {brandSummaries.map(brand => (
+                <DropdownMenu.Item
+                  key={brand.id}
+                  asChild
+                >
+                  <Link href={`/dashboard?brand=${brand.id}`}>
+                    {brand.name || "Untitled brand"}
+                    {!brand.completed && (
+                      <Text size="1" color="gray" className="ml-2">
+                        Incomplete
+                      </Text>
+                    )}
+                  </Link>
+                </DropdownMenu.Item>
+              ))}
+              <DropdownMenu.Separator />
+              <DropdownMenu.Item asChild>
+                <Link href="/settings">Manage brand profiles</Link>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+
           <ThemeToggle />
 
           <DropdownMenu.Root>

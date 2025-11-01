@@ -4,17 +4,20 @@ import { TextField, IconButton } from "@radix-ui/themes";
 import { EyeOpenIcon, EyeNoneIcon } from "@radix-ui/react-icons";
 import { forwardRef, useState } from "react";
 
-interface FormInputProps extends React.ComponentPropsWithoutRef<typeof TextField.Root> {
+type RootProps = React.ComponentPropsWithoutRef<typeof TextField.Root>;
+type InputType = RootProps["type"];
+
+type FormInputProps = Omit<RootProps, "type"> & {
   label: string;
   error?: string;
-  type?: string;
-}
+  type?: InputType;
+};
 
 export const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
   ({ label, error, type, ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
     const isPasswordField = type === "password";
-    const inputType = isPasswordField && showPassword ? "text" : type;
+    const inputType: InputType | undefined = isPasswordField && showPassword ? "text" : type;
 
     return (
       <div className="space-y-2">

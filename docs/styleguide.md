@@ -116,6 +116,24 @@ Shadows are used subtly in dark mode to simulate elevation and lift content off 
 * **Performance**: All motion should be optimized to run on the GPU (**`transform`**, **`opacity`**).
 * **Duration**: Standard interactions should use short durations, such as **`duration-200` to `duration-300ms`**, for snappy feedback.
 
+### Radix Themes & Primitives Rules
+
+- **Theme Provider**: Wrap the app in Radix `Theme` via `src/components/theme-provider.tsx`. Use `appearance` to sync with `data-theme`.
+- **Core Components**: Prefer Radix Themes for layout and UI primitives: `Container`, `Box`, `Flex`, `Grid`, `Heading`, `Text`, `Button`, `Card`, `Tabs`, `Separator`, `Badge`.
+- **Navigation**: Use `@radix-ui/react-navigation-menu` for top-level header IA (Product, Pricing, Solutions, Resources, Sign in) plus right-aligned CTAs.
+- **FAQ**: Use `@radix-ui/react-accordion` with keyboard support and focus-visible rings.
+- **Tabs**: Use Radix Themes `Tabs` for pricing toggles (Monthly/Annual). Annual shows a badge “2 months free”.
+- **Focus Rings**: All interactive elements must show `ring-2` equivalent focus via global CSS (see `globals.css`).
+
+### YC Landing IA Checklist
+
+1. Hero: clear H1 + 1-sentence subhead; dual CTAs “Start now” + “Contact sales”.
+2. Social proof: logo strip or metrics.
+3. Product value: 3 module cards — `Social+`, `Performance+`, `Studio+`.
+4. Features: concise bullets, no jargon, scan-friendly.
+5. Pricing: Social+ $300/mo or $3,000/yr (2 months free). Performance+ and Studio+ (rendering) via Contact sales. Studio+ frontier multimodal/prompt templates/brand integrations are pay‑as‑you‑go add‑ons.
+6. FAQ and footer.
+
 ---
 
 ## 6. Global & Accessibility Styling

@@ -29,10 +29,11 @@ export const GalaxyBackground = memo(function GalaxyBackground({ className, inte
 
   // Palette per appearance
   const isDark = appearance === "dark";
-  const c1 = isDark ? "rgba(160,140,207,0.24)" : "rgba(255,122,203,0.25)"; // purple / pink
-  const c2 = isDark ? "rgba(93,42,142,0.18)" : "rgba(255,255,255,0.22)"; // deep purple / white
-  const c3 = isDark ? "rgba(0,0,0,0.18)" : "rgba(255,210,238,0.14)"; // softened depth
-  const vignetteTint = isDark ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.06)";
+  // Use CSS variables to stabilize SSR/client style serialization
+  const c1 = isDark ? "var(--bg-galaxy-c1-dark)" : "var(--bg-galaxy-c1-light)";
+  const c2 = isDark ? "var(--bg-galaxy-c2-dark)" : "var(--bg-galaxy-c2-light)";
+  const c3 = isDark ? "var(--bg-galaxy-c3-dark)" : "var(--bg-galaxy-c3-light)";
+  const vignetteTint = isDark ? "var(--bg-galaxy-vignette-dark)" : "var(--bg-galaxy-vignette-light)";
 
   return (
     <div className={className ?? ""} aria-hidden>
@@ -58,7 +59,7 @@ export const GalaxyBackground = memo(function GalaxyBackground({ className, inte
         className="pointer-events-none fixed inset-0 -z-10"
         style={{
           background:
-            `radial-gradient(1200px 800px at 10% 110%, ${isDark ? "rgba(160,140,207,0.06)" : "rgba(255,210,238,0.10)"}, transparent 70%), ` +
+            `radial-gradient(1200px 800px at 10% 110%, ${isDark ? "var(--bg-galaxy-c1-overlay-dark)" : "var(--bg-galaxy-c1-overlay-light)"}, transparent 70%), ` +
             `linear-gradient(115deg, ${vignetteTint}, rgba(0,0,0,0.00) 35%, ${isDark ? "rgba(0,0,0,0.30)" : "rgba(0,0,0,0.04)"})`,
           mixBlendMode: "normal",
           willChange: "transform",

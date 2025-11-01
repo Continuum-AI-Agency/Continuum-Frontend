@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { Box, Container, Flex, Grid, Heading, Text, Card, Button } from "@radix-ui/themes";
+import { Box, Container, Flex, Grid, Heading, Text, Card, Button, Badge, Tabs } from "@radix-ui/themes";
 
 export function PricingSection() {
   return (
@@ -15,9 +17,21 @@ export function PricingSection() {
             <Card className="border border-white/40 bg-white p-8 shadow-lg dark:border-white/10 dark:bg-slate-900/70">
               <Flex direction="column" gap="4">
                 <Text size="2" color="gray" className="uppercase tracking-wide text-slate-500 dark:text-slate-300">
-                  Organic launchpad
+                  Social+
                 </Text>
-                <Heading size="7">$300<span className="text-base font-medium">/month</span></Heading>
+                <Tabs.Root defaultValue="monthly">
+                  <Tabs.List>
+                    <Tabs.Trigger value="monthly">Monthly</Tabs.Trigger>
+                    <Tabs.Trigger value="annual">Annual</Tabs.Trigger>
+                  </Tabs.List>
+                  <Tabs.Content value="monthly">
+                    <Heading size="7">$300<span className="text-base font-medium">/mo</span></Heading>
+                  </Tabs.Content>
+                  <Tabs.Content value="annual">
+                    <Heading size="7">$3,000<span className="text-base font-medium">/yr</span> <Badge color="green">2 months free</Badge></Heading>
+                    <Text size="2" color="gray">Save $600 annually</Text>
+                  </Tabs.Content>
+                </Tabs.Root>
                 <Text size="3" color="gray">
                   Unlimited organic channels, AI content drafting, scheduling, and analytics in one workspace.
                 </Text>
@@ -35,8 +49,8 @@ export function PricingSection() {
                     <span>Single dashboard for performance and anomaly alerts</span>
                   </li>
                 </ul>
-                <Button size="3" asChild data-stripe-plan="organic-monthly" className="mt-2">
-                  <Link href="#checkout">Add Stripe checkout hook</Link>
+                <Button size="3" asChild className="mt-2">
+                  <Link href="/onboarding">Start now</Link>
                 </Button>
               </Flex>
             </Card>
@@ -44,16 +58,16 @@ export function PricingSection() {
             <Card className="border border-slate-300/60 bg-slate-100/60 p-8 shadow-sm backdrop-blur dark:border-slate-600/60 dark:bg-slate-800/60">
               <Flex direction="column" gap="4">
                 <Text size="2" color="gray" className="uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                  Paid media & custom renders
+                  Performance+ & Studio+ (rendering)
                 </Text>
-                <Heading size="5">Consultative engagement</Heading>
+                <Heading size="5">Custom pricing</Heading>
                 <Text size="3" color="gray">
-                  Unlock campaign engineering, creative ops, and premium render packages tailor-made for your growth stage.
+                  Unlock paid media orchestration and premium render packages tailor-made for your growth stage.
                 </Text>
                 <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-200">
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-slate-500" />
-                    <span>Joint planning workshop with Alex's team</span>
+                    <span>Joint planning workshop with your team</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-slate-500" />
@@ -61,12 +75,15 @@ export function PricingSection() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="mt-1 h-2 w-2 rounded-full bg-slate-500" />
-                    <span>Reserved access to Continuum's render studio</span>
+                  <span>Reserved access to Continuum&apos;s render studio</span>
                   </li>
                 </ul>
                 <Button size="3" variant="outline" asChild>
-                  <Link href="#book-demo">Book consultation</Link>
+                  <Link href="mailto:hello@continuum.ai">Contact sales</Link>
                 </Button>
+                <Text size="2" color="gray" className="mt-2">
+                  Studio+ (frontier multimodal, prompt templates, brand integrations) is a pay‑as‑you‑go add‑on to any module.
+                </Text>
               </Flex>
             </Card>
           </Grid>

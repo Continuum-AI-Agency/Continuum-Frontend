@@ -33,7 +33,7 @@ To empower creators and marketers by transforming their fragmented workflow into
 - **Organic Content Module:** Full workflow from trend selection to AI content generation, creative integration, multi-platform publishing, and performance metric display.
 - **Campaigns Module:** Full workflow for creating, configuring, launching, and monitoring paid media campaigns based on AI trend analysis.
 - **Creative Studio Module:** Core functionality for generating AI images and videos, managing a central creative asset library, and utilizing an AI prompt generator.
-- **Core Technology:** Development of a responsive, high-performance front-end application and the necessary Supabase backend configuration to support all in-scope features.
+- **Core Technology:** Development of a responsive, high-performance front-end application and the necessary Supabase backend configuration to support all in-scope features. This now includes a server-first event architecture that streams typed Server-Sent Events via `/api/events` for real-time updates surfaced in client leaves.
 
 ### **Out-of-Scope**
 

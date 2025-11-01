@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Flex, Box, Container, Text, Button } from "@radix-ui/themes";
+import * as NavigationMenu from "@radix-ui/react-navigation-menu";
 import ThemeToggle from "../theme-toggle";
 
 export function SiteHeader() {
@@ -18,13 +19,47 @@ export function SiteHeader() {
                 Build, orchestrate, and ship marketing experiences fast
               </Text>
             </Flex>
-            <Flex align="center" gap="3">
-              <Button variant="ghost" asChild>
-                <Link href="/privacy">Privacy</Link>
-              </Button>
-              <Button variant="ghost" asChild>
-                <Link href="/terms">Terms</Link>
-              </Button>
+
+            <Flex align="center" gap="4">
+              <NavigationMenu.Root className="hidden md:flex" aria-label="Primary navigation">
+                <NavigationMenu.List className="flex items-center gap-3 text-sm">
+                  <NavigationMenu.Item>
+                    <NavigationMenu.Link asChild>
+                      <Link href="#product">Product</Link>
+                    </NavigationMenu.Link>
+                  </NavigationMenu.Item>
+                  <NavigationMenu.Item>
+                    <NavigationMenu.Link asChild>
+                      <Link href="#subscribe">Pricing</Link>
+                    </NavigationMenu.Link>
+                  </NavigationMenu.Item>
+                  <NavigationMenu.Item>
+                    <NavigationMenu.Link asChild>
+                      <Link href="#solutions">Solutions</Link>
+                    </NavigationMenu.Link>
+                  </NavigationMenu.Item>
+                  <NavigationMenu.Item>
+                    <NavigationMenu.Link asChild>
+                      <Link href="#resources">Resources</Link>
+                    </NavigationMenu.Link>
+                  </NavigationMenu.Item>
+                  <NavigationMenu.Item>
+                    <NavigationMenu.Link asChild>
+                      <Link href="/oauth/mock">Sign in</Link>
+                    </NavigationMenu.Link>
+                  </NavigationMenu.Item>
+                </NavigationMenu.List>
+              </NavigationMenu.Root>
+
+              <Flex align="center" gap="3">
+                <Button size="2" asChild>
+                  <Link href="/onboarding">Start now</Link>
+                </Button>
+                <Button size="2" variant="outline" asChild>
+                  <Link href="mailto:hello@continuum.ai">Contact sales</Link>
+                </Button>
+              </Flex>
+
               <ThemeToggle />
             </Flex>
           </Flex>

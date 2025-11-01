@@ -18,7 +18,7 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(function Gla
       ref={ref}
       whileHover={{ scale: 1.025, y: -4 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="h-full"
+      className="h-full motion-safe:will-change-transform"
     >
       <Card
         className={cn(
