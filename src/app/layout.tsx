@@ -7,6 +7,7 @@ import { ThemeProvider } from "../components/theme-provider";
 import ThemeToggle from "../components/theme-toggle";
 import GalaxyBackground from "../components/ui/GalaxyBackground";
 import { ToastProvider } from "../components/ui/ToastProvider";
+import { ReactQueryProvider } from "../lib/react-query/provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -69,15 +70,17 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider initialAppearance={initialAppearance}>
-          <ToastProvider>
-            <GalaxyBackground intensity={1} speed="glacial" />
-            <div className="fixed top-4 right-4 z-50">
-              <ThemeToggle />
-            </div>
-            <div className="relative z-10">
-              {children}
-            </div>
-          </ToastProvider>
+          <ReactQueryProvider>
+            <ToastProvider>
+              <GalaxyBackground intensity={1} speed="glacial" />
+              <div className="fixed top-4 right-4 z-50">
+                <ThemeToggle />
+              </div>
+              <div className="relative z-10">
+                {children}
+              </div>
+            </ToastProvider>
+          </ReactQueryProvider>
         </ThemeProvider>
       </body>
     </html>

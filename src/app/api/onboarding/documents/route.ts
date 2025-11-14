@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { appendDocument } from "@/lib/onboarding/storage";
 import type { OnboardingDocument } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -20,18 +21,44 @@ export async function POST(request: Request) {
 
   const source = (formData.get("source") as OnboardingDocument["source"] | null) ?? "upload";
 
+  const supabase = await createSupabaseServerClient();
+
+  // Stable document id ties Storage, DB, and vector chunks together
+  const documentId = createBrandId();
+  const storageBucket = "brand-docs";
+  const storagePath = `${brandId}/${documentId}/${file.name}`;
+
+  // Upload raw file to Supabase Storage
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from(storageBucket)
+    .upload(storagePath, file as File, { contentType: (file as File).type });
+
+  if (uploadError) {
+    return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 });
+  }
+
+  // Invoke Edge function asynchronously to extract/chunk/embed
+  const { data: invokeData } = await supabase.functions.invoke("embed_document", {
+    body: {
+      brandId,
+      documentId,
+      source,
+      storagePath: uploadData?.path ?? storagePath,
+      fileName: (file as File).name,
+      mimeType: (file as File).type,
+    },
+  });
+
   const document: OnboardingDocument = {
-    id: createBrandId(),
-    name: file.name,
+    id: documentId,
+    name: (file as File).name,
     source,
     createdAt: new Date().toISOString(),
     status: "processing",
-    size: file.size,
+    size: (file as File).size,
+    storagePath: uploadData?.path ?? storagePath,
+    jobId: typeof (invokeData as any)?.jobId === "string" ? (invokeData as any).jobId : undefined,
   };
-
-  // TODO: Invoke embedder edge function with `file` to generate embeddings.
-  // For now, immediately mark the document as ready to unblock onboarding.
-  document.status = "ready";
 
   const state = await appendDocument(brandId, document);
   return NextResponse.json({ document, state });

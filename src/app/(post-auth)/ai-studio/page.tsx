@@ -7,11 +7,11 @@ export default function AIStudioPage() {
   return (
     <Container size="4">
       <Flex direction="column" gap="4">
-        <Heading size="6">Creative Studio</Heading>
+        <Heading size="6" className="text-white">Creative Studio</Heading>
         <Text color="gray">Generate on-brand assets and copy powered by Continuum AI.</Text>
-        <Card>
+        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
           <Flex direction="column" gap="3" p="4">
-            <Heading size="4">Coming soon</Heading>
+            <Heading size="4" className="text-white">Coming soon</Heading>
             <Text color="gray">We’re building templates, brand voices, and multi-format exports.</Text>
             <Callout.Root color="amber">
               <Callout.Icon>

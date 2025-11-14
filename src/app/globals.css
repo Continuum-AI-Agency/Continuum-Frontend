@@ -1,35 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  /* --- Light Theme (Continuum) --- */
-  color-scheme: light;
-  --background: #121212; /* Primary Dark */
-  --foreground: #E0E0E0; /* Off-White */
+  /* --- Continuum Default (Dark) --- */
+  color-scheme: dark;
+  --background: #020617; /* slate-950 */
+  --foreground: #E5E7EB; /* gray-200 */
 
-  --card: #1F1F1F; /* Secondary Dark */
-  --card-foreground: #E0E0E0; /* Off-White */
+  --card: #0B1220; /* deep panel base */
+  --card-foreground: #E5E7EB;
 
-  --popover: #1F1F1F; /* Secondary Dark */
-  --popover-foreground: #E0E0E0; /* Off-White */
+  --popover: #0B1220;
+  --popover-foreground: #E5E7EB;
 
-  --primary: #A08CCF; /* Soft Lavender */
-  --primary-foreground: #121212; /* Primary Dark for contrast */
+  --primary: #2563EB; /* brand blue (login button) */
+  --primary-foreground: #0B1220;
 
-  --secondary: #2E2257; /* Deep Indigo */
-  --secondary-foreground: #E0E0E0; /* Off-White */
+  --secondary: #2E2257; /* deep indigo */
+  --secondary-foreground: #E5E7EB;
 
-  --muted: #1F1F1F; /* Secondary Dark */
-  --muted-foreground: #808080; /* Subtle Gray for less important text */
+  --muted: #0F172A; /* slate-900 */
+  --muted-foreground: #94A3B8; /* slate-400 */
 
-  --accent: #53A88A; /* Muted Teal */
-  --accent-foreground: #E0E0E0; /* Off-White */
+  --accent: #53A88A; /* muted teal */
+  --accent-foreground: #E5E7EB;
   
-  --destructive: #f87171; /* Brighter Red for dark mode */
-  --destructive-foreground: #121212; /* Primary Dark */
+  --destructive: #EF4444;
+  --destructive-foreground: #0B1220;
 
-  --border: #2E2E2E; /* Dark Gray Border */
-  --input: #2E2E2E; /* Dark Gray Input Border */
-  --ring: #A08CCF; /* Soft Lavender for focus rings */
+  --border: rgba(255,255,255,0.10);
+  --input: rgba(255,255,255,0.10);
+  --ring: #8B5CF6; /* violet-500 */
   
   --radius: 0.5rem;
   --color-background: var(--background);
@@ -53,7 +53,12 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Galaxy background CSS variables for SSR-stable inline styles */
+  /* Glass surface tokens */
+  --glass-bg: rgba(2, 6, 23, 0.60); /* slate-950 /60 */
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+  /* Legacy Galaxy background CSS variables for SSR-stable inline styles */
   --bg-galaxy-c1-light: rgba(255,122,203,0.25);
   --bg-galaxy-c2-light: rgba(255,255,255,0.22);
   --bg-galaxy-c3-light: rgba(255,210,238,0.14);
@@ -72,37 +77,29 @@ html {
 /* --- Dark Theme (Continuum) --- */
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #ffffff; /* White */
-  --foreground: #1A0F42; /* Dark Blue/Indigo */
-
-  --card: #ffffff; /* White */
-  --card-foreground: #1A0F42; /* Dark Blue/Indigo */
-
-  --popover: #ffffff; /* White */
-  --popover-foreground: #1A0F42; /* Dark Blue/Indigo */
-
-  --primary: #5D2A8E; /* Deep Purple */
-  --primary-foreground: #ffffff; /* White */
-
-  --secondary: #F4F0FB; /* A very light lavender for backgrounds */
-  --secondary-foreground: #5D2A8E; /* Deep Purple */
-
-  --muted: #F4F0FB; /* A very light lavender */
-  --muted-foreground: #5C587A; /* Muted Indigo for less important text */
-
-  --accent: #6FFFB0; /* Aqua Green */
-  --accent-foreground: #1A0F42; /* Dark Blue/Indigo */
-
-  --destructive: #ef4444; /* Standard Red */
-  --destructive-foreground: #ffffff; /* White */
-
-  --border: #E5E0F5; /* Light Lavender Border */
-  --input: #E5E0F5; /* Light Lavender Input Border */
-  --ring: #5D2A8E; /* Deep Purple for focus rings */
-
+  --background: #020617;
+  --foreground: #E5E7EB;
+  --card: #0B1220;
+  --card-foreground: #E5E7EB;
+  --popover: #0B1220;
+  --popover-foreground: #E5E7EB;
+  --primary: #2563EB;
+  --primary-foreground: #0B1220;
+  --secondary: #2E2257;
+  --secondary-foreground: #E5E7EB;
+  --muted: #0F172A;
+  --muted-foreground: #94A3B8;
+  --accent: #53A88A;
+  --accent-foreground: #E5E7EB;
+  --destructive: #EF4444;
+  --destructive-foreground: #0B1220;
+  --border: rgba(255,255,255,0.10);
+  --input: rgba(255,255,255,0.10);
+  --ring: #8B5CF6;
   --radius: 0.5rem;
-
-  /* Galaxy background variables for dark appearance */
+  --glass-bg: rgba(2, 6, 23, 0.60);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   --bg-galaxy-c1-dark: rgba(160,140,207,0.24);
   --bg-galaxy-c2-dark: rgba(93,42,142,0.18);
   --bg-galaxy-c3-dark: rgba(0,0,0,0.18);
@@ -114,25 +111,25 @@ html {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --background: #121212;
-    --foreground: #E0E0E0;
-    --card: #1F1F1F;
-    --card-foreground: #E0E0E0;
-    --popover: #1F1F1F;
-    --popover-foreground: #E0E0E0;
-    --primary: #A08CCF;
-    --primary-foreground: #121212;
+    --background: #020617;
+    --foreground: #E5E7EB;
+    --card: #0B1220;
+    --card-foreground: #E5E7EB;
+    --popover: #0B1220;
+    --popover-foreground: #E5E7EB;
+    --primary: #2563EB;
+    --primary-foreground: #0B1220;
     --secondary: #2E2257;
-    --secondary-foreground: #E0E0E0;
-    --muted: #1F1F1F;
-    --muted-foreground: #808080;
+    --secondary-foreground: #E5E7EB;
+    --muted: #0F172A;
+    --muted-foreground: #94A3B8;
     --accent: #53A88A;
-    --accent-foreground: #E0E0E0;
-    --destructive: #f87171;
-    --destructive-foreground: #121212;
-    --border: #2E2E2E;
-    --input: #2E2E2E;
-    --ring: #A08CCF;
+    --accent-foreground: #E5E7EB;
+    --destructive: #EF4444;
+    --destructive-foreground: #0B1220;
+    --border: rgba(255,255,255,0.10);
+    --input: rgba(255,255,255,0.10);
+    --ring: #8B5CF6;
     --radius: 0.5rem;
   }
 }

@@ -2,6 +2,7 @@ import { Container, Flex, Heading, Text } from "@radix-ui/themes";
 import { ensureOnboardingState, fetchOnboardingMetadata } from "@/lib/onboarding/storage";
 import { isOnboardingComplete, type OnboardingState, type OnboardingMetadata } from "@/lib/onboarding/state";
 import BrandSettingsPanel from "@/components/settings/BrandSettingsPanel";
+import { GlassPanel } from "@/components/ui/GlassPanel";
 
 export default async function SettingsPage() {
   const metadata: OnboardingMetadata = await fetchOnboardingMetadata();
@@ -9,7 +10,7 @@ export default async function SettingsPage() {
 
   if (!activeBrandId) {
     return (
-      <Container size="3" className="py-10">
+    <Container size="3" className="py-10">
         <Heading size="6">Settings</Heading>
         <Text color="gray">Set up a brand profile to unlock settings.</Text>
       </Container>
@@ -32,18 +33,20 @@ export default async function SettingsPage() {
     <Container size="3" className="py-10">
       <Flex direction="column" gap="6">
         <div>
-          <Heading size="7">Settings</Heading>
+          <Heading size="7" className="text-white">Settings</Heading>
           <Text color="gray">Invite teammates, manage brand profiles, and update workspace details.</Text>
         </div>
-        <BrandSettingsPanel
-          data={{
-            activeBrandId,
-            brandSummaries,
-            brandName: activeState.brand.name,
-            members: activeState.members,
-            invites: activeState.invites as OnboardingState["invites"],
-          }}
-        />
+        <GlassPanel className="p-6">
+          <BrandSettingsPanel
+            data={{
+              activeBrandId,
+              brandSummaries,
+              brandName: activeState.brand.name,
+              members: activeState.members,
+              invites: activeState.invites as OnboardingState["invites"],
+            }}
+          />
+        </GlassPanel>
       </Flex>
     </Container>
   );

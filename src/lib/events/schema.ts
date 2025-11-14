@@ -7,6 +7,7 @@ export const CONTINUUM_EVENT_TYPES = [
   "integration.status.changed",
   "campaign.metrics.updated",
   "organic.trend.updated",
+  "onboarding.document.updated",
 ] as const;
 
 export type ContinuumEventName = (typeof CONTINUUM_EVENT_TYPES)[number];
@@ -61,6 +62,16 @@ const organicTrendUpdatedSchema = z
   })
   .strict();
 
+const onboardingDocumentUpdatedSchema = z
+  .object({
+    brandId: z.string(),
+    documentId: z.string(),
+    status: z.enum(["processing", "ready", "error"]),
+    errorMessage: z.string().optional(),
+    updatedAt: z.string().datetime().optional(),
+  })
+  .strict();
+
 export const continuumEventPayloadSchemas = {
   "ai.task.progress": aiTaskProgressSchema,
   "ai.task.completed": aiTaskCompletedSchema,
@@ -68,6 +79,7 @@ export const continuumEventPayloadSchemas = {
   "integration.status.changed": integrationStatusChangedSchema,
   "campaign.metrics.updated": campaignMetricsUpdatedSchema,
   "organic.trend.updated": organicTrendUpdatedSchema,
+  "onboarding.document.updated": onboardingDocumentUpdatedSchema,
 } as const satisfies Record<ContinuumEventName, ZodTypeAny>;
 
 type ContinuumEventSchemaMap = typeof continuumEventPayloadSchemas;

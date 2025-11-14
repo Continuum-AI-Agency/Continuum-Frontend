@@ -15,6 +15,8 @@ import type {
   OnboardingState,
   OnboardingConnectionAccount,
 } from "@/lib/onboarding/state";
+import { createBrandId } from "@/lib/onboarding/state";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const MOCK_ACCOUNT_NAMES = [
   "Primary Brand Account",
@@ -115,4 +117,189 @@ export async function removeDocumentAction(
   documentId: string
 ): Promise<OnboardingState> {
   return removeDocument(brandId, documentId);
+}
+
+export async function enqueueDocumentEmbedAction(
+  brandId: string,
+  input: {
+    name: string;
+    source: OnboardingDocument["source"];
+    externalUrl?: string;
+    storagePath?: string;
+    mimeType?: string;
+    fileName?: string;
+    size?: number;
+  }
+): Promise<OnboardingState> {
+  const supabase = await createSupabaseServerClient();
+  const documentId = createBrandId();
+
+  const { data: invokeData } = await supabase.functions.invoke("embed_document", {
+    body: {
+      brandId,
+      documentId,
+      source: input.source,
+      storagePath: input.storagePath,
+      externalUrl: input.externalUrl,
+      mimeType: input.mimeType,
+      fileName: input.fileName ?? input.name,
+    },
+  });
+
+  const document: OnboardingDocument = {
+    id: documentId,
+    name: input.name,
+    source: input.source,
+    createdAt: new Date().toISOString(),
+    status: "processing",
+    size: input.size,
+    externalUrl: input.externalUrl,
+    storagePath: input.storagePath,
+    jobId: typeof (invokeData as any)?.jobId === "string" ? (invokeData as any).jobId : undefined,
+  };
+
+  return appendDocument(brandId, document);
+}
+
+// ---- New: Sync integration accounts via edge function ----
+type IntegrationGroup = "google" | "meta";
+
+type EdgeAccount = {
+  id: string;
+  externalAccountId: string | null;
+  name: string | null;
+  status: string | null;
+  type: string | null;
+};
+
+type AccountsByPlatformResponse = {
+  syncedAt: string;
+  accountsByPlatform: Record<
+    "youtube" | "googleAds" | "dv360" | "instagram" | "facebook" | "threads",
+    EdgeAccount[]
+  >;
+};
+
+export async function syncIntegrationAccountsAction(
+  brandId: string,
+  groups: IntegrationGroup[]
+): Promise<OnboardingState> {
+  const supabase = await createSupabaseServerClient();
+  // Ensure the user's JWT is forwarded to the Edge Function for RLS
+  let authHeader: Record<string, string> | undefined;
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      authHeader = { Authorization: `Bearer ${session.access_token}` };
+    }
+  } catch {
+    // ignore; we'll call without explicit header
+  }
+  const { data, error } = await supabase.functions.invoke("integration_accounts", {
+    body: { groups },
+    headers: authHeader,
+  });
+  if (error) {
+    const contextBody =
+      typeof (error as { context?: { body?: unknown } })?.context?.body === "string"
+        ? (error as { context: { body: string } }).context.body
+        : undefined;
+    let parsedBody: unknown;
+    if (contextBody) {
+      try {
+        parsedBody = JSON.parse(contextBody);
+      } catch {
+        parsedBody = contextBody;
+      }
+    }
+    console.error("[syncIntegrationAccountsAction] integration_accounts invoke failed", {
+      status: (error as { status?: number })?.status,
+      message: error.message,
+      body: parsedBody,
+      groups,
+      authHeaderProvided: Boolean(authHeader?.Authorization),
+    });
+    // Fall back to current state if invoke fails
+    return fetchOnboardingState(brandId);
+  }
+  const payload = data as AccountsByPlatformResponse;
+  const now = payload?.syncedAt ?? new Date().toISOString();
+
+  const platformKeys = [
+    "youtube",
+    "googleAds",
+    "dv360",
+    "instagram",
+    "facebook",
+    "threads",
+  ] as const;
+
+  const connectionsPatch: Partial<Record<PlatformKey, Parameters<typeof updateConnectionAccounts>[2]>> = {};
+
+  for (const key of platformKeys) {
+    const accounts = payload?.accountsByPlatform?.[key] ?? [];
+    if (!accounts.length) continue;
+    const mapped: OnboardingConnectionAccount[] = accounts.map((a) => ({
+      id: a.id,
+      name: a.name ?? a.externalAccountId ?? "Account",
+      status: (a.status === "pending" || a.status === "error") ? (a.status as "pending" | "error") : "active",
+    }));
+    connectionsPatch[key as PlatformKey] = {
+      connected: true,
+      accountId: mapped[0]?.id ?? null,
+      accounts: mapped,
+      lastSyncedAt: now,
+    };
+  }
+
+  if (Object.keys(connectionsPatch).length === 0) {
+    // Nothing to update; return current state
+    return fetchOnboardingState(brandId);
+  }
+
+  return applyOnboardingPatch(brandId, {
+    connections: connectionsPatch as any,
+  });
+}
+
+// ---- New: Associate selected accounts to brand profile ----
+export async function associateIntegrationAccountsAction(
+  brandId: string,
+  integrationAccountIds: string[]
+): Promise<OnboardingState> {
+  if (!integrationAccountIds?.length) {
+    return fetchOnboardingState(brandId);
+  }
+  const supabase = await createSupabaseServerClient();
+
+  // Read current payloads to preserve any existing metadata
+  const { data: rows } = await supabase
+    .schema("brand_profiles")
+    .from("integration_accounts_assets" as never)
+    .select("id, raw_payload")
+    .in("id", integrationAccountIds);
+
+  const updates = (rows ?? []).map((row: any) => {
+    const merged =
+      row?.raw_payload && typeof row.raw_payload === "object"
+        ? { ...row.raw_payload, selected: true }
+        : { selected: true };
+    return { id: row.id, status: "selected", raw_payload: merged, updated_at: new Date().toISOString() };
+  });
+
+  // Apply updates per row (ensures we don't overwrite raw_payload blindly)
+  await Promise.all(
+    updates.map(update =>
+      supabase
+        .schema("brand_profiles")
+        .from("integration_accounts_assets" as never)
+        .update(update as never)
+        .eq("id", update.id)
+    )
+  );
+
+  // Return the latest onboarding state (UI already holds selections)
+  return fetchOnboardingState(brandId);
 }

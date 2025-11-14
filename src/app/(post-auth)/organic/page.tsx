@@ -1,4 +1,5 @@
 import { Container } from "@radix-ui/themes";
+import { GlassPanel } from "@/components/ui/GlassPanel";
 
 import { OrganicExperience } from "@/components/organic/OrganicExperience";
 import { ORGANIC_PLATFORMS, type OrganicPlatformKey } from "@/lib/organic/platforms";
@@ -28,12 +29,14 @@ export default async function OrganicPage() {
 
   return (
     <Container size="4">
-      <OrganicExperience
-        brandName={onboarding.brand.name}
-        brandDescription={brandDescription}
-        platformAccounts={platformAccounts}
-        brandProfileId={brandProfileId}
-      />
+      <GlassPanel className="p-6">
+        <OrganicExperience
+          brandName={onboarding.brand.name}
+          brandDescription={brandDescription}
+          platformAccounts={platformAccounts}
+          brandProfileId={brandProfileId}
+        />
+      </GlassPanel>
     </Container>
   );
 }

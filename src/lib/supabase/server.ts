@@ -15,9 +15,25 @@ export async function createSupabaseServerClient() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const shouldDelete =
+                !value || (options && typeof options.maxAge === "number" && options.maxAge <= 0);
+
+              if (shouldDelete) {
+                try {
+                  cookieStore.delete(name);
+                } catch {
+                  // Some environments may not support delete; fall back to setting an expired cookie.
+                  cookieStore.set(name, "", {
+                    ...options,
+                    maxAge: 0,
+                  });
+                }
+                return;
+              }
+
+              cookieStore.set(name, value, options);
+            });
           } catch {
             // Server Component, ignore
           }

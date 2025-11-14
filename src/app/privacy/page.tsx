@@ -1,15 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
+import { LOGIN_GLOW_GRADIENT } from "@/lib/ui/backgrounds";
 
 export const dynamic = "force-static";
 
 export default function PrivacyPage() {
-  const glowGradient = `radial-gradient(circle at 60% 20%, rgba(130, 102, 255, 0.45), transparent 55%),
-    radial-gradient(circle at 30% 80%, rgba(99, 253, 207, 0.35), transparent 60%)`;
-
   return (
-    <div className="min-h-screen bg-slate-950" style={{ backgroundImage: glowGradient }}>
+    <div className="min-h-screen bg-slate-950" style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}>
       {/* Header */}
       <div className="p-6">
         <Link

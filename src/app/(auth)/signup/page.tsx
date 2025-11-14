@@ -16,6 +16,7 @@ import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 import { FeatureList } from "@/components/auth/FeatureList";
 import { useAuth } from "@/hooks/useAuth";
 import { signupSchema, type SignupInput } from "@/lib/auth/schemas";
+import { LOGIN_GLOW_GRADIENT } from "@/lib/ui/backgrounds";
 
 const FEATURES = [
   {
@@ -62,12 +63,9 @@ export default function SignupPage() {
     }
   };
 
-  const glowGradient = `radial-gradient(circle at 60% 20%, rgba(130, 102, 255, 0.45), transparent 55%),
-    radial-gradient(circle at 30% 80%, rgba(99, 253, 207, 0.35), transparent 60%)`;
-
   if (success) {
     return (
-      <div className="min-h-screen flex overflow-hidden bg-slate-950" style={{ backgroundImage: glowGradient }}>
+      <div className="min-h-screen flex overflow-hidden bg-slate-950" style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}>
         {/* Left Column */}
         <div className="w-full lg:w-1/2 flex flex-col">
           {/* Header */}
@@ -140,7 +138,7 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex overflow-hidden bg-slate-950" style={{ backgroundImage: glowGradient }}>
+    <div className="min-h-screen flex overflow-hidden bg-slate-950" style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}>
       {/* Left Column - Signup Form */}
       <div className="w-full lg:w-1/2 flex flex-col">
         {/* Header */}

@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import GalaxyBackground from "./ui/GalaxyBackground";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { MobileSidebar } from "./MobileSidebar";
@@ -27,7 +26,6 @@ export default function DashboardLayoutShell({
 
   return (
     <div className="min-h-screen">
-      <GalaxyBackground intensity={1} speed="glacial" />
       <div className="flex h-screen">
         <div className="hidden md:block">
           <DashboardSidebar />

@@ -21,7 +21,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Welcome Section */}
       <div>
-        <Heading size="6" className="mb-2">
+        <Heading size="6" className="mb-2 text-white">
           Dashboard Overview
         </Heading>
         <Text color="gray">
@@ -31,7 +31,7 @@ export default function DashboardPage() {
 
       {/* Quick Stats */}
       <Grid columns={{ initial: "1", sm: "2", lg: "4" }} gap="4">
-        <Card>
+        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
           <Flex direction="column" gap="2" p="4">
             <Flex align="center" justify="between">
               <Text size="2" color="gray">
@@ -48,7 +48,7 @@ export default function DashboardPage() {
           </Flex>
         </Card>
 
-        <Card>
+        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
           <Flex direction="column" gap="2" p="4">
             <Flex align="center" justify="between">
               <Text size="2" color="gray">
@@ -65,7 +65,7 @@ export default function DashboardPage() {
           </Flex>
         </Card>
 
-        <Card>
+        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
           <Flex direction="column" gap="2" p="4">
             <Flex align="center" justify="between">
               <Text size="2" color="gray">
@@ -82,7 +82,7 @@ export default function DashboardPage() {
           </Flex>
         </Card>
 
-        <Card>
+        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
           <Flex direction="column" gap="2" p="4">
             <Flex align="center" justify="between">
               <Text size="2" color="gray">
@@ -101,7 +101,7 @@ export default function DashboardPage() {
       </Grid>
 
       {/* Quick Actions */}
-      <Card>
+      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
         <Flex direction="column" gap="4" p="4">
           <Flex align="center" justify="between">
             <Heading size="4">Quick Actions</Heading>
@@ -131,7 +131,7 @@ export default function DashboardPage() {
       </Card>
 
       {/* Recent Activity */}
-      <Card>
+      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
         <Flex direction="column" gap="4" p="4">
           <Heading size="4">Recent Activity</Heading>
 

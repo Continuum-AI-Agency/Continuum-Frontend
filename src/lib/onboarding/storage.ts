@@ -16,6 +16,7 @@ import {
   ensureBrandExists,
   mergeOnboardingState,
   parseOnboardingMetadata,
+  serializeOnboardingMetadata,
 } from "./state";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 
@@ -61,8 +62,9 @@ async function saveMetadata(
   supabase: SupabaseClient,
   metadata: OnboardingMetadata
 ): Promise<void> {
+  const serialized = serializeOnboardingMetadata(metadata);
   const { error } = await supabase.auth.updateUser({
-    data: { onboarding: metadata },
+    data: { onboarding: serialized },
   });
   if (error) {
     throw error;
@@ -109,7 +111,13 @@ async function loadOnboardingContext(
   requestedBrandId?: string
 ): Promise<OnboardingContext> {
   const { supabase, user, owner } = await getAuthContext();
-  let metadata = parseOnboardingMetadata(user.user_metadata?.onboarding);
+  const rawOnboarding = user.user_metadata?.onboarding;
+  const metadataWasSerialized = typeof rawOnboarding === "string";
+  let metadata = parseOnboardingMetadata(rawOnboarding);
+
+  if (rawOnboarding && !metadataWasSerialized) {
+    await saveMetadata(supabase, metadata);
+  }
 
   if (!metadata.activeBrandId && Object.keys(metadata.brands).length === 0) {
     const initialBrandId = createBrandId();

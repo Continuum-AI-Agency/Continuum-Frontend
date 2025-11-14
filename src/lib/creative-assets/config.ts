@@ -1,4 +1,4 @@
-const DEFAULT_BUCKET = "creative-assets";
+const DEFAULT_BUCKET = "brand-assets";
 
 export function getCreativeAssetsBucket(): string {
   return process.env.NEXT_PUBLIC_SUPABASE_CREATIVE_BUCKET?.trim() || DEFAULT_BUCKET;

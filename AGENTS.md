@@ -1,5 +1,3 @@
-Here is the well-formatted markdown version of the Continuum Frontend Development Guide.
-
 # AGENTS.md: Continuum Frontend Development Guide
 
 This document outlines the architectural and code quality rules for professional software development on the **Continuum** project, informed by the principles of **Clean Code** and **The Clean Coder** by Robert C. Martin. Our commitment is to deliver value with code that is inherently **easy to read, maintain, and test**.

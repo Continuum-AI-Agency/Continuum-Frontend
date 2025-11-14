@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  compressToEncodedURIComponent,
+  decompressFromEncodedURIComponent,
+} from "lz-string";
 import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
 
 export const BRAND_VOICE_TAGS = [
@@ -57,9 +61,19 @@ const brandSchema = z.object({
   brandVoiceTags: z.array(brandVoiceTagSchema),
   targetAudience: z.union([z.string(), z.null()]),
   timezone: z.string(),
+  website: z.union([z.string().url(), z.null()]).default(null),
+  logoPath: z.union([z.string(), z.null()]).default(null),
 });
 
-const documentSourceSchema = z.enum(["upload", "canva", "figma", "google-drive", "sharepoint"]);
+const documentSourceSchema = z.enum([
+  "upload",
+  "canva",
+  "figma",
+  "google-drive",
+  "sharepoint",
+  "notion",
+  "website",
+]);
 
 const onboardingDocumentSchema = z.object({
   id: z.string(),
@@ -69,6 +83,9 @@ const onboardingDocumentSchema = z.object({
   status: z.enum(["processing", "ready", "error"]).default("ready"),
   size: z.number().nonnegative().optional(),
   externalUrl: z.string().url().optional(),
+  storagePath: z.string().optional(),
+  jobId: z.string().optional(),
+  errorMessage: z.string().optional(),
 });
 
 const brandMemberSchema = z.object({
@@ -146,6 +163,8 @@ export function createDefaultOnboardingState(owner?: BrandMember): OnboardingSta
       brandVoiceTags: [],
       targetAudience: null,
       timezone: "UTC",
+      website: null,
+      logoPath: null,
     },
     documents: [],
     connections: makeDefaultConnections(),
@@ -166,7 +185,20 @@ export function createDefaultMetadata(brandId: string, owner?: BrandMember): Onb
 
 export function parseOnboardingMetadata(raw: unknown): OnboardingMetadata {
   if (!raw) return { activeBrandId: null, brands: {} };
-  const parsed = onboardingMetadataSchema.safeParse(raw);
+
+  let candidate: unknown = raw;
+
+  if (typeof raw === "string") {
+    try {
+      const decompressed = decompressFromEncodedURIComponent(raw);
+      const payload = decompressed ?? raw;
+      candidate = JSON.parse(payload);
+    } catch {
+      return { activeBrandId: null, brands: {} };
+    }
+  }
+
+  const parsed = onboardingMetadataSchema.safeParse(candidate);
   if (!parsed.success) {
     return { activeBrandId: null, brands: {} };
   }
@@ -228,6 +260,10 @@ export function mergeOnboardingState(
       targetAudience:
         patch.brand.targetAudience === undefined ? next.brand.targetAudience : patch.brand.targetAudience,
       timezone: patch.brand.timezone ?? next.brand.timezone,
+      website:
+        patch.brand.website === undefined ? (next.brand.website ?? null) : (patch.brand.website ?? null),
+      logoPath:
+        patch.brand.logoPath === undefined ? (next.brand.logoPath ?? null) : (patch.brand.logoPath ?? null),
     };
   }
 
@@ -277,4 +313,12 @@ export function mergeOnboardingState(
 
 export function isOnboardingComplete(state: OnboardingState): boolean {
   return Boolean(state.completedAt);
+}
+
+export function serializeOnboardingMetadata(
+  metadata: OnboardingMetadata
+): string {
+  const json = JSON.stringify(metadata);
+  const compressed = compressToEncodedURIComponent(json);
+  return compressed ?? json;
 }

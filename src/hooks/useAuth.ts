@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth/actions";
 import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "@/lib/auth/schemas";
 import { openCenteredPopup, waitForPopupMessage } from "@/lib/popup";
+import { buildOAuthStartUrl } from "@/lib/oauth";
 
 export function useAuth() {
   const [isPending, startTransition] = useTransition();
@@ -137,7 +138,7 @@ export function useAuth() {
     setIsGooglePending(true);
 
     try {
-      const url = `/oauth/start?provider=google&context=login`;
+      const url = buildOAuthStartUrl("google", "login");
       const popup = openCenteredPopup(url, "Continue with Google");
 
       if (!popup) {
@@ -180,6 +181,10 @@ export function useAuth() {
         return;
       }
 
+      try {
+        popup.close();
+      } catch {}
+
       router.refresh();
       const redirectTo = searchParams.get("redirectTo") || "/dashboard";
       router.replace(redirectTo);
@@ -208,4 +213,3 @@ export function useAuth() {
     clearError,
   };
 }
-

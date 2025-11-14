@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { resolveRequestOrigin } from "@/lib/server/origin";
 
 type PopupPayload =
   | {
@@ -15,8 +16,14 @@ type PopupPayload =
       message: string;
     };
 
-function renderPopupResult(payload: PopupPayload, status = 200): NextResponse {
+function renderPopupResult(
+  payload: PopupPayload,
+  fallbackRedirect: string,
+  status = 200,
+  postMessageOrigin?: string
+): NextResponse {
   const safePayload = JSON.stringify(payload);
+  const targetOrigin = postMessageOrigin ?? new URL(fallbackRedirect).origin;
   const html = `<!DOCTYPE html>
 <html lang="en">
   <head><meta charset="utf-8" /><title>OAuth</title></head>
@@ -30,12 +37,15 @@ function renderPopupResult(payload: PopupPayload, status = 200): NextResponse {
         try {
           const payload = ${safePayload};
           if (window.opener) {
-            window.opener.postMessage(payload, window.location.origin);
+            window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
+            try { window.close(); } catch (_) {}
+            return;
           }
         } catch (error) {
           console.error("Failed to notify opener", error);
         }
-        window.close();
+        // Fallback when opened in the main window
+        window.location.replace(${JSON.stringify(fallbackRedirect)});
       })();
     </script>
   </body>
@@ -56,6 +66,7 @@ export async function GET(request: Request) {
   const context = url.searchParams.get("context") ?? "onboarding";
   const code = url.searchParams.get("code");
   const errorDescription = url.searchParams.get("error_description");
+  const targetOrigin = resolveRequestOrigin(request, url, url.searchParams.get("origin"));
 
   if (errorDescription) {
     return renderPopupResult(
@@ -65,7 +76,9 @@ export async function GET(request: Request) {
         context,
         message: errorDescription,
       },
-      400
+      `${targetOrigin}/login?error=auth_callback_failed`,
+      400,
+      targetOrigin
     );
   }
 
@@ -77,7 +90,9 @@ export async function GET(request: Request) {
         context,
         message: "Missing authorization code.",
       },
-      400
+      `${targetOrigin}/login?error=auth_callback_failed`,
+      400,
+      targetOrigin
     );
   }
 
@@ -92,14 +107,21 @@ export async function GET(request: Request) {
         context,
         message: error.message,
       },
-      400
+      `${targetOrigin}/login?error=auth_callback_failed`,
+      400,
+      targetOrigin
     );
   }
 
-  return renderPopupResult({
-    type: "oauth:success",
-    provider,
-    context,
-    accountId: null,
-  });
+  return renderPopupResult(
+    {
+      type: "oauth:success",
+      provider,
+      context,
+      accountId: null,
+    },
+    `${targetOrigin}/dashboard`,
+    200,
+    targetOrigin
+  );
 }

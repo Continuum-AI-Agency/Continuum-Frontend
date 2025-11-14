@@ -26,6 +26,7 @@ export function openCenteredPopup(url: string, title: string, width = 480, heigh
 type PopupMessageOptions<T> = {
   timeoutMs?: number;
   predicate?: (message: T) => boolean;
+  signal?: AbortSignal;
 };
 
 export function waitForPopupMessage<T = unknown>(
@@ -35,9 +36,21 @@ export function waitForPopupMessage<T = unknown>(
   return new Promise<T>((resolve, reject) => {
     const timeoutMs = options?.timeoutMs ?? 120000;
     const timer = setTimeout(() => {
-      window.removeEventListener("message", onMessage);
+      cleanup();
       reject(new Error("Popup timed out"));
     }, timeoutMs);
+
+    const onAbort = () => {
+      cleanup();
+      reject(new Error("Popup wait aborted"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        clearTimeout(timer);
+        return reject(new Error("Popup wait aborted"));
+      }
+      options.signal.addEventListener("abort", onAbort, { once: true });
+    }
 
     function onMessage(event: MessageEvent) {
       try {
@@ -48,14 +61,55 @@ export function waitForPopupMessage<T = unknown>(
         if (options?.predicate && !options.predicate(payload)) {
           return;
         }
-        clearTimeout(timer);
-        window.removeEventListener("message", onMessage);
+        cleanup();
         resolve(payload);
       } catch {
         // ignore and continue listening
       }
     }
 
+    function cleanup() {
+      clearTimeout(timer);
+      window.removeEventListener("message", onMessage);
+      if (options?.signal) {
+        options.signal.removeEventListener("abort", onAbort);
+      }
+    }
+
     window.addEventListener("message", onMessage);
+  });
+}
+
+export function waitForPopupClosed(
+  popup: Window | null,
+  options?: { intervalMs?: number; signal?: AbortSignal }
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const intervalMs = options?.intervalMs ?? 500;
+    const check = setInterval(() => {
+      if (!popup || popup.closed) {
+        cleanup();
+        resolve();
+      }
+    }, intervalMs);
+
+    const onAbort = () => {
+      cleanup();
+      reject(new Error("Popup close wait aborted"));
+    };
+    if (options?.signal) {
+      if (options.signal.aborted) {
+        clearInterval(check);
+        return reject(new Error("Popup close wait aborted"));
+      }
+      options.signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    function cleanup() {
+      clearInterval(check);
+      if (options?.signal) {
+        options.signal.removeEventListener("abort", onAbort);
+      }
+    }
   });
 }

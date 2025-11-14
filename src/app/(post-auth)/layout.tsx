@@ -4,6 +4,7 @@ import DashboardLayoutShell from "../../components/DashboardLayoutShell";
 import { isOnboardingComplete, type OnboardingMetadata, type OnboardingState } from "@/lib/onboarding/state";
 import { fetchOnboardingMetadata, ensureOnboardingState } from "@/lib/onboarding/storage";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { LOGIN_GLOW_GRADIENT } from "@/lib/ui/backgrounds";
 
 export const metadata: Metadata = {
   title: "Dashboard | Continuum AI",
@@ -42,11 +43,13 @@ export default async function DashboardLayout({
   });
 
   return (
-    <DashboardLayoutShell
-      activeBrandId={activeBrandId}
-      brandSummaries={brandSummaries}
-    >
-      {children}
-    </DashboardLayoutShell>
+    <div className="min-h-screen bg-slate-950 overflow-hidden" style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}>
+      <DashboardLayoutShell
+        activeBrandId={activeBrandId}
+        brandSummaries={brandSummaries}
+      >
+        {children}
+      </DashboardLayoutShell>
+    </div>
   );
 }

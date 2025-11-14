@@ -37,13 +37,13 @@ export default function IntegrationsPage() {
   return (
     <Container size="4">
       <Flex direction="column" gap="4">
-        <Heading size="6">Integrations</Heading>
+        <Heading size="6" className="text-white">Integrations</Heading>
         <Text color="gray">Manage connections to social and ads platforms. Connect or disconnect anytime.</Text>
         <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
           {PLATFORMS.map(({ key, label }) => {
             const isConnected = connections[key];
             return (
-              <Card key={key}>
+              <Card key={key} className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
                 <Flex direction="column" gap="2" p="3">
                   <Flex align="center" justify="between">
                     <Flex align="center" gap="2">

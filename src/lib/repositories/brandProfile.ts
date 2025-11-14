@@ -8,7 +8,7 @@ import {
   setActiveBrand,
 } from "@/lib/onboarding/storage";
 import { z } from "zod";
-import { http } from "@/lib/api/http";
+import { httpServer } from "@/lib/api/http.server";
 
 export type BrandSummary = {
   id: string;
@@ -75,24 +75,24 @@ const brandSettingsSchema = z.object({
 export function createGatewayBrandProfileRepository(): BrandProfileRepository {
   return {
     async switchActiveBrand(brandId: string): Promise<void> {
-      await http.request({ path: `/brands/${brandId}/switch`, method: "POST" });
+      await httpServer.request({ path: `/brands/${brandId}/switch`, method: "POST" });
     },
     async renameBrand(brandId: string, name: string): Promise<void> {
-      await http.request({ path: `/brands/${brandId}`, method: "PATCH", body: { name } });
+      await httpServer.request({ path: `/brands/${brandId}`, method: "PATCH", body: { name } });
     },
     async createBrand(name?: string): Promise<{ brandId: string }> {
       const schema = z.object({ brandId: z.string() });
-      return await http.request({ path: "/brands", method: "POST", body: { name }, schema });
+      return await httpServer.request({ path: "/brands", method: "POST", body: { name }, schema });
     },
     async removeMember(brandId: string, email: string): Promise<void> {
-      await http.request({ path: `/brands/${brandId}/members`, method: "DELETE", body: { email } });
+      await httpServer.request({ path: `/brands/${brandId}/members`, method: "DELETE", body: { email } });
     },
     async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }> {
       const schema = z.object({ link: z.string().url() });
-      return await http.request({ path: `/brands/${brandId}/invites`, method: "POST", body: { email, role, siteUrl }, schema });
+      return await httpServer.request({ path: `/brands/${brandId}/invites`, method: "POST", body: { email, role, siteUrl }, schema });
     },
     async revokeInvite(brandId: string, inviteId: string): Promise<void> {
-      await http.request({ path: `/brands/${brandId}/invites/${inviteId}`, method: "DELETE" });
+      await httpServer.request({ path: `/brands/${brandId}/invites/${inviteId}`, method: "DELETE" });
     },
   };
 }
@@ -102,5 +102,4 @@ export function createBrandProfileRepository(): BrandProfileRepository {
   return createSupabaseBrandProfileRepository();
   // return createGatewayBrandProfileRepository();
 }
-
 

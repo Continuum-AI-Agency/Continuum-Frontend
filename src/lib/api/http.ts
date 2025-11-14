@@ -1,31 +1,12 @@
-import { z } from "zod";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { assertOk } from "@/lib/api/errors";
-// Use dynamic imports to avoid bundling client code in server context and vice versa.
+import type { RequestOptions } from "@/lib/api/http.types";
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
-export type RequestOptions<TResponse> = {
-  path: string;
-  method?: HttpMethod;
-  body?: unknown;
-  headers?: Record<string, string>;
-  schema?: z.ZodType<TResponse>;
-  cache?: RequestCache;
-  next?: NextFetchRequestConfig;
-};
-
-async function getAccessToken(): Promise<string | undefined> {
-  const isBrowser = typeof window !== "undefined";
+async function getBrowserAccessToken(): Promise<string | undefined> {
+  if (typeof window === "undefined") return undefined;
   try {
-    if (isBrowser) {
-      const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ?? undefined;
-    }
-    const { createSupabaseServerClient } = await import("@/lib/supabase/server");
-    const supabase = await createSupabaseServerClient();
+    const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+    const supabase = createSupabaseBrowserClient();
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? undefined;
   } catch {
@@ -38,7 +19,7 @@ export async function request<TResponse = unknown>(options: RequestOptions<TResp
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
-  const token = await getAccessToken();
+  const token = await getBrowserAccessToken();
   const finalHeaders: Record<string, string> = {
     ...(body ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -67,5 +48,4 @@ export async function request<TResponse = unknown>(options: RequestOptions<TResp
 export const http = {
   request,
 };
-
 

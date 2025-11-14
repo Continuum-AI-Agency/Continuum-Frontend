@@ -3,6 +3,7 @@ import { Container, Flex, Heading, Text } from "@radix-ui/themes";
 import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { isOnboardingComplete } from "@/lib/onboarding/state";
+import OnboardingGate from "@/components/onboarding/OnboardingGate";
 
 export const metadata = {
   title: "Onboarding | Continuum AI",
@@ -25,16 +26,16 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   }
 
   return (
-    <div className="min-h-screen py-10">
-      <Container size="3">
+    <OnboardingGate>
+      <Container size="3" className="py-10">
         <Flex direction="column" gap="5">
           <div>
-            <Heading size="7">Get started</Heading>
+            <Heading size="7" className="text-white">Get started</Heading>
             <Text color="gray">Connect your accounts and create your first Brand Profile.</Text>
           </div>
           <OnboardingFlow brandId={brandId} initialState={state} />
         </Flex>
       </Container>
-    </div>
+    </OnboardingGate>
   );
 }

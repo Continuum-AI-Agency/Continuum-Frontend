@@ -100,7 +100,7 @@ export async function signupAction(input: SignupInput): Promise<ActionResult> {
           name: validation.data.name,
           howDidYouHear: validation.data.howDidYouHear,
         },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
       },
     });
 
@@ -205,7 +205,7 @@ export async function signInWithGoogleAction(): Promise<ActionResult<{ url: stri
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
       },
     });
 
@@ -242,7 +242,7 @@ export async function signInWithLinkedInAction(): Promise<ActionResult<{ url: st
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "linkedin_oidc",
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
       },
     });
 
@@ -278,7 +278,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
   if (!validation.success) {
     return {
       success: false,
-      error: validation.error.errors[0]?.message || "Invalid input",
+      error: validation.error.issues[0]?.message || "Invalid input",
     };
   }
 
@@ -288,7 +288,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
     const { error } = await supabase.auth.signInWithOtp({
       email: validation.data.email,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
         shouldCreateUser: true,
       },
     });

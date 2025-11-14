@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { openCenteredPopup, waitForPopupMessage } from "@/lib/popup";
+import { buildOAuthStartUrl } from "@/lib/oauth";
 import { useToast } from "@/components/ui/ToastProvider";
 
 export default function GoogleOAuthButton() {
@@ -14,7 +15,8 @@ export default function GoogleOAuthButton() {
     if (pending) return;
     setPending(true);
 
-    const popup = openCenteredPopup("/oauth/start?provider=google&context=auth", "Continue with Google");
+    const popupUrl = buildOAuthStartUrl("google", "auth");
+    const popup = openCenteredPopup(popupUrl, "Continue with Google");
     if (!popup) {
       show({ title: "Popup blocked", description: "Enable popups to continue with Google.", variant: "error" });
       setPending(false);

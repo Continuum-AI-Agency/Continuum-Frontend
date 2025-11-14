@@ -7,8 +7,9 @@ import React from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSession } from "@/hooks/useSession";
 import ThemeToggle from "./theme-toggle";
-
-type BrandSummary = { id: string; name: string; completed: boolean };
+import type { BrandSummary } from "./DashboardLayoutShell";
+import { switchActiveBrandAction } from "@/app/(post-auth)/settings/actions";
+import { useRouter } from "next/navigation";
 
 export function DashboardHeader({
   onOpenMobile,

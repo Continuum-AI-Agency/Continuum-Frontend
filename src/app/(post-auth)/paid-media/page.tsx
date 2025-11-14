@@ -7,11 +7,11 @@ export default function PaidMediaPage() {
   return (
     <Container size="4">
       <Flex direction="column" gap="4">
-        <Heading size="6">Paid Media</Heading>
+        <Heading size="6" className="text-white">Paid Media</Heading>
         <Text color="gray">Plan, launch, and optimize paid campaigns across ads platforms.</Text>
-        <Card>
+        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
           <Flex direction="column" gap="3" p="4">
-            <Heading size="4">Coming soon</Heading>
+            <Heading size="4" className="text-white">Coming soon</Heading>
             <Text color="gray">We’re building budgeting, targeting presets, and performance insights.</Text>
             <Callout.Root color="amber">
               <Callout.Icon>
