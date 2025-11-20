@@ -1,75 +1,121 @@
-# Brand Insights Frontend Work Plan
+# Definitive Guide to Recreating the Trends Frontend
 
-## Decisions (confirmed)
-- Identifier: `brand_id` is the source of truth for access; prefer `brand_id` across all calls, optionally include `platform_account_id` only as a transitional fallback if backend supports it.
-- UI primitives: reuse existing theme components and skeletons already in the app; no bespoke styling outside the styleguide.
-- Date display: show `week_start_date` in the UI for insights.
+This self-contained document outlines the architecture of the existing backend and provides a clear, tranche-based plan for recreating the "Trends" feature frontend using **Radix Themes and Radix UI primitives**.
 
-## Current backend contract (for reference)
-- Endpoints: `POST /api/brand-insights/generate` (body: brand_id, optional force_regenerate, selected_social_platforms), `GET /api/brand-insights/status/{task_id}`, `GET /api/brand-insights/{brand_id}`, `GET /api/brand-insights/profile/{brand_id}`.
-- Generate short-circuits when insights exist in last 7 days; otherwise returns `status: processing` with `task_id` and relies on background task.
-- Status endpoint is in-memory only (resets on server restart); final data is retrievable via `GET /{brand_id}`.
-- Response shape already includes item ids, selection flags, and `from_cache`.
+---
 
-## Goals
-- Deliver a full frontend flow to trigger, track, and display Brand Insights (trends, events, questions by niche) and the associated brand profile.
-- Keep client components minimal (only for interactivity/polling); default to RSC for data fetching and rendering.
-- Be resilient to identifier changes (platform_account_id vs brand_id) and backend restarts that drop in-memory statuses.
+## Part 1: Understanding the Existing Backend Architecture
 
-## Workstreams
+The new frontend will be built for an existing backend system composed of distinct, decoupled services. It's crucial to understand how these services interact. The process is broken into **Generation**, **Ingestion**, and **Retrieval**.
 
-### 1) API client + typing
-- Create typed fetch wrappers for the four endpoints with clear error handling (no `any`), server-first where possible.
-- Encode request/response types for generate/status/get/profile; include `from_cache`, `week_start_date`, `week_analyzed`, and selection flags.
-- Add safe parsers (Zod) at the boundary to guard against schema drift; surface meaningful errors to the UI.
+### The Service Chain: How Insights Are Made and Stored
 
-### 2) Data flow and caching
-- Use RSC data fetching with appropriate `revalidate` strategy (likely `revalidate: 3600` for get/profile, `cache: 'no-store'` for status polling).
-- Centralize identifier handling with `brand_id` first; keep an adapter to optionally include legacy `platform_account_id` if backend allows dual lookup.
-- Avoid client-side global state for domain data; keep local state to interactivity only.
+Based on the evidence, the "backend" is not a single application. Instead, it's a chain of services where the output of one service becomes the input for the next.
 
-### 3) Generation trigger + status polling
-- Build a client component that posts generate requests, then polls status until `completed` or `error` with exponential-ish backoff and a sensible timeout.
-- Handle restart edge case: if status returns `not_found` but generation likely finished, fall back to fetching latest insights directly.
-- Respect `from_cache` responses by short-circuiting polling when generation is skipped.
-- Surface progress/error messaging inline with Radix primitives; no toasts unless already standardized.
+**1. The Generation Service (Triggered by the Frontend)**
+*   **Endpoint:** `POST /api/brand-insights/generate`
+*   **Responsibility:** This is the service the frontend interacts with to start the process. Its sole job is to perform the initial, heavy-lifting task of communicating with a Large Language Model to generate a large, unstructured JSON payload containing all the raw trend, event, and audience question data.
+*   **Key Action:** Upon completing its generation task, **this Generation Service acts as a client and makes an HTTP POST request to the Ingestion Service**, passing along the raw JSON it just created.
 
-### 4) Insights display (trends/events/questions)
-- Server-render lists with sorting/grouping options (date for events, relevance/source for trends, platform/niche for questions).
-- Include empty/loading/error states and `from_cache` indicator.
-- Keep selection toggles client-side only (since no update endpoint); persist locally (in-memory or optional localStorage if acceptable for UX).
-- Ensure cards follow styleguide spacing/typography and reuse existing primitives if available.
+**2. The Ingestion Service (The Supabase Edge Function)**
+*   **Endpoint:** `.../functions/v1/process-brand-insights-context`
+*   **Responsibility:** This is a dedicated, serverless function whose only job is to receive the large JSON payload from the Generation Service. It is **not** called by the frontend.
+*   **Key Actions (The Known Logic):**
+    1.  **Receives Payload:** It's an HTTP-triggered function that expects the raw JSON data in the request body.
+    2.  **Creates a Generation Record:** It first creates a master record in a `brand_insights_generations` table to track this specific event.
+    3.  **Atomizes Data:** It iterates through every trend, event, and question in the payload.
+    4.  **Generates Embeddings:** For each item, it generates a vector embedding using OpenAI's `text-embedding-3-small` model.
+    5.  **Stores Individual Rows:** It inserts each item as a **separate, normalized row** into the appropriate database table (`brand_insights_trends`, `brand_insights_events`, `brand_insights_questions`), including the new embedding.
+    6.  **Finalizes:** It updates the master generation record with final counts and marks it as complete.
 
-### 5) Brand profile view
-- Update profile rendering to align with new strategic analysis fields (mission, vision, core_values, audience summary/segments, competitors, voice).
-- Provide graceful “onboarding required” state when backend returns that status.
-- Keep this as an RSC; wrap interactive affordances (e.g., copy buttons) in small client components if needed.
+**3. The Retrieval Service (The Frontend's Data Source)**
+*   **Endpoint:** `GET /api/brand-insights/{id}`
+*   **Responsibility:** This is the API the frontend calls to get the data to display. It acts as an adapter between the normalized database schema and the nested JSON structure the frontend components expect.
+*   **Key Action:** When called, this service queries the individual `trends`, `events`, and `questions` tables, finds all the rows associated with the most recent completed generation for the requested account, and then **re-constructs the complex JSON object** (`BrandInsightsResponse`) before sending it to the frontend.
 
-### 6) Identifier strategy migration
-- Make all calls use `brand_id` as the primary identifier; include `platform_account_id` only if explicitly supported as a fallback.
-- Trace all uses (generate, status, get, profile) through a single resolver to avoid duplicated conditionals; prefer brand_id-only paths.
+This decoupled architecture is a critical distinction. The frontend does not and should not know about the `process-brand-insights-context` function. It only needs to interact with the Generation and Retrieval services via the API endpoints defined in the original `brandInsightsService.ts`.
 
-### 7) UX states and accessibility
-- Loading skeletons/spinners via Radix-friendly patterns; maintain keyboard/focus flows.
-- Inline error banners with retry affordances for generate/poll/fetch steps.
-- Support mobile layout (cards stack, readable typography).
+---
 
-### 8) Observability and logging
-- Add structured client-side logging hooks for failures (include endpoint, identifier, correlation where available); keep PII out of logs.
-- Consider lightweight analytics events for generation attempts/results if the project has an established pattern; otherwise, leave a placeholder hook.
+## Part 2: Frontend Recreation Plan (Using Radix)
 
-### 9) Testing plan
-- Unit: parsers/transformers for API responses, polling logic (status transitions/timeouts), identifier resolver.
-- Integration/component: rendering of trends/events/questions with edge cases (empty, from_cache, error).
-- E2E (if Playwright/Cypress present): happy path generate → poll → render; restart scenario fallback (mock status not_found then fetch succeeds).
+This project plan is broken into four tranches, focusing exclusively on building the new frontend application.
 
-### 10) Rollout and sequencing
-- Phase 1: API clients + data parsers + types.
-- Phase 2: Brand profile RSC update.
-- Phase 3: Insights display RSC + client selection state.
-- Phase 4: Generation trigger + polling client.
-- Phase 5: Identifier dual-mode support + tests + cleanup.
+### Tranche 1: Foundation, Styling & Core UI Shell
 
-## Open questions / dependencies
-- Define revalidation windows for insights/profile.
-- Any analytics/telemetry standards we should hook into for generate/poll events?
+**Goal:** Set up the project, establish the Radix styling system, and build the static layout for the dashboard and itemized views.
+
+1.  **Project Initialization:**
+    *   Set up a new React project using Vite with the TypeScript template.
+2.  **Install Core Dependencies:**
+    *   Install **Radix Themes** (`@radix-ui/themes`) and **Radix UI Primitives** (e.g., `@radix-ui/react-icons`).
+    *   Install `axios` for API calls and `date-fns` for date formatting.
+3.  **Establish Radix Foundation:**
+    *   Wrap the root of your application in the Radix `<Theme>` provider. Configure the theme (accent color, dark mode, etc.) to match your application's design system.
+4.  **Copy Essential Logic:**
+    *   Copy `src/types/brand-insights-types.ts` into your new project. This remains the unbreakable contract with the backend API.
+    *   Copy `src/services/brandInsightsService.ts`. You will adapt its authentication logic later, but its endpoint definitions are essential.
+5.  **Build Static Layouts:**
+    *   Create a main `Dashboard.tsx` page component.
+    *   Using Radix components (`<Grid>`, `<Flex>`, `<Card>`, `<Heading>`, `<Text>`), build the high-level layout for the dashboard. This should include placeholder areas for where trends, events, and questions will be displayed.
+    *   Create a separate `ItemDetailView.tsx` component that will be used to show the "itemized understanding" of a trend or question. Build its static layout as well.
+
+**Value Delivered:** A visually correct, statically rendered shell of the feature that adheres to the new design system.
+
+---
+
+### Tranche 2: Read-Only Data Display & Dashboard
+
+**Goal:** Connect the UI to the existing backend and successfully display real, read-only data on the main dashboard.
+
+1.  **Adapt Authentication:**
+    *   Modify the `getAuthHeaders` function in your copied `brandInsightsService.ts` to correctly retrieve the authentication token from your new application's auth context.
+2.  **Implement Data Fetching:**
+    *   In the `Dashboard.tsx` component, implement the initial data-fetching logic. Use a `useEffect` hook to call `brandInsightsService.getInsights` and `brandInsightsService.getBrandProfile`.
+    *   Manage the loading and error states. Use Radix components like `<Spinner>` or `<Callout>` to display feedback to the user.
+3.  **Create Radix-based Display Components:**
+    *   Re-create the `TrendCard`, `EventCard`, and `QuestionAccordion` components from the original project, but build them using Radix primitives (`<Card>`, `<Text>`, `<Accordion.Root>`).
+    *   These new components will receive the data fetched in the `Dashboard.tsx` component as props.
+4.  **Render Live Data:**
+    *   Map over the API data and render your new Radix-based components. The goal is to see live data from your backend appearing correctly on the dashboard. At this stage, all "Generate" or "Regenerate" buttons are still disabled.
+
+**Value Delivered:** A functional, read-only dashboard that proves successful integration with the existing backend API.
+
+---
+
+### Tranche 3: Itemized Views & Interactivity
+
+**Goal:** Enable users to navigate from the dashboard to a detailed view of each insight and provide client-side filtering.
+
+1.  **Implement Routing:**
+    *   Using a router like `react-router-dom`, make each trend, event, or question on the dashboard a link to a detailed view (e.g., `/trends/{trendId}`).
+2.  **Build the Detail View:**
+    *   The `ItemDetailView.tsx` component should now fetch the specific data for the item ID from the URL. **Note:** This may require a new backend endpoint `GET /api/brand-insights/trends/{trendId}`. If one doesn't exist, this view can be populated by passing the data from the dashboard via router state as an initial step.
+    *   Display all available fields for the item in a clean, readable format using Radix components.
+3.  **Implement Client-Side Filtering:**
+    *   On the dashboard, add UI controls for filtering the displayed lists.
+    *   Use Radix primitives like `<DropdownMenu.Root>` for platform selection or `<TextField.Root>` for a text-based search.
+    *   Use `useState` to manage the filter state and apply the filter to the data array before rendering.
+
+**Value Delivered:** A more interactive and useful experience where users can explore the data in greater detail.
+
+---
+
+### Tranche 4: Full Interactivity & Generation Workflow
+
+**Goal:** Implement the final pieces of functionality: insight generation and regeneration.
+
+1.  **Implement Generation Logic:**
+    *   In your `Dashboard.tsx`, implement the `generateInsights` function that calls the `POST /api/brand-insights/generate` endpoint.
+    *   Implement the full `startPolling` logic to handle the asynchronous response, periodically checking the `GET /status/{taskId}` endpoint.
+    *   Use Radix components like `<Callout>` or a custom toast notification to display feedback like "Generating insights...".
+2.  **Create Generation Dialog:**
+    *   Build the "Regenerate" dialog using `<Dialog.Root>` from Radix.
+    *   Inside, re-implement the `SocialPlatformSelector` using Radix's `<Checkbox>` and `<Label>` components.
+3.  **Wire Up All Actions:**
+    *   Connect the "Generate" and "Regenerate" buttons to their respective functions.
+    *   Ensure all loading (`<Spinner>`) and error (`<Callout>`) states are correctly handled across the entire application, providing a seamless user experience.
+4.  **Final Polish:**
+    *   Review the entire feature for accessibility and responsiveness, making adjustments to the Radix component layouts as needed.
+
+**Value Delivered:** A complete, fully functional, and modern frontend experience for the Brand Insights feature.
