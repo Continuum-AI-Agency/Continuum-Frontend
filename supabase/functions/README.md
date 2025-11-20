@@ -30,8 +30,7 @@ supabase functions deploy embed_document
 ```
 
 ### Notes
-- Google Drive downloads/exports: https://developers.google.com/workspace/drive/api/guides/manage-downloads
-- This draft includes stubs: source adapters, extraction, chunking, and a zero-vector embedder placeholder.
-- Replace the embedding logic and add DB tables (`brand_documents`, `brand_document_chunks`) before production.
 
-
+- Set `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL`) in Supabase Edge Function secrets before invoking; the runtime calls OpenAI `text-embedding-3-small`.
+- Google Drive downloads/exports: <https://developers.google.com/workspace/drive/api/guides/manage-downloads>
+- The vector schema assumes 1,536 dimensions to match `text-embedding-3-small`.

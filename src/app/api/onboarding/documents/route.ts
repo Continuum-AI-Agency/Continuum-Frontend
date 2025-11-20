@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { appendDocument } from "@/lib/onboarding/storage";
+import { appendDocument, ensureOnboardingState } from "@/lib/onboarding/storage";
 import type { OnboardingDocument } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { sanitizeStorageFileName } from "@/lib/storage/sanitize";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing brand context" }, { status: 400 });
   }
 
+  await ensureOnboardingState(brandId);
+
   const source = (formData.get("source") as OnboardingDocument["source"] | null) ?? "upload";
 
   const supabase = await createSupabaseServerClient();
@@ -26,7 +29,8 @@ export async function POST(request: Request) {
   // Stable document id ties Storage, DB, and vector chunks together
   const documentId = createBrandId();
   const storageBucket = "brand-docs";
-  const storagePath = `${brandId}/${documentId}/${file.name}`;
+  const sanitizedFileName = sanitizeStorageFileName((file as File).name);
+  const storagePath = `${brandId}/${documentId}/${sanitizedFileName}`;
 
   // Upload raw file to Supabase Storage
   const { data: uploadData, error: uploadError } = await supabase.storage
@@ -44,7 +48,7 @@ export async function POST(request: Request) {
       documentId,
       source,
       storagePath: uploadData?.path ?? storagePath,
-      fileName: (file as File).name,
+      fileName: sanitizedFileName,
       mimeType: (file as File).type,
     },
   });

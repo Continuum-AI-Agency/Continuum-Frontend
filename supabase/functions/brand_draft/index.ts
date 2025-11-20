@@ -179,9 +179,8 @@ serve(async (req: Request) => {
   const abort = new AbortController();
   const timeout = setTimeout(() => abort.abort("timeout"), 25_000);
 
-  const voicePromise = streamResponsesApi({ input: voiceInput, system: voiceSystem, channel: "brandVoice", signal: abort.signal });
-  const audiencePromise = streamResponsesApi({ input: audienceInput, system: audienceSystem, channel: "targetAudience", signal: abort.signal });
-  const [voiceStream, audienceStream] = await Promise.all([voicePromise, audiencePromise]);
+  const voiceStream = await streamResponsesApi({ input: voiceInput, system: voiceSystem, channel: "brandVoice", signal: abort.signal });
+  const audienceStream = await streamResponsesApi({ input: audienceInput, system: audienceSystem, channel: "targetAudience", signal: abort.signal });
 
   const merged = toReadableStream(async (controller) => {
     // Initial ready event

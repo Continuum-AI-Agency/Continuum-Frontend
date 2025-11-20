@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { MobileSidebar } from "./MobileSidebar";
 import GalaxyBackground from "./ui/GalaxyBackground";
+import { AppSidebar } from "./navigation/AppSidebar";
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode;
@@ -17,9 +17,7 @@ export function DashboardLayoutClient({ children }: DashboardLayoutClientProps) 
     <div className="min-h-screen">
       <GalaxyBackground intensity={1} speed="glacial" />
       <div className="flex h-screen">
-        <div className="hidden md:block">
-          <DashboardSidebar />
-        </div>
+        <AppSidebar />
         <MobileSidebar open={mobileOpen} onOpenChange={setMobileOpen} />
 
         <div className="flex-1 flex flex-col overflow-hidden">

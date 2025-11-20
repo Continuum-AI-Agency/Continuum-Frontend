@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import type { Database } from "./types";
+import { getSupabaseCookieOptions } from "./cookies";
 
 let client: ReturnType<typeof createBrowserClient<Database>> | undefined;
 
@@ -13,6 +14,9 @@ export function createSupabaseBrowserClient() {
   client = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
+    {
+      cookieOptions: getSupabaseCookieOptions(),
+    }
   );
 
   return client;

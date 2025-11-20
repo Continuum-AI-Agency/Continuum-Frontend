@@ -94,6 +94,43 @@ export const targetAudienceSchema = z.object({
 
 export type TargetAudience = z.infer<typeof targetAudienceSchema>;
 
+const platformAgentResultSchema = z.object({ provider: z.string().optional() }).passthrough();
+
+const websiteSummarySchema = z
+  .object({
+    website_url: z.union([z.string().url(), z.null()]).optional(),
+    hero_statement: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
+
+const documentsSummarySchema = z
+  .object({
+    primary_topics: z.array(z.string()).default([]),
+    secondary_topics: z.array(z.string()).default([]),
+    notes: z.string().optional(),
+  })
+  .passthrough();
+
+const businessSummarySchema = z
+  .object({
+    business_name: z.string().optional(),
+    business_description: z.string().optional(),
+    business_features: z.array(z.string()).optional(),
+    business_benefits: z.array(z.string()).optional(),
+    business_cta: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
+
+const onboardingReportStructuredSchema = z
+  .object({
+    connected_accounts: z.array(platformAgentResultSchema).default([]),
+    website: websiteSummarySchema,
+    documents: documentsSummarySchema,
+    target_audience: targetAudienceSchema.default({}),
+    business: businessSummarySchema.nullable().optional(),
+  })
+  .passthrough();
+
 export const agentBrandProfileSchema = z.object({
   id: z.string().min(1),
   brand_name: z.string().min(1),
@@ -131,26 +168,92 @@ export type AgentRequestPayload = {
   runContext: AgentRunContext;
 };
 
-const previewStatusSchema = z.object({
-  phase: z.string(),
-  status: z.string(),
-}).passthrough();
+const previewSectionSchema = z.enum(["brand_profile", "voice", "audience", "website", "business"]);
+type PreviewSection = z.infer<typeof previewSectionSchema>;
 
-const previewErrorSchema = z.object({
-  message: z.string(),
-}).passthrough();
+const previewWorkflowResultSchema = z
+  .object({
+    brand_profile: agentBrandProfileSchema.optional(),
+    structured: onboardingReportStructuredSchema.optional(),
+  })
+  .partial()
+  .passthrough();
+
+const previewStatusEventSchema = z
+  .object({
+    kind: z.literal("status"),
+    section: previewSectionSchema,
+    status: z.string(),
+    error: z.string().optional(),
+  })
+  .passthrough();
+
+const previewStreamEventSchema = z.object({
+  kind: z.literal("stream"),
+  section: previewSectionSchema,
+  delta: z.string(),
+});
+
+const previewDataEventSchema = z.object({
+  kind: z.literal("data"),
+  section: previewSectionSchema,
+  data: z.unknown(),
+});
+
+const previewStructuredEventSchema = z.object({
+  kind: z.literal("structured"),
+  data: onboardingReportStructuredSchema,
+});
+
+const previewEmbeddingEventSchema = z
+  .object({
+    kind: z.literal("embedding"),
+    target: z.string(),
+    status: z.string(),
+    error: z.string().optional(),
+  })
+  .passthrough();
+
+const previewPingEventSchema = z
+  .object({
+    kind: z.literal("ping"),
+    ts: z.union([z.string(), z.number()]).optional(),
+  })
+  .passthrough();
+
+const previewErrorSchema = z
+  .object({
+    kind: z.literal("error"),
+    message: z.string(),
+  })
+  .passthrough();
 
 const previewCompleteSchema = z.object({
+  kind: z.literal("complete"),
   phase: z.string().optional(),
   status: z.string(),
+  result: previewWorkflowResultSchema.optional(),
 }).passthrough();
 
+export type PlatformAgentResult = z.infer<typeof platformAgentResultSchema>;
+export type WebsiteSummary = z.infer<typeof websiteSummarySchema>;
+export type DocumentsSummary = z.infer<typeof documentsSummarySchema>;
+export type BusinessSummary = z.infer<typeof businessSummarySchema>;
+export type OnboardingReportStructured = z.infer<typeof onboardingReportStructuredSchema>;
+export type OnboardingPreviewSection = PreviewSection;
+export type OnboardingPreviewWorkflowResult = z.infer<typeof previewWorkflowResultSchema>;
+
 export type OnboardingPreviewEvent =
-  | { type: "status"; phase: string; status: string; meta?: Record<string, unknown> }
+  | { type: "status"; section: PreviewSection; status: string; error?: string }
+  | { type: "stream"; section: PreviewSection; delta: string }
   | { type: "voice"; payload: BrandVoice }
   | { type: "audience"; payload: TargetAudience }
   | { type: "brand_profile"; payload: AgentBrandProfile }
-  | { type: "complete"; phase?: string; status: string }
+  | { type: "website"; payload: WebsiteSummary | null }
+  | { type: "business"; payload: BusinessSummary | null }
+  | { type: "structured"; payload: OnboardingReportStructured }
+  | { type: "embedding"; target: string; status: string; error?: string }
+  | { type: "complete"; phase?: string; status: string; result?: OnboardingPreviewWorkflowResult }
   | { type: "ping" }
   | { type: "error"; message: string };
 
@@ -195,7 +298,13 @@ type PreviewOptions = {
   onEvent?: (event: OnboardingPreviewEvent) => void;
 };
 
-export async function runOnboardingPreview(options: PreviewOptions): Promise<{ brandProfile?: AgentBrandProfile }> {
+export type RunOnboardingPreviewResult = {
+  brandProfile?: AgentBrandProfile;
+  structured?: OnboardingReportStructured;
+  complete?: OnboardingPreviewWorkflowResult;
+};
+
+export async function runOnboardingPreview(options: PreviewOptions): Promise<RunOnboardingPreviewResult> {
   const response = await fetch(buildUrl("/onboarding/brand-profiles/preview"), {
     method: "POST",
     headers: {
@@ -220,61 +329,205 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<{ b
   const decoder = new TextDecoder();
   let buffer = "";
   let latestProfile: AgentBrandProfile | undefined;
+  let latestStructured: OnboardingReportStructured | undefined;
+  let finalResult: OnboardingPreviewWorkflowResult | undefined;
 
   const dispatch = (event: OnboardingPreviewEvent) => {
     options.onEvent?.(event);
   };
 
-  const handleMessage = (eventName: string, data: string) => {
+  const handleDataEvent = (payload: z.infer<typeof previewDataEventSchema>) => {
+    switch (payload.section) {
+      case "brand_profile": {
+        const parsed = agentBrandProfileSchema.parse(payload.data);
+        latestProfile = parsed;
+        dispatch({ type: "brand_profile", payload: parsed });
+        break;
+      }
+      case "voice": {
+        const parsed = brandVoiceSchema.parse(payload.data);
+        dispatch({ type: "voice", payload: parsed });
+        break;
+      }
+      case "audience": {
+        const parsed = targetAudienceSchema.parse(payload.data);
+        dispatch({ type: "audience", payload: parsed });
+        break;
+      }
+      case "website": {
+        const parsed = websiteSummarySchema.nullable().parse(payload.data);
+        dispatch({ type: "website", payload: parsed });
+        break;
+      }
+      case "business": {
+        const parsed = businessSummarySchema.nullable().parse(payload.data);
+        dispatch({ type: "business", payload: parsed });
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  const handleParsedPayload = (payload: unknown, eventName?: string | null) => {
+    if (payload === undefined || payload === null) {
+      return;
+    }
+
+    let parsedPayload: unknown = payload;
+    if (typeof parsedPayload === "string") {
+      try {
+        parsedPayload = JSON.parse(parsedPayload);
+      } catch {
+        // leave as string
+      }
+    }
+
+    const kind =
+      typeof parsedPayload === "object" && parsedPayload !== null && "kind" in (parsedPayload as Record<string, unknown>)
+        ? (parsedPayload as Record<string, unknown>).kind
+        : null;
+
+    if (kind) {
+      switch (kind) {
+        case "ping": {
+          previewPingEventSchema.parse(parsedPayload);
+          dispatch({ type: "ping" });
+          return;
+        }
+        case "status": {
+          const parsed = previewStatusEventSchema.parse(parsedPayload);
+          dispatch({
+            type: "status",
+            section: parsed.section,
+            status: parsed.status,
+            error: parsed.error,
+          });
+          return;
+        }
+        case "stream": {
+          const parsed = previewStreamEventSchema.parse(parsedPayload);
+          dispatch({ type: "stream", section: parsed.section, delta: parsed.delta });
+          return;
+        }
+        case "data": {
+          const parsed = previewDataEventSchema.parse(parsedPayload);
+          handleDataEvent(parsed);
+          return;
+        }
+        case "structured": {
+          const parsed = previewStructuredEventSchema.parse(parsedPayload);
+          latestStructured = parsed.data;
+          dispatch({ type: "structured", payload: parsed.data });
+          return;
+        }
+        case "embedding": {
+          const parsed = previewEmbeddingEventSchema.parse(parsedPayload);
+          dispatch({ type: "embedding", target: parsed.target, status: parsed.status, error: parsed.error });
+          return;
+        }
+        case "complete": {
+          const parsed = previewCompleteSchema.parse(parsedPayload);
+          if (parsed.result) {
+            if (parsed.result.brand_profile) {
+              latestProfile = agentBrandProfileSchema.parse(parsed.result.brand_profile);
+            }
+            if (parsed.result.structured) {
+              latestStructured = onboardingReportStructuredSchema.parse(parsed.result.structured);
+            }
+            finalResult = parsed.result;
+          }
+          dispatch({
+            type: "complete",
+            phase: parsed.phase,
+            status: parsed.status,
+            result: parsed.result,
+          });
+          return;
+        }
+        case "error": {
+          const parsed = previewErrorSchema.parse(parsedPayload);
+          dispatch({ type: "error", message: parsed.message });
+          throw new Error(parsed.message);
+        }
+        default:
+          return;
+      }
+    }
+
     if (eventName === "ping") {
       dispatch({ type: "ping" });
       return;
     }
 
-    let parsed: unknown = data;
-    try {
-      parsed = JSON.parse(data);
-    } catch {
-      // ignore JSON parse failures for plain-text events
+    if (!eventName) {
+      return;
     }
 
     switch (eventName) {
-      case "status": {
-        const payload = previewStatusSchema.parse(parsed);
-        const { phase, status, ...meta } = payload;
-        dispatch({
-          type: "status",
-          phase,
-          status,
-          meta: Object.keys(meta).length ? meta : undefined,
-        });
+      case "voice":
+        handleDataEvent({ kind: "data", section: "voice", data: parsedPayload } as z.infer<typeof previewDataEventSchema>);
         break;
-      }
-      case "voice": {
-        const payload = brandVoiceSchema.parse(parsed);
-        dispatch({ type: "voice", payload });
+      case "audience":
+        handleDataEvent({ kind: "data", section: "audience", data: parsedPayload } as z.infer<typeof previewDataEventSchema>);
         break;
-      }
-      case "audience": {
-        const payload = targetAudienceSchema.parse(parsed);
-        dispatch({ type: "audience", payload });
+      case "brand_profile":
+        handleDataEvent({ kind: "data", section: "brand_profile", data: parsedPayload } as z.infer<typeof previewDataEventSchema>);
         break;
-      }
-      case "brand_profile": {
-        const payload = agentBrandProfileSchema.parse(parsed);
-        latestProfile = payload;
-        dispatch({ type: "brand_profile", payload });
+      case "website":
+        handleDataEvent({ kind: "data", section: "website", data: parsedPayload } as z.infer<typeof previewDataEventSchema>);
+        break;
+      case "business":
+        handleDataEvent({ kind: "data", section: "business", data: parsedPayload } as z.infer<typeof previewDataEventSchema>);
+        break;
+      case "status":
+        try {
+          const parsed = previewStatusEventSchema.parse({
+            kind: "status",
+            ...(parsedPayload as Record<string, unknown>),
+          });
+          dispatch({
+            type: "status",
+            section: parsed.section,
+            status: parsed.status,
+            error: parsed.error,
+          });
+        } catch {
+          dispatch({ type: "status", section: "brand_profile", status: "pending" });
+        }
+        break;
+      case "structured": {
+        try {
+          const parsed = onboardingReportStructuredSchema.parse(parsedPayload);
+          latestStructured = parsed;
+          dispatch({ type: "structured", payload: parsed });
+        } catch {
+          // ignore malformed legacy payloads
+        }
         break;
       }
       case "complete": {
-        const payload = previewCompleteSchema.parse(parsed);
-        dispatch({ type: "complete", phase: payload.phase, status: payload.status });
+        try {
+          const parsed = previewCompleteSchema.parse(parsedPayload);
+          if (parsed.result) {
+            if (parsed.result.brand_profile) {
+              latestProfile = agentBrandProfileSchema.parse(parsed.result.brand_profile);
+            }
+            if (parsed.result.structured) {
+              latestStructured = onboardingReportStructuredSchema.parse(parsed.result.structured);
+            }
+            finalResult = parsed.result;
+          }
+          dispatch({
+            type: "complete",
+            phase: parsed.phase,
+            status: parsed.status,
+            result: parsed.result,
+          });
+        } catch {
+          // ignore malformed legacy payloads
+        }
         break;
-      }
-      case "error": {
-        const payload = previewErrorSchema.parse(parsed);
-        dispatch({ type: "error", message: payload.message });
-        throw new Error(payload.message);
       }
       default:
         break;
@@ -302,19 +555,22 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<{ b
             eventName = line.slice(6).trim();
           } else if (line.startsWith("data:")) {
             dataLines.push(line.slice(5));
+          } else if (line.startsWith(":")) {
+            // comment/heartbeat line; ignore
           }
         }
-        if (!eventName || dataLines.length === 0) {
+        if (dataLines.length === 0) {
           continue;
         }
-        handleMessage(eventName, dataLines.join("\n"));
+        const payload = dataLines.join("\n");
+        handleParsedPayload(payload, eventName);
       }
     }
   } finally {
     reader.releaseLock();
   }
 
-  return { brandProfile: latestProfile };
+  return { brandProfile: latestProfile, structured: latestStructured, complete: finalResult };
 }
 
 type ApproveOptions = {

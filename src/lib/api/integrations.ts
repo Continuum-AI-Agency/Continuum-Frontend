@@ -5,8 +5,10 @@ import { http } from "@/lib/api/http";
 import {
   metaSyncResponseSchema,
   googleSyncResponseSchema,
+  googleDrivePickerResponseSchema,
   type MetaSyncResponse,
   type GoogleSyncResponse,
+  type GoogleDrivePickerResponse,
 } from "@/lib/schemas/integrations";
 
 function buildSyncPath(basePath: string, params: Record<string, string>): string {
@@ -32,6 +34,28 @@ export async function startGoogleSync(callbackUrl: string): Promise<GoogleSyncRe
   });
 }
 
+type StartGoogleDrivePickerParams = {
+  brandId: string;
+  callbackUrl: string;
+  context: string;
+};
+
+export async function startGoogleDrivePicker(
+  params: StartGoogleDrivePickerParams
+): Promise<GoogleDrivePickerResponse> {
+  const { brandId, callbackUrl, context } = params;
+  return http.request({
+    path: buildSyncPath("/integrations/google-drive/picker", {
+      brand_id: brandId,
+      callback_url: callbackUrl,
+      context,
+    }),
+    method: "GET",
+    schema: googleDrivePickerResponseSchema,
+    cache: "no-store",
+  });
+}
+
 export function useStartMetaSync() {
   return useMutation({
     mutationFn: (callbackUrl: string) => startMetaSync(callbackUrl),
@@ -41,5 +65,11 @@ export function useStartMetaSync() {
 export function useStartGoogleSync() {
   return useMutation({
     mutationFn: (callbackUrl: string) => startGoogleSync(callbackUrl),
+  });
+}
+
+export function useStartGoogleDrivePicker() {
+  return useMutation({
+    mutationFn: (params: StartGoogleDrivePickerParams) => startGoogleDrivePicker(params),
   });
 }

@@ -7,6 +7,7 @@ import {
   applyOnboardingPatch,
   fetchOnboardingState,
   removeDocument,
+  resetOnboardingState,
   updateConnectionAccounts,
 } from "@/lib/onboarding/storage";
 import type {
@@ -45,6 +46,10 @@ export async function mutateOnboardingStateAction(
   patch: OnboardingPatch
 ): Promise<OnboardingState> {
   return applyOnboardingPatch(brandId, patch);
+}
+
+export async function resetOnboardingStateAction(brandId: string): Promise<OnboardingState> {
+  return resetOnboardingState(brandId);
 }
 
 export async function markPlatformConnectionAction(props: {

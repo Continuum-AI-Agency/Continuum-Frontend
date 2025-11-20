@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import { DashboardSidebar } from "./dashboard-sidebar";
 import { DashboardHeader } from "./dashboard-header";
 import { MobileSidebar } from "./MobileSidebar";
+import { AppSidebar } from "./navigation/AppSidebar";
 
 export type BrandSummary = {
   id: string;
@@ -27,9 +27,7 @@ export default function DashboardLayoutShell({
   return (
     <div className="min-h-screen">
       <div className="flex h-screen">
-        <div className="hidden md:block">
-          <DashboardSidebar />
-        </div>
+        <AppSidebar />
         <MobileSidebar open={mobileOpen} onOpenChange={setMobileOpen} />
 
         <div className="flex-1 flex flex-col overflow-hidden">

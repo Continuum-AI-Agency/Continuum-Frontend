@@ -1,4 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
+// @ts-nocheck
 // Edge function: embed_document
 // - Accepts JSON { brandId, documentId, source, storagePath?, externalUrl?, mimeType?, fileName? }
 // - Returns 202 with { jobId, documentId }
@@ -53,18 +54,67 @@ function jsonResponse(body: Record<string, JsonValue>, init?: ResponseInit) {
   });
 }
 
-function createSupabase() {
+const OPENAI_MODEL = "text-embedding-3-small";
+const OPENAI_BATCH_LIMIT = 64;
+
+function createSupabase(authHeader?: string | null) {
   const url = Deno.env.get("SUPABASE_URL");
   const key =
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
   if (!url || !key) {
     throw new Error("Missing SUPABASE_URL or SUPABASE_*_KEY env vars");
   }
-  return createClient(url, key);
+  const headers: Record<string, string> = {};
+  if (authHeader) {
+    headers.Authorization = authHeader;
+  }
+  return createClient(url, key, {
+    global: { headers },
+  });
 }
 
-async function processDocument(input: z.infer<typeof InputSchema>) {
-  const supabase = createSupabase();
+async function createEmbeddings(inputs: string[]): Promise<number[][]> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    throw new Error("Missing OPENAI_API_KEY environment variable");
+  }
+
+  const endpoint = Deno.env.get("OPENAI_BASE_URL")?.trim() || "https://api.openai.com/v1/embeddings";
+  const body = {
+    input: inputs,
+    model: OPENAI_MODEL,
+    encoding_format: "float",
+  };
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`OpenAI embedding failed: ${response.status} ${message}`);
+  }
+
+  const payload = (await response.json()) as {
+    data?: Array<{ embedding: number[] }>;
+    error?: { message?: string };
+  };
+
+  if (!payload.data?.length) {
+    const errMessage = payload.error?.message ?? "Empty embedding response";
+    throw new Error(errMessage);
+  }
+
+  return payload.data.map((item) => item.embedding);
+}
+
+async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: string | null) {
+  const supabase = createSupabase(authHeader);
 
   // Step 1: Acquire bytes
   const bytes = await fetchBytes({
@@ -79,13 +129,46 @@ async function processDocument(input: z.infer<typeof InputSchema>) {
     fileName: input.fileName,
   });
 
-  // Step 3: Chunk
-  const chunks = chunkText(text, { chunkSize: 2000, overlap: 200 });
+  // Step 3: Chunk & sanitize (remove null bytes that Postgres rejects)
+  const sanitize = (value: string) =>
+    value
+      .replace(/[\u0000-\u001f\u007f]/g, (char) => {
+        if (char === "\n" || char === "\r" || char === "\t") {
+          return char;
+        }
+        return " ";
+      })
+      .replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u");
+  const chunks = chunkText(text, { chunkSize: 2000, overlap: 200 }).map(sanitize);
+  const safeFileName = sanitize(fileName ?? "document");
 
-  // Step 4: Embed (stub)
-  // TODO: Replace with real embedding provider; maintain 1536 dims
-  const zero = new Array<number>(1536).fill(0);
-  const embeddings = chunks.map(() => zero);
+  // Step 4: Embed chunks with OpenAI
+  let embeddings: number[][] = [];
+  if (chunks.length > 0) {
+    try {
+      const batchResults: number[][] = [];
+      for (let i = 0; i < chunks.length; i += OPENAI_BATCH_LIMIT) {
+        const slice = chunks.slice(i, i + OPENAI_BATCH_LIMIT);
+        const vectors = await createEmbeddings(slice);
+        batchResults.push(...vectors);
+      }
+      embeddings = batchResults;
+      if (embeddings.length !== chunks.length) {
+        throw new Error(
+          `Embedding count mismatch: expected ${chunks.length}, received ${embeddings.length}`
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Embedding error:", message);
+      await supabase
+        .schema("brand_profiles")
+        .from("brand_documents")
+        .update({ status: "error", error_message: message, updated_at: new Date().toISOString() })
+        .eq("id", input.documentId);
+      throw new Error(message);
+    }
+  }
 
   // Step 5: Persist (best-effort; tables may not exist yet)
   try {
@@ -93,7 +176,7 @@ async function processDocument(input: z.infer<typeof InputSchema>) {
     const baseDoc = {
       id: input.documentId,
       brand_id: input.brandId,
-      name: input.fileName ?? "document",
+      name: safeFileName,
       source: input.source,
       status: "processing",
       storage_path: input.storagePath,
@@ -164,8 +247,13 @@ Deno.serve(async (req) => {
 
   // Kick off background work (best-effort). Edge runtime continues until completion.
   // If needed, move to a queue or use a scheduled task runner.
+  const authHeader =
+    req.headers.get("Authorization") ??
+    req.headers.get("authorization") ??
+    req.headers.get("sb-function-request-authorization");
+
   Promise.resolve()
-    .then(() => processDocument(payload))
+    .then(() => processDocument(payload, authHeader))
     .catch((err) => console.error("embed_document job failed", err));
 
   return jsonResponse({ ok: true, jobId, documentId: payload.documentId }, { status: 202 });

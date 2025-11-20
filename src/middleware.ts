@@ -1,29 +1,39 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { applySupabaseCookies, getSupabaseCookieOptions } from "./lib/supabase/cookies";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
-    request,
+    request: { headers: request.headers },
   });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: getSupabaseCookieOptions(),
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
+        async setAll(cookiesToSet) {
+          const nextResponse = NextResponse.next({
+            request: { headers: request.headers },
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+
+          await applySupabaseCookies(cookiesToSet, {
+            getExisting: () => request.cookies.getAll(),
+            set: (name, value, options) => {
+              request.cookies.set(name, value);
+              nextResponse.cookies.set(name, value, options);
+            },
+            remove: (name, options) => {
+              request.cookies.delete(name);
+              nextResponse.cookies.set(name, "", options);
+            },
+          });
+
+          supabaseResponse = nextResponse;
         },
       },
     }

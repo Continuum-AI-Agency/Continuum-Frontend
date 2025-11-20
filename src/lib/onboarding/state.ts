@@ -141,6 +141,10 @@ export type OnboardingState = z.infer<typeof onboardingStateSchema>;
 export type OnboardingPatch = z.infer<typeof onboardingPatchSchema>;
 export type OnboardingMetadata = z.infer<typeof onboardingMetadataSchema>;
 
+export function normalizeOnboardingState(raw: unknown): OnboardingState {
+  return onboardingStateSchema.parse(raw);
+}
+
 function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState> {
   return PLATFORM_KEYS.reduce((acc, key) => {
     acc[key] = {

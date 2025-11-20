@@ -234,3 +234,26 @@ body {
     filter: blur(calc(var(--waves-blur) * 0.5));
   }
 }
+
+@keyframes sidebar-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.sidebar-gradient-bg {
+  background: linear-gradient(
+    270deg,
+    rgba(139, 92, 246, 0.03),
+    rgba(83, 168, 138, 0.03),
+    rgba(139, 92, 246, 0.03)
+  );
+  background-size: 200% 200%;
+  animation: sidebar-gradient 15s ease infinite;
+}

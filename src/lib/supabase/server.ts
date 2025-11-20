@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./types";
+import { applySupabaseCookies, getSupabaseCookieOptions } from "./cookies";
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
@@ -9,30 +10,21 @@ export async function createSupabaseServerClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
     {
+      cookieOptions: getSupabaseCookieOptions(),
       cookies: {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        async setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              const shouldDelete =
-                !value || (options && typeof options.maxAge === "number" && options.maxAge <= 0);
-
-              if (shouldDelete) {
-                try {
-                  cookieStore.delete(name);
-                } catch {
-                  // Some environments may not support delete; fall back to setting an expired cookie.
-                  cookieStore.set(name, "", {
-                    ...options,
-                    maxAge: 0,
-                  });
-                }
-                return;
-              }
-
-              cookieStore.set(name, value, options);
+            await applySupabaseCookies(cookiesToSet, {
+              getExisting: () => cookieStore.getAll(),
+              set: (name, value, options) => {
+                cookieStore.set(name, value, options);
+              },
+              remove: (name, options) => {
+                cookieStore.set(name, "", options);
+              },
             });
           } catch {
             // Server Component, ignore

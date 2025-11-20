@@ -1,4 +1,4 @@
-import { fetchBrandProfileIncludedAssets } from "@/lib/api/brandProfiles";
+import { fetchBrandProfileIncludedAssets } from "@/lib/api/brandProfiles.server";
 import { fetchAvailableAssets } from "@/lib/api/integrations/server";
 import { BrandAssetsForm } from "./BrandAssetsForm";
 

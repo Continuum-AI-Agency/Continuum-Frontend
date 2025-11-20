@@ -38,6 +38,51 @@ export type Database = {
         }
         Relationships: []
       }
+      brand_profile_integration_accounts: {
+        Row: {
+          alias: string | null
+          brand_profile_id: string
+          created_at: string
+          id: string
+          integration_account_id: string
+          settings: Json | null
+          updated_at: string
+        }
+        Insert: {
+          alias?: string | null
+          brand_profile_id: string
+          created_at?: string
+          id?: string
+          integration_account_id: string
+          settings?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          alias?: string | null
+          brand_profile_id?: string
+          created_at?: string
+          id?: string
+          integration_account_id?: string
+          settings?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_profile_integration_accounts_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_profile_integration_accounts_integration_account_id_fkey"
+            columns: ["integration_account_id"]
+            isOneToOne: false
+            referencedRelation: "integration_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_report_drafts: {
         Row: {
           agent_profile_snapshot: Json
@@ -81,6 +126,50 @@ export type Database = {
             columns: ["brand_profile_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_accounts: {
+        Row: {
+          created_at: string
+          external_account_id: string
+          id: string
+          integration_id: string
+          name: string | null
+          raw_payload: Json | null
+          status: string | null
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_account_id: string
+          id?: string
+          integration_id: string
+          name?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_account_id?: string
+          id?: string
+          integration_id?: string
+          name?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_accounts_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "user_integrations"
             referencedColumns: ["id"]
           },
         ]
@@ -219,6 +308,94 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_integrations: {
+        Row: {
+          access_token_encrypted: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          metadata: Json | null
+          platform_email: string | null
+          platform_user_id: string | null
+          provider: string
+          refresh_token_encrypted: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          platform_email?: string | null
+          platform_user_id?: string | null
+          provider: string
+          refresh_token_encrypted?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json | null
+          platform_email?: string | null
+          platform_user_id?: string | null
+          provider?: string
+          refresh_token_encrypted?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_integrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_onboarding_states: {
+        Row: {
+          brand_id: string
+          created_at: string
+          is_active: boolean
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          is_active?: boolean
+          state: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          is_active?: boolean
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_onboarding_states_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

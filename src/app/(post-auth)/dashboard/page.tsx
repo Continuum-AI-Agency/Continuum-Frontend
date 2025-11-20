@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   Grid,
@@ -15,10 +16,40 @@ import {
   PlusIcon,
   ArrowUpIcon,
 } from "@radix-ui/react-icons";
+import { fetchOnboardingMetadata } from "@/lib/onboarding/storage";
+import { needsOnboardingReminder } from "@/lib/onboarding/reminders";
 
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const metadata = await fetchOnboardingMetadata();
+  const activeBrandId = metadata.activeBrandId ?? null;
+  const activeBrandState = activeBrandId ? metadata.brands[activeBrandId] : null;
+  const activeBrandName =
+    activeBrandState?.brand.name && activeBrandState.brand.name.trim().length > 0
+      ? activeBrandState.brand.name
+      : "Untitled brand";
+  const showOnboardingReminder = Boolean(activeBrandId && needsOnboardingReminder(activeBrandState));
+
   return (
     <div className="space-y-6">
+      {showOnboardingReminder && (
+        <Card className="bg-violet-950/60 backdrop-blur-xl border border-violet-500/40">
+          <Flex align="center" justify="between" direction={{ initial: "column", sm: "row" }} gap="3" p="4">
+            <Flex direction="column" gap="2" className="text-center sm:text-left">
+              <Heading size="4" className="text-white">
+                Finish onboarding for {activeBrandName}
+              </Heading>
+              <Text color="gray" size="2">
+                Complete onboarding to unlock brand-specific automations and analytics.
+              </Text>
+            </Flex>
+            <Button asChild size="3" variant="solid">
+              <Link href={`/onboarding?brand=${activeBrandId}`}>Complete onboarding</Link>
+            </Button>
+          </Flex>
+        </Card>
+      )}
       {/* Welcome Section */}
       <div>
         <Heading size="6" className="mb-2 text-white">

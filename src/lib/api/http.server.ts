@@ -1,5 +1,3 @@
-"use server";
-
 import "server-only";
 
 import { getApiBaseUrl } from "@/lib/api/config";

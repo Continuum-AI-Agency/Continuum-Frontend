@@ -7,6 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test --loader ts-node/esm",
     "supabase:gen:types": "node scripts/generate-supabase-types.js",
     "generate:types": "node scripts/generate-supabase-types.js",
     "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.js"
@@ -26,6 +27,7 @@
     "lucide-react": "^0.548.0",
     "lz-string": "^1.5.0",
     "next": "15.5.4",
+    "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-hook-form": "^7.63.0",
     "tailwind-merge": "^3.3.1"
@@ -41,6 +43,7 @@
     "radix": "^0.0.0",
     "stale-while-revalidate": "^0.2.0",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "typescript": "^5",
     "zod": "^4.1.11"
   }

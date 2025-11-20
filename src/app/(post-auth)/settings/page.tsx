@@ -3,6 +3,8 @@ import { ensureOnboardingState, fetchOnboardingMetadata } from "@/lib/onboarding
 import { isOnboardingComplete, type OnboardingState, type OnboardingMetadata } from "@/lib/onboarding/state";
 import BrandSettingsPanel from "@/components/settings/BrandSettingsPanel";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { BrandIntegrationsCard } from "@/components/settings/BrandIntegrationsCard";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
 export default async function SettingsPage() {
   const metadata: OnboardingMetadata = await fetchOnboardingMetadata();
@@ -28,6 +30,7 @@ export default async function SettingsPage() {
   });
 
   const { state: activeState } = await ensureOnboardingState(activeBrandId);
+  const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
 
   return (
     <Container size="3" className="py-10">
@@ -46,6 +49,9 @@ export default async function SettingsPage() {
               invites: activeState.invites as OnboardingState["invites"],
             }}
           />
+        </GlassPanel>
+        <GlassPanel className="p-6">
+          <BrandIntegrationsCard summary={integrationSummary} />
         </GlassPanel>
       </Flex>
     </Container>

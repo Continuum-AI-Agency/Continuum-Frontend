@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   Badge,
   Box,
@@ -12,7 +12,6 @@ import {
   Grid,
   Heading,
   Select,
-  Tabs,
   Text,
   TextArea,
   TextField,
@@ -27,6 +26,7 @@ import {
   completeOnboardingAction,
   fetchOnboardingStateAction,
   mutateOnboardingStateAction,
+  resetOnboardingStateAction,
   // New real integration actions
   syncIntegrationAccountsAction,
   associateIntegrationAccountsAction,
@@ -37,7 +37,7 @@ import {
 import type { BrandVoiceTag, OnboardingDocument, OnboardingState } from "@/lib/onboarding/state";
 import { BRAND_VOICE_TAGS } from "@/lib/onboarding/state";
 import { openCenteredPopup, waitForPopupMessage, waitForPopupClosed } from "@/lib/popup";
-import { useStartMetaSync, useStartGoogleSync } from "@/lib/api/integrations";
+import { useStartMetaSync, useStartGoogleSync, useStartGoogleDrivePicker } from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import { PlatformIcon, ExtraIcon, DocumentSourceIcon } from "./PlatformIcons";
 import { uploadCreativeAsset, createSignedAssetUrl } from "@/lib/creative-assets/storage";
@@ -51,10 +51,16 @@ import {
   type BrandVoice as AgentBrandVoice,
   type TargetAudience as AgentTargetAudience,
   type OnboardingPreviewEvent,
+  type BusinessSummary,
+  type OnboardingPreviewWorkflowResult,
+  type RunOnboardingPreviewResult,
+  type WebsiteSummary,
   type IntegrationProvider,
 } from "@/lib/onboarding/agentClient";
+import type { ContinuumEvent } from "@/lib/events/schema";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useContinuumServerEvents } from "@/lib/sse/useContinuumServerEvents";
+import { Tabs } from "@/components/ui/StableTabs";
 
 const industries = [
   "Advertising",
@@ -160,7 +166,7 @@ type OnboardingFlowProps = {
 };
 
 const CONNECTOR_SOURCES = [
-  { key: "google-drive", label: "Google Drive", status: "active" as const },
+  { key: "google-drive", label: "Google Drive", status: "soon" as const },
   { key: "canva", label: "Canva", status: "soon" as const },
   { key: "figma", label: "Figma", status: "soon" as const },
   { key: "sharepoint", label: "SharePoint", status: "soon" as const },
@@ -173,7 +179,7 @@ const FACEBOOK_OAUTH_KEYS: PlatformKey[] = ["instagram", "facebook", "threads"];
 const COMING_SOON_KEYS: PlatformKey[] = ["amazonAds", "tiktok", "linkedin"];
 const COMING_SOON_EXTRA = [{ key: "x", label: "X" }] as const;
 
-const agentPhaseKeys = ["brand_profile", "voice", "audience"] as const;
+const agentPhaseKeys = ["brand_profile", "voice", "audience", "website", "business"] as const;
 type AgentPhase = (typeof agentPhaseKeys)[number];
 type AgentPhaseStatus = "idle" | "pending" | "completed" | "error";
 
@@ -181,6 +187,8 @@ const phaseLabel: Record<AgentPhase, string> = {
   brand_profile: "Brand profile",
   voice: "Voice",
   audience: "Audience",
+  website: "Website",
+  business: "Business",
 };
 
 const phaseStatusCopy: Record<AgentPhaseStatus, string> = {
@@ -229,11 +237,31 @@ function buildIntegrationCallbackUrl(group: "google" | "facebook", context: stri
   return url.toString();
 }
 
+function buildDocumentCallbackUrl(provider: "google-drive", context: string): string {
+  const origin = getSiteOrigin();
+  const url = new URL("/documents/callback", origin);
+  url.searchParams.set("provider", provider);
+  url.searchParams.set("context", context);
+  return url.toString();
+}
+
 function createAgentPhaseState(): Record<AgentPhase, AgentPhaseStatus> {
   return {
     brand_profile: "idle",
     voice: "idle",
     audience: "idle",
+    website: "idle",
+    business: "idle",
+  };
+}
+
+function createAgentStreamState(): Record<AgentPhase, string> {
+  return {
+    brand_profile: "",
+    voice: "",
+    audience: "",
+    website: "",
+    business: "",
   };
 }
 
@@ -249,6 +277,20 @@ function mapAgentStatus(status: string): AgentPhaseStatus | null {
   return null;
 }
 
+function createEmptyAccountSelection(): Record<PlatformKey, Set<string>> {
+  return {
+    youtube: new Set(),
+    googleAds: new Set(),
+    dv360: new Set(),
+    instagram: new Set(),
+    facebook: new Set(),
+    threads: new Set(),
+    tiktok: new Set(),
+    linkedin: new Set(),
+    amazonAds: new Set(),
+  };
+}
+
 export default function OnboardingFlow({ brandId, initialState }: OnboardingFlowProps) {
   const router = useRouter();
   const { show } = useToast();
@@ -259,27 +301,28 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const [selectedVoiceTags, setSelectedVoiceTags] = useState<BrandVoiceTag[]>(initialState.brand.brandVoiceTags ?? []);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [agentPhases, setAgentPhases] = useState<Record<AgentPhase, AgentPhaseStatus>>(() => createAgentPhaseState());
+  const [agentStreams, setAgentStreams] = useState<Record<AgentPhase, string>>(() => createAgentStreamState());
   const [agentVoice, setAgentVoice] = useState<AgentBrandVoice | null>(null);
   const [agentAudience, setAgentAudience] = useState<AgentTargetAudience | null>(null);
   const [agentBrandProfile, setAgentBrandProfile] = useState<AgentBrandProfile | null>(null);
+  const [agentWebsite, setAgentWebsite] = useState<WebsiteSummary | null>(null);
+  const [agentBusiness, setAgentBusiness] = useState<BusinessSummary | null>(null);
+  const [previewCompletePayload, setPreviewCompletePayload] = useState<OnboardingPreviewWorkflowResult | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   // Track selected integration accounts per provider
-  const [selectedAccountIdsByKey, setSelectedAccountIdsByKey] = useState<Record<PlatformKey, Set<string>>>(() => ({
-    youtube: new Set(),
-    googleAds: new Set(),
-    dv360: new Set(),
-    instagram: new Set(),
-    facebook: new Set(),
-    threads: new Set(),
-    tiktok: new Set(),
-    linkedin: new Set(),
-    amazonAds: new Set(),
-  }));
+  const [selectedAccountIdsByKey, setSelectedAccountIdsByKey] = useState<Record<PlatformKey, Set<string>>>(() =>
+    createEmptyAccountSelection()
+  );
+  const [isGoogleDriveLinking, setIsGoogleDriveLinking] = useState(false);
   const previewAbortRef = useRef<AbortController | null>(null);
+  const previewPayloadRef = useRef<AgentRequestPayload | null>(null);
   const startMetaSyncMutation = useStartMetaSync();
   const startGoogleSyncMutation = useStartGoogleSync();
+  const startGoogleDrivePickerMutation = useStartGoogleDrivePicker();
+  const isGoogleDrivePickerPending = startGoogleDrivePickerMutation.isPending;
 
   const {
     register,
@@ -324,39 +367,110 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     (event: OnboardingPreviewEvent) => {
       switch (event.type) {
         case "status": {
-          if (!isAgentPhase(event.phase)) break;
+          if (!isAgentPhase(event.section)) break;
           const mapped = mapAgentStatus(event.status);
           if (mapped) {
-            setAgentPhases(prev => ({
-              ...prev,
-              [event.phase]: mapped,
-            }));
+            setAgentPhases(prev => {
+              if (prev[event.section] === mapped) {
+                return prev;
+              }
+              return {
+                ...prev,
+                [event.section]: mapped,
+              };
+            });
           }
+          if (mapped === "error") {
+            if (event.error) {
+              setAgentError(event.error);
+            }
+            setAgentStreams(prev => ({ ...prev, [event.section]: "" }));
+          }
+          if (mapped === "completed") {
+            setAgentStreams(prev => ({ ...prev, [event.section]: "" }));
+          }
+          break;
+        }
+        case "stream": {
+          if (!isAgentPhase(event.section)) break;
+          setAgentStreams(prev => ({
+            ...prev,
+            [event.section]: `${prev[event.section] || ""}${event.delta}`,
+          }));
           break;
         }
         case "voice":
           setAgentVoice(event.payload);
+          setAgentStreams(prev => ({ ...prev, voice: "" }));
           break;
         case "audience":
           setAgentAudience(event.payload);
+          setAgentStreams(prev => ({ ...prev, audience: "" }));
           break;
         case "brand_profile":
           setAgentBrandProfile(event.payload);
+          if (event.payload.brand_voice) {
+            setAgentVoice(event.payload.brand_voice);
+          }
+          if (event.payload.target_audience) {
+            setAgentAudience(event.payload.target_audience);
+          }
+          setAgentStreams(prev => ({ ...prev, brand_profile: "" }));
+          break;
+        case "website":
+          setAgentWebsite(event.payload);
+          setAgentStreams(prev => ({ ...prev, website: "" }));
+          break;
+        case "business":
+          setAgentBusiness(event.payload);
+          setAgentStreams(prev => ({ ...prev, business: "" }));
+          break;
+        case "structured":
+          setAgentWebsite(event.payload.website);
+          setAgentBusiness(event.payload.business ?? null);
+          setAgentStreams(prev => ({ ...prev, website: "", business: "" }));
+          break;
+        case "embedding":
           break;
         case "complete":
-          setAgentPhases(prev => ({
-            brand_profile: prev.brand_profile === "completed" ? prev.brand_profile : "completed",
-            voice: prev.voice === "completed" ? prev.voice : "completed",
-            audience: prev.audience === "completed" ? prev.audience : "completed",
-          }));
+          setAgentPhases(prev => {
+            const next = { ...prev };
+            for (const phase of agentPhaseKeys) {
+              if (next[phase] !== "completed") {
+                next[phase] = "completed";
+              }
+            }
+            return next;
+          });
+          setAgentStreams(createAgentStreamState());
+          if (event.result?.brand_profile) {
+            setAgentBrandProfile(event.result.brand_profile);
+            if (event.result.brand_profile.brand_voice) {
+              setAgentVoice(event.result.brand_profile.brand_voice);
+            }
+            if (event.result.brand_profile.target_audience) {
+              setAgentAudience(event.result.brand_profile.target_audience);
+            }
+          }
+          if (event.result?.structured) {
+            setAgentWebsite(event.result.structured.website);
+            setAgentBusiness(event.result.structured.business ?? null);
+            setAgentStreams(prev => ({ ...prev, website: "", business: "" }));
+          }
+          setPreviewCompletePayload(event.result ?? null);
           break;
         case "error":
           setAgentError(event.message);
-          setAgentPhases(prev => ({
-            brand_profile: prev.brand_profile === "completed" ? prev.brand_profile : "error",
-            voice: prev.voice === "completed" ? prev.voice : "error",
-            audience: prev.audience === "completed" ? prev.audience : "error",
-          }));
+          setAgentPhases(prev => {
+            const next = { ...prev };
+            for (const phase of agentPhaseKeys) {
+              if (next[phase] !== "completed") {
+                next[phase] = "error";
+              }
+            }
+            return next;
+          });
+          setAgentStreams(createAgentStreamState());
           break;
         default:
           break;
@@ -367,9 +481,9 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
   // Live update from server events (optional; backend must emit this)
   useContinuumServerEvents({
-    "onboarding.document.updated": event => {
-      if ((event.data as any).brandId !== brandId) return;
-      const { documentId, status, errorMessage } = event.data as any;
+    "onboarding.document.updated": (event: ContinuumEvent<"onboarding.document.updated">) => {
+      if (event.data.brandId !== brandId) return;
+      const { documentId, status, errorMessage } = event.data;
       setState(prev => ({
         ...prev,
         documents: prev.documents.map(d => (d.id === documentId ? { ...d, status, errorMessage } : d)),
@@ -418,32 +532,20 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     };
   }, []);
 
-  useEffect(() => {
-    setSelectedVoiceTags(state.brand.brandVoiceTags ?? []);
-    const storedIndustry = state.brand.industry;
-    const isCustom = Boolean(storedIndustry && !industries.includes(storedIndustry));
-    reset({
-      name: state.brand.name,
-      industry: isCustom ? "Other" : storedIndustry || industries[0],
-      brandVoice: state.brand.brandVoice ?? "",
-      targetAudience: state.brand.targetAudience ?? "",
-      timezone: normalizeTimezoneValue(state.brand.timezone || "UTC"),
-      website: state.brand.website ?? "",
-      otherIndustry: isCustom ? storedIndustry : "",
-    });
-    // Resolve logo URL for preview when path exists
-    if (state.brand.logoPath) {
-      void createSignedAssetUrl(state.brand.logoPath, 3600)
-        .then(url => setLogoPreviewUrl(url))
-        .catch(() => setLogoPreviewUrl(null));
-    } else {
-      setLogoPreviewUrl(null);
-    }
-  }, [reset, state.brand]);
-
   const industryValue = watch("industry");
   const timezoneValue = watch("timezone");
   const websiteValue = watch("website");
+
+  const streamingAbortRef = useRef<AbortController | null>(null);
+  const [isDraftingVoice, setIsDraftingVoice] = useState(false);
+  const [isDraftingAudience, setIsDraftingAudience] = useState(false);
+  const lastWebsiteTriggeredRef = useRef<string | null>(null);
+  const userEditedRef = useRef<{
+    brandVoice: boolean;
+    targetAudience: boolean;
+    name: boolean;
+    website: boolean;
+  }>({ brandVoice: false, targetAudience: false, name: false, website: false });
 
   // Auto-detect timezone from browser on first render if not already set by server
   const autoTimezoneAppliedRef = useRef(false);
@@ -461,6 +563,65 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     }
     autoTimezoneAppliedRef.current = true;
   }, [initialState.brand.timezone, setValue, timezoneValue]);
+
+  useEffect(() => {
+    setSelectedVoiceTags(state.brand.brandVoiceTags ?? []);
+  }, [state.brand.brandVoiceTags]);
+
+  useEffect(() => {
+    const storedIndustry = state.brand.industry;
+    const isCustom = Boolean(storedIndustry && !industries.includes(storedIndustry));
+
+    const currentValues = getValues();
+
+    const nextValues = {
+      name: currentValues.name ?? "",
+      industry: isCustom ? "Other" : storedIndustry || industries[0],
+      brandVoice: currentValues.brandVoice ?? state.brand.brandVoice ?? "",
+      targetAudience: currentValues.targetAudience ?? state.brand.targetAudience ?? "",
+      timezone: normalizeTimezoneValue(state.brand.timezone || "UTC"),
+      website: currentValues.website ?? "",
+      otherIndustry: isCustom ? storedIndustry : "",
+    };
+
+    let resetNameEdited = false;
+    let resetWebsiteEdited = false;
+
+    if (!userEditedRef.current.name) {
+      nextValues.name = state.brand.name ?? "";
+      resetNameEdited = true;
+    }
+
+    if (!userEditedRef.current.website) {
+      nextValues.website = state.brand.website ?? "";
+      resetWebsiteEdited = true;
+    }
+
+    if (!isDraftingVoice && !userEditedRef.current.brandVoice && state.brand.brandVoice !== null) {
+      nextValues.brandVoice = state.brand.brandVoice;
+    }
+
+    if (!isDraftingAudience && !userEditedRef.current.targetAudience && state.brand.targetAudience !== null) {
+      nextValues.targetAudience = state.brand.targetAudience;
+    }
+
+    reset(nextValues, { keepDirty: true, keepTouched: true });
+
+    if (resetNameEdited) {
+      userEditedRef.current.name = false;
+    }
+    if (resetWebsiteEdited) {
+      userEditedRef.current.website = false;
+    }
+
+    if (state.brand.logoPath) {
+      void createSignedAssetUrl(state.brand.logoPath, 3600)
+        .then(url => setLogoPreviewUrl(url))
+        .catch(() => setLogoPreviewUrl(null));
+    } else {
+      setLogoPreviewUrl(null);
+    }
+  }, [getValues, isDraftingAudience, isDraftingVoice, reset, state.brand]);
 
   const buildAgentPayload = useCallback((): AgentRequestPayload => {
     const userId = currentUserId ?? ownerId;
@@ -545,6 +706,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         targetAudience: data.targetAudience?.trim() ? data.targetAudience.trim() : null,
         timezone: data.timezone,
         website,
+        logoPath: state.brand.logoPath ?? null,
       };
 
       startTransition(() => {
@@ -554,22 +716,18 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         })
           .then(next => {
             setState(next);
+            userEditedRef.current.name = false;
+            userEditedRef.current.website = false;
           })
           .catch(() => {
             show({ title: "Save failed", description: "Could not update brand details.", variant: "error" });
           });
       });
     },
-    [brandId, selectedVoiceTags, show]
+    [brandId, selectedVoiceTags, show, state.brand.logoPath]
   );
 
   // --- Draft streaming from website on blur ---
-  const streamingAbortRef = useRef<AbortController | null>(null);
-  const [isDraftingVoice, setIsDraftingVoice] = useState(false);
-  const [isDraftingAudience, setIsDraftingAudience] = useState(false);
-  const lastWebsiteTriggeredRef = useRef<string | null>(null);
-  const userEditedRef = useRef<{ brandVoice: boolean; targetAudience: boolean }>({ brandVoice: false, targetAudience: false });
-
   const stopDrafting = useCallback(() => {
     try {
       streamingAbortRef.current?.abort();
@@ -578,6 +736,59 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     setIsDraftingVoice(false);
     setIsDraftingAudience(false);
   }, []);
+
+  const stopPreview = useCallback(() => {
+    try {
+      previewAbortRef.current?.abort();
+    } catch {}
+    previewAbortRef.current = null;
+    setIsAgentRunning(false);
+  }, []);
+
+  const resetPreviewState = useCallback(() => {
+    setAgentPhases(createAgentPhaseState());
+    setAgentStreams(createAgentStreamState());
+    setAgentVoice(null);
+    setAgentAudience(null);
+    setAgentBrandProfile(null);
+    setAgentWebsite(null);
+    setAgentBusiness(null);
+    setPreviewCompletePayload(null);
+    setAgentError(null);
+  }, []);
+
+  const handleClear = useCallback(() => {
+    stopDrafting();
+    stopPreview();
+    resetPreviewState();
+    previewPayloadRef.current = null;
+    setIsPreviewVisible(false);
+    lastWebsiteTriggeredRef.current = null;
+    userEditedRef.current = { brandVoice: false, targetAudience: false, name: false, website: false };
+    setSelectedAccountIdsByKey(createEmptyAccountSelection());
+    setSelectedVoiceTags([]);
+    setLogoPreviewUrl(null);
+    reset({
+      name: "",
+      industry: industries[0],
+      brandVoice: "",
+      targetAudience: "",
+      timezone: normalizeTimezoneValue(detectGmtFromBrowser()),
+      website: "",
+      otherIndustry: "",
+    });
+    startTransition(() => {
+      void resetOnboardingStateAction(brandId)
+        .then(next => {
+          setState(next);
+          setSelectedAccountIdsByKey(createEmptyAccountSelection());
+          show({ title: "Progress cleared", description: "Your onboarding data was reset.", variant: "success" });
+        })
+        .catch(() => {
+          show({ title: "Clear failed", description: "Unable to reset onboarding. Try again.", variant: "error" });
+        });
+    });
+  }, [brandId, reset, show, startTransition, stopDrafting]);
 
   const startDraftingFromWebsite = useCallback(async (url: string) => {
     if (!url || url.trim().length < 5) return;
@@ -612,56 +823,123 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       let audienceBuffer = "";
       let voiceDone = false;
       let audienceDone = false;
+      let pendingEvent: string | null = null;
+      let pendingData: string[] = [];
+
+      const handleEvent = (eventName: string | null, rawPayload: string) => {
+        if (!eventName) return;
+        const payload = rawPayload.trim();
+        switch (eventName) {
+          case "brandVoice": {
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = typeof parsed?.delta === "string" ? parsed.delta : "";
+              if (!delta) break;
+              voiceBuffer += delta;
+              if (!userEditedRef.current.brandVoice) {
+                setValue("brandVoice", voiceBuffer, { shouldDirty: false });
+              }
+            } catch {
+              // ignore malformed chunks
+            }
+            break;
+          }
+          case "targetAudience": {
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = typeof parsed?.delta === "string" ? parsed.delta : "";
+              if (!delta) break;
+              audienceBuffer += delta;
+              if (!userEditedRef.current.targetAudience) {
+                setValue("targetAudience", audienceBuffer, { shouldDirty: false });
+              }
+            } catch {
+              // ignore malformed chunks
+            }
+            break;
+          }
+          case "brandVoiceDone":
+            voiceDone = true;
+            setIsDraftingVoice(false);
+            break;
+          case "targetAudienceDone":
+            audienceDone = true;
+            setIsDraftingAudience(false);
+            break;
+          case "done":
+            voiceDone = true;
+            audienceDone = true;
+            setIsDraftingVoice(false);
+            setIsDraftingAudience(false);
+            break;
+          case "error":
+            show({ title: "Draft error", description: payload || "Upstream error.", variant: "error" });
+            stopDrafting();
+            voiceDone = true;
+            audienceDone = true;
+            break;
+          default:
+            break;
+        }
+      };
+
+      const flushPendingEvent = () => {
+        if (!pendingEvent) {
+          pendingData = [];
+          return;
+        }
+        const data = pendingData.join("\n");
+        handleEvent(pendingEvent, data);
+        pendingEvent = null;
+        pendingData = [];
+      };
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          flushPendingEvent();
+          break;
+        }
+        if (!value) continue;
         buf += decoder.decode(value, { stream: true });
         const lines = buf.split(/\r?\n/);
         buf = lines.pop() ?? "";
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line.startsWith("event:")) {
-            const event = line.slice(6).trim();
-            const dataLine = lines[++i] || ""; // next line should be data
-            if (!dataLine.startsWith("data:")) continue;
-            const data = dataLine.slice(5).trim();
 
-            if (event === "brandVoice") {
-              try {
-                const { delta } = JSON.parse(data);
-                voiceBuffer += String(delta);
-                if (!userEditedRef.current.brandVoice) {
-                  setValue("brandVoice", voiceBuffer, { shouldDirty: false });
-                }
-              } catch {}
-            } else if (event === "targetAudience") {
-              try {
-                const { delta } = JSON.parse(data);
-                audienceBuffer += String(delta);
-                if (!userEditedRef.current.targetAudience) {
-                  setValue("targetAudience", audienceBuffer, { shouldDirty: false });
-                }
-              } catch {}
-            } else if (event === "brandVoiceDone") {
-              voiceDone = true;
-              setIsDraftingVoice(false);
-            } else if (event === "targetAudienceDone") {
-              audienceDone = true;
-              setIsDraftingAudience(false);
-            } else if (event === "error") {
-              show({ title: "Draft error", description: "Upstream error.", variant: "error" });
-            } else if (event === "done") {
-              // overall done
-              voiceDone = true;
-              audienceDone = true;
-              setIsDraftingVoice(false);
-              setIsDraftingAudience(false);
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            flushPendingEvent();
+            pendingEvent = line.slice(6).trim() || null;
+          } else if (line.startsWith("data:")) {
+            if (!pendingEvent) {
+              pendingEvent = "message";
             }
+            pendingData.push(line.slice(5));
+          } else if (line.trim() === "") {
+            flushPendingEvent();
+          } else if (line.startsWith(":")) {
+            // comment line; ignore
+          } else {
+            if (!pendingEvent) {
+              pendingEvent = "message";
+            }
+            pendingData.push(line);
           }
         }
 
         if (voiceDone && audienceDone) break;
+      }
+
+      if (!ctrl.signal.aborted) {
+        const finalVoice = (getValues("brandVoice") || "").trim();
+        const finalAudience = (getValues("targetAudience") || "").trim();
+        setState(prev => ({
+          ...prev,
+          brand: {
+            ...prev.brand,
+            brandVoice: finalVoice.length ? finalVoice : null,
+            targetAudience: finalAudience.length ? finalAudience : null,
+          },
+        }));
       }
     } catch {
       // swallow; user may have aborted
@@ -670,7 +948,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       setIsDraftingAudience(false);
       streamingAbortRef.current = null;
     }
-  }, [brandId, setValue, show, stopDrafting]);
+  }, [brandId, getValues, setState, setValue, show, startTransition, stopDrafting]);
 
   const handleUploadDocuments = useCallback(
     async (files: FileList | null) => {
@@ -712,7 +990,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       if (!fileList || fileList.length === 0) return;
       const file = fileList[0];
       const validTypes = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"] as const;
-      if (!validTypes.includes(file.type as any)) {
+      if (!validTypes.includes(file.type as (typeof validTypes)[number])) {
         show({ title: "Unsupported file", description: "Use PNG, JPG, WEBP, or SVG.", variant: "error" });
         return;
       }
@@ -734,9 +1012,14 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       startTransition(() => {
         void (async () => {
           const { asset } = await uploadCreativeAsset(brandId, "branding", namedFile);
-          const next = await mutateOnboardingStateAction(brandId, { brand: { logoPath: asset.fullPath } });
-          setState(next);
           const url = await createSignedAssetUrl(asset.fullPath, 3600);
+          setState(prev => ({
+            ...prev,
+            brand: {
+              ...prev.brand,
+              logoPath: asset.fullPath,
+            },
+          }));
           setLogoPreviewUrl(url);
           show({ title: "Logo uploaded", description: "We saved your brand logo.", variant: "success" });
         })().catch(() =>
@@ -749,6 +1032,117 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
   const handleConnectorLaunch = useCallback(
     async (source: (typeof CONNECTOR_SOURCES)[number]["key"]) => {
+      if (source === "google-drive") {
+        type GoogleDriveLinkedMessage = {
+          type: string;
+          source: string;
+          name: string;
+          externalUrl?: string | null;
+          state?: string | null;
+          context?: string | null;
+        };
+        type GoogleDriveErrorMessage = {
+          type: string;
+          source?: string | null;
+          message?: string | null;
+          state?: string | null;
+          context?: string | null;
+        };
+        let popup: Window | null = null;
+        let abortController: AbortController | null = null;
+        let linkedPromise: Promise<GoogleDriveLinkedMessage> | null = null;
+        let errorPromise: Promise<never> | null = null;
+        let closedPromise: Promise<never> | null = null;
+        setIsGoogleDriveLinking(true);
+        try {
+          const callbackUrl = buildDocumentCallbackUrl("google-drive", "onboarding");
+          const { url, state } = await startGoogleDrivePickerMutation.mutateAsync({
+            brandId,
+            callbackUrl,
+            context: "onboarding",
+          });
+          popup = openCenteredPopup(url, "Google Drive");
+          if (!popup) {
+            show({ title: "Popup blocked", description: "Enable popups to connect external libraries.", variant: "error" });
+            return;
+          }
+
+          abortController = new AbortController();
+
+          const predicate = (message: GoogleDriveLinkedMessage | GoogleDriveErrorMessage) =>
+            (message?.source ?? null) === "google-drive" &&
+            (message?.context ?? "onboarding") === "onboarding" &&
+            (!state || message?.state === state);
+
+          linkedPromise = waitForPopupMessage<GoogleDriveLinkedMessage>("documents:linked", {
+            predicate,
+            signal: abortController.signal,
+          });
+
+          errorPromise = waitForPopupMessage<GoogleDriveErrorMessage>("documents:error", {
+            predicate,
+            signal: abortController.signal,
+          }).then(payload => {
+            const description = payload.message?.trim().length ? payload.message : "Google Drive linking cancelled.";
+            throw new Error(description);
+          });
+
+          closedPromise = waitForPopupClosed(popup, { signal: abortController.signal }).then(() => {
+            throw new Error("Google Drive window closed before completion.");
+          });
+
+          const result = await Promise.race([linkedPromise, errorPromise, closedPromise]);
+          const { name, externalUrl } = result;
+          if (!externalUrl) {
+            throw new Error("Google Drive did not return a shareable link.");
+          }
+
+          startTransition(() => {
+            void enqueueDocumentEmbedAction(brandId, {
+              name,
+              source: "google-drive",
+              externalUrl,
+            })
+              .then(next => {
+                setState(next);
+                show({
+                  title: "Google Drive library linked",
+                  description: `${name} queued for embedding.`,
+                  variant: "success",
+                });
+              })
+              .catch(() => {
+                show({ title: "Integration failed", description: "Unable to capture the selected document.", variant: "error" });
+              });
+          });
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "Unable to link Google Drive. Please try again.";
+          show({ title: "Google Drive integration failed", description: message, variant: "error" });
+        } finally {
+          abortController?.abort();
+          const pending: Promise<unknown>[] = [];
+          if (linkedPromise) {
+            pending.push(linkedPromise.catch(() => undefined));
+          }
+          if (errorPromise) {
+            pending.push(errorPromise.catch(() => undefined));
+          }
+          if (closedPromise) {
+            pending.push(closedPromise.catch(() => undefined));
+          }
+          try {
+            popup?.close();
+          } catch {
+            // ignore
+          }
+          if (pending.length > 0) {
+            await Promise.all(pending);
+          }
+          setIsGoogleDriveLinking(false);
+        }
+        return;
+      }
+
       const popup = openCenteredPopup(`/documents/mock/${source}`, `Connect ${source}`);
       if (!popup) {
         show({ title: "Popup blocked", description: "Enable popups to connect external libraries.", variant: "error" });
@@ -766,24 +1160,17 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         });
 
         startTransition(() => {
-          const action = source === "google-drive"
-            ? enqueueDocumentEmbedAction(brandId, {
-                name: payload.name,
-                source: "google-drive",
-                externalUrl: payload.externalUrl,
-              })
-            : registerDocumentMetadataAction(brandId, {
-                name: payload.name,
-                source,
-                externalUrl: payload.externalUrl,
-                status: "ready",
-              });
+          const action = registerDocumentMetadataAction(brandId, {
+            name: payload.name,
+            source,
+            externalUrl: payload.externalUrl,
+            status: "ready",
+          });
 
           void action
             .then(next => {
               setState(next);
-              const desc = source === "google-drive" ? `${payload.name} queued for embedding.` : payload.name;
-              show({ title: `${source} library linked`, description: desc, variant: "success" });
+              show({ title: `${source} library linked`, description: payload.name, variant: "success" });
             })
             .catch(() => {
               show({ title: "Integration failed", description: "Unable to capture the selected document.", variant: "error" });
@@ -793,7 +1180,16 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         show({ title: "Integration cancelled", description: `We didn't receive a document from ${source}.`, variant: "error" });
       }
     },
-    [brandId, show]
+    [
+      brandId,
+      enqueueDocumentEmbedAction,
+      registerDocumentMetadataAction,
+      setState,
+      setIsGoogleDriveLinking,
+      show,
+      startGoogleDrivePickerMutation,
+      startTransition,
+    ]
   );
 
   const removeDocument = useCallback(
@@ -1063,9 +1459,9 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     });
   }, [brandId, isAgentRunning, show, step]);
 
-  const completeOnboarding = useCallback(async () => {
+  const startPreview = useCallback(async () => {
     if (isAgentRunning) return;
-    // Persist any remaining selections before finalizing
+
     const selectedIds = getAllSelectedIds();
     if (selectedIds.length > 0) {
       try {
@@ -1075,6 +1471,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         return;
       }
     }
+
     let payload: AgentRequestPayload;
     try {
       payload = buildAgentPayload();
@@ -1084,64 +1481,117 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       return;
     }
 
-    setAgentError(null);
-    setAgentVoice(null);
-    setAgentAudience(null);
-    setAgentBrandProfile(null);
-    setAgentPhases(createAgentPhaseState());
+    previewPayloadRef.current = payload;
+    setIsPreviewVisible(true);
+    stopPreview();
+    resetPreviewState();
 
     const controller = new AbortController();
     previewAbortRef.current = controller;
-    const finishAgents = () => {
-      setIsAgentRunning(false);
-      previewAbortRef.current = null;
-    };
-
     setIsAgentRunning(true);
 
     try {
       await checkOnboardingAgentHealth({ signal: controller.signal });
-      await runOnboardingPreview({
+      const result: RunOnboardingPreviewResult = await runOnboardingPreview({
         payload,
         signal: controller.signal,
         onEvent: handleAgentPreviewEvent,
       });
-      const approval = await approveOnboardingBrandProfile({ payload, signal: controller.signal });
-      setAgentBrandProfile(approval.brand_profile);
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (result.brandProfile) {
+        setAgentBrandProfile(result.brandProfile);
+      }
+        if (result.structured) {
+          setAgentWebsite(result.structured.website);
+          setAgentBusiness(result.structured.business ?? null);
+        }
+      if (result.complete) {
+        setPreviewCompletePayload(result.complete);
+      }
     } catch (error) {
       if (controller.signal.aborted) {
-        finishAgents();
         return;
       }
       const message =
-        error instanceof Error ? error.message : "Unable to complete the onboarding preview. Please try again.";
+        error instanceof Error ? error.message : "Unable to generate the onboarding preview. Please try again.";
       setAgentError(message);
-      setAgentPhases(prev => ({
-        brand_profile: prev.brand_profile === "completed" ? prev.brand_profile : "error",
-        voice: prev.voice === "completed" ? prev.voice : "error",
-        audience: prev.audience === "completed" ? prev.audience : "error",
-      }));
+      setAgentPhases(prev => {
+        const next = { ...prev };
+        for (const phase of agentPhaseKeys) {
+          if (next[phase] !== "completed") {
+            next[phase] = "error";
+          }
+        }
+        return next;
+      });
       show({ title: "Preview failed", description: message, variant: "error" });
-      finishAgents();
+    } finally {
+      setIsAgentRunning(false);
+      if (previewAbortRef.current === controller) {
+        previewAbortRef.current = null;
+      }
+    }
+  }, [
+    associateIntegrationAccountsAction,
+    brandId,
+    buildAgentPayload,
+    checkOnboardingAgentHealth,
+    getAllSelectedIds,
+    handleAgentPreviewEvent,
+    isAgentRunning,
+    resetPreviewState,
+    runOnboardingPreview,
+    show,
+    stopPreview,
+  ]);
+
+  const handleExitPreview = useCallback(() => {
+    if (isAgentRunning) return;
+    setIsPreviewVisible(false);
+  }, [isAgentRunning]);
+
+  const completeOnboarding = useCallback(() => {
+    if (isAgentRunning) return;
+    if (!previewCompletePayload) {
+      show({ title: "Preview required", description: "Generate and review your preview before approval.", variant: "error" });
+      return;
+    }
+    const payload = previewPayloadRef.current;
+    if (!payload) {
+      show({ title: "Preview missing", description: "Run the preview before completing onboarding.", variant: "error" });
       return;
     }
 
-    finishAgents();
-
     startTransition(() => {
-      void completeOnboardingAction(brandId)
-        .then(next => {
-          setState(next);
-          show({ title: "Onboarding complete", description: "Redirecting to your dashboard.", variant: "success" });
-          router.replace("/dashboard");
-        })
-        .catch(() => {
-          show({ title: "Completion failed", description: "Please try again.", variant: "error" });
-        });
+      void (async () => {
+        const approval = await approveOnboardingBrandProfile({ payload });
+        setAgentBrandProfile(approval.brand_profile);
+        const next = await completeOnboardingAction(brandId);
+        setState(next);
+        show({ title: "Onboarding complete", description: "Redirecting to your dashboard.", variant: "success" });
+        router.replace("/dashboard");
+      })().catch(error => {
+        const message =
+          error instanceof Error ? error.message : "Unable to finalize onboarding. Please try again.";
+        show({ title: "Completion failed", description: message, variant: "error" });
+      });
     });
-  }, [brandId, buildAgentPayload, handleAgentPreviewEvent, isAgentRunning, router, show, startTransition, getAllSelectedIds]);
+  }, [
+    approveOnboardingBrandProfile,
+    brandId,
+    completeOnboardingAction,
+    isAgentRunning,
+    previewCompletePayload,
+    router,
+    show,
+    startTransition,
+  ]);
 
-  const isCompleting = isPending || isAgentRunning;
+  const isPreviewRunning = isAgentRunning;
+  const isCompleting = isPending;
+  const shouldShowPreview = isPreviewVisible || isPreviewRunning;
 
   const renderBrandTags = () => (
     <Flex wrap="wrap" gap="2">
@@ -1167,6 +1617,36 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     </Flex>
   );
 
+  const renderBadgeList = (items?: string[] | null, emptyLabel: string = "No data available.") => {
+    if (!items || items.length === 0) {
+      return (
+        <Text color="gray" size="1">
+          {emptyLabel}
+        </Text>
+      );
+    }
+    return (
+      <Flex wrap="wrap" gap="1">
+        {items.map(item => (
+          <Badge key={item} color="gray" variant="soft">
+            {item}
+          </Badge>
+        ))}
+      </Flex>
+    );
+  };
+
+  const renderPreviewSection = (title: string, content: ReactNode) => (
+    <Box key={title} className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+      <Text size="2" weight="medium">
+        {title}
+      </Text>
+      <Box className="mt-2">
+        {content}
+      </Box>
+    </Box>
+  );
+
   const renderDocumentsList = () => {
     if (brandDocuments.length === 0) {
       return <Text color="gray">No documents added yet. Bring your brand voice and visual libraries to kick-start personalization.</Text>;
@@ -1182,7 +1662,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                 <Flex gap="2" align="center">
                   <Badge color="gray">
                     <Flex align="center" gap="1">
-                      <DocumentSourceIcon source={doc.source as any} />
+                      <DocumentSourceIcon source={doc.source} />
                       <span>{doc.source}</span>
                     </Flex>
                   </Badge>
@@ -1380,17 +1860,362 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     );
   };
 
+  const renderReviewSummary = () => {
+    const isSummaryActionDisabled = isPending || isPreviewRunning;
+    return (
+      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+        <Flex direction="column" gap="4" p="4">
+          <Heading size="4" className="text-white">Review</Heading>
+          <Text color="gray">
+            Confirm your workspace setup, then generate a preview to stream the AI recommendations before approval.
+          </Text>
+          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+            <Flex direction="column" gap="2" p="3">
+              <Text size="2" weight="medium">Brand profile</Text>
+              <Text>{state.brand.name}</Text>
+              <Flex gap="2">
+                <Badge color="violet">{state.brand.industry || "Industry not set"}</Badge>
+                <Badge color="gray">{state.brand.timezone}</Badge>
+              </Flex>
+              {state.brand.website && (
+                <Text color="gray" size="2">Website: {state.brand.website}</Text>
+              )}
+              {logoPreviewUrl && (
+                <Flex align="center" gap="2" className="mt-1">
+                  <Text size="2" color="gray">Logo:</Text>
+                  <img
+                    src={logoPreviewUrl}
+                    alt="Brand logo"
+                    className="h-10 w-10 rounded bg-white object-contain p-1 border border-white/10"
+                  />
+                </Flex>
+              )}
+              {state.brand.brandVoice && (
+                <Text color="gray" size="2">Voice: {state.brand.brandVoice}</Text>
+              )}
+              {state.brand.brandVoiceTags.length > 0 && (
+                <Flex gap="1" wrap="wrap">
+                  {state.brand.brandVoiceTags.map(tag => (
+                    <Badge key={tag} color="green">
+                      {tag}
+                    </Badge>
+                  ))}
+                </Flex>
+              )}
+              {state.brand.targetAudience && (
+                <Text color="gray" size="2">Target audience: {state.brand.targetAudience}</Text>
+              )}
+            </Flex>
+          </Card>
+
+          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+            <Flex direction="column" gap="2" p="3">
+              <Text size="2" weight="medium">Brand documents</Text>
+              {brandDocuments.length ? (
+                <Flex direction="column" gap="1">
+                  {brandDocuments.map(doc => (
+                    <Flex key={doc.id} align="center" justify="between">
+                      <Text size="2">{doc.name}</Text>
+                      <Badge color="gray">{doc.source}</Badge>
+                    </Flex>
+                  ))}
+                </Flex>
+              ) : (
+                <Text color="gray" size="2">No documents uploaded.</Text>
+              )}
+            </Flex>
+          </Card>
+
+          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+            <Flex direction="column" gap="2" p="3">
+              <Text size="2" weight="medium">Connected platforms</Text>
+              {connectedKeys.length ? (
+                <Flex direction="column" gap="2">
+                  {connectedKeys.map(provider => {
+                    const connection = state.connections[provider];
+                    const label = PLATFORMS.find(p => p.key === provider)?.label ?? provider;
+                    return (
+                      <Card key={provider} variant="ghost" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+                        <Flex direction="column" gap="1" p="2">
+                          <Flex justify="between">
+                            <Text>{label}</Text>
+                            <Badge color="green">Connected</Badge>
+                          </Flex>
+                          {connection?.accounts?.length ? (
+                            <Flex wrap="wrap" gap="2">
+                              {connection.accounts.map(account => (
+                                <Badge key={account.id} color="violet">
+                                  {account.name}
+                                </Badge>
+                              ))}
+                            </Flex>
+                          ) : (
+                            <Text color="gray" size="1">No accounts synced yet.</Text>
+                          )}
+                        </Flex>
+                      </Card>
+                    );
+                  })}
+                </Flex>
+              ) : (
+                <Text color="gray" size="2">No integrations connected.</Text>
+              )}
+            </Flex>
+          </Card>
+
+          <Callout.Root color="green">
+            <Callout.Icon>
+              <CheckCircledIcon />
+            </Callout.Icon>
+            <Callout.Text>
+              You can manage integrations and brand assets anytime from Settings.
+            </Callout.Text>
+          </Callout.Root>
+
+          <Flex justify="between" align="center">
+            <Button
+              type="button"
+              variant="ghost"
+              color="gray"
+              onClick={handleClear}
+              disabled={isSummaryActionDisabled}
+            >
+              Clear
+            </Button>
+            <Flex gap="2">
+              <Button variant="soft" onClick={handleBack} disabled={isSummaryActionDisabled}>
+                Back
+              </Button>
+              <Button onClick={startPreview} disabled={isSummaryActionDisabled}>
+                {isPreviewRunning ? (
+                  <>
+                    <ReloadIcon className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  "Generate preview"
+                )}
+              </Button>
+            </Flex>
+          </Flex>
+        </Flex>
+      </Card>
+    );
+  };
+
+  const renderPreviewScreen = () => {
+    const previewReady = Boolean(previewCompletePayload && !agentError);
+    const approveDisabled = isCompleting || isPreviewRunning || !previewReady;
+    const streamingBrandProfile = agentStreams.brand_profile;
+    const streamingVoice = agentStreams.voice;
+    const streamingAudience = agentStreams.audience;
+    const streamingWebsite = agentStreams.website;
+    const streamingBusiness = agentStreams.business;
+    const previewStatusBadges = (
+      <Flex wrap="wrap" gap="2">
+        {agentPhaseKeys.map(phase => (
+          <Badge key={phase} color={phaseStatusColor[agentPhases[phase]]}>
+            {phaseLabel[phase]} · {phaseStatusCopy[agentPhases[phase]]}
+          </Badge>
+        ))}
+      </Flex>
+    );
+
+    const brandProfileContent = agentBrandProfile ? (
+      <Flex direction="column" gap="2">
+        <Text weight="medium">{agentBrandProfile.brand_name}</Text>
+        {agentBrandProfile.description && <Text color="gray" size="2">{agentBrandProfile.description}</Text>}
+        {agentBrandProfile.website_url && <Text color="gray" size="2">Website: {agentBrandProfile.website_url}</Text>}
+      </Flex>
+    ) : (
+      streamingBrandProfile ? (
+        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingBrandProfile}</Text>
+      ) : (
+        <Text color="gray" size="2">Awaiting brand profile…</Text>
+      )
+    );
+
+    const voiceContent = agentVoice ? (
+      <Flex direction="column" gap="2">
+        {agentVoice.tone && <Text color="gray" size="2">Tone: {agentVoice.tone}</Text>}
+        {agentVoice.voice_style && <Text color="gray" size="2">Style: {agentVoice.voice_style}</Text>}
+        {agentVoice.mission && <Text color="gray" size="2">Mission: {agentVoice.mission}</Text>}
+        <Box>
+          <Text size="1" color="gray">Keywords</Text>
+          <Box className="mt-1">{renderBadgeList(agentVoice.keywords, "No keywords identified yet.")}</Box>
+        </Box>
+      </Flex>
+    ) : (
+      streamingVoice ? (
+        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingVoice}</Text>
+      ) : (
+        <Text color="gray" size="2">Awaiting voice insights…</Text>
+      )
+    );
+
+    const audienceContent = agentAudience ? (
+      <Flex direction="column" gap="2">
+        {agentAudience.summary && <Text color="gray" size="2">{agentAudience.summary}</Text>}
+        <Box>
+          <Text size="1" color="gray">Demographics</Text>
+          <Box className="mt-1">{renderBadgeList(agentAudience.demographics, "No demographics yet.")}</Box>
+        </Box>
+        <Box>
+          <Text size="1" color="gray">Motivations</Text>
+          <Box className="mt-1">{renderBadgeList(agentAudience.motivations, "No motivations yet.")}</Box>
+        </Box>
+      </Flex>
+    ) : (
+      streamingAudience ? (
+        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingAudience}</Text>
+      ) : (
+        <Text color="gray" size="2">Awaiting audience insights…</Text>
+      )
+    );
+
+    const websiteContent = agentWebsite ? (
+      <Flex direction="column" gap="2">
+        {agentWebsite.website_url && <Text color="gray" size="2">URL: {agentWebsite.website_url}</Text>}
+        {agentWebsite.hero_statement && <Text color="gray" size="2">Hero statement: {agentWebsite.hero_statement}</Text>}
+      </Flex>
+    ) : (
+      streamingWebsite ? (
+        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingWebsite}</Text>
+      ) : (
+        <Text color="gray" size="2">Awaiting website summary…</Text>
+      )
+    );
+
+    const businessContent = agentBusiness ? (
+      <Flex direction="column" gap="2">
+        {agentBusiness.business_name && <Text weight="medium">{agentBusiness.business_name}</Text>}
+        {agentBusiness.business_description && (
+          <Text color="gray" size="2">{agentBusiness.business_description}</Text>
+        )}
+        <Box>
+          <Text size="1" color="gray">Features</Text>
+          <Box className="mt-1">{renderBadgeList(agentBusiness.business_features, "No features captured yet.")}</Box>
+        </Box>
+        <Box>
+          <Text size="1" color="gray">Benefits</Text>
+          <Box className="mt-1">{renderBadgeList(agentBusiness.business_benefits, "No benefits captured yet.")}</Box>
+        </Box>
+        {agentBusiness.business_cta && <Text color="gray" size="2">CTA: {agentBusiness.business_cta}</Text>}
+      </Flex>
+    ) : (
+      streamingBusiness ? (
+        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingBusiness}</Text>
+      ) : (
+        <Text color="gray" size="2">Awaiting business summary…</Text>
+      )
+    );
+
+    const sections = [
+      { title: "Brand profile", content: brandProfileContent },
+      { title: "Voice", content: voiceContent },
+      { title: "Audience", content: audienceContent },
+      { title: "Website", content: websiteContent },
+      { title: "Business overview", content: businessContent },
+    ];
+
+    return (
+      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+        <Flex direction="column" gap="4" p="4">
+          <Flex align="center" justify="between">
+            <Heading size="4" className="text-white">Preview & Approve</Heading>
+            <Flex gap="2">
+              <Button variant="ghost" color="gray" onClick={handleExitPreview} disabled={isPreviewRunning}>
+                Review summary
+              </Button>
+              <Button
+                variant="ghost"
+                color="gray"
+                onClick={isPreviewRunning ? stopPreview : startPreview}
+                disabled={isCompleting}
+              >
+                {isPreviewRunning ? (
+                  <>
+                    <ReloadIcon className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Stop preview
+                  </>
+                ) : (
+                  "Regenerate preview"
+                )}
+              </Button>
+            </Flex>
+          </Flex>
+
+          {agentError ? (
+            <Callout.Root color="red">
+              <Callout.Icon>
+                <ExclamationTriangleIcon />
+              </Callout.Icon>
+              <Callout.Text>{agentError}</Callout.Text>
+            </Callout.Root>
+          ) : (
+            <Text color="gray">
+              {isPreviewRunning
+                ? "Streaming preview responses…"
+                : previewReady
+                  ? "Preview complete. Review the AI-generated sections and approve when ready."
+                  : "Preview data is loading. Sections update as soon as each agent finishes."}
+            </Text>
+          )}
+
+          {previewStatusBadges}
+
+          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+            <Flex direction="column" gap="3" p="3">
+              {sections.map(section => renderPreviewSection(section.title, section.content))}
+            </Flex>
+          </Card>
+
+          <Flex justify="between" align="center">
+            <Button
+              type="button"
+              variant="ghost"
+              color="gray"
+              onClick={handleClear}
+              disabled={isCompleting || isPreviewRunning}
+            >
+              Clear
+            </Button>
+            <Flex gap="2">
+              <Button
+                variant="soft"
+                onClick={handleBack}
+                disabled={isCompleting || isPreviewRunning}
+              >
+                Back
+              </Button>
+              <Button onClick={completeOnboarding} disabled={approveDisabled}>
+                {isCompleting ? (
+                  <>
+                    <ReloadIcon className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Finalizing
+                  </>
+                ) : (
+                  "Approve & complete"
+                )}
+              </Button>
+            </Flex>
+          </Flex>
+        </Flex>
+      </Card>
+    );
+  };
+
   return (
-    <Container size="3">
+    <Container size="4" className="max-w-6xl w-full">
       <Flex direction="column" gap="4">
         <Heading size="6" className="text-white">Welcome to Continuum</Heading>
         <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>
 
-        <Tabs.Root value={`step-${step}`} onValueChange={() => {}}>
-          <Tabs.List>
-            <Tabs.Trigger value="step-0">Brand profile</Tabs.Trigger>
-            <Tabs.Trigger value="step-1">Integrations</Tabs.Trigger>
-            <Tabs.Trigger value="step-2">Review</Tabs.Trigger>
+        <Tabs.Root baseId={`radix-onboarding-tabs-${brandId}`} value={`step-${step}`} onValueChange={() => {}}>
+          <Tabs.List className="grid grid-cols-3 gap-3 md:flex md:gap-4 md:justify-start">
+            <Tabs.Trigger value="step-0" className="flex-1 rounded-full px-4 py-2">Brand profile</Tabs.Trigger>
+            <Tabs.Trigger value="step-1" className="flex-1 rounded-full px-4 py-2">Integrations</Tabs.Trigger>
+            <Tabs.Trigger value="step-2" className="flex-1 rounded-full px-4 py-2">Review</Tabs.Trigger>
           </Tabs.List>
 
           <Tabs.Content value="step-0">
@@ -1406,7 +2231,14 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     <Text size="2" weight="medium">
                       Brand name
                     </Text>
-                    <TextField.Root placeholder="e.g. Continuum Collective" {...register("name")} />
+                  <TextField.Root
+                    placeholder="e.g. Continuum Collective"
+                    {...register("name", {
+                      onChange: () => {
+                        userEditedRef.current.name = true;
+                      },
+                    })}
+                  />
                     {errors.name?.message && <Text color="red" size="1">{errors.name.message}</Text>}
                   </Box>
                   <Box>
@@ -1415,7 +2247,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     </Text>
                     <TextField.Root
                       placeholder="https://example.com"
-                      {...register("website")}
+                    {...register("website", {
+                      onChange: () => {
+                        userEditedRef.current.website = true;
+                      },
+                    })}
                       onBlur={() => {
                         const val = websiteValue?.trim() || "";
                         // Must be >= 5 chars and parse as URL
@@ -1461,6 +2297,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     </Text>
                     <TextArea
                       placeholder="Describe your brand tone and style"
+                      className="min-h-[140px]"
                       {...register("brandVoice", {
                         onChange: () => (userEditedRef.current.brandVoice = true),
                       })}
@@ -1476,6 +2313,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     </Text>
                     <TextArea
                       placeholder="Who are you speaking to?"
+                      className="min-h-[140px]"
                       {...register("targetAudience", {
                         onChange: () => (userEditedRef.current.targetAudience = true),
                       })}
@@ -1531,15 +2369,15 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                           color="red"
                           disabled={isPending || isAgentRunning}
                           onClick={() => {
-                            startTransition(() => {
-                              void mutateOnboardingStateAction(brandId, { brand: { logoPath: null } })
-                                .then(next => {
-                                  setState(next);
-                                  setLogoPreviewUrl(null);
-                                  show({ title: "Removed", description: "Logo removed from brand profile.", variant: "success" });
-                                })
-                                .catch(() => show({ title: "Remove failed", description: "Try again.", variant: "error" }));
-                            });
+                            setState(prev => ({
+                              ...prev,
+                              brand: {
+                                ...prev.brand,
+                                logoPath: null,
+                              },
+                            }));
+                            setLogoPreviewUrl(null);
+                            show({ title: "Removed", description: "Logo removed from brand profile.", variant: "success" });
                           }}
                         >
                           Remove logo
@@ -1577,24 +2415,32 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                         </Flex>
                       </Button>
                       {CONNECTOR_SOURCES.map(source => {
-                        const disabled = source.status !== "active" || isPending || isAgentRunning;
-                        const label = source.status === "soon" ? `${source.label} (coming soon)` : source.label;
+                        const isGoogleDriveBusy =
+                          source.key === "google-drive" && (isGoogleDrivePickerPending || isGoogleDriveLinking);
+                    const isComingSoon = source.status === "soon";
+                    const disabled =
+                      isComingSoon || isPending || isAgentRunning || isGoogleDriveBusy;
+                    const label = isComingSoon ? `${source.label} (coming soon)` : source.label;
+                        const variant = isComingSoon ? "soft" : "outline";
                         return (
                           <Button
                             key={source.key}
                             type="button"
-                            variant={source.status === "active" ? "outline" : "soft"}
+                            variant={variant}
                             color="gray"
                             onClick={() => {
-                              if (source.status === "active") {
-                                void handleConnectorLaunch(source.key as any);
+                              if (!isComingSoon) {
+                                void handleConnectorLaunch(source.key);
                               }
                             }}
                             disabled={disabled}
-                            title={source.status === "soon" ? "Coming soon" : undefined}
+                            title={isComingSoon ? "Coming soon" : undefined}
                           >
                             <Flex align="center" gap="2">
-                              <DocumentSourceIcon source={source.key as any} />
+                              {source.key === "google-drive" && isGoogleDriveBusy && (
+                                <ReloadIcon className="h-3.5 w-3.5 animate-spin" />
+                              )}
+                              <DocumentSourceIcon source={source.key} />
                               <span>{label}</span>
                             </Flex>
                           </Button>
@@ -1615,13 +2461,24 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     />
                     {renderDocumentsList()}
                   </Flex>
-                  <Flex justify="end" gap="3">
-                    <Button type="button" variant="soft" disabled>
-                      Back
+                  <Flex justify="between" align="center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      color="gray"
+                      onClick={handleClear}
+                      disabled={isPending || isAgentRunning}
+                    >
+                      Clear
                     </Button>
-                    <Button type="submit" disabled={!canContinueFrom(0) || isPending || isAgentRunning}>
-                      Continue
-                    </Button>
+                    <Flex gap="3">
+                      <Button type="button" variant="soft" disabled>
+                        Back
+                      </Button>
+                      <Button type="submit" disabled={!canContinueFrom(0) || isPending || isAgentRunning}>
+                        Continue
+                      </Button>
+                    </Flex>
                   </Flex>
                 </Flex>
               </form>
@@ -1664,174 +2521,31 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     Popups talk to the Continuum integrations service. We cache the callback URL you pass in, exchange tokens with Google or Meta, then stream the connected accounts back into this brand automatically.
                   </Callout.Text>
                 </Callout.Root>
-                <Flex justify="between">
-                  <Button variant="soft" onClick={handleBack} disabled={isPending || isAgentRunning}>
-                    Back
+                <Flex justify="between" align="center">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    color="gray"
+                    onClick={handleClear}
+                    disabled={isPending || isAgentRunning}
+                  >
+                    Clear
                   </Button>
-                  <Button onClick={handleNext} disabled={!canContinueFrom(1) || isPending || isAgentRunning}>
-                    Continue
-                  </Button>
+                  <Flex gap="2">
+                    <Button variant="soft" onClick={handleBack} disabled={isPending || isAgentRunning}>
+                      Back
+                    </Button>
+                    <Button onClick={handleNext} disabled={!canContinueFrom(1) || isPending || isAgentRunning}>
+                      Continue
+                    </Button>
+                  </Flex>
                 </Flex>
               </Flex>
             </Card>
           </Tabs.Content>
 
           <Tabs.Content value="step-2">
-            <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-              <Flex direction="column" gap="4" p="4">
-                <Heading size="4" className="text-white">Review</Heading>
-                <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-                  <Flex direction="column" gap="2" p="3">
-                    <Text size="2" weight="medium">Brand profile</Text>
-                    <Text>{state.brand.name}</Text>
-                    <Flex gap="2">
-                      <Badge color="violet">{state.brand.industry || "Industry not set"}</Badge>
-                      <Badge color="gray">{state.brand.timezone}</Badge>
-                    </Flex>
-                    {state.brand.website && (
-                      <Text color="gray" size="2">Website: {state.brand.website}</Text>
-                    )}
-                    {logoPreviewUrl && (
-                      <Flex align="center" gap="2" className="mt-1">
-                        <Text size="2" color="gray">Logo:</Text>
-                        <img
-                          src={logoPreviewUrl}
-                          alt="Brand logo"
-                          className="h-10 w-10 rounded bg-white object-contain p-1 border border-white/10"
-                        />
-                      </Flex>
-                    )}
-                    {state.brand.brandVoice && (
-                      <Text color="gray" size="2">Voice: {state.brand.brandVoice}</Text>
-                    )}
-                    {state.brand.brandVoiceTags.length > 0 && (
-                      <Flex gap="1" wrap="wrap">
-                        {state.brand.brandVoiceTags.map(tag => (
-                          <Badge key={tag} color="green">{tag}</Badge>
-                        ))}
-                      </Flex>
-                    )}
-                    {state.brand.targetAudience && (
-                      <Text color="gray" size="2">Target audience: {state.brand.targetAudience}</Text>
-                    )}
-                  </Flex>
-                </Card>
-
-                <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-                  <Flex direction="column" gap="2" p="3">
-                    <Text size="2" weight="medium">Brand documents</Text>
-                    {brandDocuments.length ? (
-                      <Flex direction="column" gap="1">
-                        {brandDocuments.map(doc => (
-                          <Flex key={doc.id} align="center" justify="between">
-                            <Text size="2">{doc.name}</Text>
-                            <Badge color="gray">{doc.source}</Badge>
-                          </Flex>
-                        ))}
-                      </Flex>
-                    ) : (
-                      <Text color="gray" size="2">No documents uploaded.</Text>
-                    )}
-                  </Flex>
-                </Card>
-
-                <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-                  <Flex direction="column" gap="2" p="3">
-                    <Text size="2" weight="medium">Connected platforms</Text>
-                    {connectedKeys.length ? (
-                      <Flex direction="column" gap="2">
-                        {connectedKeys.map(provider => {
-                          const connection = state.connections[provider];
-                          const label = PLATFORMS.find(p => p.key === provider)?.label ?? provider;
-                          return (
-                            <Card key={provider} variant="ghost" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-                              <Flex direction="column" gap="1" p="2">
-                                <Flex justify="between">
-                                  <Text>{label}</Text>
-                                  <Badge color="green">Connected</Badge>
-                                </Flex>
-                                {connection?.accounts?.length ? (
-                                  <Flex wrap="wrap" gap="2">
-                                    {connection.accounts.map(account => (
-                                      <Badge key={account.id} color="violet">
-                                        {account.name}
-                                      </Badge>
-                                    ))}
-                                  </Flex>
-                                ) : (
-                                  <Text color="gray" size="1">No accounts synced yet.</Text>
-                                )}
-                              </Flex>
-                            </Card>
-                          );
-                        })}
-                      </Flex>
-                    ) : (
-                      <Text color="gray" size="2">No integrations connected.</Text>
-                    )}
-                  </Flex>
-                </Card>
-
-                {(agentBrandProfile || agentVoice || agentAudience || agentError || isAgentRunning) && (
-                  <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-                    <Flex direction="column" gap="2" p="3">
-                      <Flex align="center" justify="between">
-                        <Text size="2" weight="medium">AI onboarding preview</Text>
-                        <Badge color={agentError ? "red" : isAgentRunning ? "indigo" : "green"}>
-                          {agentError ? "Error" : isAgentRunning ? "Running" : "Ready"}
-                        </Badge>
-                      </Flex>
-                      <Flex wrap="wrap" gap="2">
-                        {agentPhaseKeys.map(phase => (
-                          <Badge key={phase} color={phaseStatusColor[agentPhases[phase]]}>
-                            {phaseLabel[phase]} · {phaseStatusCopy[agentPhases[phase]]}
-                          </Badge>
-                        ))}
-                      </Flex>
-                      {agentBrandProfile?.description && (
-                        <Text size="2" color="gray">{agentBrandProfile.description}</Text>
-                      )}
-                      {agentVoice?.tone && (
-                        <Text size="2" color="gray">Voice tone: {agentVoice.tone}</Text>
-                      )}
-                      {agentAudience?.summary && (
-                        <Text size="2" color="gray">Audience summary: {agentAudience.summary}</Text>
-                      )}
-                      {agentError && (
-                        <Text size="2" color="red">{agentError}</Text>
-                      )}
-                      {!isAgentRunning && isPending && !agentError && (
-                        <Text size="2" color="gray">Finalizing onboarding…</Text>
-                      )}
-                    </Flex>
-                  </Card>
-                )}
-
-                <Callout.Root color="green">
-                  <Callout.Icon>
-                    <CheckCircledIcon />
-                  </Callout.Icon>
-                  <Callout.Text>
-                    You can manage integrations and brand assets anytime from Settings.
-                  </Callout.Text>
-                </Callout.Root>
-                <Flex justify="between">
-                  <Button variant="soft" onClick={handleBack} disabled={isCompleting}>
-                    Back
-                  </Button>
-                  <Button onClick={completeOnboarding} disabled={isCompleting}>
-                    {isCompleting ? (
-                      <>
-                        <ReloadIcon className="mr-2 h-3.5 w-3.5 animate-spin" />
-                        Finalizing
-                      </>
-                    ) : (
-                      "Complete setup"
-                    )}
-                  </Button>
-                </Flex>
-              </Flex>
-            </Card>
+            {shouldShowPreview ? renderPreviewScreen() : renderReviewSummary()}
           </Tabs.Content>
         </Tabs.Root>
 

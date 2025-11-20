@@ -1,75 +1,45 @@
-"use client";
+import { Container, Flex, Heading, Text } from "@radix-ui/themes";
+import { BrandIntegrationsCard } from "@/components/settings/BrandIntegrationsCard";
+import { GlassPanel } from "@/components/ui/GlassPanel";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { fetchOnboardingMetadata } from "@/lib/onboarding/storage";
 
-import React, { useState } from "react";
-import { Card, Container, Flex, Grid, Heading, Text, Button, Badge, Callout } from "@radix-ui/themes";
-import { Link2Icon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
-import { PLATFORMS, PlatformKey } from "@/components/onboarding/platforms";
+export default async function IntegrationsPage() {
+  const metadata = await fetchOnboardingMetadata();
+  const activeBrandId = metadata.activeBrandId;
 
-export default function IntegrationsPage() {
-  const [connections, setConnections] = useState<Record<PlatformKey, boolean>>(() => {
-    try {
-      const stored = typeof window !== "undefined" ? window.localStorage.getItem("integrations.state") : null;
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return {
-      youtube: false,
-      instagram: false,
-      facebook: false,
-      tiktok: false,
-      linkedin: false,
-      googleAds: false,
-      amazonAds: false,
-      dv360: false,
-      threads: false,
-    };
-  });
-
-  function toggle(key: PlatformKey) {
-    setConnections(prev => {
-      const next = { ...prev, [key]: !prev[key] };
-      try {
-        window.localStorage.setItem("integrations.state", JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+  if (!activeBrandId) {
+    return (
+      <Container size="4" className="py-10">
+        <Flex direction="column" gap="3">
+          <Heading size="6" className="text-white">
+            Integrations
+          </Heading>
+          <Text color="gray">
+            Create a brand profile in settings to manage integrations. Once a brand is active you can assign OAuth
+            connections and business accounts here.
+          </Text>
+        </Flex>
+      </Container>
+    );
   }
 
+  const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
+
   return (
-    <Container size="4">
+    <Container size="4" className="py-10">
       <Flex direction="column" gap="4">
-        <Heading size="6" className="text-white">Integrations</Heading>
-        <Text color="gray">Manage connections to social and ads platforms. Connect or disconnect anytime.</Text>
-        <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
-          {PLATFORMS.map(({ key, label }) => {
-            const isConnected = connections[key];
-            return (
-              <Card key={key} className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-                <Flex direction="column" gap="2" p="3">
-                  <Flex align="center" justify="between">
-                    <Flex align="center" gap="2">
-                      <Link2Icon />
-                      <Text weight="medium">{label}</Text>
-                    </Flex>
-                    <Badge color={isConnected ? "green" : "gray"}>{isConnected ? "Connected" : "Not connected"}</Badge>
-                  </Flex>
-                  <Button onClick={() => toggle(key)} variant={isConnected ? "soft" : "solid"} color={isConnected ? "gray" : "violet"}>
-                    {isConnected ? "Disconnect" : "Connect"}
-                  </Button>
-                </Flex>
-              </Card>
-            );
-          })}
-        </Grid>
-        <Callout.Root color="amber">
-          <Callout.Icon>
-            <ExclamationTriangleIcon />
-          </Callout.Icon>
-          <Callout.Text>
-            This is a UI placeholder. Actual OAuth will be wired via Supabase Auth.
-          </Callout.Text>
-        </Callout.Root>
+        <Heading size="6" className="text-white">
+          Integrations
+        </Heading>
+        <Text color="gray">
+          Manage which social and ads accounts are linked to your active brand profile. OAuth flows remain managed
+          centrally by Continuum.
+        </Text>
+        <GlassPanel className="p-6">
+          <BrandIntegrationsCard summary={integrationSummary} showHeader={false} />
+        </GlassPanel>
       </Flex>
     </Container>
   );
 }
-

@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Asset } from "@/lib/schemas/brand-assets";
-import { updateBrandProfileAssets } from "@/lib/api/brandProfiles";
+import { updateBrandProfileAssets } from "@/lib/api/brandProfiles.client";
 import { ProviderAssetList } from "@/components/assets/ProviderAssetList";
 import { useToast } from "@/components/ui/ToastProvider";
 

@@ -29,9 +29,7 @@ export default async function DashboardLayout({
   }
 
   const { state: activeState } = await ensureOnboardingState(activeBrandId);
-  if (!isOnboardingComplete(activeState)) {
-    redirect(`/onboarding?brand=${activeBrandId}`);
-  }
+  metadata.brands[activeBrandId] = activeState;
 
   const brandSummaries = Object.keys(metadata.brands).map((id) => {
     const state = metadata.brands[id] as OnboardingState;
