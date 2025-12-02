@@ -48,3 +48,12 @@ export async function revokeInviteAction(brandId: string, inviteId: string): Pro
   const repo = createBrandProfileRepository();
   await repo.revokeInvite(brandId, inviteId);
 }
+
+export async function deleteBrandProfileAction(brandId: string): Promise<{ nextBrandId: string | null }> {
+  if (!brandId) {
+    throw new Error("Brand id is required");
+  }
+  const repo = createBrandProfileRepository();
+  const nextBrandId = await repo.deleteBrand(brandId);
+  return { nextBrandId };
+}

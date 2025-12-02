@@ -2,6 +2,7 @@ import type { BrandRole, BrandInvite, BrandMember } from "@/lib/onboarding/state
 import {
   createBrandProfile,
   createMagicLinkInvite,
+  deleteBrandFromMetadata,
   removeMemberFromBrand,
   renameBrandProfile,
   revokeInvite,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/onboarding/storage";
 import { z } from "zod";
 import { httpServer } from "@/lib/api/http.server";
+import { invokeDeleteBrandProfile, fetchBrandProfileDetails, type BrandProfileDetails } from "@/lib/brands/profile";
 
 export type BrandSummary = {
   id: string;
@@ -31,6 +33,8 @@ export interface BrandProfileRepository {
   removeMember(brandId: string, email: string): Promise<void>;
   createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }>;
   revokeInvite(brandId: string, inviteId: string): Promise<void>;
+  deleteBrand(brandId: string): Promise<string | null>;
+  fetchProfile(brandId: string): Promise<BrandProfileDetails | null>;
 }
 
 // Default implementation leveraging existing Supabase-backed onboarding storage.
@@ -55,6 +59,14 @@ export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
     },
     async revokeInvite(brandId: string, inviteId: string) {
       await revokeInvite(brandId, inviteId);
+    },
+    async deleteBrand(brandId: string): Promise<string | null> {
+      await invokeDeleteBrandProfile(brandId);
+      const { nextActiveBrandId } = await deleteBrandFromMetadata(brandId);
+      return nextActiveBrandId ?? null;
+    },
+    async fetchProfile(brandId: string): Promise<BrandProfileDetails | null> {
+      return fetchBrandProfileDetails(brandId);
     },
   };
 }
@@ -94,6 +106,20 @@ export function createGatewayBrandProfileRepository(): BrandProfileRepository {
     async revokeInvite(brandId: string, inviteId: string): Promise<void> {
       await httpServer.request({ path: `/brands/${brandId}/invites/${inviteId}`, method: "DELETE" });
     },
+    async deleteBrand(brandId: string): Promise<string | null> {
+      await httpServer.request({ path: `/brands/${brandId}`, method: "DELETE" });
+      return null;
+    },
+    async fetchProfile(brandId: string): Promise<BrandProfileDetails | null> {
+      const schema = z.object({
+        id: z.string(),
+        name: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+        createdBy: z.string(),
+      });
+      return await httpServer.request({ path: `/brands/${brandId}`, method: "GET", schema });
+    },
   };
 }
 
@@ -102,4 +128,3 @@ export function createBrandProfileRepository(): BrandProfileRepository {
   return createSupabaseBrandProfileRepository();
   // return createGatewayBrandProfileRepository();
 }
-

@@ -13,7 +13,13 @@ export const dynamic = "force-static";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-slate-950" style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}>
+    <div
+      className="min-h-screen"
+      style={{
+        backgroundColor: "var(--background)",
+        color: "var(--foreground)",
+      }}
+    >
       <main className="relative z-10">
         <SiteHeader />
         <HeroSection />

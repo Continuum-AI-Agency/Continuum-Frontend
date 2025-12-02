@@ -4,8 +4,10 @@ import { PLATFORMS } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
 type Props = {
-  summary: BrandIntegrationSummary;
+  summary?: BrandIntegrationSummary;
   showHeader?: boolean;
+  isLoading?: boolean;
+  onRefresh?: () => Promise<void> | void;
 };
 
 function formatConnectionBadge(connectedCount: number): { label: string; color: "green" | "gray" } {
@@ -25,28 +27,41 @@ function resolveStatusColor(status: string | null): "green" | "amber" | "red" | 
   return "gray";
 }
 
-export function BrandIntegrationsCard({ summary, showHeader = true }: Props) {
+export function BrandIntegrationsCard({ summary, showHeader = true, isLoading = false, onRefresh }: Props) {
+  const resolvedSummary = summary ?? ({} as BrandIntegrationSummary);
+
   return (
-    <Flex direction="column" gap="4">
+    <Flex direction="column" gap="5">
       {showHeader ? (
         <>
           <Heading size="6" className="text-white">
             Integrations
           </Heading>
-          <Text color="gray">
-            Review which social and ads accounts are linked to this brand profile. OAuth connections are configured per
-            workspace owner; assignments below reflect the accounts currently shared with this brand.
-          </Text>
+          <Flex align="center" justify="between" wrap="wrap" gap="3">
+            <Text color="gray">
+              Review which social and ads accounts are linked to this brand profile. OAuth connections are configured per
+              workspace owner; assignments below reflect the accounts currently shared with this brand.
+            </Text>
+            {onRefresh ? (
+              <button
+                type="button"
+                className="text-sm text-sky-400 hover:text-sky-300 underline"
+                onClick={() => onRefresh()}
+              >
+                Refresh
+              </button>
+            ) : null}
+          </Flex>
         </>
       ) : null}
       <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
         {PLATFORMS.map(({ key, label }) => {
-          const accounts = summary[key]?.accounts ?? [];
+          const accounts = resolvedSummary[key]?.accounts ?? [];
           const badge = formatConnectionBadge(accounts.length);
 
           return (
             <Card key={key} className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-              <Flex direction="column" gap="2" p="3">
+              <Flex direction="column" gap="3" p="4">
                 <Flex align="center" justify="between">
                   <Flex align="center" gap="2">
                     <Link2Icon />
@@ -54,7 +69,11 @@ export function BrandIntegrationsCard({ summary, showHeader = true }: Props) {
                   </Flex>
                   <Badge color={badge.color}>{badge.label}</Badge>
                 </Flex>
-                {accounts.length > 0 ? (
+                {isLoading ? (
+                  <Text color="gray" size="2">
+                    Loading connections...
+                  </Text>
+                ) : accounts.length > 0 ? (
                   <Flex direction="column" gap="1">
                     {accounts.map(account => {
                       const statusColor = resolveStatusColor(account.status);
@@ -94,4 +113,3 @@ export function BrandIntegrationsCard({ summary, showHeader = true }: Props) {
     </Flex>
   );
 }
-

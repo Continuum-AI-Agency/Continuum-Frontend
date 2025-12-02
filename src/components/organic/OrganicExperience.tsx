@@ -31,7 +31,7 @@ import {
   type OrganicPlatformKey,
 } from "@/lib/organic/platforms";
 import type { CreativeAssetDragPayload } from "@/lib/creative-assets/drag";
-import { createSignedAssetUrl } from "@/lib/creative-assets/storage";
+import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
 import type {
   ContentGridRow,
   DailyDetailsRequestPayload,
@@ -51,7 +51,7 @@ import type { PostingState } from "./types";
 import type { PromptDefinition, PromptFormValue } from "@/lib/organic/prompts";
 import { promptFormValueSchema, toPromptFormValue } from "@/lib/organic/prompts";
 import { useOrganicPromptLibrary, type PromptInput } from "@/lib/organic/usePromptLibrary";
-import { DEFAULT_TRENDS, type Trend } from "@/lib/organic/trends";
+import { type Trend } from "@/lib/organic/trends";
 
 type OrganicPlatformAccount = {
   platform: OrganicPlatformKey;
@@ -65,6 +65,7 @@ type OrganicExperienceProps = {
   brandDescription: string;
   platformAccounts: OrganicPlatformAccount[];
   brandProfileId: string;
+  trends: Trend[];
 };
 
 type ProgressEntry = {
@@ -345,11 +346,11 @@ export function OrganicExperience({
   brandName,
   platformAccounts,
   brandProfileId,
+  trends,
 }: OrganicExperienceProps) {
   const { show } = useToast();
   const promptLibrary = useOrganicPromptLibrary(brandProfileId);
   const { prompts, addCustomPrompt, removeCustomPrompt, defaultPrompt } = promptLibrary;
-  const trends = DEFAULT_TRENDS;
   const activePlatforms = useMemo(
     () =>
       platformAccounts

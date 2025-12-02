@@ -37,26 +37,35 @@ function toBackendPayload(payload: AiStudioGenerationRequest) {
   };
 }
 
+function logError(message: string, detail?: unknown) {
+  console.error(`[ai-studio/generate] ${message}`, detail);
+}
+
 export async function POST(request: NextRequest) {
   let json: unknown;
   try {
     json = await request.json();
   } catch {
+    logError("Invalid JSON payload");
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
   const parsed = aiStudioGenerationRequestSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid request payload", issues: parsed.error.flatten() },
-      { status: 422 }
-    );
+    logError("Request schema validation failed", parsed.error.flatten());
+    return NextResponse.json({ error: "Invalid request payload", issues: parsed.error.flatten() }, { status: 422 });
   }
+  const requestContext = {
+    brandProfileId: parsed.data.brandProfileId,
+    provider: parsed.data.provider,
+    medium: parsed.data.medium,
+  };
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getSession();
 
   if (error || !data.session?.access_token) {
+    logError("Unauthorized generate attempt", { error: error ?? "missing session", ...requestContext });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -71,7 +80,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(toBackendPayload(parsed.data)),
     });
   } catch (error) {
-    console.error("Failed to reach AI Studio generation service", error);
+    logError("Upstream unreachable", { error, ...requestContext });
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
     return NextResponse.json(
@@ -88,10 +97,7 @@ export async function POST(request: NextRequest) {
       detail = await response.text();
     }
 
-    console.warn("AI Studio generation upstream returned error", {
-      status: response.status,
-      detail,
-    });
+    logError("Upstream returned error", { status: response.status, detail });
 
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
@@ -114,7 +120,7 @@ export async function POST(request: NextRequest) {
   try {
     payload = await response.json();
   } catch (error) {
-    console.error("AI Studio generation upstream returned non-JSON payload", error);
+    logError("Upstream returned non-JSON payload", error);
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
     return NextResponse.json(
@@ -134,7 +140,7 @@ export async function POST(request: NextRequest) {
     recordFallbackJob(result.job);
     return NextResponse.json(result, { status: response.status });
   } catch (err) {
-    console.error("Failed to normalize AI Studio generation payload", err);
+    logError("Schema normalization failed", { err, ...requestContext });
     const fallbackJob = createFallbackJobFromRequest(parsed.data);
     recordFallbackJob(fallbackJob);
     markFallbackJobErrored(
@@ -155,5 +161,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-

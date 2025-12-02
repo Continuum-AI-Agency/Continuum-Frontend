@@ -9,7 +9,14 @@ export default function PaidMediaPage() {
       <Flex direction="column" gap="4">
         <Heading size="6" className="text-white">Paid Media</Heading>
         <Text color="gray">Plan, launch, and optimize paid campaigns across ads platforms.</Text>
-        <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+        <Card
+          className="backdrop-blur-xl"
+          style={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+            color: "var(--foreground)",
+          }}
+        >
           <Flex direction="column" gap="3" p="4">
             <Heading size="4" className="text-white">Coming soon</Heading>
             <Text color="gray">We’re building budgeting, targeting presets, and performance insights.</Text>
@@ -27,5 +34,4 @@ export default function PaidMediaPage() {
     </Container>
   );
 }
-
 

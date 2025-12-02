@@ -39,8 +39,10 @@ import { BRAND_VOICE_TAGS } from "@/lib/onboarding/state";
 import { openCenteredPopup, waitForPopupMessage, waitForPopupClosed } from "@/lib/popup";
 import { useStartMetaSync, useStartGoogleSync, useStartGoogleDrivePicker } from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
+import { StrategicAnalysisRealtimeListener } from "@/components/strategic-analyses/StrategicAnalysisRealtimeListener";
+import { requestStrategicRunsCatchUp } from "@/components/strategic-analyses/realtimeBus";
 import { PlatformIcon, ExtraIcon, DocumentSourceIcon } from "./PlatformIcons";
-import { uploadCreativeAsset, createSignedAssetUrl } from "@/lib/creative-assets/storage";
+import { uploadCreativeAsset, createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
 import {
   approveOnboardingBrandProfile,
   checkOnboardingAgentHealth,
@@ -61,6 +63,7 @@ import type { ContinuumEvent } from "@/lib/events/schema";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useContinuumServerEvents } from "@/lib/sse/useContinuumServerEvents";
 import { Tabs } from "@/components/ui/StableTabs";
+import { Editor, EditorProvider } from "react-simple-wysiwyg";
 
 const industries = [
   "Advertising",
@@ -117,6 +120,57 @@ function parseGmtToMinutes(gmtValue: string): number {
   const hours = Number(match[2]);
   const mins = Number(match[3]);
   return sign * (hours * 60 + mins);
+}
+
+function stripHtmlToText(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<br\s*\/?>(?=\n?)/gi, "\n")
+    .replace(/<\/(p|div)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\u00a0/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripUrls(input: string): string {
+  return input
+    // Remove markdown links but keep anchor text
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, "$1")
+    // Remove bare URLs in parentheses or plain text
+    .replace(/\((https?:\/\/[^\s)]+)\)/gi, "")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function splitLinesToArray(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+function formatVoiceForEdit(voice: AgentBrandVoice): string {
+  const parts: string[] = [];
+  if (voice.tone) parts.push(`Tone: ${voice.tone}`);
+  if (voice.voice_style) parts.push(`Style: ${voice.voice_style}`);
+  if (voice.mission) parts.push(`Mission: ${voice.mission}`);
+  if (voice.keywords?.length) parts.push(`Keywords: ${voice.keywords.join(", ")}`);
+  if (voice.key_messaging?.length) parts.push(`Messaging: ${voice.key_messaging.join(", ")}`);
+  if (voice.core_values?.length) parts.push(`Values: ${voice.core_values.join(", ")}`);
+  return parts.join("\n");
+}
+
+function formatAudienceForEdit(audience: AgentTargetAudience): string {
+  const parts: string[] = [];
+  if (audience.summary) parts.push(audience.summary);
+  if (audience.demographics?.length) parts.push(`Demographics: ${audience.demographics.join(", ")}`);
+  if (audience.motivations?.length) parts.push(`Motivations: ${audience.motivations.join(", ")}`);
+  if (audience.behaviors?.length) parts.push(`Behaviors: ${audience.behaviors.join(", ")}`);
+  if (audience.goals?.length) parts.push(`Goals: ${audience.goals.join(", ")}`);
+  return parts.join("\n");
 }
 
 function detectGmtFromBrowser(): string {
@@ -291,6 +345,39 @@ function createEmptyAccountSelection(): Record<PlatformKey, Set<string>> {
   };
 }
 
+function createSelectionFromState(state: OnboardingState): Record<PlatformKey, Set<string>> {
+  const selection = createEmptyAccountSelection();
+  PLATFORM_KEYS.forEach(key => {
+    const connection = state.connections[key];
+    if (!connection) return;
+    const next = selection[key];
+    const accounts = connection.accounts ?? [];
+    const hasSelectedTrue = accounts.some(account => account.selected === true);
+    const hasExplicitSelection = hasSelectedTrue || accounts.some(account => account.selected === false);
+
+    if (hasSelectedTrue) {
+      accounts.forEach(account => {
+        if (account.selected) next.add(account.id);
+      });
+      return;
+    }
+
+    // If the user explicitly deselected everything, respect the empty set
+    if (hasExplicitSelection) {
+      return;
+    }
+
+    if (connection.accountId) {
+      next.add(connection.accountId);
+      return;
+    }
+    if (accounts.length === 1) {
+      next.add(accounts[0]?.id);
+    }
+  });
+  return selection;
+}
+
 export default function OnboardingFlow({ brandId, initialState }: OnboardingFlowProps) {
   const router = useRouter();
   const { show } = useToast();
@@ -307,18 +394,25 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const [agentBrandProfile, setAgentBrandProfile] = useState<AgentBrandProfile | null>(null);
   const [agentWebsite, setAgentWebsite] = useState<WebsiteSummary | null>(null);
   const [agentBusiness, setAgentBusiness] = useState<BusinessSummary | null>(null);
+  const [voiceHtml, setVoiceHtml] = useState<string>(state.brand.brandVoice ?? "");
+  const [audienceHtml, setAudienceHtml] = useState<string>(state.brand.targetAudience ?? "");
+  const [websiteHtml, setWebsiteHtml] = useState<string>("");
+  const [businessHtml, setBusinessHtml] = useState<string>("");
+  const [demographicsHtml, setDemographicsHtml] = useState<string>("");
   const [previewCompletePayload, setPreviewCompletePayload] = useState<OnboardingPreviewWorkflowResult | null>(null);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [hasPreviewRun, setHasPreviewRun] = useState(false);
   // Track selected integration accounts per provider
   const [selectedAccountIdsByKey, setSelectedAccountIdsByKey] = useState<Record<PlatformKey, Set<string>>>(() =>
-    createEmptyAccountSelection()
+    createSelectionFromState(initialState)
   );
   const [isGoogleDriveLinking, setIsGoogleDriveLinking] = useState(false);
   const previewAbortRef = useRef<AbortController | null>(null);
   const previewPayloadRef = useRef<AgentRequestPayload | null>(null);
+  const previewEditTouchedRef = useRef<{ voice: boolean; audience: boolean }>({ voice: false, audience: false });
   const startMetaSyncMutation = useStartMetaSync();
   const startGoogleSyncMutation = useStartGoogleSync();
   const startGoogleDrivePickerMutation = useStartGoogleDrivePicker();
@@ -353,6 +447,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     () => PLATFORM_KEYS.filter(key => state.connections[key]?.connected),
     [state.connections]
   );
+
+  // Keep local selections in sync with the latest connection data (e.g., after resync)
+  useEffect(() => {
+    setSelectedAccountIdsByKey(createSelectionFromState(state));
+  }, [state.connections]);
 
   const ownerId = useMemo(
     () => state.members.find(member => member.role === "owner")?.id ?? null,
@@ -457,7 +556,9 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             setAgentBusiness(event.result.structured.business ?? null);
             setAgentStreams(prev => ({ ...prev, website: "", business: "" }));
           }
-          setPreviewCompletePayload(event.result ?? null);
+          // Some agent implementations emit a final complete event without a result payload.
+          // Treat that as a valid completion so users can proceed to approval once all phases finish.
+          setPreviewCompletePayload(event.result ?? ({} as OnboardingPreviewWorkflowResult));
           break;
         case "error":
           setAgentError(event.message);
@@ -569,6 +670,44 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   }, [state.brand.brandVoiceTags]);
 
   useEffect(() => {
+    if (previewEditTouchedRef.current.voice) return;
+    const nextValue = agentVoice
+      ? formatVoiceForEdit(agentVoice)
+      : agentStreams.voice || state.brand.brandVoice;
+    if (nextValue !== undefined && nextValue !== null) {
+      setVoiceHtml(nextValue);
+    }
+  }, [agentStreams.voice, agentVoice, state.brand.brandVoice]);
+
+  useEffect(() => {
+    if (previewEditTouchedRef.current.audience) return;
+    const base = agentAudience ? formatAudienceForEdit(agentAudience) : agentStreams.audience || state.brand.targetAudience;
+    if (base !== undefined && base !== null) {
+      setAudienceHtml(stripUrls(base));
+    }
+  }, [agentAudience, agentStreams.audience, state.brand.targetAudience]);
+
+  useEffect(() => {
+    if (agentWebsite?.hero_statement) {
+      setWebsiteHtml(agentWebsite.hero_statement || "");
+    } else if (agentStreams.website) {
+      setWebsiteHtml(agentStreams.website);
+    }
+  }, [agentStreams.website, agentWebsite]);
+
+  useEffect(() => {
+    if (agentBusiness?.business_description) {
+      setBusinessHtml(agentBusiness.business_description || "");
+    }
+  }, [agentBusiness]);
+
+  useEffect(() => {
+    if (agentAudience?.demographics?.length) {
+      setDemographicsHtml(agentAudience.demographics.map(stripUrls).join("\n"));
+    }
+  }, [agentAudience?.demographics]);
+
+  useEffect(() => {
     const storedIndustry = state.brand.industry;
     const isCustom = Boolean(storedIndustry && !industries.includes(storedIndustry));
 
@@ -623,6 +762,24 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     }
   }, [getValues, isDraftingAudience, isDraftingVoice, reset, state.brand]);
 
+  const getAllSelectedIds = useCallback((): string[] => {
+    const all: string[] = [];
+    (Object.keys(selectedAccountIdsByKey) as PlatformKey[]).forEach(k => {
+      selectedAccountIdsByKey[k].forEach(id => all.push(id));
+    });
+    return all;
+  }, [selectedAccountIdsByKey]);
+
+  const getAllAvailableIds = useCallback((): string[] => {
+    const all: string[] = [];
+    PLATFORM_KEYS.forEach(key => {
+      state.connections[key]?.accounts?.forEach(account => {
+        all.push(account.id);
+      });
+    });
+    return Array.from(new Set(all));
+  }, [state.connections]);
+
   const buildAgentPayload = useCallback((): AgentRequestPayload => {
     const userId = currentUserId ?? ownerId;
     if (!userId) {
@@ -632,9 +789,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     if (!brandName) {
       throw new Error("Add your brand name before completing onboarding.");
     }
-    const brandVoice = state.brand.brandVoice?.trim();
-    const targetAudience = state.brand.targetAudience?.trim();
-    const website = state.brand.website?.trim();
+
     const providers = Array.from(
       new Set(
         connectedKeys
@@ -642,6 +797,39 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           .filter((value): value is IntegrationProvider => Boolean(value))
       )
     );
+
+    // Merge voice with edits: prefer agentVoice structure, override tone with edited text when present
+    const editedVoiceText = stripHtmlToText(voiceHtml);
+    const mergedVoice: AgentBrandVoice | undefined = agentVoice
+      ? { ...agentVoice, tone: editedVoiceText || agentVoice.tone }
+      : editedVoiceText
+        ? { tone: editedVoiceText }
+        : state.brand.brandVoice?.trim()
+          ? { tone: state.brand.brandVoice.trim() }
+          : undefined;
+
+    // Merge audience with edits
+    const editedAudienceSummary = stripHtmlToText(audienceHtml);
+    const editedDemographics = demographicsHtml ? splitLinesToArray(stripHtmlToText(demographicsHtml)) : [];
+    const mergedAudience: AgentTargetAudience | undefined = (() => {
+      const base = agentAudience ? { ...agentAudience } : {};
+      const summary = editedAudienceSummary || agentAudience?.summary || state.brand.targetAudience?.trim();
+      const demographics = editedDemographics.length ? editedDemographics : agentAudience?.demographics;
+      if (!summary && (!demographics || demographics.length === 0)) return agentAudience ? base : undefined;
+      return {
+        ...base,
+        summary: summary ?? base.summary,
+        demographics: demographics ?? base.demographics,
+      };
+    })();
+
+    const websiteUrl = state.brand.website?.trim() || agentWebsite?.website_url || undefined;
+    const heroText = stripHtmlToText(websiteHtml);
+    const businessText = stripHtmlToText(businessHtml);
+    const description = [businessText, heroText, state.brand.industry].filter(Boolean).join(" — ") || undefined;
+
+    const selectedIntegrationAccountIds = Array.from(new Set(getAllSelectedIds())).sort();
+
     const runContext = agentRunContextSchema.parse({
       user_id: userId,
       brand_id: brandId,
@@ -650,19 +838,29 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       platform_urls: [],
       integrated_platforms: providers,
       brand_voice_tags: state.brand.brandVoiceTags ?? [],
+      integration_account_ids: selectedIntegrationAccountIds,
     });
+
     return {
       brandProfile: {
         id: brandId,
         brand_name: brandName,
-        description: state.brand.industry || undefined,
-        brand_voice: brandVoice ? { tone: brandVoice } : undefined,
-        target_audience: targetAudience ? { summary: targetAudience } : undefined,
-        website_url: website && website.length > 0 ? website : undefined,
+        description,
+        brand_voice: mergedVoice,
+        target_audience: mergedAudience,
+        website_url: websiteUrl && websiteUrl.length > 0 ? websiteUrl : undefined,
       },
       runContext,
     };
   }, [
+    agentAudience,
+    agentVoice,
+    agentWebsite?.website_url,
+    businessHtml,
+    demographicsHtml,
+    voiceHtml,
+    audienceHtml,
+    websiteHtml,
     brandId,
     connectedKeys,
     currentUserId,
@@ -674,6 +872,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     state.brand.targetAudience,
     state.brand.website,
     state.completedAt,
+    getAllSelectedIds,
   ]);
 
   const refreshState = useCallback(() => {
@@ -755,6 +954,71 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     setAgentBusiness(null);
     setPreviewCompletePayload(null);
     setAgentError(null);
+    previewEditTouchedRef.current = { voice: false, audience: false };
+    setVoiceHtml(state.brand.brandVoice ?? "");
+    setAudienceHtml(state.brand.targetAudience ?? "");
+    setWebsiteHtml("");
+    setBusinessHtml("");
+    setDemographicsHtml("");
+    setHasPreviewRun(false);
+  }, [state.brand.brandVoice, state.brand.targetAudience]);
+
+  const handleVoiceEdit = useCallback((html: string) => {
+    previewEditTouchedRef.current.voice = true;
+    setVoiceHtml(html);
+    const text = stripHtmlToText(html);
+    setState(prev => ({
+      ...prev,
+      brand: {
+        ...prev.brand,
+        brandVoice: text || null,
+      },
+    }));
+  }, []);
+
+  const handleAudienceEdit = useCallback((html: string) => {
+    previewEditTouchedRef.current.audience = true;
+    setAudienceHtml(html);
+    const text = stripHtmlToText(html);
+    setState(prev => ({
+      ...prev,
+      brand: {
+        ...prev.brand,
+        targetAudience: text || null,
+      },
+    }));
+  }, []);
+
+  const handleWebsiteEdit = useCallback((html: string) => {
+    setWebsiteHtml(html);
+    const text = stripHtmlToText(html);
+    setAgentWebsite(prev => {
+      const next: WebsiteSummary = {
+        ...(prev || {}),
+        hero_statement: text || null,
+        website_url: prev?.website_url ?? state.brand.website ?? undefined,
+      };
+      return next;
+    });
+  }, [state.brand.website]);
+
+  const handleBusinessEdit = useCallback((html: string) => {
+    setBusinessHtml(html);
+    const text = stripHtmlToText(html);
+    setAgentBusiness(prev => ({
+      ...(prev || {}),
+      business_description: text || null,
+    }));
+  }, []);
+
+  const handleDemographicsEdit = useCallback((html: string) => {
+    setDemographicsHtml(html);
+    const text = stripHtmlToText(html);
+    const entries = splitLinesToArray(text);
+    setAgentAudience(prev => ({
+      ...(prev || {}),
+      demographics: entries,
+    }));
   }, []);
 
   const handleClear = useCallback(() => {
@@ -768,6 +1032,9 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     setSelectedAccountIdsByKey(createEmptyAccountSelection());
     setSelectedVoiceTags([]);
     setLogoPreviewUrl(null);
+    previewEditTouchedRef.current = { voice: false, audience: false };
+    setVoiceHtml("");
+    setAudienceHtml("");
     reset({
       name: "",
       industry: industries[0],
@@ -1382,14 +1649,6 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     });
   }, []);
 
-  const getAllSelectedIds = useCallback((): string[] => {
-    const all: string[] = [];
-    (Object.keys(selectedAccountIdsByKey) as PlatformKey[]).forEach(k => {
-      selectedAccountIdsByKey[k].forEach(id => all.push(id));
-    });
-    return all;
-  }, [selectedAccountIdsByKey]);
-
   const canContinueFrom = useCallback(
     (stepIndex: number): boolean => {
       if (stepIndex === 0) {
@@ -1423,8 +1682,8 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       const selectedIds = getAllSelectedIds();
       startTransition(() => {
         void (async () => {
-          if (selectedIds.length > 0) {
-            await associateIntegrationAccountsAction(brandId, selectedIds);
+          if (selectedIds.length > 0 || getAllAvailableIds().length > 0) {
+            await associateIntegrationAccountsAction(brandId, selectedIds, getAllAvailableIds());
           }
           const next = await mutateOnboardingStateAction(brandId, { step: nextStep });
           setState(next);
@@ -1443,7 +1702,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           show({ title: "Progress blocked", description: "Unable to save your progress.", variant: "error" });
         });
     });
-  }, [brandId, getValues, handleBrandSubmit, isAgentRunning, setError, show, step, getAllSelectedIds]);
+  }, [brandId, getValues, handleBrandSubmit, isAgentRunning, setError, show, step, getAllSelectedIds, getAllAvailableIds]);
 
   const handleBack = useCallback(() => {
     if (isAgentRunning) return;
@@ -1463,9 +1722,9 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     if (isAgentRunning) return;
 
     const selectedIds = getAllSelectedIds();
-    if (selectedIds.length > 0) {
+    if (selectedIds.length > 0 || getAllAvailableIds().length > 0) {
       try {
-        await associateIntegrationAccountsAction(brandId, selectedIds);
+        await associateIntegrationAccountsAction(brandId, selectedIds, getAllAvailableIds());
       } catch {
         show({ title: "Save failed", description: "Could not save your integration selections.", variant: "error" });
         return;
@@ -1485,6 +1744,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     setIsPreviewVisible(true);
     stopPreview();
     resetPreviewState();
+    setHasPreviewRun(true);
 
     const controller = new AbortController();
     previewAbortRef.current = controller;
@@ -1503,12 +1763,29 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       if (result.brandProfile) {
         setAgentBrandProfile(result.brandProfile);
       }
-        if (result.structured) {
-          setAgentWebsite(result.structured.website);
-          setAgentBusiness(result.structured.business ?? null);
-        }
+      if (result.structured) {
+        setAgentWebsite(result.structured.website);
+        setAgentBusiness(result.structured.business ?? null);
+      }
       if (result.complete) {
         setPreviewCompletePayload(result.complete);
+      }
+      // If the stream ends without emitting a complete payload, consider the preview ready
+      // when we received any structured/profile data and no errors.
+      if (!result.complete && !controller.signal.aborted) {
+        const previewHasData = Boolean(result.brandProfile || result.structured);
+        if (previewHasData) {
+          setPreviewCompletePayload(prev => prev ?? ({} as OnboardingPreviewWorkflowResult));
+          setAgentPhases(prev => {
+            const next = { ...prev };
+            for (const phase of agentPhaseKeys) {
+              if (next[phase] === "pending" || next[phase] === "idle") {
+                next[phase] = "completed";
+              }
+            }
+            return next;
+          });
+        }
       }
     } catch (error) {
       if (controller.signal.aborted) {
@@ -1539,6 +1816,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     buildAgentPayload,
     checkOnboardingAgentHealth,
     getAllSelectedIds,
+    getAllAvailableIds,
     handleAgentPreviewEvent,
     isAgentRunning,
     resetPreviewState,
@@ -1566,10 +1844,13 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
     startTransition(() => {
       void (async () => {
-        const approval = await approveOnboardingBrandProfile({ payload });
+        const refreshedPayload = buildAgentPayload();
+        previewPayloadRef.current = refreshedPayload;
+        const approval = await approveOnboardingBrandProfile({ payload: refreshedPayload });
         setAgentBrandProfile(approval.brand_profile);
         const next = await completeOnboardingAction(brandId);
         setState(next);
+        await requestStrategicRunsCatchUp(brandId);
         show({ title: "Onboarding complete", description: "Redirecting to your dashboard.", variant: "success" });
         router.replace("/dashboard");
       })().catch(error => {
@@ -1584,6 +1865,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     completeOnboardingAction,
     isAgentRunning,
     previewCompletePayload,
+    buildAgentPayload,
     router,
     show,
     startTransition,
@@ -1637,14 +1919,31 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   };
 
   const renderPreviewSection = (title: string, content: ReactNode) => (
-    <Box key={title} className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0">
+    <Box key={title} className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0 min-w-0" style={{ wordBreak: "break-word" }}>
       <Text size="2" weight="medium">
         {title}
       </Text>
-      <Box className="mt-2">
+      <Box className="mt-2 min-w-0" style={{ wordBreak: "break-word" }}>
         {content}
       </Box>
     </Box>
+  );
+
+  const renderInlineEditor = (value: string, onChange: (html: string) => void, placeholder: string) => (
+    <EditorProvider>
+      <Editor
+        value={value}
+        onChange={event => onChange((event as unknown as { target: { value: string } }).target.value)}
+        disabled={isPreviewRunning || isCompleting}
+        placeholder={placeholder}
+        containerProps={{
+          className: "rsw-editor bg-transparent border-none shadow-none p-0 m-0",
+          style: { padding: 0, background: "transparent", border: "none" },
+        }}
+        className="rsw-ce min-h-[60px] text-white placeholder:text-slate-400 focus:outline-none bg-transparent border-none p-0 whitespace-pre-wrap break-words"
+        style={{ whiteSpace: "pre-wrap", background: "transparent", border: "none", padding: 0, wordBreak: "break-word", overflowWrap: "anywhere", width: "100%" }}
+      />
+    </EditorProvider>
   );
 
   const renderDocumentsList = () => {
@@ -1863,7 +2162,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const renderReviewSummary = () => {
     const isSummaryActionDisabled = isPending || isPreviewRunning;
     return (
-      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10 w-full max-w-none">
         <Flex direction="column" gap="4" p="4">
           <Heading size="4" className="text-white">Review</Heading>
           <Text color="gray">
@@ -2004,7 +2303,16 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   };
 
   const renderPreviewScreen = () => {
-    const previewReady = Boolean(previewCompletePayload && !agentError);
+    const allPhasesCompleted = agentPhaseKeys.every(phase => agentPhases[phase] === "completed");
+    const hasAgentContent = Boolean(
+      agentBrandProfile || agentVoice || agentAudience || agentWebsite || agentBusiness
+    );
+    const hasInlineEdits = Boolean(voiceHtml.trim() || audienceHtml.trim());
+    const previewReady =
+      hasPreviewRun &&
+      !agentError &&
+      !isPreviewRunning &&
+      (Boolean(previewCompletePayload) || allPhasesCompleted || hasAgentContent || hasInlineEdits);
     const approveDisabled = isCompleting || isPreviewRunning || !previewReady;
     const streamingBrandProfile = agentStreams.brand_profile;
     const streamingVoice = agentStreams.voice;
@@ -2035,91 +2343,87 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       )
     );
 
-    const voiceContent = agentVoice ? (
+    const voiceEditable = agentPhases.voice === "completed" || Boolean(previewCompletePayload?.brand_profile?.brand_voice);
+    const voiceContent = voiceEditable ? (
       <Flex direction="column" gap="2">
-        {agentVoice.tone && <Text color="gray" size="2">Tone: {agentVoice.tone}</Text>}
-        {agentVoice.voice_style && <Text color="gray" size="2">Style: {agentVoice.voice_style}</Text>}
-        {agentVoice.mission && <Text color="gray" size="2">Mission: {agentVoice.mission}</Text>}
+        {renderInlineEditor(voiceHtml, handleVoiceEdit, "Refine tone, style, and messaging")}
         <Box>
           <Text size="1" color="gray">Keywords</Text>
-          <Box className="mt-1">{renderBadgeList(agentVoice.keywords, "No keywords identified yet.")}</Box>
+          <Box className="mt-1">{renderBadgeList(agentVoice?.keywords, "No keywords identified yet.")}</Box>
         </Box>
       </Flex>
+    ) : streamingVoice ? (
+      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingVoice}</Text>
     ) : (
-      streamingVoice ? (
-        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingVoice}</Text>
-      ) : (
-        <Text color="gray" size="2">Awaiting voice insights…</Text>
-      )
+      <Text color="gray" size="2">Awaiting voice insights…</Text>
     );
 
-    const audienceContent = agentAudience ? (
+    const audienceEditable = agentPhases.audience === "completed" || Boolean(previewCompletePayload?.structured?.target_audience || agentAudience);
+    const audienceContent = audienceEditable ? (
       <Flex direction="column" gap="2">
-        {agentAudience.summary && <Text color="gray" size="2">{agentAudience.summary}</Text>}
+        {renderInlineEditor(audienceHtml, handleAudienceEdit, "Refine audience summary and segments")}
         <Box>
           <Text size="1" color="gray">Demographics</Text>
-          <Box className="mt-1">{renderBadgeList(agentAudience.demographics, "No demographics yet.")}</Box>
+          {renderInlineEditor(demographicsHtml, handleDemographicsEdit, "Edit demographics (one per line)")}
         </Box>
         <Box>
           <Text size="1" color="gray">Motivations</Text>
-          <Box className="mt-1">{renderBadgeList(agentAudience.motivations, "No motivations yet.")}</Box>
+          <Box className="mt-1">{renderBadgeList(agentAudience?.motivations, "No motivations yet.")}</Box>
         </Box>
       </Flex>
+    ) : streamingAudience ? (
+      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingAudience}</Text>
     ) : (
-      streamingAudience ? (
-        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingAudience}</Text>
-      ) : (
-        <Text color="gray" size="2">Awaiting audience insights…</Text>
-      )
+      <Text color="gray" size="2">Awaiting audience insights…</Text>
     );
 
-    const websiteContent = agentWebsite ? (
+    const websiteEditable = agentPhases.website === "completed" || Boolean(previewCompletePayload?.structured?.website || agentWebsite);
+    const websiteContent = websiteEditable ? (
       <Flex direction="column" gap="2">
-        {agentWebsite.website_url && <Text color="gray" size="2">URL: {agentWebsite.website_url}</Text>}
-        {agentWebsite.hero_statement && <Text color="gray" size="2">Hero statement: {agentWebsite.hero_statement}</Text>}
+        {agentWebsite?.website_url && <Text color="gray" size="2">URL: {agentWebsite.website_url}</Text>}
+        {renderInlineEditor(websiteHtml, handleWebsiteEdit, "Edit hero statement")}
       </Flex>
+    ) : streamingWebsite ? (
+      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingWebsite}</Text>
     ) : (
-      streamingWebsite ? (
-        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingWebsite}</Text>
-      ) : (
-        <Text color="gray" size="2">Awaiting website summary…</Text>
-      )
+      <Text color="gray" size="2">Awaiting website summary…</Text>
     );
 
-    const businessContent = agentBusiness ? (
+    const businessEditable = agentPhases.business === "completed" || Boolean(previewCompletePayload?.structured?.business || agentBusiness);
+    const businessContent = businessEditable ? (
       <Flex direction="column" gap="2">
-        {agentBusiness.business_name && <Text weight="medium">{agentBusiness.business_name}</Text>}
-        {agentBusiness.business_description && (
-          <Text color="gray" size="2">{agentBusiness.business_description}</Text>
-        )}
+        {agentBusiness?.business_name && <Text weight="medium">{agentBusiness.business_name}</Text>}
+        {renderInlineEditor(businessHtml, handleBusinessEdit, "Edit business overview")}
         <Box>
           <Text size="1" color="gray">Features</Text>
-          <Box className="mt-1">{renderBadgeList(agentBusiness.business_features, "No features captured yet.")}</Box>
+          <Box className="mt-1">{renderBadgeList(agentBusiness?.business_features, "No features captured yet.")}</Box>
         </Box>
         <Box>
           <Text size="1" color="gray">Benefits</Text>
-          <Box className="mt-1">{renderBadgeList(agentBusiness.business_benefits, "No benefits captured yet.")}</Box>
+          <Box className="mt-1">{renderBadgeList(agentBusiness?.business_benefits, "No benefits captured yet.")}</Box>
         </Box>
-        {agentBusiness.business_cta && <Text color="gray" size="2">CTA: {agentBusiness.business_cta}</Text>}
+        {agentBusiness?.business_cta && <Text color="gray" size="2">CTA: {agentBusiness.business_cta}</Text>}
       </Flex>
+    ) : streamingBusiness ? (
+      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingBusiness}</Text>
     ) : (
-      streamingBusiness ? (
-        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingBusiness}</Text>
-      ) : (
-        <Text color="gray" size="2">Awaiting business summary…</Text>
-      )
+      <Text color="gray" size="2">Awaiting business summary…</Text>
     );
 
     const sections = [
       { title: "Brand profile", content: brandProfileContent },
       { title: "Voice", content: voiceContent },
       { title: "Audience", content: audienceContent },
-      { title: "Website", content: websiteContent },
       { title: "Business overview", content: businessContent },
+      { title: "Website", content: websiteContent },
     ];
 
+    const [brandProfileSection, ...otherSections] = sections;
+    const leftSections = otherSections.filter((_, index) => index % 2 === 0);
+    const rightSections = otherSections.filter((_, index) => index % 2 === 1);
+
     return (
-      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10 w-full max-w-none">
         <Flex direction="column" gap="4" p="4">
           <Flex align="center" justify="between">
             <Heading size="4" className="text-white">Preview & Approve</Heading>
@@ -2164,9 +2468,17 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
           {previewStatusBadges}
 
-          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10 w-full max-w-none">
             <Flex direction="column" gap="3" p="3">
-              {sections.map(section => renderPreviewSection(section.title, section.content))}
+              {renderPreviewSection(brandProfileSection.title, brandProfileSection.content)}
+              <Grid columns={{ initial: "1", md: "2" }} gap="4" className="items-start" style={{ alignItems: "flex-start" }}>
+                <Flex direction="column" gap="3" className="min-w-0" style={{ minWidth: 0 }}>
+                  {leftSections.map(section => renderPreviewSection(section.title, section.content))}
+                </Flex>
+                <Flex direction="column" gap="3" className="min-w-0" style={{ minWidth: 0 }}>
+                  {rightSections.map(section => renderPreviewSection(section.title, section.content))}
+                </Flex>
+              </Grid>
             </Flex>
           </Card>
 
@@ -2206,12 +2518,14 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   };
 
   return (
-    <Container size="4" className="max-w-6xl w-full">
-      <Flex direction="column" gap="4">
-        <Heading size="6" className="text-white">Welcome to Continuum</Heading>
-        <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>
+    <>
+      <StrategicAnalysisRealtimeListener brandId={brandId} />
+      <Container size="5" className="max-w-7xl w-full">
+        <Flex direction="column" gap="4">
+          <Heading size="6" className="text-white">Welcome to Continuum</Heading>
+          <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>
 
-        <Tabs.Root baseId={`radix-onboarding-tabs-${brandId}`} value={`step-${step}`} onValueChange={() => {}}>
+          <Tabs.Root baseId={`radix-onboarding-tabs-${brandId}`} value={`step-${step}`} onValueChange={() => {}}>
           <Tabs.List className="grid grid-cols-3 gap-3 md:flex md:gap-4 md:justify-start">
             <Tabs.Trigger value="step-0" className="flex-1 rounded-full px-4 py-2">Brand profile</Tabs.Trigger>
             <Tabs.Trigger value="step-1" className="flex-1 rounded-full px-4 py-2">Integrations</Tabs.Trigger>
@@ -2547,14 +2861,15 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           <Tabs.Content value="step-2">
             {shouldShowPreview ? renderPreviewScreen() : renderReviewSummary()}
           </Tabs.Content>
-        </Tabs.Root>
+          </Tabs.Root>
 
-        <Flex justify="center">
-          <Text color="gray" size="1">
-            Need to pause? Your progress saves automatically.
-          </Text>
+          <Flex justify="center">
+            <Text color="gray" size="1">
+              Need to pause? Your progress saves automatically.
+            </Text>
+          </Flex>
         </Flex>
-      </Flex>
-    </Container>
+      </Container>
+    </>
   );
 }

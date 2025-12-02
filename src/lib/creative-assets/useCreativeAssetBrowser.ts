@@ -6,9 +6,10 @@ import {
   createSignedAssetUrl,
   deleteCreativeAsset,
   listCreativeAssets,
+  createCreativeFolder,
   renameCreativeAsset,
   uploadCreativeAsset,
-} from "./storage";
+} from "./storageClient";
 import { resolveStoragePath } from "./config";
 import type { CreativeAsset } from "./types";
 
@@ -127,6 +128,14 @@ export function useCreativeAssetBrowser(brandProfileId: string) {
     return createSignedAssetUrl(asset.fullPath, expiresInSeconds);
   }, []);
 
+  const createFolder = useCallback(
+    async (name: string) => {
+      await createCreativeFolder(brandProfileId, folderPath, name);
+      await refresh();
+    },
+    [brandProfileId, folderPath, refresh]
+  );
+
   return {
     loading: state.loading,
     error: state.error,
@@ -141,5 +150,6 @@ export function useCreativeAssetBrowser(brandProfileId: string) {
     renameAssetPath,
     deleteAssetPath,
     signedUrl,
+    createFolder,
   };
 }

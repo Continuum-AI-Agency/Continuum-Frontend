@@ -1,57 +1,63 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React from "react";
-import { z } from "zod";
-import { useForm, type Resolver, type SubmitHandler } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlow,
+  Handle,
+  Position,
+  addEdge,
+  useEdgesState,
+  useNodesState,
+  type Connection,
+  type Edge,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import * as ContextMenu from "@radix-ui/react-context-menu";
+import * as Collapsible from "@radix-ui/react-collapsible";
 import {
   Badge,
   Button,
-  Card,
-  Checkbox,
-  Flex,
-  Grid,
+  Callout,
   Heading,
-  IconButton,
-  SegmentedControl,
-  Separator,
   Text,
   TextArea,
-  TextField,
-  Tooltip,
-  Callout,
-  ScrollArea,
+  Tabs,
 } from "@radix-ui/themes";
 import {
   CheckIcon,
-  DownloadIcon,
   ExclamationTriangleIcon,
-  LightningBoltIcon,
   MagicWandIcon,
-  MixerHorizontalIcon,
+  PaperPlaneIcon,
   ReloadIcon,
-  RocketIcon,
   StackIcon,
-  StarIcon,
+  ImageIcon,
+  VideoIcon,
+  TextIcon,
 } from "@radix-ui/react-icons";
 
+import { useToast } from "@/components/ui/ToastProvider";
+import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
+import { createAiStudioJob, getAiStudioJob } from "@/lib/api/aiStudio";
 import {
-  createAiStudioJob,
-  getAiStudioJob,
-  listAiStudioJobs,
-} from "@/lib/api/aiStudio";
-import {
-  aiStudioAspectRatioSchema,
-  aiStudioMediumSchema,
-  aiStudioProviderSchema,
-  type AiStudioArtifact,
+  providerAspectRatioOptions,
   type AiStudioJob,
-  type AiStudioMedium,
   type AiStudioProvider,
   type AiStudioTemplate,
 } from "@/lib/schemas/aiStudio";
-import { useToast } from "@/components/ui/ToastProvider";
-import { uploadCreativeAsset } from "@/lib/creative-assets/storage";
+import {
+  type AttachmentNodeData,
+  type GeneratorNodeData,
+  type ModelNodeData,
+  type NegativeNodeData,
+  type PreviewNodeData,
+  type PromptNodeData,
+  type StudioNode,
+} from "@/lib/ai-studio/nodeTypes";
+import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
 
 type AIStudioClientProps = {
   brandProfileId: string;
@@ -66,932 +72,648 @@ type AIStudioClientProps = {
 
 type LoadErrorMap = NonNullable<AIStudioClientProps["loadErrors"]>;
 
-type TemplateFilter = {
-  provider: AiStudioProvider;
-  medium: AiStudioMedium;
-};
-
-type ProviderDescriptor = {
-  label: string;
-  description: string;
-  mediums: AiStudioMedium[];
-  accent: "blue" | "purple" | "orange";
-};
-
-const PROVIDERS: Record<AiStudioProvider, ProviderDescriptor> = {
-  "nano-banana": {
-    label: "Nano Banana",
-    description: "Lightning-fast image diffusion tuned for brand palettes.",
-    mediums: ["image"],
-    accent: "purple",
-  },
-  "veo-3-1": {
-    label: "Veo 3.1",
-    description: "Google Veo cinematic video model with motion control.",
-    mediums: ["video"],
-    accent: "blue",
-  },
-  "sora-2": {
-    label: "Sora 2",
-    description: "OpenAI Sora for longer-form video storytelling.",
-    mediums: ["video"],
-    accent: "orange",
-  },
-};
-
-const KNOWN_ASPECT_RATIOS = ["1:1", "4:5", "3:4", "16:9", "9:16"] as const;
-
+const DRAG_MIME = "application/reactflow-node-data";
 const PENDING_STATUSES = new Set<AiStudioJob["status"]>(["queued", "processing"]);
 
-function preprocessNumber(value: unknown) {
-  if (value === "" || value === null || typeof value === "undefined") {
-    return undefined;
-  }
-  if (typeof value === "number") {
-    return Number.isNaN(value) ? undefined : value;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) return undefined;
-    const parsed = Number(trimmed);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  }
-  return undefined;
-}
+const JOB_STATUS_META: Record<
+  AiStudioJob["status"],
+  { label: string; color: "gray" | "amber" | "blue" | "green" | "red"; icon: React.ReactNode }
+> = {
+  queued: { label: "Queued", color: "amber", icon: <StackIcon /> },
+  processing: { label: "Processing", color: "blue", icon: <MagicWandIcon /> },
+  completed: { label: "Completed", color: "green", icon: <CheckIcon /> },
+  failed: { label: "Failed", color: "red", icon: <ExclamationTriangleIcon /> },
+  cancelled: { label: "Cancelled", color: "gray", icon: <ExclamationTriangleIcon /> },
+};
 
-const generationFormSchema = z.object({
-  provider: aiStudioProviderSchema,
-  medium: aiStudioMediumSchema,
-  templateId: z.string().min(1).optional().nullable(),
-  prompt: z.string().min(12, "Prompt must be at least 12 characters long."),
-  negativePrompt: z.string().optional(),
-  aspectRatio: aiStudioAspectRatioSchema.optional(),
-  durationSeconds: z
-    .preprocess(preprocessNumber, z.number().int().min(1).max(120))
-    .optional(),
-  guidanceScale: z.preprocess(preprocessNumber, z.number().min(0).max(20)).optional(),
-  seed: z.preprocess(preprocessNumber, z.number().int().nonnegative()).optional(),
-});
+const PromptNode = ({ id: nodeId, data, selected }: { id: string; data: PromptNodeData; selected: boolean }) => (
+  <div className={`relative w-64 rounded-xl border ${selected ? "border-blue-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
+    <Text className="text-gray-200">Prompt</Text>
+    <TextArea
+      value={data.prompt}
+      onChange={(e) =>
+        window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "prompt", value: e.target.value } }))
+      }
+      placeholder="Describe the visual..."
+      className="mt-2 h-28 bg-transparent text-white"
+    />
+    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-blue-400" />
+  </div>
+);
 
-type GenerationFormValues = z.infer<typeof generationFormSchema>;
+const NegativeNode = ({ id: nodeId, data, selected }: { id: string; data: NegativeNodeData; selected: boolean }) => (
+  <div className={`relative w-64 rounded-xl border ${selected ? "border-amber-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
+    <Text className="text-gray-200">Negative Prompt</Text>
+    <TextArea
+      value={data.negativePrompt}
+      onChange={(e) =>
+        window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "negativePrompt", value: e.target.value } }))
+      }
+      placeholder="What to avoid..."
+      className="mt-2 h-28 bg-transparent text-white"
+    />
+    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-amber-400" />
+  </div>
+);
 
-type SelectedArtifactsMap = Record<string, string[]>;
+const ModelNode = ({ id: nodeId, data, selected }: { id: string; data: ModelNodeData; selected: boolean }) => (
+  <div className={`relative w-64 rounded-xl border ${selected ? "border-purple-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
+    <Text className="text-gray-200">Model</Text>
+    <select
+      className="mt-2 w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1 text-sm text-white"
+      value={data.provider}
+      onChange={(e) =>
+        window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "provider", value: e.target.value as AiStudioProvider } }))
+      }
+    >
+      <option value="nano-banana">Nano Banana</option>
+      <option value="veo-3-1" disabled>
+        Veo 3.1 (coming soon)
+      </option>
+      <option value="sora-2" disabled>
+        Sora 2 (coming soon)
+      </option>
+    </select>
+    <div className="mt-2 flex flex-wrap gap-1">
+      {(providerAspectRatioOptions[data.provider]?.[data.medium] ?? ["1:1", "16:9"]).map((ratio) => (
+        <Button
+          key={ratio}
+          size="1"
+          variant={data.aspectRatio === ratio ? "solid" : "outline"}
+          className="rounded-full"
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "aspectRatio", value: ratio } }))
+          }
+        >
+          {ratio}
+        </Button>
+      ))}
+    </div>
+    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-purple-400" />
+  </div>
+);
 
-type JobStatusMeta = {
+const AttachmentNode = ({ data, selected }: { data: AttachmentNodeData; selected: boolean }) => (
+  <div className={`relative w-56 rounded-xl border ${selected ? "border-blue-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
+    <Text className="text-gray-200">Attachment</Text>
+    <div className="mt-2 h-24 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+      {data.mimeType.startsWith("video/") ? (
+        <video src={data.previewUrl} muted loop className="h-full w-full object-cover" />
+      ) : (
+        <img src={data.previewUrl} alt={data.label} className="h-full w-full object-cover" />
+      )}
+    </div>
+    <Text size="1" color="gray" className="mt-1 block truncate">
+      {data.label}
+    </Text>
+    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-purple-400" />
+  </div>
+);
+
+const PreviewNode = ({ data, selected }: { data: PreviewNodeData; selected: boolean }) => (
+  <div className={`relative w-[320px] rounded-2xl border ${selected ? "border-green-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-xl`}>
+    <Text className="text-gray-200">Preview</Text>
+    <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/60 min-h-[220px] flex items-center justify-center">
+      {data.artifactPreview ? (
+        data.medium === "video" ? (
+          <video src={data.artifactPreview} controls className="h-full w-full object-cover" />
+        ) : (
+          <img src={data.artifactPreview} alt={data.artifactName ?? "artifact"} className="h-full w-full object-cover" />
+        )
+      ) : (
+        <Text color="gray" className="px-4 text-center">
+          Connect a generator to see output.
+        </Text>
+      )}
+    </div>
+    <Handle type="target" position={Position.Left} className="h-3 w-3 !bg-green-400" />
+  </div>
+);
+
+const GeneratorNode = ({ id, data, selected }: { id: string; data: GeneratorNodeData; selected: boolean }) => (
+  <ContextMenu.Root>
+    <ContextMenu.Trigger asChild>
+      <div className={`relative w-96 max-w-md rounded-2xl border ${selected ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.35)]" : "border-white/10"} bg-slate-900/95 p-3 shadow-xl`}>
+        <div className="flex items-center justify-between">
+          <Badge size="2" variant="soft">
+            Nano Banana
+          </Badge>
+          <Badge size="1" variant="soft" color="purple">
+            image
+          </Badge>
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(providerAspectRatioOptions["nano-banana"]?.image ?? ["1:1", "16:9"]).map((ratio) => (
+            <Button
+              key={ratio}
+              size="1"
+              variant={data.aspectRatio === ratio ? "solid" : "outline"}
+              className="rounded-full"
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("node:edit", { detail: { id, field: "aspectRatio", value: ratio } }))
+              }
+            >
+              {ratio}
+            </Button>
+          ))}
+        </div>
+
+        <TextArea
+          value={data.prompt}
+          onChange={(e) => window.dispatchEvent(new CustomEvent("node:edit", { detail: { id, field: "prompt", value: e.target.value } }))}
+          placeholder="Prompt..."
+          className="mt-2 min-h-[80px] bg-transparent text-white"
+        />
+
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-300">
+          <Badge size="1" variant="soft">
+            {data.aspectRatio}
+          </Badge>
+          {data.referenceAssetPath ? <Badge size="1" variant="soft">ref</Badge> : null}
+          {data.negativePrompt ? <Badge size="1" variant="soft" color="amber">neg</Badge> : null}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between">
+          <Badge size="1" variant="surface" color={data.status ? JOB_STATUS_META[data.status].color : "gray"}>
+            {data.status ?? "idle"}
+          </Badge>
+          <Button size="2" onClick={() => window.dispatchEvent(new CustomEvent("node:generate", { detail: { id } }))}>
+            <PaperPlaneIcon /> Generate
+          </Button>
+        </div>
+
+        <Handle type="target" id="prompt" position={Position.Left} className="h-3 w-3 !bg-blue-400" />
+        <Handle type="target" id="ref" position={Position.Left} style={{ top: "60%" }} className="h-3 w-3 !bg-purple-400" />
+        <Handle type="target" id="negative" position={Position.Top} className="h-3 w-3 !bg-amber-400" />
+        <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-green-400" />
+      </div>
+    </ContextMenu.Trigger>
+
+    <ContextMenu.Content className="rounded-lg border border-white/10 bg-slate-900/95 p-2 text-sm text-white shadow-xl">
+      <ContextMenu.Item onSelect={() => window.dispatchEvent(new CustomEvent("node:duplicate", { detail: { id } }))}>Duplicate</ContextMenu.Item>
+      <ContextMenu.Item onSelect={() => window.dispatchEvent(new CustomEvent("node:delete", { detail: { id } }))} className="text-red-300">
+        Delete
+      </ContextMenu.Item>
+      <ContextMenu.Separator className="my-1 h-px bg-white/10" />
+      <ContextMenu.Label className="text-gray-300">Advanced</ContextMenu.Label>
+      <Collapsible.Root>
+        <Collapsible.Trigger className="mt-1 w-full rounded-md px-1 py-1 text-left text-xs text-gray-300 hover:bg-white/5">Advanced</Collapsible.Trigger>
+        <Collapsible.Content className="space-y-2 px-1 py-1">
+          <div>
+            <label className="text-xs text-gray-300">Negative prompt</label>
+            <TextArea
+              value={data.negativePrompt ?? ""}
+              onChange={(e) => window.dispatchEvent(new CustomEvent("node:edit", { detail: { id, field: "negativePrompt", value: e.target.value } }))}
+              className="mt-1 h-16 bg-slate-800 text-white"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-gray-300">Seed</label>
+              <input
+                type="number"
+                className="mt-1 w-full rounded-md bg-slate-800 border border-white/10 px-2 py-1 text-white"
+                value={data.seed ?? ""}
+                onChange={(e) =>
+                  window.dispatchEvent(
+                    new CustomEvent("node:edit", { detail: { id, field: "seed", value: e.target.value ? Number(e.target.value) : undefined } })
+                  )
+                }
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-300">Guidance</label>
+              <input
+                type="number"
+                step="0.5"
+                min={0}
+                max={20}
+                className="mt-1 w-full rounded-md bg-slate-800 border border-white/10 px-2 py-1 text-white"
+                value={data.guidanceScale ?? ""}
+                onChange={(e) =>
+                  window.dispatchEvent(
+                    new CustomEvent("node:edit", { detail: { id, field: "guidanceScale", value: e.target.value ? Number(e.target.value) : undefined } })
+                  )
+                }
+              />
+            </div>
+          </div>
+        </Collapsible.Content>
+      </Collapsible.Root>
+    </ContextMenu.Content>
+  </ContextMenu.Root>
+);
+
+const nodeTypes = {
+  prompt: PromptNode,
+  negative: NegativeNode,
+  model: ModelNode,
+  attachment: AttachmentNode,
+  generator: GeneratorNode,
+  preview: PreviewNode,
+};
+
+type PaletteType = "prompt" | "negative" | "model" | "attachment" | "generator" | "preview";
+
+type PaletteItem = {
+  id: string;
   label: string;
-  color: "gray" | "amber" | "blue" | "green" | "red";
+  type: PaletteType;
   icon: React.ReactNode;
+  data:
+    | Partial<GeneratorNodeData>
+    | Partial<PromptNodeData>
+    | Partial<AttachmentNodeData>
+    | Partial<ModelNodeData>
+    | Partial<NegativeNodeData>
+    | Partial<PreviewNodeData>;
+  disabled?: boolean;
 };
 
-const JOB_STATUS_META: Record<AiStudioJob["status"], JobStatusMeta> = {
-  queued: {
-    label: "Queued",
-    color: "amber",
-    icon: <StackIcon />,
-  },
-  processing: {
-    label: "Processing",
-    color: "blue",
-    icon: <MagicWandIcon />,
-  },
-  completed: {
-    label: "Completed",
-    color: "green",
-    icon: <CheckIcon />,
-  },
-  failed: {
-    label: "Failed",
-    color: "red",
-    icon: <ExclamationTriangleIcon />,
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "gray",
-    icon: <MixerHorizontalIcon />,
-  },
-};
-
-function sortJobs(jobs: AiStudioJob[]): AiStudioJob[] {
-  return [...jobs].sort((a, b) => {
-    const aDate = Date.parse(a.createdAt ?? "");
-    const bDate = Date.parse(b.createdAt ?? "");
-    return bDate - aDate;
-  });
-}
-
-function upsertJob(list: AiStudioJob[], job: AiStudioJob): AiStudioJob[] {
-  const next = [...list];
-  const index = next.findIndex((item) => item.id === job.id);
-  if (index >= 0) {
-    next[index] = job;
-  } else {
-    next.unshift(job);
-  }
-  return sortJobs(next);
-}
-
-function formatDate(timestamp: string | undefined): string {
-  if (!timestamp) return "—";
-  const date = new Date(timestamp);
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function getArtifactPreviewSource(artifact: AiStudioArtifact): string {
-  return artifact.previewUri ?? artifact.uri;
-}
-
-async function downloadArtifactAsFile(artifact: AiStudioArtifact): Promise<File> {
-  const response = await fetch(artifact.uri);
-  if (!response.ok) {
-    throw new Error(`Failed to download artifact ${artifact.id}`);
-  }
-  const blob = await response.blob();
-  const mimeType = artifact.mimeType ?? blob.type ?? "application/octet-stream";
-  const extension = (() => {
-    if (artifact.fileName?.includes(".")) {
-      return "";
-    }
-    const inferred = mimeType.split("/")[1];
-    return inferred ? `.${inferred}` : "";
-  })();
-  const fileName =
-    artifact.fileName ??
-    `continuum-${artifact.id}${extension || (mimeType.startsWith("image/") ? ".png" : mimeType.startsWith("video/") ? ".mp4" : ".bin")}`;
-
-  return new File([blob], fileName, { type: mimeType });
-}
-
-function initialSelectedArtifacts(jobs: AiStudioJob[]): SelectedArtifactsMap {
-  return jobs.reduce<SelectedArtifactsMap>((acc, job) => {
-    if (job.status === "completed" && job.artifacts.length > 0) {
-      acc[job.id] = job.artifacts.map((artifact) => artifact.id);
-    }
-    return acc;
-  }, {});
-}
+const paletteItems: PaletteItem[] = [
+  { id: "palette-prompt", label: "Prompt", type: "prompt", icon: <TextIcon />, data: { prompt: "" } },
+  { id: "palette-negative", label: "Negative", type: "negative", icon: <TextIcon />, data: { negativePrompt: "" } },
+  { id: "palette-model", label: "Model", type: "model", icon: <ImageIcon />, data: { provider: "nano-banana", medium: "image", aspectRatio: "1:1" } },
+  { id: "palette-attachment", label: "Reference Image", type: "attachment", icon: <ImageIcon />, data: { label: "Ref", path: "", mimeType: "image/png", previewUrl: "" } },
+  { id: "palette-image-gen", label: "Image Generator", type: "generator", icon: <ImageIcon />, data: { provider: "nano-banana", medium: "image", prompt: "", aspectRatio: "1:1" } },
+  { id: "palette-video-veo", label: "Video Gen (Veo 3.1)", type: "generator", icon: <VideoIcon />, data: { provider: "veo-3-1", medium: "video", prompt: "", aspectRatio: "16:9" }, disabled: true },
+  { id: "palette-video-sora", label: "Video Gen (Sora 2)", type: "generator", icon: <VideoIcon />, data: { provider: "sora-2", medium: "video", prompt: "", aspectRatio: "16:9" }, disabled: true },
+  { id: "palette-preview", label: "Preview", type: "preview", icon: <ImageIcon />, data: { artifactPreview: "", medium: "image" } },
+];
 
 export default function AIStudioClient({
   brandProfileId,
   brandName,
-  initialTemplates,
+  initialTemplates: _initialTemplates,
   initialJobs,
   loadErrors: initialLoadErrors,
 }: AIStudioClientProps) {
   const { show: showToast } = useToast();
+  void _initialTemplates;
 
   const [loadErrors, setLoadErrors] = React.useState<LoadErrorMap>(() => initialLoadErrors ?? {});
-  const hasLoadErrors = Boolean(loadErrors.templates || loadErrors.jobs);
-
-  const [templates] = React.useState(() =>
-    [...initialTemplates].sort((a, b) => a.name.localeCompare(b.name))
-  );
-
-  const [jobs, setJobs] = React.useState(() => sortJobs(initialJobs));
-  const [selectedArtifacts, setSelectedArtifacts] = React.useState<SelectedArtifactsMap>(() =>
-    initialSelectedArtifacts(initialJobs)
-  );
-  const [expandedJobId, setExpandedJobId] = React.useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [jobs, setJobs] = React.useState(() => initialJobs);
+  const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode[]>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [savingJobId, setSavingJobId] = React.useState<string | null>(null);
-
-  const form = useForm<GenerationFormValues>({
-    resolver: zodResolver(generationFormSchema) as Resolver<GenerationFormValues>,
-    defaultValues: {
-      provider: "nano-banana",
-      medium: "image",
-      templateId: null,
-      prompt: "",
-      negativePrompt: "",
-      aspectRatio: "16:9",
-      durationSeconds: undefined,
-      guidanceScale: undefined,
-      seed: undefined,
-    },
-  });
-
-  const provider = form.watch("provider");
-  const medium = form.watch("medium");
-  const templateId = form.watch("templateId") ?? undefined;
+  const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
+  const [canvasOverlay, setCanvasOverlay] = React.useState(false);
 
   React.useEffect(() => {
-    const descriptor = PROVIDERS[provider];
-    if (!descriptor.mediums.includes(medium)) {
-      form.setValue("medium", descriptor.mediums[0], { shouldDirty: true });
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      setCanvasOverlay(host !== "localhost" && host !== "127.0.0.1");
     }
-  }, [provider, medium, form]);
-
-  const availableTemplates = React.useMemo(() => {
-    return templates.filter(
-      (template) =>
-        template.provider === provider &&
-        template.medium === medium
-    );
-  }, [templates, provider, medium]);
-
-  const selectedTemplate = React.useMemo(
-    () => availableTemplates.find((template) => template.id === templateId),
-    [availableTemplates, templateId]
-  );
+  }, []);
 
   React.useEffect(() => {
-    if (selectedTemplate?.defaultPrompt) {
-      form.setValue("prompt", selectedTemplate.defaultPrompt, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
-    if (selectedTemplate?.defaultNegativePrompt) {
-      form.setValue("negativePrompt", selectedTemplate.defaultNegativePrompt, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
-    if (selectedTemplate?.aspectRatio) {
-      form.setValue("aspectRatio", selectedTemplate.aspectRatio, {
-        shouldDirty: true,
-        shouldTouch: true,
-      });
-    }
-  }, [selectedTemplate, form]);
-
-  const pendingSignature = React.useMemo(() => {
-    return jobs
-      .filter((job) => PENDING_STATUSES.has(job.status))
-      .map((job) => `${job.id}:${job.status}`)
-      .sort()
-      .join("|");
-  }, [jobs]);
-
-  React.useEffect(() => {
-    setSelectedArtifacts((previous) => {
-      const next: SelectedArtifactsMap = { ...previous };
-      for (const job of jobs) {
-        if (job.status === "completed" && job.artifacts.length > 0 && !next[job.id]) {
-          next[job.id] = job.artifacts.map((artifact) => artifact.id);
-        }
-        if (job.artifacts.length === 0 && next[job.id]) {
-          delete next[job.id];
-        }
-      }
-      return next;
-    });
-  }, [jobs]);
+    const nodesSeed: StudioNode[] = [
+      { id: "model-1", type: "model", position: { x: 120, y: 120 }, data: { provider: "nano-banana", medium: "image", aspectRatio: "1:1" } },
+      { id: "prompt-1", type: "prompt", position: { x: 120, y: 280 }, data: { prompt: "" } },
+      { id: "neg-1", type: "negative", position: { x: 120, y: 440 }, data: { negativePrompt: "" } },
+      { id: "gen-1", type: "generator", position: { x: 420, y: 260 }, data: { provider: "nano-banana", medium: "image", prompt: "", aspectRatio: "1:1" } },
+      { id: "preview-1", type: "preview", position: { x: 720, y: 240 }, data: { artifactPreview: "", medium: "image" } },
+    ];
+    setNodes(nodesSeed);
+    setEdges([
+      { id: "e-model-gen", source: "model-1", target: "gen-1", targetHandle: "model", type: "default" },
+      { id: "e-prompt-gen", source: "prompt-1", target: "gen-1", targetHandle: "prompt", type: "default" },
+      { id: "e-neg-gen", source: "neg-1", target: "gen-1", targetHandle: "negative", type: "default" },
+      { id: "e-gen-preview", source: "gen-1", target: "preview-1", type: "default" },
+    ]);
+  }, [setNodes, setEdges]);
 
   React.useEffect(() => {
     const activeJobs = jobs.filter((job) => PENDING_STATUSES.has(job.status));
-    if (activeJobs.length === 0) {
-      return;
-    }
-
+    if (activeJobs.length === 0) return;
     let cancelled = false;
-
     async function poll() {
       for (const job of activeJobs) {
         try {
           const updated = await getAiStudioJob(job.id, brandProfileId);
           if (!cancelled) {
-            setJobs((prev) => upsertJob(prev, updated));
+            setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+            setNodes((prev) =>
+              prev.map((n) =>
+                (n.data as GeneratorNodeData).jobId === updated.id
+                  ? {
+                      ...n,
+                      data: {
+                        ...(n.data as GeneratorNodeData),
+                        status: updated.status,
+                        artifactPreview: updated.artifacts[0]?.previewUri ?? updated.artifacts[0]?.uri,
+                        artifactName: updated.artifacts[0]?.fileName,
+                      },
+                    }
+                  : n
+              )
+            );
           }
-        } catch (error) {
-          console.error("Failed to poll job", error);
+        } catch (err) {
+          console.error("Failed to poll job", err);
         }
       }
     }
-
     const interval = window.setInterval(poll, 6000);
-    poll();
-
+    void poll();
     return () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [brandProfileId, pendingSignature]);
+  }, [jobs, brandProfileId, setNodes]);
 
-  const previousStatusesRef = React.useRef<Map<string, AiStudioJob["status"]>>(new Map());
-
-  React.useEffect(() => {
-    for (const job of jobs) {
-      const previous = previousStatusesRef.current.get(job.id);
-      if (previous !== job.status) {
-        previousStatusesRef.current.set(job.id, job.status);
-        if (job.status === "completed") {
-          showToast({
-            title: "Generation complete",
-            description: `${PROVIDERS[job.provider].label} finished rendering your ${job.medium}.`,
-            variant: "success",
-          });
-        }
-        if (job.status === "failed" && job.failure?.message) {
-          showToast({
-            title: "Generation failed",
-            description: job.failure.message,
-            variant: "error",
-          });
-        }
-      }
-    }
-  }, [jobs, showToast]);
-
-  const filteredTemplates = React.useMemo<AiStudioTemplate[]>(() => {
-    return availableTemplates;
-  }, [availableTemplates]);
-
-  const handleTemplateSelect = React.useCallback(
-    (template: AiStudioTemplate) => {
-      form.setValue("templateId", template.id, { shouldDirty: true, shouldTouch: true });
-    },
-    [form]
-  );
-
-  const handleTemplateClear = React.useCallback(() => {
-    form.setValue("templateId", null, { shouldDirty: true, shouldTouch: true });
-  }, [form]);
-
-  const handleFormSubmit: SubmitHandler<GenerationFormValues> = async (values) => {
-    setIsSubmitting(true);
-    try {
-      const job = await createAiStudioJob({
-        brandProfileId,
-        provider: values.provider,
-        medium: values.medium,
-        prompt: values.prompt.trim(),
-        negativePrompt: values.negativePrompt?.trim() || undefined,
-        templateId: values.templateId ?? undefined,
-        aspectRatio: values.aspectRatio ?? undefined,
-        durationSeconds: values.durationSeconds,
-        guidanceScale: values.guidanceScale,
-        seed: values.seed,
-      });
-      setJobs((prev) => upsertJob(prev, job));
-      setLoadErrors((current) => {
-        if (!current.jobs) {
-          return current;
-        }
-        const { jobs: _jobs, ...rest } = current;
-        return rest;
-      });
-      setExpandedJobId(job.id);
-      showToast({
-        title: "Generation queued",
-        description: `${PROVIDERS[job.provider].label} is spinning up your ${job.medium}.`,
-        variant: "success",
-      });
-    } catch (error) {
-      console.error(error);
-      const message =
-        error instanceof Error ? error.message : "Unable to queue generation job right now.";
-      showToast({
-        title: "Failed to queue generation",
-        description: message,
-        variant: "error",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  async function handleRefreshJobs() {
+  const handleRefreshJobs = React.useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const refreshed = await listAiStudioJobs({ brandProfileId, limit: 25 });
-      setJobs(sortJobs(refreshed));
-      setLoadErrors((current) => {
-        if (!current.jobs) {
-          return current;
-        }
-        const { jobs: _jobs, ...rest } = current;
-        return rest;
-      });
-      showToast({
-        title: "Job list refreshed",
-        variant: "success",
-      });
+      // Simple refresh: refetch active jobs only
+      const activeIds = jobs.filter((j) => PENDING_STATUSES.has(j.status)).map((j) => j.id);
+      const refreshed: AiStudioJob[] = [];
+      for (const id of activeIds) {
+        refreshed.push(await getAiStudioJob(id, brandProfileId));
+      }
+      if (refreshed.length > 0) {
+        setJobs((prev) =>
+          prev.map((j) => {
+            const found = refreshed.find((r) => r.id === j.id);
+            return found ?? j;
+          })
+        );
+      }
+      showToast({ title: "Job list refreshed", variant: "success" });
     } catch (error) {
-      console.error(error);
       const message = error instanceof Error ? error.message : undefined;
-      showToast({
-        title: "Unable to refresh jobs",
-        description: message,
-        variant: "error",
-      });
-      setLoadErrors((current) => ({
-        ...current,
-        jobs: message ?? "Unable to refresh jobs.",
-      }));
+      showToast({ title: "Unable to refresh jobs", description: message, variant: "error" });
+      setLoadErrors((current) => ({ ...current, jobs: message ?? "Unable to refresh jobs." }));
     } finally {
       setIsRefreshing(false);
     }
-  }
+  }, [brandProfileId, jobs, showToast]);
 
-  function toggleArtifactSelection(jobId: string, artifactId: string, checked: boolean) {
-    setSelectedArtifacts((prev) => {
-      const current = new Set(prev[jobId] ?? []);
-      if (checked) {
-        current.add(artifactId);
-      } else {
-        current.delete(artifactId);
-      }
-      return {
-        ...prev,
-        [jobId]: Array.from(current),
-      };
-    });
-  }
-
-  async function handleSaveArtifacts(job: AiStudioJob) {
-    const selected = selectedArtifacts[job.id] ?? [];
-    if (selected.length === 0) {
-      showToast({
-        title: "No assets selected",
-        description: "Choose at least one output to add to your brand library.",
-        variant: "info",
-      });
-      return;
-    }
-
-    setSavingJobId(job.id);
-    try {
-      for (const artifactId of selected) {
-        const artifact = job.artifacts.find((item) => item.id === artifactId);
-        if (!artifact) continue;
-        const file = await downloadArtifactAsFile(artifact);
-        await uploadCreativeAsset(brandProfileId, "ai-studio", file);
-      }
-
-      showToast({
-        title: "Assets saved",
-        description: `Uploaded ${selected.length} file${selected.length > 1 ? "s" : ""} to ${brandName}.`,
-        variant: "success",
-      });
-    } catch (error) {
-      console.error(error);
-      const message = error instanceof Error ? error.message : "Unable to upload media to Supabase.";
-      showToast({
-        title: "Upload failed",
-        description: message,
-        variant: "error",
-      });
-    } finally {
-      setSavingJobId(null);
-    }
-  }
-
-  const templateFilter: TemplateFilter = React.useMemo(
-    () => ({ provider, medium }),
-    [provider, medium]
+  const updateNodeField = React.useCallback(
+    (id: string, field: string, value: unknown) => {
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                data: { ...(n.data as Record<string, unknown>), [field]: value },
+              }
+            : n
+        )
+      );
+    },
+    [setNodes]
   );
 
+  React.useEffect(() => {
+    const onEdit = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string; field: string; value: unknown };
+      updateNodeField(detail.id, detail.field, detail.value);
+    };
+    const onGenerate = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string };
+      const node = nodes.find((n) => n.id === detail.id && n.type === "generator");
+      if (!node) return;
+      const data = node.data as GeneratorNodeData;
+      if (!data.prompt || !data.aspectRatio) {
+        showToast({ title: "Missing fields", description: "Prompt and aspect ratio required", variant: "error" });
+        return;
+      }
+      try {
+        updateNodeField(node.id, "status", "queued");
+        const payload = {
+          brandProfileId,
+          provider: data.provider,
+          medium: data.medium,
+          prompt: data.prompt,
+          aspectRatio: data.aspectRatio,
+          negativePrompt: data.negativePrompt || undefined,
+          guidanceScale: data.guidanceScale || undefined,
+          seed: data.seed || undefined,
+          metadata: {
+            referenceAssetPath: data.referenceAssetPath,
+          },
+        };
+        const job = await createAiStudioJob(payload);
+        setJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === node.id ? { ...n, data: { ...(n.data as GeneratorNodeData), jobId: job.id, status: job.status } } : n
+          )
+        );
+        showToast({ title: "Generation started", description: JOB_STATUS_META[job.status].label, variant: "success" });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to start job";
+        showToast({ title: "Generation failed", description: message, variant: "error" });
+        updateNodeField(node.id, "status", "failed");
+      }
+    };
+    const onDuplicate = (e: Event) => {
+      const { id } = (e as CustomEvent).detail as { id: string };
+      const node = nodes.find((n) => n.id === id);
+      if (!node) return;
+      const dup: StudioNode = {
+        ...node,
+        id: `${node.id}-copy-${crypto.randomUUID().slice(0, 4)}`,
+        position: { x: node.position.x + 60, y: node.position.y + 60 },
+        selected: false,
+      };
+      setNodes((prev) => prev.concat(dup));
+    };
+    const onDelete = (e: Event) => {
+      const { id } = (e as CustomEvent).detail as { id: string };
+      setNodes((prev) => prev.filter((n) => n.id !== id));
+      setEdges((prev) => prev.filter((edge) => edge.source !== id && edge.target !== id));
+    };
+
+    window.addEventListener("node:edit", onEdit);
+    window.addEventListener("node:generate", onGenerate);
+    window.addEventListener("node:duplicate", onDuplicate);
+    window.addEventListener("node:delete", onDelete);
+    return () => {
+      window.removeEventListener("node:edit", onEdit);
+      window.removeEventListener("node:generate", onGenerate);
+      window.removeEventListener("node:duplicate", onDuplicate);
+      window.removeEventListener("node:delete", onDelete);
+    };
+  }, [nodes, brandProfileId, setNodes, setEdges, showToast, updateNodeField]);
+
+  const handleCanvasDrop = React.useCallback(
+    async (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const position = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+
+      const payloadRaw = event.dataTransfer.getData(DRAG_MIME);
+      if (payloadRaw) {
+        try {
+          const parsed = JSON.parse(payloadRaw) as {
+            type?: string;
+            payload?: {
+              path?: string;
+              publicUrl?: string;
+              mimeType?: string;
+              id?: string;
+              nodeType?: StudioNode["type"];
+              data?: unknown;
+            };
+          };
+          if (parsed.type === "asset_drop" && parsed.payload?.path) {
+            const mime = parsed.payload.mimeType ?? "image/png";
+            const previewUrl = parsed.payload.publicUrl ?? parsed.payload.path;
+            const attachmentNode: StudioNode = {
+              id: `att-${crypto.randomUUID()}`,
+              type: "attachment",
+              position,
+              data: {
+                label: parsed.payload.path.split("/").pop() ?? parsed.payload.path,
+                path: parsed.payload.path,
+                mimeType: mime,
+                previewUrl,
+              },
+            };
+            setNodes((prev) => prev.concat(attachmentNode));
+            showToast({ title: "Attachment node created. Connect it to a generator.", variant: "success" });
+            return;
+          }
+          if (parsed.type === "palette") {
+            const newNode: StudioNode = {
+              id: `${parsed.payload?.id ?? "node"}-${crypto.randomUUID().slice(0, 6)}`,
+              type: (parsed.payload?.nodeType as StudioNode["type"]) ?? "prompt",
+              position,
+              data: parsed.payload?.data ?? {},
+            };
+            setNodes((prev) => prev.concat(newNode));
+            return;
+          }
+        } catch (err) {
+          console.error("parse drop payload failed", err);
+        }
+      }
+    },
+    [setNodes, showToast]
+  );
+
+  const handleConnect = React.useCallback(
+    (params: Edge | Connection) => setEdges((eds) => addEdge({ ...params, type: "default" }, eds)),
+    [setEdges]
+  );
+
+  const pendingCount = React.useMemo(() => jobs.filter((j) => PENDING_STATUSES.has(j.status)).length, [jobs]);
+
   return (
-    <div className="space-y-6">
-      <Flex direction="column" gap="2">
-        <Heading size="6" className="text-white">Creative Studio</Heading>
-        <Text color="gray">
-          Generate production-ready media for <span className="text-white font-medium">{brandName}</span>.
-        </Text>
-      </Flex>
+    <div className="relative isolate flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden bg-slate-950 text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
-      {hasLoadErrors ? (
-        <Callout.Root color="red" variant="surface">
-          <Callout.Icon>
-            <ExclamationTriangleIcon />
-          </Callout.Icon>
-          <Callout.Text>
-            We couldn’t reach parts of the studio services.
-            {loadErrors.templates ? (
-              <>
-                {" "}
-                Templates: {loadErrors.templates}
-              </>
+      <main className="relative z-[1] flex flex-1 flex-col gap-2 px-4 sm:px-8 md:px-10 pt-3 pb-6">
+        <div className="flex items-center justify-between">
+          <Heading size="7" className="text-white">AI Studio</Heading>
+          <Tabs.Root value={activeTab} onValueChange={(v) => setActiveTab(v as "chat" | "canvas")} className="flex items-center gap-2">
+            <Tabs.List>
+              <Tabs.Trigger value="chat">Chat</Tabs.Trigger>
+              <Tabs.Trigger value="canvas">Canvas</Tabs.Trigger>
+            </Tabs.List>
+          </Tabs.Root>
+        </div>
+
+        {activeTab === "chat" ? (
+          <ChatSurface brandProfileId={brandProfileId} brandName={brandName} />
+        ) : (
+          <>
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <Text color="gray">Build flows for {brandName}</Text>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-300">
+                <Badge color={pendingCount > 0 ? "amber" : "green"} size="2">
+                  {pendingCount > 0 ? `${pendingCount} in queue` : "Idle"}
+                </Badge>
+                <Button variant="ghost" size="2" onClick={handleRefreshJobs} disabled={isRefreshing}>
+                  <ReloadIcon /> Refresh
+                </Button>
+              </div>
+            </header>
+
+            {loadErrors && (loadErrors.templates || loadErrors.jobs) ? (
+              <Callout.Root color="red" variant="surface">
+                <Callout.Icon>
+                  <ExclamationTriangleIcon />
+                </Callout.Icon>
+                <Callout.Text>
+                  {loadErrors.templates ? `Templates: ${loadErrors.templates}` : ""}
+                  {loadErrors.jobs ? ` Jobs: ${loadErrors.jobs}` : ""}
+                </Callout.Text>
+              </Callout.Root>
             ) : null}
-            {loadErrors.jobs ? (
-              <>
-                {" "}
-                Jobs: {loadErrors.jobs}
-              </>
-            ) : null}
-          </Callout.Text>
-        </Callout.Root>
-      ) : null}
 
-      <Callout.Root color="blue" variant="surface">
-        <Callout.Icon>
-          <LightningBoltIcon />
-        </Callout.Icon>
-        <Callout.Text>
-          Outputs automatically inherit your brand palette and typography wherever possible. Save completed renders to sync them with your brand library.
-        </Callout.Text>
-      </Callout.Root>
-
-      <div className="grid gap-5 xl:grid-cols-4">
-        <div className="xl:col-span-3">
-          <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-            <form onSubmit={form.handleSubmit(handleFormSubmit)} className="flex flex-col gap-5">
-              <Flex direction="column" gap="1">
-                <Text color="gray" size="2">Provider</Text>
-                <SegmentedControl.Root
-                  value={provider}
-                  onValueChange={(value) => form.setValue("provider", value as AiStudioProvider, { shouldDirty: true })}
-                  className="bg-white/5"
+            <aside className="pointer-events-auto fixed left-2 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2 shadow-xl">
+              <Text size="2" className="px-2 text-gray-200">
+                Tools
+              </Text>
+              {paletteItems.map((item) => (
+                <button
+                  key={item.id}
+                  draggable={!item.disabled}
+                  onDragStart={(e) => {
+                    if (item.disabled) {
+                      e.preventDefault();
+                      showToast({ title: "Coming soon", description: "Video nodes will be enabled next.", variant: "info" });
+                      return;
+                    }
+                    e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "palette", payload: { id: item.id, nodeType: item.type, data: item.data } }));
+                  }}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-2 text-left text-sm ${
+                    item.disabled ? "text-gray-500 opacity-60 cursor-not-allowed" : "text-gray-100 hover:bg-white/10"
+                  }`}
                 >
-                  {Object.entries(PROVIDERS).map(([key, descriptor]) => (
-                    <SegmentedControl.Item key={key} value={key}>
-                      <Flex align="center" gap="2">
-                        <Badge color="gray">{descriptor.label}</Badge>
-                      </Flex>
-                    </SegmentedControl.Item>
-                  ))}
-                </SegmentedControl.Root>
-                <Text size="1" color="gray">
-                  {PROVIDERS[provider].description}
-                </Text>
-              </Flex>
+                  <span className="text-gray-300">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </aside>
 
-              <Flex direction="column" gap="1">
-                <Text color="gray" size="2">Medium</Text>
-                <SegmentedControl.Root
-                  value={medium}
-                  onValueChange={(value) => form.setValue("medium", value as AiStudioMedium, { shouldDirty: true })}
-                  className="bg-white/5"
-                >
-                  {PROVIDERS[provider].mediums.map((item) => (
-                    <SegmentedControl.Item key={item} value={item}>
-                      <Flex align="center" gap="2">
-                        {item === "image" ? <StarIcon /> : <RocketIcon />}
-                        <Text size="2" weight="medium" className="capitalize">{item}</Text>
-                      </Flex>
-                    </SegmentedControl.Item>
-                  ))}
-                </SegmentedControl.Root>
-              </Flex>
-
-              <Flex direction="column" gap="2">
-                <Flex align="center" justify="between">
-                  <Text color="gray" size="2">Prompt</Text>
-                  <Tooltip content="Describe the visual story to render. Keep it specific and on-brand.">
-                    <IconButton size="1" variant="ghost">
-                      <MagicWandIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Flex>
-                <TextArea
-                  {...form.register("prompt")}
-                  rows={6}
-                  placeholder="E.g. Hyperreal product shot of the Continuum AI interface on a floating glass panel..."
-                />
-                {form.formState.errors.prompt ? (
-                  <Text size="1" color="red">{form.formState.errors.prompt.message}</Text>
+            <div className="relative flex-1 min-h-0 overflow-hidden">
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={handleConnect}
+                nodeTypes={nodeTypes}
+                fitView
+                onDrop={handleCanvasDrop}
+                onDragOver={(e) => e.preventDefault()}
+                proOptions={{ hideAttribution: true }}
+                style={{ width: "100%", height: "100%" }}
+              >
+                <Background />
+                <MiniMap />
+                <Controls />
+                {canvasOverlay ? (
+                  <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur">
+                    <div className="rounded-2xl border border-white/10 bg-slate-900/95 px-6 py-4 text-center shadow-2xl">
+                      <Text size="4" weight="bold" className="text-white">Graph-based image generation coming soon</Text>
+                      <Text color="gray" className="mt-2">Switch to localhost to build flows, or stay tuned for release.</Text>
+                    </div>
+                  </div>
                 ) : null}
-              </Flex>
-
-              <Flex direction="column" gap="1">
-                <Text color="gray" size="2">Negative prompt</Text>
-                <TextField.Root
-                  {...form.register("negativePrompt")}
-                  placeholder="Things to avoid (optional)."
-                />
-              </Flex>
-
-              <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-                <Flex direction="column" gap="1">
-                  <Text color="gray" size="2">Aspect Ratio</Text>
-                  <SegmentedControl.Root
-                    value={form.watch("aspectRatio") ?? "16:9"}
-                    onValueChange={(value) => form.setValue("aspectRatio", value, { shouldDirty: true })}
-                    className="bg-white/5"
-                  >
-                    {KNOWN_ASPECT_RATIOS.map((ratio) => (
-                      <SegmentedControl.Item key={ratio} value={ratio}>
-                        <Text size="2">{ratio}</Text>
-                      </SegmentedControl.Item>
-                    ))}
-                  </SegmentedControl.Root>
-                </Flex>
-
-                <Flex direction="column" gap="1">
-                  <Text color="gray" size="2">Duration (sec)</Text>
-                  <TextField.Root
-                    type="number"
-                    min={1}
-                    max={120}
-                    placeholder={medium === "video" ? "Up to 120s" : "—"}
-                    disabled={medium !== "video"}
-                    {...form.register("durationSeconds", { valueAsNumber: true })}
-                  />
-                </Flex>
-
-                <Flex direction="column" gap="1">
-                  <Text color="gray" size="2">Guidance scale</Text>
-                  <TextField.Root
-                    type="number"
-                    step={0.5}
-                    min={0}
-                    max={20}
-                    placeholder="Default"
-                    {...form.register("guidanceScale", { valueAsNumber: true })}
-                  />
-                </Flex>
-
-                <Flex direction="column" gap="1">
-                  <Text color="gray" size="2">Seed</Text>
-                  <TextField.Root
-                    type="number"
-                    min={0}
-                    placeholder="Random"
-                    {...form.register("seed", { valueAsNumber: true })}
-                  />
-                </Flex>
-              </Grid>
-
-              {form.formState.errors.aspectRatio ? (
-                <Text size="1" color="red">{form.formState.errors.aspectRatio.message}</Text>
+              </ReactFlow>
+              {canvasOverlay ? (
+                <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur">
+                  <div className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/95 px-6 py-5 text-center shadow-2xl">
+                    <Text size="4" weight="bold" className="text-white">Graph-based image generation coming soon</Text>
+                    <Text color="gray" className="mt-1">Switch to localhost to build flows, or stay tuned for release.</Text>
+                    <Button size="2" onClick={() => setCanvasOverlay(false)}>Dismiss</Button>
+                  </div>
+                </div>
               ) : null}
+            </div>
+          </>
+        )}
+      </main>
 
-              <Flex align="center" gap="3">
-                <Button type="submit" size="3" disabled={isSubmitting}>
-                  <MagicWandIcon />
-                  {isSubmitting ? "Generating..." : "Generate media"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => form.reset()}
-                  disabled={isSubmitting}
-                >
-                  Reset
-                </Button>
-              </Flex>
-            </form>
-          </Card>
-        </div>
-
-        <div>
-          <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10 h-full">
-            <Flex direction="column" gap="4">
-              <Flex align="center" justify="between">
-                <Heading size="4" className="text-white flex items-center gap-2">
-                  <StackIcon />
-                  Templates
-                </Heading>
-                {templateId ? (
-                  <Button size="1" variant="ghost" onClick={handleTemplateClear}>
-                    Clear
-                  </Button>
-                ) : null}
-              </Flex>
-              {filteredTemplates.length === 0 ? (
-                loadErrors.templates ? (
-                  <Callout.Root color="red" variant="soft">
-                    <Callout.Icon>
-                      <ExclamationTriangleIcon />
-                    </Callout.Icon>
-                    <Callout.Text>{loadErrors.templates}</Callout.Text>
-                  </Callout.Root>
-                ) : (
-                  <Callout.Root color="gray" variant="soft">
-                    <Callout.Icon>
-                      <ExclamationTriangleIcon />
-                    </Callout.Icon>
-                    <Callout.Text>
-                      No templates yet for {PROVIDERS[provider].label} {medium}. Create your own prompt and save it as a favorite once you like the result.
-                    </Callout.Text>
-                  </Callout.Root>
-                )
-              ) : (
-                <ScrollArea className="max-h-[520px] pr-2">
-                  <Flex direction="column" gap="3">
-                    {filteredTemplates.map((template) => {
-                      const isActive = template.id === templateId;
-                      return (
-                        <Card
-                          key={template.id}
-                          className={`transition-all border ${isActive ? "border-blue-500/60 shadow-lg shadow-blue-500/20" : "border-white/10 hover:border-white/30"}`}
-                          onClick={() => handleTemplateSelect(template)}
-                        >
-                          <Flex direction="column" gap="2" p="3">
-                            <Flex align="center" justify="between">
-                              <Heading size="3" className="text-white">{template.name}</Heading>
-                              {isActive ? (
-                                <Badge color="blue" size="1">
-                                  Active
-                                </Badge>
-                              ) : null}
-                            </Flex>
-                            {template.description ? (
-                              <Text color="gray" size="2">{template.description}</Text>
-                            ) : null}
-                            {template.tags && template.tags.length > 0 ? (
-                              <Flex wrap="wrap" gap="2">
-                                {template.tags.map((tag) => (
-                                  <Badge key={tag} size="1" variant="soft">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </Flex>
-                            ) : null}
-                          </Flex>
-                        </Card>
-                      );
-                    })}
-                  </Flex>
-                </ScrollArea>
-              )}
-            </Flex>
-          </Card>
-        </div>
-      </div>
-
-      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
-        <Flex direction="column" gap="4">
-          <Flex align="center" justify="between">
-            <Flex align="center" gap="2">
-              <Heading size="4" className="text-white">
-                Recent jobs
-              </Heading>
-              <Badge color="gray" size="1">
-                {jobs.length}
-              </Badge>
-            </Flex>
-            <Button
-              variant="outline"
-              size="2"
-              onClick={handleRefreshJobs}
-              disabled={isRefreshing}
-            >
-              <ReloadIcon />
-              Refresh
-            </Button>
-          </Flex>
-
-          <Flex direction="column" gap="3">
-            {jobs.length === 0 ? (
-              loadErrors.jobs ? (
-                <Callout.Root color="red" variant="soft">
-                  <Callout.Icon>
-                    <ExclamationTriangleIcon />
-                  </Callout.Icon>
-                  <Callout.Text>{loadErrors.jobs}</Callout.Text>
-                </Callout.Root>
-              ) : (
-                <Card className="bg-white/5 border border-white/10">
-                  <Flex direction="column" gap="2" p="4" align="center">
-                    <MagicWandIcon className="h-6 w-6 text-blue-500" />
-                    <Heading size="3" className="text-white">No jobs yet</Heading>
-                    <Text color="gray" size="2">
-                      Start by crafting a prompt and sending your first job to the studio.
-                    </Text>
-                  </Flex>
-                </Card>
-              )
-            ) : (
-              jobs.map((job) => {
-                const statusMeta = JOB_STATUS_META[job.status];
-                const isExpanded = expandedJobId === job.id;
-                const artifacts = job.artifacts ?? [];
-                const selected = new Set(selectedArtifacts[job.id] ?? []);
-                return (
-                  <Card
-                    key={job.id}
-                    className={`border transition-all ${isExpanded ? "border-blue-500/60 shadow-blue-500/20 shadow-lg" : "border-white/10 hover:border-white/30"}`}
-                  >
-                    <Flex direction="column" gap="3" p="4">
-                      <Flex align="start" justify="between" gap="3">
-                        <Flex direction="column" gap="1">
-                          <Flex gap="2" align="center">
-                            <Badge color={statusMeta.color} size="1">
-                              <Flex align="center" gap="1">
-                                {statusMeta.icon}
-                                <span>{statusMeta.label}</span>
-                              </Flex>
-                            </Badge>
-                            <Badge variant="soft" size="1">
-                              {PROVIDERS[job.provider].label}
-                            </Badge>
-                            <Badge variant="soft" size="1" color={job.medium === "video" ? "blue" : "gray"}>
-                              {job.medium}
-                            </Badge>
-                          </Flex>
-                          <Text size="3" className="text-white">
-                            {job.prompt}
-                          </Text>
-                          <Text size="1" color="gray">
-                            Requested {formatDate(job.createdAt)} • Job ID {job.id}
-                          </Text>
-                        </Flex>
-                        <Flex align="center" gap="2">
-                          <Button
-                            variant="ghost"
-                            size="2"
-                            onClick={() => setExpandedJobId((current) => (current === job.id ? null : job.id))}
-                          >
-                            {isExpanded ? "Hide details" : "View details"}
-                          </Button>
-                        </Flex>
-                      </Flex>
-
-                      {isExpanded ? (
-                        <>
-                          <Separator className="bg-white/10" />
-                          {job.failure ? (
-                            <Callout.Root color="red" variant="soft">
-                              <Callout.Icon>
-                                <ExclamationTriangleIcon />
-                              </Callout.Icon>
-                              <Callout.Text>
-                                {job.failure.message}
-                              </Callout.Text>
-                            </Callout.Root>
-                          ) : null}
-
-                          {artifacts.length === 0 ? (
-                            <Text color="gray" size="2">
-                              No outputs yet. Check back once the job finishes.
-                            </Text>
-                          ) : (
-                            <Flex direction="column" gap="3">
-                              <Heading size="3" className="text-white">
-                                Outputs
-                              </Heading>
-                              <Grid columns={{ initial: "1", md: "2", xl: "3" }} gap="3">
-                                {artifacts.map((artifact) => {
-                                  const previewSource = getArtifactPreviewSource(artifact);
-                                  const isImage = artifact.medium === "image";
-                                  const isSelected = selected.has(artifact.id);
-                                  return (
-                                    <Card
-                                      key={artifact.id}
-                                      className={`border ${isSelected ? "border-blue-500/60" : "border-white/10"}`}
-                                    >
-                                      <Flex direction="column" gap="2" p="3">
-                                        <div className="relative overflow-hidden rounded-lg bg-black/40">
-                                          {isImage ? (
-                                            <img
-                                              src={previewSource}
-                                              alt={artifact.fileName ?? artifact.id}
-                                              className="w-full h-48 object-cover"
-                                            />
-                                          ) : (
-                                            <video
-                                              src={previewSource}
-                                              controls
-                                              className="w-full h-48 object-cover"
-                                            />
-                                          )}
-                                        </div>
-                                        <Flex align="center" justify="between">
-                                          <Flex align="center" gap="2">
-                                            <Checkbox
-                                              checked={isSelected}
-                                              onCheckedChange={(checked) =>
-                                                toggleArtifactSelection(job.id, artifact.id, Boolean(checked))
-                                              }
-                                              size="2"
-                                              aria-label={`Select artifact ${artifact.fileName ?? artifact.id}`}
-                                            />
-                                            <Text size="2">Select</Text>
-                                          </Flex>
-                                          <Text size="1" color="gray">
-                                            {artifact.fileName ?? artifact.id}
-                                          </Text>
-                                        </Flex>
-                                      </Flex>
-                                    </Card>
-                                  );
-                                })}
-                              </Grid>
-                              <Flex align="center" gap="3">
-                                <Button
-                                  size="2"
-                                  variant="solid"
-                                  onClick={() => handleSaveArtifacts(job)}
-                                  disabled={savingJobId === job.id || job.status !== "completed"}
-                                >
-                                  <DownloadIcon />
-                                  {savingJobId === job.id ? "Saving..." : "Save to brand library"}
-                                </Button>
-                                <Text size="1" color="gray">
-                                  Saved files will land in <span className="text-white font-medium">ai-studio/</span> for {brandName}.
-                                </Text>
-                              </Flex>
-                            </Flex>
-                          )}
-                        </>
-                      ) : null}
-                    </Flex>
-                  </Card>
-                );
-              })
-            )}
-          </Flex>
-        </Flex>
-      </Card>
+      <CreativeLibrarySidebar brandProfileId={brandProfileId} />
     </div>
   );
 }
-
-

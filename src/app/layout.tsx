@@ -73,9 +73,6 @@ export default async function RootLayout({
           <ReactQueryProvider>
             <ToastProvider>
               <GalaxyBackground intensity={1} speed="glacial" />
-              <div className="fixed top-4 right-4 z-50">
-                <ThemeToggle />
-              </div>
               <div className="relative z-10">
                 {children}
               </div>

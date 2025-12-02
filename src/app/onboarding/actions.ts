@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import type { PlatformKey } from "@/components/onboarding/platforms";
+import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
 import {
   appendDocument,
   applyOnboardingPatch,
@@ -18,6 +18,10 @@ import type {
 } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/types";
+
+type IntegrationAccountAssetRow =
+  Database["brand_profiles"]["Tables"]["integration_accounts_assets"]["Row"];
 
 const MOCK_ACCOUNT_NAMES = [
   "Primary Brand Account",
@@ -232,6 +236,35 @@ export async function syncIntegrationAccountsAction(
   const payload = data as AccountsByPlatformResponse;
   const now = payload?.syncedAt ?? new Date().toISOString();
 
+  const allAccountIds = Object.values(payload?.accountsByPlatform ?? {})
+    .flat()
+    .map(account => account.id)
+    .filter(Boolean);
+
+  let selectionById = new Map<string, boolean>();
+  if (allAccountIds.length > 0) {
+    const { data: selectionRows } = await supabase
+      .schema("brand_profiles")
+      .from("integration_accounts_assets")
+      .select("id, raw_payload")
+      .in("id", allAccountIds);
+
+    selectionById = new Map(
+      (selectionRows ?? [])
+        .map(row => {
+          const hasSelectedKey =
+            row?.raw_payload &&
+            typeof row.raw_payload === "object" &&
+            Object.prototype.hasOwnProperty.call(row.raw_payload, "selected");
+          if (!hasSelectedKey) return null;
+          const selected =
+            (row.raw_payload as Record<string, unknown>).selected === true;
+          return [row.id, selected] as const;
+        })
+        .filter((entry): entry is readonly [string, boolean] => Boolean(entry))
+    );
+  }
+
   const platformKeys = [
     "youtube",
     "googleAds",
@@ -250,10 +283,18 @@ export async function syncIntegrationAccountsAction(
       id: a.id,
       name: a.name ?? a.externalAccountId ?? "Account",
       status: (a.status === "pending" || a.status === "error") ? (a.status as "pending" | "error") : "active",
+      selected: selectionById.has(a.id) ? selectionById.get(a.id) === true : undefined,
     }));
+
+    const hasExplicitSelection =
+      mapped.some(account => account.selected === true) || mapped.some(account => account.selected === false);
+    const defaultAccountId = hasExplicitSelection
+      ? mapped.find(account => account.selected)?.id ?? null
+      : mapped[0]?.id ?? null;
+
     connectionsPatch[key as PlatformKey] = {
       connected: true,
-      accountId: mapped[0]?.id ?? null,
+      accountId: defaultAccountId,
       accounts: mapped,
       lastSyncedAt: now,
     };
@@ -272,9 +313,14 @@ export async function syncIntegrationAccountsAction(
 // ---- New: Associate selected accounts to brand profile ----
 export async function associateIntegrationAccountsAction(
   brandId: string,
-  integrationAccountIds: string[]
+  integrationAccountIds: string[],
+  allIntegrationAccountIds?: string[]
 ): Promise<OnboardingState> {
-  if (!integrationAccountIds?.length) {
+  const idsToUpdate = (allIntegrationAccountIds && allIntegrationAccountIds.length > 0)
+    ? allIntegrationAccountIds
+    : integrationAccountIds;
+
+  if (!idsToUpdate?.length) {
     return fetchOnboardingState(brandId);
   }
   const supabase = await createSupabaseServerClient();
@@ -282,16 +328,17 @@ export async function associateIntegrationAccountsAction(
   // Read current payloads to preserve any existing metadata
   const { data: rows } = await supabase
     .schema("brand_profiles")
-    .from("integration_accounts_assets" as never)
+    .from("integration_accounts_assets")
     .select("id, raw_payload")
-    .in("id", integrationAccountIds);
+    .in("id", idsToUpdate);
 
-  const updates = (rows ?? []).map((row: any) => {
+  const updates = (rows ?? []).map((row: IntegrationAccountAssetRow) => {
+    const selected = integrationAccountIds.includes(row.id);
     const merged =
       row?.raw_payload && typeof row.raw_payload === "object"
-        ? { ...row.raw_payload, selected: true }
-        : { selected: true };
-    return { id: row.id, status: "selected", raw_payload: merged, updated_at: new Date().toISOString() };
+        ? { ...row.raw_payload, selected }
+        : { selected };
+    return { id: row.id, raw_payload: merged, updated_at: new Date().toISOString() };
   });
 
   // Apply updates per row (ensures we don't overwrite raw_payload blindly)
@@ -299,12 +346,40 @@ export async function associateIntegrationAccountsAction(
     updates.map(update =>
       supabase
         .schema("brand_profiles")
-        .from("integration_accounts_assets" as never)
-        .update(update as never)
+        .from("integration_accounts_assets")
+        .update(update)
         .eq("id", update.id)
     )
   );
 
-  // Return the latest onboarding state (UI already holds selections)
-  return fetchOnboardingState(brandId);
+  // Persist selection flags into onboarding state so reloads stay in sync
+  const selectionSet = new Set(integrationAccountIds);
+  const state = await fetchOnboardingState(brandId);
+  const connectionsPatch: Partial<Record<PlatformKey, Parameters<typeof updateConnectionAccounts>[2]>> = {};
+
+  PLATFORM_KEYS.forEach(key => {
+    const connection = state.connections[key];
+    if (!connection) return;
+    const accounts = (connection.accounts ?? []).map(account => {
+      const explicitlyKnown = allIntegrationAccountIds?.includes(account.id) ?? false;
+      const selected = selectionSet.has(account.id)
+        ? true
+        : explicitlyKnown
+          ? false
+          : account.selected;
+      return { ...account, selected };
+    });
+    connectionsPatch[key] = {
+      connected: connection.connected,
+      accountId: connection.accountId,
+      accounts,
+      lastSyncedAt: connection.lastSyncedAt,
+    };
+  });
+
+  const next = await applyOnboardingPatch(brandId, {
+    connections: connectionsPatch as any,
+  });
+
+  return next;
 }

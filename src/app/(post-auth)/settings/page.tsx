@@ -1,12 +1,20 @@
-import { Container, Flex, Heading, Text } from "@radix-ui/themes";
+import { Container, Flex, Grid, Heading, Tabs, Text } from "@radix-ui/themes";
 import { ensureOnboardingState, fetchOnboardingMetadata } from "@/lib/onboarding/storage";
-import { isOnboardingComplete, type OnboardingState, type OnboardingMetadata } from "@/lib/onboarding/state";
+import { type OnboardingState, type OnboardingMetadata } from "@/lib/onboarding/state";
 import BrandSettingsPanel from "@/components/settings/BrandSettingsPanel";
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import { BrandIntegrationsCard } from "@/components/settings/BrandIntegrationsCard";
+import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
+import { RunStrategicAnalysisButton } from "@/components/strategic-analyses/RunStrategicAnalysisButton";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { fetchBrandProfileDetails } from "@/lib/brands/profile";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { UserSettingsPanel } from "@/components/settings/UserSettingsPanel";
+import { createEmptyUserIntegrationSummary, fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 
 export default async function SettingsPage() {
+  const supabase = await createSupabaseServerClient();
+  const { data: userData } = await supabase.auth.getUser();
+
   const metadata: OnboardingMetadata = await fetchOnboardingMetadata();
   const activeBrandId = metadata.activeBrandId;
 
@@ -19,40 +27,64 @@ export default async function SettingsPage() {
     );
   }
 
-  const brands = metadata.brands as Record<string, OnboardingState>;
-  const brandSummaries = Object.keys(brands).map((id) => {
-    const state = brands[id];
-    return {
-      id,
-      name: state.brand.name || "Untitled brand",
-      completed: isOnboardingComplete(state),
-    };
-  });
-
   const { state: activeState } = await ensureOnboardingState(activeBrandId);
   const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
+  const brandProfile = await fetchBrandProfileDetails(activeBrandId);
+  const currentUserRole =
+    activeState.members.find(
+      member => member.id === userData?.user?.id || member.email === userData?.user?.email
+    )?.role ?? null;
+
+  const userIntegrationSummary = userData?.user
+    ? await fetchUserIntegrationSummary(userData.user.id)
+    : createEmptyUserIntegrationSummary();
 
   return (
-    <Container size="3" className="py-10">
-      <Flex direction="column" gap="6">
+    <Container size="4" className="py-10 w-full max-w-[96vw] px-4 md:px-8">
+      <Flex direction="column" gap="7">
         <div>
           <Heading size="7" className="text-white">Settings</Heading>
-          <Text color="gray">Invite teammates, manage brand profiles, and update workspace details.</Text>
+          <Text color="gray">Invite teammates, manage brand profiles, and update your own integrations.</Text>
         </div>
-        <GlassPanel className="p-6">
-          <BrandSettingsPanel
-            data={{
-              activeBrandId,
-              brandSummaries,
-              brandName: activeState.brand.name,
-              members: activeState.members,
-              invites: activeState.invites as OnboardingState["invites"],
-            }}
-          />
-        </GlassPanel>
-        <GlassPanel className="p-6">
-          <BrandIntegrationsCard summary={integrationSummary} />
-        </GlassPanel>
+        <Tabs.Root defaultValue="brand" className="space-y-4">
+          <Tabs.List>
+            <Tabs.Trigger value="brand">Brand</Tabs.Trigger>
+            <Tabs.Trigger value="you">You</Tabs.Trigger>
+          </Tabs.List>
+          <Tabs.Content value="brand" className="mt-3">
+            <Grid columns={{ initial: "1", lg: "12" }} gap="6" align="start">
+              <GlassPanel className="p-6 h-full lg:col-span-7 xl:col-span-8">
+                <BrandSettingsPanel
+                  data={{
+                    brandName: activeState.brand.name,
+                    members: activeState.members,
+                    invites: activeState.invites as OnboardingState["invites"],
+                    profile: brandProfile ?? undefined,
+                    currentUserRole,
+                  }}
+                />
+              </GlassPanel>
+              <GlassPanel className="p-6 h-full lg:col-span-5 xl:col-span-4">
+                <BrandIntegrationsSection initialSummary={integrationSummary} />
+              </GlassPanel>
+              <GlassPanel className="p-6 lg:col-span-12">
+                <RunStrategicAnalysisButton brandProfileId={activeBrandId} />
+              </GlassPanel>
+            </Grid>
+          </Tabs.Content>
+          <Tabs.Content value="you" className="mt-3">
+            <GlassPanel className="p-6">
+              <UserSettingsPanel
+                user={{
+                  email: userData?.user?.email ?? "Unknown",
+                  name: userData?.user?.user_metadata?.full_name ?? null,
+                  lastSignIn: userData?.user?.last_sign_in_at ?? null,
+                }}
+                integrations={userIntegrationSummary}
+              />
+            </GlassPanel>
+          </Tabs.Content>
+        </Tabs.Root>
       </Flex>
     </Container>
   );

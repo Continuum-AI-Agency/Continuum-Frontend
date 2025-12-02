@@ -7,7 +7,8 @@ import type { Database } from "@/lib/supabase/types";
 
 type BrandProfileIntegrationRow =
   Database["brand_profiles"]["Tables"]["brand_profile_integration_accounts"]["Row"];
-type IntegrationAccountRow = Database["brand_profiles"]["Tables"]["integration_accounts"]["Row"];
+type IntegrationAccountAssetRow =
+  Database["brand_profiles"]["Tables"]["integration_accounts_assets"]["Row"];
 
 export type BrandIntegrationAccountSummary = {
   assignmentId: string;
@@ -65,12 +66,14 @@ export async function fetchBrandIntegrationSummary(
     return createEmptySummary();
   }
 
-  const integrationAccountIds = assignments.map(assignment => assignment.integration_account_id);
+  const integrationAccountIds = Array.from(
+    new Set(assignments.map(assignment => assignment.integration_account_id))
+  );
 
   const { data: accounts, error: accountsError } = await supabase
     .schema("brand_profiles")
-    .from("integration_accounts")
-    .select("id, integration_id, type, name, status, external_account_id")
+    .from("integration_accounts_assets")
+    .select("id, integration_id, type, name, status, external_account_id, created_at")
     .in("id", integrationAccountIds);
 
   if (accountsError) {
@@ -78,8 +81,9 @@ export async function fetchBrandIntegrationSummary(
     return createEmptySummary();
   }
 
-  const accountsById = new Map<string, IntegrationAccountRow>();
-  for (const account of accounts ?? []) {
+  const accountRows = (accounts ?? []) as IntegrationAccountAssetRow[];
+  const accountsById = new Map<string, IntegrationAccountAssetRow>();
+  for (const account of accountRows) {
     accountsById.set(account.id, account);
   }
 
@@ -120,4 +124,3 @@ export async function fetchBrandIntegrationSummary(
 
   return summary;
 }
-

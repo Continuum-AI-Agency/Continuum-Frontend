@@ -1,35 +1,36 @@
 @import "tailwindcss";
 
-:root {
-  /* --- Continuum Default (Dark) --- */
-  color-scheme: dark;
-  --background: #020617; /* slate-950 */
-  --foreground: #E5E7EB; /* gray-200 */
+:root,
+[data-theme="light"] {
+  /* --- Continuum Default (Light) --- */
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #0f172a; /* slate-900 */
 
-  --card: #0B1220; /* deep panel base */
-  --card-foreground: #E5E7EB;
+  --card: #f8fafc; /* slate-50/100 range */
+  --card-foreground: #0f172a;
 
-  --popover: #0B1220;
-  --popover-foreground: #E5E7EB;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
 
-  --primary: #2563EB; /* brand blue (login button) */
-  --primary-foreground: #0B1220;
+  --primary: #6d28d9; /* violet-700 */
+  --primary-foreground: #f8fafc;
 
-  --secondary: #2E2257; /* deep indigo */
-  --secondary-foreground: #E5E7EB;
+  --secondary: #22c55e; /* green-500 */
+  --secondary-foreground: #0f172a;
 
-  --muted: #0F172A; /* slate-900 */
-  --muted-foreground: #94A3B8; /* slate-400 */
+  --muted: #e2e8f0; /* slate-200 */
+  --muted-foreground: #475569; /* slate-600 */
 
-  --accent: #53A88A; /* muted teal */
-  --accent-foreground: #E5E7EB;
+  --accent: #8b5cf6; /* violet-500 for accents */
+  --accent-foreground: #0f172a;
   
-  --destructive: #EF4444;
-  --destructive-foreground: #0B1220;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 
-  --border: rgba(255,255,255,0.10);
-  --input: rgba(255,255,255,0.10);
-  --ring: #8B5CF6; /* violet-500 */
+  --border: #e2e8f0; /* subtle border */
+  --input: #e2e8f0;
+  --ring: #7c3aed; /* violet-600 */
   
   --radius: 0.5rem;
   --color-background: var(--background);
@@ -53,10 +54,10 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Glass surface tokens */
-  --glass-bg: rgba(2, 6, 23, 0.60); /* slate-950 /60 */
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  /* Glass surface tokens (light) */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.28);
 
   /* Legacy Galaxy background CSS variables for SSR-stable inline styles */
   --bg-galaxy-c1-light: rgba(255,122,203,0.25);
@@ -138,6 +139,102 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.particle-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.14;
+  mix-blend-mode: screen;
+  background-size: 200% 200%;
+  animation-duration: 28s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.particle-layer.top {
+  background-image:
+    radial-gradient(14px 14px at 10% 20%, rgba(112, 54, 255, 0.28), transparent 55%),
+    radial-gradient(12px 12px at 70% 10%, rgba(147, 197, 253, 0.26), transparent 55%),
+    radial-gradient(16px 16px at 40% 0%, rgba(124, 58, 237, 0.35), transparent 60%);
+  animation-name: floatTop;
+}
+
+.particle-layer.bottom {
+  background-image:
+    radial-gradient(18px 18px at 20% 90%, rgba(34, 211, 238, 0.32), transparent 60%),
+    radial-gradient(14px 14px at 80% 95%, rgba(14, 165, 233, 0.28), transparent 60%),
+    radial-gradient(12px 12px at 50% 82%, rgba(6, 182, 212, 0.3), transparent 55%);
+  animation-name: floatBottom;
+}
+
+@keyframes floatTop {
+  0% {
+    transform: translateY(-6px);
+    background-position: 0% 0%, 30% 20%, 60% 10%;
+  }
+  50% {
+    transform: translateY(6px);
+    background-position: 20% 10%, 40% 0%, 70% 15%;
+  }
+  100% {
+    transform: translateY(-6px);
+    background-position: 0% 0%, 30% 20%, 60% 10%;
+  }
+}
+
+@keyframes floatBottom {
+  0% {
+    transform: translateY(6px);
+    background-position: 20% 100%, 70% 90%, 50% 96%;
+  }
+  50% {
+    transform: translateY(-6px);
+    background-position: 30% 92%, 60% 98%, 40% 88%;
+  }
+  100% {
+    transform: translateY(6px);
+    background-position: 20% 100%, 70% 90%, 50% 96%;
+  }
+}
+
+/* Light theme overrides for legacy dark utility classes */
+[data-theme="light"] [class*="bg-slate-950"] {
+  background-color: var(--card) !important;
+}
+[data-theme="light"] [class*="bg-slate-900"] {
+  background-color: var(--card) !important;
+}
+[data-theme="light"] [class*="bg-slate-8"] {
+  background-color: var(--card) !important;
+}
+[data-theme="light"] [class*="bg-slate-7"] {
+  background-color: var(--card) !important;
+}
+[data-theme="light"] [class*="bg-slate-6"] {
+  background-color: var(--card) !important;
+}
+[data-theme="light"] [class*="bg-black"] {
+  background-color: var(--muted) !important;
+}
+[data-theme="light"] [class*="bg-gray-900"] {
+  background-color: var(--card) !important;
+}
+[data-theme="light"] [class*="border-white"] {
+  border-color: var(--border) !important;
+}
+[data-theme="light"] [class*="text-white"] {
+  color: var(--foreground) !important;
+}
+[data-theme="light"] [class*=\"text-slate-100\"], 
+[data-theme="light"] [class*=\"text-slate-200\"], 
+[data-theme="light"] [class*=\"text-slate-300\"],
+[data-theme="light"] [class*=\"text-gray-100\"],
+[data-theme="light"] [class*=\"text-gray-200\"],
+[data-theme="light"] [class*=\"text-gray-300\"] {
+  color: var(--foreground) !important;
 }
 
 /* Accessible focus rings across interactive elements */

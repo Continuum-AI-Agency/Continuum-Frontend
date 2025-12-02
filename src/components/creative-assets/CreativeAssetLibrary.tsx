@@ -382,7 +382,7 @@ function AssetTile({
         <Text size="1" color="gray">
           {asset.kind === "folder" ? "Folder" : asset.contentType ?? "File"}
         </Text>
-        <Flex gap="1">
+        <Flex gap="2">
           <IconButton
             size="1"
             variant="soft"
@@ -422,7 +422,7 @@ function AssetPreview({ asset }: { asset: CreativeAsset }) {
     }
     setLoading(true);
     // Lazy-import to avoid circular dependency
-    import("@/lib/creative-assets/storage")
+    import("@/lib/creative-assets/storageClient")
       .then(({ createSignedAssetUrl, getPublicAssetUrl }) => {
         const resolver = async () => {
           try {
@@ -430,8 +430,13 @@ function AssetPreview({ asset }: { asset: CreativeAsset }) {
               return getPublicAssetUrl(asset.fullPath);
             }
             return createSignedAssetUrl(asset.fullPath, 60);
-          } catch {
-            return null;
+          } catch (err) {
+            try {
+              return getPublicAssetUrl(asset.fullPath);
+            } catch (err2) {
+              console.error("asset preview url failed", err ?? err2);
+              return null;
+            }
           }
         };
         return resolver();
@@ -497,6 +502,8 @@ function AssetPreview({ asset }: { asset: CreativeAsset }) {
       className="object-cover"
       sizes="(max-width: 768px) 200px, 240px"
       unoptimized
+      priority={false}
+      loading="lazy"
     />
   );
 }

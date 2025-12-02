@@ -6,6 +6,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { Asset } from "@/lib/schemas/brand-assets";
 import { updateBrandProfileAssets } from "@/lib/api/brandProfiles.client";
+import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
 import { ProviderAssetList } from "@/components/assets/ProviderAssetList";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -41,6 +42,7 @@ export function BrandAssetsForm({ brandProfileId, availableAssets, includedAsset
 
 	const [serverError, setServerError] = useState<string | undefined>();
 	const [isPending, startTransition] = useTransition();
+	const [isRunningAnalysis, startAnalysisTransition] = useTransition();
 
 	const { show } = useToast();
 
@@ -86,6 +88,23 @@ export function BrandAssetsForm({ brandProfileId, availableAssets, includedAsset
 		});
 	}
 
+	const handleStrategicAnalysisRun = () => {
+		startAnalysisTransition(async () => {
+			try {
+				const result = await runStrategicAnalysis(brandProfileId);
+				const details = result.runId ?? result.taskId ?? result.status ?? undefined;
+				show({
+					title: "Strategic analysis queued",
+					description: details ? `Run reference: ${details}` : "Regeneration requested for this brand.",
+					variant: "success",
+				});
+			} catch (e: unknown) {
+				const message = e instanceof Error ? e.message : "Unable to start strategic analysis run.";
+				show({ title: "Run failed", description: message, variant: "error" });
+			}
+		});
+	};
+
 	return (
 		<form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
 			<div className="flex items-center justify-between">
@@ -115,8 +134,25 @@ export function BrandAssetsForm({ brandProfileId, availableAssets, includedAsset
 					/>
 				))}
 			</div>
+
+			<div className="rounded-lg border border-slate-200/40 bg-slate-950/40 p-4 text-white">
+				<div className="flex flex-wrap items-start justify-between gap-3">
+					<div className="space-y-1">
+						<h2 className="text-lg font-semibold">Strategic analyses</h2>
+						<p className="text-sm text-slate-300">
+							Trigger a manual regeneration when no strategic analysis data exists for this brand.
+						</p>
+					</div>
+					<button
+						type="button"
+						onClick={handleStrategicAnalysisRun}
+						className="rounded bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+						disabled={isRunningAnalysis}
+					>
+						{isRunningAnalysis ? "Queuing..." : "Run analysis"}
+					</button>
+				</div>
+			</div>
 		</form>
 	);
 }
-
-

@@ -15,9 +15,21 @@ import {
   brandInsightsTaskStatusSchema,
   brandInsightsTrendSchema,
   brandInsightsEventSchema,
+  brandInsightsTrendsAndEventsSchema,
 } from "@/lib/schemas/brandInsights";
 
-const isoDateSchema = z.string().datetime({ message: "Expected ISO timestamp" });
+// Accept either ISO-8601 timestamps (with "T") or Postgres-style timestamps with a space.
+const isoDateSchema = z
+  .string()
+  .transform((value, ctx) => {
+    const normalized = value.replace(" ", "T");
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Expected ISO timestamp" });
+      return z.NEVER;
+    }
+    return normalized;
+  });
 
 const backendTrendSchema = z.object({
   id: z.string(),
@@ -42,7 +54,8 @@ const backendEventSchema = z.object({
 
 const backendQuestionSchema = z.object({
   id: z.string(),
-  question: z.string(),
+  question: z.string().nullish(),
+  question_text: z.string().nullish(),
   social_platform: z.string().nullish(),
   platform: z.string().nullish(),
   content_type_suggestion: z.string().nullish(),
@@ -54,6 +67,11 @@ const backendQuestionSchema = z.object({
 const backendNicheQuestionsSchema = z.object({
   questions: z.array(backendQuestionSchema).default([]),
   total_generated: z.number().int().nonnegative().nullish(),
+  stats: z
+    .object({
+      count: z.number().int().nonnegative().nullish(),
+    })
+    .nullish(),
 });
 
 const backendQuestionsByNicheSchema = z.object({
@@ -90,8 +108,9 @@ const backendInsightsDataSchema = z.object({
 
 const backendInsightsResponseSchema = z.object({
   status: z.string(),
+  message: z.string().nullish(),
   generated_at: isoDateSchema.nullish(),
-  data: backendInsightsDataSchema,
+  data: backendInsightsDataSchema.nullable(),
 });
 
 const backendGenerationProcessingSchema = z.object({
@@ -215,6 +234,14 @@ function normalizeStrings(values?: Array<string | null | undefined>) {
   return result.length > 0 ? result : undefined;
 }
 
+function normalizeTimestamp(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const normalized = value.includes("T") ? value : value.replace(" ", "T");
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return normalized;
+}
+
 function mapTrend(trend: z.infer<typeof backendTrendSchema>) {
   return brandInsightsTrendSchema.parse({
     id: trend.id,
@@ -241,9 +268,10 @@ function mapEvent(event: z.infer<typeof backendEventSchema>) {
 }
 
 function mapQuestion(question: z.infer<typeof backendQuestionSchema>) {
+  const questionText = question.question ?? question.question_text;
   return brandInsightsQuestionSchema.parse({
     id: question.id,
-    question: question.question,
+    question: questionText ?? "",
     socialPlatform: question.social_platform ?? question.platform ?? undefined,
     contentTypeSuggestion: question.content_type_suggestion ?? undefined,
     whyRelevant: question.why_relevant ?? undefined,
@@ -255,26 +283,34 @@ function mapQuestion(question: z.infer<typeof backendQuestionSchema>) {
 function mapQuestionsByNiche(payload: z.infer<typeof backendQuestionsByNicheSchema>) {
   const questionsByNiche: Record<string, z.infer<typeof brandInsightsQuestionsByNicheSchema>["questionsByNiche"][string]> =
     {};
+  let totalQuestions = 0;
 
   Object.entries(payload.questions_by_niche ?? {}).forEach(([niche, value]) => {
     const parsed = backendNicheQuestionsSchema.parse(value);
+    const totalGenerated = parsed.total_generated ?? parsed.stats?.count ?? undefined;
+    const questions = parsed.questions.map(mapQuestion);
+    totalQuestions += totalGenerated ?? questions.length;
     questionsByNiche[niche] = {
-      questions: parsed.questions.map(mapQuestion),
-      totalGenerated: parsed.total_generated ?? undefined,
+      questions,
+      totalGenerated,
     };
   });
+
+  const nichesCount = Object.keys(questionsByNiche).length;
 
   return brandInsightsQuestionsByNicheSchema.parse({
     status: payload.status ?? undefined,
     questionsByNiche,
-    summary: payload.summary
-      ? {
-          totalNiches: payload.summary.total_niches ?? undefined,
-          totalQuestions: payload.summary.total_questions ?? undefined,
-          averagePerNiche: payload.summary.average_per_niche ?? undefined,
-        }
-      : undefined,
-    generatedAt: payload.generated_at ?? undefined,
+    summary:
+      payload.summary || nichesCount > 0
+        ? {
+            totalNiches: payload.summary?.total_niches ?? nichesCount,
+            totalQuestions: payload.summary?.total_questions ?? totalQuestions,
+            averagePerNiche:
+              payload.summary?.average_per_niche ?? (nichesCount > 0 ? totalQuestions / nichesCount : undefined),
+          }
+        : undefined,
+    generatedAt: normalizeTimestamp(payload.generated_at),
   });
 }
 
@@ -285,17 +321,22 @@ function mapTrendsAndEvents(payload: z.infer<typeof backendTrendsAndEventsSchema
     events: (payload.events ?? []).map(mapEvent),
     country: payload.country ?? undefined,
     weekAnalyzed: payload.week_analyzed ?? undefined,
-    generatedAt: payload.generated_at ?? undefined,
+    generatedAt: normalizeTimestamp(payload.generated_at),
   });
 }
 
 export function mapBackendInsightsResponse(payload: unknown) {
   const parsed = backendInsightsResponseSchema.parse(payload);
+  if (!parsed.data) {
+    const reason = parsed.message ?? `Brand insights unavailable (status: ${parsed.status})`;
+    throw new Error(reason);
+  }
+
   const data = backendInsightsDataSchema.parse(parsed.data);
 
   return brandInsightsSchema.parse({
     status: parsed.status,
-    generatedAt: parsed.generated_at ?? undefined,
+    generatedAt: normalizeTimestamp(parsed.generated_at),
     data: brandInsightsDataSchema.parse({
       generationId: data.generation_id,
       trendsAndEvents: mapTrendsAndEvents(data.trends_and_events),

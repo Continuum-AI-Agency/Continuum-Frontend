@@ -23,17 +23,28 @@ export const BRAND_ROLES = ["owner", "admin", "operator", "viewer"] as const;
 const brandVoiceTagSchema = z.enum(BRAND_VOICE_TAGS);
 const brandRoleSchema = z.enum(BRAND_ROLES);
 
+// Accept Supabase/Postgres timestamps that include offsets (e.g., "+00:00") and normalize to ISO with trailing Z.
+const isoDateString = z.string().transform((value, ctx) => {
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid datetime" });
+    return z.NEVER;
+  }
+  return new Date(timestamp).toISOString();
+});
+
 const platformAccountSchema = z.object({
   id: z.string(),
   name: z.string(),
   status: z.enum(["active", "pending", "error"]),
+  selected: z.boolean().optional(),
 });
 
 const connectionStateSchema = z.object({
   connected: z.boolean(),
   accountId: z.union([z.string(), z.null()]).default(null),
   accounts: z.array(platformAccountSchema).default([]),
-  lastSyncedAt: z.union([z.string().datetime(), z.null()]).default(null),
+  lastSyncedAt: z.union([isoDateString, z.null()]).default(null),
 });
 
 const connectionPatchSchema = connectionStateSchema.partial();
@@ -79,7 +90,7 @@ const onboardingDocumentSchema = z.object({
   id: z.string(),
   name: z.string(),
   source: documentSourceSchema,
-  createdAt: z.string().datetime(),
+  createdAt: isoDateString,
   status: z.enum(["processing", "ready", "error"]).default("ready"),
   size: z.number().nonnegative().optional(),
   externalUrl: z.string().url().optional(),
@@ -99,8 +110,8 @@ const brandInviteSchema = z.object({
   email: z.string().email(),
   role: brandRoleSchema,
   token: z.string(),
-  createdAt: z.string().datetime(),
-  expiresAt: z.union([z.string().datetime(), z.null()]).optional(),
+  createdAt: isoDateString,
+  expiresAt: z.union([isoDateString, z.null()]).optional(),
 });
 
 const onboardingStateSchema = z.object({
@@ -110,7 +121,7 @@ const onboardingStateSchema = z.object({
   connections: z.object(connectionShape),
   members: z.array(brandMemberSchema),
   invites: z.array(brandInviteSchema),
-  completedAt: z.union([z.string().datetime(), z.null()]).nullable(),
+  completedAt: z.union([isoDateString, z.null()]).nullable(),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -121,7 +132,7 @@ const onboardingPatchSchema = z.object({
   connections: z.object(connectionPatchShape).partial().optional(),
   members: z.array(brandMemberSchema).optional(),
   invites: z.array(brandInviteSchema).optional(),
-  completedAt: z.union([z.string().datetime(), z.null()]).nullable().optional(),
+  completedAt: z.union([isoDateString, z.null()]).nullable().optional(),
 });
 
 const onboardingMetadataSchema = z.object({

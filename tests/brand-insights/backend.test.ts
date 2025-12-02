@@ -199,6 +199,54 @@ test("mapBackendProfileResponse maps new strategic analysis fields", () => {
   assert.deepEqual(result.brandVoice?.keywords, ["mobile", "resilient"]);
 });
 
+test("mapBackendInsightsResponse handles question_text and niche stats", () => {
+  const payload = {
+    status: "success",
+    data: {
+      generation_id: "gen-abc",
+      trends_and_events: {
+        trends: [],
+        events: [],
+      },
+      questions_by_niche: {
+        questions_by_niche: {
+          wellness: {
+            questions: [
+              {
+                id: "q1",
+                question_text: "How do I stay consistent?",
+                social_platform: "instagram",
+                content_type_suggestion: "Carousel",
+                why_relevant: "Seasonal",
+              },
+            ],
+            stats: { count: 2 },
+          },
+        },
+      },
+      country: "US",
+      week_start_date: "2025-11-24",
+    },
+  };
+
+  const result = mapBackendInsightsResponse(payload);
+
+  assert.equal(result.data.questionsByNiche.questionsByNiche.wellness.totalGenerated, 2);
+  assert.equal(result.data.questionsByNiche.questionsByNiche.wellness.questions[0].question, "How do I stay consistent?");
+  assert.equal(result.data.questionsByNiche.summary?.totalQuestions, 2);
+  assert.equal(result.data.questionsByNiche.summary?.totalNiches, 1);
+});
+
+test("mapBackendInsightsResponse throws when data is null", () => {
+  const payload = {
+    status: "not_found",
+    message: "No insights yet",
+    data: null,
+  };
+
+  assert.throws(() => mapBackendInsightsResponse(payload), /No insights yet/);
+});
+
 test("mapBackendProfileResponse gracefully handles onboarding_required", () => {
   const result = mapBackendProfileResponse({
     status: "onboarding_required",

@@ -33,9 +33,16 @@ function applyDomTheme(appearance: "light" | "dark") {
     root.setAttribute("data-theme", "dark");
     root.style.colorScheme = "dark";
   } else {
-    root.removeAttribute("data-theme");
+    root.setAttribute("data-theme", "light");
     root.style.colorScheme = "light";
   }
+
+  // Ensure background/foreground take effect even when legacy utility classes linger.
+  const computed = getComputedStyle(root);
+  const bg = computed.getPropertyValue("--background") || "";
+  const fg = computed.getPropertyValue("--foreground") || "";
+  document.body.style.backgroundColor = bg.trim();
+  document.body.style.color = fg.trim();
 }
 
 export function ThemeProvider({ children, initialAppearance }: { children: React.ReactNode; initialAppearance?: "light" | "dark" }) {
@@ -107,5 +114,3 @@ export function useTheme() {
   if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
   return ctx;
 }
-
-

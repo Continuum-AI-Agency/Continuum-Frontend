@@ -48,4 +48,3 @@ export async function request<TResponse = unknown>(options: RequestOptions<TResp
 export const http = {
   request,
 };
-

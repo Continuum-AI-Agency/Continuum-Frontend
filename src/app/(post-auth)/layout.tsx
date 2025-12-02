@@ -41,7 +41,13 @@ export default async function DashboardLayout({
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 overflow-hidden" style={{ backgroundImage: LOGIN_GLOW_GRADIENT }}>
+    <div
+      className="min-h-screen overflow-hidden"
+      style={{
+        backgroundColor: "var(--background)",
+        color: "var(--foreground)",
+      }}
+    >
       <DashboardLayoutShell
         activeBrandId={activeBrandId}
         brandSummaries={brandSummaries}

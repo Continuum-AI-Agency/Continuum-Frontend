@@ -78,7 +78,49 @@ export type Database = {
             foreignKeyName: "brand_profile_integration_accounts_integration_account_id_fkey"
             columns: ["integration_account_id"]
             isOneToOne: false
-            referencedRelation: "integration_accounts"
+            referencedRelation: "integration_accounts_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permissions: {
+        Row: {
+          brand_profile_id: string
+          created_at: string
+          role: string
+          tier: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_profile_id: string
+          created_at?: string
+          role?: string
+          tier?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_profile_id?: string
+          created_at?: string
+          role?: string
+          tier?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permissions_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "permissions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -174,8 +216,53 @@ export type Database = {
           },
         ]
       }
+      integration_accounts_assets: {
+        Row: {
+          created_at: string
+          external_account_id: string
+          id: string
+          integration_id: string
+          name: string | null
+          raw_payload: Json | null
+          status: string | null
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_account_id: string
+          id?: string
+          integration_id: string
+          name?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_account_id?: string
+          id?: string
+          integration_id?: string
+          name?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_accounts_assets_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "user_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_reports: {
         Row: {
+          active: boolean
           agent_profile_snapshot: Json
           brand_profile_id: string
           embedding: string | null
@@ -190,6 +277,7 @@ export type Database = {
           synced_by: string
         }
         Insert: {
+          active?: boolean
           agent_profile_snapshot: Json
           brand_profile_id: string
           embedding?: string | null
@@ -204,6 +292,7 @@ export type Database = {
           synced_by: string
         }
         Update: {
+          active?: boolean
           agent_profile_snapshot?: Json
           brand_profile_id?: string
           embedding?: string | null
@@ -229,6 +318,7 @@ export type Database = {
       }
       strategic_analyses: {
         Row: {
+          active: boolean
           analysis_embedding: string | null
           analysis_json: Json
           brand_id: string
@@ -240,6 +330,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active?: boolean
           analysis_embedding?: string | null
           analysis_json: Json
           brand_id: string
@@ -251,6 +342,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active?: boolean
           analysis_embedding?: string | null
           analysis_json?: Json
           brand_id?: string

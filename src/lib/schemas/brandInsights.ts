@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+// Accept either ISO-8601 or Postgres-style timestamps and normalize to an ISO-like string.
+function tolerantTimestampSchema(message: string) {
+  return z
+    .string()
+    .transform((value, ctx) => {
+      const withT = value.includes("T") ? value : value.replace(" ", "T");
+
+      // Ensure timezone separator has a colon (e.g., +00 -> +00:00).
+      const normalized = withT.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+
+      const parsed = new Date(normalized);
+      if (Number.isNaN(parsed.getTime())) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+        return z.NEVER;
+      }
+      return normalized;
+    });
+}
+
 export const brandInsightsTrendSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -45,7 +64,7 @@ export const brandInsightsQuestionsByNicheSchema = z.object({
       averagePerNiche: z.number().optional(),
     })
     .optional(),
-  generatedAt: z.string().datetime({ message: "generatedAt must be an ISO timestamp" }).optional(),
+  generatedAt: tolerantTimestampSchema("generatedAt must be an ISO timestamp").optional(),
 });
 
 export const brandInsightsTrendsAndEventsSchema = z.object({
@@ -54,7 +73,7 @@ export const brandInsightsTrendsAndEventsSchema = z.object({
   events: z.array(brandInsightsEventSchema).default([]),
   country: z.string().optional(),
   weekAnalyzed: z.string().optional(),
-  generatedAt: z.string().datetime({ message: "generatedAt must be an ISO timestamp" }).optional(),
+  generatedAt: tolerantTimestampSchema("generatedAt must be an ISO timestamp").optional(),
 });
 
 export const brandInsightsDataSchema = z.object({
@@ -69,7 +88,7 @@ export const brandInsightsDataSchema = z.object({
 
 export const brandInsightsSchema = z.object({
   status: z.string(),
-  generatedAt: z.string().datetime({ message: "generatedAt must be an ISO timestamp" }).optional(),
+  generatedAt: tolerantTimestampSchema("generatedAt must be an ISO timestamp").optional(),
   data: brandInsightsDataSchema,
 });
 

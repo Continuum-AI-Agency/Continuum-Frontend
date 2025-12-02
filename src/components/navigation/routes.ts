@@ -1,12 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
-import {
-  BarChartIcon,
-  GearIcon,
-  HomeIcon,
-  Link2Icon,
-  MagicWandIcon,
-  RocketIcon,
-} from "@radix-ui/react-icons";
+import { BarChartIcon, HomeIcon, MagicWandIcon, RocketIcon } from "@radix-ui/react-icons";
 
 export type AppNavigationItem = {
   label: string;
@@ -26,12 +19,12 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     icon: HomeIcon,
   },
   {
-    label: "AI Studio",
+    label: "Creative Studio",
     href: "/ai-studio",
     icon: MagicWandIcon,
   },
   {
-    label: "Organic",
+    label: "Organic Content",
     href: "/organic",
     icon: BarChartIcon,
   },
@@ -44,16 +37,4 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       tone: "violet",
     },
   },
-  {
-    label: "Integrations",
-    href: "/integrations",
-    icon: Link2Icon,
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    icon: GearIcon,
-  },
 ];
-
-

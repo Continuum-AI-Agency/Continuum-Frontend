@@ -3,13 +3,15 @@ import React from "react";
 export function GlassPanel({ className = "", ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={
-        "bg-slate-950/60 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl " +
-        className
-      }
+      className={"backdrop-blur-xl rounded-3xl shadow-2xl " + className}
+      style={{
+        backgroundColor: "var(--glass-bg)",
+        border: `1px solid var(--glass-border)`,
+        color: "var(--foreground)",
+        ...(props.style || {}),
+      }}
       {...props}
     />
   );
 }
-
 

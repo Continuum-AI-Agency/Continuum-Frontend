@@ -7,6 +7,7 @@ import {
   Box,
   Button,
   Callout,
+  Dialog,
   Flex,
   Grid,
   Heading,
@@ -17,24 +18,28 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import type { BrandInvite, BrandMember, BrandRole } from "@/lib/onboarding/state";
-import type { BrandSummary } from "@/components/DashboardLayoutShell";
 import {
-  createBrandProfileAction,
   createMagicLinkAction,
+  deleteBrandProfileAction,
   removeMemberAction,
   renameBrandProfileAction,
   revokeInviteAction,
-  switchActiveBrandAction,
 } from "@/app/(post-auth)/settings/actions";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 
 type BrandSettingsPanelProps = {
   data: {
-    activeBrandId: string;
-    brandSummaries: BrandSummary[];
     brandName: string;
     members: BrandMember[];
     invites: BrandInvite[];
+    profile?: {
+      id: string;
+      createdAt: string;
+      updatedAt: string;
+      createdBy: string;
+    };
+    currentUserRole?: BrandRole | null;
   };
 };
 
@@ -43,17 +48,29 @@ const INVITE_ROLES: BrandRole[] = ["admin", "operator", "viewer"];
 export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
   const router = useRouter();
   const { show } = useToast();
+  const { activeBrandId, updateBrandName } = useActiveBrandContext();
   const [isPending, startTransition] = useTransition();
   const [brandName, setBrandName] = useState(data.brandName);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<BrandRole>("operator");
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-  const [newBrandName, setNewBrandName] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
 
   const ownerEmails = useMemo(
     () => data.members.filter(member => member.role === "owner").map(member => member.email),
     [data.members]
   );
+
+  const formattedProfileDates = useMemo(() => {
+    if (!data.profile) return null;
+    return {
+      createdAt: new Date(data.profile.createdAt).toLocaleString(),
+      updatedAt: new Date(data.profile.updatedAt).toLocaleString(),
+    };
+  }, [data.profile]);
+
+  const canDelete = data.currentUserRole === "owner" || data.currentUserRole === "admin";
 
   function handleRenameBrand(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,14 +80,54 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
     }
     startTransition(async () => {
       try {
-        await renameBrandProfileAction(data.activeBrandId, brandName.trim());
+        await renameBrandProfileAction(activeBrandId, brandName.trim());
         setBrandName(prev => prev.trim());
+        updateBrandName(activeBrandId, brandName.trim());
         show({ title: "Brand updated", description: "Brand name saved.", variant: "success" });
-        router.refresh();
       } catch (error) {
         show({
           title: "Rename failed",
           description: error instanceof Error ? error.message : "Unable to rename brand.",
+          variant: "error",
+        });
+      }
+    });
+  }
+
+  function handleDeleteBrandProfile() {
+    if (!data.profile) {
+      show({ title: "No brand profile", description: "Nothing to delete for this brand.", variant: "error" });
+      return;
+    }
+
+    if (confirmName.trim() !== brandName.trim()) {
+      show({
+        title: "Confirmation required",
+        description: "Type the brand name exactly to confirm deletion.",
+        variant: "error",
+      });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const { nextBrandId } = await deleteBrandProfileAction(activeBrandId);
+        show({
+          title: "Brand profile deleted",
+          description: "Related reports and analyses were deactivated.",
+          variant: "success",
+        });
+        setConfirmOpen(false);
+        setConfirmName("");
+        if (nextBrandId) {
+          router.refresh();
+        } else {
+          router.push("/onboarding");
+        }
+      } catch (error) {
+        show({
+          title: "Delete failed",
+          description: error instanceof Error ? error.message : "Unable to delete brand profile.",
           variant: "error",
         });
       }
@@ -85,7 +142,7 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
     }
     startTransition(async () => {
       try {
-        const { link } = await createMagicLinkAction(data.activeBrandId, inviteEmail.trim(), inviteRole);
+        const { link } = await createMagicLinkAction(activeBrandId, inviteEmail.trim(), inviteRole);
         setGeneratedLink(link);
         setInviteEmail("");
         show({ title: "Invite generated", description: "Share the magic link to grant access.", variant: "success" });
@@ -103,7 +160,7 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
   function handleRemoveMember(email: string) {
     startTransition(async () => {
       try {
-        await removeMemberAction(data.activeBrandId, email);
+        await removeMemberAction(activeBrandId, email);
         show({ title: "Member removed", description: `${email} no longer has access.`, variant: "success" });
         router.refresh();
       } catch (error) {
@@ -119,44 +176,13 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
   function handleRevokeInvite(inviteId: string) {
     startTransition(async () => {
       try {
-        await revokeInviteAction(data.activeBrandId, inviteId);
+        await revokeInviteAction(activeBrandId, inviteId);
         show({ title: "Invite revoked", description: "This invite link is no longer valid.", variant: "success" });
         router.refresh();
       } catch (error) {
         show({
           title: "Revoke failed",
           description: error instanceof Error ? error.message : "Unable to revoke invite.",
-          variant: "error",
-        });
-      }
-    });
-  }
-
-  function handleSwitchBrand(brandId: string) {
-    if (brandId === data.activeBrandId) return;
-    startTransition(async () => {
-      try {
-        await switchActiveBrandAction(brandId);
-        router.refresh();
-      } catch (error) {
-        show({
-          title: "Switch failed",
-          description: error instanceof Error ? error.message : "Unable to switch brand.",
-          variant: "error",
-        });
-      }
-    });
-  }
-
-  function handleCreateBrand(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    startTransition(async () => {
-      try {
-        await createBrandProfileAction(newBrandName.trim() || undefined);
-      } catch (error) {
-        show({
-          title: "Creation failed",
-          description: error instanceof Error ? error.message : "Unable to create brand profile.",
           variant: "error",
         });
       }
@@ -178,6 +204,63 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
               Save name
             </Button>
           </Flex>
+          {data.profile && (
+            <Grid columns={{ initial: "1", sm: "2" }} gap="3">
+              <Detail label="Brand ID" value={data.profile.id} monospace />
+              <Detail label="Created" value={formattedProfileDates?.createdAt ?? "—"} />
+              <Detail label="Last updated" value={formattedProfileDates?.updatedAt ?? "—"} />
+            </Grid>
+          )}
+          {canDelete && (
+            <Box className="border border-red-6/60 bg-red-3/40 dark:bg-red-3/10 rounded-md p-4">
+              <Flex align="center" justify="between" gap="4" wrap="wrap">
+                <div className="space-y-1">
+                  <Heading size="3">Delete brand profile</Heading>
+                  <Text size="2" color="red">
+                    Permanently removes this brand profile and deactivates linked reports and analyses.
+                  </Text>
+                </div>
+                <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+                  <Dialog.Trigger>
+                    <Button color="red" variant="solid" disabled={isPending || !data.profile}>
+                      Delete brand profile
+                    </Button>
+                  </Dialog.Trigger>
+                  <Dialog.Content maxWidth="420px">
+                    <Dialog.Title>Delete this brand profile?</Dialog.Title>
+                    <Dialog.Description>
+                      Type the brand name below to confirm. Related reports and strategic analyses will be deactivated.
+                    </Dialog.Description>
+                    <Flex direction="column" gap="2" className="mt-3">
+                      <Text size="2" color="gray">
+                        Brand name
+                      </Text>
+                      <TextField.Root
+                        placeholder={brandName}
+                        value={confirmName}
+                        onChange={event => setConfirmName(event.target.value)}
+                      />
+                    </Flex>
+                    <Flex justify="end" gap="3" className="mt-4">
+                      <Button variant="soft" onClick={() => setConfirmOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button color="red" onClick={handleDeleteBrandProfile} disabled={isPending}>
+                        Confirm delete
+                      </Button>
+                    </Flex>
+                  </Dialog.Content>
+                </Dialog.Root>
+              </Flex>
+            </Box>
+          )}
+          {!canDelete && (
+            <Callout.Root color="amber">
+              <Callout.Text>
+                Only brand owners or admins can delete this brand profile. Ask an owner to perform this action.
+              </Callout.Text>
+            </Callout.Root>
+          )}
         </CardSection>
       </form>
 
@@ -305,55 +388,6 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
         )}
       </CardSection>
 
-      <CardSection
-        title="Brand profiles"
-        description="Switch between brands or create a new one to start onboarding again."
-      >
-        <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-          {data.brandSummaries.map(brand => (
-            <Flex
-              key={brand.id}
-              direction="column"
-              gap="2"
-              className="border border-gray-200 dark:border-gray-700 rounded-lg p-3"
-            >
-              <Flex justify="between" align="center">
-                <Heading size="4">{brand.name || "Untitled brand"}</Heading>
-                {brand.id === data.activeBrandId && <Badge color="violet">Active</Badge>}
-              </Flex>
-              <Flex justify="between" align="center">
-                <Text color="gray" size="2">
-                  {brand.completed ? "Ready for campaign operations" : "Finish onboarding"}
-                </Text>
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={() => handleSwitchBrand(brand.id)}
-                  disabled={brand.id === data.activeBrandId || isPending}
-                >
-                  {brand.id === data.activeBrandId ? "Current" : "Switch"}
-                </Button>
-              </Flex>
-            </Flex>
-          ))}
-        </Grid>
-        <form onSubmit={handleCreateBrand}>
-          <Flex gap="3" align="center" wrap="wrap">
-            <TextField.Root
-              placeholder="New brand name"
-              value={newBrandName}
-              onChange={event => setNewBrandName(event.target.value)}
-              className="min-w-[260px]"
-            />
-            <Button type="submit" disabled={isPending}>
-              Create new brand
-            </Button>
-          </Flex>
-          <Text size="1" color="gray">
-            Creating a brand launches onboarding so you can configure integrations and brand assets.
-          </Text>
-        </form>
-      </CardSection>
     </Flex>
   );
 }
@@ -363,6 +397,23 @@ type CardSectionProps = {
   description: string;
   children: React.ReactNode;
 };
+
+type DetailProps = {
+  label: string;
+  value: string;
+  monospace?: boolean;
+};
+
+function Detail({ label, value, monospace }: DetailProps) {
+  return (
+    <Box>
+      <Text size="1" color="gray">
+        {label}
+      </Text>
+      <Text className={monospace ? "font-mono break-all" : undefined}>{value}</Text>
+    </Box>
+  );
+}
 
 function CardSection({ title, description, children }: CardSectionProps) {
   return (

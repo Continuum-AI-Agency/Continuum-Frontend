@@ -351,7 +351,7 @@ async function upsertMetadataRows(
     user_id: userId,
     brand_id: brandId,
     state,
-    is_active: metadata.activeBrandId === brandId,
+    is_active: false,
     updated_at: now,
   }));
 
@@ -390,6 +390,52 @@ async function upsertMetadataRows(
   }
 }
 
+async function deactivateActiveBrand(
+  supabase: SupabaseOnboardingClient,
+  userId: string,
+  excludeBrandId?: string
+): Promise<void> {
+  const { error } = await supabase
+    .schema(ONBOARDING_SCHEMA)
+    .from(ONBOARDING_TABLE)
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("is_active", true)
+    .neq("brand_id", excludeBrandId ?? "");
+
+  if (error && error.code !== "PGRST116") {
+    throw error;
+  }
+}
+
+async function upsertActiveBrand(
+  supabase: SupabaseOnboardingClient,
+  userId: string,
+  brandId: string,
+  state: OnboardingState
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .schema(ONBOARDING_SCHEMA)
+    .from(ONBOARDING_TABLE)
+    .upsert(
+      [
+        {
+          user_id: userId,
+          brand_id: brandId,
+          state,
+          is_active: true,
+          updated_at: now,
+        },
+      ],
+      { onConflict: "user_id,brand_id" }
+    );
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function persistMetadata(
   supabase: SupabaseOnboardingClient,
   user: User,
@@ -397,6 +443,16 @@ async function persistMetadata(
 ): Promise<void> {
   ensureActiveSelection(metadata);
   await upsertMetadataRows(supabase, user.id, metadata);
+
+  // Set the single active brand in a separate step to avoid partial unique index conflicts.
+  if (metadata.activeBrandId) {
+    await deactivateActiveBrand(supabase, user.id, metadata.activeBrandId);
+    const activeState = metadata.brands[metadata.activeBrandId];
+    if (activeState) {
+      await upsertActiveBrand(supabase, user.id, metadata.activeBrandId, activeState);
+    }
+  }
+
   await updateUserOnboardingMetadata(supabase, metadata.activeBrandId ?? null);
 }
 
@@ -604,11 +660,22 @@ export async function updateConnectionAccounts(
 
 export async function setActiveBrand(brandId: string): Promise<OnboardingState> {
   const context = await loadOnboardingContext(brandId);
-  if (context.metadata.activeBrandId !== brandId) {
-    context.metadata.activeBrandId = brandId;
-    await persistMetadata(context.supabase, context.user, context.metadata);
+  const targetState = context.metadata.brands[brandId];
+  if (!targetState) {
+    throw new Error("Brand not found");
   }
-  return context.metadata.brands[brandId];
+
+  if (context.metadata.activeBrandId === brandId) {
+    return targetState;
+  }
+
+  await deactivateActiveBrand(context.supabase, context.user.id, brandId);
+  await upsertActiveBrand(context.supabase, context.user.id, brandId, targetState);
+
+  context.metadata.activeBrandId = brandId;
+  await updateUserOnboardingMetadata(context.supabase, brandId);
+
+  return targetState;
 }
 
 export async function createBrandProfile(
@@ -625,6 +692,39 @@ export async function createBrandProfile(
   await persistMetadata(supabase, user, metadata);
   await ensureBrandProfileRecord(supabase, brandId, owner, state);
   return { brandId, state };
+}
+
+export async function deleteBrandFromMetadata(
+  brandId: string
+): Promise<{ nextActiveBrandId: string | null }> {
+  const { supabase, user } = await getAuthContext();
+  const metadata = await fetchMetadataFromTable(supabase, user.id);
+
+  if (!metadata.brands[brandId]) {
+    return { nextActiveBrandId: metadata.activeBrandId ?? null };
+  }
+
+  delete metadata.brands[brandId];
+  if (metadata.activeBrandId === brandId) {
+    metadata.activeBrandId = null;
+  }
+
+  ensureActiveSelection(metadata);
+
+  const { error: deleteStateError } = await supabase
+    .schema(ONBOARDING_SCHEMA)
+    .from(ONBOARDING_TABLE)
+    .delete()
+    .eq("user_id", user.id)
+    .eq("brand_id", brandId);
+
+  if (deleteStateError) {
+    throw deleteStateError;
+  }
+
+  await persistMetadata(supabase, user, metadata);
+
+  return { nextActiveBrandId: metadata.activeBrandId ?? null };
 }
 
 export async function renameBrandProfile(

@@ -12,6 +12,19 @@ export const aiStudioAspectRatioSchema = z
   .string()
   .regex(/^\d{1,2}:\d{1,2}$/, "Aspect ratio must be formatted as W:H");
 
+// Supported aspect ratios per provider/medium. Keep in sync with upstream model docs.
+export const providerAspectRatioOptions: Record<AiStudioProvider, Partial<Record<AiStudioMedium, readonly string[]>>> = {
+  "nano-banana": {
+    image: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const,
+  },
+  "veo-3-1": {
+    video: ["16:9", "9:16"] as const,
+  },
+  "sora-2": {
+    video: ["16:9", "9:16", "1:1"] as const,
+  },
+};
+
 export const aiStudioJobStatusSchema = z.enum([
   "queued",
   "processing",
@@ -92,6 +105,17 @@ export const aiStudioGenerationRequestSchema = z.object({
   guidanceScale: z.number().min(0).max(20).optional(),
   seed: z.number().int().nonnegative().optional(),
   metadata: z.record(z.unknown()).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.aspectRatio) return;
+  const providerOptions = providerAspectRatioOptions[value.provider]?.[value.medium];
+  if (!providerOptions) return;
+  if (!providerOptions.includes(value.aspectRatio)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["aspectRatio"],
+      message: `Aspect ratio ${value.aspectRatio} is not supported for ${value.provider} ${value.medium}. Supported: ${providerOptions.join(", ")}`,
+    });
+  }
 });
 
 export const aiStudioGenerationResponseSchema = z.object({
@@ -109,5 +133,4 @@ export type AiStudioGenerationRequest = z.infer<typeof aiStudioGenerationRequest
 export type AiStudioGenerationResponse = z.infer<typeof aiStudioGenerationResponseSchema>;
 export type AiStudioJobsResponse = z.infer<typeof aiStudioJobsResponseSchema>;
 export type AiStudioTemplatesResponse = z.infer<typeof aiStudioTemplatesResponseSchema>;
-
 
