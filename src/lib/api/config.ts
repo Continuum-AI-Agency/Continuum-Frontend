@@ -4,7 +4,7 @@
  * Priority (Server): API_URL → API_BASE_URL → NEXT_PUBLIC_API_URL → NEXT_PUBLIC_API_BASE_URL
  * Priority (Browser): NEXT_PUBLIC_API_URL → NEXT_PUBLIC_API_BASE_URL → API_URL → API_BASE_URL
  *
- * Falls back to http://localhost:8000 and trims any trailing slash.
+ * Falls back to http://localhost:4000 and trims any trailing slash.
  */
 export function getApiBaseUrl(): string {
   const isBrowser = typeof window !== "undefined";
@@ -22,7 +22,7 @@ export function getApiBaseUrl(): string {
     process.env.API_BASE_URL;
 
   const baseUrl = isBrowser ? clientBase ?? serverBase : serverBase ?? clientBase;
-  return (baseUrl && baseUrl.trim().length > 0 ? baseUrl : "http://localhost:8000").replace(/\/$/, "");
+  return (baseUrl && baseUrl.trim().length > 0 ? baseUrl : "http://localhost:4000").replace(/\/$/, "");
 }
 
 function resolveBaseUrl(envKeys: Array<string | undefined>, fallback: string) {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createClient } from "@supabase/supabase-js";
 import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -19,6 +20,8 @@ export type BrandIntegrationAccountSummary = {
   status: string | null;
   linkedAt: string | null;
   providerIntegrationId: string;
+  type: string | null;
+  settings: Record<string, unknown> | null;
 };
 
 export type BrandIntegrationSummary = Record<
@@ -49,56 +52,54 @@ function resolveAccountName(row: {
 export async function fetchBrandIntegrationSummary(
   brandProfileId: string
 ): Promise<BrandIntegrationSummary> {
-  const supabase = await createSupabaseServerClient();
+  // Prefer service role to avoid RLS blockers on cross-owner integration assets.
+  const supabase =
+    process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? createClient<Database>(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+          { auth: { autoRefreshToken: false, persistSession: false } }
+        )
+      : await createSupabaseServerClient();
 
-  const { data: assignments, error: assignmentsError } = await supabase
+  const { data, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profile_integration_accounts")
-    .select("id, integration_account_id, alias, created_at")
+    .select(
+      `
+      id,
+      alias,
+      created_at,
+      settings,
+      integration_accounts_assets:integration_account_id (
+        id,
+        integration_id,
+        type,
+        name,
+        status,
+        external_account_id
+      )
+    `
+    )
     .eq("brand_profile_id", brandProfileId);
 
-  if (assignmentsError) {
-    console.error("[fetchBrandIntegrationSummary] assignments query failed", assignmentsError);
+  if (error) {
+    console.error("[fetchBrandIntegrationSummary] assignments query failed", error);
     return createEmptySummary();
   }
 
-  if (!assignments || assignments.length === 0) {
+  if (!data || data.length === 0) {
     return createEmptySummary();
-  }
-
-  const integrationAccountIds = Array.from(
-    new Set(assignments.map(assignment => assignment.integration_account_id))
-  );
-
-  const { data: accounts, error: accountsError } = await supabase
-    .schema("brand_profiles")
-    .from("integration_accounts_assets")
-    .select("id, integration_id, type, name, status, external_account_id, created_at")
-    .in("id", integrationAccountIds);
-
-  if (accountsError) {
-    console.error("[fetchBrandIntegrationSummary] accounts query failed", accountsError);
-    return createEmptySummary();
-  }
-
-  const accountRows = (accounts ?? []) as IntegrationAccountAssetRow[];
-  const accountsById = new Map<string, IntegrationAccountAssetRow>();
-  for (const account of accountRows) {
-    accountsById.set(account.id, account);
   }
 
   const summary = createEmptySummary();
 
-  assignments.forEach((assignment: BrandProfileIntegrationRow) => {
-    const account = accountsById.get(assignment.integration_account_id);
-    if (!account) {
-      return;
-    }
+  data.forEach((assignment: any) => {
+    const account = assignment.integration_accounts_assets as IntegrationAccountAssetRow | null;
+    if (!account) return;
 
     const platformKey = mapIntegrationTypeToPlatformKey(account.type ?? undefined);
-    if (!platformKey) {
-      return;
-    }
+    if (!platformKey) return;
 
     const accountName = resolveAccountName({
       alias: assignment.alias ?? null,
@@ -115,7 +116,36 @@ export async function fetchBrandIntegrationSummary(
       status: account.status ?? null,
       linkedAt: assignment.created_at ?? null,
       providerIntegrationId: account.integration_id,
+      type: account.type ?? null,
+      settings: (assignment.settings as Record<string, unknown> | null) ?? null,
     });
+  });
+
+  // Fallback: if a type wasn't mapped but clearly indicates platform, attempt substring mapping.
+  data.forEach((assignment: any) => {
+    const account = assignment.integration_accounts_assets as IntegrationAccountAssetRow | null;
+    if (!account) return;
+    const alreadyIncluded = summary.youtube.accounts.some((a) => a.integrationAccountId === account.id);
+    if (alreadyIncluded) return;
+    const typeGuess = account.type?.toLowerCase() ?? "";
+    if (!mapIntegrationTypeToPlatformKey(account.type) && typeGuess.includes("youtube")) {
+      summary.youtube.accounts.push({
+        assignmentId: assignment.id,
+        integrationAccountId: account.id,
+        alias: assignment.alias ?? null,
+        name: resolveAccountName({
+          alias: assignment.alias ?? null,
+          accountName: account.name ?? null,
+          externalAccountId: account.external_account_id ?? null,
+        }),
+        externalAccountId: account.external_account_id ?? null,
+        status: account.status ?? null,
+        linkedAt: assignment.created_at ?? null,
+        providerIntegrationId: account.integration_id,
+        type: account.type ?? null,
+        settings: (assignment.settings as Record<string, unknown> | null) ?? null,
+      });
+    }
   });
 
   PLATFORM_KEYS.forEach(key => {

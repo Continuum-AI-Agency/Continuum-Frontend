@@ -38,7 +38,7 @@ function NoFlashScript() {
           root.setAttribute('data-theme', 'dark');
           root.style.colorScheme = 'dark';
         } else {
-          root.removeAttribute('data-theme');
+          root.setAttribute('data-theme', 'light');
           root.style.colorScheme = 'light';
         }
       } catch (_) {}
@@ -60,7 +60,7 @@ export default async function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      data-theme={initialAppearance === "dark" ? "dark" : undefined}
+      data-theme={initialAppearance === "dark" ? "dark" : "light"}
       style={{ colorScheme: initialAppearance === "dark" ? "dark" : "light" }}
     >
       <head>

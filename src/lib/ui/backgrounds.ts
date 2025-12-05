@@ -1,4 +1,3 @@
-export const LOGIN_GLOW_GRADIENT = `radial-gradient(circle at 60% 20%, rgba(130, 102, 255, 0.45), transparent 55%),
-  radial-gradient(circle at 30% 80%, rgba(99, 253, 207, 0.35), transparent 60%)`;
-
+export const LOGIN_GLOW_GRADIENT = `radial-gradient(circle at 60% 20%, color-mix(in srgb, var(--accent) 45%, transparent), transparent 55%),
+  radial-gradient(circle at 30% 80%, color-mix(in srgb, var(--secondary) 35%, transparent), transparent 60%)`;
 

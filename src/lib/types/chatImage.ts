@@ -75,6 +75,7 @@ export type StreamState = {
   etaMs?: number;
   currentBase64?: string;
   posterBase64?: string;
+  thumbBase64?: string;
   error?: string;
   lastEvent?: StreamEvent;
 };

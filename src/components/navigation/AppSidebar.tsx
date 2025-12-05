@@ -61,10 +61,9 @@ export function AppSidebar() {
             const active = isRouteActive(pathname, item);
 
             return (
-              <Tooltip.Root delayDuration={200} disableHoverableContent>
+              <Tooltip.Root key={item.href} delayDuration={200} disableHoverableContent>
                 <Tooltip.Trigger asChild>
                   <Link
-                    key={item.href}
                     href={item.href}
                     aria-label={item.label}
                     className={cn(

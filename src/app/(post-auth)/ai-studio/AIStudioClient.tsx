@@ -18,15 +18,8 @@ import {
 import "@xyflow/react/dist/style.css";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import {
-  Badge,
-  Button,
-  Callout,
-  Heading,
-  Text,
-  TextArea,
-  Tabs,
-} from "@radix-ui/themes";
+import { motion } from "framer-motion";
+import { Badge, Button, Callout, Heading, Text, TextArea, Tabs } from "@radix-ui/themes";
 import {
   CheckIcon,
   ExclamationTriangleIcon,
@@ -41,6 +34,8 @@ import {
 
 import { useToast } from "@/components/ui/ToastProvider";
 import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
+import { BrandSwitcherPill } from "@/components/navigation/BrandSwitcherPill";
+import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
 import { createAiStudioJob, getAiStudioJob } from "@/lib/api/aiStudio";
 import {
   providerAspectRatioOptions,
@@ -57,7 +52,6 @@ import {
   type PromptNodeData,
   type StudioNode,
 } from "@/lib/ai-studio/nodeTypes";
-import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
 
 type AIStudioClientProps = {
   brandProfileId: string;
@@ -359,6 +353,7 @@ export default function AIStudioClient({
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
   const [canvasOverlay, setCanvasOverlay] = React.useState(false);
+  const [toolboxPos, setToolboxPos] = React.useState({ x: 96, y: 140 });
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -603,22 +598,33 @@ export default function AIStudioClient({
   const pendingCount = React.useMemo(() => jobs.filter((j) => PENDING_STATUSES.has(j.status)).length, [jobs]);
 
   return (
-    <div className="relative isolate flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden bg-slate-950 text-white">
+    <div className="fixed inset-0 isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
-      <main className="relative z-[1] flex flex-1 flex-col gap-2 px-4 sm:px-8 md:px-10 pt-3 pb-6">
-        <div className="flex items-center justify-between">
-          <Heading size="7" className="text-white">AI Studio</Heading>
-          <Tabs.Root value={activeTab} onValueChange={(v) => setActiveTab(v as "chat" | "canvas")} className="flex items-center gap-2">
-            <Tabs.List>
-              <Tabs.Trigger value="chat">Chat</Tabs.Trigger>
-              <Tabs.Trigger value="canvas">Canvas</Tabs.Trigger>
-            </Tabs.List>
-          </Tabs.Root>
+      <main className="relative z-[1] flex flex-1 flex-col gap-3 px-6 sm:px-10 md:px-16 pt-4 pb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <Heading size="7" className="text-white">AI Studio</Heading>
+            <Text color="gray">Build flows for {brandName}</Text>
+          </div>
+          <div className="flex items-center gap-3">
+            <Tabs.Root value={activeTab} onValueChange={(v) => setActiveTab(v as "chat" | "canvas")}>
+              <Tabs.List>
+                <Tabs.Trigger value="chat">Chat</Tabs.Trigger>
+                <Tabs.Trigger value="canvas">Canvas</Tabs.Trigger>
+              </Tabs.List>
+            </Tabs.Root>
+            <BrandSwitcherPill />
+            <Button size="2" variant="ghost" onClick={handleRefreshJobs} disabled={isRefreshing}>
+              <ReloadIcon /> Refresh
+            </Button>
+          </div>
         </div>
 
         {activeTab === "chat" ? (
-          <ChatSurface brandProfileId={brandProfileId} brandName={brandName} />
+          <div className="flex-1 min-h-0">
+            <ChatSurface brandProfileId={brandProfileId} brandName={brandName} />
+          </div>
         ) : (
           <>
             <header className="flex flex-wrap items-center justify-between gap-3">
@@ -647,7 +653,14 @@ export default function AIStudioClient({
               </Callout.Root>
             ) : null}
 
-            <aside className="pointer-events-auto fixed left-2 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2 shadow-xl">
+            <motion.div
+              className="pointer-events-auto fixed z-40 flex w-40 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2 shadow-xl"
+              drag
+              dragMomentum={false}
+              dragElastic={0.12}
+              initial={toolboxPos}
+              onDragEnd={(_, info) => setToolboxPos({ x: info.point.x, y: info.point.y })}
+            >
               <Text size="2" className="px-2 text-gray-200">
                 Tools
               </Text>
@@ -671,7 +684,7 @@ export default function AIStudioClient({
                   <span>{item.label}</span>
                 </button>
               ))}
-            </aside>
+            </motion.div>
 
             <div className="relative flex-1 min-h-0 overflow-hidden">
               <ReactFlow
@@ -690,14 +703,6 @@ export default function AIStudioClient({
                 <Background />
                 <MiniMap />
                 <Controls />
-                {canvasOverlay ? (
-                  <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur">
-                    <div className="rounded-2xl border border-white/10 bg-slate-900/95 px-6 py-4 text-center shadow-2xl">
-                      <Text size="4" weight="bold" className="text-white">Graph-based image generation coming soon</Text>
-                      <Text color="gray" className="mt-2">Switch to localhost to build flows, or stay tuned for release.</Text>
-                    </div>
-                  </div>
-                ) : null}
               </ReactFlow>
               {canvasOverlay ? (
                 <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur">

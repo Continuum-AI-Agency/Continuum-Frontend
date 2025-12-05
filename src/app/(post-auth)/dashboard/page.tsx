@@ -33,6 +33,14 @@ import { needsOnboardingReminder } from "@/lib/onboarding/reminders";
 export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
+const glassPanelStyle: React.CSSProperties = {
+  backgroundColor: "var(--glass-bg)",
+  borderColor: "var(--glass-border)",
+  boxShadow: "var(--glass-shadow)",
+};
+
+const glassPanelClassName = "backdrop-blur-xl border";
+
 export default async function DashboardPage() {
   const metadata = await fetchOnboardingMetadata();
   const activeBrandId = metadata.activeBrandId ?? null;
@@ -80,7 +88,6 @@ export default async function DashboardPage() {
     <Container
       size="4"
       className="space-y-6"
-      style={{ backgroundColor: "var(--background)", color: "var(--foreground)" }}
     >
       {showOnboardingReminder && (
         <SurfaceCard>
@@ -248,12 +255,9 @@ export default async function DashboardPage() {
 function SurfaceCard({ children }: { children: React.ReactNode }) {
   return (
     <Card
-      className="backdrop-blur-xl"
-      style={{
-        backgroundColor: "var(--card)",
-        border: "1px solid var(--border)",
-        color: "var(--foreground)",
-      }}
+      variant="surface"
+      className={glassPanelClassName}
+      style={glassPanelStyle}
     >
       <Box p="4">{children}</Box>
     </Card>

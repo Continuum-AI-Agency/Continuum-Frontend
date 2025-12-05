@@ -2,7 +2,7 @@
 
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Badge, Button, Callout, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField } from "@radix-ui/themes";
+import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
 import { useForm } from "react-hook-form";
 
@@ -35,9 +35,23 @@ type ChatPanelProps = {
 
 const MODEL_OPTIONS: { value: SupportedModel; label: string; disabled?: boolean }[] = [
   { value: "nano-banana", label: "Nano Banana (Gemini 2.5 Flash Image)" },
+  { value: "gemini-3-pro-image-preview", label: "Nano Banana Pro (Gemini 3 Pro Image Preview)" },
   { value: "veo-3-1", label: "Veo 3.1 (Video)" },
   { value: "veo-3-1-fast", label: "Veo 3.1 Fast (Video)" },
   { value: "sora-2", label: "Sora 2 (Coming soon)", disabled: true },
+];
+
+const NANO_RES_OPTIONS = [
+  { value: "1024x1024", label: "1024 x 1024 (1:1)" },
+  { value: "1344x768", label: "1344 x 768 (16:9)" },
+  { value: "768x1344", label: "768 x 1344 (9:16)" },
+  { value: "1248x832", label: "1248 x 832 (3:2)" },
+  { value: "832x1248", label: "832 x 1248 (2:3)" },
+  { value: "1184x864", label: "1184 x 864 (4:3)" },
+  { value: "864x1184", label: "864 x 1184 (3:4)" },
+  { value: "1152x896", label: "1152 x 896 (5:4)" },
+  { value: "896x1152", label: "896 x 1152 (4:5)" },
+  { value: "1536x672", label: "1536 x 672 (21:9)" },
 ];
 
 export function ChatPanel({
@@ -65,11 +79,12 @@ export function ChatPanel({
       })
     ),
     defaultValues: {
-      model: "veo-3-1",
+      model: "nano-banana",
       prompt: "",
-      aspectRatio: getAspectsForModel("veo-3-1")[0] ?? "16:9",
-      resolution: "720p",
+      aspectRatio: getAspectsForModel("nano-banana")[0] ?? "1:1",
+      resolution: "1024x1024",
       durationSeconds: 8,
+      imageSize: "1K",
     },
     mode: "onSubmit",
   });
@@ -98,12 +113,27 @@ export function ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, aspectOptions, medium]);
 
-  const handleSubmit = form.handleSubmit((values) => {
-    onSubmit(values);
-  });
+  const handleSubmit = form.handleSubmit(
+    (values) => onSubmit(values),
+    (errors) => {
+      const firstError = Object.values(errors)[0];
+      if (firstError?.message) {
+        form.setError("prompt", { message: firstError.message });
+      }
+    }
+  );
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/90 via-slate-900/80 to-slate-950/90 p-4 text-white shadow-2xl">
+    <Card
+      size="3"
+      variant="surface"
+      className="shadow-2xl"
+      style={{
+        backgroundColor: "var(--color-surface)",
+        border: "1px solid var(--gray-6)",
+        color: "var(--gray-12)",
+      }}
+    >
       <div className="flex items-center justify-between mb-3">
         <div className="space-y-0.5">
           <Text weight="medium">Generate</Text>
@@ -145,17 +175,30 @@ export function ChatPanel({
             className="min-h-[120px]"
             disabled={disabled || isStreaming}
           />
+          {form.formState.errors.prompt ? (
+            <Text size="1" color="red" className="block">
+              {form.formState.errors.prompt.message}
+            </Text>
+          ) : null}
         </div>
 
         {model === "nano-banana" ? (
           <div className="space-y-1">
-            <Text size="1" color="gray">Resolution (WxH)</Text>
-            <TextField.Root
-              placeholder="1024x1024"
-              value={form.watch("resolution") ?? ""}
-              onChange={(e) => form.setValue("resolution", e.target.value)}
+            <Text size="1" color="gray">Resolution</Text>
+            <Select.Root
+              value={form.watch("resolution") ?? "1024x1024"}
+              onValueChange={(value) => form.setValue("resolution", value)}
               disabled={disabled || isStreaming}
-            />
+            >
+              <Select.Trigger className="w-full" />
+              <Select.Content>
+                {NANO_RES_OPTIONS.map((opt) => (
+                  <Select.Item key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
           </div>
         ) : medium === "video" ? (
           <div className="space-y-1">
@@ -301,6 +344,6 @@ export function ChatPanel({
           </Button>
         </Flex>
       </form>
-    </div>
+    </Card>
   );
 }

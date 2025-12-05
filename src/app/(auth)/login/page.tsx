@@ -76,7 +76,7 @@ export default function LoginPage() {
     radial-gradient(circle at 30% 80%, rgba(99, 253, 207, 0.35), transparent 60%)`;
 
   return (
-    <div className="min-h-screen flex overflow-hidden bg-slate-950" style={{ backgroundImage: glowGradient }}>
+    <div className="min-h-screen flex overflow-hidden bg-default text-primary" style={{ backgroundImage: glowGradient }}>
       {/* Left Column - Login Form */}
       <div 
         className="w-full lg:w-1/2 flex flex-col" 
@@ -85,7 +85,7 @@ export default function LoginPage() {
         <div className="p-6">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
+            className="inline-flex items-center gap-2 text-secondary hover:text-primary transition-colors group"
           >
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             <span className="text-sm font-medium">Back to home</span>
@@ -113,12 +113,12 @@ export default function LoginPage() {
                 transition={{ duration: 0.3 }}
               >
                 {/* Card */}
-                <div className="bg-slate-950/70 backdrop-blur-xl rounded-3xl border border-white/30 dark:border-white/10 p-8 shadow-2xl">
+                <div className="glass-panel rounded-3xl p-8 shadow-2xl border-subtle">
                   <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-white mb-2">
+                    <h1 className="text-3xl font-bold text-primary mb-2">
                       Welcome back
                     </h1>
-                    <p className="text-gray-400">
+                    <p className="text-secondary">
                       Sign in to continue building smarter, on-brand campaigns.
                     </p>
                   </div>
@@ -145,9 +145,10 @@ export default function LoginPage() {
                         display: 'flex', 
                         justifyContent: 'center', 
                         alignItems: 'center',
-                        backgroundColor: '#2563EB',
+                        backgroundColor: 'var(--primary)',
+                        color: 'var(--primary-foreground)',
                       }}
-                      className="text-white font-semibold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
+                      className="font-semibold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
                     >
                       {isPending ? (
                         <span className="flex items-center justify-center gap-2">
@@ -164,10 +165,10 @@ export default function LoginPage() {
                   {/* Divider */}
                   <div className="relative my-6">
                     <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-700" />
+                      <div className="w-full border-t border-subtle" />
                     </div>
                     <div className="relative flex justify-center">
-                      <span className="bg-slate-800/50 px-4 text-sm text-gray-500">
+                      <span className="bg-surface px-4 text-sm text-secondary">
                         Or continue with
                       </span>
                     </div>
@@ -218,7 +219,8 @@ export default function LoginPage() {
                       type="button"
                       onClick={signInWithLinkedIn}
                       disabled={isPending}
-                      className="flex items-center justify-center gap-2 bg-[#0A66C2] hover:bg-[#004182] text-white font-medium py-3 px-4 rounded-xl shadow-sm hover:shadow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center justify-center gap-2 bg-[#0A66C2] hover:bg-[#004182] font-medium py-3 px-4 rounded-xl shadow-sm hover:shadow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ color: '#fff' }}
                     >
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
@@ -228,29 +230,29 @@ export default function LoginPage() {
                   </div>
 
                   {/* Terms */}
-                  <p className="text-center mt-6 text-xs text-gray-500">
+                  <p className="text-center mt-6 text-xs text-secondary">
                     By continuing, you agree to our{" "}
-                    <Link href="/terms" className="text-white hover:text-gray-200 underline">
+                    <Link href="/terms" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--accent)" }}>
                       Terms of Service
                     </Link>{" "}
                     and{" "}
-                    <Link href="/privacy" className="text-white hover:text-gray-200 underline">
+                    <Link href="/privacy" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--accent)" }}>
                       Privacy Policy
                     </Link>
                   </p>
                 </div>
 
                 {/* Trouble signing in */}
-                <p className="text-center mt-8 text-sm text-gray-400">
+                <p className="text-center mt-8 text-sm text-secondary">
                   Having trouble signing in?
                 </p>
 
                 {/* Sign up link */}
-                <p className="text-center mt-6 text-sm text-gray-400">
+                <p className="text-center mt-6 text-sm text-secondary">
                   Don&apos;t have an account?{" "}
                   <Link
                     href="/signup"
-                    className="font-semibold text-white hover:text-gray-200 transition-colors"
+                    className="font-semibold text-primary hover:opacity-80 transition-colors"
                   >
                     Create an account
                   </Link>
@@ -261,7 +263,7 @@ export default function LoginPage() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3 }}
-                className="bg-slate-950/70 backdrop-blur-xl rounded-3xl border border-white/30 dark:border-white/10 p-8 shadow-2xl"
+                className="glass-panel rounded-3xl p-8 shadow-2xl border-subtle"
               >
                 <EmailSent
                   email={submittedEmail}

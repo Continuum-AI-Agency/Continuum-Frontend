@@ -106,6 +106,14 @@ const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
   { value: "GMT+12:00", label: "GMT+12:00 (NZST)" },
 ];
 
+const glassPanelStyle: React.CSSProperties = {
+  backgroundColor: "var(--glass-bg)",
+  borderColor: "var(--glass-border)",
+  boxShadow: "var(--glass-shadow)",
+};
+
+const glassPanelClassName = "backdrop-blur-xl border";
+
 function normalizeTimezoneValue(input?: string): string {
   if (!input) return "GMT+00:00";
   if (TIMEZONE_OPTIONS.some(o => o.value === input)) return input;
@@ -1908,9 +1916,14 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       );
     }
     return (
-      <Flex wrap="wrap" gap="1">
+      <Flex wrap="wrap" gap="1" className="max-w-full min-w-0">
         {items.map(item => (
-          <Badge key={item} color="gray" variant="soft">
+          <Badge
+            key={item}
+            color="gray"
+            variant="soft"
+            className="max-w-full whitespace-normal break-words text-left leading-snug"
+          >
             {item}
           </Badge>
         ))}
@@ -1919,7 +1932,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   };
 
   const renderPreviewSection = (title: string, content: ReactNode) => (
-    <Box key={title} className="border-t border-white/10 pt-3 first:border-t-0 first:pt-0 min-w-0" style={{ wordBreak: "break-word" }}>
+    <Box
+      key={title}
+      className="border-t pt-3 first:border-t-0 first:pt-0 min-w-0"
+      style={{ wordBreak: "break-word", borderColor: "var(--border)" }}
+    >
       <Text size="2" weight="medium">
         {title}
       </Text>
@@ -1954,7 +1971,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     return (
       <Flex direction="column" gap="2">
         {brandDocuments.map(doc => (
-          <Card key={doc.id} className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+          <Card key={doc.id} className={glassPanelClassName} style={glassPanelStyle}>
             <Flex align="center" justify="between" p="3" gap="3">
               <Flex direction="column" gap="1">
                 <Text weight="medium">{doc.name}</Text>
@@ -2002,7 +2019,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       const connection = state.connections[provider];
       const isConnected = Boolean(connection?.connected);
       return (
-        <Card key={provider} className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+      <Card key={provider} className={glassPanelClassName} style={glassPanelStyle}>
           <Flex direction="column" gap="3" p="4">
             <Flex align="center" justify="between">
               <Flex align="center" gap="2">
@@ -2058,7 +2075,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     };
 
     const ComingSoonProviderCard = ({ provider }: { provider: PlatformKey }) => (
-      <Card key={provider} className="bg-slate-950/60 backdrop-blur-xl border border-white/10 opacity-60">
+      <Card
+        key={provider}
+        className={`${glassPanelClassName} opacity-60`}
+        style={glassPanelStyle}
+      >
         <Flex direction="column" gap="3" p="4">
           <Flex align="center" justify="between">
             <Flex align="center" gap="2">
@@ -2077,7 +2098,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     );
 
     const ComingSoonExtraCard = ({ id, label }: { id: "x"; label: string }) => (
-      <Card key={id} className="bg-slate-950/60 backdrop-blur-xl border border-white/10 opacity-60">
+      <Card
+        key={id}
+        className={`${glassPanelClassName} opacity-60`}
+        style={glassPanelStyle}
+      >
         <Flex direction="column" gap="3" p="4">
           <Flex align="center" justify="between">
             <Flex align="center" gap="2">
@@ -2159,16 +2184,16 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     );
   };
 
-  const renderReviewSummary = () => {
+    const renderReviewSummary = () => {
     const isSummaryActionDisabled = isPending || isPreviewRunning;
     return (
-      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10 w-full max-w-none">
+      <Card className={`${glassPanelClassName} w-full max-w-none`} style={glassPanelStyle}>
         <Flex direction="column" gap="4" p="4">
           <Heading size="4" className="text-white">Review</Heading>
           <Text color="gray">
             Confirm your workspace setup, then generate a preview to stream the AI recommendations before approval.
           </Text>
-          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+          <Card variant="surface" className={glassPanelClassName} style={glassPanelStyle}>
             <Flex direction="column" gap="2" p="3">
               <Text size="2" weight="medium">Brand profile</Text>
               <Text>{state.brand.name}</Text>
@@ -2182,10 +2207,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
               {logoPreviewUrl && (
                 <Flex align="center" gap="2" className="mt-1">
                   <Text size="2" color="gray">Logo:</Text>
-                  <img
+                    <img
                     src={logoPreviewUrl}
                     alt="Brand logo"
-                    className="h-10 w-10 rounded bg-white object-contain p-1 border border-white/10"
+                    className="h-10 w-10 rounded object-contain p-1 border"
+                    style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
                   />
                 </Flex>
               )}
@@ -2207,7 +2233,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             </Flex>
           </Card>
 
-          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+          <Card variant="surface" className={glassPanelClassName} style={glassPanelStyle}>
             <Flex direction="column" gap="2" p="3">
               <Text size="2" weight="medium">Brand documents</Text>
               {brandDocuments.length ? (
@@ -2225,7 +2251,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             </Flex>
           </Card>
 
-          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+          <Card variant="surface" className={glassPanelClassName} style={glassPanelStyle}>
             <Flex direction="column" gap="2" p="3">
               <Text size="2" weight="medium">Connected platforms</Text>
               {connectedKeys.length ? (
@@ -2234,7 +2260,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                     const connection = state.connections[provider];
                     const label = PLATFORMS.find(p => p.key === provider)?.label ?? provider;
                     return (
-                      <Card key={provider} variant="ghost" className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+                      <Card
+                        key={provider}
+                        variant="surface"
+                        className={glassPanelClassName}
+                        style={glassPanelStyle}
+                      >
                         <Flex direction="column" gap="1" p="2">
                           <Flex justify="between">
                             <Text>{label}</Text>
@@ -2423,7 +2454,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     const rightSections = otherSections.filter((_, index) => index % 2 === 1);
 
     return (
-      <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10 w-full max-w-none">
+      <Card className={`${glassPanelClassName} w-full max-w-none`} style={glassPanelStyle}>
         <Flex direction="column" gap="4" p="4">
           <Flex align="center" justify="between">
             <Heading size="4" className="text-white">Preview & Approve</Heading>
@@ -2468,7 +2499,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
           {previewStatusBadges}
 
-          <Card variant="surface" className="bg-slate-950/60 backdrop-blur-xl border border-white/10 w-full max-w-none">
+          <Card
+            variant="surface"
+            className={`${glassPanelClassName} w-full max-w-none`}
+            style={glassPanelStyle}
+          >
             <Flex direction="column" gap="3" p="3">
               {renderPreviewSection(brandProfileSection.title, brandProfileSection.content)}
               <Grid columns={{ initial: "1", md: "2" }} gap="4" className="items-start" style={{ alignItems: "flex-start" }}>
@@ -2533,7 +2568,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           </Tabs.List>
 
           <Tabs.Content value="step-0">
-            <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+            <Card className={glassPanelClassName} style={glassPanelStyle}>
               <form
                 onSubmit={handleSubmit(data => {
                   handleBrandSubmit(data);
@@ -2661,7 +2696,8 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                       <img
                         src={logoPreviewUrl}
                         alt="Brand logo preview"
-                        className="h-16 w-16 rounded bg-white object-contain p-1 border border-white/10"
+                        className="h-16 w-16 rounded object-contain p-1 border"
+                        style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
                       />
                     ) : (
                       <Text size="1" color="gray">No logo uploaded.</Text>
@@ -2800,7 +2836,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           </Tabs.Content>
 
           <Tabs.Content value="step-1">
-            <Card className="bg-slate-950/60 backdrop-blur-xl border border-white/10">
+            <Card className={glassPanelClassName} style={glassPanelStyle}>
               <Flex direction="column" gap="4" p="4">
                 <Flex align="center" justify="between">
                   <Heading size="4" className="text-white">Connect your channels</Heading>

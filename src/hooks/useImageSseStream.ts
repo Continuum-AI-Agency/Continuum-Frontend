@@ -2,34 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ChatImageRequestPayload, StreamEvent, StreamState } from "@/lib/types/chatImage";
+import { getApiUrl } from "@/lib/api/config";
+import type { ChatImageRequestPayload, StreamState } from "@/lib/types/chatImage";
 
 type StartOptions = {
-  initUrl?: string;
-  streamUrl?: string; // optional override; defaults to `${initUrl}/stream` if omitted
+  initUrl?: string; // single endpoint that streams SSE directly on POST
 };
 
 type StartResult = { jobId?: string };
 
-const DEFAULT_INIT = "/api/ai-studio/chat-generate/init";
-const DEFAULT_STREAM = "/api/ai-studio/chat-generate/stream";
+const DEFAULT_INIT = process.env.NEXT_PUBLIC_AI_STUDIO_INIT_URL || getApiUrl("/ai-studio/generate");
 
 export function useImageSseStream() {
   const [state, setState] = useState<StreamState>({ status: "idle" });
-  const eventSourceRef = useRef<EventSource | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   const reset = useCallback(() => {
-    eventSourceRef.current?.close();
     abortRef.current?.abort();
-    eventSourceRef.current = null;
+    readerRef.current?.cancel().catch(() => {});
     abortRef.current = null;
+    readerRef.current = null;
     setState({ status: "idle" });
   }, []);
 
   const cancel = useCallback(() => {
-    eventSourceRef.current?.close();
     abortRef.current?.abort();
+    readerRef.current?.cancel().catch(() => {});
     setState((prev) => ({ ...prev, status: "idle" }));
   }, []);
 
@@ -38,7 +37,6 @@ export function useImageSseStream() {
   const start = useCallback(
     async (payload: ChatImageRequestPayload, options?: StartOptions): Promise<StartResult> => {
       const initUrl = options?.initUrl ?? DEFAULT_INIT;
-      const streamUrlBase = options?.streamUrl ?? DEFAULT_STREAM;
 
       reset();
       setState({ status: "starting" });
@@ -50,51 +48,116 @@ export function useImageSseStream() {
       try {
         const res = await fetch(initUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-        const json = (await res.json()) as { jobId?: string; streamUrl?: string };
-        jobId = json.jobId;
-        const streamUrl = json.streamUrl ?? `${streamUrlBase}${jobId ? `?jobId=${encodeURIComponent(jobId)}` : ""}`;
 
-        const es = new EventSource(streamUrl, { withCredentials: true });
-        eventSourceRef.current = es;
+        if (!res.ok || !res.body) {
+          const body = await res.text();
+          const msg = body.includes("<!DOCTYPE") ? "Init endpoint returned HTML (likely 404). Check API base." : body;
+          throw new Error(`init failed ${res.status}: ${msg.slice(0, 200)}`);
+        }
+
         setState({ status: "streaming", progressPct: 0 });
 
-        es.addEventListener("message", (evt) => {
-          try {
-            const parsed = JSON.parse((evt as MessageEvent<string>).data) as StreamEvent;
-            setState((prev) => {
-              switch (parsed.type) {
-                case "progress":
-                  return { ...prev, status: "streaming", progressPct: parsed.pct, etaMs: parsed.etaMs, lastEvent: parsed };
-                case "chunk":
-                  return { ...prev, currentBase64: parsed.base64, lastEvent: parsed };
-                case "thumbnail":
-                  return { ...prev, posterBase64: parsed.base64, lastEvent: parsed };
-                case "status":
-                  return { ...prev, status: parsed.status === "failed" ? "error" : prev.status, lastEvent: parsed };
-                case "done":
-                  return { ...prev, status: "done", currentBase64: parsed.base64 ?? prev.currentBase64, posterBase64: parsed.posterBase64 ?? prev.posterBase64, lastEvent: parsed };
-                case "error":
-                  return { ...prev, status: "error", error: parsed.message, lastEvent: parsed };
-                default:
-                  return prev;
-              }
-            });
-          } catch (error) {
-            console.error("Failed to parse SSE message", error);
-            setState((prev) => ({ ...prev, status: "error", error: "Stream parse error" }));
-          }
-        });
+        const reader = res.body.getReader();
+        readerRef.current = reader;
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        es.onerror = () => {
-          setState((prev) => ({ ...prev, status: prev.status === "done" ? "done" : "error", error: prev.error ?? "Stream connection error" }));
+        const processChunk = (chunk: string) => {
+          const events = chunk.split("\n\n");
+          buffer = events.pop() ?? "";
+
+          for (const evt of events) {
+            let eventName: string | undefined;
+            const dataLines: string[] = [];
+            for (const line of evt.split("\n")) {
+              if (line.startsWith("event:")) {
+                eventName = line.replace(/^event:\s*/, "").trim();
+              } else if (line.startsWith("data:")) {
+                dataLines.push(line.replace(/^data:\s*/, ""));
+              }
+            }
+            if (!dataLines.length) continue;
+            const jsonStr = dataLines.join("");
+            try {
+              const parsed = JSON.parse(jsonStr) as any;
+              if (parsed.jobId) jobId = parsed.jobId;
+
+              setState((prev) => {
+                switch (eventName) {
+                  case "status":
+                    return { ...prev, status: parsed.phase === "complete" ? "done" : "streaming", lastEvent: parsed };
+                  case "progress":
+                    return { ...prev, status: "streaming", progressPct: parsed.pct ?? prev.progressPct, etaMs: parsed.etaMs, lastEvent: parsed };
+                  case "init":
+                    return { ...prev, lastEvent: parsed };
+                  case "image": {
+                    const imgBase64 = parsed.base64 ?? parsed.data_url?.replace(/^data:image\/[^;]+;base64,/, "");
+                    return {
+                      ...prev,
+                      status: "streaming",
+                      progressPct: parsed.progress ?? 100,
+                      currentBase64: imgBase64 ?? prev.currentBase64,
+                      posterBase64: imgBase64 ?? prev.posterBase64,
+                      thumbBase64: imgBase64 ?? prev.thumbBase64,
+                      lastEvent: parsed,
+                    };
+                  }
+                  case "text":
+                  case "grounding":
+                  case "conversation_append":
+                    return { ...prev, lastEvent: parsed };
+                  case "stored":
+                    return { ...prev, lastEvent: parsed };
+                  case "complete":
+                    return {
+                      ...prev,
+                      status: "done",
+                      progressPct: 100,
+                      thumbBase64: prev.thumbBase64 ?? prev.currentBase64,
+                      lastEvent: parsed,
+                    };
+                  case "error":
+                    return { ...prev, status: "error", error: parsed.message ?? "Stream error", lastEvent: parsed };
+                  case "reset":
+                    return { status: "idle" };
+                  default:
+                    return prev;
+                }
+              });
+            } catch (err) {
+              console.error("Failed to parse SSE message", err, jsonStr.slice(0, 200));
+              setState((prev) => ({ ...prev, status: "error", error: "Stream parse error" }));
+            }
+          }
         };
+
+        const pump = async (): Promise<void> => {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (buffer.trim().length) {
+              processChunk(buffer + "\n\n");
+              buffer = "";
+            }
+            return;
+          }
+          buffer += decoder.decode(value, { stream: true });
+
+          processChunk(buffer);
+
+          await pump();
+        };
+
+        pump().catch((err) => {
+          console.error("stream-read-failed", err);
+          setState((prev) => ({ ...prev, status: "error", error: "Stream ended unexpectedly" }));
+        });
       } catch (error) {
         console.error("stream-start-failed", error instanceof Error ? error.message : error);
         setState({ status: "error", error: error instanceof Error ? error.message : String(error) });

@@ -20,10 +20,8 @@ async function fetchAdminUsers(): Promise<AdminData> {
     redirect("/login");
   }
 
-  const shouldCallEdge = process.env.NEXT_PUBLIC_ENABLE_ADMIN_EDGE === "true";
-  if (!shouldCallEdge) {
-    return { users: [], permissions: [], loadError: "Admin edge functions are disabled. Deploy and enable to load data." };
-  }
+  const enableEdgeEnv = process.env.NEXT_PUBLIC_ENABLE_ADMIN_EDGE;
+  const shouldCallEdge = enableEdgeEnv === undefined || enableEdgeEnv === null || enableEdgeEnv === "" || enableEdgeEnv === "true";
 
   const { data, error } = await server.functions.invoke<{ users: AdminUser[]; permissions: PermissionRow[] }>(
     "admin-list-users",

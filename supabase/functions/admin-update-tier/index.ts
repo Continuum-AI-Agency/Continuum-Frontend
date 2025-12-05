@@ -21,6 +21,8 @@ function json(body: unknown, status = 200) {
 }
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const log = (msg: string, extra?: unknown) => console.log(`[admin-update-tier] ${requestId} ${msg}`, extra ?? "");
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -62,7 +64,11 @@ serve(async (req) => {
       { onConflict: "user_id,brand_profile_id" }
     );
 
-  if (upsertError) return json({ error: upsertError.message }, 500);
+  if (upsertError) {
+    log("upsert failed", { upsertError, userId, brandProfileId, tier: tierValue });
+    return json({ error: upsertError.message }, 500);
+  }
 
+  log("success", { userId, brandProfileId, tier: tierValue });
   return json({ ok: true });
 });

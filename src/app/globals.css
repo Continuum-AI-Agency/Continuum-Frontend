@@ -35,6 +35,13 @@
   --radius: 0.5rem;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --surface-default: var(--background);
+  --surface-accent: var(--card);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --border-subtle: var(--border);
+  --shadow-brand-glow: 0 16px 40px -18px rgba(90, 72, 249, 0.35);
+  --glass-border: rgba(15, 23, 42, 0.08);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-card: var(--card);
@@ -75,6 +82,24 @@ html {
   text-size-adjust: 100%;
 }
 
+/* Semantic theme utilities (align with styleguide) */
+.bg-default { background-color: var(--surface-default); }
+.bg-surface { background-color: var(--surface-accent); }
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.border-subtle { border-color: var(--border-subtle); }
+.shadow-brand-glow { box-shadow: var(--shadow-brand-glow); }
+
+.glass-panel {
+  background-color: color-mix(in srgb, var(--surface-accent) 92%, transparent);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px);
+}
+
+[data-theme="dark"] .glass-panel {
+  background-color: color-mix(in srgb, var(--surface-accent) 78%, transparent);
+}
+
 /* --- Dark Theme (Continuum) --- */
 [data-theme="dark"] {
   color-scheme: dark;
@@ -98,8 +123,14 @@ html {
   --input: rgba(255,255,255,0.10);
   --ring: #8B5CF6;
   --radius: 0.5rem;
-  --glass-bg: rgba(2, 6, 23, 0.60);
+  --surface-default: var(--background);
+  --surface-accent: var(--card);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --border-subtle: var(--border);
+  --shadow-brand-glow: 0 18px 48px -18px rgba(139, 92, 246, 0.45);
   --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-bg: rgba(2, 6, 23, 0.60);
   --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   --bg-galaxy-c1-dark: rgba(160,140,207,0.24);
   --bg-galaxy-c2-dark: rgba(93,42,142,0.18);

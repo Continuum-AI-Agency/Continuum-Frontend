@@ -20,6 +20,8 @@ function json(body: unknown, status = 200) {
 }
 
 serve(async (req) => {
+  const requestId = crypto.randomUUID();
+  const log = (msg: string, extra?: unknown) => console.log(`[admin-set-admin] ${requestId} ${msg}`, extra ?? "");
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -49,7 +51,11 @@ serve(async (req) => {
     app_metadata: { is_admin: isAdmin },
   });
 
-  if (updateError) return json({ error: updateError.message }, 500);
+  if (updateError) {
+    log("updateUserById failed", { updateError });
+    return json({ error: updateError.message }, 500);
+  }
 
+  log("success", { targetUser: userId, isAdmin });
   return json({ ok: true });
 });

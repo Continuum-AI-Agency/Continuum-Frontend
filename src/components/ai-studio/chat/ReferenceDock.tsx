@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge, Box, Button, Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
+import { Badge, Box, Button, Card, Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
 import { ImageIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
 
 import { useToast } from "@/components/ui/ToastProvider";
@@ -112,8 +112,13 @@ export function ReferenceDock({
   );
 
   return (
-    <Box
-      className={`rounded-2xl border ${isDragging ? "border-brand-primary" : "border-white/15"} bg-gradient-to-b from-slate-900/85 via-slate-900/70 to-slate-950/85 p-4 text-white shadow-xl transition min-h-[220px]`}
+    <Card
+      size="3"
+      className={`p-4 shadow-xl transition min-h-[220px] ${isDragging ? "ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]" : ""}`}
+      style={{
+        backgroundColor: "var(--color-surface)",
+        border: `1px solid var(--gray-6)`
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
@@ -163,7 +168,7 @@ export function ReferenceDock({
         <UploadIcon />
         <Text size="1" color="gray">Drag from Creative Library to seed your generation.</Text>
       </Flex>
-    </Box>
+    </Card>
   );
 }
 

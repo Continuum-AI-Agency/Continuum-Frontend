@@ -79,9 +79,9 @@ export function BrandIntegrationsCard({ summary, showHeader = true, isLoading = 
                       const statusColor = resolveStatusColor(account.status);
                       return (
                         <Flex key={account.integrationAccountId} justify="between" align="center">
-                          <Text color="gray" size="2" className="truncate">
-                            {account.name}
-                          </Text>
+                      <Text color="gray" size="2" className="truncate">
+                        {account.name}
+                      </Text>
                           {account.status ? (
                             <Badge color={statusColor} size="1" variant="soft">
                               {account.status}

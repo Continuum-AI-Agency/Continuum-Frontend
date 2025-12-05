@@ -137,7 +137,7 @@ export function getMediumForModel(model: SupportedModel): "image" | "video" {
 export function getAspectsForModel(model: SupportedModel): readonly string[] {
   const medium = modelMedium[model];
   if (model === "gemini-3-pro-image-preview") {
-    return ["1:1", "5:4", "4:5", "16:9", "9:16"] as const;
+    return ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const;
   }
   if (model === "veo-3-1-fast") {
     return providerAspectRatioOptions["veo-3-1"]?.[medium] ?? ["16:9", "9:16"];
