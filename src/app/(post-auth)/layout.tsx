@@ -25,22 +25,32 @@ export default async function DashboardLayout({
   const { data: perms, error: permsError } = await supabase
     .schema("brand_profiles")
     .from("permissions")
-    .select("brand_profile_id, role, tier, brand_profiles!inner(id, brand_name)")
+    .select("brand_profile_id, role, tier")
     .eq("user_id", data.user.id);
 
   if (permsError) {
     console.error("[layout] permissions query failed", permsError);
-    redirect("/login");
   }
 
-  type PermissionRow = {
-    brand_profile_id: string;
-    brand_profiles?: { id: string; brand_name: string | null } | null;
-  };
+  const brandIds = Array.from(new Set((perms ?? []).map((p) => p.brand_profile_id)));
 
-  const permittedBrandSummaries = (perms ?? []).map((p) => ({
-    id: p.brand_profile_id,
-    name: (p as PermissionRow["brand_profiles"] | undefined)?.brand_name ?? "Untitled brand",
+  let brandNameMap = new Map<string, string>();
+  if (brandIds.length > 0) {
+    const { data: brands, error: brandsError } = await supabase
+      .schema("brand_profiles")
+      .from("brand_profiles")
+      .select("id, brand_name")
+      .in("id", brandIds);
+    if (brandsError) {
+      console.error("[layout] brand_profiles lookup failed", brandsError);
+    } else {
+      brandNameMap = new Map((brands ?? []).map((b) => [b.id, b.brand_name ?? "Untitled brand"]));
+    }
+  }
+
+  const permittedBrandSummaries = brandIds.map((id) => ({
+    id,
+    name: brandNameMap.get(id) ?? "Untitled brand",
     completed: true, // assume usable; detailed completion not required for switcher
   }));
 

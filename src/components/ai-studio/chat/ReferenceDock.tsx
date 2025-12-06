@@ -39,6 +39,76 @@ export function ReferenceDock({
 }: ReferenceDockProps) {
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
+  const fileInputRefs = {
+    refs: React.useRef<HTMLInputElement>(null),
+    first: React.useRef<HTMLInputElement>(null),
+    last: React.useRef<HTMLInputElement>(null),
+    video: React.useRef<HTMLInputElement>(null),
+  };
+
+  const fileToBase64 = React.useCallback((file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  }), []);
+
+  const handleLocalFiles = React.useCallback(
+    async (files: FileList | null, slot?: "first" | "last" | "video") => {
+      if (!files || files.length === 0) return;
+      const max = slot ? 1 : maxRefs - refs.length;
+      const slice = Array.from(files).slice(0, Math.max(1, max));
+
+      for (const file of slice) {
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        if (slot === "video") {
+          if (!isVideo) {
+            show({ title: "Unsupported", description: "Reference video must be a video file", variant: "error" });
+            continue;
+          }
+          const base64 = await fileToBase64(file);
+          onChangeReferenceVideo?.({
+            id: `${file.name}-${Date.now()}`,
+            name: file.name,
+            mime: file.type || "video/mp4",
+            base64,
+            filename: file.name,
+          });
+          continue;
+        }
+
+        if (!isImage) {
+          show({ title: "Unsupported", description: "Only image references are supported", variant: "error" });
+          continue;
+        }
+
+        if (!slot && refs.length >= maxRefs) {
+          show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
+          break;
+        }
+
+        const base64 = await fileToBase64(file);
+        const ref: RefImage = {
+          id: `${file.name}-${Date.now()}`,
+          name: file.name,
+          path: file.name,
+          mime: file.type || "image/png",
+          base64,
+          referenceType: mode === "video" ? "asset" : undefined,
+        };
+
+        if (slot === "first") {
+          onChangeFirstFrame?.(ref);
+        } else if (slot === "last") {
+          onChangeLastFrame?.(ref);
+        } else {
+          onChangeRefs([...refs, ref]);
+        }
+      }
+    },
+    [fileToBase64, maxRefs, mode, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, onChangeRefs, refs, show]
+  );
 
   const handleDrop = React.useCallback(
     async (event: React.DragEvent<HTMLDivElement>, slot?: "first" | "last" | "video") => {
@@ -46,6 +116,10 @@ export function ReferenceDock({
       setIsDragging(false);
 
       const dataTransfer = event.dataTransfer;
+      if (dataTransfer.files && dataTransfer.files.length > 0) {
+        await handleLocalFiles(dataTransfer.files, slot);
+        return;
+      }
       const refPayload = dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) || dataTransfer.getData(RF_DRAG_MIME);
       if (!refPayload) return;
 
@@ -112,7 +186,7 @@ export function ReferenceDock({
         show({ title: "Failed to add reference", description: error instanceof Error ? error.message : "Unknown error", variant: "error" });
       }
     },
-    [refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, show]
+    [handleLocalFiles, refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, show]
   );
 
   return (
@@ -138,32 +212,61 @@ export function ReferenceDock({
         <Badge variant="soft" color="gray" size="2">{refs.length} images</Badge>
       </Flex>
 
-      <ScrollArea type="always" scrollbars="horizontal" className="mb-3">
-        <Flex gap="2" wrap="wrap">
-          {refs.map((ref) => (
-            <RefChip
-              key={ref.id}
-              refImage={ref}
-              allowReferenceType={mode === "video"}
-              onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
-              onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
-            />
-          ))}
-          {refs.length === 0 ? (
-            <Text size="1" color="gray">Drop reference images here.</Text>
-          ) : null}
-        </Flex>
-      </ScrollArea>
+      <div className="mb-3 rounded-lg border border-dashed border-white/20 bg-white/5 p-3">
+        <input
+          ref={fileInputRefs.refs}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => void handleLocalFiles(e.target.files)}
+        />
+        <ScrollArea type="always" scrollbars="horizontal" className="mb-3">
+          <Flex gap="2" wrap="wrap">
+            {refs.map((ref) => (
+              <RefChip
+                key={ref.id}
+                refImage={ref}
+                allowReferenceType={mode === "video"}
+                onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
+                onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
+              />
+            ))}
+            {refs.length === 0 ? (
+              <Text size="1" color="gray">Drag, drop, or select images.</Text>
+            ) : null}
+          </Flex>
+        </ScrollArea>
+        <Button size="2" variant="outline" onClick={() => fileInputRefs.refs.current?.click()}>
+          Select images
+        </Button>
+      </div>
 
       {mode === "video" ? (
         <div className="grid grid-cols-3 gap-3">
-          <FrameTile label="First frame" refImage={firstFrame} onDrop={(e) => void handleDrop(e, "first")} onClear={() => onChangeFirstFrame?.()} />
-          <FrameTile label="Last frame" refImage={lastFrame} onDrop={(e) => void handleDrop(e, "last")} onClear={() => onChangeLastFrame?.()} />
+          <FrameTile
+            label="First frame"
+            refImage={firstFrame}
+            onDrop={(e) => void handleDrop(e, "first")}
+            onFile={(files) => void handleLocalFiles(files, "first")}
+            onClear={() => onChangeFirstFrame?.()}
+            inputRef={fileInputRefs.first}
+          />
+          <FrameTile
+            label="Last frame"
+            refImage={lastFrame}
+            onDrop={(e) => void handleDrop(e, "last")}
+            onFile={(files) => void handleLocalFiles(files, "last")}
+            onClear={() => onChangeLastFrame?.()}
+            inputRef={fileInputRefs.last}
+          />
           <VideoTile
             label="Reference video"
             refVideo={referenceVideo}
             onDrop={(e) => void handleDrop(e, "video")}
+            onFile={(files) => void handleLocalFiles(files, "video")}
             onClear={() => onChangeReferenceVideo?.()}
+            inputRef={fileInputRefs.video}
           />
         </div>
       ) : null}
@@ -205,13 +308,36 @@ function RefChip({ refImage, onRemove, allowReferenceType, onTypeChange }: { ref
   );
 }
 
-function FrameTile({ label, refImage, onDrop, onClear }: { label: string; refImage?: RefImage; onDrop: (e: React.DragEvent<HTMLDivElement>) => void; onClear: () => void }) {
+function FrameTile({
+  label,
+  refImage,
+  onDrop,
+  onClear,
+  onFile,
+  inputRef,
+}: {
+  label: string;
+  refImage?: RefImage;
+  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  onClear: () => void;
+  onFile: (files: FileList | null) => void;
+  inputRef: React.RefObject<HTMLInputElement>;
+}) {
   return (
     <div
-      className="flex h-32 flex-col justify-between rounded-lg border border-white/15 bg-white/5 p-2 backdrop-blur"
+      className="flex h-32 flex-col justify-between rounded-lg border border-dashed border-white/20 bg-white/5 p-2 backdrop-blur transition hover:border-white/40"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
+      onClick={() => inputRef.current?.click()}
+      role="button"
     >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files)}
+      />
       <Text size="2" weight="medium">{label}</Text>
       {refImage ? (
         <div className="relative h-full">
@@ -221,7 +347,7 @@ function FrameTile({ label, refImage, onDrop, onClear }: { label: string; refIma
             fill
             unoptimized
             sizes="128px"
-            className="rounded-md object-cover"
+            className="rounded-md object-contain"
           />
           <Button size="1" color="red" variant="surface" className="absolute right-1 top-1" onClick={onClear}>Clear</Button>
         </div>
@@ -234,17 +360,40 @@ function FrameTile({ label, refImage, onDrop, onClear }: { label: string; refIma
   );
 }
 
-function VideoTile({ label, refVideo, onDrop, onClear }: { label: string; refVideo?: { mime: string; base64: string; name?: string }; onDrop: (e: React.DragEvent<HTMLDivElement>) => void; onClear: () => void }) {
+function VideoTile({
+  label,
+  refVideo,
+  onDrop,
+  onClear,
+  onFile,
+  inputRef,
+}: {
+  label: string;
+  refVideo?: { mime: string; base64: string; name?: string };
+  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  onClear: () => void;
+  onFile: (files: FileList | null) => void;
+  inputRef: React.RefObject<HTMLInputElement>;
+}) {
   return (
     <div
-      className="flex h-32 flex-col justify-between rounded-lg border border-white/15 bg-white/5 p-2 backdrop-blur"
+      className="flex h-32 flex-col justify-between rounded-lg border border-dashed border-white/20 bg-white/5 p-2 backdrop-blur transition hover:border-white/40"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
+      onClick={() => inputRef.current?.click()}
+      role="button"
     >
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => onFile(e.target.files)}
+      />
       <Text size="2" weight="medium">{label}</Text>
       {refVideo ? (
         <div className="relative h-full">
-          <video src={`data:${refVideo.mime};base64,${refVideo.base64}`} className="h-full w-full rounded-md object-cover" muted />
+          <video src={`data:${refVideo.mime};base64,${refVideo.base64}`} className="h-full w-full rounded-md object-contain" muted />
           <Button size="1" color="red" variant="surface" className="absolute right-1 top-1" onClick={onClear}>Clear</Button>
         </div>
       ) : (

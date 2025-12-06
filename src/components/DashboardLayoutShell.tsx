@@ -40,7 +40,7 @@ export default function DashboardLayoutShell({
           <DashboardHeader onOpenMobile={() => setMobileOpen(true)} />
 
           <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="max-w-[1200px] mx-auto w-full">{children}</div>
+            <div className="max-w-[1600px] mx-auto w-full">{children}</div>
           </main>
         </div>
       </div>

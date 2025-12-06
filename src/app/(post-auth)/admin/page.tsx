@@ -44,13 +44,13 @@ export default async function AdminPage() {
   const { users, permissions, loadError } = await fetchAdminUsers();
 
   return (
-    <div className="py-8 px-4 sm:px-8 w-full max-w-[1400px] mx-auto">
-      <Flex direction="column" gap="5">
+    <div className="py-10 px-4 sm:px-8 lg:px-12 w-full">
+      <Flex direction="column" gap="6">
         <div>
-          <Heading size="7">Admin</Heading>
-          <Text color="gray">Manage users, impersonate, and adjust tiers.</Text>
+          <Heading size="8">Admin</Heading>
+          <Text color="gray" size="3">Manage users, impersonate, and adjust tiers.</Text>
         </div>
-        <GlassPanel className="p-5">
+        <GlassPanel className="p-6 lg:p-8">
           {loadError ? (
             <Text color="red" className="mb-3">
               {loadError}

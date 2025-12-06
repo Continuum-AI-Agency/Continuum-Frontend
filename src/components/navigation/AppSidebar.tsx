@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import type { AppNavigationItem } from "./routes";
 import { APP_NAVIGATION } from "./routes";
 import { cn } from "@/lib/utils";
+import { CurrentUserAvatar } from "@/components/current-user-avatar";
 
 function isRouteActive(currentPath: string, item: AppNavigationItem) {
   if (item.href === "/dashboard") {
@@ -98,8 +99,8 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer Area */}
-      <Box className="border-t border-[var(--color-border)] p-4 flex justify-center text-slate-500">
-        ?
+      <Box className="border-t border-[var(--color-border)] p-4 flex justify-center">
+        <CurrentUserAvatar size={44} />
       </Box>
     </motion.aside>
     </Tooltip.Provider>

@@ -19,9 +19,9 @@ function buildBackendUrl(path: string): URL {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { jobId: string } }
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
-  const jobId = params.jobId;
+  const { jobId } = await params;
   if (!jobId) {
     return NextResponse.json({ error: "jobId is required" }, { status: 400 });
   }
@@ -90,5 +90,4 @@ export async function GET(
     );
   }
 }
-
 

@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useRef, useTransition, useState } from "react";
 import { Badge, Box, Button, Card, Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
 import { useStartGoogleSync, useStartMetaSync } from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 import { useRouter } from "next/navigation";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { CurrentUserAvatar } from "@/components/current-user-avatar";
+import { useCurrentUserAvatar } from "@/hooks/useCurrentUserAvatar";
 
 type UserProfile = {
   email: string;
@@ -23,8 +26,12 @@ export function UserSettingsPanel({ user, integrations }: Props) {
   const { show } = useToast();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [isUploading, setIsUploading] = useState(false);
   const metaSync = useStartMetaSync();
   const googleSync = useStartGoogleSync();
+  const supabase = createSupabaseBrowserClient();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { user: supabaseUser, avatarUrl, initials, refresh } = useCurrentUserAvatar();
 
   const personalIntegrations = useMemo(() => integrations, [integrations]);
 
@@ -75,14 +82,58 @@ export function UserSettingsPanel({ user, integrations }: Props) {
     show({ title: "Refreshing", description: "Updating your integrations…", variant: "default" });
   };
 
+  const handleUploadAvatar = async (file?: File | null) => {
+    if (!file || !supabaseUser) return;
+    const ext = file.name.split(".").pop() ?? "jpg";
+    const path = `avatars/${supabaseUser.id}-${Date.now()}.${ext}`;
+    setIsUploading(true);
+    try {
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      await supabase.auth.updateUser({ data: { avatar_url: path } });
+      await refresh();
+      show({ title: "Avatar updated", description: "Your profile image has been refreshed.", variant: "success" });
+    } catch (error) {
+      show({
+        title: "Avatar upload failed",
+        description: error instanceof Error ? error.message : "Could not upload avatar.",
+        variant: "error",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <Flex direction="column" gap="6">
       <Box className="rounded-lg border border-gray-200 dark:border-gray-700 p-5 space-y-3">
         <Heading size="5">Your profile</Heading>
         <Text color="gray">These details are tied to your login and personal integrations.</Text>
-        <Grid columns={{ initial: "1", sm: "2" }} gap="3">
+        <Flex align="center" gap="4" wrap="wrap">
+          <CurrentUserAvatar size={64} />
+          <Flex direction="column" gap="2">
+            <Button
+              variant="surface"
+              disabled={isUploading || !supabaseUser}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isUploading ? "Uploading…" : avatarUrl ? "Change avatar" : "Upload avatar"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleUploadAvatar(e.target.files?.[0])}
+            />
+            <Text size="1" color="gray">
+              PNG, JPG, or GIF. Max 5MB.
+            </Text>
+          </Flex>
+        </Flex>
+        <Grid columns={{ initial: "1", sm: "2" }} gap="3" className="mt-4">
           <Detail label="Email" value={user.email} />
-          <Detail label="Name" value={user.name ?? "—"} />
+          <Detail label="Name" value={user.name ?? initials ?? "—"} />
           <Detail label="Last sign in" value={user.lastSignIn ? new Date(user.lastSignIn).toLocaleString() : "—"} />
         </Grid>
       </Box>

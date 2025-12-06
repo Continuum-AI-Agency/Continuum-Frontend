@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ const PostCard = ({ post }: PostCardProps) => {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const handleImageError = () => {
     setImageError(true);
@@ -57,8 +58,17 @@ const PostCard = ({ post }: PostCardProps) => {
     }
   };
 
-  const handleVideoClick = () => {
-    setIsVideoPlaying(!isVideoPlaying);
+  const handleVideoEnter = () => {
+    setIsVideoPlaying(true);
+    void videoRef.current?.play();
+  };
+
+  const handleVideoLeave = () => {
+    setIsVideoPlaying(false);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
   };
 
   const currentMedia = post.media[currentMediaIndex];
@@ -74,25 +84,27 @@ const PostCard = ({ post }: PostCardProps) => {
       {/* Media Section */}
       <div className="relative aspect-square bg-muted">
         {isVideo && currentMedia?.video_url && !imageError ? (
-          <div className="relative w-full h-full">
+          <div
+            className="relative w-full h-full"
+            onMouseEnter={handleVideoEnter}
+            onMouseLeave={handleVideoLeave}
+          >
             <video
+              ref={videoRef}
               src={currentMedia.video_url}
               poster={currentMedia.display_url}
               className="w-full h-full object-cover"
-              controls={isVideoPlaying}
+              controls={false}
               muted
               playsInline
               onError={handleImageError}
             />
             {!isVideoPlaying && (
-              <button
-                onClick={handleVideoClick}
-                className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors"
-              >
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
                 <div className="bg-white/90 rounded-full p-3">
                   <Play className="h-6 w-6 text-black" />
                 </div>
-              </button>
+              </div>
             )}
           </div>
         ) : (
@@ -278,10 +290,12 @@ export const CompetitorPostGrid = ({ posts, pagination, onPageChange, isLoading 
   return (
     <div className="space-y-6">
       {/* Posts Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="max-h-[80vh] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {posts.map((post) => (
           <PostCard key={post.post_id} post={post} />
         ))}
+        </div>
       </div>
 
       {/* Pagination */}
