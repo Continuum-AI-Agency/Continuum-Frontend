@@ -171,39 +171,46 @@ export function DashboardHeader({
 
                 <DropdownMenu.Separator />
 
-                <DropdownMenu.Item asChild>
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-2">
-                      <MoonIcon />
-                      <Text>Dark mode</Text>
-                    </div>
-                    <Switch
-                      checked={appearance === "dark"}
-                      onCheckedChange={toggle}
-                      size="1"
-                      aria-label="Toggle dark mode"
-                    />
+                <DropdownMenu.Item
+                  className="flex items-center justify-between w-full"
+                  onSelect={(e) => e.preventDefault()}
+                >
+                  <div className="flex items-center gap-2">
+                    <MoonIcon />
+                    <Text>Dark mode</Text>
                   </div>
+                  <Switch
+                    checked={appearance === "dark"}
+                    onCheckedChange={toggle}
+                    size="1"
+                    aria-label="Toggle dark mode"
+                  />
                 </DropdownMenu.Item>
 
-                <DropdownMenu.Item asChild>
-                  <Link href="/settings" className="flex items-center gap-2">
-                    <GearIcon />
-                    Settings
-                  </Link>
+                <DropdownMenu.Item
+                  className="flex items-center gap-2"
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => (window.location.href = "/settings")}
+                >
+                  <GearIcon />
+                  Settings
                 </DropdownMenu.Item>
-                <DropdownMenu.Item asChild>
-                  <Link href="/settings/integrations" className="flex items-center gap-2">
-                    <MixerHorizontalIcon />
-                    Integrations
-                  </Link>
+                <DropdownMenu.Item
+                  className="flex items-center gap-2"
+                  onSelect={(e) => e.preventDefault()}
+                  onClick={() => (window.location.href = "/settings/integrations")}
+                >
+                  <MixerHorizontalIcon />
+                  Integrations
                 </DropdownMenu.Item>
                 {isAdmin && (
-                  <DropdownMenu.Item asChild>
-                    <Link href="/admin" className="flex items-center gap-2">
-                      <CheckCircledIcon />
-                      Admin
-                    </Link>
+                  <DropdownMenu.Item
+                    className="flex items-center gap-2"
+                    onSelect={(e) => e.preventDefault()}
+                    onClick={() => (window.location.href = "/admin")}
+                  >
+                    <CheckCircledIcon />
+                    Admin
                   </DropdownMenu.Item>
                 )}
 

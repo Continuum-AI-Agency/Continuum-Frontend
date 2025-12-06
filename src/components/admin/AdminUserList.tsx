@@ -79,14 +79,14 @@ export function AdminUserList({ users, permissions }: Props) {
         </TextField.Root>
       </Flex>
 
-      <div className="w-full overflow-hidden rounded-xl border border-white/10 bg-[#0f1116] shadow-[0_12px_50px_-24px_rgba(0,0,0,0.7)]">
-        <div className="grid grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-3 px-5 py-3 border-b border-white/10 text-sm text-gray-300 uppercase tracking-[0.04em]">
+      <div className="w-full overflow-hidden rounded-xl border border-[var(--gray-6)] bg-[var(--color-panel)] shadow-[0_12px_50px_-24px_rgba(0,0,0,0.35)]">
+        <div className="grid grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-3 px-5 py-3 border-b border-[var(--gray-6)] text-sm text-[var(--gray-11)] uppercase tracking-[0.04em]">
           <span>Users</span>
           <span>Brands</span>
           <span>Tier</span>
           <span className="text-right pr-2">Actions</span>
         </div>
-        <div className="divide-y divide-white/10">
+        <div className="divide-y divide-[var(--gray-6)]">
           {filteredUsers.map((user) => {
             const memberships = permissions.filter((p) => p.user_id === user.id);
             const tierLabel = memberships
@@ -96,10 +96,10 @@ export function AdminUserList({ users, permissions }: Props) {
               .join(", ") || "None";
 
             return (
-              <div key={user.id} className="px-5 py-4 hover:bg-white/5 transition-colors">
+              <div key={user.id} className="px-5 py-4 hover:bg-[var(--gray-3)] transition-colors">
                 <div className="grid grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-3 items-center">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-white/10 text-white grid place-items-center text-sm font-semibold">
+                    <div className="h-9 w-9 rounded-full bg-[var(--gray-4)] text-[var(--gray-12)] grid place-items-center text-sm font-semibold">
                       {(user.name ?? user.email).slice(0, 2).toUpperCase()}
                     </div>
                     <div>
@@ -115,26 +115,26 @@ export function AdminUserList({ users, permissions }: Props) {
                         No brand memberships
                       </Text>
                     ) : (
-                      <Accordion.Root type="single" collapsible>
-                        <Accordion.Item value="brands">
-                          <Accordion.Trigger>
-                            <Text size="2" weight="medium">
-                              {memberships.length} brand{memberships.length > 1 ? "s" : ""} • expand
-                            </Text>
-                          </Accordion.Trigger>
-                          <Accordion.Content>
-                            <Flex direction="column" gap="2" className="pt-2">
-                              {memberships.map((m) => (
-                                <Flex
-                                  key={`${m.user_id}-${m.brand_profile_id}`}
-                                  justify="between"
-                                  align="center"
-                                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"
-                                  gap="3"
-                                  wrap="wrap"
-                                >
-                                  <div>
-                                    <Text weight="medium">{m.brand_name ?? m.brand_profile_id}</Text>
+                        <Accordion.Root type="single" collapsible>
+                          <Accordion.Item value="brands">
+                            <Accordion.Trigger>
+                              <Text size="2" weight="medium">
+                                {memberships.length} brand{memberships.length > 1 ? "s" : ""} • expand
+                              </Text>
+                            </Accordion.Trigger>
+                            <Accordion.Content>
+                              <Flex direction="column" gap="2" className="pt-2">
+                                {memberships.map((m) => (
+                                  <Flex
+                                    key={`${m.user_id}-${m.brand_profile_id}`}
+                                    justify="between"
+                                    align="center"
+                                    className="rounded-lg border border-[var(--gray-6)] bg-[var(--gray-3)] px-3 py-2"
+                                    gap="3"
+                                    wrap="wrap"
+                                  >
+                                    <div>
+                                      <Text weight="medium">{m.brand_name ?? m.brand_profile_id}</Text>
                                     <Text color="gray" size="2">
                                       Role: {m.role ?? "unknown"}
                                     </Text>
@@ -143,13 +143,13 @@ export function AdminUserList({ users, permissions }: Props) {
                                     <Text size="2" color="gray">
                                       Tier
                                     </Text>
-                                    <select
-                                      className="bg-slate-900 border border-white/15 rounded px-2 py-1 text-sm"
-                                      defaultValue={m.tier ?? ""}
-                                      onChange={(e) =>
-                                        startTransition(async () => {
-                                          const value = e.target.value === "" ? null : Number(e.target.value);
-                                          try {
+                                      <select
+                                        className="bg-[var(--color-panel)] border border-[var(--gray-6)] rounded px-2 py-1 text-sm"
+                                        defaultValue={m.tier ?? ""}
+                                        onChange={(e) =>
+                                          startTransition(async () => {
+                                            const value = e.target.value === "" ? null : Number(e.target.value);
+                                            try {
                                             const { error } = await supabase.functions.invoke("admin-update-tier", {
                                               method: "POST",
                                               body: { userId: m.user_id, brandProfileId: m.brand_profile_id, tier: value },
