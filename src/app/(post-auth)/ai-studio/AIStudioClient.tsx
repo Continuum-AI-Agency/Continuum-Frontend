@@ -229,9 +229,14 @@ const GeneratorNode = ({ id, data, selected }: { id: string; data: GeneratorNode
         </div>
 
         <div className="mt-3 flex items-center justify-between">
-          <Badge size="1" variant="surface" color={data.status ? JOB_STATUS_META[data.status].color : "gray"}>
-            {data.status ?? "idle"}
-          </Badge>
+          {(() => {
+            const meta = data.status ? JOB_STATUS_META[data.status as keyof typeof JOB_STATUS_META] : undefined;
+            return (
+              <Badge size="1" variant="surface" color={meta?.color ?? "gray"}>
+                {data.status ?? "idle"}
+              </Badge>
+            );
+          })()}
           <Button size="2" onClick={() => window.dispatchEvent(new CustomEvent("node:generate", { detail: { id } }))}>
             <PaperPlaneIcon /> Generate
           </Button>
