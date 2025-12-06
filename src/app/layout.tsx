@@ -4,7 +4,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@radix-ui/themes/styles.css";
 import { ThemeProvider } from "../components/theme-provider";
-import ThemeToggle from "../components/theme-toggle";
 import GalaxyBackground from "../components/ui/GalaxyBackground";
 import { ToastProvider } from "../components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";

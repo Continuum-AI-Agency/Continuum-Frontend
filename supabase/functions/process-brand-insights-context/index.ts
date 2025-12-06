@@ -65,8 +65,11 @@ function validateEnv(): string | null {
   return null;
 }
 
-function validatePayload(body: any): { ok: true; data: InsightsData } | { ok: false; error: string } {
-  const { brand_id, generation_data } = body ?? {};
+function validatePayload(body: unknown): { ok: true; data: InsightsData } | { ok: false; error: string } {
+  if (!body || typeof body !== "object") {
+    return { ok: false, error: "Payload must be an object." };
+  }
+  const { brand_id, generation_data } = body as Record<string, unknown>;
   if (!generation_data || !brand_id) {
     return { ok: false, error: "brand_id and generation_data are required." };
   }
@@ -227,8 +230,9 @@ serve(async (req) => {
       stats: { trends: totalTrends, events: totalEvents, questions: totalQuestions },
       failed: { trends: failedTrends, events: failedEvents, questions: failedQuestions },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error processing brand insights context:", error);
-    return jsonResponse({ error: error?.message ?? "Unexpected error" }, 500);
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    return jsonResponse({ error: message }, 500);
   }
 });

@@ -189,7 +189,7 @@ function promoteCompletedJobs(jobs: AiStudioJob[]): AiStudioJob[] {
   const nextJobs = jobs.map((job) => {
     if ((job.status === "queued" || job.status === "processing") && now - Date.parse(job.createdAt) > 4_000) {
       mutated = true;
-      const artifact =
+      const nextArtifacts =
         job.artifacts.length > 0
           ? job.artifacts
           : [SAMPLE_ARTIFACTS[job.provider] ?? SAMPLE_ARTIFACTS["nano-banana"]];
@@ -197,7 +197,7 @@ function promoteCompletedJobs(jobs: AiStudioJob[]): AiStudioJob[] {
       return {
         ...job,
         status: "completed",
-        artifacts,
+        artifacts: nextArtifacts,
         updatedAt: new Date().toISOString(),
         metadata: {
           ...job.metadata,
@@ -284,5 +284,4 @@ export function markFallbackJobErrored(
 
   fallbackJobsStore.set(brandProfileId, nextJobs);
 }
-
 

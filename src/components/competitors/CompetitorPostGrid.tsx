@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,8 +15,7 @@ import {
   Calendar,
   Hash,
   MapPin,
-  Play,
-  Pause
+  Play
 } from 'lucide-react';
 import { CompetitorPost } from '@/types/competitor-types';
 import { CompetitorService } from '@/services/competitorService';
@@ -96,10 +96,13 @@ const PostCard = ({ post }: PostCardProps) => {
             )}
           </div>
         ) : (
-          <img
+          <Image
             src={displayUrl}
             alt={post.accessibility_caption || 'Instagram post'}
-            className="w-full h-full object-cover"
+            fill
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 25vw"
+            className="object-cover"
             onError={handleImageError}
           />
         )}

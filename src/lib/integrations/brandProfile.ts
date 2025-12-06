@@ -5,9 +5,6 @@ import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platfor
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/types";
-
-type BrandProfileIntegrationRow =
-  Database["brand_profiles"]["Tables"]["brand_profile_integration_accounts"]["Row"];
 type IntegrationAccountAssetRow =
   Database["brand_profiles"]["Tables"]["integration_accounts_assets"]["Row"];
 
@@ -94,8 +91,18 @@ export async function fetchBrandIntegrationSummary(
 
   const summary = createEmptySummary();
 
-  data.forEach((assignment: any) => {
-    const account = assignment.integration_accounts_assets as IntegrationAccountAssetRow | null;
+  type IntegrationAssignment = {
+    id: string;
+    alias: string | null;
+    settings: unknown;
+    created_at: string | null;
+    integration_accounts_assets: IntegrationAccountAssetRow | null;
+  };
+
+  const assignments = data as IntegrationAssignment[];
+
+  assignments.forEach((assignment) => {
+    const account = assignment.integration_accounts_assets;
     if (!account) return;
 
     const platformKey = mapIntegrationTypeToPlatformKey(account.type ?? undefined);
@@ -122,8 +129,8 @@ export async function fetchBrandIntegrationSummary(
   });
 
   // Fallback: if a type wasn't mapped but clearly indicates platform, attempt substring mapping.
-  data.forEach((assignment: any) => {
-    const account = assignment.integration_accounts_assets as IntegrationAccountAssetRow | null;
+  assignments.forEach((assignment) => {
+    const account = assignment.integration_accounts_assets;
     if (!account) return;
     const alreadyIncluded = summary.youtube.accounts.some((a) => a.integrationAccountId === account.id);
     if (alreadyIncluded) return;

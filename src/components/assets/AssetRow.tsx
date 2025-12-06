@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import type { Asset } from "@/lib/schemas/brand-assets";
 import { ProviderIcon } from "@/components/providers/providerIcons";
 
@@ -16,7 +18,14 @@ export function AssetRow({
 		<li className="flex items-center justify-between gap-4 p-3">
 			<div className="flex items-center gap-3">
 				{asset.avatarUrl ? (
-					<img src={asset.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+					<Image
+						src={asset.avatarUrl}
+						alt={`${asset.displayName} avatar`}
+						width={32}
+						height={32}
+						unoptimized
+						className="h-8 w-8 rounded-full object-cover"
+					/>
 				) : (
 					<div className="h-8 w-8 rounded-full bg-gray-200" />
 				)}
@@ -42,5 +51,4 @@ export function AssetRow({
 		</li>
 	);
 }
-
 

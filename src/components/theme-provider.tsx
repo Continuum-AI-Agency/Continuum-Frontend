@@ -21,11 +21,6 @@ function getStoredMode(): ThemeMode | null {
   return null;
 }
 
-function getSystemPrefersDark(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
 function applyDomTheme(appearance: "light" | "dark") {
   if (typeof document === "undefined") return;
   const root = document.documentElement;

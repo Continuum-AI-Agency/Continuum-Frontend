@@ -43,7 +43,7 @@ export default function TermsPage() {
 
           <div className="prose dark:prose-invert max-w-none text-secondary prose-headings:text-primary">
             <p className="leading-relaxed mb-6">
-              Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the Continuum AI website and service (the "Service") operated by Continuum AI ("us", "we", or "our"). Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms. These Terms apply to all visitors, users and others who access or use the Service.
+              Please read these Terms of Service (&quot;Terms&quot;, &quot;Terms of Service&quot;) carefully before using the Continuum AI website and service (the &quot;Service&quot;) operated by Continuum AI (&quot;us&quot;, &quot;we&quot;, or &quot;our&quot;). Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms. These Terms apply to all visitors, users and others who access or use the Service.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-8 mb-4">1. Accounts</h2>
@@ -62,8 +62,8 @@ export default function TermsPage() {
             </p>
             <ul className="list-disc list-inside space-y-2 mb-6 ml-4">
               <li>Violate any local, state, national, or international law or regulation.</li>
-              <li>Transmit any material that is abusive, harassing, tortious, defamatory, vulgar, pornographic, obscene, libelous, invasive of another's privacy, hateful, or racially, ethnically, or otherwise objectionable.</li>
-              <li>Transmit any unsolicited or unauthorized advertising, promotional materials, "junk mail," "spam," "chain letters," "pyramid schemes," or any other form of solicitation.</li>
+              <li>Transmit any material that is abusive, harassing, tortious, defamatory, vulgar, pornographic, obscene, libelous, invasive of another&apos;s privacy, hateful, or racially, ethnically, or otherwise objectionable.</li>
+              <li>Transmit any unsolicited or unauthorized advertising, promotional materials, &quot;junk mail,&quot; &quot;spam,&quot; &quot;chain letters,&quot; &quot;pyramid schemes,&quot; or any other form of solicitation.</li>
               <li>Knowingly transmit any material that contains adware, malware, spyware, software viruses, or any other computer code, files, or programs designed to interrupt, destroy, or limit the functionality of any computer software or hardware or telecommunications equipment.</li>
             </ul>
 
@@ -84,7 +84,7 @@ export default function TermsPage() {
 
             <h2 className="text-2xl font-bold text-primary mt-8 mb-4">7. Disclaimer</h2>
             <p className="leading-relaxed mb-6">
-              Your use of the Service is at your sole risk. The Service is provided on an "AS IS" and "AS AVAILABLE" basis. The Service is provided without warranties of any kind, whether express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement or course of performance.
+              Your use of the Service is at your sole risk. The Service is provided on an &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; basis. The Service is provided without warranties of any kind, whether express or implied, including, but not limited to, implied warranties of merchantability, fitness for a particular purpose, non-infringement or course of performance.
             </p>
 
             <h2 className="text-2xl font-bold text-primary mt-8 mb-4">8. Governing Law</h2>

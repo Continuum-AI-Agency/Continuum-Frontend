@@ -42,7 +42,9 @@ export async function POST(request: Request) {
   }
 
   // Invoke Edge function asynchronously to extract/chunk/embed
-  const { data: invokeData } = await supabase.functions.invoke("embed_document", {
+  type EmbedInvokeResult = { jobId?: string };
+
+  const { data: invokeData } = await supabase.functions.invoke<EmbedInvokeResult>("embed_document", {
     body: {
       brandId,
       documentId,
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
     status: "processing",
     size: (file as File).size,
     storagePath: uploadData?.path ?? storagePath,
-    jobId: typeof (invokeData as any)?.jobId === "string" ? (invokeData as any).jobId : undefined,
+    jobId: typeof invokeData?.jobId === "string" ? invokeData.jobId : undefined,
   };
 
   const state = await appendDocument(brandId, document);

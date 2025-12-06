@@ -1,4 +1,3 @@
-// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 // Edge function: integration_accounts
 // Fetch integration accounts grouped by Continuum platform keys after OAuth.
@@ -100,7 +99,7 @@ function mapTypeToPlatformKey(type: string | null | undefined): PlatformKey | nu
   return null;
 }
 
-function json(body: Record<string, any>, init?: ResponseInit) {
+function json(body: Record<string, unknown>, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
     headers: {
       "Content-Type": "application/json",
@@ -195,16 +194,25 @@ async function handler(req: Request): Promise<Response> {
     return json({ error: `Accounts query failed: ${accountsError.message}` }, { status: 500 });
   }
 
+  type IntegrationAccountRow = {
+    id: string;
+    external_account_id: string | null;
+    name: string | null;
+    status: string | null;
+    type: string | null;
+  };
+
   const out = emptyAccountsByPlatform();
   for (const acc of accounts ?? []) {
-    const key = mapTypeToPlatformKey(acc.type);
+    const row = acc as IntegrationAccountRow;
+    const key = mapTypeToPlatformKey(row.type);
     if (!key) continue;
     const item: Account = {
-      id: acc.id as string,
-      externalAccountId: (acc as any).external_account_id ?? null,
-      name: (acc as any).name ?? null,
-      status: (acc as any).status ?? "active",
-      type: (acc as any).type ?? null,
+      id: row.id,
+      externalAccountId: row.external_account_id ?? null,
+      name: row.name ?? null,
+      status: row.status ?? "active",
+      type: row.type ?? null,
     };
     out[key].push(item);
   }
@@ -217,5 +225,3 @@ async function handler(req: Request): Promise<Response> {
 
 // Deno entrypoint
 Deno.serve((req: Request) => handler(req));
-
-

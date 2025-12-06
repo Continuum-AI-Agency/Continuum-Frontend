@@ -71,19 +71,6 @@ export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
   };
 }
 
-// Placeholder gateway implementation; wire actual endpoints when ready.
-const brandSettingsSchema = z.object({
-  activeBrandId: z.string(),
-  brandSummaries: z.array(
-    z.object({ id: z.string(), name: z.string(), completed: z.boolean() })
-  ),
-  brandName: z.string(),
-  members: z.array(z.object({ id: z.string(), email: z.string().email(), role: z.string() })),
-  invites: z.array(
-    z.object({ id: z.string(), email: z.string().email(), role: z.string(), token: z.string(), createdAt: z.string() })
-  ),
-});
-
 export function createGatewayBrandProfileRepository(): BrandProfileRepository {
   return {
     async switchActiveBrand(brandId: string): Promise<void> {

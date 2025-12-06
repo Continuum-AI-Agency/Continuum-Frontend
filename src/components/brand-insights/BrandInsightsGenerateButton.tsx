@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Button, Callout, Flex, Spinner, Text } from "@radix-ui/themes";
+import { Button, Callout, Flex, Spinner } from "@radix-ui/themes";
 import { CounterClockwiseClockIcon, LightningBoltIcon, ReloadIcon, RocketIcon } from "@radix-ui/react-icons";
 import { useRouter } from "next/navigation";
 

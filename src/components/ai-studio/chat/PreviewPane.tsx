@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
+import Image from "next/image";
 import { ReloadIcon, StopIcon } from "@radix-ui/react-icons";
 
 import type { StreamState } from "@/lib/types/chatImage";
@@ -47,11 +48,20 @@ export function PreviewPane({ brandName, streamState, onCancel, onReset }: Previ
           minHeight: 320,
         }}
       >
-        {streamState.currentBase64 || streamState.posterBase64 ? (
-          <img
+        {streamState.videoUrl ? (
+          <video
+            src={streamState.videoUrl}
+            controls
+            className="max-h-full max-w-full object-contain transition duration-200"
+          />
+        ) : streamState.currentBase64 || streamState.posterBase64 ? (
+          <Image
             src={`data:image/png;base64,${streamState.currentBase64 ?? streamState.posterBase64}`}
             alt="Current preview"
-            className="max-h-full max-w-full object-contain transition duration-200"
+            fill
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 50vw"
+            className="object-contain transition duration-200"
           />
         ) : (
           <Text color="gray">Drop a prompt and generate to see preview.</Text>

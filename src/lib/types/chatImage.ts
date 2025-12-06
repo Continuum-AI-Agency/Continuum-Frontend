@@ -76,6 +76,7 @@ export type StreamState = {
   currentBase64?: string;
   posterBase64?: string;
   thumbBase64?: string;
+  videoUrl?: string;
   error?: string;
   lastEvent?: StreamEvent;
 };

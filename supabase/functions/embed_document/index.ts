@@ -1,5 +1,4 @@
 // deno-lint-ignore-file no-explicit-any
-// @ts-nocheck
 // Edge function: embed_document
 // - Accepts JSON { brandId, documentId, source, storagePath?, externalUrl?, mimeType?, fileName? }
 // - Returns 202 with { jobId, documentId }
@@ -187,7 +186,7 @@ async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: 
     const { error: upsertErr } = await supabase
       .schema("brand_profiles")
       .from("brand_documents")
-      // @ts-ignore deno types don't know upsert options
+      // @ts-expect-error Deno supabase client typings lack onConflict support
       .upsert(baseDoc, { onConflict: "id" });
     if (upsertErr) console.warn("Doc upsert error", upsertErr.message);
     // Insert chunks in batches of 100
@@ -201,7 +200,7 @@ async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: 
         content,
         embedding: vectors[idx],
       }));
-      // @ts-ignore - vector type is supported server-side
+      // @ts-expect-error Vector column type is supported server-side
       const { error } = await supabase
         .schema("brand_profiles")
         .from("brand_document_chunks")
@@ -258,5 +257,3 @@ Deno.serve(async (req) => {
 
   return jsonResponse({ ok: true, jobId, documentId: payload.documentId }, { status: 202 });
 });
-
-

@@ -36,7 +36,8 @@ export function ActiveBrandProvider({
 
   // Keep local selection in sync with auth metadata updates (e.g., other tab).
   useEffect(() => {
-    const metadataId = (user?.user_metadata as Record<string, any> | undefined)?.onboarding?.activeBrandId;
+    const metadata = user?.user_metadata as { onboarding?: { activeBrandId?: string } } | undefined;
+    const metadataId = metadata?.onboarding?.activeBrandId;
     if (metadataId && metadataId !== selectedBrandId) {
       setSelectedBrandId(metadataId);
     }

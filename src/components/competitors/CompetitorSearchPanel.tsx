@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Badge,
   Box,
@@ -106,15 +107,17 @@ function PostCard({ post }: { post: CompetitorPost }) {
         post.isPinned && "border-amber-500/60"
       )}
     >
-      <Box className="aspect-square overflow-hidden rounded-md bg-[var(--muted)]">
+      <Box className="relative aspect-square overflow-hidden rounded-md bg-[var(--muted)]">
         {primaryMedia ? (
-          <img
+          <Image
             src={mediaSrc}
             alt={post.caption ?? post.shortCode ?? "Competitor post"}
-            className="h-full w-full object-cover"
-            loading="lazy"
+            fill
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 33vw"
+            className="object-cover"
             onError={(e) => {
-              const target = e.target as HTMLImageElement;
+              const target = e.currentTarget;
               target.src = "/placeholder.svg";
             }}
           />
@@ -326,11 +329,13 @@ useEffect(() => {
                 <Flex key={item.username} align="center" justify="between" gap="2">
                   <Flex align="center" gap="2">
                     {item.profilePicUrl ? (
-                      <img
+                      <Image
                         src={item.profilePicUrl}
                         alt={item.username}
+                        width={32}
+                        height={32}
+                        unoptimized
                         className="h-8 w-8 rounded-full object-cover"
-                        loading="lazy"
                       />
                     ) : (
                       <Box className="h-8 w-8 rounded-full bg-[var(--muted)]" />
@@ -373,11 +378,13 @@ useEffect(() => {
           <Flex align="center" justify="between" wrap="wrap" gap="3">
             <Flex align="center" gap="3">
               {dashboard.profile.profilePicUrl ? (
-                <img
+                <Image
                   src={dashboard.profile.profilePicUrl}
                   alt={dashboard.profile.username}
+                  width={48}
+                  height={48}
+                  unoptimized
                   className="h-12 w-12 rounded-full object-cover"
-                  loading="lazy"
                 />
               ) : (
                 <Box className="h-12 w-12 rounded-full bg-[var(--muted)]" />

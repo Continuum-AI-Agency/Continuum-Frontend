@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -68,11 +69,13 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
                   />
                 </div>
               ) : (
-                <img
+                <Image
                   src={imageError ? CompetitorService.getPlaceholderImage() : getProxiedUrl(currentMedia.url)}
                   alt={CompetitorService.truncateCaption(post.caption || '', 50)}
-                  className="object-cover w-full h-full"
-                  loading="lazy"
+                  fill
+                  unoptimized
+                  sizes="(max-width: 768px) 100vw, 25vw"
+                  className="object-cover"
                   onError={handleImageError}
                 />
               )}
@@ -245,4 +248,3 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
     </div>
   );
 };
-

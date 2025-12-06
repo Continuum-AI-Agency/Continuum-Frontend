@@ -1,15 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Heart, MessageCircle, Eye, TrendingUp, BarChart3, Calendar } from 'lucide-react';
-import { CompetitorPost, CompetitorInfo } from '@/types/competitor-types';
+import { CompetitorPost } from '@/types/competitor-types';
 import { CompetitorService } from '@/services/competitorService';
 
 interface CompetitorStatsProps {
   posts: CompetitorPost[];
-  competitor: CompetitorInfo;
 }
 
-export const CompetitorStats = ({ posts, competitor }: CompetitorStatsProps) => {
+export const CompetitorStats = ({ posts }: CompetitorStatsProps) => {
   // Calculate statistics
   const totalPosts = posts.length;
   const totalLikes = posts.reduce((sum, post) => sum + post.likes_count, 0);

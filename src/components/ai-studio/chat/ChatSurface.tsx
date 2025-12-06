@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Card, ScrollArea, Text, Flex, Badge } from "@radix-ui/themes";
+import Image from "next/image";
 
 import { useToast } from "@/components/ui/ToastProvider";
 import { useImageSseStream } from "@/hooks/useImageSseStream";
@@ -29,7 +30,6 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
   const [lastFrame, setLastFrame] = React.useState<RefImage | undefined>(undefined);
   const [referenceVideo, setReferenceVideo] = React.useState<RefVideo | undefined>(undefined);
   const [history, setHistory] = React.useState<ChatImageHistoryItem[]>(initialHistory ?? []);
-  const [conversationTurns, setConversationTurns] = React.useState<any[]>([]);
   const [continueFrom, setContinueFrom] = React.useState<{ data: string; mime_type: string }[]>([]);
   const [resetNext, setResetNext] = React.useState(false);
 
@@ -49,6 +49,14 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
       setActiveModel(form.model);
       const medium = getMediumForModel(form.model);
       const isNano = form.model === "nano-banana";
+      if (isNano && (firstFrame || lastFrame || referenceVideo)) {
+        show({
+          title: "Video inputs not supported",
+          description: "Nano Banana only generates images. Remove first/last frame or reference video, or pick a video model.",
+          variant: "error",
+        });
+        return;
+      }
       const payload: ChatImageRequestPayload = {
         brandProfileId,
         model: form.model,
@@ -73,11 +81,36 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         brand_id: payload.brandProfileId,
         model: payload.model === "nano-banana" ? "gemini-2.5-flash-image" : payload.model,
         aspect_ratio: payload.aspectRatio,
-        resolution: payload.model === "nano-banana" ? payload.resolution ?? "1024x1024" : undefined,
+        resolution:
+          payload.model === "nano-banana"
+            ? payload.resolution ?? "1024x1024"
+            : payload.medium === "video"
+              ? payload.resolution ?? "720p"
+              : undefined,
+        duration_seconds: payload.medium === "video" ? payload.durationSeconds ?? 8 : undefined,
         image_size: payload.model === "gemini-3-pro-image-preview" ? payload.imageSize ?? "1K" : undefined,
         reference_images: payload.refs?.map((r) => ({ data: r.base64, mime_type: r.mime })) ?? undefined,
+        first_frame:
+          payload.medium === "video" && payload.firstFrame
+            ? { data: payload.firstFrame.base64, mime_type: payload.firstFrame.mime, filename: payload.firstFrame.name }
+            : undefined,
+        last_frame:
+          payload.medium === "video" && payload.lastFrame
+            ? { data: payload.lastFrame.base64, mime_type: payload.lastFrame.mime, filename: payload.lastFrame.name }
+            : undefined,
+        reference_video:
+          payload.medium === "video" && payload.referenceVideo
+            ? {
+                data: payload.referenceVideo.base64,
+                mime_type: payload.referenceVideo.mime,
+                filename: payload.referenceVideo.filename ?? payload.referenceVideo.name,
+              }
+            : undefined,
+        negative_prompt: payload.negativePrompt || undefined,
+        seed: payload.seed,
+        cfg_scale: payload.cfgScale,
+        steps: payload.steps,
         continue_from: continueFrom.length ? continueFrom : undefined,
-        history: conversationTurns.length ? conversationTurns : undefined,
         reset: resetNext || undefined,
       };
 
@@ -101,7 +134,10 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
       setHistory((prev) => [optimistic, ...prev]);
 
       show({ title: "Generating", description: `${medium === "video" ? "Video" : "Image"} request started`, variant: "info" });
-      const result = await start(apiPayload as any, { initUrl: getApiUrl("/ai-studio/generate") });
+      const result = await start(apiPayload, {
+        initUrl: payload.medium === "video" ? getApiUrl("/ai-studio/generate-video") : getApiUrl("/ai-studio/generate"),
+        expectedMedia: payload.medium === "video" ? "video" : "image",
+      });
       setResetNext(false);
       if (streamState.posterBase64) {
         setContinueFrom([{ data: streamState.posterBase64, mime_type: "image/png" }]);
@@ -110,7 +146,7 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         setHistory((prev) => [{ ...optimistic, id: result.jobId }, ...prev.slice(1)]);
       }
     },
-    [brandProfileId, refs, firstFrame, lastFrame, show, start, continueFrom, streamState.posterBase64, resetNext]
+    [brandProfileId, refs, firstFrame, lastFrame, referenceVideo, show, start, continueFrom, streamState.posterBase64, resetNext]
   );
 
   const handleSelectHistory = React.useCallback((item: ChatImageHistoryItem) => {
@@ -254,11 +290,32 @@ function HistoryPanel({ history, onSelectHistory }: { history: ChatImageHistoryI
                 className="group relative h-24 w-24 overflow-hidden rounded-lg border border-white/15 bg-white/5 transition hover:-translate-y-1 hover:border-white/30"
               >
                 {item.thumbBase64 ? (
-                  <img src={`data:image/png;base64,${item.thumbBase64}`} alt={item.prompt} className="h-full w-full object-cover" />
+                  <Image
+                    src={`data:image/png;base64,${item.thumbBase64}`}
+                    alt={item.prompt}
+                    fill
+                    unoptimized
+                    sizes="96px"
+                    className="object-cover"
+                  />
                 ) : item.posterBase64 ? (
-                  <img src={`data:image/png;base64,${item.posterBase64}`} alt={item.prompt} className="h-full w-full object-cover" />
+                  <Image
+                    src={`data:image/png;base64,${item.posterBase64}`}
+                    alt={item.prompt}
+                    fill
+                    unoptimized
+                    sizes="96px"
+                    className="object-cover"
+                  />
                 ) : item.fullBase64 ? (
-                  <img src={`data:image/png;base64,${item.fullBase64}`} alt={item.prompt} className="h-full w-full object-cover" />
+                  <Image
+                    src={`data:image/png;base64,${item.fullBase64}`}
+                    alt={item.prompt}
+                    fill
+                    unoptimized
+                    sizes="96px"
+                    className="object-cover"
+                  />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-gray-400">No thumb</div>
                 )}

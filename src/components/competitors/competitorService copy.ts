@@ -260,7 +260,10 @@ export class CompetitorService {
   /**
    * Get first media URL from post (with proxy)
    */
-  static getFirstMediaUrl(post: any): string {
+  static getFirstMediaUrl(post: {
+    carousel_items?: { url: string }[];
+    media_urls?: string[];
+  }): string {
     let url: string | undefined;
     
     // Try carousel items first
@@ -282,7 +285,15 @@ export class CompetitorService {
   /**
    * Sort posts by different criteria
    */
-  static sortPosts(posts: any[], sortBy: string): any[] {
+  static sortPosts(
+    posts: Array<{
+      timestamp: string;
+      likes_count: number;
+      comments_count: number;
+      views?: number;
+    }>,
+    sortBy: string
+  ) {
     const sorted = [...posts];
     
     switch (sortBy) {

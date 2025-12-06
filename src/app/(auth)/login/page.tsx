@@ -37,7 +37,7 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
-  const { sendMagicLink, signInWithGoogle, signInWithLinkedIn, signInWithGooglePopup, isPending, isGooglePending, error, clearError, setError } = useAuth();
+  const { sendMagicLink, signInWithLinkedIn, signInWithGooglePopup, isPending, isGooglePending, error, clearError, setError } = useAuth();
   const searchParams = useSearchParams();
   const [emailSent, setEmailSent] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");

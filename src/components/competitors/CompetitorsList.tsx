@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -123,12 +124,15 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
                 <div className="flex items-center gap-4">
                   {/* Profile Pic */}
                   {competitor.profile_pic_url ? (
-                    <img
+                    <Image
                       src={CompetitorService.getProxiedImageUrl(competitor.profile_pic_url)}
                       alt={competitor.username}
+                      width={48}
+                      height={48}
+                      unoptimized
                       className="w-12 h-12 rounded-full bg-muted flex-shrink-0"
                       onError={(e) => {
-                        const target = e.target as HTMLImageElement;
+                        const target = e.currentTarget;
                         target.src = CompetitorService.getPlaceholderImage();
                         target.onerror = null;
                       }}
@@ -190,4 +194,3 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
     </div>
   );
 };
-

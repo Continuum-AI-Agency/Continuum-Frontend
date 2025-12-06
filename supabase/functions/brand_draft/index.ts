@@ -1,4 +1,3 @@
-// @ts-nocheck
 // deno-lint-ignore-file no-explicit-any
 // Supabase Edge Function: brand_draft
 // Streams two parallel channels (brandVoice, targetAudience) via SSE
@@ -167,7 +166,7 @@ serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: "Missing brandId or websiteUrl" }), { status: 400, headers: { "Content-Type": "application/json" } });
   }
 
-  const { brandId, websiteUrl, locale } = payload;
+  const { websiteUrl, locale } = payload;
   const lc = (locale || "en-US").slice(0, 5);
 
   const voiceSystem = `You are drafting a concise brand voice summary using the website as primary source. Output brief, actionable tone guidance; 2-3 sentences plus 5-8 adjectives. Locale: ${lc}.`;
@@ -223,5 +222,3 @@ serve(async (req: Request) => {
     },
   });
 });
-
-

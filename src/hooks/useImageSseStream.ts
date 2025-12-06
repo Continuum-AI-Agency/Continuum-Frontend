@@ -7,6 +7,7 @@ import type { ChatImageRequestPayload, StreamState } from "@/lib/types/chatImage
 
 type StartOptions = {
   initUrl?: string; // single endpoint that streams SSE directly on POST
+  expectedMedia?: "image" | "video";
 };
 
 type StartResult = { jobId?: string };
@@ -37,6 +38,7 @@ export function useImageSseStream() {
   const start = useCallback(
     async (payload: ChatImageRequestPayload, options?: StartOptions): Promise<StartResult> => {
       const initUrl = options?.initUrl ?? DEFAULT_INIT;
+      const expectedMedia = options?.expectedMedia ?? "image";
 
       reset();
       setState({ status: "starting" });
@@ -86,7 +88,20 @@ export function useImageSseStream() {
             if (!dataLines.length) continue;
             const jsonStr = dataLines.join("");
             try {
-              const parsed = JSON.parse(jsonStr) as any;
+              type StreamEventPayload = {
+                jobId?: string;
+                phase?: string;
+                pct?: number;
+                etaMs?: number;
+                base64?: string;
+                data_url?: string;
+                progress?: number;
+                poster_base64?: string;
+                download_url?: string;
+                message?: string;
+              };
+
+              const parsed = JSON.parse(jsonStr) as StreamEventPayload;
               if (parsed.jobId) jobId = parsed.jobId;
 
               setState((prev) => {
@@ -107,6 +122,19 @@ export function useImageSseStream() {
                       posterBase64: imgBase64 ?? prev.posterBase64,
                       thumbBase64: imgBase64 ?? prev.thumbBase64,
                       lastEvent: parsed,
+                    };
+                  }
+                  case "video": {
+                    // Prefer downloadable URL if provided; otherwise fallback to base64 data_url
+                    const videoUrl: string | undefined = parsed.download_url ?? parsed.data_url;
+                    return {
+                      ...prev,
+                      status: "streaming",
+                      progressPct: parsed.progress ?? prev.progressPct ?? 0,
+                      posterBase64: parsed.poster_base64 ?? prev.posterBase64,
+                      currentBase64: prev.currentBase64, // leave images untouched
+                      lastEvent: parsed,
+                      videoUrl: expectedMedia === "video" ? videoUrl ?? prev.videoUrl : prev.videoUrl,
                     };
                   }
                   case "text":

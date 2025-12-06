@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -96,7 +97,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
                   await CompetitorService.addCompetitor(targetUsername, instagramBusinessAccountId);
                 }
               } catch (error) {
-                console.log('Competitor may already exist in list');
+                console.log('Competitor may already exist in list', error);
               }
               
               toast({
@@ -123,7 +124,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
             await CompetitorService.addCompetitor(targetUsername, instagramBusinessAccountId);
           }
         } catch (error) {
-          console.log('Competitor may already exist in list');
+          console.log('Competitor may already exist in list', error);
         }
         
         if (response.cache_age_seconds) {
@@ -256,12 +257,15 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   {dashboard.profile.profile_pic_url && (
-                    <img
+                    <Image
                       src={CompetitorService.getProxiedImageUrl(dashboard.profile.profile_pic_url)}
                       alt={dashboard.profile.username}
+                      width={64}
+                      height={64}
+                      unoptimized
                       className="w-16 h-16 rounded-full bg-muted"
                       onError={(e) => {
-                        const target = e.target as HTMLImageElement;
+                        const target = e.currentTarget;
                         target.src = CompetitorService.getPlaceholderImage();
                         target.onerror = null;
                       }}

@@ -80,13 +80,14 @@ function mapProfile(input: z.infer<typeof backendProfileSchema>) {
   });
 }
 
-export function mapSavedCompetitor(input: z.infer<typeof backendSavedCompetitorSchema>): CompetitorSavedProfile {
+export function mapSavedCompetitor(input: unknown): CompetitorSavedProfile {
+  const parsed = backendSavedCompetitorSchema.parse(input);
   return competitorSavedProfileSchema.parse({
-    username: input.username,
-    biography: input.biography ?? undefined,
-    profilePicUrl: input.profile_pic_url ?? undefined,
-    fullName: input.full_name ?? undefined,
-    cacheAgeSeconds: input.cache_age_seconds ?? undefined,
+    username: parsed.username,
+    biography: parsed.biography ?? undefined,
+    profilePicUrl: parsed.profile_pic_url ?? undefined,
+    fullName: parsed.full_name ?? undefined,
+    cacheAgeSeconds: parsed.cache_age_seconds ?? undefined,
   });
 }
 

@@ -68,10 +68,8 @@ export function DashboardHeader({
   const [welcomeVisible, setWelcomeVisible] = React.useState(true);
   const [progress, setProgress] = React.useState(0);
 
-  const isAdmin =
-    Boolean(user?.app_metadata?.is_admin) ||
-    (Array.isArray((user?.app_metadata as Record<string, any> | undefined)?.roles) &&
-      (user?.app_metadata as Record<string, any>).roles.includes("admin"));
+  const roles = (user?.app_metadata as { roles?: string[] } | undefined)?.roles ?? [];
+  const isAdmin = Boolean(user?.app_metadata?.is_admin) || roles.includes("admin");
 
   React.useEffect(() => {
     if (!welcomeVisible) return;

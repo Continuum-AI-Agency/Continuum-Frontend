@@ -1,8 +1,10 @@
-'use strict';
+import { execFile } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const { execFile } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function loadDotEnv() {
   const rootDir = path.resolve(__dirname, '..');
@@ -66,5 +68,4 @@ function generateTypes() {
 }
 
 generateTypes();
-
 

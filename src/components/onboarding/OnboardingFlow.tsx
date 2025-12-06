@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import Image from "next/image";
 import {
   Badge,
   Box,
@@ -459,7 +460,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   // Keep local selections in sync with the latest connection data (e.g., after resync)
   useEffect(() => {
     setSelectedAccountIdsByKey(createSelectionFromState(state));
-  }, [state.connections]);
+  }, [state]);
 
   const ownerId = useMemo(
     () => state.members.find(member => member.role === "owner")?.id ?? null,
@@ -883,18 +884,19 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     getAllSelectedIds,
   ]);
 
-  const refreshState = useCallback(() => {
-    startTransition(() => {
-      void fetchOnboardingStateAction(brandId)
-        .then(next => setState(next))
-        .catch(() => {
-          show({ title: "Refresh failed", description: "Unable to load the latest onboarding state.", variant: "error" });
-        });
-    });
-  }, [brandId, show]);
-
   const handleBrandSubmit = useCallback(
     (data: BrandForm) => {
+      const parsed = brandSchema.safeParse(data);
+      if (!parsed.success) {
+        parsed.error.issues.forEach(issue => {
+          const field = issue.path[0];
+          if (field) {
+            setError(field as keyof BrandForm, { message: issue.message });
+          }
+        });
+        return;
+      }
+
       // Coerce website to a valid URL or null (avoid server-side Zod url errors)
       const websiteRaw = (data.website || "").trim();
       let website: string | null = null;
@@ -931,7 +933,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           });
       });
     },
-    [brandId, selectedVoiceTags, show, state.brand.logoPath]
+    [brandId, selectedVoiceTags, setError, show, state.brand.logoPath]
   );
 
   // --- Draft streaming from website on blur ---
@@ -1063,7 +1065,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           show({ title: "Clear failed", description: "Unable to reset onboarding. Try again.", variant: "error" });
         });
     });
-  }, [brandId, reset, show, startTransition, stopDrafting]);
+  }, [brandId, reset, resetPreviewState, show, startTransition, stopDrafting, stopPreview]);
 
   const startDraftingFromWebsite = useCallback(async (url: string) => {
     if (!url || url.trim().length < 5) return;
@@ -1223,7 +1225,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       setIsDraftingAudience(false);
       streamingAbortRef.current = null;
     }
-  }, [brandId, getValues, setState, setValue, show, startTransition, stopDrafting]);
+  }, [brandId, getValues, setState, setValue, show, stopDrafting]);
 
   const handleUploadDocuments = useCallback(
     async (files: FileList | null) => {
@@ -1455,16 +1457,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         show({ title: "Integration cancelled", description: `We didn't receive a document from ${source}.`, variant: "error" });
       }
     },
-    [
-      brandId,
-      enqueueDocumentEmbedAction,
-      registerDocumentMetadataAction,
-      setState,
-      setIsGoogleDriveLinking,
-      show,
-      startGoogleDrivePickerMutation,
-      startTransition,
-    ]
+    [brandId, setState, setIsGoogleDriveLinking, show, startGoogleDrivePickerMutation, startTransition]
   );
 
   const removeDocument = useCallback(
@@ -1819,16 +1812,13 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       }
     }
   }, [
-    associateIntegrationAccountsAction,
     brandId,
     buildAgentPayload,
-    checkOnboardingAgentHealth,
     getAllSelectedIds,
     getAllAvailableIds,
     handleAgentPreviewEvent,
     isAgentRunning,
     resetPreviewState,
-    runOnboardingPreview,
     show,
     stopPreview,
   ]);
@@ -1867,17 +1857,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         show({ title: "Completion failed", description: message, variant: "error" });
       });
     });
-  }, [
-    approveOnboardingBrandProfile,
-    brandId,
-    completeOnboardingAction,
-    isAgentRunning,
-    previewCompletePayload,
-    buildAgentPayload,
-    router,
-    show,
-    startTransition,
-  ]);
+  }, [brandId, isAgentRunning, previewCompletePayload, buildAgentPayload, router, show, startTransition]);
 
   const isPreviewRunning = isAgentRunning;
   const isCompleting = isPending;
@@ -2207,9 +2187,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
               {logoPreviewUrl && (
                 <Flex align="center" gap="2" className="mt-1">
                   <Text size="2" color="gray">Logo:</Text>
-                    <img
+                  <Image
                     src={logoPreviewUrl}
                     alt="Brand logo"
+                    width={40}
+                    height={40}
+                    unoptimized
                     className="h-10 w-10 rounded object-contain p-1 border"
                     style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
                   />
@@ -2693,9 +2676,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                       <Text size="1" color="gray">Drafting suggestions… <Button variant="ghost" size="1" onClick={stopDrafting}>Stop</Button></Text>
                     )}
                     {logoPreviewUrl ? (
-                      <img
+                      <Image
                         src={logoPreviewUrl}
                         alt="Brand logo preview"
+                        width={64}
+                        height={64}
+                        unoptimized
                         className="h-16 w-16 rounded object-contain p-1 border"
                         style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
                       />

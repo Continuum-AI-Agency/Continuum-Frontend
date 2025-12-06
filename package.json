@@ -8,9 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "TS_NODE_PROJECT=tsconfig.json node --test --loader ts-node/esm --loader ./scripts/tsconfig-paths-loader.mjs",
-    "supabase:gen:types": "node scripts/generate-supabase-types.js",
-    "generate:types": "node scripts/generate-supabase-types.js",
-    "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.js"
+    "supabase:gen:types": "node scripts/generate-supabase-types.mjs",
+    "generate:types": "node scripts/generate-supabase-types.mjs",
+    "generate:types:brand": "SUPABASE_SCHEMAS=brand_profiles node scripts/generate-supabase-types.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

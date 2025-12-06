@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Avatar, Button, DropdownMenu, Flex, Switch, Text } from "@radix-ui/themes";
+import { Avatar, Button, DropdownMenu, Switch, Text } from "@radix-ui/themes";
 import {
   CheckCircledIcon,
   ExitIcon,
@@ -26,10 +26,8 @@ export function BrandSwitcherPill() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
 
-  const isAdmin =
-    Boolean(user?.app_metadata?.is_admin) ||
-    (Array.isArray((user?.app_metadata as Record<string, any> | undefined)?.roles) &&
-      (user?.app_metadata as Record<string, any>).roles.includes("admin"));
+  const roles = (user?.app_metadata as { roles?: string[] } | undefined)?.roles ?? [];
+  const isAdmin = Boolean(user?.app_metadata?.is_admin) || roles.includes("admin");
 
   return (
     <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>

@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Badge, Box, Button, Card, Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
+import { Badge, Button, Card, Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
+import Image from "next/image";
 import { ImageIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
 
 import { useToast } from "@/components/ui/ToastProvider";
@@ -49,20 +50,23 @@ export function ReferenceDock({
       if (!refPayload) return;
 
       try {
-        const parsed = JSON.parse(refPayload) as
+        type DragPayload =
           | { name: string; path: string; contentType?: string | null }
           | { type?: string; payload?: { path?: string; publicUrl?: string; mimeType?: string } };
 
-        const path = (parsed as any).path ?? (parsed as any)?.payload?.path;
-        const mime = (parsed as any)?.contentType ?? (parsed as any)?.payload?.mimeType ?? "image/png";
-        const publicUrl = (parsed as any)?.payload?.publicUrl;
+        const parsed = JSON.parse(refPayload) as DragPayload;
+
+        const path = "path" in parsed ? parsed.path : parsed.payload?.path;
+        const mime = "contentType" in parsed ? parsed.contentType : parsed.payload?.mimeType;
+        const publicUrl = "payload" in parsed ? parsed.payload?.publicUrl : undefined;
 
         if (!path) {
           show({ title: "Drop failed", description: "Missing asset path", variant: "error" });
           return;
         }
-        const isImage = /^image\//i.test(mime);
-        const isVideo = /^video\//i.test(mime);
+        const resolvedMime = mime ?? "image/png";
+        const isImage = /^image\//i.test(resolvedMime);
+        const isVideo = /^video\//i.test(resolvedMime);
 
         if (slot === "video") {
           if (!isVideo) {
@@ -91,7 +95,7 @@ export function ReferenceDock({
           id: `${path}-${Date.now()}`,
           name: path.split("/").pop(),
           path,
-          mime,
+          mime: resolvedMime,
           base64,
           referenceType: mode === "video" ? "asset" : undefined,
         };
@@ -108,7 +112,7 @@ export function ReferenceDock({
         show({ title: "Failed to add reference", description: error instanceof Error ? error.message : "Unknown error", variant: "error" });
       }
     },
-    [refs, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, show]
+    [refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, show]
   );
 
   return (
@@ -175,7 +179,14 @@ export function ReferenceDock({
 function RefChip({ refImage, onRemove, allowReferenceType, onTypeChange }: { refImage: RefImage; onRemove: () => void; allowReferenceType?: boolean; onTypeChange?: (type: "asset" | "style") => void }) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-2 py-1 backdrop-blur">
-      <img src={`data:${refImage.mime};base64,${refImage.base64}`} alt={refImage.name ?? refImage.id} className="h-8 w-8 rounded-md object-cover" />
+      <Image
+        src={`data:${refImage.mime};base64,${refImage.base64}`}
+        alt={refImage.name ?? refImage.id}
+        width={32}
+        height={32}
+        unoptimized
+        className="h-8 w-8 rounded-md object-cover"
+      />
       <Text size="1" className="truncate max-w-[120px]">{refImage.name ?? "ref"}</Text>
       {allowReferenceType ? (
         <select
@@ -204,7 +215,14 @@ function FrameTile({ label, refImage, onDrop, onClear }: { label: string; refIma
       <Text size="2" weight="medium">{label}</Text>
       {refImage ? (
         <div className="relative h-full">
-          <img src={`data:${refImage.mime};base64,${refImage.base64}`} alt={label} className="h-full w-full rounded-md object-cover" />
+          <Image
+            src={`data:${refImage.mime};base64,${refImage.base64}`}
+            alt={label}
+            fill
+            unoptimized
+            sizes="128px"
+            className="rounded-md object-cover"
+          />
           <Button size="1" color="red" variant="surface" className="absolute right-1 top-1" onClick={onClear}>Clear</Button>
         </div>
       ) : (

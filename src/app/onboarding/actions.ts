@@ -143,7 +143,9 @@ export async function enqueueDocumentEmbedAction(
   const supabase = await createSupabaseServerClient();
   const documentId = createBrandId();
 
-  const { data: invokeData } = await supabase.functions.invoke("embed_document", {
+  type EmbedInvokeResult = { jobId?: string };
+
+  const { data: invokeData } = await supabase.functions.invoke<EmbedInvokeResult>("embed_document", {
     body: {
       brandId,
       documentId,
@@ -164,7 +166,7 @@ export async function enqueueDocumentEmbedAction(
     size: input.size,
     externalUrl: input.externalUrl,
     storagePath: input.storagePath,
-    jobId: typeof (invokeData as any)?.jobId === "string" ? (invokeData as any).jobId : undefined,
+    jobId: typeof invokeData?.jobId === "string" ? invokeData.jobId : undefined,
   };
 
   return appendDocument(brandId, document);
@@ -274,7 +276,7 @@ export async function syncIntegrationAccountsAction(
     "threads",
   ] as const;
 
-  const connectionsPatch: Partial<Record<PlatformKey, Parameters<typeof updateConnectionAccounts>[2]>> = {};
+  const connectionsPatch: Partial<OnboardingPatch["connections"]> = {};
 
   for (const key of platformKeys) {
     const accounts = payload?.accountsByPlatform?.[key] ?? [];
@@ -306,7 +308,7 @@ export async function syncIntegrationAccountsAction(
   }
 
   return applyOnboardingPatch(brandId, {
-    connections: connectionsPatch as any,
+    connections: connectionsPatch,
   });
 }
 
@@ -355,7 +357,7 @@ export async function associateIntegrationAccountsAction(
   // Persist selection flags into onboarding state so reloads stay in sync
   const selectionSet = new Set(integrationAccountIds);
   const state = await fetchOnboardingState(brandId);
-  const connectionsPatch: Partial<Record<PlatformKey, Parameters<typeof updateConnectionAccounts>[2]>> = {};
+  const connectionsPatch: Partial<OnboardingPatch["connections"]> = {};
 
   PLATFORM_KEYS.forEach(key => {
     const connection = state.connections[key];
@@ -378,7 +380,7 @@ export async function associateIntegrationAccountsAction(
   });
 
   const next = await applyOnboardingPatch(brandId, {
-    connections: connectionsPatch as any,
+    connections: connectionsPatch,
   });
 
   return next;

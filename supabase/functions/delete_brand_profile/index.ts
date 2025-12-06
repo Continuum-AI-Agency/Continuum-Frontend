@@ -95,8 +95,10 @@ async function assertUserAccess(supabase: ReturnType<typeof createSupabaseClient
   }
 
   const email = userResult.user.email?.toLowerCase() ?? "";
-  const members = Array.isArray(onboardingRow.state.members) ? onboardingRow.state.members : [];
-  const matching = members.find((member: any) => typeof member?.email === "string" && member.email.toLowerCase() === email);
+  const members = Array.isArray(onboardingRow.state.members)
+    ? (onboardingRow.state.members as Array<{ email?: string; role?: string }>)
+    : [];
+  const matching = members.find((member) => typeof member?.email === "string" && member.email.toLowerCase() === email);
   if (!matching) {
     return { status: 403, message: "Forbidden" };
   }

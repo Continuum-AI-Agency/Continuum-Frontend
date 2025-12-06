@@ -34,7 +34,7 @@ const FEATURES = [
 ];
 
 export default function SignupPage() {
-  const { signup, signInWithGoogle, signInWithLinkedIn, isPending, error, clearError } = useAuth();
+  const { signup, isPending, error, clearError } = useAuth();
   const [success, setSuccess] = useState(false);
   const router = useRouter();
 
