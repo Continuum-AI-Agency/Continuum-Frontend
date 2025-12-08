@@ -353,7 +353,7 @@ export default function AIStudioClient({
 
   const [loadErrors, setLoadErrors] = React.useState<LoadErrorMap>(() => initialLoadErrors ?? {});
   const [jobs, setJobs] = React.useState(() => initialJobs);
-  const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode[]>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
