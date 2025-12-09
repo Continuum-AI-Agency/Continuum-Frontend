@@ -18,7 +18,7 @@ function buildSyncPath(basePath: string, params: Record<string, string>): string
 
 export async function startMetaSync(callbackUrl: string): Promise<MetaSyncResponse> {
   return http.request({
-    path: buildSyncPath("/integrations/meta/sync", { callback_url: callbackUrl }),
+    path: buildSyncPath("/integrations/meta/resync", { callback_url: callbackUrl }),
     method: "GET",
     schema: metaSyncResponseSchema,
     cache: "no-store",
