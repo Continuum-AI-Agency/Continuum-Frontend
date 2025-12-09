@@ -52,7 +52,8 @@ export const chatImageRequestBase = z.object({
 
 export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, ctx) => {
   const medium = modelMedium[value.model];
-  const allowedAspects = providerAspectRatioOptions[value.model]?.[medium];
+  const providerKey = value.model === "gemini-3-pro-image-preview" ? "nano-banana" : value.model === "veo-3-1-fast" ? "veo-3-1" : value.model;
+  const allowedAspects = providerAspectRatioOptions[providerKey as keyof typeof providerAspectRatioOptions]?.[medium];
 
   if (medium === "video" && !value.aspectRatio) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["aspectRatio"], message: "Aspect ratio is required for video." });

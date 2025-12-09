@@ -25,7 +25,6 @@ type PrimitiveButtonProps = React.ComponentPropsWithoutRef<typeof Primitive.butt
 type Orientation = NonNullable<RovingFocusGroupProps["orientation"]>;
 type Direction = NonNullable<RovingFocusGroupProps["dir"]>;
 type ActivationMode = "automatic" | "manual";
-
 interface TabsContextValue {
   baseId: string;
   value: string;
@@ -45,7 +44,10 @@ function cn(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(" ");
 }
 
-type StableTabsProps = RadixTabsProps & {
+type TabsScope = Parameters<ReturnType<typeof createTabsScope>>[0];
+type ScopedProps<P> = P & { __scopeTabs?: TabsScope };
+
+type StableTabsProps = ScopedProps<RadixTabsProps> & {
   baseId?: string;
   className?: string;
 };
@@ -96,7 +98,7 @@ const TabsRoot = React.forwardRef<HTMLDivElement, StableTabsProps>((props, forwa
 });
 TabsRoot.displayName = TABS_NAME;
 
-type StableTabsListProps = RadixTabsListProps & {
+type StableTabsListProps = ScopedProps<RadixTabsListProps> & {
   className?: string;
   color?: string;
 };
@@ -129,7 +131,7 @@ const TabsList = React.forwardRef<HTMLDivElement, StableTabsListProps>((props, f
 });
 TabsList.displayName = TAB_LIST_NAME;
 
-type StableTabsTriggerProps = RadixTabsTriggerProps & {
+type StableTabsTriggerProps = ScopedProps<RadixTabsTriggerProps> & {
   className?: string;
   children: React.ReactNode;
 };
@@ -193,7 +195,7 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, StableTabsTriggerProps>(
 });
 TabsTrigger.displayName = TRIGGER_NAME;
 
-type StableTabsContentProps = RadixTabsContentProps & {
+type StableTabsContentProps = ScopedProps<RadixTabsContentProps> & {
   className?: string;
 };
 
@@ -259,5 +261,3 @@ export const Tabs = {
 export type { StableTabsProps, StableTabsListProps, StableTabsTriggerProps, StableTabsContentProps };
 
 export { createTabsScope };
-
-

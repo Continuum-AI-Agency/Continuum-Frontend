@@ -56,7 +56,7 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
   const { data: assets, error: assetsError } = await supabase
     .schema("brand_profiles")
     .from("integration_accounts_assets")
-    .select("id, integration_id, type, name, status, external_account_id, created_at")
+    .select("id, integration_id, type, name, status, external_account_id, created_at, updated_at, raw_payload")
     .in("integration_id", integrationIds);
 
   if (assetsError) {
@@ -67,13 +67,17 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
   const assetsByIntegrationId = new Map<string, IntegrationAccountAssetRow[]>();
   for (const asset of assets ?? []) {
     const current = assetsByIntegrationId.get(asset.integration_id) ?? [];
-    current.push(asset);
+    current.push({
+      ...asset,
+      raw_payload: asset.raw_payload ?? null,
+      updated_at: asset.updated_at ?? asset.created_at ?? new Date().toISOString(),
+    });
     assetsByIntegrationId.set(asset.integration_id, current);
   }
 
   const summary = createEmptyUserIntegrationSummary();
 
-  integrations.forEach((integration: UserIntegrationRow) => {
+  integrations.forEach((integration) => {
     const relatedAssets = assetsByIntegrationId.get(integration.id) ?? [];
     relatedAssets.forEach(asset => {
       const platformKey = mapIntegrationTypeToPlatformKey(asset.type ?? undefined);

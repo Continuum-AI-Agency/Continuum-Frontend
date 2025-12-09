@@ -3,6 +3,7 @@
 
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import * as Accordion from "@radix-ui/react-accordion";
 import {
   Box,
   Flex,
@@ -15,6 +16,7 @@ import {
 } from "@radix-ui/themes";
 import {
   ArchiveIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   FileIcon,
   ImageIcon,
@@ -26,11 +28,12 @@ import {
 
 import { getCreativeAssetsBucket } from "@/lib/creative-assets/config";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
-import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
+import { createSignedAssetUrl, listCreativeAssets } from "@/lib/creative-assets/storageClient";
 import type { CreativeAsset } from "@/lib/creative-assets/types";
 import { useToast } from "@/components/ui/ToastProvider";
 
 const DRAG_MIME = "application/reactflow-node-data";
+const FOLDER_CACHE_LIMIT = 20;
 
 type CreativeLibrarySidebarProps = {
   brandProfileId: string;
@@ -47,6 +50,8 @@ export function CreativeLibrarySidebar({
   const [query, setQuery] = React.useState("");
   const browser = useCreativeAssetBrowser(brandProfileId);
   const previewCache = React.useRef<Map<string, string>>(new Map());
+  const folderCache = React.useRef<Map<string, CreativeAsset[]>>(new Map());
+  const folderCacheOrder = React.useRef<string[]>([]);
   const [panelWidth, setPanelWidth] = React.useState(expandedWidth);
   const dragState = React.useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -55,6 +60,9 @@ export function CreativeLibrarySidebar({
     const q = query.toLowerCase();
     return browser.assets.filter((asset) => asset.name.toLowerCase().includes(q));
   }, [browser.assets, query]);
+
+  const folders = React.useMemo(() => filteredAssets.filter((a) => a.kind === "folder"), [filteredAssets]);
+  const files = React.useMemo(() => filteredAssets.filter((a) => a.kind === "file"), [filteredAssets]);
 
   const ensurePreviewUrl = React.useCallback(
     async (asset: CreativeAsset) => {
@@ -250,32 +258,82 @@ export function CreativeLibrarySidebar({
                       <div className="p-4 text-sm text-gray-300">Loading assets…</div>
                     ) : filteredAssets.length === 0 ? (
                       <div className="p-4 text-sm text-gray-400">No assets yet.</div>
-                    ) : view === "grid" ? (
-                      <div className="grid grid-cols-2 gap-3 p-3">
-                        {filteredAssets.map((asset) => (
-                          <AssetCard
-                            key={asset.fullPath}
-                            asset={asset}
-                            onDragStart={handleDragStart}
-                            onRename={browser.renameAssetPath}
-                            onDelete={browser.deleteAssetPath}
-                            resolvePreview={ensurePreviewUrl}
-                          />
-                        ))}
-                      </div>
                     ) : (
-                      <div className="divide-y divide-white/5">
-                        {filteredAssets.map((asset) => (
-                          <AssetRow
-                            key={asset.fullPath}
-                            asset={asset}
-                            onDragStart={handleDragStart}
-                            onRename={browser.renameAssetPath}
-                            onDelete={browser.deleteAssetPath}
-                            onOpenFolder={browser.navigateInto}
-                            resolvePreview={ensurePreviewUrl}
-                          />
-                        ))}
+                      <div className="space-y-3 p-3">
+                        {folders.length > 0 ? (
+                          <Accordion.Root type="multiple" className="space-y-2">
+                            {folders.map((folder) => (
+                              <Accordion.Item
+                                key={folder.fullPath}
+                                value={folder.fullPath}
+                                className="rounded-lg border border-white/10 bg-slate-900/60"
+                              >
+                                <Accordion.Trigger className="flex w-full items-center justify-between px-2 py-2 text-left text-sm font-medium">
+                                  <Flex align="center" gap="2">
+                                    <ArchiveIcon /> <Text>{folder.name}</Text>
+                                  </Flex>
+                                  <ChevronLeftIcon className="data-[state=open]:rotate-90 transition-transform" />
+                                </Accordion.Trigger>
+                                <Accordion.Content className="px-2 pb-2">
+                                  <SidebarFolder
+                                    brandProfileId={brandProfileId}
+                                    folder={folder}
+                                    onDragStart={handleDragStart}
+                                    onRename={browser.renameAssetPath}
+                                    onDelete={browser.deleteAssetPath}
+                                    resolvePreview={ensurePreviewUrl}
+                                    getCachedAssets={(path) => folderCache.current.get(path)}
+                                    setCachedAssets={(path, assets) => {
+                                      const cache = folderCache.current;
+                                      const order = folderCacheOrder.current;
+                                      if (!cache.has(path)) order.push(path);
+                                      cache.set(path, assets);
+                                      while (order.length > FOLDER_CACHE_LIMIT) {
+                                        const oldest = order.shift();
+                                        if (oldest) cache.delete(oldest);
+                                      }
+                                    }}
+                                  />
+                                </Accordion.Content>
+                              </Accordion.Item>
+                            ))}
+                          </Accordion.Root>
+                        ) : null}
+
+                        {files.length > 0 ? (
+                          <>
+                            {folders.length > 0 ? <Separator className="bg-white/10" /> : null}
+                            {view === "grid" ? (
+                              <div className="grid grid-cols-2 gap-3">
+                                {files.map((asset) => (
+                                  <AssetCard
+                                    key={asset.fullPath}
+                                    asset={asset}
+                                    onDragStart={handleDragStart}
+                                    onRename={browser.renameAssetPath}
+                                    onDelete={browser.deleteAssetPath}
+                                    onOpenFolder={browser.navigateInto}
+                                    resolvePreview={ensurePreviewUrl}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-white/5">
+                                {files.map((asset) => (
+                                  <AssetRow
+                                    key={asset.fullPath}
+                                    asset={asset}
+                                    onDragStart={handleDragStart}
+                                    onRename={browser.renameAssetPath}
+                                    onDelete={browser.deleteAssetPath}
+                                    onOpenFolder={browser.navigateInto}
+                                    resolvePreview={ensurePreviewUrl}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : null}
                       </div>
                     )}
                   </ScrollArea>
@@ -286,6 +344,136 @@ export function CreativeLibrarySidebar({
         </AnimatePresence>
       </div>
     </>
+  );
+}
+
+type SidebarFolderProps = {
+  brandProfileId: string;
+  folder: CreativeAsset;
+  onDragStart: (event: React.DragEvent<HTMLDivElement>, asset: CreativeAsset) => void;
+  onRename: (asset: CreativeAsset, nextName: string) => Promise<string>;
+  onDelete: (asset: CreativeAsset) => Promise<void>;
+  resolvePreview: (asset: CreativeAsset) => Promise<string>;
+  getCachedAssets: (path: string) => CreativeAsset[] | undefined;
+  setCachedAssets: (path: string, assets: CreativeAsset[]) => void;
+};
+
+function SidebarFolder({
+  brandProfileId,
+  folder,
+  onDragStart,
+  onRename,
+  onDelete,
+  resolvePreview,
+  getCachedAssets,
+  setCachedAssets,
+}: SidebarFolderProps) {
+  const [assets, setAssets] = React.useState<CreativeAsset[] | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const folderPath = React.useMemo(
+    () => folder.fullPath.replace(new RegExp(`^${brandProfileId}/?`), ""),
+    [brandProfileId, folder.fullPath]
+  );
+
+  React.useEffect(() => {
+    const cached = getCachedAssets(folderPath);
+    if (cached) {
+      setAssets(cached);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    listCreativeAssets(brandProfileId, folderPath)
+      .then((listing) => {
+        if (cancelled) return;
+        setAssets(listing.assets);
+        setCachedAssets(folderPath, listing.assets);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!cancelled) setError((err as Error)?.message ?? "Failed to load folder");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandProfileId, folderPath, getCachedAssets, setCachedAssets]);
+
+  const files = React.useMemo(() => (assets ?? []).filter((a) => a.kind === "file"), [assets]);
+  const subfolders = React.useMemo(() => (assets ?? []).filter((a) => a.kind === "folder"), [assets]);
+
+  return (
+    <div className="space-y-2 rounded-md border border-white/10 bg-slate-900/40 p-2">
+      {loading ? <Text size="1">Loading…</Text> : null}
+      {error ? (
+        <Text size="1" color="red">
+          {error}
+        </Text>
+      ) : null}
+
+      {files.length > 0 ? (
+        <ScrollArea style={{ maxHeight: 320 }} type="always" scrollbars="vertical">
+          <div
+            className="grid gap-2 p-1"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+              gridAutoRows: "160px",
+            }}
+          >
+            {files.map((asset) => (
+              <AssetCard
+                key={asset.fullPath}
+                asset={asset}
+                onDragStart={onDragStart}
+                onRename={onRename}
+                onDelete={onDelete}
+                resolvePreview={resolvePreview}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      ) : null}
+
+      {subfolders.length > 0 ? (
+        <Accordion.Root type="multiple" className="space-y-1">
+          {subfolders.map((child) => (
+            <Accordion.Item
+              key={child.fullPath}
+              value={child.fullPath}
+              className="rounded-md border border-white/10 bg-slate-900/60"
+            >
+              <Accordion.Trigger className="flex w-full items-center justify-between px-2 py-1 text-left text-sm font-medium">
+                <Flex align="center" gap="2">
+                  <ArchiveIcon /> <Text size="1">{child.name}</Text>
+                </Flex>
+                <ChevronLeftIcon className="data-[state=open]:rotate-90 transition-transform" />
+              </Accordion.Trigger>
+              <Accordion.Content className="px-2 pb-2">
+                <SidebarFolder
+                  brandProfileId={brandProfileId}
+                  folder={child}
+                  onDragStart={onDragStart}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  resolvePreview={resolvePreview}
+                  getCachedAssets={getCachedAssets}
+                  setCachedAssets={setCachedAssets}
+                />
+              </Accordion.Content>
+            </Accordion.Item>
+          ))}
+        </Accordion.Root>
+      ) : null}
+
+      {!loading && !error && files.length === 0 && subfolders.length === 0 ? (
+        <Text size="1" color="gray">
+          Empty folder
+        </Text>
+      ) : null}
+    </div>
   );
 }
 

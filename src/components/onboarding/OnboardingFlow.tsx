@@ -1017,7 +1017,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     const text = stripHtmlToText(html);
     setAgentBusiness(prev => ({
       ...(prev || {}),
-      business_description: text || null,
+      business_description: text || undefined,
     }));
   }, []);
 
@@ -2538,7 +2538,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   return (
     <>
       <StrategicAnalysisRealtimeListener brandId={brandId} />
-      <Container size="5" className="max-w-7xl w-full">
+      <Container size="4" className="max-w-7xl w-full">
         <Flex direction="column" gap="4">
           <Heading size="6" className="text-white">Welcome to Continuum</Heading>
           <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>

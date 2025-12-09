@@ -1,17 +1,29 @@
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge, Callout } from '@radix-ui/themes';
 import { Loader2, Search, RefreshCw, Instagram, Clock, AlertCircle, ArrowLeft, Lock } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from "@/components/ui/ToastProvider";
 import { CompetitorService } from '@/services/competitorService';
 import { DashboardResponse } from '@/types/competitor-types';
 import { CompetitorPostCard } from './CompetitorPostCard';
 import { CompetitorFilters, type SortOption } from './CompetitorFilters';
 import { CompetitorsList } from './CompetitorsList';
+
+type CardProps = { children: React.ReactNode; className?: string };
+const Card = ({ children, className }: CardProps) => (
+  <div className={`rounded-lg border border-white/10 bg-white/5 p-4 shadow-sm ${className ?? ""}`}>
+    {children}
+  </div>
+);
+const CardHeader = ({ children, className }: CardProps) => <div className={`mb-3 ${className ?? ""}`}>{children}</div>;
+const CardTitle = ({ children, className }: CardProps) => (
+  <h3 className={`text-lg font-semibold leading-tight ${className ?? ""}`}>{children}</h3>
+);
+const CardDescription = ({ children, className }: CardProps) => (
+  <p className={`text-sm text-gray-400 ${className ?? ""}`}>{children}</p>
+);
+const CardContent = ({ children, className }: CardProps) => <div className={className}>{children}</div>;
 
 interface CompetitorInsightsProps {
   instagramBusinessAccountId?: string;
@@ -27,12 +39,18 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   
-  const { toast } = useToast();
+  const { show: toast } = useToast();
 
   // Sort posts based on selected criteria
   const sortedPosts = useMemo(() => {
     if (!dashboard?.posts) return [];
-    return CompetitorService.sortPosts(dashboard.posts, sortBy);
+    const normalized = dashboard.posts.map((post) => ({
+      ...post,
+      likes_count: post.likesCount,
+      comments_count: post.commentsCount,
+      views: (post as { views?: number }).views ?? (post as { impressions?: number }).impressions,
+    }));
+    return CompetitorService.sortPosts(normalized, sortBy);
   }, [dashboard?.posts, sortBy]);
 
   const handleViewCompetitor = (targetUsername: string) => {
@@ -58,7 +76,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
       toast({
         title: 'Username Required',
         description: 'Please enter an Instagram username to analyze.',
-        variant: 'destructive',
+        variant: 'error',
       });
       return;
     }
@@ -127,8 +145,8 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
           console.log('Competitor may already exist in list', error);
         }
         
-        if (response.cache_age_seconds) {
-          const ageMinutes = Math.floor(response.cache_age_seconds / 60);
+        if (response.cacheAgeSeconds) {
+          const ageMinutes = Math.floor(response.cacheAgeSeconds / 60);
           if (ageMinutes > 0) {
             toast({
               title: 'Data Loaded',
@@ -146,7 +164,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
       toast({
         title: 'Error Loading Data',
         description: error instanceof Error ? error.message : 'Failed to load competitor data',
-        variant: 'destructive',
+        variant: 'error',
       });
     } finally {
       if (dashboard?.status !== 'scraping') {
@@ -174,7 +192,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
       toast({
         title: 'Error',
         description: 'Failed to refresh data',
-        variant: 'destructive',
+        variant: 'error',
       });
     } finally {
       setIsRefreshing(false);
@@ -207,12 +225,13 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
-            <Input
+            <input
               placeholder={showDashboard ? "Search other competitor @username" : "Search competitor @username"}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               disabled={isLoading}
+              className="w-full rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-gray-400 focus:border-white/40 focus:outline-none"
             />
             <Button onClick={handleSearch} disabled={isLoading}>
               {isLoading ? (
@@ -242,12 +261,14 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
       {showDashboard && (
         <>
           {isLoading && dashboard?.status === 'scraping' && (
-            <Alert>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <AlertDescription>
+            <Callout.Root variant="surface" color="yellow">
+              <Callout.Icon>
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </Callout.Icon>
+              <Callout.Text>
                 Scraping Instagram data for @{searchedUsername}. This usually takes 30-60 seconds...
-              </AlertDescription>
-            </Alert>
+              </Callout.Text>
+            </Callout.Root>
           )}
 
           {dashboard && dashboard.status === 'success' && dashboard.profile && (
@@ -256,9 +277,9 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  {dashboard.profile.profile_pic_url && (
+                  {dashboard.profile.profilePicUrl && (
                     <Image
-                      src={CompetitorService.getProxiedImageUrl(dashboard.profile.profile_pic_url)}
+                      src={CompetitorService.getProxiedImageUrl(dashboard.profile.profilePicUrl)}
                       alt={dashboard.profile.username}
                       width={64}
                       height={64}
@@ -275,11 +296,11 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
                     <div className="flex items-center gap-2">
                       <h2 className="text-2xl font-bold">@{dashboard.profile.username}</h2>
                       {dashboard.profile.verified && (
-                        <Badge variant="secondary">✓ Verified</Badge>
+                        <Badge variant="soft" color="green">✓ Verified</Badge>
                       )}
                     </div>
                     <p className="text-muted-foreground">
-                      {CompetitorService.formatNumber(dashboard.profile.followers_count)} followers
+                      {CompetitorService.formatNumber(dashboard.profile.followersCount)} followers
                     </p>
                     {dashboard.profile.biography && (
                       <p className="text-sm mt-2">{dashboard.profile.biography}</p>
@@ -288,11 +309,11 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {dashboard.cache_age_seconds !== undefined && (
+                  {dashboard.cacheAgeSeconds !== undefined && (
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
-                      <span>{CompetitorService.getTimeAgo(dashboard.cache_age_seconds)}</span>
-                      {CompetitorService.isCacheOld(dashboard.cache_age_seconds) && (
+                      <span>{CompetitorService.getTimeAgo(dashboard.cacheAgeSeconds)}</span>
+                      {CompetitorService.isCacheOld(dashboard.cacheAgeSeconds) && (
                         <AlertCircle className="h-4 w-4 text-yellow-500 ml-1" />
                       )}
                     </div>
@@ -332,7 +353,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
                 <div className="text-2xl font-bold">
                   {dashboard.posts.length > 0
                     ? CompetitorService.formatNumber(
-                        Math.round(dashboard.posts.reduce((sum, p) => sum + p.likes_count, 0) / dashboard.posts.length)
+                        Math.round(dashboard.posts.reduce((sum, p) => sum + p.likesCount, 0) / dashboard.posts.length)
                       )
                     : '0'}
                 </div>
@@ -347,7 +368,7 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
                 <div className="text-2xl font-bold">
                   {dashboard.posts.length > 0
                     ? CompetitorService.formatNumber(
-                        Math.round(dashboard.posts.reduce((sum, p) => sum + p.comments_count, 0) / dashboard.posts.length)
+                        Math.round(dashboard.posts.reduce((sum, p) => sum + p.commentsCount, 0) / dashboard.posts.length)
                       )
                     : '0'}
                 </div>
@@ -383,12 +404,24 @@ export const CompetitorInsights = ({ instagramBusinessAccountId }: CompetitorIns
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
-                {sortedPosts.map((post) => (
-                  <CompetitorPostCard 
-                    key={post.id} 
-                    post={post}
-                  />
-                ))}
+            {sortedPosts.map((post) => (
+              <CompetitorPostCard 
+                key={post.id as string}
+                post={{
+                  ...(post as unknown as { id: string; timestamp: string }),
+                  likesCount: post.likes_count,
+                  commentsCount: post.comments_count,
+                  mediaUrls: (post as { mediaUrls?: string[] }).mediaUrls,
+                  hashtags: (post as { hashtags?: string[] }).hashtags,
+                  type: (post as { type?: string }).type,
+                  caption: (post as { caption?: string }).caption,
+                  views: (post as { views?: number }).views,
+                  isPinned: (post as { isPinned?: boolean }).isPinned,
+                  timestamp: (post as { timestamp: string }).timestamp,
+                  id: (post as { id: string }).id ?? String(post.id),
+                }}
+              />
+            ))}
               </div>
 
               {dashboard.posts.length === 0 && (

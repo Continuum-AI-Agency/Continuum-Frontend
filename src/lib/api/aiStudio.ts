@@ -102,7 +102,7 @@ export async function createAiStudioJob(
     body,
     aiStudioGenerationResponseSchema
   );
-  return job;
+  return aiStudioJobSchema.parse(job);
 }
 
 type ListJobsParams = {
@@ -126,7 +126,7 @@ export async function listAiStudioJobs(
     aiStudioJobsResponseSchema,
     init
   );
-  return jobs;
+  return jobs.map((job) => aiStudioJobSchema.parse(job));
 }
 
 export async function getAiStudioJob(
@@ -137,11 +137,12 @@ export async function getAiStudioJob(
   const search = new URLSearchParams({
     brandProfileId,
   });
-  return getInternal(
+  const job = await getInternal(
     `/api/ai-studio/jobs/${encodeURIComponent(jobId)}?${search.toString()}`,
     aiStudioJobSchema,
     init
   );
+  return aiStudioJobSchema.parse(job);
 }
 
 type ListTemplatesParams = {
@@ -167,5 +168,3 @@ export async function listAiStudioTemplates(
   );
   return templates;
 }
-
-

@@ -109,11 +109,11 @@ export function useCreativeAssetBrowser(brandProfileId: string) {
 
   const renameAssetPath = useCallback(
     async (asset: CreativeAsset, nextName: string) => {
-      const destination = await renameCreativeAsset(asset.fullPath, nextName);
+      const destination = await renameCreativeAsset(brandProfileId, asset.fullPath, nextName);
       await refresh();
       return destination;
     },
-    [refresh]
+    [brandProfileId, refresh]
   );
 
   const deleteAssetPath = useCallback(

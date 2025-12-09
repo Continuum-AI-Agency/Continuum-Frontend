@@ -43,8 +43,22 @@ export function AdminUserList({ users, permissions }: Props) {
   const supabase = createSupabaseBrowserClient();
   const [query, setQuery] = useState("");
 
-  function openUrlInIncognito(url: string) {
-    window.open(url, "_blank", "noopener,noreferrer,incognito=yes");
+  async function handleImpersonationLink(url: string) {
+    // Best-effort safety: copy to clipboard and open a new tab without opener; advise user to paste into incognito.
+    try {
+      await navigator.clipboard.writeText(url);
+      show({ title: "Link copied", description: "Paste it in an incognito/private window.", variant: "info" });
+    } catch {
+      // clipboard may fail in some browsers; ignore
+    }
+    const w = window.open("about:blank", "_blank", "noopener,noreferrer");
+    if (w) {
+      try {
+        w.location = url;
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const filteredUsers = useMemo(() => {
@@ -200,8 +214,12 @@ export function AdminUserList({ users, permissions }: Props) {
                             if (error || !data?.signInLink) {
                               throw new Error(error?.message ?? "Failed to generate link");
                             }
-                            openUrlInIncognito(data.signInLink);
-                            show({ title: "Impersonation link opened", description: "Check the new window.", variant: "success" });
+                            await handleImpersonationLink(data.signInLink);
+                            show({
+                              title: "Impersonation link ready",
+                              description: "Link copied. Open it in an incognito/private window.",
+                              variant: "success",
+                            });
                           } catch (error) {
                             show({
                               title: "Failed to impersonate",

@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getApiUrl } from "@/lib/api/config";
-import type { ChatImageRequestPayload, StreamState } from "@/lib/types/chatImage";
+import type { BackendChatImageRequestPayload, StreamState, StreamEvent } from "@/lib/types/chatImage";
 
 type StartOptions = {
   initUrl?: string; // single endpoint that streams SSE directly on POST
   expectedMedia?: "image" | "video";
 };
 
-type StartResult = { jobId?: string };
+type StartResult = { jobId?: string; error?: string };
 
 const DEFAULT_INIT = process.env.NEXT_PUBLIC_AI_STUDIO_INIT_URL || getApiUrl("/ai-studio/generate");
 
@@ -36,7 +36,7 @@ export function useImageSseStream() {
   useEffect(() => () => cancel(), [cancel]);
 
   const start = useCallback(
-    async (payload: ChatImageRequestPayload, options?: StartOptions): Promise<StartResult> => {
+    async (payload: BackendChatImageRequestPayload, options?: StartOptions): Promise<StartResult> => {
       const initUrl = options?.initUrl ?? DEFAULT_INIT;
       const expectedMedia = options?.expectedMedia ?? "image";
 
@@ -99,19 +99,70 @@ export function useImageSseStream() {
                 poster_base64?: string;
                 download_url?: string;
                 message?: string;
+                mime_type?: string;
+                bytes?: string;
+                signed_url?: string;
+                storage?: { signed_url?: string; bucket?: string; path?: string };
               };
 
               const parsed = JSON.parse(jsonStr) as StreamEventPayload;
               if (parsed.jobId) jobId = parsed.jobId;
 
-              setState((prev) => {
+              const mapLastEvent = (
+                name: string | undefined,
+                payload: StreamEventPayload,
+                opts: { videoUrl?: string; posterBase64?: string; thumbBase64?: string }
+              ): StreamEvent | undefined => {
+                switch (name) {
+                  case "status":
+                    return {
+                      type: "status",
+                      status: payload.phase === "complete" ? "completed" : "processing",
+                    };
+                  case "progress":
+                    return { type: "progress", pct: payload.pct ?? 0, etaMs: payload.etaMs };
+                  case "image": {
+                    const base64 = payload.base64 ?? payload.data_url?.replace(/^data:image\/[^;]+;base64,/, "");
+                    if (!base64) return undefined;
+                    return { type: "thumbnail", base64 };
+                  }
+                  case "video":
+                  case "stored":
+                  case "complete":
+                    return {
+                      type: "done",
+                      base64: opts.posterBase64 ?? opts.thumbBase64 ?? payload.poster_base64,
+                      videoUrl: opts.videoUrl,
+                      posterBase64: opts.posterBase64 ?? payload.poster_base64,
+                    };
+                  case "error":
+                    return { type: "error", message: payload.message ?? "Stream error" };
+                  default:
+                    return undefined;
+                }
+              };
+
+              setState((prev): StreamState => {
+                const signedUrl = parsed.signed_url ?? parsed.storage?.signed_url;
+                const supabaseVideoUrl = signedUrl;
+                const downloadUrl = parsed.download_url ?? (parsed.bytes ? `data:${parsed.mime_type ?? "video/mp4"};base64,${parsed.bytes}` : undefined);
                 switch (eventName) {
                   case "status":
-                    return { ...prev, status: parsed.phase === "complete" ? "done" : "streaming", lastEvent: parsed };
+                    return {
+                      ...prev,
+                      status: parsed.phase === "complete" ? "done" : "streaming",
+                      lastEvent: mapLastEvent(eventName, parsed, { videoUrl: prev.videoUrl }),
+                    };
                   case "progress":
-                    return { ...prev, status: "streaming", progressPct: parsed.pct ?? prev.progressPct, etaMs: parsed.etaMs, lastEvent: parsed };
+                    return {
+                      ...prev,
+                      status: "streaming",
+                      progressPct: parsed.pct ?? prev.progressPct,
+                      etaMs: parsed.etaMs,
+                      lastEvent: mapLastEvent(eventName, parsed, { videoUrl: prev.videoUrl }),
+                    };
                   case "init":
-                    return { ...prev, lastEvent: parsed };
+                    return { ...prev, lastEvent: undefined };
                   case "image": {
                     const imgBase64 = parsed.base64 ?? parsed.data_url?.replace(/^data:image\/[^;]+;base64,/, "");
                     return {
@@ -121,38 +172,78 @@ export function useImageSseStream() {
                       currentBase64: imgBase64 ?? prev.currentBase64,
                       posterBase64: imgBase64 ?? prev.posterBase64,
                       thumbBase64: imgBase64 ?? prev.thumbBase64,
-                      lastEvent: parsed,
+                      lastEvent: mapLastEvent(eventName, parsed, {
+                        thumbBase64: imgBase64 ?? prev.thumbBase64,
+                        posterBase64: imgBase64 ?? prev.posterBase64,
+                      }),
                     };
                   }
                   case "video": {
-                    // Prefer downloadable URL if provided; otherwise fallback to base64 data_url
-                    const videoUrl: string | undefined = parsed.download_url ?? parsed.data_url;
+                    const mime = parsed.mime_type ?? "video/mp4";
+                    const videoUrl: string | undefined =
+                      supabaseVideoUrl ??
+                      parsed.download_url ??
+                      parsed.data_url ??
+                      (parsed.bytes ? `data:${mime};base64,${parsed.bytes}` : undefined) ??
+                      (parsed.base64 ? `data:${mime};base64,${parsed.base64}` : undefined);
                     return {
                       ...prev,
                       status: "streaming",
                       progressPct: parsed.progress ?? prev.progressPct ?? 0,
                       posterBase64: parsed.poster_base64 ?? prev.posterBase64,
                       currentBase64: prev.currentBase64, // leave images untouched
-                      lastEvent: parsed,
+                      lastEvent: mapLastEvent(eventName, parsed, {
+                        videoUrl: expectedMedia === "video" ? videoUrl ?? prev.videoUrl : prev.videoUrl,
+                        posterBase64: parsed.poster_base64 ?? prev.posterBase64,
+                        thumbBase64: prev.thumbBase64,
+                      }),
                       videoUrl: expectedMedia === "video" ? videoUrl ?? prev.videoUrl : prev.videoUrl,
                     };
                   }
                   case "text":
                   case "grounding":
                   case "conversation_append":
-                    return { ...prev, lastEvent: parsed };
+                    return { ...prev, lastEvent: undefined };
                   case "stored":
-                    return { ...prev, lastEvent: parsed };
+                    return {
+                      ...prev,
+                      lastEvent: mapLastEvent(eventName, parsed, {
+                        videoUrl:
+                          expectedMedia === "video"
+                            ? supabaseVideoUrl ?? prev.videoUrl ?? downloadUrl ?? prev.videoUrl
+                            : prev.videoUrl,
+                      }),
+                      videoUrl:
+                        expectedMedia === "video"
+                          ? supabaseVideoUrl ?? prev.videoUrl ?? downloadUrl ?? prev.videoUrl
+                          : prev.videoUrl,
+                    };
                   case "complete":
                     return {
                       ...prev,
                       status: "done",
                       progressPct: 100,
                       thumbBase64: prev.thumbBase64 ?? prev.currentBase64,
-                      lastEvent: parsed,
+                      lastEvent: mapLastEvent(eventName, parsed, {
+                        videoUrl:
+                          expectedMedia === "video"
+                            ? supabaseVideoUrl ?? prev.videoUrl ?? downloadUrl ?? prev.videoUrl
+                            : prev.videoUrl,
+                        posterBase64: parsed.poster_base64 ?? prev.posterBase64,
+                        thumbBase64: prev.thumbBase64 ?? prev.currentBase64,
+                      }),
+                      videoUrl:
+                        expectedMedia === "video"
+                          ? supabaseVideoUrl ?? prev.videoUrl ?? downloadUrl ?? prev.videoUrl
+                          : prev.videoUrl,
                     };
                   case "error":
-                    return { ...prev, status: "error", error: parsed.message ?? "Stream error", lastEvent: parsed };
+                    return {
+                      ...prev,
+                      status: "error",
+                      error: parsed.message ?? "Stream error",
+                      lastEvent: mapLastEvent(eventName, parsed, { videoUrl: prev.videoUrl }),
+                    };
                   case "reset":
                     return { status: "idle" };
                   default:
@@ -187,8 +278,10 @@ export function useImageSseStream() {
           setState((prev) => ({ ...prev, status: "error", error: "Stream ended unexpectedly" }));
         });
       } catch (error) {
-        console.error("stream-start-failed", error instanceof Error ? error.message : error);
-        setState({ status: "error", error: error instanceof Error ? error.message : String(error) });
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("stream-start-failed", message);
+        setState({ status: "error", error: message });
+        return { jobId, error: message };
       }
 
       return { jobId };

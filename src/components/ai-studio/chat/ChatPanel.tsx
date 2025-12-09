@@ -5,22 +5,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 import { chatImageRequestBase, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
 import type { SupportedModel } from "@/lib/types/chatImage";
 
-type FormValues = {
-  model: SupportedModel;
-  prompt: string;
-  aspectRatio: string;
-  durationSeconds?: number;
-  resolution?: string;
-   imageSize?: "1K" | "2K" | "4K";
-  negativePrompt?: string;
-  seed?: number;
-  cfgScale?: number;
-  steps?: number;
-};
+const chatPanelFormSchema = chatImageRequestBase.pick({
+  model: true,
+  prompt: true,
+  aspectRatio: true,
+  resolution: true,
+  imageSize: true,
+  negativePrompt: true,
+  seed: true,
+  cfgScale: true,
+  steps: true,
+  durationSeconds: true,
+});
+
+type FormValues = z.infer<typeof chatPanelFormSchema>;
 
 type ChatPanelProps = {
   disabled?: boolean;
@@ -65,19 +68,7 @@ export function ChatPanel({
   refsSummary,
 }: ChatPanelProps) {
   const form = useForm<FormValues>({
-    resolver: zodResolver(
-      chatImageRequestBase.pick({
-        model: true,
-        prompt: true,
-        aspectRatio: true,
-        resolution: true,
-        imageSize: true,
-        negativePrompt: true,
-        seed: true,
-        cfgScale: true,
-        steps: true,
-      })
-    ),
+    resolver: zodResolver(chatPanelFormSchema),
     defaultValues: {
       model: "nano-banana",
       prompt: "",
@@ -96,17 +87,22 @@ export function ChatPanel({
   React.useEffect(() => {
     onModelChange?.(model);
     // reset aspect if current is not allowed
-    if (!aspectOptions.includes(form.getValues("aspectRatio"))) {
+    const currentAspect = form.getValues("aspectRatio") ?? "";
+    if (!aspectOptions.includes(currentAspect)) {
       form.setValue("aspectRatio", aspectOptions[0] ?? "1:1");
     }
     if (model === "nano-banana") {
-      form.setValue("resolution", form.getValues("resolution") || "1024x1024");
+      const current = form.getValues("resolution");
+      form.setValue("resolution", current || "1024x1024");
       form.setValue("imageSize", undefined);
     } else if (model === "gemini-3-pro-image-preview") {
       form.setValue("resolution", "");
       form.setValue("imageSize", form.getValues("imageSize") || "1K");
     } else {
-      form.setValue("resolution", form.getValues("resolution") || "720p");
+      const current = form.getValues("resolution");
+      const allowedVideoResolutions = ["720p", "1080p"];
+      const nextResolution = allowedVideoResolutions.includes(current ?? "") ? current : "720p";
+      form.setValue("resolution", nextResolution);
       form.setValue("imageSize", undefined);
       if (!form.getValues("durationSeconds")) form.setValue("durationSeconds", 8);
     }
@@ -142,7 +138,7 @@ export function ChatPanel({
         <Badge variant="soft" size="2">{medium === "image" ? "Image" : "Video"}</Badge>
       </div>
 
-      <form className="space-y-3" onSubmit={handleSubmit}>
+      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
         <div className="space-y-1">
           <Text size="1" color="gray">Model</Text>
           <Select.Root
@@ -171,8 +167,8 @@ export function ChatPanel({
             value={form.watch("prompt")}
             onChange={(e) => form.setValue("prompt", e.target.value)}
             placeholder="Describe what you want to see"
-            rows={4}
-            className="min-h-[120px]"
+            rows={6}
+            className="min-h-[300px]"
             disabled={disabled || isStreaming}
           />
           {form.formState.errors.prompt ? (
@@ -262,12 +258,12 @@ export function ChatPanel({
         {medium === "video" ? (
           <div className="space-y-1">
             <Flex align="center" justify="between">
-              <Text size="1" color="gray">Duration (secs)</Text>
+              <Text size="1" color="gray">Duration (seconds)</Text>
               <Text size="1" color="gray">Default 8s</Text>
             </Flex>
             <RadioGroup.Root
               value={String(form.watch("durationSeconds") ?? "8")}
-              onValueChange={(value) => form.setValue("durationSeconds", Number(value))}
+              onValueChange={(value) => form.setValue("durationSeconds", Number(value) as 4 | 6 | 8)}
               className="flex gap-2"
               disabled={disabled || isStreaming}
             >

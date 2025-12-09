@@ -186,7 +186,7 @@ function promoteCompletedJobs(jobs: AiStudioJob[]): AiStudioJob[] {
   const now = Date.now();
   let mutated = false;
 
-  const nextJobs = jobs.map((job) => {
+  const nextJobs: AiStudioJob[] = jobs.map((job): AiStudioJob => {
     if ((job.status === "queued" || job.status === "processing") && now - Date.parse(job.createdAt) > 4_000) {
       mutated = true;
       const nextArtifacts =
@@ -267,7 +267,7 @@ export function markFallbackJobErrored(
   const jobs = fallbackJobsStore.get(brandProfileId);
   if (!jobs) return;
 
-  const nextJobs = jobs.map((job) =>
+  const nextJobs: AiStudioJob[] = jobs.map((job): AiStudioJob =>
     job.id === jobId
       ? {
           ...job,
@@ -284,4 +284,3 @@ export function markFallbackJobErrored(
 
   fallbackJobsStore.set(brandProfileId, nextJobs);
 }
-

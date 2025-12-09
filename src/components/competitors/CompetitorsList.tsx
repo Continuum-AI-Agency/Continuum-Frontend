@@ -1,17 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { 
-  Loader2, 
-  Trash2, 
-  Eye, 
-  Instagram
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { CompetitorService } from '@/services/competitorService';
-import type { CompetitorInfo } from '@/types/competitor-types';
+'use client';
+
+import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@radix-ui/themes";
+import { Loader2, Trash2, Eye, Instagram } from "lucide-react";
+import { useToast } from "@/components/ui/ToastProvider";
+import { CompetitorService } from "@/services/competitorService";
+import type { CompetitorInfo } from "@/types/competitor-types";
+
+type DivProps = React.HTMLAttributes<HTMLDivElement>;
+const Card = ({ children, className, ...rest }: { children: React.ReactNode; className?: string } & DivProps) => (
+  <div className={`rounded-lg border border-white/10 bg-white/5 p-4 ${className ?? ""}`} {...rest}>
+    {children}
+  </div>
+);
+
+const CardContent = ({ children, className, ...rest }: { children: React.ReactNode; className?: string } & DivProps) => (
+  <div className={className} {...rest}>
+    {children}
+  </div>
+);
 
 interface CompetitorsListProps {
   onViewCompetitor: (username: string) => void;
@@ -23,7 +32,7 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
   const [isLoading, setIsLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
   
-  const { toast } = useToast();
+  const { show: toast } = useToast();
 
   const loadCompetitors = useCallback(async () => {
     if (!instagramBusinessAccountId) return;
@@ -34,11 +43,7 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
       setCompetitors(data);
     } catch (error) {
       console.error('Error loading competitors:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load competitors list',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to load competitors list", variant: "error" });
     } finally {
       setIsLoading(false);
     }
@@ -57,33 +62,31 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
       setRemovingId(username);
       await CompetitorService.removeCompetitor(username, instagramBusinessAccountId);
       
-      toast({
-        title: 'Competitor Removed',
-        description: `@${username} has been removed from your list`,
-      });
+      toast({ title: "Competitor Removed", description: `@${username} has been removed from your list` });
       
       await loadCompetitors();
     } catch (error) {
       console.error('Error removing competitor:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to remove competitor',
-        variant: 'destructive',
-      });
+      toast({ title: "Error", description: "Failed to remove competitor", variant: "error" });
     } finally {
       setRemovingId(null);
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Never updated';
-    const date = new Date(dateString);
+  const formatUpdatedAt = (competitor: CompetitorInfo) => {
+    if (competitor.cacheAgeSeconds !== undefined) {
+      return CompetitorService.getTimeAgo(competitor.cacheAgeSeconds);
+    }
+
+    if (!competitor.lastScrapedAt) return "Never updated";
+
+    const date = new Date(competitor.lastScrapedAt);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     
-    if (diffDays === 0) return 'Updated today';
-    if (diffDays === 1) return 'Updated yesterday';
+    if (diffDays === 0) return "Updated today";
+    if (diffDays === 1) return "Updated yesterday";
     if (diffDays < 7) return `Updated ${diffDays} days ago`;
     if (diffDays < 30) return `Updated ${Math.floor(diffDays / 7)} weeks ago`;
     return `Updated ${date.toLocaleDateString()}`;
@@ -114,18 +117,22 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
       {/* Competitors List - Horizontal Cards */}
       {!isLoading && competitors.length > 0 && (
         <div className="space-y-2">
-          {competitors.map((competitor) => (
+          {competitors.map((competitor) => {
+            const profileImage = CompetitorService.getProxiedImageUrl(competitor.profilePicUrl);
+            const updatedLabel = formatUpdatedAt(competitor);
+            
+            return (
             <Card 
-              key={competitor.ig_user_id} 
+              key={competitor.igUserId ?? competitor.username} 
               className="overflow-hidden hover:shadow-md transition-all cursor-pointer group"
               onClick={() => onViewCompetitor(competitor.username)}
             >
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   {/* Profile Pic */}
-                  {competitor.profile_pic_url ? (
+                  {competitor.profilePicUrl ? (
                     <Image
-                      src={CompetitorService.getProxiedImageUrl(competitor.profile_pic_url)}
+                      src={profileImage}
                       alt={competitor.username}
                       width={48}
                       height={48}
@@ -148,7 +155,7 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-semibold truncate">@{competitor.username}</h3>
                       {competitor.verified && (
-                        <Badge variant="secondary" className="text-xs px-1.5 py-0">✓</Badge>
+                    <Badge variant="soft" color="green" className="text-xs px-1.5 py-0">✓</Badge>
                       )}
                     </div>
                     {competitor.biography && (
@@ -162,7 +169,7 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="text-right">
                       <p className="text-xs text-muted-foreground">
-                        {formatDate(competitor.last_scraped_at)}
+                        {updatedLabel}
                       </p>
                     </div>
                     
@@ -188,7 +195,8 @@ export const CompetitorsList = ({ onViewCompetitor, instagramBusinessAccountId }
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>

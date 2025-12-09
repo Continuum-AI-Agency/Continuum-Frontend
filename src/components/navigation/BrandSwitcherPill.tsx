@@ -11,7 +11,7 @@ import {
   MoonIcon,
   PlusCircledIcon,
 } from "@radix-ui/react-icons";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useSession } from "@/hooks/useSession";
 import { useActiveBrandContext } from "../providers/ActiveBrandProvider";
@@ -19,6 +19,7 @@ import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
 import { useTheme } from "../theme-provider";
 
 export function BrandSwitcherPill() {
+  const router = useRouter();
   const { logout, isPending } = useAuth();
   const { user } = useSession();
   const { activeBrandId, brandSummaries, isSwitching, selectBrand } = useActiveBrandContext();
@@ -31,7 +32,7 @@ export function BrandSwitcherPill() {
 
   return (
     <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-      <DropdownMenu.Trigger asChild>
+      <DropdownMenu.Trigger>
         <Button
           variant="surface"
           size="2"
@@ -93,39 +94,58 @@ export function BrandSwitcherPill() {
 
         <DropdownMenu.Separator className="my-1 h-px bg-white/10" />
 
-        <DropdownMenu.Item asChild>
-          <div className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1">
-            <div className="flex items-center gap-2">
-              <MoonIcon />
-              <Text>Dark mode</Text>
-            </div>
-            <Switch
-              checked={appearance === "dark"}
-              onCheckedChange={toggle}
-              size="1"
-              aria-label="Toggle dark mode"
-            />
+        <DropdownMenu.Item
+          onSelect={(event) => event.preventDefault()}
+          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1"
+        >
+          <div className="flex items-center gap-2">
+            <MoonIcon />
+            <Text>Dark mode</Text>
           </div>
+          <Switch
+            checked={appearance === "dark"}
+            onCheckedChange={toggle}
+            size="1"
+            aria-label="Toggle dark mode"
+          />
         </DropdownMenu.Item>
 
-        <DropdownMenu.Item asChild className="rounded-lg px-2 py-1">
-          <Link href="/settings" className="flex items-center gap-2">
+        <DropdownMenu.Item
+          className="rounded-lg px-2 py-1"
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push("/settings");
+          }}
+        >
+          <div className="flex items-center gap-2">
             <GearIcon />
             Settings
-          </Link>
+          </div>
         </DropdownMenu.Item>
-        <DropdownMenu.Item asChild className="rounded-lg px-2 py-1">
-          <Link href="/settings/integrations" className="flex items-center gap-2">
+        <DropdownMenu.Item
+          className="rounded-lg px-2 py-1"
+          onSelect={(event) => {
+            event.preventDefault();
+            router.push("/settings/integrations");
+          }}
+        >
+          <div className="flex items-center gap-2">
             <MixerHorizontalIcon />
             Integrations
-          </Link>
+          </div>
         </DropdownMenu.Item>
         {isAdmin && (
-          <DropdownMenu.Item asChild className="rounded-lg px-2 py-1">
-            <Link href="/admin" className="flex items-center gap-2">
+          <DropdownMenu.Item
+            className="rounded-lg px-2 py-1"
+            onSelect={(event) => {
+              event.preventDefault();
+              router.push("/admin");
+            }}
+          >
+            <div className="flex items-center gap-2">
               <CheckCircledIcon />
               Admin
-            </Link>
+            </div>
           </DropdownMenu.Item>
         )}
 

@@ -1,10 +1,5 @@
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { DropdownMenu } from '@radix-ui/themes';
 import { ChevronDown } from 'lucide-react';
 
 export type SortOption = 
@@ -42,8 +37,8 @@ export const CompetitorFilters = ({ sortBy, onSortChange, totalPosts }: Competit
       <div className="flex items-center gap-4">
         <span className="text-sm font-medium">Sort by:</span>
         
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
             <Button variant="outline" className="min-w-[240px] justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-base">{currentSort.icon}</span>
@@ -51,10 +46,10 @@ export const CompetitorFilters = ({ sortBy, onSortChange, totalPosts }: Competit
               </div>
               <ChevronDown className="h-4 w-4 ml-2" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[240px]">
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content align="start" className="w-[240px]">
             {sortOptions.map((option) => (
-              <DropdownMenuItem
+              <DropdownMenu.Item
                 key={option.value}
                 onClick={() => onSortChange(option.value)}
                 className="cursor-pointer"
@@ -66,10 +61,10 @@ export const CompetitorFilters = ({ sortBy, onSortChange, totalPosts }: Competit
                 {sortBy === option.value && (
                   <span className="ml-auto">✓</span>
                 )}
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       </div>
 
       <div className="text-sm text-muted-foreground">

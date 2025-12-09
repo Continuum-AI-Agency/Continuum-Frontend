@@ -17,7 +17,7 @@ type Props = {
 };
 
 const formSchema = z.object({
-	selected: z.record(z.boolean()).default({}),
+	selected: z.record(z.boolean()),
 });
 type FormValues = z.infer<typeof formSchema>;
 

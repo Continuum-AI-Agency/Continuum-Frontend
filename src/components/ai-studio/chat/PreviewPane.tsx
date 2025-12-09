@@ -43,16 +43,27 @@ export function PreviewPane({ brandName, streamState, onCancel, onReset }: Previ
         className="relative flex flex-1 items-center justify-center overflow-hidden rounded-xl"
         style={{
           background:
-            "radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-9), transparent 80%), transparent 35%), " +
-            "radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--accent-10), transparent 82%), transparent 30%), var(--color-panel)",
+            streamState.videoUrl || streamState.currentBase64 || streamState.posterBase64
+              ? "transparent"
+              : "radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent-9), transparent 80%), transparent 35%), " +
+                "radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--accent-10), transparent 82%), transparent 30%), var(--color-panel)",
           minHeight: 320,
+          height: "1200px",
+          maxHeight: "100vh",
         }}
       >
         {streamState.videoUrl ? (
           <video
             src={streamState.videoUrl}
             controls
-            className="max-h-full max-w-full object-contain transition duration-200"
+            playsInline
+            key={streamState.videoUrl}
+            poster={
+              streamState.posterBase64
+                ? `data:image/png;base64,${streamState.posterBase64}`
+                : undefined
+            }
+            className="absolute inset-0 h-full w-full object-contain transition duration-200"
           />
         ) : streamState.currentBase64 || streamState.posterBase64 ? (
           <Image
@@ -60,8 +71,9 @@ export function PreviewPane({ brandName, streamState, onCancel, onReset }: Previ
             alt="Current preview"
             fill
             unoptimized
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-contain transition duration-200"
+            sizes="100vw"
+            className="!object-contain transition duration-200"
+            priority
           />
         ) : (
           <Text color="gray">Drop a prompt and generate to see preview.</Text>

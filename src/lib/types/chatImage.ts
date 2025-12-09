@@ -2,6 +2,13 @@
 
 export type SupportedModel = "nano-banana" | "gemini-3-pro-image-preview" | "veo-3-1" | "veo-3-1-fast" | "sora-2";
 
+// Models accepted by the backend generation services (may include provider-specific aliases).
+export type SupportedBackendModel =
+  | SupportedModel
+  | "veo-3.1-generate-preview"
+  | "veo-3.1-fast-generate-preview"
+  | "gemini-2.5-flash-image";
+
 export const modelMediumMap: Record<SupportedModel, "image" | "video"> = {
   "nano-banana": "image",
   "gemini-3-pro-image-preview": "image",
@@ -79,4 +86,27 @@ export type StreamState = {
   videoUrl?: string;
   error?: string;
   lastEvent?: StreamEvent;
+};
+
+// Payload we send to the backend generation endpoints (snake_case; model may use provider-specific aliases).
+export type BackendChatImageRequestPayload = {
+  brand_id: string;
+  model: SupportedBackendModel;
+  medium: "image" | "video";
+  prompt: string;
+  aspect_ratio: string;
+  resolution?: string;
+  duration_seconds?: "4" | "6" | "8";
+  image_size?: "1K" | "2K" | "4K";
+  reference_images?: { data: string; mime_type: string; filename?: string; weight?: number; referenceType?: "asset" | "style" }[];
+  first_frame?: { data: string; mime_type: string; filename?: string };
+  last_frame?: { data: string; mime_type: string; filename?: string };
+  reference_video?: { data: string; mime_type: string; filename?: string };
+  negative_prompt?: string;
+  seed?: number;
+  cfg_scale?: number;
+  steps?: number;
+  continue_from?: { data: string; mime_type: string }[];
+  history?: { role: "user" | "assistant"; content: string }[];
+  reset?: boolean;
 };

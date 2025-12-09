@@ -7,7 +7,15 @@ import Image from "next/image";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useImageSseStream } from "@/hooks/useImageSseStream";
 import { chatImageRequestSchema, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
-import type { ChatImageHistoryItem, ChatImageRequestPayload, RefImage, RefVideo, SupportedModel } from "@/lib/types/chatImage";
+import type {
+  ChatImageHistoryItem,
+  ChatImageRequestPayload,
+  RefImage,
+  RefVideo,
+  SupportedModel,
+  SupportedBackendModel,
+  BackendChatImageRequestPayload,
+} from "@/lib/types/chatImage";
 import { getApiUrl } from "@/lib/api/config";
 
 import { ChatPanel } from "./ChatPanel";
@@ -18,6 +26,19 @@ type ChatSurfaceProps = {
   brandProfileId: string;
   brandName: string;
   initialHistory?: ChatImageHistoryItem[];
+};
+
+type ChatFormValues = {
+  model: SupportedModel;
+  prompt: string;
+  aspectRatio?: string;
+  durationSeconds?: number;
+  resolution?: string;
+  imageSize?: "1K" | "2K" | "4K";
+  negativePrompt?: string;
+  seed?: number;
+  cfgScale?: number;
+  steps?: number;
 };
 
 export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatSurfaceProps) {
@@ -32,20 +53,10 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
   const [history, setHistory] = React.useState<ChatImageHistoryItem[]>(initialHistory ?? []);
   const [continueFrom, setContinueFrom] = React.useState<{ data: string; mime_type: string }[]>([]);
   const [resetNext, setResetNext] = React.useState(false);
+  const [conversationTurns, setConversationTurns] = React.useState<{ role: "user" | "assistant"; content: string }[]>([]);
 
   const handleSubmit = React.useCallback(
-    async (form: {
-      model: SupportedModel;
-      prompt: string;
-      aspectRatio: string;
-      durationSeconds?: number;
-      resolution?: string;
-      imageSize?: "1K" | "2K" | "4K";
-      negativePrompt?: string;
-      seed?: number;
-      cfgScale?: number;
-      steps?: number;
-    }) => {
+    async (form: ChatFormValues) => {
       setActiveModel(form.model);
       const medium = getMediumForModel(form.model);
       const isNano = form.model === "nano-banana";
@@ -57,12 +68,14 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         });
         return;
       }
+      const aspectRatio = form.aspectRatio ?? "1:1";
+
       const payload: ChatImageRequestPayload = {
         brandProfileId,
         model: form.model,
         medium,
         prompt: form.prompt,
-        aspectRatio: form.aspectRatio,
+        aspectRatio,
         resolution: form.model === "nano-banana" ? form.resolution || "1024x1024" : medium === "video" ? form.resolution || "720p" : undefined,
         imageSize: form.model === "gemini-3-pro-image-preview" ? form.imageSize || "1K" : undefined,
         durationSeconds: medium === "video" ? (form.durationSeconds as 4 | 6 | 8 | undefined) ?? 8 : undefined,
@@ -76,10 +89,23 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         referenceVideo: medium === "video" ? referenceVideo : undefined,
       };
 
-      const apiPayload: Record<string, unknown> = {
-        prompt: payload.prompt,
+      const apiModel: SupportedBackendModel =
+        payload.medium === "video"
+          ? payload.model === "veo-3-1-fast"
+            ? "veo-3.1-fast-generate-preview"
+            : "veo-3.1-generate-preview"
+          : payload.model === "nano-banana"
+            ? "gemini-2.5-flash-image"
+            : payload.model;
+
+      const userTurn = { role: "user" as const, content: form.prompt };
+      const nextConversationTurns = form.model === "gemini-3-pro-image-preview" ? [...conversationTurns, userTurn] : [];
+
+      const apiPayload: BackendChatImageRequestPayload = {
         brand_id: payload.brandProfileId,
-        model: payload.model === "nano-banana" ? "gemini-2.5-flash-image" : payload.model,
+        model: apiModel,
+        medium: payload.medium,
+        prompt: payload.prompt,
         aspect_ratio: payload.aspectRatio,
         resolution:
           payload.model === "nano-banana"
@@ -87,9 +113,18 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
             : payload.medium === "video"
               ? payload.resolution ?? "720p"
               : undefined,
-        duration_seconds: payload.medium === "video" ? payload.durationSeconds ?? 8 : undefined,
+        duration_seconds:
+          payload.medium === "video"
+            ? (String((payload.durationSeconds as 4 | 6 | 8 | undefined) ?? 8) as "4" | "6" | "8")
+            : undefined,
         image_size: payload.model === "gemini-3-pro-image-preview" ? payload.imageSize ?? "1K" : undefined,
-        reference_images: payload.refs?.map((r) => ({ data: r.base64, mime_type: r.mime })) ?? undefined,
+        reference_images: payload.refs?.map((r) => ({
+          data: r.base64,
+          mime_type: r.mime,
+          filename: r.name,
+          weight: r.weight,
+          referenceType: r.referenceType,
+        })) ?? undefined,
         first_frame:
           payload.medium === "video" && payload.firstFrame
             ? { data: payload.firstFrame.base64, mime_type: payload.firstFrame.mime, filename: payload.firstFrame.name }
@@ -110,9 +145,23 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         seed: payload.seed,
         cfg_scale: payload.cfgScale,
         steps: payload.steps,
-        continue_from: continueFrom.length ? continueFrom : undefined,
+        continue_from:
+          payload.model === "gemini-3-pro-image-preview" && continueFrom.length ? continueFrom : undefined,
+        history:
+          payload.model === "gemini-3-pro-image-preview" && nextConversationTurns.length ? nextConversationTurns : undefined,
         reset: resetNext || undefined,
-      };
+      } satisfies Record<string, unknown>;
+
+      const estimatedSizeBytes = new TextEncoder().encode(JSON.stringify(apiPayload)).length;
+      const maxBytes = payload.medium === "video" ? 2_500_000 : 1_200_000;
+      if (estimatedSizeBytes > maxBytes) {
+        show({
+          title: "Request too large",
+          description: "Attachments are too big for this request. Remove or downsize reference media and try again.",
+          variant: "error",
+        });
+        return;
+      }
 
       const parsed = chatImageRequestSchema.safeParse({ ...payload });
       if (!parsed.success) {
@@ -138,15 +187,24 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         initUrl: payload.medium === "video" ? getApiUrl("/ai-studio/generate-video") : getApiUrl("/ai-studio/generate"),
         expectedMedia: payload.medium === "video" ? "video" : "image",
       });
+      if (result.error) {
+        reset();
+        show({ title: "Generation failed", description: result.error, variant: "error" });
+        return;
+      }
       setResetNext(false);
       if (streamState.posterBase64) {
         setContinueFrom([{ data: streamState.posterBase64, mime_type: "image/png" }]);
       }
       if (result.jobId) {
-        setHistory((prev) => [{ ...optimistic, id: result.jobId }, ...prev.slice(1)]);
+        setHistory((prev) => [{ ...optimistic, id: result.jobId }, ...prev.slice(1)] as ChatImageHistoryItem[]);
+      }
+
+      if (payload.model === "gemini-3-pro-image-preview") {
+        setConversationTurns(nextConversationTurns);
       }
     },
-    [brandProfileId, refs, firstFrame, lastFrame, referenceVideo, show, start, continueFrom, streamState.posterBase64, resetNext]
+    [brandProfileId, refs, firstFrame, lastFrame, referenceVideo, show, start, continueFrom, streamState.posterBase64, resetNext, reset, conversationTurns]
   );
 
   const handleSelectHistory = React.useCallback((item: ChatImageHistoryItem) => {
@@ -179,17 +237,29 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
 
   const handleReset = React.useCallback(() => {
     reset();
-    setConversationTurns([]);
-    setContinueFrom([]);
-    setResetNext(true);
+    if (activeModel === "gemini-3-pro-image-preview") {
+      setContinueFrom([]);
+      setResetNext(true);
+      setConversationTurns([]);
+    }
     show({ title: "Stream reset", variant: "info" });
-  }, [reset, show]);
+  }, [reset, show, activeModel]);
 
   React.useEffect(() => {
     if (streamState.status === "error" && streamState.error) {
       show({ title: "Stream error", description: streamState.error, variant: "error" });
     }
   }, [streamState.status, streamState.error, show]);
+
+  React.useEffect(() => {
+    const lastEvent = streamState.lastEvent as { event?: string; message?: string; text?: string } | undefined;
+    if (!lastEvent || activeModel !== "gemini-3-pro-image-preview") return;
+    if (lastEvent.event === "text" || lastEvent.event === "conversation_append") {
+      const content = (lastEvent.message ?? lastEvent.text ?? "").trim();
+      if (!content) return;
+      setConversationTurns((prev) => [...prev, { role: "assistant", content }]);
+    }
+  }, [streamState.lastEvent, activeModel]);
 
   return (
     <div className="relative ml-6 sm:ml-10 md:ml-[96px] flex h-full min-h-[720px] flex-col gap-4" style={{ color: "var(--gray-12)" }}>

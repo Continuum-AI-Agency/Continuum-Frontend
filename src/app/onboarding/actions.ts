@@ -334,7 +334,8 @@ export async function associateIntegrationAccountsAction(
     .select("id, raw_payload")
     .in("id", idsToUpdate);
 
-  const updates = (rows ?? []).map((row: IntegrationAccountAssetRow) => {
+  type MinimalAssetRow = Pick<IntegrationAccountAssetRow, "id" | "raw_payload">;
+  const updates = (rows ?? []).map((row: MinimalAssetRow) => {
     const selected = integrationAccountIds.includes(row.id);
     const merged =
       row?.raw_payload && typeof row.raw_payload === "object"

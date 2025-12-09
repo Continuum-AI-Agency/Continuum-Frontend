@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@radix-ui/themes/styles.css";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "../components/theme-provider";
 import GalaxyBackground from "../components/ui/GalaxyBackground";
 import { ToastProvider } from "../components/ui/ToastProvider";
@@ -78,6 +80,8 @@ export default async function RootLayout({
             </ToastProvider>
           </ReactQueryProvider>
         </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -89,8 +89,11 @@ export function DashboardHeader({
     <div className="px-4 sm:px-6 pt-3 sm:pt-4">
       <Flex direction="column" gap="3">
         {welcomeVisible && (
-          <Callout.Root color="indigo" variant="surface" className="shadow-sm" icon={<InfoCircledIcon />}>
-            <Flex align="center" gap="3" justify="between">
+          <Callout.Root color="indigo" variant="surface" className="shadow-sm">
+            <Callout.Icon>
+              <InfoCircledIcon />
+            </Callout.Icon>
+            <Flex align="center" gap="3" justify="between" className="w-full">
               <Callout.Text>
                 Welcome back, {user?.user_metadata?.name || user?.email?.split("@")[0] || "User"}. Your dashboard shows
                 live brand insights and quick actions. Switch brands or add a new one from the menu on the right.
@@ -109,7 +112,7 @@ export function DashboardHeader({
 
           <Flex align="center" gap="3 sm:gap-4" className="ml-auto">
             <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-              <DropdownMenu.Trigger asChild>
+              <DropdownMenu.Trigger>
                 <Button
                   variant="outline"
                   size="2"

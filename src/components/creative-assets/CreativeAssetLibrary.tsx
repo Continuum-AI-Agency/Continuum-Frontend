@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Box,
   Button,
@@ -10,10 +9,12 @@ import {
   Heading,
   IconButton,
   Separator,
+  ScrollArea,
   Text,
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
+import * as Accordion from "@radix-ui/react-accordion";
 import {
   ChevronLeftIcon,
   FileIcon,
@@ -32,6 +33,9 @@ import {
   type CreativeAssetDragPayload,
 } from "@/lib/creative-assets/drag";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
+import { listCreativeAssets } from "@/lib/creative-assets/storageClient";
+
+const FOLDER_CACHE_LIMIT = 20;
 
 type CreativeAssetLibraryProps = {
   brandProfileId: string;
@@ -51,40 +55,13 @@ export function CreativeAssetLibrary({
 }: CreativeAssetLibraryProps) {
   const { show } = useToast();
   const browser = useCreativeAssetBrowser(brandProfileId);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const [columns, setColumns] = useState(3);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const width = entry.contentRect.width;
-      if (width < 420) setColumns(1);
-      else if (width < 720) setColumns(2);
-      else if (width < 960) setColumns(3);
-      else setColumns(4);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  const [openFolders, setOpenFolders] = useState<string[]>([]);
+  const folderCacheRef = useRef<Map<string, CreativeAsset[]>>(new Map());
+  const folderCacheOrderRef = useRef<string[]>([]);
 
   const assets = browser.assets;
-
-  const rows = useMemo(() => {
-    const grouped: CreativeAsset[][] = [];
-    const chunk = Math.max(columns, 1);
-    for (let index = 0; index < assets.length; index += chunk) {
-      grouped.push(assets.slice(index, index + chunk));
-    }
-    return grouped;
-  }, [assets, columns]);
-
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 220,
-    overscan: 4,
-  });
+  const folders = useMemo(() => assets.filter((a) => a.kind === "folder"), [assets]);
+  const files = useMemo(() => assets.filter((a) => a.kind === "file"), [assets]);
 
   const handleUploadFiles = useCallback(
     async (files: FileList | null) => {
@@ -115,8 +92,6 @@ export function CreativeAssetLibrary({
   const onDragOverUpload = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
   }, []);
-
-  const virtualRows = rowVirtualizer.getVirtualItems();
 
   return (
     <Box className="space-y-3">
@@ -162,56 +137,77 @@ export function CreativeAssetLibrary({
         </Text>
       </Box>
 
-      <Box
-        className="rounded-lg border border-gray-200 dark:border-gray-800"
-        style={{ height }}
-      >
-        <div ref={scrollRef} className="relative h-full overflow-auto">
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: "100%",
-              position: "relative",
-            }}
-          >
-            {virtualRows.map((virtualRow) => {
-              const rowAssets = rows[virtualRow.index] ?? [];
-              return (
+      <Box className="rounded-lg border border-gray-200 dark:border-gray-800" style={{ height }}>
+        <ScrollArea type="always" scrollbars="vertical" style={{ height: "100%" }}>
+          <div className="space-y-3 p-3">
+            <Accordion.Root
+              type="multiple"
+              value={openFolders}
+              onValueChange={(values) => setOpenFolders(values as string[])}
+              className="space-y-2"
+            >
+              {folders.map((folder) => (
+                <Accordion.Item key={folder.fullPath} value={folder.fullPath} className="rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+                  <Accordion.Trigger className="w-full px-3 py-2 text-left font-medium flex items-center justify-between">
+                    <Flex align="center" gap="2">
+                      <ArchiveIcon /> <Text>{folder.name}</Text>
+                    </Flex>
+                    <ChevronLeftIcon className="data-[state=open]:rotate-90 transition-transform" />
+                  </Accordion.Trigger>
+                  <Accordion.Content className="px-3 pb-3">
+                    <FolderContents
+                      brandProfileId={brandProfileId}
+                      folder={folder}
+                      isOpen={openFolders.includes(folder.fullPath)}
+                      getCachedAssets={(path) => folderCacheRef.current.get(path)}
+                      setCachedAssets={(path, assetsToCache) => {
+                        const cache = folderCacheRef.current;
+                        const order = folderCacheOrderRef.current;
+                        if (!cache.has(path)) {
+                          order.push(path);
+                        }
+                        cache.set(path, assetsToCache);
+                        while (order.length > FOLDER_CACHE_LIMIT) {
+                          const oldest = order.shift();
+                          if (oldest) cache.delete(oldest);
+                        }
+                      }}
+                      onRename={browser.renameAssetPath}
+                      onDelete={browser.deleteAssetPath}
+                      onDragStart={onAssetDragStart}
+                      onSelect={onAssetClick}
+                    />
+                  </Accordion.Content>
+                </Accordion.Item>
+              ))}
+            </Accordion.Root>
+
+            {files.length > 0 && (
+              <Box className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-950">
+                <Text weight="medium" size="2" className="mb-2 block">
+                  Files in this folder
+                </Text>
                 <div
-                  key={virtualRow.key}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                  data-index={virtualRow.index}
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
                 >
-                  <div
-                    className="grid gap-3"
-                    style={{
-                      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-                    }}
-                  >
-                    {rowAssets.map((asset) => (
-                      <AssetTile
-                        key={asset.fullPath}
-                        asset={asset}
-                        onOpenFolder={browser.navigateInto}
-                        onRename={browser.renameAssetPath}
-                        onDelete={browser.deleteAssetPath}
-                        onDragStart={onAssetDragStart}
-                        onSelect={onAssetClick}
-                        scrollContainer={scrollRef}
-                      />
-                    ))}
-                  </div>
+                  {files.map((asset) => (
+                    <AssetTile
+                      key={asset.fullPath}
+                      asset={asset}
+                      onOpenFolder={browser.navigateInto}
+                      onRename={browser.renameAssetPath}
+                      onDelete={browser.deleteAssetPath}
+                      onDragStart={onAssetDragStart}
+                      onSelect={onAssetClick}
+                      scrollContainer={null}
+                    />
+                  ))}
                 </div>
-              );
-            })}
+              </Box>
+            )}
           </div>
-        </div>
+        </ScrollArea>
       </Box>
 
       {browser.error && (
@@ -237,8 +233,137 @@ type AssetTileProps = {
   onDelete: (asset: CreativeAsset) => Promise<unknown>;
   onDragStart?: (asset: CreativeAsset) => void;
   onSelect?: (asset: CreativeAsset) => void;
-  scrollContainer: React.RefObject<HTMLDivElement | null>;
+  scrollContainer: React.RefObject<HTMLDivElement | null> | null;
 };
+
+type FolderContentsProps = {
+  brandProfileId: string;
+  folder: CreativeAsset;
+  isOpen: boolean;
+  getCachedAssets: (path: string) => CreativeAsset[] | undefined;
+  setCachedAssets: (path: string, assets: CreativeAsset[]) => void;
+  onRename: (asset: CreativeAsset, name: string) => Promise<unknown>;
+  onDelete: (asset: CreativeAsset) => Promise<unknown>;
+  onDragStart?: (asset: CreativeAsset) => void;
+  onSelect?: (asset: CreativeAsset) => void;
+};
+
+function FolderContents({
+  brandProfileId,
+  folder,
+  isOpen,
+  getCachedAssets,
+  setCachedAssets,
+  onRename,
+  onDelete,
+  onDragStart,
+  onSelect,
+}: FolderContentsProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [assets, setAssets] = useState<CreativeAsset[] | null>(null);
+  const [openNested, setOpenNested] = useState<string[]>([]);
+  const folderPath = useMemo(() => folder.fullPath.replace(new RegExp(`^${brandProfileId}/?`), ""), [brandProfileId, folder.fullPath]);
+
+  useEffect(() => {
+    if (!isOpen || loading) return;
+    const cached = getCachedAssets(folderPath);
+    if (cached) {
+      setAssets(cached);
+      return;
+    }
+    if (assets !== null) return;
+    setLoading(true);
+    listCreativeAssets(brandProfileId, folderPath)
+      .then((listing) => {
+        setAssets(listing.assets);
+        setCachedAssets(folderPath, listing.assets);
+        setError(null);
+      })
+      .catch((err) => setError((err as Error)?.message ?? "Failed to load folder"))
+      .finally(() => setLoading(false));
+  }, [assets, brandProfileId, folderPath, getCachedAssets, isOpen, loading, setCachedAssets]);
+
+  const files = useMemo(() => (assets ?? []).filter((a) => a.kind === "file"), [assets]);
+  const subfolders = useMemo(() => (assets ?? []).filter((a) => a.kind === "folder"), [assets]);
+
+  return (
+    <Box className="rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-900">
+      {loading && <Text size="1">Loading…</Text>}
+      {error && (
+        <Text size="1" color="red">
+          {error}
+        </Text>
+      )}
+
+      {files.length === 0 && subfolders.length === 0 && !loading ? (
+        <Text size="1" color="gray">
+          Empty folder
+        </Text>
+      ) : null}
+
+      {files.length > 0 && (
+        <ScrollArea type="always" scrollbars="vertical" style={{ maxHeight: 480 }}>
+          <div
+            ref={scrollRef}
+            className="grid gap-3 p-2"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+              gridAutoRows: "220px",
+            }}
+          >
+            {files.map((asset) => (
+              <AssetTile
+                key={asset.fullPath}
+                asset={asset}
+                onOpenFolder={() => {}}
+                onRename={onRename}
+                onDelete={onDelete}
+                onDragStart={onDragStart}
+                onSelect={onSelect}
+                scrollContainer={scrollRef}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      )}
+
+      {subfolders.length > 0 && (
+        <Accordion.Root
+          type="multiple"
+          value={openNested}
+          onValueChange={(values) => setOpenNested(values as string[])}
+          className="mt-2 space-y-2"
+        >
+          {subfolders.map((child) => (
+            <Accordion.Item key={child.fullPath} value={child.fullPath} className="rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
+              <Accordion.Trigger className="w-full px-2 py-1 text-left font-medium flex items-center justify-between">
+                <Flex align="center" gap="2">
+                  <ArchiveIcon width={16} height={16} /> <Text size="1">{child.name}</Text>
+                </Flex>
+                <ChevronLeftIcon className="data-[state=open]:rotate-90 transition-transform" />
+              </Accordion.Trigger>
+              <Accordion.Content className="px-2 pb-2">
+                <FolderContents
+                  brandProfileId={brandProfileId}
+                  folder={child}
+                  isOpen={openNested.includes(child.fullPath)}
+                  getCachedAssets={getCachedAssets}
+                  setCachedAssets={setCachedAssets}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  onDragStart={onDragStart}
+                  onSelect={onSelect}
+                />
+              </Accordion.Content>
+            </Accordion.Item>
+          ))}
+        </Accordion.Root>
+      )}
+    </Box>
+  );
+}
 
 function AssetTile({
   asset,
@@ -256,6 +381,10 @@ function AssetTile({
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    if (!scrollContainer) {
+      setIsVisible(true);
+      return;
+    }
     const target = previewRef.current;
     const root = scrollContainer.current;
     if (!target) return;

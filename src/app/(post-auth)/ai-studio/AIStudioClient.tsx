@@ -354,7 +354,7 @@ export default function AIStudioClient({
   const [loadErrors, setLoadErrors] = React.useState<LoadErrorMap>(() => initialLoadErrors ?? {});
   const [jobs, setJobs] = React.useState(() => initialJobs);
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge[]>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
   const [canvasOverlay, setCanvasOverlay] = React.useState(false);
@@ -613,7 +613,7 @@ export default function AIStudioClient({
             <Text color="gray">Build flows for {brandName}</Text>
           </div>
           <div className="flex items-center gap-3">
-            <Tabs.Root value={activeTab} onValueChange={(v) => setActiveTab(v as "chat" | "canvas")}>
+            <Tabs.Root value={activeTab} onValueChange={(v) => setActiveTab(v as "chat" | "canvas")} activationMode="manual">
               <Tabs.List>
                 <Tabs.Trigger value="chat">Chat</Tabs.Trigger>
                 <Tabs.Trigger value="canvas">Canvas</Tabs.Trigger>

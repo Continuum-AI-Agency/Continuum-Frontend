@@ -200,12 +200,13 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, [dashboard, activeUsername]);
 
-  const runSearch = async (force = false) => {
-    if (!username.trim()) {
+const runSearch = async (force = false, overrideUsername?: string) => {
+    const candidate = overrideUsername ?? username;
+    if (!candidate.trim()) {
       setError("Enter an Instagram handle to search.");
       return;
     }
-    const clean = username.replace(/^@/, "").trim();
+    const clean = candidate.replace(/^@/, "").trim();
     setIsLoading(true);
     setError(null);
     setActiveUsername(clean);

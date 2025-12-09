@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import { useCurrentUserAvatar } from "@/hooks/useCurrentUserAvatar";
+import { openCenteredPopup, waitForPopupClosed, waitForPopupMessage } from "@/lib/popup";
 
 type UserProfile = {
   email: string;
@@ -35,51 +36,134 @@ export function UserSettingsPanel({ user, integrations }: Props) {
 
   const personalIntegrations = useMemo(() => integrations, [integrations]);
 
-  function openUrl(url: string) {
-    if (typeof window !== "undefined") {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
-  }
+  type ProviderGroup = "google" | "facebook";
 
-  const handleConnectMeta = () => {
-    startTransition(async () => {
-      try {
-        const { url } = await metaSync.mutateAsync(window.location.origin + "/integrations/callback");
-        openUrl(url);
-        show({ title: "Continue in new window", description: "Complete Meta auth to finish connecting.", variant: "success" });
-      } catch (error) {
-        show({
-          title: "Meta connection failed",
-          description: error instanceof Error ? error.message : "Unable to start Meta OAuth.",
-          variant: "error",
-        });
-      }
-    });
+  const getSiteOrigin = () => {
+    if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+    const fallback = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    try {
+      return new URL(fallback).origin;
+    } catch {
+      return "http://localhost:3000";
+    }
   };
 
-  const handleConnectGoogle = () => {
+  const buildIntegrationCallbackUrl = (provider: ProviderGroup, context: string) => {
+    const origin = getSiteOrigin();
+    const url = new URL("/integrations/callback", origin);
+    url.searchParams.set("provider", provider);
+    url.searchParams.set("context", context);
+    return url.toString();
+  };
+
+  const handleConnectProvider = (provider: ProviderGroup) => {
     startTransition(async () => {
+      let cleanup: (() => void) | undefined;
       try {
-        const { url } = await googleSync.mutateAsync(window.location.origin + "/integrations/callback");
-        openUrl(url);
-        show({
-          title: "Continue in new window",
-          description: "Complete Google OAuth to finish connecting.",
-          variant: "success",
+        const callbackUrl = buildIntegrationCallbackUrl(provider, "settings");
+        const syncResponse =
+          provider === "google"
+            ? await googleSync.mutateAsync(callbackUrl)
+            : await metaSync.mutateAsync(callbackUrl);
+        const expectedState = "state" in syncResponse ? syncResponse.state : null;
+
+        const popup = openCenteredPopup(
+          syncResponse.url,
+          `Connect ${provider === "google" ? "Google" : "Meta"}`
+        );
+        if (!popup) {
+          show({ title: "Popup blocked", description: "Allow popups to continue.", variant: "error" });
+          return;
+        }
+
+        const abortCtrl = new AbortController();
+        const timeoutId = window.setTimeout(() => {
+          try {
+            popup?.close();
+          } catch {
+            // ignore
+          }
+          abortCtrl.abort();
+        }, 120000);
+        cleanup = () => {
+          try {
+            abortCtrl.abort();
+          } catch {
+            // ignore
+          }
+          window.clearTimeout(timeoutId);
+        };
+
+        type IntegrationSuccess = {
+          type: string;
+          provider: string | null;
+          accountId?: string | null;
+          context?: string;
+          state?: string | null;
+        };
+        type IntegrationError = {
+          type: string;
+          provider?: string | null;
+          context?: string;
+          message?: string;
+          state?: string | null;
+        };
+
+        const predicate = (message: IntegrationSuccess | IntegrationError) =>
+          message.provider === provider &&
+          message.context === "settings" &&
+          (!expectedState || message.state === expectedState);
+
+        const successPromise = waitForPopupMessage<IntegrationSuccess>("oauth:success", {
+          predicate,
+          signal: abortCtrl.signal,
         });
+
+        const errorPromise = waitForPopupMessage<IntegrationError>("oauth:error", {
+          predicate,
+          signal: abortCtrl.signal,
+        }).then(payload => {
+          throw new Error(payload.message ?? "Connection cancelled.");
+        });
+
+        const closedPromise = waitForPopupClosed(popup, { signal: abortCtrl.signal }).then(() => {
+          throw new Error("Connection cancelled.");
+        });
+
+        const result = await Promise.race([successPromise, errorPromise, closedPromise]);
+        if (!result.provider || result.provider !== provider) {
+          show({ title: "Connection incomplete", description: "We could not verify the provider.", variant: "error" });
+          cleanup();
+          return;
+        }
+
+        try {
+          popup.close();
+        } catch {
+          // popup may already be closed
+        }
+        cleanup();
+        router.refresh();
+        show({ title: "Connected", description: `${provider === "google" ? "Google" : "Meta"} accounts synced.`, variant: "success" });
       } catch (error) {
         show({
-          title: "Google connection failed",
-          description: error instanceof Error ? error.message : "Unable to start Google OAuth.",
+          title: "Connection failed",
+          description: error instanceof Error ? error.message : "Please try again.",
           variant: "error",
         });
+      } finally {
+        try {
+          cleanup?.();
+        } catch {
+          // ignore cleanup errors
+        }
       }
     });
   };
 
   const handleRefresh = () => {
     router.refresh();
-    show({ title: "Refreshing", description: "Updating your integrations…", variant: "default" });
+    show({ title: "Refreshing", description: "Updating your integrations…", variant: "info" });
   };
 
   const handleUploadAvatar = async (file?: File | null) => {
@@ -145,10 +229,10 @@ export function UserSettingsPanel({ user, integrations }: Props) {
             <Text color="gray">Accounts you personally connected. You can share them to brands later.</Text>
           </div>
           <Flex gap="2" wrap="wrap">
-            <Button variant="surface" onClick={handleConnectMeta} disabled={isPending}>
+            <Button variant="surface" onClick={() => handleConnectProvider("facebook")} disabled={isPending}>
               Connect Meta
             </Button>
-            <Button variant="surface" onClick={handleConnectGoogle} disabled={isPending}>
+            <Button variant="surface" onClick={() => handleConnectProvider("google")} disabled={isPending}>
               Connect Google
             </Button>
             <Button variant="ghost" onClick={handleRefresh} disabled={isPending}>

@@ -10,7 +10,7 @@ import type {
 import { CONTINUUM_EVENT_TYPES } from "@/lib/events/schema";
 
 type ContinuumEventHandlers = {
-  [K in ContinuumEventName]?: (event: ContinuumEvent) => void;
+  [K in ContinuumEventName]?: (event: ContinuumEvent<K>) => void;
 };
 
 type UseContinuumServerEventsOptions = {
@@ -76,9 +76,9 @@ export function useContinuumServerEvents(
     eventSource.addEventListener("continuum.keepalive", onKeepAlive);
     eventSource.onerror = onError;
 
-    const listeners = CONTINUUM_EVENT_TYPES.map((eventName) => {
+    const listeners = CONTINUUM_EVENT_TYPES.map(<K extends ContinuumEventName>(eventName: K) => {
       const listener = (message: MessageEvent<string>) => {
-        const handler = handlersRef.current[eventName];
+        const handler = handlersRef.current[eventName] as ((event: ContinuumEvent<K>) => void) | undefined;
         if (!handler) return;
 
         const payload = parseEventPayload(eventName, message);

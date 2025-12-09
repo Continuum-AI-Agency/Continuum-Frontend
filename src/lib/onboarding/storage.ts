@@ -133,7 +133,20 @@ const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument["source"]>([
   "website",
 ]);
 
-type BrandDocumentRow = Database["brand_profiles"]["Tables"]["brand_documents"]["Row"];
+type BrandDocumentRow = {
+  id: string;
+  brand_id: string;
+  name: string;
+  status: string | null;
+  error_message: string | null;
+  type: string | null;
+  source: string | null;
+  created_at: string;
+  updated_at: string | null;
+  size?: number | null;
+  storage_path?: string | null;
+  external_url?: string | null;
+};
 
 function normalizeDocumentStatus(status: string | null): OnboardingDocument["status"] {
   if (status === "ready" || status === "error") {
@@ -227,15 +240,17 @@ async function syncBrandDocuments(
 
   const { data, error } = await supabase
     .schema("brand_profiles")
+    // the generated Database types don't include brand_documents yet; cast to bypass
     .from("brand_documents")
     .select(
       "id, name, source, status, size, storage_path, external_url, error_message, created_at, updated_at"
     )
     .eq("brand_id", brandId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true }) as { data: BrandDocumentRow[] | null; error: unknown };
 
   if (error) {
-    console.warn("Failed to sync brand documents", error.message);
+    const message = (error as { message?: string })?.message ?? "Unknown error";
+    console.warn("Failed to sync brand documents", message);
     return false;
   }
 

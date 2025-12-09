@@ -1,0 +1,2 @@
+# Prevent Vercel from uploading serverless Supabase functions.
+supabase/functions

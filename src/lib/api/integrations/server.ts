@@ -3,9 +3,9 @@
 import "server-only";
 
 import { httpServer } from "@/lib/api/http.server";
-import { assetsResponseSchema } from "@/lib/schemas/brand-assets";
+import { assetsResponseSchema, type Asset } from "@/lib/schemas/brand-assets";
 
-export async function fetchAvailableAssets(providers?: string[]) {
+export async function fetchAvailableAssets(providers?: string[]): Promise<Asset[]> {
   const query = providers?.length ? `?providers=${encodeURIComponent(providers.join(","))}` : "";
   const res = await httpServer.request({
     path: `/integrations/assets${query}`,
@@ -13,5 +13,9 @@ export async function fetchAvailableAssets(providers?: string[]) {
     schema: assetsResponseSchema,
     cache: "no-store",
   });
-  return res.assets;
+  // Ensure included is always a concrete boolean for form consumers.
+  return res.assets.map(asset => ({
+    ...asset,
+    included: Boolean(asset.included),
+  }));
 }

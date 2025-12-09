@@ -4,19 +4,26 @@ import {
   competitorDashboardSchema,
   competitorPostSchema,
   competitorProfileSchema,
+  competitorSavedProfileSchema,
   type CompetitorDashboard,
   type CompetitorPost as CompetitorPostType,
   type CompetitorProfile,
+  type CompetitorSavedProfile,
 } from "@/lib/schemas/competitors";
 
+export const CompetitorInfoSchema = z.object({
+  username: z.string(),
+  fullName: z.string().optional(),
+  biography: z.string().optional(),
+  profilePicUrl: z.string().optional(),
+  cacheAgeSeconds: z.number().int().nonnegative().optional(),
+  lastScrapedAt: z.string().optional(),
+  verified: z.boolean().optional(),
+  igUserId: z.string().optional(),
+});
+
+export type CompetitorInfo = z.infer<typeof CompetitorInfoSchema>;
 export type DashboardResponse = CompetitorDashboard;
-export type CompetitorInfo = {
-  username: string;
-  full_name?: string;
-  biography?: string;
-  profile_pic_url?: string;
-  cache_age_seconds?: number;
-};
 
 // Legacy shapes kept for compatibility with reference components.
 export const CompetitorPostsFilters = z.object({
@@ -29,6 +36,7 @@ export const CompetitorPostsFilters = z.object({
 export type CompetitorPostsFilters = z.infer<typeof CompetitorPostsFilters>;
 export type CompetitorPost = CompetitorPostType;
 export type ProfileData = CompetitorProfile;
+export type SavedCompetitor = CompetitorSavedProfile;
 
 export const CompetitorDashboardSchema = competitorDashboardSchema;
 export const ProfileDataSchema = competitorProfileSchema;

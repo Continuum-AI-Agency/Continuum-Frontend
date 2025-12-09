@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import Image from 'next/image';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@radix-ui/themes';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import { ChevronLeft, ChevronRight, ExternalLink, Heart, MessageCircle, Eye, TrendingUp } from 'lucide-react';
 import { CompetitorService } from '@/services/competitorService';
-import type { DashboardPost } from '@/types/competitor-types';
+import type { CompetitorPost as DashboardPost } from '@/types/competitor-types';
 
 interface CompetitorPostCardProps {
   post: DashboardPost;
@@ -15,17 +15,19 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
 
-  const allMedia = post.carousel_items.length > 0 
-    ? post.carousel_items 
-    : post.media_urls.map(url => ({ type: post.type === 'Video' ? 'video' : 'image' as const, url }));
+  const carousel = (post as { carousel_items?: { type: "image" | "video"; url: string }[] }).carousel_items ?? [];
+  const mediaUrls = (post as { media_urls?: string[] }).media_urls ?? [];
+  const allMedia = carousel.length > 0
+    ? carousel
+    : mediaUrls.map(url => ({ type: post.type === 'Video' ? 'video' as const : 'image' as const, url }));
 
   const hasMultipleMedia = allMedia.length > 1;
   const currentMedia = allMedia[currentMediaIndex];
   
-  const engagementRate = post.views 
+  const engagementRate = post.views
     ? CompetitorService.calculateVideoEngagementRate(
-        post.likes_count,
-        post.comments_count,
+        (post as { likes_count?: number }).likes_count ?? post.likesCount,
+        (post as { comments_count?: number }).comments_count ?? post.commentsCount,
         post.views
       )
     : null;
@@ -137,22 +139,22 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
 
           <div className="absolute top-2 right-2 flex gap-1">
             {hasMultipleMedia && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="soft" color="gray" className="text-xs">
                 {currentMediaIndex + 1}/{allMedia.length}
               </Badge>
             )}
-            <Badge variant="secondary" className="text-xs">
-              {CompetitorService.getPostTypeIcon(post.type, post.product_type)}
+            <Badge variant="soft" color="indigo" className="text-xs">
+              {CompetitorService.getPostTypeIcon(post.type ?? "", (post as { productType?: string }).productType ?? "")}
             </Badge>
           </div>
 
-          {post.is_pinned && (
+          {(post as { is_pinned?: boolean }).is_pinned ?? post.isPinned ? (
             <div className="absolute top-2 left-2">
-              <Badge variant="default" className="text-xs">
+              <Badge variant="solid" className="text-xs">
                 📌 Pinned
               </Badge>
             </div>
-          )}
+          ) : null}
 
           {post.caption && (
             <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white p-4 pointer-events-none">
@@ -166,7 +168,7 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <a
-                  href={CompetitorService.getPostOpenUrl(post.short_code, post.product_type)}
+                  href={CompetitorService.getPostOpenUrl(post.shortCode, post.productType)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-30"
@@ -195,7 +197,7 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
               <TooltipTrigger asChild>
                 <div className="flex items-center gap-1.5 cursor-default">
                   <Heart className="h-4 w-4 text-red-500" />
-                  <span className="font-medium">{CompetitorService.formatNumber(post.likes_count)}</span>
+                  <span className="font-medium">{CompetitorService.formatNumber(post.likesCount)}</span>
                 </div>
               </TooltipTrigger>
               <TooltipContent>
@@ -207,7 +209,7 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
               <TooltipTrigger asChild>
                 <div className="flex items-center gap-1.5 cursor-default">
                   <MessageCircle className="h-4 w-4 text-blue-500" />
-                  <span className="font-medium">{CompetitorService.formatNumber(post.comments_count)}</span>
+                  <span className="font-medium">{CompetitorService.formatNumber(post.commentsCount)}</span>
                 </div>
               </TooltipTrigger>
               <TooltipContent>

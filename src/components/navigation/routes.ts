@@ -1,10 +1,10 @@
-import type { ComponentType, SVGProps } from "react";
+import type { ComponentType, ComponentProps } from "react";
 import { BarChartIcon, HomeIcon, MagicWandIcon, RocketIcon } from "@radix-ui/react-icons";
 
 export type AppNavigationItem = {
   label: string;
   href: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  icon: ComponentType<ComponentProps<typeof HomeIcon>>;
   badge?: {
     label: string;
     tone?: "green" | "red" | "blue" | "violet";

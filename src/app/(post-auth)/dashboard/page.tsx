@@ -27,6 +27,7 @@ import { BrandEventsPanel } from "@/components/brand-insights/BrandEventsPanel";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
+import type { BrandInsightsTrendsAndEvents } from "@/lib/schemas/brandInsights";
 import { fetchOnboardingMetadata, ensureOnboardingState } from "@/lib/onboarding/storage";
 import { needsOnboardingReminder } from "@/lib/onboarding/reminders";
 
@@ -61,7 +62,15 @@ export default async function DashboardPage() {
     insightsError = error instanceof Error ? error.message : "Unable to load brand insights.";
   }
 
-  const trendsAndEvents = insights?.data.trendsAndEvents ?? { trends: [], events: [], country: null };
+  const trendsAndEvents: BrandInsightsTrendsAndEvents =
+    insights?.data.trendsAndEvents ?? {
+      trends: [],
+      events: [],
+      country: undefined,
+      status: undefined,
+      generatedAt: undefined,
+      weekAnalyzed: undefined,
+    };
   const trendsCount = trendsAndEvents.trends.length;
   const eventsCount = trendsAndEvents.events.length;
   const questionsCount = insights?.data.questionsByNiche.summary?.totalQuestions ?? 0;
