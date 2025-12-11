@@ -11,9 +11,20 @@ export function createSupabaseBrowserClient() {
     return client;
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      "Supabase client is not configured. Missing NEXT_PUBLIC_SUPABASE_URL or publishable/anon key."
+    );
+  }
+
   client = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookieOptions: getSupabaseCookieOptions(),
     }
@@ -21,4 +32,3 @@ export function createSupabaseBrowserClient() {
 
   return client;
 }
-

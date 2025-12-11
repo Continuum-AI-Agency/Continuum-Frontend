@@ -1,11 +1,11 @@
 "use client";
 
-import { Card, Container, Flex, Heading, Text, Callout } from "@radix-ui/themes";
+import { Card, Flex, Heading, Text, Callout } from "@radix-ui/themes";
 import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
 
 export default function PaidMediaPage() {
   return (
-    <Container size="4">
+    <div className="w-full max-w-none px-3 sm:px-4 lg:px-6 py-8">
       <Flex direction="column" gap="4">
         <Heading size="6" className="text-white">Paid Media</Heading>
         <Text color="gray">Plan, launch, and optimize paid campaigns across ads platforms.</Text>
@@ -31,7 +31,6 @@ export default function PaidMediaPage() {
           </Flex>
         </Card>
       </Flex>
-    </Container>
+    </div>
   );
 }
-

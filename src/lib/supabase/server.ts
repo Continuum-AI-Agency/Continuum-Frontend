@@ -6,9 +6,18 @@ import { applySupabaseCookies, getSupabaseCookieOptions } from "./cookies";
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase server client misconfigured: missing URL or key env vars.");
+  }
+
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookieOptions: getSupabaseCookieOptions(),
       cookies: {
@@ -68,4 +77,3 @@ export async function getServerUser() {
     return null;
   }
 }
-
