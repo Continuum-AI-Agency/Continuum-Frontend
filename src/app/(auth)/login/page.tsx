@@ -15,6 +15,7 @@ import { FeatureList } from "@/components/auth/FeatureList";
 import { EmailSent } from "@/components/auth/EmailSent";
 import { useAuth } from "@/hooks/useAuth";
 import { magicLinkSchema, type MagicLinkInput } from "@/lib/auth/schemas";
+import styles from "./login.module.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: "Authentication failed. Please try again.",
@@ -72,29 +73,23 @@ export default function LoginPage() {
     }
   };
 
-  const glowGradient = `radial-gradient(circle at 60% 20%, rgba(130, 102, 255, 0.45), transparent 55%),
-    radial-gradient(circle at 30% 80%, rgba(99, 253, 207, 0.35), transparent 60%)`;
-
   return (
-    <div className="min-h-screen flex overflow-hidden bg-default text-primary" style={{ backgroundImage: glowGradient }}>
-      {/* Left Column - Login Form */}
-      <div 
-        className="w-full lg:w-1/2 flex flex-col" 
-      >
+    <div className={`${styles.loginBackground} min-h-screen overflow-hidden`}>
+      <div className={styles.wave} />
+      <div className={`${styles.wave} ${styles.waveSecond}`} />
+      <div className={`${styles.wave} ${styles.waveThird}`} />
+
+      <div className="relative z-10 min-h-screen flex text-primary">
+        {/* Left Column - Login Form */}
+        <div 
+          className="w-full lg:w-1/2 flex flex-col" 
+        >
         {/* Header */}
-        <div className="p-6">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-secondary hover:text-primary transition-colors group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-medium">Back to home</span>
-          </Link>
-        </div>
+        <div className="p-6" />
 
         {/* Form Container */}
-        <div className="flex-1 flex items-center justify-center pl-12 pr-8 py-16">
-          <div className="w-full max-w-md">
+          <div className="flex-1 flex items-center justify-center pl-12 pr-8 py-16">
+            <div className="w-full max-w-md">
             {/* Logo */}
             <div className="mb-8">
               <Image
@@ -229,34 +224,33 @@ export default function LoginPage() {
                     </button>
                   </div>
 
-                  {/* Terms */}
-                  <p className="text-center mt-6 text-xs text-secondary">
-                    By continuing, you agree to our{" "}
-                    <Link href="/terms" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--accent)" }}>
-                      Terms of Service
-                    </Link>{" "}
-                    and{" "}
-                    <Link href="/privacy" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--accent)" }}>
-                      Privacy Policy
-                    </Link>
-                  </p>
+                  <div className="space-y-4 mt-8">
+                    <p className="text-center text-xs text-secondary">
+                      By continuing, you agree to our{" "}
+                      <Link href="/terms" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--primary)" }}>
+                        Terms of Service
+                      </Link>{" "}
+                      and{" "}
+                      <Link href="/privacy" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--primary)" }}>
+                        Privacy Policy
+                      </Link>
+                    </p>
+
+                    <p className="text-center text-sm text-secondary">
+                      Having trouble signing in?
+                    </p>
+
+                    <p className="text-center text-sm text-secondary">
+                      Don&apos;t have an account?{" "}
+                      <Link
+                        href="/signup"
+                        className="font-semibold text-primary hover:opacity-80 transition-colors"
+                      >
+                        Create an account
+                      </Link>
+                    </p>
+                  </div>
                 </div>
-
-                {/* Trouble signing in */}
-                <p className="text-center mt-8 text-sm text-secondary">
-                  Having trouble signing in?
-                </p>
-
-                {/* Sign up link */}
-                <p className="text-center mt-6 text-sm text-secondary">
-                  Don&apos;t have an account?{" "}
-                  <Link
-                    href="/signup"
-                    className="font-semibold text-primary hover:opacity-80 transition-colors"
-                  >
-                    Create an account
-                  </Link>
-                </p>
               </motion.div>
             ) : (
               <motion.div
@@ -274,22 +268,29 @@ export default function LoginPage() {
             )}
           </div>
         </div>
-      </div>
+        </div>
 
-      {/* Right Column - Features */}
-      <div 
-        className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
-      >
-        {/* Decorative gradient orbs */}
-        <div className="absolute top-20 right-20 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 left-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl" />
+        {/* Right Column - Features */}
+        <div className="hidden lg:flex lg:w-1/2 flex-col relative overflow-hidden">
+          {/* Decorative gradient orbs */}
+          <div className="absolute top-20 right-20 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 left-20 w-96 h-96 bg-cyan-500/20 rounded-full blur-3xl" />
 
-        <FeatureList
-          title="Enterprise-grade brand protection"
-          subtitle="Join teams that have increased campaign efficiency by 3.2x while maintaining 99.7% brand compliance."
-          features={FEATURES}
-          securityBadge="Enterprise security certified • SOC 2 Type II compliant"
-        />
+          {/* Header spacer to mirror login side */}
+          <div className="p-6" />
+
+          <div className="flex-1 flex items-center justify-center px-12 py-16">
+            <div className="w-full max-w-xl relative mt-30">
+              <FeatureList
+                title="Enterprise-grade brand protection"
+                subtitle="Join teams that have increased campaign efficiency by 3.2x while maintaining 99.7% brand compliance."
+                features={FEATURES}
+                securityBadge="Enterprise security certified • SOC 2 Type II compliant"
+                variant="light"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -191,11 +191,14 @@ export async function createSignedAssetUrl(
 ): Promise<string> {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
+
+  // Supabase image transforms break on videos; only apply resizing for image assets.
+  const shouldTransformImage = /\.((png)|(jpe?g)|(gif)|(webp)|(avif))$/i.test(fullPath);
+  const options = shouldTransformImage ? { transform: { width: 1280 } } : undefined;
+
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(fullPath, expiresInSeconds, {
-      transform: { width: 1280 },
-    });
+    .createSignedUrl(fullPath, expiresInSeconds, options);
 
   if (error || !data?.signedUrl) {
     throw error ?? new Error("Failed to create signed URL");

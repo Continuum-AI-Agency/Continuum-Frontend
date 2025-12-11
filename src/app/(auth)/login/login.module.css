@@ -1,0 +1,81 @@
+.loginBackground {
+  position: relative;
+  background: linear-gradient(
+    315deg,
+    #4f46e5 0%,
+    #6d5dfc 18%,
+    #a855f7 32%,
+    #f472b6 46%,
+    #6d5dfc 58%,
+    #22c55e 70%,
+    #7dd3fc 82%,
+    #6d5dfc 100%
+  );
+  background-size: 400% 400%;
+  background-attachment: fixed;
+  animation: loginGradient 18s ease infinite;
+}
+
+@keyframes loginGradient {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+.wave {
+  position: absolute;
+  left: -25%;
+  bottom: 0;
+  width: 150%;
+  height: 14rem;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(79, 70, 229, 0.24),
+    rgba(168, 85, 247, 0.20),
+    rgba(34, 197, 94, 0.18),
+    rgba(125, 211, 252, 0.16)
+  );
+  border-radius: 1000% 1000% 0 0;
+  animation: loginWave 16s -3s linear infinite;
+  transform: translate3d(0, 0, 0);
+  opacity: 0.8;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.waveSecond {
+  bottom: -2.8rem;
+  animation: loginWave 22s linear reverse infinite;
+  opacity: 0.65;
+}
+
+.waveThird {
+  bottom: -5.4rem;
+  animation: loginWave 26s -1s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes loginWave {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-25%);
+  }
+  50% {
+    transform: translateX(-50%);
+  }
+  75% {
+    transform: translateX(-25%);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}

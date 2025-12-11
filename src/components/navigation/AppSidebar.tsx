@@ -43,15 +43,8 @@ export function AppSidebar() {
       )}
     >
       {/* Header Area */}
-      <Box className="h-[72px] flex items-center justify-center border-b border-[var(--color-border)] overflow-hidden px-4">
-        <Badge
-          size="2"
-          color="violet"
-          radius="full"
-          className="transition-all duration-300"
-        >
-          C
-        </Badge>
+      <Box className="h-[96px] flex items-center justify-center border-b border-[var(--color-border)] overflow-hidden px-4 pt-4">
+        <CurrentUserAvatar size={48} />
       </Box>
 
       {/* Navigation Items */}
@@ -97,11 +90,6 @@ export function AppSidebar() {
           })}
         </Flex>
       </nav>
-
-      {/* Footer Area */}
-      <Box className="border-t border-[var(--color-border)] p-4 flex justify-center">
-        <CurrentUserAvatar size={44} />
-      </Box>
     </motion.aside>
     </Tooltip.Provider>
   );

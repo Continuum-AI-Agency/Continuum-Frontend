@@ -114,6 +114,7 @@ export function DashboardHeader({
             <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
               <DropdownMenu.Trigger>
                 <Button
+                  id="dashboard-brand-menu-trigger"
                   variant="outline"
                   size="2"
                   onMouseEnter={() => setMenuOpen(true)}

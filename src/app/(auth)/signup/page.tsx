@@ -268,11 +268,11 @@ export default function SignupPage() {
                 {/* Terms */}
                 <p className="text-center mt-6 text-xs text-secondary">
                   By creating an account, you agree to our{" "}
-                  <Link href="/terms" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--accent)" }}>
+                  <Link href="/terms" className="underline transition-opacity hover:opacity-80 text-brand-primary">
                     Terms of Service
                   </Link>{" "}
                   and{" "}
-                  <Link href="/privacy" className="underline transition-opacity hover:opacity-80" style={{ color: "var(--accent)" }}>
+                  <Link href="/privacy" className="underline transition-opacity hover:opacity-80 text-brand-primary">
                     Privacy Policy
                   </Link>
                 </p>
@@ -304,6 +304,7 @@ export default function SignupPage() {
           subtitle="Join teams that have increased campaign efficiency by 3.2x while maintaining 99.7% brand compliance."
           features={FEATURES}
           securityBadge="Enterprise security certified • SOC 2 Type II compliant"
+          variant="light"
         />
       </div>
     </div>

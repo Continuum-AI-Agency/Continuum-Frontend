@@ -151,7 +151,7 @@ const AttachmentNode = ({ data, selected }: { data: AttachmentNodeData; selected
   <div className={`relative w-56 rounded-xl border ${selected ? "border-blue-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
     <Text className="text-gray-200">Attachment</Text>
     <div className="mt-2 h-24 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-      {data.mimeType.startsWith("video/") ? (
+      {data.mimeType?.startsWith("video/") ? (
         <video src={data.previewUrl} muted loop className="h-full w-full object-cover" />
       ) : (
         <img src={data.previewUrl} alt={data.label} className="h-full w-full object-cover" />
@@ -603,7 +603,7 @@ export default function AIStudioClient({
   const pendingCount = React.useMemo(() => jobs.filter((j) => PENDING_STATUSES.has(j.status)).length, [jobs]);
 
   return (
-    <div className="fixed inset-0 isolate flex flex-col overflow-hidden bg-slate-950 text-white">
+    <div className="fixed inset-0 md:left-[88px] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
       <main className="relative z-[1] flex flex-1 flex-col gap-3 px-6 sm:px-10 md:px-16 pt-4 pb-6">
@@ -676,7 +676,7 @@ export default function AIStudioClient({
                   onDragStart={(e) => {
                     if (item.disabled) {
                       e.preventDefault();
-                      showToast({ title: "Coming soon", description: "Video nodes will be enabled next.", variant: "info" });
+                      showToast({ title: "Coming soon", description: "Video nodes will be enabled next.", variant: "warning" });
                       return;
                     }
                     e.dataTransfer.setData(DRAG_MIME, JSON.stringify({ type: "palette", payload: { id: item.id, nodeType: item.type, data: item.data } }));

@@ -3,6 +3,8 @@ import { fetchOnboardingMetadata, ensureOnboardingState } from "@/lib/onboarding
 import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
+export const revalidate = 0;
+
 export default async function IntegrationsSettingsPage() {
   const metadata = await fetchOnboardingMetadata();
   const activeBrandId = metadata.activeBrandId;

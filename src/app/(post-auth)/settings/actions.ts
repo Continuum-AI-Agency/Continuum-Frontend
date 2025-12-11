@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
 import type { BrandRole } from "@/lib/onboarding/state";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
@@ -38,10 +39,32 @@ export async function createMagicLinkAction(
     throw new Error("Email is required");
   }
 
+  const supabase = await createSupabaseServerClient();
+  // forward user JWT so edge function can authorize owner/admin
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const repo = createBrandProfileRepository();
-  const { link } = await repo.createMagicLink(brandId, email.trim(), role, siteUrl);
-  return { link };
+  const { data, error } = await supabase.functions.invoke<{
+    link: string;
+    inviteId: string;
+  }>("brand_invite", {
+    body: {
+      action: "create",
+      brandId,
+      email: email.trim(),
+      role,
+      siteUrl,
+    },
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+  });
+
+  if (error || !data?.link) {
+    throw new Error(error?.message ?? "Unable to create invite");
+  }
+
+  return { link: data.link };
 }
 
 export async function revokeInviteAction(brandId: string, inviteId: string): Promise<void> {

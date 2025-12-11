@@ -1,11 +1,15 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { http } from "@/lib/api/http";
 import {
   metaSyncResponseSchema,
   googleSyncResponseSchema,
   googleDrivePickerResponseSchema,
+  selectableAssetsResponseSchema,
+  linkIntegrationAccountsResponseSchema,
+  type SelectableAssetsResponse,
+  type LinkIntegrationAccountsResponse,
   type MetaSyncResponse,
   type GoogleSyncResponse,
   type GoogleDrivePickerResponse,
@@ -71,5 +75,43 @@ export function useStartGoogleSync() {
 export function useStartGoogleDrivePicker() {
   return useMutation({
     mutationFn: (params: StartGoogleDrivePickerParams) => startGoogleDrivePicker(params),
+  });
+}
+
+export async function fetchSelectableAssets(userId?: string): Promise<SelectableAssetsResponse> {
+  const path = userId
+    ? `/brand-profiles/${encodeURIComponent(userId)}/selectable-assets`
+    : "/brand-profiles/selectable-assets";
+
+  return http.request({
+    path,
+    method: "GET",
+    schema: selectableAssetsResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export function useSelectableAssets(userId?: string) {
+  return useQuery({
+    queryKey: ["selectable-assets", userId ?? "self"],
+    queryFn: () => fetchSelectableAssets(userId),
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
+export async function linkIntegrationAccounts(
+  brandId: string,
+  assetPks: string[]
+): Promise<LinkIntegrationAccountsResponse> {
+  if (!assetPks.length) {
+    throw new Error("No assets selected to link.");
+  }
+  return http.request({
+    path: `/brand-profiles/${encodeURIComponent(brandId)}/integration-accounts`,
+    method: "POST",
+    body: { asset_pks: assetPks },
+    schema: linkIntegrationAccountsResponseSchema,
+    cache: "no-store",
   });
 }

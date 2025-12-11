@@ -402,7 +402,7 @@ export function OrganicExperience({
       show({
         title: "Select platforms",
         description: "Enable at least one platform to generate templates.",
-        variant: "info",
+        variant: "warning",
       });
       return;
     }

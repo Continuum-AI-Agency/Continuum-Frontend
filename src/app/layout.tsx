@@ -7,7 +7,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "../components/theme-provider";
 import GalaxyBackground from "../components/ui/GalaxyBackground";
-import { ToastProvider } from "../components/ui/ToastProvider";
+import { ToastProvider } from "@/components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";
 
 const geistSans = Geist({
@@ -33,7 +33,12 @@ function NoFlashScript() {
         var cookieAppearance = cookieMatch ? cookieMatch[1] : null;
         var stored = localStorage.getItem('theme');
         var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var appearance = cookieAppearance || (stored === 'dark' || (!stored && prefersDark) ? 'dark' : 'light');
+        var appearance = cookieAppearance
+          || (stored === 'dark'
+            ? 'dark'
+            : stored === 'system'
+              ? (prefersDark ? 'dark' : 'light')
+              : 'light');
         var root = document.documentElement;
         if (appearance === 'dark') {
           root.setAttribute('data-theme', 'dark');
@@ -55,7 +60,7 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const cookieAppearance = cookieStore.get("appearance")?.value;
-  const initialAppearance = cookieAppearance === "dark" || cookieAppearance === "light" ? cookieAppearance : undefined;
+  const initialAppearance = cookieAppearance === "dark" ? "dark" : "light";
 
   return (
     <html

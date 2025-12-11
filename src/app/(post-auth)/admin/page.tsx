@@ -44,7 +44,7 @@ export default async function AdminPage() {
   const { users, permissions, loadError } = await fetchAdminUsers();
 
   return (
-    <div className="py-10 px-4 sm:px-8 lg:px-12 w-full">
+    <div className="py-10 w-full max-w-none px-3 sm:px-4 lg:px-6">
       <Flex direction="column" gap="6">
         <div>
           <Heading size="8">Admin</Heading>

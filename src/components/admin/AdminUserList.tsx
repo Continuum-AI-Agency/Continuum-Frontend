@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import {
   Badge,
-  Box,
   Button,
   Callout,
   Flex,
@@ -47,7 +46,7 @@ export function AdminUserList({ users, permissions }: Props) {
     // Best-effort safety: copy to clipboard and open a new tab without opener; advise user to paste into incognito.
     try {
       await navigator.clipboard.writeText(url);
-      show({ title: "Link copied", description: "Paste it in an incognito/private window.", variant: "info" });
+      show({ title: "Link copied", description: "Paste it in an incognito/private window.", variant: "success" });
     } catch {
       // clipboard may fail in some browsers; ignore
     }

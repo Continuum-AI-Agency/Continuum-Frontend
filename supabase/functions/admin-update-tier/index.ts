@@ -56,11 +56,32 @@ serve(async (req) => {
           ? Number(tier)
           : null;
 
+  const { data: existingPermission, error: existingPermissionError } = await adminClient
+    .schema("brand_profiles")
+    .from("permissions")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("brand_profile_id", brandProfileId)
+    .maybeSingle();
+
+  if (existingPermissionError && existingPermissionError.code !== "PGRST116") {
+    log("permissions lookup failed", { existingPermissionError, userId, brandProfileId });
+    return json({ error: existingPermissionError.message }, 500);
+  }
+
+  const role = existingPermission?.role ?? "viewer";
+
   const { error: upsertError } = await adminClient
     .schema("brand_profiles")
     .from("permissions")
     .upsert(
-      { user_id: userId, brand_profile_id: brandProfileId, tier: tierValue, updated_at: new Date().toISOString() },
+      {
+        user_id: userId,
+        brand_profile_id: brandProfileId,
+        role,
+        tier: tierValue,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: "user_id,brand_profile_id" }
     );
 

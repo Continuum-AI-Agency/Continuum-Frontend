@@ -3,10 +3,12 @@
 
 import React from "react";
 import { Badge, Button, Callout, Card, Grid, ScrollArea, Text } from "@radix-ui/themes";
+import * as HoverCard from "@radix-ui/react-hover-card";
 import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
 
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
 import type { CreativeAsset } from "@/lib/creative-assets/types";
+import { useAssetPreviewUrl } from "@/lib/creative-assets/useAssetPreviewUrl";
 
 export type LibraryStripProps = {
   brandProfileId: string;
@@ -61,21 +63,59 @@ export function LibraryStrip({ brandProfileId, medium, onUse }: LibraryStripProp
             {assets
               .filter((a) => a.kind === "file" && (a.contentType ?? "").startsWith("image/"))
               .map((asset) => (
-                <div key={asset.id} className="rounded-lg border border-white/10 bg-white/5 p-2">
-                  <div className="h-20 w-full overflow-hidden rounded-md bg-black/40">
-                    <img src={asset.publicUrl ?? asset.fullPath} alt={asset.name} className="h-full w-full object-cover" />
-                  </div>
-                  <Text size="1" className="mt-1 block truncate text-white">{asset.name}</Text>
-                  <div className="mt-1 flex items-center gap-1">
-                    <Button size="1" variant="ghost" onClick={() => onUse("image-reference", asset)}>Seed</Button>
-                    <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("first-frame", asset)}>First</Button>
-                    <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("last-frame", asset)}>Last</Button>
-                  </div>
-                </div>
+                <HoverCard.Root key={asset.id} openDelay={80} closeDelay={60}>
+                  <HoverCard.Trigger asChild>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                      <div className="h-20 w-full overflow-hidden rounded-md bg-black/40">
+                        <AssetThumb asset={asset} />
+                      </div>
+                      <Text size="1" className="mt-1 block truncate text-white">{asset.name}</Text>
+                      <div className="mt-1 flex items-center gap-1">
+                        <Button size="1" variant="ghost" onClick={() => onUse("image-reference", asset)}>Seed</Button>
+                        <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("first-frame", asset)}>First</Button>
+                        <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("last-frame", asset)}>Last</Button>
+                      </div>
+                    </div>
+                  </HoverCard.Trigger>
+                  <AssetHoverPreview asset={asset} />
+                </HoverCard.Root>
               ))}
           </Grid>
         )}
       </ScrollArea>
     </Card>
+  );
+}
+
+function AssetThumb({ asset }: { asset: CreativeAsset }) {
+  const { url, loading } = useAssetPreviewUrl(asset, { expiresInSeconds: 600 });
+  if (loading) {
+    return <div className="flex h-full w-full items-center justify-center text-white/60 text-xs">Loading…</div>;
+  }
+  return (
+    <img
+      src={url ?? asset.publicUrl ?? asset.fullPath}
+      alt={asset.name}
+      className="h-full w-full object-cover"
+    />
+  );
+}
+
+function AssetHoverPreview({ asset }: { asset: CreativeAsset }) {
+  const { url, loading, canPreview } = useAssetPreviewUrl(asset, { expiresInSeconds: 600 });
+  if (!canPreview) return null;
+  return (
+    <HoverCard.Content sideOffset={8} className="rounded-lg border border-white/10 bg-black p-2 shadow-xl">
+      <div className="relative h-72 w-72 overflow-hidden rounded-md bg-black/40">
+        {loading ? (
+          <div className="flex h-full items-center justify-center text-white/60">Loading…</div>
+        ) : asset.contentType?.startsWith("video/") ? (
+          <video src={url ?? asset.publicUrl ?? asset.fullPath} muted playsInline controls className="h-full w-full object-contain" />
+        ) : (
+          <img src={url ?? asset.publicUrl ?? asset.fullPath} alt={asset.name} className="h-full w-full object-contain" />
+        )}
+      </div>
+      <Text size="1" color="gray" className="mt-2 block truncate">{asset.name}</Text>
+    </HoverCard.Content>
   );
 }

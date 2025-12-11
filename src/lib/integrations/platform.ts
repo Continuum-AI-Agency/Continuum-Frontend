@@ -3,6 +3,7 @@ import type { PlatformKey } from "@/components/onboarding/platforms";
 const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   youtube_channel: "youtube",
   youtube: "youtube",
+  google_ad_account: "googleAds",
   google_ads_account: "googleAds",
   googleads_account: "googleAds",
   google_ads_customer: "googleAds",
@@ -11,11 +12,14 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   displayvideo360_advertiser: "dv360",
   instagram_business_account: "instagram",
   instagram_account: "instagram",
+  meta_instagram_account: "instagram",
   facebook_page: "facebook",
   facebook_account: "facebook",
   meta_ad_account: "facebook",
+  meta_page: "facebook",
   threads_profile: "threads",
   threads_account: "threads",
+  meta_threads_account: "threads",
 };
 
 export function mapIntegrationTypeToPlatformKey(type?: string | null): PlatformKey | null {
@@ -25,4 +29,3 @@ export function mapIntegrationTypeToPlatformKey(type?: string | null): PlatformK
   const normalized = type.trim().toLowerCase();
   return TYPE_TO_PLATFORM_MAP[normalized] ?? null;
 }
-

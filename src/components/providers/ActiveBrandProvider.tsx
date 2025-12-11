@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useTran
 import type { BrandSummary } from "@/components/DashboardLayoutShell";
 import { switchActiveBrandAction } from "@/app/(post-auth)/settings/actions";
 import { switchBrand } from "@/lib/brands/switch-brand";
-import { useToast } from "@/components/ui/ToastProvider";
+import { useToastContext, type ToastOptions } from "@/components/ui/ToastProvider";
 import { useSession } from "@/hooks/useSession";
 
 type ActiveBrandContextValue = {
@@ -31,8 +31,22 @@ export function ActiveBrandProvider({
   const [selectedBrandId, setSelectedBrandId] = useState(activeBrandId);
   const [summaries, setSummaries] = useState<BrandSummary[]>(brandSummaries);
   const [isSwitching, startTransition] = useTransition();
-  const { show } = useToast();
+  const toast = useToastContext();
   const { user } = useSession();
+
+  const showToast = React.useCallback(
+    (options: ToastOptions) => {
+      if (toast) {
+        toast.show(options);
+        return;
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("ToastProvider is missing; toast not shown.", options);
+      }
+    },
+    [toast]
+  );
 
   // Keep local selection in sync with auth metadata updates (e.g., other tab).
   useEffect(() => {
@@ -72,7 +86,7 @@ export function ActiveBrandProvider({
             }
           } catch (error) {
             setSelectedBrandId(previous);
-            show({
+            showToast({
               title: "Switch failed",
               description: error instanceof Error ? error.message : "Unable to switch brand.",
               variant: "error",
@@ -82,7 +96,7 @@ export function ActiveBrandProvider({
           }
         });
       }),
-    [activeBrandId, selectedBrandId, show]
+    [activeBrandId, selectedBrandId, showToast]
   );
 
   const value = useMemo<ActiveBrandContextValue>(

@@ -145,7 +145,11 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
         const { link } = await createMagicLinkAction(activeBrandId, inviteEmail.trim(), inviteRole);
         setGeneratedLink(link);
         setInviteEmail("");
-        show({ title: "Invite generated", description: "Share the magic link to grant access.", variant: "success" });
+        show({
+          title: "Magic link sent",
+          description: `Invite emailed to ${inviteEmail.trim()}.`,
+          variant: "success",
+        });
         router.refresh();
       } catch (error) {
         show({

@@ -4,6 +4,8 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { fetchOnboardingMetadata } from "@/lib/onboarding/storage";
 
+export const revalidate = 0;
+
 export default async function IntegrationsPage() {
   const metadata = await fetchOnboardingMetadata();
   const activeBrandId = metadata.activeBrandId;

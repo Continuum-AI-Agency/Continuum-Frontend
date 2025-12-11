@@ -94,10 +94,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <Container
-      size="4"
-      className="space-y-6"
-    >
+    <div className="space-y-6 w-full max-w-none px-2 sm:px-3 lg:px-4">
       {showOnboardingReminder && (
         <SurfaceCard>
           <Flex
@@ -257,7 +254,7 @@ export default async function DashboardPage() {
           </Flex>
         )}
       </SurfaceCard>
-    </Container>
+    </div>
   );
 }
 

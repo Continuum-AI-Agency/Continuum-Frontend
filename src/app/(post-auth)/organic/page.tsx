@@ -56,7 +56,7 @@ export default async function OrganicPage() {
     }));
 
     return (
-      <Container size="4" className="space-y-4">
+      <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
         <BrandTrendsPanel
           trends={brandTrends}
           country={trendsAndEvents.country ?? insights.data.country}
@@ -81,12 +81,12 @@ export default async function OrganicPage() {
             trends={selectorTrends}
           />
         </GlassPanel>
-      </Container>
+      </div>
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load brand insights for this brand.";
     return (
-      <Container size="4" className="space-y-4">
+      <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
         <Heading size="6" className="text-white">
           Organic Planner
         </Heading>
@@ -96,7 +96,7 @@ export default async function OrganicPage() {
           </Callout.Icon>
           <Callout.Text>{message}</Callout.Text>
         </Callout.Root>
-      </Container>
+      </div>
     );
   }
 }

@@ -39,8 +39,8 @@ export default function DashboardLayoutShell({
         <div className="h-screen flex flex-col overflow-hidden md:pl-20">
           <DashboardHeader onOpenMobile={() => setMobileOpen(true)} />
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="max-w-[1600px] mx-auto w-full">{children}</div>
+          <main className="flex-1 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
+            <div className="w-full">{children}</div>
           </main>
         </div>
       </div>

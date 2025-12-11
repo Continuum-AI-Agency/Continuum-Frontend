@@ -35,16 +35,29 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
         setAvatarUrl(null);
         return;
       }
-      const raw = (u.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
-      if (raw && /^https?:\/\//i.test(raw)) {
-        setAvatarUrl(raw);
+
+      const rawMeta =
+        "raw_user_meta_data" in u
+          ? (u as { raw_user_meta_data?: { picture?: string } }).raw_user_meta_data
+          : undefined;
+
+      const picture = rawMeta?.picture || (u.user_metadata as { picture?: string } | undefined)?.picture;
+
+      const avatarUrlFromMetadata = typeof picture === "string" && picture.length > 0
+        ? picture
+        : (u.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
+
+      if (avatarUrlFromMetadata && /^https?:\/\//i.test(avatarUrlFromMetadata)) {
+        setAvatarUrl(avatarUrlFromMetadata);
         return;
       }
-      if (raw) {
-        const { data } = supabase.storage.from("avatars").getPublicUrl(raw);
+
+      if (avatarUrlFromMetadata) {
+        const { data } = supabase.storage.from("avatars").getPublicUrl(avatarUrlFromMetadata);
         setAvatarUrl(data?.publicUrl ?? null);
         return;
       }
+
       setAvatarUrl(null);
     },
     [supabase]

@@ -41,7 +41,7 @@ function applyDomTheme(appearance: "light" | "dark") {
 }
 
 export function ThemeProvider({ children, initialAppearance }: { children: React.ReactNode; initialAppearance?: "light" | "dark" }) {
-  const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "system");
+  const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "light");
   const [appearance, setAppearance] = useState<"light" | "dark">(initialAppearance ?? "light");
 
   // Sync appearance with mode and system preference

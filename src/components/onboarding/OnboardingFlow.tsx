@@ -35,10 +35,21 @@ import {
   enqueueDocumentEmbedAction,
   removeDocumentAction,
 } from "@/app/onboarding/actions";
-import type { BrandVoiceTag, OnboardingDocument, OnboardingState } from "@/lib/onboarding/state";
+import type {
+  BrandVoiceTag,
+  OnboardingDocument,
+  OnboardingState,
+  OnboardingConnectionAccount,
+} from "@/lib/onboarding/state";
 import { BRAND_VOICE_TAGS } from "@/lib/onboarding/state";
 import { openCenteredPopup, waitForPopupMessage, waitForPopupClosed } from "@/lib/popup";
-import { useStartMetaSync, useStartGoogleSync, useStartGoogleDrivePicker } from "@/lib/api/integrations";
+import {
+  useStartMetaSync,
+  useStartGoogleSync,
+  useStartGoogleDrivePicker,
+  useSelectableAssets,
+  linkIntegrationAccounts,
+} from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import { StrategicAnalysisRealtimeListener } from "@/components/strategic-analyses/StrategicAnalysisRealtimeListener";
 import { requestStrategicRunsCatchUp } from "@/components/strategic-analyses/realtimeBus";
@@ -65,6 +76,9 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useContinuumServerEvents } from "@/lib/sse/useContinuumServerEvents";
 import { Tabs } from "@/components/ui/StableTabs";
 import { Editor, EditorProvider } from "react-simple-wysiwyg";
+import { BrandSwitcherPill } from "@/components/navigation/BrandSwitcherPill";
+import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 
 const industries = [
   "Advertising",
@@ -205,7 +219,14 @@ const brandSchema = z
     brandVoice: z.string().optional(),
     targetAudience: z.string().optional(),
     timezone: z.string().min(1, "Timezone is required"),
-    website: z.union([z.string().url("Enter a valid URL (e.g. https://example.com)"), z.literal("")]).optional(),
+    website: z
+      .string()
+      .trim()
+      .min(1, "Website is required")
+      .refine(value => {
+        const candidate = /^(https?:)?\/\//i.test(value) ? value : `https://${value}`;
+        return z.string().url("Enter a valid URL (e.g. https://example.com)").safeParse(candidate).success;
+      }, "Enter a valid URL (e.g. https://example.com)"),
     otherIndustry: z.string().optional(),
   })
   .refine(
@@ -425,7 +446,10 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const startMetaSyncMutation = useStartMetaSync();
   const startGoogleSyncMutation = useStartGoogleSync();
   const startGoogleDrivePickerMutation = useStartGoogleDrivePicker();
+  const selectableAssetsQuery = useSelectableAssets();
   const isGoogleDrivePickerPending = startGoogleDrivePickerMutation.isPending;
+  const { activeBrandId, brandSummaries, isSwitching } = useActiveBrandContext();
+  const hasAdditionalBrands = brandSummaries.length > 1;
 
   const {
     register,
@@ -461,6 +485,58 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   useEffect(() => {
     setSelectedAccountIdsByKey(createSelectionFromState(state));
   }, [state]);
+
+  // When selectable-assets arrive, merge into connection accounts and preserve selection flags
+  useEffect(() => {
+    if (!selectableAssetsQuery.data?.assets?.length) return;
+
+    const accountsByPlatform = new Map<PlatformKey, OnboardingConnectionAccount[]>();
+
+    selectableAssetsQuery.data.assets.forEach(asset => {
+      const platformKey = mapIntegrationTypeToPlatformKey(asset.type);
+      if (!platformKey) return;
+      const current = accountsByPlatform.get(platformKey) ?? [];
+      current.push({
+        id: asset.asset_pk,
+        name: asset.name,
+        status: "active",
+        selected: undefined,
+      });
+      accountsByPlatform.set(platformKey, current);
+    });
+
+    setState(prev => {
+      const nextConnections: OnboardingState["connections"] = { ...prev.connections } as OnboardingState["connections"];
+      accountsByPlatform.forEach((accounts, key) => {
+        const existing = prev.connections[key] ?? { connected: false, accountId: null, accounts: [], lastSyncedAt: null };
+        const mergedAccounts = accounts.map(account => {
+          const existingAccount = existing.accounts?.find(a => a.id === account.id);
+          const selectedFromState = selectedAccountIdsByKey[key]?.has(account.id) ?? false;
+          return existingAccount
+            ? { ...existingAccount, ...account, selected: existingAccount.selected ?? (selectedFromState ? true : undefined) }
+            : { ...account, selected: selectedFromState ? true : account.selected };
+        });
+
+        // Preserve any existing accounts that aren't part of the selectable-assets payload
+        const existingRemainder = (existing.accounts ?? []).filter(
+          account => !mergedAccounts.some(a => a.id === account.id)
+        );
+        const combinedAccounts = [...mergedAccounts, ...existingRemainder];
+
+        nextConnections[key] = {
+          connected: combinedAccounts.length > 0 || existing.connected,
+          accountId: existing.accountId,
+          accounts: combinedAccounts,
+          lastSyncedAt: selectableAssetsQuery.data?.synced_at ?? existing.lastSyncedAt,
+        } as OnboardingState["connections"][PlatformKey];
+      });
+
+      return {
+        ...prev,
+        connections: nextConnections,
+      };
+    });
+  }, [selectableAssetsQuery.data, selectedAccountIdsByKey]);
 
   const ownerId = useMemo(
     () => state.members.find(member => member.role === "owner")?.id ?? null,
@@ -679,6 +755,13 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   }, [state.brand.brandVoiceTags]);
 
   useEffect(() => {
+    if (isSwitching) return;
+    if (activeBrandId && activeBrandId !== brandId) {
+      router.replace(`/onboarding?brand=${activeBrandId}`);
+    }
+  }, [activeBrandId, brandId, isSwitching, router]);
+
+  useEffect(() => {
     if (previewEditTouchedRef.current.voice) return;
     const nextValue = agentVoice
       ? formatVoiceForEdit(agentVoice)
@@ -786,8 +869,10 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         all.push(account.id);
       });
     });
+    // Also include assets from the selectable-assets API in case they're not yet merged into state
+    selectableAssetsQuery.data?.assets?.forEach(asset => all.push(asset.asset_pk));
     return Array.from(new Set(all));
-  }, [state.connections]);
+  }, [state.connections, selectableAssetsQuery.data?.assets]);
 
   const buildAgentPayload = useCallback((): AgentRequestPayload => {
     const userId = currentUserId ?? ownerId;
@@ -1563,11 +1648,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
         startTransition(() => {
           void (async () => {
-            const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
-            const next = await syncIntegrationAccountsAction(brandId, groups);
-            setState(next);
-            show({ title: "Connected", description: `Accounts synced for ${group}.`, variant: "success" });
-          })().catch(() => {
+          const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
+          const next = await syncIntegrationAccountsAction(brandId, groups);
+          await selectableAssetsQuery.refetch();
+          setState(next);
+          show({ title: "Connected", description: `Accounts synced for ${group}.`, variant: "success" });
+        })().catch(() => {
             show({ title: "Connection failed", description: "Please try again.", variant: "error" });
           });
         });
@@ -1583,7 +1669,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         } catch {}
       }
     },
-    [brandId, show, startMetaSyncMutation, startGoogleSyncMutation]
+    [brandId, show, startMetaSyncMutation, startGoogleSyncMutation, selectableAssetsQuery]
   );
 
   const disconnectGroup = useCallback(
@@ -1620,18 +1706,19 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         });
       });
     },
-    [brandId, show]
+    [brandId, show, selectableAssetsQuery]
   );
 
   const resyncGroup = useCallback(
     (group: "google" | "facebook") => {
       startTransition(() => {
         void (async () => {
-          const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
-          const next = await syncIntegrationAccountsAction(brandId, groups);
-          setState(next);
-          show({ title: "Synced", description: `Pulled the latest accounts for ${group}.`, variant: "success" });
-        })().catch(() => {
+    const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
+    const next = await syncIntegrationAccountsAction(brandId, groups);
+    await selectableAssetsQuery.refetch();
+    setState(next);
+    show({ title: "Synced", description: `Pulled the latest accounts for ${group}.`, variant: "success" });
+  })().catch(() => {
           show({ title: "Sync failed", description: "Unable to refresh this integration.", variant: "error" });
         });
       });
@@ -1844,6 +1931,10 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       void (async () => {
         const refreshedPayload = buildAgentPayload();
         previewPayloadRef.current = refreshedPayload;
+        const selectedIds = getAllSelectedIds();
+        if (selectedIds.length > 0) {
+          await linkIntegrationAccounts(brandId, selectedIds);
+        }
         const approval = await approveOnboardingBrandProfile({ payload: refreshedPayload });
         setAgentBrandProfile(approval.brand_profile);
         const next = await completeOnboardingAction(brandId);
@@ -1937,7 +2028,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           className: "rsw-editor bg-transparent border-none shadow-none p-0 m-0",
           style: { padding: 0, background: "transparent", border: "none" },
         }}
-        className="rsw-ce min-h-[60px] text-white placeholder:text-slate-400 focus:outline-none bg-transparent border-none p-0 whitespace-pre-wrap break-words"
+        className="rsw-ce min-h-[60px] text-[var(--foreground)] placeholder:text-[var(--text-secondary)] focus:outline-none bg-transparent border-none p-0 whitespace-pre-wrap break-words"
         style={{ whiteSpace: "pre-wrap", background: "transparent", border: "none", padding: 0, wordBreak: "break-word", overflowWrap: "anywhere", width: "100%" }}
       />
     </EditorProvider>
@@ -2169,7 +2260,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     return (
       <Card className={`${glassPanelClassName} w-full max-w-none`} style={glassPanelStyle}>
         <Flex direction="column" gap="4" p="4">
-          <Heading size="4" className="text-white">Review</Heading>
+          <Heading size="4">Review</Heading>
           <Text color="gray">
             Confirm your workspace setup, then generate a preview to stream the AI recommendations before approval.
           </Text>
@@ -2440,7 +2531,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       <Card className={`${glassPanelClassName} w-full max-w-none`} style={glassPanelStyle}>
         <Flex direction="column" gap="4" p="4">
           <Flex align="center" justify="between">
-            <Heading size="4" className="text-white">Preview & Approve</Heading>
+            <Heading size="4">Preview & Approve</Heading>
             <Flex gap="2">
               <Button variant="ghost" color="gray" onClick={handleExitPreview} disabled={isPreviewRunning}>
                 Review summary
@@ -2540,8 +2631,13 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       <StrategicAnalysisRealtimeListener brandId={brandId} />
       <Container size="4" className="max-w-7xl w-full">
         <Flex direction="column" gap="4">
-          <Heading size="6" className="text-white">Welcome to Continuum</Heading>
-          <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>
+          <Flex align="center" justify="between" gap="3" className="w-full">
+            <Box>
+              <Heading size="6">Welcome to Continuum</Heading>
+              <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>
+            </Box>
+            {hasAdditionalBrands ? <div className="ml-auto"><BrandSwitcherPill /></div> : null}
+          </Flex>
 
           <Tabs.Root baseId={`radix-onboarding-tabs-${brandId}`} value={`step-${step}`} onValueChange={() => {}}>
           <Tabs.List className="grid grid-cols-3 gap-3 md:flex md:gap-4 md:justify-start">
@@ -2558,7 +2654,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                 })}
               >
                 <Flex direction="column" gap="4" p="4">
-                  <Heading size="4" className="text-white">Tell us about your brand</Heading>
+                  <Heading size="4">Tell us about your brand</Heading>
                   <Box>
                     <Text size="2" weight="medium">
                       Brand name
@@ -2575,15 +2671,16 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                   </Box>
                   <Box>
                     <Text size="2" weight="medium">
-                      Website (optional)
+                      Website
                     </Text>
                     <TextField.Root
                       placeholder="https://example.com"
-                    {...register("website", {
-                      onChange: () => {
-                        userEditedRef.current.website = true;
-                      },
-                    })}
+                      {...register("website", {
+                        required: "Website is required",
+                        onChange: () => {
+                          userEditedRef.current.website = true;
+                        },
+                      })}
                       onBlur={() => {
                         const val = websiteValue?.trim() || "";
                         // Must be >= 5 chars and parse as URL
@@ -2825,7 +2922,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             <Card className={glassPanelClassName} style={glassPanelStyle}>
               <Flex direction="column" gap="4" p="4">
                 <Flex align="center" justify="between">
-                  <Heading size="4" className="text-white">Connect your channels</Heading>
+                  <Heading size="4">Connect your channels</Heading>
                   <Button
                     variant="ghost"
                     size="1"

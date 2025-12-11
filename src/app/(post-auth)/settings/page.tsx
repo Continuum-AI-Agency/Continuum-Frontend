@@ -20,10 +20,10 @@ export default async function SettingsPage() {
 
   if (!activeBrandId) {
     return (
-    <Container size="3" className="py-10">
+    <div className="py-10 px-3 sm:px-4 lg:px-6 w-full">
         <Heading size="6">Settings</Heading>
         <Text color="gray">Set up a brand profile to unlock settings.</Text>
-      </Container>
+      </div>
     );
   }
 
@@ -40,7 +40,7 @@ export default async function SettingsPage() {
     : createEmptyUserIntegrationSummary();
 
   return (
-    <Container size="4" className="py-10 w-full max-w-[96vw] px-4 md:px-8">
+    <div className="py-10 w-full max-w-none px-3 sm:px-4 lg:px-6">
       <Flex direction="column" gap="7">
         <div>
           <Heading size="7" className="text-white">Settings</Heading>
@@ -86,6 +86,6 @@ export default async function SettingsPage() {
           </Tabs.Content>
         </Tabs.Root>
       </Flex>
-    </Container>
+    </div>
   );
 }

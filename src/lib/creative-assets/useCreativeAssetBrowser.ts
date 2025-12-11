@@ -124,7 +124,7 @@ export function useCreativeAssetBrowser(brandProfileId: string) {
     [refresh]
   );
 
-  const signedUrl = useCallback(async (asset: CreativeAsset, expiresInSeconds = 60) => {
+  const signedUrl = useCallback(async (asset: CreativeAsset, expiresInSeconds = 600) => {
     return createSignedAssetUrl(asset.fullPath, expiresInSeconds);
   }, []);
 

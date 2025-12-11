@@ -243,6 +243,7 @@ export default function RecoveryPage() {
           subtitle="Join teams that have increased campaign efficiency by 3.2x while maintaining 99.7% brand compliance."
           features={FEATURES}
           securityBadge="Enterprise security certified • SOC 2 Type II compliant"
+          variant="light"
         />
       </div>
     </div>

@@ -163,7 +163,7 @@ export function UserSettingsPanel({ user, integrations }: Props) {
 
   const handleRefresh = () => {
     router.refresh();
-    show({ title: "Refreshing", description: "Updating your integrations…", variant: "info" });
+    show({ title: "Refreshing", description: "Updating your integrations…", variant: "warning" });
   };
 
   const handleUploadAvatar = async (file?: File | null) => {

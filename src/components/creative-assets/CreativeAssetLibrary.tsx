@@ -14,6 +14,7 @@ import {
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
+import * as HoverCard from "@radix-ui/react-hover-card";
 import * as Accordion from "@radix-ui/react-accordion";
 import {
   ChevronLeftIcon,
@@ -33,7 +34,8 @@ import {
   type CreativeAssetDragPayload,
 } from "@/lib/creative-assets/drag";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
-import { listCreativeAssets } from "@/lib/creative-assets/storageClient";
+import { createCreativeFolder, listCreativeAssets } from "@/lib/creative-assets/storageClient";
+import { useAssetPreviewUrl } from "@/lib/creative-assets/useAssetPreviewUrl";
 
 const FOLDER_CACHE_LIMIT = 20;
 
@@ -102,6 +104,18 @@ export function CreativeAssetLibrary({
           <Tooltip content="Refresh">
             <IconButton size="2" variant="soft" onClick={() => browser.refresh()} disabled={browser.loading}>
               <ReloadIcon className={browser.loading ? "animate-spin" : ""} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip content="New folder">
+            <IconButton
+              size="2"
+              variant="soft"
+              onClick={() => {
+                const name = window.prompt("Folder name?");
+                if (name) void browser.createFolder(name);
+              }}
+            >
+              <ArchiveIcon />
             </IconButton>
           </Tooltip>
         </Flex>
@@ -264,7 +278,11 @@ function FolderContents({
   const [error, setError] = useState<string | null>(null);
   const [assets, setAssets] = useState<CreativeAsset[] | null>(null);
   const [openNested, setOpenNested] = useState<string[]>([]);
-  const folderPath = useMemo(() => folder.fullPath.replace(new RegExp(`^${brandProfileId}/?`), ""), [brandProfileId, folder.fullPath]);
+  const folderPath = useMemo(
+    () => folder.fullPath.replace(new RegExp(`^${brandProfileId}/?`), ""),
+    [brandProfileId, folder.fullPath]
+  );
+  const { show } = useToast();
 
   useEffect(() => {
     if (!isOpen || loading) return;
@@ -290,6 +308,32 @@ function FolderContents({
 
   return (
     <Box className="rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-900">
+      <Flex justify="between" align="center" mb="2">
+        <Text size="2" weight="medium">{folder.name}</Text>
+        <Button
+          size="1"
+          variant="soft"
+          onClick={async () => {
+            const name = window.prompt("New subfolder name?");
+            if (!name) return;
+            try {
+              await createCreativeFolder(brandProfileId, folderPath, name);
+              const listing = await listCreativeAssets(brandProfileId, folderPath);
+              setAssets(listing.assets);
+              setCachedAssets(folderPath, listing.assets);
+              show({ title: "Folder created", variant: "success" });
+            } catch (err) {
+              show({
+                title: "Folder creation failed",
+                description: (err as Error)?.message ?? "Could not create folder",
+                variant: "error",
+              });
+            }
+          }}
+        >
+          New folder
+        </Button>
+      </Flex>
       {loading && <Text size="1">Loading…</Text>}
       {error && (
         <Text size="1" color="red">
@@ -472,19 +516,26 @@ function AssetTile({
         }
       }}
     >
-      <div ref={previewRef} className="relative mb-3 h-44 w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-900">
-        {asset.kind === "folder" ? (
-          <Flex align="center" justify="center" className="h-full w-full text-gray-500 dark:text-gray-400">
-            <ArchiveIcon width={32} height={32} />
-          </Flex>
-        ) : isVisible ? (
-          <AssetPreview asset={asset} />
-        ) : (
-          <Flex align="center" justify="center" className="h-full w-full text-gray-400">
-            <ImageIcon width={24} height={24} />
-          </Flex>
-        )}
-      </div>
+      <HoverCard.Root openDelay={120} closeDelay={80}>
+        <HoverCard.Trigger asChild>
+          <div ref={previewRef} className="relative mb-3 h-44 w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-900">
+            {asset.kind === "folder" ? (
+              <Flex align="center" justify="center" className="h-full w-full text-gray-500 dark:text-gray-400">
+                <ArchiveIcon width={32} height={32} />
+              </Flex>
+            ) : isVisible ? (
+              <AssetPreview asset={asset} />
+            ) : (
+              <Flex align="center" justify="center" className="h-full w-full text-gray-400">
+                <ImageIcon width={24} height={24} />
+              </Flex>
+            )}
+          </div>
+        </HoverCard.Trigger>
+        {asset.kind === "file" ? (
+          <AssetHoverCardContent asset={asset} />
+        ) : null}
+      </HoverCard.Root>
 
       {isEditing ? (
         <TextField.Root
@@ -536,56 +587,64 @@ function AssetTile({
   );
 }
 
-function AssetPreview({ asset }: { asset: CreativeAsset }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+function AssetHoverCardContent({ asset }: { asset: CreativeAsset }) {
+  const { url, loading, canPreview } = useAssetPreviewUrl(asset, { expiresInSeconds: 600 });
   const isVideo = MIME_VIDEO.test(asset.contentType ?? "");
   const isImage = MIME_IMAGE.test(asset.contentType ?? "");
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!isVideo && !isImage) {
-      setSignedUrl(null);
-      return;
-    }
-    setLoading(true);
-    // Lazy-import to avoid circular dependency
-    import("@/lib/creative-assets/storageClient")
-      .then(({ createSignedAssetUrl, getPublicAssetUrl }) => {
-        const resolver = async () => {
-          try {
-            if (process.env.NEXT_PUBLIC_SUPABASE_STORAGE_PUBLIC === "true") {
-              return getPublicAssetUrl(asset.fullPath);
-            }
-            return createSignedAssetUrl(asset.fullPath, 60);
-          } catch (err) {
-            try {
-              return getPublicAssetUrl(asset.fullPath);
-            } catch (err2) {
-              console.error("asset preview url failed", err ?? err2);
-              return null;
-            }
-          }
-        };
-        return resolver();
-      })
-      .then((url) => {
-        if (!cancelled) {
-          setSignedUrl(url ?? null);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSignedUrl(null);
-          setLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asset.fullPath, isImage, isVideo]);
+  if (!canPreview) return null;
+
+  return (
+    <HoverCard.Content sideOffset={12} className="rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+      <div className="relative h-72 w-72 overflow-hidden rounded-md bg-black/60">
+        {loading ? (
+          <Flex align="center" justify="center" className="h-full w-full text-gray-400">
+            <ReloadIcon className="animate-spin" />
+          </Flex>
+        ) : isVideo ? (
+          <video
+            src={url ?? undefined}
+            muted
+            playsInline
+            controls
+            className="h-full w-full object-contain"
+            onLoadedMetadata={(event) => {
+              const video = event.currentTarget;
+              try {
+                video.currentTime = 0.01;
+              } catch {
+                // ignore seek failures
+              }
+            }}
+          />
+        ) : isImage ? (
+          <div className="relative h-full w-full">
+            <Image
+              src={url ?? asset.fullPath}
+              alt={asset.name}
+              fill
+              className="object-contain"
+              sizes="240px"
+              unoptimized
+              priority={false}
+            />
+          </div>
+        ) : null}
+      </div>
+      <Text size="2" weight="medium" className="mt-2 block truncate">
+        {asset.name}
+      </Text>
+      <Text size="1" color="gray">
+        {asset.contentType ?? "file"}
+      </Text>
+    </HoverCard.Content>
+  );
+}
+
+function AssetPreview({ asset }: { asset: CreativeAsset }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { url: signedUrl, loading, canPreview } = useAssetPreviewUrl(asset, { expiresInSeconds: 600 });
+  const isVideo = MIME_VIDEO.test(asset.contentType ?? "");
 
   const handleHover = useCallback(
     (playing: boolean) => {
@@ -599,6 +658,14 @@ function AssetPreview({ asset }: { asset: CreativeAsset }) {
     },
     []
   );
+
+  if (!canPreview) {
+    return (
+      <Flex align="center" justify="center" className="h-full w-full text-gray-400">
+        <FileIcon width={24} height={24} />
+      </Flex>
+    );
+  }
 
   if (!signedUrl) {
     return (
@@ -619,6 +686,14 @@ function AssetPreview({ asset }: { asset: CreativeAsset }) {
         className="h-full w-full object-cover"
         onMouseEnter={() => handleHover(true)}
         onMouseLeave={() => handleHover(false)}
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          try {
+            video.currentTime = 0.01;
+          } catch {
+            // ignore seek failures
+          }
+        }}
       />
     );
   }

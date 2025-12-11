@@ -182,7 +182,7 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
       };
       setHistory((prev) => [optimistic, ...prev]);
 
-      show({ title: "Generating", description: `${medium === "video" ? "Video" : "Image"} request started`, variant: "info" });
+      show({ title: "Generating", description: `${medium === "video" ? "Video" : "Image"} request started`, variant: "warning" });
       const result = await start(apiPayload, {
         initUrl: payload.medium === "video" ? getApiUrl("/ai-studio/generate-video") : getApiUrl("/ai-studio/generate"),
         expectedMedia: payload.medium === "video" ? "video" : "image",
@@ -242,7 +242,7 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
       setResetNext(true);
       setConversationTurns([]);
     }
-    show({ title: "Stream reset", variant: "info" });
+    show({ title: "Stream reset", variant: "warning" });
   }, [reset, show, activeModel]);
 
   React.useEffect(() => {

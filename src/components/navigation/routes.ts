@@ -1,5 +1,5 @@
 import type { ComponentType, ComponentProps } from "react";
-import { BarChartIcon, HomeIcon, MagicWandIcon, RocketIcon } from "@radix-ui/react-icons";
+import { BarChartIcon, Component1Icon, HomeIcon, MagicWandIcon, RocketIcon } from "@radix-ui/react-icons";
 
 export type AppNavigationItem = {
   label: string;
@@ -36,5 +36,15 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       label: "Beta",
       tone: "violet",
     },
+  },
+  {
+    label: "Primitives",
+    href: "/primitives",
+    icon: Component1Icon,
+    badge: {
+      label: "MVP",
+      tone: "blue",
+    },
+    description: "Shared building blocks for paid media (audiences, guidelines, personas).",
   },
 ];
