@@ -1,15 +1,18 @@
 "use client";
 
 import { type ReactElement, useState } from "react";
-import { Badge, Box, Button, Card, Callout, Flex, Grid, Heading, Separator, Text } from "@radix-ui/themes";
+import { Badge, Box, Button, Card, Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import {
   ArrowLeftIcon,
-  BackpackIcon,
-  Component1Icon,
   FileTextIcon,
   MixerHorizontalIcon,
   PersonIcon,
 } from "@radix-ui/react-icons";
+
+import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import { AudienceBuilderPrimitive } from "./primitives/AudienceBuilderPrimitive";
+import { BrandGuidelinesPrimitive } from "./primitives/BrandGuidelinesPrimitive";
+import { BrandPersonasPrimitive } from "./primitives/BrandPersonasPrimitive";
 
 type PrimitiveId = "audience" | "guidelines" | "personas";
 
@@ -104,144 +107,20 @@ function GlassCardButton({
   );
 }
 
-function SkeletonBar({ width = "100%" }: { width?: string }) {
-  return (
-    <Box
-      className="rounded-md"
-      style={{
-        width,
-        height: "10px",
-        background: "linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.16), rgba(255,255,255,0.08))",
-      }}
-      aria-hidden
-    />
-  );
-}
+type PrimitivesHubProps = {
+  questionsByNiche?: BrandInsightsQuestionsByNiche;
+  questionsError?: string | null;
+};
 
-function AudienceDetail() {
-  return (
-    <Card className="glass-panel">
-      <Flex direction="column" gap="3">
-        <Flex align="center" gap="2">
-          <BackpackIcon />
-          <Heading size="4" className="text-white">
-            Audience Builder
-          </Heading>
-        </Flex>
-        <Separator size="4" />
-        <Grid columns={{ initial: "1", sm: "2" }} gap="4">
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Text size="2" color="gray">Concept name</Text>
-              <SkeletonBar width="70%" />
-              <SkeletonBar width="55%" />
-            </Flex>
-          </Card>
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Text size="2" color="gray">Objectives</Text>
-              <SkeletonBar width="60%" />
-              <SkeletonBar width="40%" />
-            </Flex>
-          </Card>
-        </Grid>
-        <Separator size="4" />
-        <Grid columns={{ initial: "1", sm: "2" }} gap="4">
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Flex align="center" gap="2">
-                <MixerHorizontalIcon />
-                <Text weight="medium">Psychographic layer</Text>
-              </Flex>
-              <SkeletonBar width="90%" />
-              <SkeletonBar width="75%" />
-              <SkeletonBar width="60%" />
-            </Flex>
-          </Card>
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Flex align="center" gap="2">
-                <Component1Icon />
-                <Text weight="medium">Targeting layer</Text>
-              </Flex>
-              <SkeletonBar width="85%" />
-              <SkeletonBar width="50%" />
-              <SkeletonBar width="45%" />
-            </Flex>
-          </Card>
-        </Grid>
-        <Separator size="4" />
-        <Grid columns={{ initial: "1", sm: "2" }} gap="4">
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Text weight="medium">Behaviors</Text>
-              <SkeletonBar width="80%" />
-              <SkeletonBar width="68%" />
-              <SkeletonBar width="55%" />
-            </Flex>
-          </Card>
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Text weight="medium">Interests</Text>
-              <SkeletonBar width="82%" />
-              <SkeletonBar width="65%" />
-              <SkeletonBar width="48%" />
-            </Flex>
-          </Card>
-        </Grid>
-        <Grid columns={{ initial: "1" }} gap="4">
-          <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-            <Flex direction="column" gap="2">
-              <Text weight="medium">Demographics</Text>
-              <SkeletonBar width="78%" />
-              <SkeletonBar width="52%" />
-              <SkeletonBar width="40%" />
-            </Flex>
-          </Card>
-        </Grid>
-        <Separator size="4" />
-        <Card variant="surface" className="border border-[var(--glass-border)] p-4">
-          <Flex direction="column" gap="2">
-            <Flex align="center" gap="2">
-              <Badge color="amber" radius="full">Preflight</Badge>
-              <Text weight="medium">Compatibility & reach</Text>
-            </Flex>
-            <SkeletonBar width="80%" />
-            <SkeletonBar width="65%" />
-          </Flex>
-        </Card>
-        <Flex gap="2" justify="end">
-          <Button disabled variant="solid" color="gray">
-            Save preset (disabled)
-          </Button>
-        </Flex>
-      </Flex>
-    </Card>
-  );
-}
+const EMPTY_QUESTIONS_BY_NICHE: BrandInsightsQuestionsByNiche = {
+  questionsByNiche: {},
+  status: undefined,
+  summary: undefined,
+  generatedAt: undefined,
+};
 
-function PlaceholderDetail({ title }: { title: string }) {
-  return (
-    <Card className="glass-panel">
-      <Flex direction="column" gap="3">
-        <Flex align="center" gap="2">
-          <FileTextIcon />
-          <Heading size="4" className="text-white">
-            {title}
-          </Heading>
-        </Flex>
-        <Text color="gray">
-          Coming soon. We’ll wire this into the same primitives surface so teams can reuse tone, visuals, and personas
-          across channels.
-        </Text>
-        <Separator size="4" />
-        <Text color="gray">Add requirements and sample assets here to keep the build aligned.</Text>
-      </Flex>
-    </Card>
-  );
-}
-
-export function PrimitivesHub() {
+export function PrimitivesHub({ questionsByNiche, questionsError }: PrimitivesHubProps) {
+  const safeQuestionsByNiche = questionsByNiche ?? EMPTY_QUESTIONS_BY_NICHE;
   const [active, setActive] = useState<PrimitiveId | null>(null);
   const activeCard = primitiveCards.find((card) => card.id === active);
 
@@ -285,9 +164,14 @@ export function PrimitivesHub() {
           </Flex>
 
           {active === "audience" ? (
-            <AudienceDetail />
+            <AudienceBuilderPrimitive
+              questionsByNiche={safeQuestionsByNiche}
+              questionsError={questionsError}
+            />
+          ) : active === "guidelines" ? (
+            <BrandGuidelinesPrimitive />
           ) : (
-            <PlaceholderDetail title={activeCard?.title ?? "Coming soon"} />
+            <BrandPersonasPrimitive />
           )}
         </Flex>
       ) : (

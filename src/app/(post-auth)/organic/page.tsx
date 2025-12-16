@@ -1,9 +1,8 @@
-import { Callout, Container, Heading } from "@radix-ui/themes";
+import { Callout, Heading } from "@radix-ui/themes";
 import { LightningBoltIcon } from "@radix-ui/react-icons";
 
 import { OrganicExperience } from "@/components/organic/OrganicExperience";
-import { BrandEventsPanel } from "@/components/brand-insights/BrandEventsPanel";
-import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
+import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import {
   ORGANIC_PLATFORMS,
@@ -39,6 +38,7 @@ export default async function OrganicPage() {
   try {
     const insights = await fetchBrandInsights(brandProfileId, { revalidateSeconds: 300 });
     const trendsAndEvents = insights.data.trendsAndEvents;
+    const questionsByNiche = insights.data.questionsByNiche;
     const brandTrends = trendsAndEvents.trends;
     const activePlatformKeys = platformAccounts
       .filter((account) => account.connected && account.accountId)
@@ -57,20 +57,15 @@ export default async function OrganicPage() {
 
     return (
       <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
-        <BrandTrendsPanel
+        <BrandInsightsSignalsPanel
           trends={brandTrends}
+          events={trendsAndEvents.events}
+          questionsByNiche={questionsByNiche}
           country={trendsAndEvents.country ?? insights.data.country}
           weekStartDate={insights.data.weekStartDate}
           generatedAt={trendsAndEvents.generatedAt ?? insights.generatedAt}
           status={trendsAndEvents.status}
           brandId={brandProfileId}
-        />
-        <BrandEventsPanel
-          events={trendsAndEvents.events}
-          country={trendsAndEvents.country ?? insights.data.country}
-          weekStartDate={insights.data.weekStartDate}
-          generatedAt={trendsAndEvents.generatedAt ?? insights.generatedAt}
-          status={trendsAndEvents.status}
         />
         <GlassPanel className="p-6">
           <OrganicExperience

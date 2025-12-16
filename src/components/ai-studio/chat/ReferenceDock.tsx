@@ -7,10 +7,19 @@ import { ImageIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
 import { useDropzone, type FileRejection, type FileError } from "react-dropzone";
 import type { RefImage } from "@/lib/types/chatImage";
 
-import { Dropzone, DropzoneContent, DropzoneEmptyState } from "@/components/dropzone";
+import { Dropzone, DropzoneEmptyState } from "@/components/dropzone";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
 import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
+import {
+  IMAGE_REFERENCE_MAX_BYTES,
+  VIDEO_REFERENCE_MAX_BYTES,
+  formatMiB,
+  inferMimeTypeFromPath,
+  parseReferenceDropPayload,
+  resolveReferenceMimeType,
+  type ParsedReferenceDropPayload,
+} from "@/lib/ai-studio/referenceDrop";
 
 type ReferenceDockProps = {
   mode: "image" | "video";
@@ -46,7 +55,8 @@ export type DZReturn = ReturnType<typeof useDropzone> & {
 
 const useLocalDropzone = (
   opts: { maxFiles: number; allowedMimeTypes: string[]; maxFileSize: number },
-  onAcceptUpload: (files: File[]) => Promise<void>
+  onAcceptUpload: (files: File[]) => Promise<void>,
+  onReject?: (rejected: FileRejection[]) => void
 ): DZReturn => {
   const [files, setFiles] = React.useState<LocalFile[]>([]);
   const [errors, setErrors] = React.useState<{ name: string; message: string }[]>([]);
@@ -61,26 +71,31 @@ const useLocalDropzone = (
     multiple: opts.maxFiles !== 1,
     accept: opts.allowedMimeTypes.reduce<Record<string, string[]>>((acc, type) => ({ ...acc, [type]: [] }), {}),
     onDrop: (accepted, rejected) => {
-      const acceptedWithMeta = accepted.map(file => ({
-        ...(file as File),
-        preview: URL.createObjectURL(file),
-        errors: [] as readonly FileError[],
-      })) as LocalFile[];
+      if (rejected.length > 0) {
+        onReject?.(rejected);
+      }
 
-      const rejectedWithMeta = rejected.map(rej => ({
-        ...(rej.file as File),
-        preview: URL.createObjectURL(rej.file),
-        errors: rej.errors as readonly FileError[],
-      })) as LocalFile[];
-      const next = [...files, ...acceptedWithMeta, ...rejectedWithMeta];
-      setFiles(next);
-      setErrors([
-        ...errors,
-        ...rejected.map((rej) => ({
-          name: rej.file.name,
-          message: rej.errors.map((e) => e.message).join(", "),
-        })),
-      ]);
+      if (accepted.length === 0) return;
+
+      // This dropzone is used as a file picker + visual affordance; we process immediately.
+      void (async () => {
+        try {
+          setLoading(true);
+          setErrors([]);
+          await onAcceptUpload(accepted);
+          setSuccesses([]);
+        } catch (error) {
+          setErrors([
+            {
+              name: accepted[0]?.name ?? "file",
+              message: error instanceof Error ? error.message : "Failed to process file",
+            },
+          ]);
+        } finally {
+          setLoading(false);
+          setFiles([]);
+        }
+      })();
     },
   });
 
@@ -125,9 +140,15 @@ export function ReferenceDock({
 }: ReferenceDockProps) {
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
-  const hasCreativePayload = React.useCallback((types: DataTransfer["types"]) => {
+  const hasCreativeAssetPayload = React.useCallback((types: DataTransfer["types"]) => {
     const list = Array.from(types ?? []);
-    return list.includes(CREATIVE_ASSET_DRAG_TYPE) || list.includes(RF_DRAG_MIME) || list.includes(TEXT_MIME);
+    return list.includes(CREATIVE_ASSET_DRAG_TYPE) || list.includes(RF_DRAG_MIME);
+  }, []);
+
+  const resolveDropSlot = React.useCallback((target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return undefined;
+    const slot = target.closest<HTMLElement>("[data-reference-drop-slot]")?.dataset.referenceDropSlot;
+    return slot === "first" || slot === "last" || slot === "video" ? slot : undefined;
   }, []);
 
   const fileToBase64 = React.useCallback((file: File) => new Promise<string>((resolve, reject) => {
@@ -137,49 +158,71 @@ export function ReferenceDock({
     reader.readAsDataURL(file);
   }), []);
 
+  const enforceMaxAttachmentBytes = React.useCallback(
+    (opts: { label: string; sizeBytes: number; maxBytes: number }) => {
+      if (opts.sizeBytes <= opts.maxBytes) return true;
+      show({
+        title: "Attachment too large",
+        description: `${opts.label} is ${formatMiB(opts.sizeBytes)} (max ${formatMiB(opts.maxBytes)}).`,
+        variant: "error",
+      });
+      return false;
+    },
+    [show]
+  );
+
   const handleLocalFiles = React.useCallback(
     async (files: FileList | File[] | null, slot?: "first" | "last" | "video") => {
       if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
       const fileArray = Array.isArray(files) ? files : Array.from(files);
-      const max = slot ? 1 : maxRefs - refs.length;
-      const slice = fileArray.slice(0, Math.max(1, max));
+      const remaining = Math.max(0, maxRefs - refs.length);
+      const maxToProcess = slot ? 1 : remaining;
+      if (maxToProcess === 0) {
+        show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
+        return;
+      }
+
+      const slice = fileArray.slice(0, maxToProcess);
+      const nextRefs: RefImage[] = [];
 
       for (const file of slice) {
-        const isImage = file.type.startsWith("image/");
-        const isVideo = file.type.startsWith("video/");
+        const mime = file.type || inferMimeTypeFromPath(file.name) || "application/octet-stream";
+        const isImage = mime.startsWith("image/");
+        const isVideo = mime.startsWith("video/");
+
         if (slot === "video") {
           if (!isVideo) {
             show({ title: "Unsupported", description: "Reference video must be a video file", variant: "error" });
-            continue;
+            return;
           }
-          if (file.size > 1_000_000) {
-            show({ title: "Video too large", description: "Reference video must be under 1MB", variant: "error" });
-            continue;
+          if (!enforceMaxAttachmentBytes({ label: "Reference video", sizeBytes: file.size, maxBytes: VIDEO_REFERENCE_MAX_BYTES })) {
+            return;
           }
+
           const base64 = await fileToBase64(file);
           onChangeReferenceVideo?.({
             id: `${file.name}-${Date.now()}`,
             name: file.name,
-            mime: file.type || "video/mp4",
+            mime,
             base64,
             filename: file.name,
           });
-          continue;
+          return;
         }
 
         if (!isImage) {
           show({ title: "Unsupported", description: "Only image references are supported", variant: "error" });
           continue;
         }
-
-        if (file.size > 750_000) {
-          show({ title: "Image too large", description: "Reference images must be under 750KB", variant: "error" });
+        if (
+          !enforceMaxAttachmentBytes({
+            label: slot === "first" ? "First frame" : slot === "last" ? "Last frame" : "Reference image",
+            sizeBytes: file.size,
+            maxBytes: IMAGE_REFERENCE_MAX_BYTES,
+          })
+        ) {
+          if (slot) return;
           continue;
-        }
-
-        if (!slot && refs.length >= maxRefs) {
-          show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
-          break;
         }
 
         const base64 = await fileToBase64(file);
@@ -187,21 +230,42 @@ export function ReferenceDock({
           id: `${file.name}-${Date.now()}`,
           name: file.name,
           path: file.name,
-          mime: file.type || "image/png",
+          mime,
           base64,
           referenceType: mode === "video" ? "asset" : undefined,
         };
 
         if (slot === "first") {
           onChangeFirstFrame?.(ref);
-        } else if (slot === "last") {
-          onChangeLastFrame?.(ref);
-        } else {
-          onChangeRefs([...refs, ref]);
+          return;
         }
+        if (slot === "last") {
+          onChangeLastFrame?.(ref);
+          return;
+        }
+        nextRefs.push(ref);
+      }
+
+      if (nextRefs.length > 0) {
+        onChangeRefs([...refs, ...nextRefs]);
       }
     },
-    [fileToBase64, maxRefs, mode, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, onChangeRefs, refs, show]
+    [enforceMaxAttachmentBytes, fileToBase64, maxRefs, mode, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, onChangeRefs, refs, show]
+  );
+
+  const rejectDropzoneFiles = React.useCallback(
+    (rejected: FileRejection[]) => {
+      const message = rejected
+        .flatMap((rej) => rej.errors.map((e) => `${rej.file.name}: ${e.message}`))
+        .slice(0, 3)
+        .join(" • ");
+      show({
+        title: "File rejected",
+        description: message || "Unsupported file",
+        variant: "error",
+      });
+    },
+    [show]
   );
 
   const handleDrop = React.useCallback(
@@ -210,56 +274,30 @@ export function ReferenceDock({
       setIsDragging(false);
 
       const dataTransfer = event.dataTransfer;
-      if (dataTransfer.files && dataTransfer.files.length > 0) {
-        await handleLocalFiles(dataTransfer.files, slot);
-        // don't return; allow creative payloads in same drop
-      }
-      const refPayload =
-        dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) ||
-        dataTransfer.getData(RF_DRAG_MIME) ||
-        dataTransfer.getData(TEXT_MIME);
-      if (!refPayload) {
-        if (!dataTransfer.files || dataTransfer.files.length === 0) {
-          show({ title: "Drop ignored", description: "No asset data detected in drop.", variant: "warning" });
-        }
-        return;
-      }
-
       try {
-        type DragPayload =
-          | { name: string; path: string; contentType?: string | null }
-          | { type?: string; payload: { path?: string; publicUrl?: string; mimeType?: string } };
-
-        let parsed: DragPayload | null = null;
-        try {
-          parsed = JSON.parse(refPayload) as DragPayload;
-        } catch {
-          parsed = null; // plain text or data URL
+        if (dataTransfer.files && dataTransfer.files.length > 0) {
+          await handleLocalFiles(dataTransfer.files, slot);
+          // don't return; allow creative payloads in same drop
         }
 
-        const path = parsed
-          ? "path" in parsed
-            ? parsed.path
-            : (parsed as Extract<DragPayload, { payload: unknown }>).payload?.path
-          : undefined;
-        const mime = parsed
-          ? "contentType" in parsed
-            ? parsed.contentType ?? undefined
-            : (parsed as Extract<DragPayload, { payload: unknown }>).payload?.mimeType
-          : undefined;
-        const publicUrl = parsed && "payload" in parsed ? (parsed as Extract<DragPayload, { payload: unknown }>).payload?.publicUrl : undefined;
-
-        if (!path && !publicUrl && !refPayload.startsWith("data:")) {
-          show({ title: "Drop failed", description: "Missing asset data", variant: "error" });
+        const rawPayload =
+          dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) ||
+          dataTransfer.getData(RF_DRAG_MIME) ||
+          dataTransfer.getData(TEXT_MIME);
+        if (!rawPayload) {
+          if (!dataTransfer.files || dataTransfer.files.length === 0) {
+            show({ title: "Drop ignored", description: "No asset data detected in drop.", variant: "warning" });
+          }
           return;
         }
-        const resolvedMime =
-          mime ??
-          (refPayload.startsWith("data:video")
-            ? "video/mp4"
-            : refPayload.startsWith("data:image")
-              ? "image/png"
-              : "image/png");
+
+        const parsed = parseReferenceDropPayload(rawPayload);
+        if (!parsed) {
+          show({ title: "Drop failed", description: "Unrecognized drop payload", variant: "error" });
+          return;
+        }
+
+        const resolvedMime = resolveReferenceMimeType(parsed);
         const isImage = /^image\//i.test(resolvedMime);
         const isVideo = /^video\//i.test(resolvedMime);
 
@@ -273,24 +311,27 @@ export function ReferenceDock({
           return;
         }
 
-        let signedUrl: string;
-        try {
-          signedUrl = publicUrl ?? (path ? await createSignedAssetUrl(path, 300) : refPayload);
-        } catch (err) {
-          show({ title: "Link failed", description: err instanceof Error ? err.message : "Could not sign asset URL", variant: "error" });
+        if (parsed.kind === "remote" && typeof parsed.sizeBytes === "number") {
+          const maxBytes = slot === "video" ? VIDEO_REFERENCE_MAX_BYTES : IMAGE_REFERENCE_MAX_BYTES;
+          const label = slot === "video" ? "Reference video" : slot === "first" ? "First frame" : slot === "last" ? "Last frame" : "Reference image";
+          if (!enforceMaxAttachmentBytes({ label, sizeBytes: parsed.sizeBytes, maxBytes })) {
+            return;
+          }
+        }
+
+        const maxBytes = slot === "video" ? VIDEO_REFERENCE_MAX_BYTES : IMAGE_REFERENCE_MAX_BYTES;
+        const label = slot === "video" ? "Reference video" : slot === "first" ? "First frame" : slot === "last" ? "Last frame" : "Reference image";
+        const { base64, sourceName, byteLength } = await resolveDroppedBase64(parsed, maxBytes);
+        if (typeof byteLength === "number" && !enforceMaxAttachmentBytes({ label, sizeBytes: byteLength, maxBytes })) {
           return;
         }
 
-        const base64 = refPayload.startsWith("data:")
-          ? refPayload.split(",")[1] ?? ""
-          : await fetchBase64(signedUrl);
-
         if (slot === "video") {
-          const safeName = (path ?? signedUrl).split("/").pop() ?? path ?? "reference-video";
+          const safeName = sourceName ?? "reference-video";
           onChangeReferenceVideo?.({
-            id: `${path ?? safeName}-${Date.now()}`,
+            id: `${safeName}-${Date.now()}`,
             name: safeName,
-            mime: mime ?? "video/mp4",
+            mime: resolvedMime,
             base64,
             filename: safeName,
           });
@@ -303,9 +344,9 @@ export function ReferenceDock({
         }
 
         const ref: RefImage = {
-          id: `${path ?? signedUrl}-${Date.now()}`,
-          name: (path ?? signedUrl).split("/").pop(),
-          path: path ?? signedUrl,
+          id: `${sourceName ?? "ref"}-${Date.now()}`,
+          name: sourceName,
+          path: parsed.kind === "remote" ? (parsed.path ?? parsed.publicUrl ?? "") : "data-url",
           mime: resolvedMime,
           base64,
           referenceType: mode === "video" ? "asset" : undefined,
@@ -323,60 +364,51 @@ export function ReferenceDock({
         show({ title: "Failed to add reference", description: error instanceof Error ? error.message : "Unknown error", variant: "error" });
       }
     },
-    [handleLocalFiles, refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, show]
-  );
-  const tryHandleAssetDrop = React.useCallback(
-    (event: React.DragEvent<HTMLDivElement>, slot?: "first" | "last" | "video") => {
-      const dt = event.dataTransfer;
-      const types = Array.from(dt.types ?? []);
-      const hasFiles = types.includes("Files");
-      const hasCreative = hasCreativePayload(dt.types);
-
-      if (!hasCreative || hasFiles) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      void handleDrop(event, slot);
-    },
-    [handleDrop, hasCreativePayload]
+    [enforceMaxAttachmentBytes, handleLocalFiles, refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, show]
   );
 
   const refsDropzone = useLocalDropzone(
-    { maxFiles: maxRefs, allowedMimeTypes: ["image/*"], maxFileSize: 750_000 },
-    async (files) => handleLocalFiles(files, undefined)
+    { maxFiles: maxRefs, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
+    async (files) => handleLocalFiles(files, undefined),
+    rejectDropzoneFiles
   );
   const firstDropzone = useLocalDropzone(
-    { maxFiles: 1, allowedMimeTypes: ["image/*"], maxFileSize: 750_000 },
-    async (files) => handleLocalFiles(files, "first")
+    { maxFiles: 1, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
+    async (files) => handleLocalFiles(files, "first"),
+    rejectDropzoneFiles
   );
   const lastDropzone = useLocalDropzone(
-    { maxFiles: 1, allowedMimeTypes: ["image/*"], maxFileSize: 750_000 },
-    async (files) => handleLocalFiles(files, "last")
+    { maxFiles: 1, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
+    async (files) => handleLocalFiles(files, "last"),
+    rejectDropzoneFiles
   );
   const videoDropzone = useLocalDropzone(
-    { maxFiles: 1, allowedMimeTypes: ["video/*"], maxFileSize: 1_000_000 },
-    async (files) => handleLocalFiles(files, "video")
+    { maxFiles: 1, allowedMimeTypes: ["video/*"], maxFileSize: Number.POSITIVE_INFINITY },
+    async (files) => handleLocalFiles(files, "video"),
+    rejectDropzoneFiles
   );
 
   return (
     <Card
       size="3"
-      className={`p-4 shadow-xl transition min-h-[220px] ${isDragging ? "ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]" : ""}`}
+      className={`p-4 shadow-xl transition min-h-[220px] max-h-[520px] overflow-hidden flex flex-col gap-3 ${isDragging ? "ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]" : ""}`}
       style={{
         backgroundColor: "var(--color-surface)",
         border: `1px solid var(--gray-6)`
       }}
       onDragOver={(e) => {
+        const types = Array.from(e.dataTransfer.types ?? []);
+        if (!types.includes("Files") && !hasCreativeAssetPayload(e.dataTransfer.types)) return;
         e.preventDefault();
         setIsDragging(true);
       }}
       onDragLeave={() => setIsDragging(false)}
-      onDrop={(e) => {
-        const types = Array.from(e.dataTransfer.types ?? []);
-        if (types.includes("Files") && !hasCreativePayload(e.dataTransfer.types)) return; // let dropzones handle pure file drops
-        void handleDrop(e);
+      onDropCapture={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const slot = resolveDropSlot(e.target);
+        void handleDrop(e, slot);
       }}
-      onDropCapture={(e) => tryHandleAssetDrop(e)}
     >
       <Flex justify="between" align="center" className="mb-2">
         <Flex gap="2" align="center">
@@ -386,17 +418,9 @@ export function ReferenceDock({
         <Badge variant="soft" color="gray" size="2">{refs.length}</Badge>
       </Flex>
 
-      <div
-        onDropCapture={(e) => tryHandleAssetDrop(e)}
-        onDragOverCapture={(e) => {
-          const types = Array.from(e.dataTransfer.types ?? []);
-          if (types.includes("Files") && !hasCreativePayload(e.dataTransfer.types)) return;
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-      >
-        <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white">
-          <ScrollArea type="always" scrollbars="horizontal" className="mb-3">
+      <div>
+        <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden">
+          <ScrollArea type="always" scrollbars="both" className="mb-3 max-h-44 pr-2">
             <Flex gap="2" wrap="wrap">
               {refs.map((ref) => (
                 <RefChip
@@ -411,7 +435,6 @@ export function ReferenceDock({
             </Flex>
           </ScrollArea>
           <DropzoneEmptyState />
-          <DropzoneContent />
         </Dropzone>
       </div>
 
@@ -420,26 +443,23 @@ export function ReferenceDock({
           <FrameTile
             label="First frame"
             refImage={firstFrame}
-            onDrop={(e) => void handleDrop(e, "first")}
             dropzoneProps={firstDropzone}
-            onAssetDrop={(e) => tryHandleAssetDrop(e, "first")}
             onClear={() => onChangeFirstFrame?.()}
+            dropSlot="first"
           />
           <FrameTile
             label="Last frame"
             refImage={lastFrame}
-            onDrop={(e) => void handleDrop(e, "last")}
             dropzoneProps={lastDropzone}
-            onAssetDrop={(e) => tryHandleAssetDrop(e, "last")}
             onClear={() => onChangeLastFrame?.()}
+            dropSlot="last"
           />
           <VideoTile
             label="Reference video"
             refVideo={referenceVideo}
-            onDrop={(e) => void handleDrop(e, "video")}
             dropzoneProps={videoDropzone}
-            onAssetDrop={(e) => tryHandleAssetDrop(e, "video")}
             onClear={() => onChangeReferenceVideo?.()}
+            dropSlot="video"
           />
         </div>
       ) : null}
@@ -484,14 +504,12 @@ function RefChip({ refImage, onRemove, allowReferenceType, onTypeChange }: { ref
 function FrameTile({
   label,
   refImage,
-  onDrop,
   onClear,
   dropzoneProps,
-  onAssetDrop,
+  dropSlot,
 }: {
   label: string;
   refImage?: RefImage;
-  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
   onClear: () => void;
   dropzoneProps: ReturnType<typeof useDropzone> & {
     files: LocalFile[];
@@ -506,14 +524,12 @@ function FrameTile({
     maxFiles: number;
     allowedMimeTypes: string[];
   };
-  onAssetDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+  dropSlot: "first" | "last";
 }) {
   return (
     <div
+      data-reference-drop-slot={dropSlot}
       className="flex min-h-[128px] flex-col justify-between rounded-lg border border-dashed border-white/20 bg-white/5 p-2 backdrop-blur transition hover:border-white/40"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDrop}
-      onDropCapture={onAssetDrop}
     >
       <Text size="2" weight="medium">{label}</Text>
       {refImage ? (
@@ -531,7 +547,6 @@ function FrameTile({
       ) : (
         <Dropzone {...dropzoneProps} className="h-full w-full rounded-md border border-dashed border-white/15 bg-white/5 text-white min-h-[140px]">
           <DropzoneEmptyState />
-          <DropzoneContent />
         </Dropzone>
       )}
     </div>
@@ -541,14 +556,12 @@ function FrameTile({
 function VideoTile({
   label,
   refVideo,
-  onDrop,
   onClear,
   dropzoneProps,
-  onAssetDrop,
+  dropSlot,
 }: {
   label: string;
   refVideo?: { mime: string; base64: string; name?: string };
-  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
   onClear: () => void;
   dropzoneProps: ReturnType<typeof useDropzone> & {
     files: LocalFile[];
@@ -563,14 +576,12 @@ function VideoTile({
     maxFiles: number;
     allowedMimeTypes: string[];
   };
-  onAssetDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
+  dropSlot: "video";
 }) {
   return (
     <div
+      data-reference-drop-slot={dropSlot}
       className="flex min-h-[128px] flex-col justify-between rounded-lg border border-dashed border-white/20 bg-white/5 p-2 backdrop-blur transition hover:border-white/40"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDrop}
-      onDropCapture={onAssetDrop}
     >
       <Text size="2" weight="medium">{label}</Text>
       {refVideo ? (
@@ -581,21 +592,58 @@ function VideoTile({
       ) : (
         <Dropzone {...dropzoneProps} className="h-full w-full rounded-md border border-dashed border-white/15 bg-white/5 text-white min-h-[140px]">
           <DropzoneEmptyState />
-          <DropzoneContent />
         </Dropzone>
       )}
     </div>
   );
 }
 
-async function fetchBase64(url: string): Promise<string> {
+async function resolveDroppedBase64(
+  parsed: ParsedReferenceDropPayload,
+  maxBytes: number
+): Promise<{ base64: string; sourceName?: string; byteLength?: number }> {
+  if (parsed.kind === "data-url") {
+    return { base64: parsed.base64, sourceName: "data-url" };
+  }
+
+  const source = parsed.publicUrl ?? parsed.path;
+  if (!source) throw new Error("Missing asset data");
+
+  let url: string;
+  if (parsed.publicUrl) {
+    url = parsed.publicUrl;
+  } else {
+    url = await createSignedAssetUrl(parsed.path!, 300);
+  }
+
+  const { base64, byteLength } = await fetchBase64(url, maxBytes);
+  const rawName = (source ?? url).split("/").pop() ?? "ref";
+  const sourceName = rawName.split("?")[0]?.split("#")[0] ?? rawName;
+  return { base64, sourceName, byteLength };
+}
+
+async function fetchBase64(url: string, maxBytes: number): Promise<{ base64: string; byteLength?: number }> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch asset: ${res.status}`);
+  const contentLength = res.headers.get("content-length");
+  const headerBytes = contentLength ? Number(contentLength) : undefined;
+  if (Number.isFinite(headerBytes) && (headerBytes as number) > maxBytes) {
+    throw new Error(`Attachment exceeds ${formatMiB(maxBytes)} limit`);
+  }
   const buffer = await res.arrayBuffer();
+  if (buffer.byteLength > maxBytes) {
+    throw new Error(`Attachment exceeds ${formatMiB(maxBytes)} limit`);
+  }
+  const byteLength = Number.isFinite(headerBytes) ? (headerBytes as number) : buffer.byteLength;
+  return { base64: arrayBufferToBase64(buffer), byteLength };
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
   let binary = "";
-  for (let i = 0; i < bytes.byteLength; i += 1) {
-    binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
   return btoa(binary);
 }

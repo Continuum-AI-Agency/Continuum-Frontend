@@ -1,2 +1,8 @@
 # Prevent Vercel from uploading serverless Supabase functions.
 supabase/functions
+
+# Prevent Vercel from uploading test suites.
+tests
+**/__tests__/**
+**/*.test.*
+**/*.spec.*

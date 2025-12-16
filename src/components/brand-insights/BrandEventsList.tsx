@@ -1,3 +1,5 @@
+"use client";
+
 import { Badge, Box, Callout, Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import { CalendarIcon, CounterClockwiseClockIcon, LightningBoltIcon, PinTopIcon } from "@radix-ui/react-icons";
 

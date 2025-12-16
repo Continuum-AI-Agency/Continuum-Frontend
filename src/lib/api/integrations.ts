@@ -38,6 +38,22 @@ export async function startGoogleSync(callbackUrl: string): Promise<GoogleSyncRe
   });
 }
 
+export async function deauthorizeMeta(): Promise<void> {
+  await http.request({
+    path: "/integrations/meta/deauthorize",
+    method: "POST",
+    cache: "no-store",
+  });
+}
+
+export async function deauthorizeGoogle(): Promise<void> {
+  await http.request({
+    path: "/integrations/google/deauthorize",
+    method: "POST",
+    cache: "no-store",
+  });
+}
+
 type StartGoogleDrivePickerParams = {
   brandId: string;
   callbackUrl: string;
@@ -69,6 +85,18 @@ export function useStartMetaSync() {
 export function useStartGoogleSync() {
   return useMutation({
     mutationFn: (callbackUrl: string) => startGoogleSync(callbackUrl),
+  });
+}
+
+export function useDeauthorizeMeta() {
+  return useMutation({
+    mutationFn: () => deauthorizeMeta(),
+  });
+}
+
+export function useDeauthorizeGoogle() {
+  return useMutation({
+    mutationFn: () => deauthorizeGoogle(),
   });
 }
 

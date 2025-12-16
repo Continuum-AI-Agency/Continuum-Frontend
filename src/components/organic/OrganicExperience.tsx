@@ -1232,6 +1232,7 @@ function buildDailyDetailsPayload(
       platformAccountIds as DailyDetailsRequestPayload["platformAccountIds"],
     weeklyGrid,
     language: values.language,
+    selectedTrendIds: values.selectedTrendIds ?? [],
   };
 }
 

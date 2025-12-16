@@ -14,5 +14,12 @@ export function BrandIntegrationsSection({ initialSummary }: Props) {
   const { activeBrandId } = useActiveBrandContext();
   const { integrations, isLoading, refresh } = useBrandIntegrations(activeBrandId, initialSummary);
 
-  return <BrandIntegrationsCard summary={integrations} isLoading={isLoading} onRefresh={refresh} />;
+  return (
+    <BrandIntegrationsCard
+      brandProfileId={activeBrandId}
+      summary={integrations}
+      isLoading={isLoading}
+      onRefresh={refresh}
+    />
+  );
 }

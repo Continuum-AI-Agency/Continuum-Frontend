@@ -137,6 +137,7 @@ export const dailyDetailsRequestSchema = z.object({
     ),
   weeklyGrid: weeklyGridSchema,
   language: z.string().min(1),
+  selectedTrendIds: z.array(z.string()).max(5).default([]),
 });
 
 export type DailyDetailsRequestPayload = z.infer<typeof dailyDetailsRequestSchema>;

@@ -23,11 +23,12 @@ import {
 } from "@radix-ui/react-icons";
 import React from "react";
 
-import { BrandEventsPanel } from "@/components/brand-insights/BrandEventsPanel";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
-import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
+import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
+import { InstagramOrganicReportingWidget } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
-import type { BrandInsightsTrendsAndEvents } from "@/lib/schemas/brandInsights";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import type { BrandInsightsQuestionsByNiche, BrandInsightsTrendsAndEvents } from "@/lib/schemas/brandInsights";
 import { fetchOnboardingMetadata, ensureOnboardingState } from "@/lib/onboarding/storage";
 import { needsOnboardingReminder } from "@/lib/onboarding/reminders";
 
@@ -53,6 +54,12 @@ export default async function DashboardPage() {
   const showOnboardingReminder = Boolean(activeBrandId && needsOnboardingReminder(activeBrandState));
 
   const { brandId } = await ensureOnboardingState(activeBrandId ?? undefined);
+  const integrationSummary = await fetchBrandIntegrationSummary(brandId);
+  const instagramAccounts = integrationSummary.instagram.accounts.map((account) => ({
+    integrationAccountId: account.integrationAccountId,
+    name: account.name,
+    externalAccountId: account.externalAccountId,
+  }));
   let insightsError: string | null = null;
   let insights = null;
 
@@ -70,6 +77,13 @@ export default async function DashboardPage() {
       status: undefined,
       generatedAt: undefined,
       weekAnalyzed: undefined,
+    };
+  const questionsByNiche: BrandInsightsQuestionsByNiche =
+    insights?.data.questionsByNiche ?? {
+      questionsByNiche: {},
+      status: undefined,
+      summary: undefined,
+      generatedAt: undefined,
     };
   const trendsCount = trendsAndEvents.trends.length;
   const eventsCount = trendsAndEvents.events.length;
@@ -131,7 +145,7 @@ export default async function DashboardPage() {
 
       <SurfaceCard>
         <Flex direction="column" gap="3">
-          <Tabs.Root defaultValue="paid">
+          <Tabs.Root defaultValue="organic">
             <Tabs.List>
               <Tabs.Trigger value="paid">Paid</Tabs.Trigger>
               <Tabs.Trigger value="organic">Organic</Tabs.Trigger>
@@ -157,6 +171,9 @@ export default async function DashboardPage() {
                 ]}
                 note={organicSummary.note}
               />
+              <Box pt="4">
+                <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
+              </Box>
             </Tabs.Content>
           </Tabs.Root>
         </Flex>
@@ -221,39 +238,33 @@ export default async function DashboardPage() {
         </SurfaceCard>
       </Grid>
 
-      <SurfaceCard>
-        <Flex align="center" justify="between" mb="3">
-          <Heading size="4">Brand insights</Heading>
-          <BrandInsightsGenerateButton brandId={brandId} />
-        </Flex>
-        <Separator my="3" />
-        {insightsError ? (
+      {insightsError ? (
+        <SurfaceCard>
+          <Flex align="center" justify="between" mb="3">
+            <Heading size="4">Brand insights</Heading>
+            <BrandInsightsGenerateButton brandId={brandId} />
+          </Flex>
+          <Separator my="3" />
           <Callout.Root color="red" variant="surface">
             <Callout.Icon>
               <LightningBoltIcon />
             </Callout.Icon>
             <Callout.Text>{insightsError}</Callout.Text>
           </Callout.Root>
-        ) : (
-          <Flex direction="column" gap="4">
-            <BrandTrendsPanel
-              trends={trendsAndEvents.trends}
-              country={trendsAndEvents.country ?? insights?.data.country}
-              weekStartDate={insights?.data.weekStartDate}
-              generatedAt={trendsAndEvents.generatedAt ?? insights?.generatedAt}
-              status={trendsAndEvents.status}
-              brandId={brandId}
-            />
-            <BrandEventsPanel
-              events={trendsAndEvents.events}
-              country={trendsAndEvents.country ?? insights?.data.country}
-              weekStartDate={insights?.data.weekStartDate}
-              generatedAt={trendsAndEvents.generatedAt ?? insights?.generatedAt}
-              status={trendsAndEvents.status}
-            />
-          </Flex>
-        )}
-      </SurfaceCard>
+        </SurfaceCard>
+      ) : (
+        <BrandInsightsSignalsPanel
+          trends={trendsAndEvents.trends}
+          events={trendsAndEvents.events}
+          questionsByNiche={questionsByNiche}
+          country={trendsAndEvents.country ?? insights?.data.country}
+          weekStartDate={insights?.data.weekStartDate}
+          generatedAt={trendsAndEvents.generatedAt ?? insights?.generatedAt}
+          status={trendsAndEvents.status}
+          brandId={brandId}
+          actionSlot={<BrandInsightsGenerateButton brandId={brandId} />}
+        />
+      )}
     </div>
   );
 }

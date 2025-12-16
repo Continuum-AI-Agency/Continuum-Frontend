@@ -8,9 +8,9 @@ This note tracks how the Trends/Brand Insights surface actually works today in t
 - **API host**: Brand Insights calls read from `NEXT_PUBLIC_PYTHON_API_URL` first (then `*_PYTHON_API_BASE_URL`, `BRAND_INSIGHTS_API_URL`, `BRAND_INSIGHTS_API_BASE_URL`, or NEXT_PUBLIC_* variants), defaulting to `http://localhost:8000`. This must point at the FastAPI service that serves `/api/brand-insights/{brand_id}` and `/api/brand-insights/profile/{brand_id}`.
 - **Endpoints in play**: `POST /api/brand-insights/generate` (start, returns task_id if async), `GET /api/brand-insights/status/{task_id}` (poll), `GET /api/brand-insights/{brand_id}` (latest insights), `GET /api/brand-insights/profile/{brand_id}` (curated profile), `GET /api/brand-insights/health` (liveness).
 - **Primary components** (shared across surfaces):
-  - `BrandTrendsPanel` → header badges + `BrandTrendsGrid` list of trends with search/filter/sort.
-  - `BrandEventsPanel` (new) → header + `BrandEventsList` for upcoming events/opportunities.
-  - These components are embedded in the dashboard and organic planner; no standalone `/trends` route.
+  - `BrandInsightsSignalsPanel` → single glass widget with Radix Tabs for Trends / Events / Questions / Competitors.
+  - Tab content uses `BrandTrendsGrid`, `BrandEventsList`, `BrandQuestionsList`, and `CompetitorSearchPanel`.
+  - Embedded in the dashboard and organic planner; no standalone `/trends` route.
 - **Organic helper**: `src/lib/organic/trends.ts` provides fallback trend scaffolding; live data from Brand Insights is mapped for OrganicExperience in `src/app/(post-auth)/organic/page.tsx`.
 
 ## Data flow (happy path)

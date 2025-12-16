@@ -3,7 +3,12 @@
 import { useMemo, useRef, useTransition, useState } from "react";
 import { Badge, Box, Button, Card, Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
-import { useStartGoogleSync, useStartMetaSync } from "@/lib/api/integrations";
+import {
+  useStartGoogleSync,
+  useStartMetaSync,
+  useDeauthorizeGoogle,
+  useDeauthorizeMeta,
+} from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 import { useRouter } from "next/navigation";
@@ -11,6 +16,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import { useCurrentUserAvatar } from "@/hooks/useCurrentUserAvatar";
 import { openCenteredPopup, waitForPopupClosed, waitForPopupMessage } from "@/lib/popup";
+import { hasProviderConnections } from "@/lib/integrations/providerConnections";
 
 type UserProfile = {
   email: string;
@@ -30,6 +36,8 @@ export function UserSettingsPanel({ user, integrations }: Props) {
   const [isUploading, setIsUploading] = useState(false);
   const metaSync = useStartMetaSync();
   const googleSync = useStartGoogleSync();
+  const metaDeauthorize = useDeauthorizeMeta();
+  const googleDeauthorize = useDeauthorizeGoogle();
   const supabase = createSupabaseBrowserClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { user: supabaseUser, avatarUrl, initials, refresh } = useCurrentUserAvatar();
@@ -161,6 +169,41 @@ export function UserSettingsPanel({ user, integrations }: Props) {
     });
   };
 
+  const handleDeauthorizeProvider = (provider: ProviderGroup) => {
+    const label = provider === "google" ? "Google" : "Meta";
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Disconnect ${label}? This revokes Continuum’s access to your ${label} accounts.`
+      )
+    ) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        if (provider === "google") {
+          await googleDeauthorize.mutateAsync();
+        } else {
+          await metaDeauthorize.mutateAsync();
+        }
+        router.refresh();
+        show({
+          title: "Disconnected",
+          description: `${label} access revoked for this workspace.`,
+          variant: "success",
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Please retry shortly.";
+        show({
+          title: "Unable to disconnect",
+          description: message,
+          variant: "error",
+        });
+      }
+    });
+  };
+
   const handleRefresh = () => {
     router.refresh();
     show({ title: "Refreshing", description: "Updating your integrations…", variant: "warning" });
@@ -229,6 +272,26 @@ export function UserSettingsPanel({ user, integrations }: Props) {
             <Text color="gray">Accounts you personally connected. You can share them to brands later.</Text>
           </div>
           <Flex gap="2" wrap="wrap">
+            {hasProviderConnections(personalIntegrations, "facebook") ? (
+              <Button
+                variant="soft"
+                color="red"
+                onClick={() => handleDeauthorizeProvider("facebook")}
+                disabled={isPending || metaDeauthorize.isPending}
+              >
+                Disconnect Meta
+              </Button>
+            ) : null}
+            {hasProviderConnections(personalIntegrations, "google") ? (
+              <Button
+                variant="soft"
+                color="red"
+                onClick={() => handleDeauthorizeProvider("google")}
+                disabled={isPending || googleDeauthorize.isPending}
+              >
+                Disconnect Google
+              </Button>
+            ) : null}
             <Button variant="surface" onClick={() => handleConnectProvider("facebook")} disabled={isPending}>
               Connect Meta
             </Button>
@@ -284,7 +347,7 @@ export function UserSettingsPanel({ user, integrations }: Props) {
         <Flex gap="2" align="center">
           <ExclamationTriangleIcon />
           <Text color="gray" size="2">
-            Disconnect and granular sharing flows are coming soon; contact support to revoke provider access.
+            Disconnecting a provider removes all linked accounts from Continuum. You can reconnect anytime.
           </Text>
         </Flex>
       </Box>

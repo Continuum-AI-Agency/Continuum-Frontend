@@ -9,12 +9,60 @@ import {
   type CompetitorSavedProfile,
 } from "@/lib/schemas/competitors";
 
+const backendMediaCandidateSchema = z
+  .object({
+    url: z.string().optional(),
+    media_url: z.string().optional(),
+    mediaUrl: z.string().optional(),
+    display_url: z.string().optional(),
+    displayUrl: z.string().optional(),
+    src: z.string().optional(),
+    source: z.string().optional(),
+    thumbnail_url: z.string().optional(),
+    thumbnailUrl: z.string().optional(),
+  })
+  .passthrough();
+
+const backendMediaItemSchema = z.union([z.string(), backendMediaCandidateSchema]);
+
+function normalizeMediaUrl(item: z.infer<typeof backendMediaItemSchema>): string | undefined {
+  if (typeof item === "string") {
+    const trimmed = item.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  let candidate =
+    item.media_url ??
+    item.mediaUrl ??
+    item.url ??
+    item.display_url ??
+    item.displayUrl ??
+    item.src ??
+    item.source ??
+    item.thumbnail_url ??
+    item.thumbnailUrl;
+
+  if (typeof candidate !== "string") {
+    candidate = Object.values(item).find((value) => typeof value === "string" && value.startsWith("http"));
+  }
+
+  if (typeof candidate !== "string") return undefined;
+  const trimmed = candidate.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeMediaList(list: Array<z.infer<typeof backendMediaItemSchema>> | null | undefined): string[] | undefined {
+  if (!list?.length) return undefined;
+  const normalized = list.map(normalizeMediaUrl).filter((value): value is string => Boolean(value));
+  return normalized.length ? normalized : undefined;
+}
+
 const backendPostSchema = z.object({
   id: z.string(),
   caption: z.string().nullish(),
   hashtags: z.array(z.string()).nullish(),
-  media_urls: z.array(z.string()).nullish(),
-  carousel_items: z.array(z.string()).nullish(),
+  media_urls: z.array(backendMediaItemSchema).nullish(),
+  carousel_items: z.array(backendMediaItemSchema).nullish(),
   shortcode: z.string().nullish(),
   product_type: z.string().nullish(),
   type: z.string().nullish(),
@@ -56,8 +104,8 @@ function mapPost(input: z.infer<typeof backendPostSchema>) {
     id: input.id,
     caption: input.caption ?? undefined,
     hashtags: input.hashtags ?? undefined,
-    mediaUrls: input.media_urls ?? undefined,
-    carouselItems: input.carousel_items ?? undefined,
+    mediaUrls: normalizeMediaList(input.media_urls),
+    carouselItems: normalizeMediaList(input.carousel_items),
     shortCode: input.shortcode ?? undefined,
     productType: input.product_type ?? undefined,
     type: input.type ?? undefined,

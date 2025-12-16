@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
         platform_account_ids: parsed.data.platformAccountIds,
         weekly_grid: parsed.data.weeklyGrid,
         language: parsed.data.language,
+        selected_trend_ids: parsed.data.selectedTrendIds ?? [],
       }),
     }
   );

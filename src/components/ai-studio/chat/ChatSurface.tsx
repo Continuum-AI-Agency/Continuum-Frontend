@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useImageSseStream } from "@/hooks/useImageSseStream";
 import { chatImageRequestSchema, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
+import { IMAGE_REFERENCE_MAX_BYTES, VIDEO_REFERENCE_MAX_BYTES, estimateBase64DecodedBytes, formatMiB } from "@/lib/ai-studio/referenceDrop";
 import type {
   ChatImageHistoryItem,
   ChatImageRequestPayload,
@@ -152,12 +153,28 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
         reset: resetNext || undefined,
       } satisfies Record<string, unknown>;
 
-      const estimatedSizeBytes = new TextEncoder().encode(JSON.stringify(apiPayload)).length;
-      const maxBytes = payload.medium === "video" ? 2_500_000 : 1_200_000;
-      if (estimatedSizeBytes > maxBytes) {
+      const attachmentIssues: string[] = [];
+      const checkBase64 = (label: string, base64: string | undefined, maxBytes: number) => {
+        if (!base64) return;
+        const bytes = estimateBase64DecodedBytes(base64);
+        if (bytes > maxBytes) {
+          attachmentIssues.push(`${label}: ${formatMiB(bytes)} (max ${formatMiB(maxBytes)})`);
+        }
+      };
+
+      for (const ref of payload.refs ?? []) {
+        checkBase64(`Reference image${ref.name ? ` (${ref.name})` : ""}`, ref.base64, IMAGE_REFERENCE_MAX_BYTES);
+      }
+      if (payload.medium === "video") {
+        checkBase64("First frame", payload.firstFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
+        checkBase64("Last frame", payload.lastFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
+        checkBase64("Reference video", payload.referenceVideo?.base64, VIDEO_REFERENCE_MAX_BYTES);
+      }
+
+      if (attachmentIssues.length > 0) {
         show({
-          title: "Request too large",
-          description: "Attachments are too big for this request. Remove or downsize reference media and try again.",
+          title: "Attachment too large",
+          description: attachmentIssues.slice(0, 2).join(" • "),
           variant: "error",
         });
         return;
