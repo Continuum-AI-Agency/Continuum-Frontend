@@ -66,7 +66,7 @@ const backendTemplateSchema = z.object({
   default_prompt: z.string().nullish(),
   default_negative_prompt: z.string().nullish(),
   metadata: z.record(z.unknown()).nullish(),
-  tags: z.array(z.string()).nullish(),
+  tags: z.array(z.string().nullish()).nullish(),
 });
 
 const backendTemplatesResponseSchema = z.object({
@@ -131,7 +131,8 @@ function mapTemplate(template: z.infer<typeof backendTemplateSchema>): AiStudioT
     defaultPrompt: template.default_prompt ?? undefined,
     defaultNegativePrompt: template.default_negative_prompt ?? undefined,
     metadata: template.metadata ?? undefined,
-    tags: template.tags?.filter((tag): tag is string => Boolean(tag)) ?? undefined,
+    tags:
+      template.tags?.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0) ?? undefined,
   };
 
   return aiStudioTemplateSchema.parse(mapped);
@@ -159,5 +160,4 @@ export function mapBackendGenerationResponse(payload: unknown): AiStudioGenerati
   const job = mapJob(parsed.job);
   return aiStudioGenerationResponseSchema.parse({ job });
 }
-
 

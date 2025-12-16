@@ -193,9 +193,9 @@ const backendCompetitorSchema = z
 const backendBrandVoiceSchema = z
   .object({
     tone: z.string().nullish(),
-    keywords: z.array(z.string()).nullish(),
+    keywords: z.array(z.string().nullish()).nullish(),
     emoji_usage: z.string().nullish(),
-    key_messaging: z.array(z.string()).nullish(),
+    key_messaging: z.array(z.string().nullish()).nullish(),
   })
   .passthrough();
 

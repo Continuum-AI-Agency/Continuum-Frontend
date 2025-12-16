@@ -58,8 +58,8 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
   const isExpanded = accordionValue === "details";
 
   React.useEffect(() => {
+    if (selectedAccountId === null) return;
     const accountId = selectedAccountId;
-    if (!accountId) return;
     let cancelled = false;
 
     async function run() {

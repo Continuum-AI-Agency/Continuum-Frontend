@@ -15,7 +15,7 @@ function normalizeName(value: string, fallback: string): string {
   const dotCollapsed = hyphenCollapsed.replace(/[.]{2,}/g, ".");
   const underscoresCollapsed = dotCollapsed.replace(/_{2,}/g, "_");
   const punctuationBalanced = underscoresCollapsed.replace(/(?:-\.|\.-)+/g, "-");
-  const collapsed = punctuationBalanced;
+  const collapsed = punctuationBalanced.replace(/-+/g, "-");
   const trimmedPunctuation = collapsed.replace(/^[.\-_]+/, "").replace(/[.\-_]+$/, "");
   return trimmedPunctuation || fallback;
 }
@@ -32,9 +32,12 @@ export function sanitizeStorageFileName(raw: string, fallback: string = DEFAULT_
   const trimmed = safeInput.trim().replace(/[\\\/]+/g, "-");
 
   const lastDot = trimmed.lastIndexOf(".");
-  const hasExtension = lastDot > 0 && lastDot < trimmed.length - 1;
-  const basePart = hasExtension ? trimmed.slice(0, lastDot) : trimmed;
-  const extensionPart = hasExtension ? trimmed.slice(lastDot + 1) : "";
+  const isExtensionOnlyDotFile = trimmed.startsWith(".") && trimmed.indexOf(".", 1) === -1 && trimmed.length > 1;
+  const hasExtension =
+    (lastDot > 0 && lastDot < trimmed.length - 1) || (isExtensionOnlyDotFile && trimmed.length > 1);
+
+  const basePart = isExtensionOnlyDotFile ? "" : hasExtension ? trimmed.slice(0, lastDot) : trimmed;
+  const extensionPart = isExtensionOnlyDotFile ? trimmed.slice(1) : hasExtension ? trimmed.slice(lastDot + 1) : "";
 
   const sanitizedName = normalizeName(basePart, safeFallback).toLowerCase();
   const sanitizedExt = normalizeExtension(extensionPart);
@@ -45,5 +48,4 @@ export function sanitizeStorageFileName(raw: string, fallback: string = DEFAULT_
 
   return `${sanitizedName}.${sanitizedExt}`;
 }
-
 

@@ -39,19 +39,23 @@ type FilterOptions = {
   platformFilter?: SupportedPlatformKey | "all";
 };
 
+function tokenListIncludes(tokens: readonly string[], token: string) {
+  return tokens.includes(token);
+}
+
 function extractQueryTokens(query: string) {
   return query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
 function inferPlatformFilter(tokens: string[]): SupportedPlatformKey | undefined {
-  if (tokens.some((token) => SUPPORTED_PLATFORMS.youtube.tokens.includes(token))) return "youtube";
-  if (tokens.some((token) => SUPPORTED_PLATFORMS.x.tokens.includes(token))) return "x";
-  if (tokens.some((token) => SUPPORTED_PLATFORMS.linkedin.tokens.includes(token))) return "linkedin";
+  if (tokens.some((token) => tokenListIncludes(SUPPORTED_PLATFORMS.youtube.tokens, token))) return "youtube";
+  if (tokens.some((token) => tokenListIncludes(SUPPORTED_PLATFORMS.x.tokens, token))) return "x";
+  if (tokens.some((token) => tokenListIncludes(SUPPORTED_PLATFORMS.linkedin.tokens, token))) return "linkedin";
   return undefined;
 }
 
 function isPlatformToken(token: string) {
-  return Object.values(SUPPORTED_PLATFORMS).some((platform) => platform.tokens.includes(token));
+  return Object.values(SUPPORTED_PLATFORMS).some((platform) => tokenListIncludes(platform.tokens, token));
 }
 
 function normalizePlatform(raw?: string | null): SupportedPlatformKey | undefined {

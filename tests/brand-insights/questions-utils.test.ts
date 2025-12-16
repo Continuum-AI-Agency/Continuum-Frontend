@@ -71,6 +71,21 @@ test("filterAndSortQuestionsByNiche infers supported platform filters from query
   assert.deepEqual(result[0].questions.map((q) => q.id), ["q1"]);
 });
 
+test("filterAndSortQuestionsByNiche treats 'yt' token as YouTube platform filter", () => {
+  const youtubeQuestionsByNiche: BrandInsightsQuestionsByNiche["questionsByNiche"] = {
+    AudienceA: {
+      questions: [
+        { id: "q1", question: "YT question", socialPlatform: "YouTube", isSelected: false, timesUsed: 0 },
+        { id: "q2", question: "Other platform question", socialPlatform: "instagram", isSelected: false, timesUsed: 0 },
+      ],
+    },
+  };
+
+  const result = filterAndSortQuestionsByNiche(youtubeQuestionsByNiche, { query: "yt" });
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].questions.map((q) => q.id), ["q1"]);
+});
+
 test("filterAndSortQuestionsByNiche respects explicit platformFilter", () => {
   const result = filterAndSortQuestionsByNiche(questionsByNiche, {
     platformFilter: "linkedin",
