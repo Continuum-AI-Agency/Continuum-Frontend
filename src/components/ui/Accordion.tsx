@@ -2,7 +2,6 @@
 
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import React from "react";
-import { motion } from "framer-motion";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 
 export type AccordionItem = {
@@ -36,41 +35,11 @@ export function Accordion({ items, type = "single", collapsible = true }: { item
 
 function AccordionContent({ children }: { children: React.ReactNode }) {
   return (
-    <AccordionPrimitive.Content forceMount asChild>
-      <AnimatedAccordionContent>{children}</AnimatedAccordionContent>
-    </AccordionPrimitive.Content>
-  );
-}
-
-type AnimatedAccordionContentProps = Omit<
-  React.ComponentPropsWithoutRef<"div">,
-  | "onDrag"
-  | "onDragStart"
-  | "onDragEnd"
-  | "onDragEnter"
-  | "onDragLeave"
-  | "onDragOver"
-  | "onDrop"
->;
-
-function AnimatedAccordionContent(props: AnimatedAccordionContentProps) {
-  const { children, className, ...rest } = props;
-  const dataState = (rest as Record<string, unknown>)["data-state"];
-  const state = dataState === "open" ? "open" : "closed";
-
-  return (
-    <motion.div
-      {...rest}
-      initial={false}
-      animate={state}
-      variants={{
-        open: { height: "auto", opacity: 1 },
-        closed: { height: 0, opacity: 0 },
-      }}
-      transition={{ type: "tween", duration: 0.2 }}
-      className={`overflow-hidden ${className ?? ""}`}
+    <AccordionPrimitive.Content
+      forceMount
+      className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up"
     >
       <div className="py-2 text-sm text-gray-700 dark:text-gray-300">{children}</div>
-    </motion.div>
+    </AccordionPrimitive.Content>
   );
 }

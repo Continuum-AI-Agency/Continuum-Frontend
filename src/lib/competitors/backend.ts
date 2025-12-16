@@ -43,7 +43,10 @@ function normalizeMediaUrl(item: z.infer<typeof backendMediaItemSchema>): string
     item.thumbnailUrl;
 
   if (typeof candidate !== "string") {
-    candidate = Object.values(item).find((value) => typeof value === "string" && value.startsWith("http"));
+    const fallbackCandidate = Object.values(item).find(
+      (value): value is string => typeof value === "string" && value.startsWith("http")
+    );
+    candidate = fallbackCandidate;
   }
 
   if (typeof candidate !== "string") return undefined;
