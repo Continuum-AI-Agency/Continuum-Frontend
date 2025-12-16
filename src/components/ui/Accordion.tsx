@@ -42,7 +42,18 @@ function AccordionContent({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AnimatedAccordionContent(props: React.HTMLAttributes<HTMLDivElement>) {
+type AnimatedAccordionContentProps = Omit<
+  React.ComponentPropsWithoutRef<"div">,
+  | "onDrag"
+  | "onDragStart"
+  | "onDragEnd"
+  | "onDragEnter"
+  | "onDragLeave"
+  | "onDragOver"
+  | "onDrop"
+>;
+
+function AnimatedAccordionContent(props: AnimatedAccordionContentProps) {
   const { children, className, ...rest } = props;
   const dataState = (rest as Record<string, unknown>)["data-state"];
   const state = dataState === "open" ? "open" : "closed";
