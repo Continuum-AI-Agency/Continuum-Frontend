@@ -172,7 +172,7 @@ export type AgentRequestPayload = {
 const previewSectionSchema = z.enum(["brand_profile", "voice", "audience", "website", "business"]);
 type PreviewSection = z.infer<typeof previewSectionSchema>;
 
-const previewWorkflowResultSchema = z
+export const previewWorkflowResultSchema = z
   .object({
     brand_profile: agentBrandProfileSchema.optional(),
     structured: onboardingReportStructuredSchema.optional(),

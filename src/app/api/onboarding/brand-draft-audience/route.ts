@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing Supabase URL" }, { status: 500 });
   }
 
-  const edgeResponse = await fetch(`${supabaseUrl}/functions/v1/brand_draft`, {
+  const edgeResponse = await fetch(`${supabaseUrl}/functions/v1/brand-draft-audience`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -85,3 +85,4 @@ export async function POST(request: Request) {
 
   return new Response(stream, { headers, status: edgeResponse.status });
 }
+

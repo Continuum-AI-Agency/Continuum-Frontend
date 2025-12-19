@@ -7,9 +7,11 @@ import {
   googleSyncResponseSchema,
   googleDrivePickerResponseSchema,
   selectableAssetsResponseSchema,
+  integrationAssetsResponseSchema,
   applyBrandProfileIntegrationAccountsRequestSchema,
   linkIntegrationAccountsResponseSchema,
   type SelectableAssetsResponse,
+  type IntegrationAssetsResponse,
   type LinkIntegrationAccountsResponse,
   type MetaSyncResponse,
   type GoogleSyncResponse,
@@ -134,10 +136,43 @@ export async function fetchSelectableAssets(userId?: string): Promise<Selectable
   });
 }
 
-export function useSelectableAssets(userId?: string) {
+type UseSelectableAssetsOptions = {
+  enabled?: boolean;
+};
+
+export function useSelectableAssets(userId?: string, options?: UseSelectableAssetsOptions) {
   return useQuery({
     queryKey: ["selectable-assets", userId ?? "self"],
     queryFn: () => fetchSelectableAssets(userId),
+    enabled: options?.enabled ?? true,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
+export async function fetchIntegrationAssets(integrationId: string): Promise<IntegrationAssetsResponse> {
+  if (!integrationId) {
+    throw new Error("integrationId is required to fetch integration assets.");
+  }
+
+  return http.request({
+    path: buildSyncPath("/integrations/assets", { integration_id: integrationId }),
+    method: "GET",
+    schema: integrationAssetsResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export function useIntegrationAssets(integrationId: string | undefined) {
+  return useQuery({
+    queryKey: ["integration-assets", integrationId ?? "missing"],
+    queryFn: () => {
+      if (!integrationId) {
+        throw new Error("integrationId is required to fetch integration assets.");
+      }
+      return fetchIntegrationAssets(integrationId);
+    },
+    enabled: Boolean(integrationId),
     staleTime: 0,
     gcTime: 5 * 60 * 1000,
   });

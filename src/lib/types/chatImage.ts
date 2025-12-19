@@ -88,6 +88,16 @@ export type StreamState = {
   lastEvent?: StreamEvent;
 };
 
+export type ChatConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type BackendGeminiContent = {
+  role: "user" | "model";
+  parts: Array<{ text: string }>;
+};
+
 // Payload we send to the backend generation endpoints (snake_case; model may use provider-specific aliases).
 export type BackendChatImageRequestPayload = {
   brand_id: string;

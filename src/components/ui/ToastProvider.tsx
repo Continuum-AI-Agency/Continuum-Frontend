@@ -3,9 +3,11 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 import * as Toast from "@radix-ui/react-toast";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircledIcon, Cross2Icon, ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { CheckCircledIcon, Cross2Icon, ExclamationTriangleIcon, InfoCircledIcon } from "@radix-ui/react-icons";
 
-type ToastVariant = "success" | "warning" | "error";
+export const TOAST_VARIANTS = ["success", "info", "warning", "error"] as const;
+
+type ToastVariant = (typeof TOAST_VARIANTS)[number];
 
 export type ToastOptions = {
   title: string;
@@ -33,6 +35,14 @@ const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
     bg: "bg-white/95 dark:bg-slate-900/90 border-emerald-100 dark:border-emerald-900/60",
     text: "text-emerald-900 dark:text-emerald-50",
     subtext: "text-emerald-700 dark:text-emerald-200",
+  },
+  info: {
+    icon: <InfoCircledIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />,
+    accent: "bg-indigo-500",
+    ring: "focus-visible:ring-indigo-500",
+    bg: "bg-white/95 dark:bg-slate-900/90 border-indigo-100 dark:border-indigo-900/60",
+    text: "text-indigo-900 dark:text-indigo-50",
+    subtext: "text-indigo-700 dark:text-indigo-200",
   },
   warning: {
     icon: <ExclamationTriangleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400" />,

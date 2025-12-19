@@ -38,14 +38,80 @@ const selectableAssetSchema = z.object({
   ad_account_id: z.string().nullable(),
 });
 
+const metaSelectableHierarchyAdAccountSchema = z.object({
+  ad_account_id: z.string().min(1),
+  ad_account: selectableAssetSchema.nullable(),
+  pages: z.array(selectableAssetSchema),
+  instagram_accounts: z.array(selectableAssetSchema),
+  threads_accounts: z.array(selectableAssetSchema),
+});
+
+const metaSelectableHierarchyBusinessSchema = z.object({
+  business_id: z.string().nullable(),
+  business_name: z.string().nullable(),
+  ad_accounts: z.array(metaSelectableHierarchyAdAccountSchema),
+  pages_without_ad_account: z.array(selectableAssetSchema),
+  instagram_accounts_without_ad_account: z.array(selectableAssetSchema),
+  threads_accounts_without_ad_account: z.array(selectableAssetSchema),
+});
+
+const metaSelectableHierarchyIntegrationSchema = z.object({
+  integration_id: z.string().uuid(),
+  businesses: z.array(metaSelectableHierarchyBusinessSchema),
+});
+
+const metaSelectableHierarchySchema = z.object({
+  integrations: z.array(metaSelectableHierarchyIntegrationSchema),
+});
+
+const selectableAssetsHierarchySchema = z.preprocess(
+  value => {
+    if (!value || typeof value !== "object") return value;
+    const maybeRecord = value as Record<string, unknown>;
+    if ("meta" in maybeRecord) return value;
+    if ("integrations" in maybeRecord) return { meta: value };
+    return value;
+  },
+  z
+    .object({
+      meta: metaSelectableHierarchySchema.optional(),
+    })
+    .catchall(z.unknown())
+);
+
+const providerSelectableAssetsSchema = z
+  .object({
+    asset_count: z.number().int().nonnegative().optional(),
+    assets: z.array(selectableAssetSchema).optional().default([]),
+    hierarchy: selectableAssetsHierarchySchema.optional(),
+  })
+  .catchall(z.unknown());
+
 export const selectableAssetsResponseSchema = z.object({
   synced_at: z.union([isoDateString, z.null()]).default(null),
   stale: z.boolean(),
-  assets: z.array(selectableAssetSchema),
+  assets: z.array(selectableAssetSchema).optional().default([]),
+  providers: z.record(providerSelectableAssetsSchema).default({}),
 });
 
 export type SelectableAsset = z.infer<typeof selectableAssetSchema>;
+export type MetaSelectableHierarchy = z.infer<typeof metaSelectableHierarchySchema>;
+export type SelectableAssetsHierarchy = z.infer<typeof selectableAssetsHierarchySchema>;
+export type ProviderSelectableAssets = z.infer<typeof providerSelectableAssetsSchema>;
 export type SelectableAssetsResponse = z.infer<typeof selectableAssetsResponseSchema>;
+
+const selectableAssetWithIntegrationIdSchema = selectableAssetSchema.extend({
+  integration_id: z.string().uuid(),
+});
+
+export const integrationAssetsResponseSchema = selectableAssetsResponseSchema.extend({
+  integration_id: z.string().uuid(),
+  provider: z.string().min(1).nullable(),
+  assets: z.array(selectableAssetWithIntegrationIdSchema),
+  assets_flat: z.array(selectableAssetSchema),
+});
+
+export type IntegrationAssetsResponse = z.infer<typeof integrationAssetsResponseSchema>;
 
 export const applyBrandProfileIntegrationAccountsRequestSchema = z.union([
   z.object({ asset_pks: z.array(z.string().uuid()) }),

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import AIStudioClient from "./AIStudioClient";
+import { ClientOnly } from "@/components/ui/ClientOnly";
 import { fetchOnboardingMetadata } from "@/lib/onboarding/storage";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -47,9 +48,16 @@ export default async function AIStudioPage() {
       : "Untitled brand";
 
   return (
-    <AIStudioClient
-      brandProfileId={activeBrandId}
-      brandName={brandName}
-    />
+    <ClientOnly
+      fallback={
+        <div className="fixed inset-0 md:left-[88px] flex items-center justify-center bg-slate-950 text-white">
+          <div className="rounded-2xl border border-white/10 bg-slate-900/70 px-6 py-4 shadow-xl">
+            Loading AI Studio…
+          </div>
+        </div>
+      }
+    >
+      <AIStudioClient brandProfileId={activeBrandId} brandName={brandName} />
+    </ClientOnly>
   );
 }

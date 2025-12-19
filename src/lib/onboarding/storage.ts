@@ -655,6 +655,7 @@ export async function updateConnectionAccounts(
     connected?: boolean;
     accountId?: string | null;
     accounts?: OnboardingState["connections"][PlatformKey]["accounts"];
+    integrationIds?: OnboardingState["connections"][PlatformKey]["integrationIds"];
     lastSyncedAt?: string | null;
   }
 ): Promise<OnboardingState> {
@@ -665,6 +666,7 @@ export async function updateConnectionAccounts(
           connected: details.connected,
           accountId: details.accountId ?? null,
           accounts: details.accounts,
+          integrationIds: details.integrationIds,
           lastSyncedAt:
             details.lastSyncedAt !== undefined ? details.lastSyncedAt : new Date().toISOString(),
         },

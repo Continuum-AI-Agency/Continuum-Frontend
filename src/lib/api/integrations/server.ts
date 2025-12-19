@@ -5,9 +5,11 @@ import "server-only";
 import { httpServer } from "@/lib/api/http.server";
 import {
   selectableAssetsResponseSchema,
+  integrationAssetsResponseSchema,
   applyBrandProfileIntegrationAccountsRequestSchema,
   linkIntegrationAccountsResponseSchema,
   type SelectableAssetsResponse,
+  type IntegrationAssetsResponse,
   type LinkIntegrationAccountsResponse,
 } from "@/lib/schemas/integrations";
 
@@ -37,6 +39,20 @@ export async function fetchSelectableAssetsForCurrentUser(): Promise<SelectableA
     throw new Error("Unable to determine user id for selectable assets.");
   }
   return fetchSelectableAssetsForUser(userId);
+}
+
+export async function fetchIntegrationAssetsServer(integrationId: string): Promise<IntegrationAssetsResponse> {
+  if (!integrationId) {
+    throw new Error("integrationId is required to fetch integration assets.");
+  }
+
+  const search = new URLSearchParams({ integration_id: integrationId });
+  return httpServer.request({
+    path: `/integrations/assets?${search.toString()}`,
+    method: "GET",
+    schema: integrationAssetsResponseSchema,
+    cache: "no-store",
+  });
 }
 
 export type ApplyBrandProfileIntegrationAccountsParams =

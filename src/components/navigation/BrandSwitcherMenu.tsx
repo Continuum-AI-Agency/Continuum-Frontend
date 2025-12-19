@@ -73,9 +73,14 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
           <DropdownMenu.Item
             key={brand.id}
             disabled={isSwitching}
-            onSelect={(event) => {
+            onSelect={async (event) => {
               event.preventDefault();
-              selectBrand(brand.id);
+              if (brand.id === activeBrandId) {
+                return;
+              }
+
+              await selectBrand(brand.id);
+              router.refresh();
             }}
             className="flex items-center justify-between gap-2"
           >
@@ -178,4 +183,3 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
 function BadgeIndicator() {
   return <span className="inline-flex h-2 w-2 rounded-full bg-violet-500" aria-hidden="true" />;
 }
-

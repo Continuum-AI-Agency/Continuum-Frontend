@@ -3,21 +3,27 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
+  Box,
   Button,
   Callout,
   Card,
+  Checkbox,
   Dialog,
   Flex,
   Grid,
   Heading,
+  IconButton,
+  Separator,
   Text,
 } from "@radix-ui/themes";
-import { ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
+import { ChevronDownIcon, ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
+import * as Accordion from "@radix-ui/react-accordion";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets } from "@/lib/api/integrations";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
+import { getMetaSelectableAdAccountBundles, getSelectableAssetsFlatList } from "@/lib/integrations/selectableAssets";
 import { useToast } from "@/components/ui/ToastProvider";
 
 type Props = {
@@ -81,11 +87,24 @@ function groupSelectableAssets(
     grouped[platformKey].push(asset);
   });
 
+  (Object.keys(grouped) as PlatformKey[]).forEach(key => {
+    grouped[key] = grouped[key].sort((a, b) => {
+      const typeCompare = a.type.localeCompare(b.type);
+      if (typeCompare !== 0) return typeCompare;
+      return resolveSelectableAssetLabel(a).localeCompare(resolveSelectableAssetLabel(b));
+    });
+  });
+
   return grouped;
 }
 
 function resolveSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
   return asset.name?.trim() || asset.external_id;
+}
+
+function formatAssetLabelWithBusiness(asset: SelectableAsset): string {
+  if (!asset.business_id) return resolveSelectableAssetLabel(asset);
+  return `${resolveSelectableAssetLabel(asset)} · ${asset.business_id}`;
 }
 
 type AssignmentsDialogProps = {
@@ -107,10 +126,17 @@ function AssignmentsDialog({
   const selectableAssetsQuery = useSelectableAssets();
   const applyAssignments = useApplyBrandProfileIntegrationAccounts();
 
-  const selectableAssets = selectableAssetsQuery.data?.assets ?? [];
+  const selectableAssets = useMemo(
+    () => (selectableAssetsQuery.data ? getSelectableAssetsFlatList(selectableAssetsQuery.data) : []),
+    [selectableAssetsQuery.data]
+  );
   const groupedAssets = useMemo(
     () => groupSelectableAssets(selectableAssets),
     [selectableAssets]
+  );
+  const metaBundles = useMemo(
+    () => (selectableAssetsQuery.data ? getMetaSelectableAdAccountBundles(selectableAssetsQuery.data) : null),
+    [selectableAssetsQuery.data]
   );
 
   const [selectedById, setSelectedById] = useState<Record<string, boolean>>(
@@ -170,7 +196,26 @@ function AssignmentsDialog({
     setSelectedById(prev => ({ ...prev, [integrationAccountId]: checked }));
   };
 
+  const handleToggleSelectableAssets = (assets: SelectableAsset[], checked: boolean) => {
+    setSelectedById(prev => {
+      const next = { ...prev };
+      assets.forEach(asset => {
+        if (!asset.integration_account_id) return;
+        next[asset.integration_account_id] = checked;
+      });
+      return next;
+    });
+  };
+
   const handleSave = async () => {
+    if (desiredIntegrationAccountIds.length === 0) {
+      show({
+        title: "Select an ad account",
+        description: "Choose at least one ad account before saving assignments.",
+        variant: "error",
+      });
+      return;
+    }
     try {
       const result = await applyAssignments.mutateAsync({
         brandId: brandProfileId,
@@ -204,8 +249,21 @@ function AssignmentsDialog({
     [selectableAssets]
   );
 
+  const filteredGroupedAssets = useMemo(() => {
+    if (!metaBundles) return groupedAssets;
+    const copy: Record<PlatformKey, SelectableAsset[]> = { ...groupedAssets };
+    (["facebook", "instagram", "threads"] as PlatformKey[]).forEach(key => {
+      if (key === "facebook") {
+        copy[key] = [];
+        return;
+      }
+      copy[key] = (copy[key] ?? []).filter(asset => !asset.ad_account_id);
+    });
+    return copy;
+  }, [groupedAssets, metaBundles]);
+
   const orderedPlatforms = PLATFORMS.filter(
-    ({ key }) => groupedAssets[key]?.length
+    ({ key }) => filteredGroupedAssets[key]?.length
   );
 
   return (
@@ -246,66 +304,206 @@ function AssignmentsDialog({
             <Text color="gray" size="2">
               Loading your accounts...
             </Text>
-          ) : orderedPlatforms.length === 0 ? (
+          ) : (orderedPlatforms.length === 0 && !metaBundles) ? (
             <Text color="gray" size="2">
               No connected accounts available yet. Connect providers from your
               personal integrations first.
             </Text>
           ) : (
-            orderedPlatforms.map(({ key, label }) => {
-              const assets = groupedAssets[key] ?? [];
-              if (!assets.length) return null;
-              return (
-                <div key={key} className="flex flex-col gap-2">
-                  <Heading size="3">{label}</Heading>
-                  <div className="flex flex-col gap-2">
-                    {assets.map(asset => {
-                      const integrationAccountId =
-                        asset.integration_account_id;
-                      const checked = integrationAccountId
-                        ? selectedById[integrationAccountId] ?? false
-                        : false;
-                      const disabled = isSaving || !integrationAccountId;
+            <>
+              {metaBundles ? (
+                <div className="flex flex-col gap-2">
+                  <Heading size="3">Meta</Heading>
+                  <Accordion.Root type="multiple">
+                    {metaBundles.ad_accounts.map(bundle => {
+                      const adAccountLabel = bundle.ad_account
+                        ? resolveSelectableAssetLabel(bundle.ad_account)
+                        : bundle.ad_account_id;
+                      const adAccountId = bundle.ad_account_id;
+                      const selectionAssets = (bundle.ad_account ? [bundle.ad_account, ...bundle.assets] : bundle.assets)
+                        .filter(asset => Boolean(asset.integration_account_id));
+                      const uniqueIds = new Set<string>();
+                      selectionAssets.forEach(asset => {
+                        if (!asset.integration_account_id) return;
+                        uniqueIds.add(asset.integration_account_id);
+                      });
+                      const selectedCount = Array.from(uniqueIds).reduce(
+                        (count, id) => (selectedById[id] ? count + 1 : count),
+                        0
+                      );
+                      const totalSelectable = uniqueIds.size;
+                      const allSelected = totalSelectable > 0 && selectedCount === totalSelectable;
+                      const partiallySelected = selectedCount > 0 && selectedCount < totalSelectable;
+                      const selectionBadge = totalSelectable === 0
+                        ? { color: "gray" as const, label: "Unavailable" }
+                        : allSelected
+                          ? { color: "green" as const, label: `Selected ${selectedCount}/${totalSelectable}` }
+                          : partiallySelected
+                            ? { color: "amber" as const, label: `Selected ${selectedCount}/${totalSelectable}` }
+                            : { color: "gray" as const, label: `Selected ${selectedCount}/${totalSelectable}` };
+
                       return (
-                        <label
-                          key={asset.asset_pk}
-                          className="flex items-center justify-between gap-3 rounded border border-white/10 bg-slate-950/40 px-3 py-2"
-                        >
-                          <div className="flex flex-col">
-                            <Text size="2" weight="medium" className="truncate">
-                              {resolveSelectableAssetLabel(asset)}
-                            </Text>
-                            {asset.business_id ? (
-                              <Text size="1" color="gray">
-                                Business {asset.business_id}
-                              </Text>
-                            ) : !integrationAccountId ? (
-                              <Text size="1" color="gray">
-                                Not ready for assignment
-                              </Text>
-                            ) : null}
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={event =>
-                              integrationAccountId
-                                ? handleToggle(
-                                    integrationAccountId,
-                                    event.target.checked
-                                  )
-                                : undefined
-                            }
-                            disabled={disabled}
-                            className="h-4 w-4 accent-sky-500"
-                          />
-                        </label>
+                        <Accordion.Item key={adAccountId} value={adAccountId} className="mb-2 last:mb-0">
+                          <Card className="border border-white/10 bg-slate-950/40">
+                            <Accordion.Header>
+                              <Flex justify="between" align="center" gap="2" p="3">
+                                <Text as="label" size="2" className="min-w-0">
+                                  <Flex as="span" align="center" gap="2" className="min-w-0">
+                                    <Checkbox
+                                      checked={partiallySelected ? "indeterminate" : allSelected}
+                                      disabled={isSaving || totalSelectable === 0}
+                                      onCheckedChange={(value) => {
+                                        handleToggleSelectableAssets(selectionAssets, value === true);
+                                      }}
+                                    />
+                                    <Flex direction="column" className="min-w-0">
+                                      <Text size="2" weight="medium" className="truncate">
+                                        {adAccountLabel}
+                                      </Text>
+                                      <Text size="1" color="gray" className="truncate">
+                                        Ad account ID {adAccountId}
+                                      </Text>
+                                    </Flex>
+                                  </Flex>
+                                </Text>
+                                <Flex align="center" gap="2">
+                                  <Badge color={selectionBadge.color} variant="soft">
+                                    {selectionBadge.label}
+                                  </Badge>
+                                  <Accordion.Trigger asChild>
+                                    <IconButton
+                                      variant="ghost"
+                                      color="gray"
+                                      size="1"
+                                      aria-label={`Toggle ${adAccountLabel} assets`}
+                                      className="group"
+                                    >
+                                      <ChevronDownIcon className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                                    </IconButton>
+                                  </Accordion.Trigger>
+                                </Flex>
+                              </Flex>
+                            </Accordion.Header>
+                            <Accordion.Content className="overflow-hidden">
+                              <Box px="3" pb="3">
+                                <Separator size="4" my="2" />
+                                {bundle.assets.length > 0 ? (
+                                  <Flex direction="column" gap="2">
+                                    {bundle.assets.map(asset => (
+                                      <Flex key={asset.asset_pk} justify="between" align="center" gap="2">
+                                        <Flex align="center" gap="2" className="min-w-0">
+                                          <Text size="2" className="truncate">
+                                            {formatAssetLabelWithBusiness(asset)}
+                                          </Text>
+                                          <Badge color="gray" variant="soft">
+                                            {asset.type}
+                                          </Badge>
+                                        </Flex>
+                                      </Flex>
+                                    ))}
+                                  </Flex>
+                                ) : (
+                                  <Text size="1" color="gray">
+                                    No assets for this ad account.
+                                  </Text>
+                                )}
+                              </Box>
+                            </Accordion.Content>
+                          </Card>
+                        </Accordion.Item>
                       );
                     })}
-                  </div>
+                  </Accordion.Root>
+
+                  {metaBundles.assets_without_ad_account.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      <Text size="1" color="gray">
+                        Other
+                      </Text>
+                      <div className="flex flex-col gap-2">
+                        {metaBundles.assets_without_ad_account.map(asset => {
+                          const integrationAccountId = asset.integration_account_id;
+                          const checked = integrationAccountId
+                            ? selectedById[integrationAccountId] ?? false
+                            : false;
+                          const disabled = isSaving || !integrationAccountId;
+                          return (
+                            <label
+                              key={asset.asset_pk}
+                              className="flex items-center justify-between gap-3 rounded border border-white/10 bg-slate-950/40 px-3 py-2"
+                            >
+                              <div className="flex flex-col">
+                                <Text size="2" weight="medium" className="truncate">
+                                  {formatAssetLabelWithBusiness(asset)}
+                                </Text>
+                                {!integrationAccountId ? (
+                                  <Text size="1" color="gray">
+                                    Not ready for assignment
+                                  </Text>
+                                ) : null}
+                              </div>
+                              <Checkbox
+                                checked={checked}
+                                disabled={disabled}
+                                onCheckedChange={(value) => {
+                                  if (!integrationAccountId) return;
+                                  handleToggle(integrationAccountId, value === true);
+                                }}
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              );
-            })
+              ) : null}
+
+              {orderedPlatforms.map(({ key, label }) => {
+                const assets = filteredGroupedAssets[key] ?? [];
+                if (!assets.length) return null;
+                return (
+                  <div key={key} className="flex flex-col gap-2">
+                    <Heading size="3">{label}</Heading>
+                    <div className="flex flex-col gap-2">
+                      {assets.map(asset => {
+                        const integrationAccountId =
+                          asset.integration_account_id;
+                        const checked = integrationAccountId
+                          ? selectedById[integrationAccountId] ?? false
+                          : false;
+                        const disabled = isSaving || !integrationAccountId;
+                        return (
+                          <label
+                            key={asset.asset_pk}
+                            className="flex items-center justify-between gap-3 rounded border border-white/10 bg-slate-950/40 px-3 py-2"
+                          >
+                            <div className="flex flex-col">
+                              <Text size="2" weight="medium" className="truncate">
+                                {formatAssetLabelWithBusiness(asset)}
+                              </Text>
+                              {!integrationAccountId ? (
+                                <Text size="1" color="gray">
+                                  Not ready for assignment
+                                </Text>
+                              ) : null}
+                            </div>
+                            <Checkbox
+                              checked={checked}
+                              disabled={disabled}
+                              onCheckedChange={(value) => {
+                                if (!integrationAccountId) return;
+                                handleToggle(integrationAccountId, value === true);
+                              }}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
 

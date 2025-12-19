@@ -25,11 +25,37 @@ type PermissionRow = {
   brand_created_by?: string | null;
 };
 
+type AdminPagination = {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  nextPage: number | null;
+  lastPage: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+};
+
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function parsePositiveInt(value: unknown, fallback: number) {
+  const numberValue = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
+  if (!Number.isFinite(numberValue) || numberValue <= 0) {
+    return fallback;
+  }
+  return Math.floor(numberValue);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 serve(async (req) => {
@@ -62,6 +88,28 @@ serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
+    const url = new URL(req.url);
+    const queryPage = url.searchParams.get("page");
+    const queryPageSize = url.searchParams.get("pageSize") ?? url.searchParams.get("perPage") ?? url.searchParams.get("per_page");
+    let bodyParams: Record<string, unknown> = {};
+    if (req.method === "POST") {
+      try {
+        bodyParams = await req.json();
+      } catch {
+        bodyParams = {};
+      }
+    }
+
+    const page = Math.max(
+      1,
+      parsePositiveInt(bodyParams.page ?? queryPage, 1)
+    );
+    const pageSize = clamp(
+      parsePositiveInt(bodyParams.pageSize ?? bodyParams.perPage ?? queryPageSize, DEFAULT_PAGE_SIZE),
+      1,
+      MAX_PAGE_SIZE
+    );
+
     const { data: userData, error: userError } = await adminClient.auth.getUser(accessToken);
     if (userError || !userData?.user) {
       log("getUser failed", { userError });
@@ -74,7 +122,10 @@ serve(async (req) => {
       return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({ perPage: 200 });
+    const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage: pageSize,
+    });
     if (usersError) {
       log("listUsers failed", { usersError });
       return jsonResponse({ error: usersError.message }, 500);
@@ -90,9 +141,23 @@ serve(async (req) => {
       })) ?? [];
 
     const userIds = users.map((u) => u.id);
+    const totalCount = usersData?.total ?? 0;
+    const lastPage = usersData?.lastPage ?? 0;
+    const totalPages = lastPage > 0 ? lastPage : totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
+    const pagination: AdminPagination = {
+      page,
+      pageSize,
+      totalCount,
+      totalPages,
+      nextPage: usersData?.nextPage ?? null,
+      lastPage,
+      hasNextPage: totalPages > 0 ? page < totalPages : (usersData?.nextPage ?? null) !== null,
+      hasPrevPage: page > 1,
+    };
+
     if (userIds.length === 0) {
       log("no users found");
-      return jsonResponse({ users: [], permissions: [] });
+      return jsonResponse({ users: [], permissions: [], pagination });
     }
 
   const { data: permsData, error: permsError } = await adminClient
@@ -187,8 +252,8 @@ serve(async (req) => {
     }
   }
 
-    log("success", { users: users.length, permissions: permissions.length });
-    return jsonResponse({ users, permissions });
+    log("success", { users: users.length, permissions: permissions.length, page, pageSize, totalCount });
+    return jsonResponse({ users, permissions, pagination });
   } catch (error) {
     console.error("[admin-list-users] unhandled", error);
     return jsonResponse({ error: (error as Error)?.message ?? "Unknown error" }, 500);

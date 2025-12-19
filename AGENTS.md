@@ -112,25 +112,16 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 * **Link the work:** Attach related PRs, docs, analytics dashboards, or Looms directly to the issue. Cross-link dependent issues so risk can be tracked.
 * **Close the loop:** Before marking an issue Done, confirm acceptance criteria, tests, and documentation updates are complete. Summarize outcomes in the final comment.
 
-## 5. Linear Workflow & Project Operations
+## 6. MCP Usage
 
-Our Linear workspace is the source of truth for delivery planning. Treat every interaction as a professional contract with the team.
+* **Purpose:** MCP tools are for reference and guidance only; they must not mutate production data or state.
+* **Supabase MCP (Read-Only):** Use it for looking up schemas, tables, migrations, and query behavior to inform frontend work. Do not run write operations or migrations unless explicitly requested and approved.
+* **Radix MCP (Design System):** Use it to retrieve official Radix primitives documentation/source for building our UI foundations. Prefer Radix primitives over custom equivalents unless a clear gap exists.
+* **Document Gaps:** If MCP data is missing or unclear, state assumptions and ask for clarification rather than guessing.
 
-### Estimation Discipline
+## 7. Tests
 
-* **Always estimate:** Every issue and sub-issue must carry an estimate from the team scale (`1, 2, 4, 8, 16`). Add or adjust the estimate before work begins.
-* **Anchor on scope, not hope:** Estimate only after clarifying acceptance criteria, risks, and dependencies. Escalate unknowns instead of guessing.
-* **Refine continuously:** Update estimates when scope changes. Communicate deltas in the issue comments and relevant standups.
-
-### Issue Shape & Chunking
-
-* **Right-size work:** Break initiatives into issues that fit within a single sprint window (≤16 points). Split anything larger into sequenced sub-issues.
-* **Single outcome per issue:** Each issue should deliver one testable outcome. Use clear titles (`Verb + Object`) and maintain crisp acceptance criteria.
-* **Connect the tree:** Use parent issues or projects to show hierarchy. Ensure sub-issues reference their parent so burndown and rollups stay accurate.
-
-### Projects, Status, and Flow
-
-* **Projects as umbrellas:** Every major initiative belongs to a Linear project. Keep project documents, milestones, and health updated weekly.
-* **Status is signal:** Move issues through the workflow promptly (`Backlog → In Progress → Review → Done`). Leave a comment when blocking or handing off.
-* **Link the work:** Attach related PRs, docs, analytics dashboards, or Looms directly to the issue. Cross-link dependent issues so risk can be tracked.
-* **Close the loop:** Before marking an issue Done, confirm acceptance criteria, tests, and documentation updates are complete. Summarize outcomes in the final comment.
+* **Don't cheat, don't be lazy, just be Honest.** Write tests that cover TRUE functionality. NEVER simulate a pass condition, and it should always attempt the function's intended behavior.
+* **Tests are Atomized** Tests should cover the smallest amount of functions at a time, to give clarity on what is breaking. A test can have multiple calls/arguments at a time, but it should be for the function they are covering.
+* **Tests are Critical** Tests are critical to effective codebases, functions, and behavior. Always write the full test, covering 100% of functionality.
+* **You can Iterate on them yourself** Running `bun test path/to/function` runs that singular test. `bun tests` runs all tests in the codebase. You may run them iteratively within your context in order to confirm your work.

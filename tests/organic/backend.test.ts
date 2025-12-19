@@ -38,3 +38,40 @@ test("normalizes edge instagram organic metrics response to frontend shape", () 
   assert.equal(normalized.metrics.profileVisitsYesterday, 2);
   assert.equal(normalized.comparison?.reach?.percentageChange, 25);
 });
+
+test("normalizes reporting api organic metrics response with pctChange", () => {
+  const payload = {
+    platform: "instagram",
+    brandId: "brand-1",
+    integrationAccountId: "integration-1",
+    externalAccountId: "ig-2",
+    fetchedAt: "2025-12-12T00:00:00.000Z",
+    range: {
+      preset: "last_7d",
+      since: "2025-12-05",
+      until: "2025-12-12",
+    },
+    metrics: {
+      reach: 100,
+      views: 200,
+      accountsEngaged: 30,
+      reelsViews: 50,
+      postViews: 70,
+      storiesViews: 80,
+      profileVisitsYesterday: 20,
+      nonFollowerReach: 60,
+      followerReach: 40,
+      newFollowers: 10,
+    },
+    comparison: {
+      reach: { current: 100, previous: 80, pctChange: 25 },
+      newFollowers: { current: 10, previous: 5, pctChange: 100 },
+    },
+  } as const;
+
+  const normalized = normalizeInstagramOrganicMetricsResponse(payload);
+  assert.equal(normalized.accountId, "ig-2");
+  assert.equal(normalized.metrics.reelsViews, 50);
+  assert.equal(normalized.comparison?.reach?.percentageChange, 25);
+  assert.equal(normalized.comparison?.newFollowers?.percentageChange, 100);
+});

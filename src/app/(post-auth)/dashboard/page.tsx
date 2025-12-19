@@ -26,6 +26,7 @@ import React from "react";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
 import { InstagramOrganicReportingWidget } from "@/components/dashboard/InstagramOrganicReportingWidget";
+import { ClientOnly } from "@/components/ui/ClientOnly";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import type { BrandInsightsQuestionsByNiche, BrandInsightsTrendsAndEvents } from "@/lib/schemas/brandInsights";
@@ -145,37 +146,58 @@ export default async function DashboardPage() {
 
       <SurfaceCard>
         <Flex direction="column" gap="3">
-          <Tabs.Root defaultValue="organic">
-            <Tabs.List>
-              <Tabs.Trigger value="paid">Paid</Tabs.Trigger>
-              <Tabs.Trigger value="organic">Organic</Tabs.Trigger>
-            </Tabs.List>
-            <Tabs.Content value="paid">
-              <ReportingGrid
-                title="Paid reporting"
-                summary={[
-                  { label: "Spend", value: paidSummary.spend },
-                  { label: "Conversions", value: paidSummary.conversions },
-                  { label: "Efficiency", value: paidSummary.efficiency },
-                ]}
-                note={paidSummary.note}
-              />
-            </Tabs.Content>
-            <Tabs.Content value="organic">
-              <ReportingGrid
-                title="Organic signals"
-                summary={[
-                  { label: "Posts observed", value: organicSummary.posts.toString() },
-                  { label: "Mentions", value: organicSummary.mentions.toString() },
-                  { label: "Questions", value: organicSummary.questions.toString() },
-                ]}
-                note={organicSummary.note}
-              />
-              <Box pt="4">
-                <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
-              </Box>
-            </Tabs.Content>
-          </Tabs.Root>
+          <ClientOnly
+            fallback={
+              <>
+                <ReportingGrid
+                  title="Organic signals"
+                  summary={[
+                    { label: "Posts observed", value: organicSummary.posts.toString() },
+                    { label: "Mentions", value: organicSummary.mentions.toString() },
+                    { label: "Questions", value: organicSummary.questions.toString() },
+                  ]}
+                  note={organicSummary.note}
+                />
+                <Box pt="4">
+                  <Text color="gray" size="2">
+                    Loading reporting widgets…
+                  </Text>
+                </Box>
+              </>
+            }
+          >
+            <Tabs.Root defaultValue="organic">
+              <Tabs.List>
+                <Tabs.Trigger value="organic">Organic</Tabs.Trigger>
+                <Tabs.Trigger value="paid">Paid</Tabs.Trigger>
+              </Tabs.List>
+              <Tabs.Content value="organic">
+                <ReportingGrid
+                  title="Organic signals"
+                  summary={[
+                    { label: "Posts observed", value: organicSummary.posts.toString() },
+                    { label: "Mentions", value: organicSummary.mentions.toString() },
+                    { label: "Questions", value: organicSummary.questions.toString() },
+                  ]}
+                  note={organicSummary.note}
+                />
+                <Box pt="4">
+                  <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
+                </Box>
+              </Tabs.Content>
+              <Tabs.Content value="paid">
+                <ReportingGrid
+                  title="Paid reporting"
+                  summary={[
+                    { label: "Spend", value: paidSummary.spend },
+                    { label: "Conversions", value: paidSummary.conversions },
+                    { label: "Efficiency", value: paidSummary.efficiency },
+                  ]}
+                  note={paidSummary.note}
+                />
+              </Tabs.Content>
+            </Tabs.Root>
+          </ClientOnly>
         </Flex>
       </SurfaceCard>
 

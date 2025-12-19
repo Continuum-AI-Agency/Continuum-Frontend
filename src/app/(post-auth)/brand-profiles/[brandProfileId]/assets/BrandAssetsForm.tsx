@@ -2,14 +2,21 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { applyBrandProfileIntegrationAccounts } from "@/lib/api/integrations";
-import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
-import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
-import { useToast } from "@/components/ui/ToastProvider";
-import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
-import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
+	import { z } from "zod";
+	import { zodResolver } from "@hookform/resolvers/zod";
+	import { Badge, Box, Checkbox, Flex, Text } from "@radix-ui/themes";
+	import { applyBrandProfileIntegrationAccounts } from "@/lib/api/integrations";
+	import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
+	import {
+		getSelectableAssetLabel,
+		getSelectableAssetsFlatList,
+		getSelectableAssetsFlatListForProvider,
+	} from "@/lib/integrations/selectableAssets";
+	import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
+	import { useToast } from "@/components/ui/ToastProvider";
+	import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
+	import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
+	import { MetaSelectableAssetsTree } from "@/components/integrations/MetaSelectableAssetsTree";
 
 type Props = {
 	brandProfileId: string;
@@ -21,10 +28,6 @@ const formSchema = z.object({
 	selected: z.record(z.boolean()),
 });
 type FormValues = z.infer<typeof formSchema>;
-
-function resolveSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
-	return asset.name?.trim() || asset.external_id;
-}
 
 function groupSelectableAssetsByPlatform(
 	assets: SelectableAsset[]
@@ -43,12 +46,134 @@ function groupSelectableAssetsByPlatform(
 	return grouped;
 }
 
+function ProviderPlatformList({
+	assets,
+	selected,
+	onToggle,
+	disabled,
+}: {
+	assets: SelectableAsset[];
+	selected: Record<string, boolean>;
+	onToggle: (integrationAccountId: string, checked: boolean) => void;
+	disabled: boolean;
+}) {
+	const grouped = useMemo(() => groupSelectableAssetsByPlatform(assets), [assets]);
+	const orderedPlatforms = useMemo(
+		() => PLATFORMS.filter(({ key }) => grouped[key]?.length),
+		[grouped]
+	);
+	const unmappedAssets = useMemo(
+		() => assets.filter(asset => !mapIntegrationTypeToPlatformKey(asset.type)),
+		[assets]
+	);
+
+	if (assets.length === 0) {
+		return (
+			<Text size="2" color="gray">
+				No accounts found.
+			</Text>
+		);
+	}
+
+	return (
+		<div className="flex flex-col gap-6">
+			{orderedPlatforms.map(({ key, label }) => {
+				const platformAssets = grouped[key] ?? [];
+				return (
+					<section key={key} className="space-y-3">
+						<Text size="3" weight="medium" className="text-primary">
+							{label}
+						</Text>
+						<Box className="border-subtle overflow-hidden rounded-lg border bg-surface">
+							{platformAssets.map(asset => {
+								const integrationAccountId = asset.integration_account_id;
+								const checked = integrationAccountId ? Boolean(selected[integrationAccountId]) : false;
+								const rowDisabled = disabled || !integrationAccountId;
+								return (
+									<Box key={asset.asset_pk} className="border-subtle border-t px-3 py-2 first:border-t-0">
+										<Text as="label" size="2" color={rowDisabled ? "gray" : undefined}>
+											<Flex as="span" align="center" justify="between" gap="3">
+												<Flex as="span" align="center" gap="2" className="min-w-0">
+													<Checkbox
+														checked={checked}
+														disabled={rowDisabled}
+														onCheckedChange={(value) =>
+															integrationAccountId ? onToggle(integrationAccountId, value === true) : undefined
+														}
+													/>
+													<Text as="span" className="truncate">
+														{getSelectableAssetLabel(asset)}
+													</Text>
+												</Flex>
+												<Flex as="span" align="center" gap="2">
+													<Badge variant="soft" color="gray">
+														{asset.type}
+													</Badge>
+													{!integrationAccountId ? (
+														<Text as="span" size="1" color="amber">
+															Not ready
+														</Text>
+													) : null}
+												</Flex>
+											</Flex>
+										</Text>
+									</Box>
+								);
+							})}
+						</Box>
+					</section>
+				);
+			})}
+
+			{unmappedAssets.length > 0 ? (
+				<section className="space-y-3">
+					<Text size="3" weight="medium" className="text-primary">
+						Other
+					</Text>
+					<Box className="border-subtle overflow-hidden rounded-lg border bg-surface">
+						{unmappedAssets.map(asset => {
+							const integrationAccountId = asset.integration_account_id;
+							const checked = integrationAccountId ? Boolean(selected[integrationAccountId]) : false;
+							const rowDisabled = disabled || !integrationAccountId;
+							return (
+								<Box key={asset.asset_pk} className="border-subtle border-t px-3 py-2 first:border-t-0">
+									<Text as="label" size="2" color={rowDisabled ? "gray" : undefined}>
+										<Flex as="span" align="center" justify="between" gap="3">
+											<Flex as="span" align="center" gap="2" className="min-w-0">
+												<Checkbox
+													checked={checked}
+													disabled={rowDisabled}
+													onCheckedChange={(value) =>
+														integrationAccountId ? onToggle(integrationAccountId, value === true) : undefined
+													}
+												/>
+												<Text as="span" className="truncate">
+													{getSelectableAssetLabel(asset)}
+												</Text>
+											</Flex>
+											<Badge variant="soft" color="gray">
+												{asset.type}
+											</Badge>
+										</Flex>
+									</Text>
+								</Box>
+							);
+						})}
+					</Box>
+				</section>
+			) : null}
+		</div>
+	);
+}
+
 export function BrandAssetsForm({
 	brandProfileId,
 	selectableAssetsResponse,
 	assignedIntegrationAccountIds,
 }: Props) {
-	const selectableAssets = selectableAssetsResponse.assets ?? [];
+	const selectableAssets = useMemo(() => {
+		return getSelectableAssetsFlatList(selectableAssetsResponse);
+	}, [selectableAssetsResponse]);
 	const assignedSet = useMemo(() => new Set(assignedIntegrationAccountIds), [assignedIntegrationAccountIds]);
 
 	const defaultSelected: Record<string, boolean> = useMemo(() => {
@@ -76,15 +201,17 @@ export function BrandAssetsForm({
 		form.setValue("selected", { ...selected, [key]: checked }, { shouldDirty: true, shouldTouch: true });
 	}
 
-	const grouped = useMemo(
-		() => groupSelectableAssetsByPlatform(selectableAssets),
-		[selectableAssets]
-	);
+	const providers = selectableAssetsResponse.providers ?? {};
+	const providerKeys = Object.keys(providers);
+	const hasProviderBuckets = providerKeys.length > 0;
+	const metaProvider = providers.meta;
+	const googleProvider = providers.google;
+	const otherProviders = providerKeys
+		.filter((key) => key !== "meta" && key !== "google")
+		.map((key) => ({ key, data: providers[key] }))
+		.filter((entry): entry is { key: string; data: NonNullable<typeof entry.data> } => Boolean(entry.data));
 
-	const orderedPlatforms = useMemo(
-		() => PLATFORMS.filter(({ key }) => grouped[key]?.length),
-		[grouped]
-	);
+	const metaHierarchy = metaProvider?.hierarchy?.meta;
 
 	const unassignableCount = useMemo(
 		() => selectableAssets.filter(asset => !asset.integration_account_id).length,
@@ -162,50 +289,72 @@ export function BrandAssetsForm({
 				</div>
 			) : null}
 			<div className="flex flex-col gap-8">
-				{orderedPlatforms.length === 0 ? (
+				{selectableAssets.length === 0 ? (
 					<p className="text-sm text-slate-500">
 						No connected accounts available yet. Connect providers from your personal integrations first.
 					</p>
 				) : (
-					orderedPlatforms.map(({ key, label }) => {
-						const assets = grouped[key] ?? [];
-						return (
-							<section key={key} className="space-y-3">
-								<h2 className="text-lg font-medium">{label}</h2>
-								<ul className="divide-y divide-gray-200 rounded border">
-									{assets.map(asset => {
-										const integrationAccountId = asset.integration_account_id;
-										const checked = integrationAccountId ? Boolean(selected[integrationAccountId]) : false;
-										const disabled = isPending || !integrationAccountId;
-										return (
-											<li key={asset.asset_pk} className="flex items-center justify-between gap-4 p-3">
-												<div>
-													<div className="text-sm font-medium">{resolveSelectableAssetLabel(asset)}</div>
-													<div className="text-xs text-gray-500">{asset.type}</div>
-													{asset.business_id ? (
-														<div className="text-xs text-gray-500">Business {asset.business_id}</div>
-													) : null}
-												</div>
-												<div className="flex items-center gap-3">
-													{!integrationAccountId ? (
-														<span className="text-xs text-amber-600">Not ready</span>
-													) : null}
-													<input
-														type="checkbox"
-														checked={checked}
-														onChange={(e) =>
-															integrationAccountId ? handleToggle(integrationAccountId, e.target.checked) : undefined
-														}
-														disabled={disabled}
-													/>
-												</div>
-											</li>
-										);
-									})}
-								</ul>
+					<>
+						{hasProviderBuckets ? (
+							<>
+								{metaProvider ? (
+									<section className="space-y-3">
+										<h2 className="text-lg font-medium">Meta</h2>
+										{metaHierarchy ? (
+											<MetaSelectableAssetsTree
+												hierarchy={metaHierarchy}
+												selectedByIntegrationAccountId={selected}
+												onToggleIntegrationAccountId={handleToggle}
+												disabled={isPending}
+											/>
+										) : null}
+											{!metaHierarchy ? (
+												<ProviderPlatformList
+													assets={getSelectableAssetsFlatListForProvider(selectableAssetsResponse, "meta")}
+													selected={selected}
+													onToggle={handleToggle}
+													disabled={isPending}
+												/>
+										) : null}
+									</section>
+								) : null}
+
+									{googleProvider ? (
+										<section className="space-y-3">
+											<h2 className="text-lg font-medium">Google</h2>
+											<ProviderPlatformList
+												assets={getSelectableAssetsFlatListForProvider(selectableAssetsResponse, "google")}
+												selected={selected}
+												onToggle={handleToggle}
+												disabled={isPending}
+											/>
+									</section>
+								) : null}
+
+									{otherProviders.map(({ key, data }) => (
+										<section key={key} className="space-y-3">
+											<h2 className="text-lg font-medium">{key}</h2>
+											<ProviderPlatformList
+												assets={getSelectableAssetsFlatListForProvider(selectableAssetsResponse, key)}
+												selected={selected}
+												onToggle={handleToggle}
+												disabled={isPending}
+											/>
+										</section>
+									))}
+							</>
+						) : (
+							<section className="space-y-3">
+								<h2 className="text-lg font-medium">Accounts</h2>
+								<ProviderPlatformList
+									assets={selectableAssets}
+									selected={selected}
+									onToggle={handleToggle}
+									disabled={isPending}
+								/>
 							</section>
-						);
-					})
+						)}
+					</>
 				)}
 			</div>
 

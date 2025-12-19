@@ -7,7 +7,7 @@ export type RequestOptions<TResponse> = {
   method?: HttpMethod;
   body?: unknown;
   headers?: Record<string, string>;
-  schema?: ZodType<TResponse>;
+  schema?: ZodType<TResponse, any, unknown>;
   cache?: RequestCache;
   next?: NextFetchRequestConfig;
 };

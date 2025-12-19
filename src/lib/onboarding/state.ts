@@ -4,6 +4,7 @@ import {
   decompressFromEncodedURIComponent,
 } from "lz-string";
 import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
+import { previewWorkflowResultSchema } from "@/lib/onboarding/agentClient";
 
 export const BRAND_VOICE_TAGS = [
   "Playful",
@@ -44,6 +45,7 @@ const connectionStateSchema = z.object({
   connected: z.boolean(),
   accountId: z.union([z.string(), z.null()]).default(null),
   accounts: z.array(platformAccountSchema).default([]),
+  integrationIds: z.array(z.string().uuid()).default([]),
   lastSyncedAt: z.union([isoDateString, z.null()]).default(null),
 });
 
@@ -122,6 +124,13 @@ const onboardingStateSchema = z.object({
   members: z.array(brandMemberSchema),
   invites: z.array(brandInviteSchema),
   completedAt: z.union([isoDateString, z.null()]).nullable(),
+  preview: z
+    .object({
+      completedAt: isoDateString,
+      payload: previewWorkflowResultSchema,
+    })
+    .nullable()
+    .default(null),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -133,6 +142,13 @@ const onboardingPatchSchema = z.object({
   members: z.array(brandMemberSchema).optional(),
   invites: z.array(brandInviteSchema).optional(),
   completedAt: z.union([isoDateString, z.null()]).nullable().optional(),
+  preview: z
+    .object({
+      completedAt: isoDateString,
+      payload: previewWorkflowResultSchema,
+    })
+    .nullable()
+    .optional(),
 });
 
 const onboardingMetadataSchema = z.object({
@@ -162,6 +178,7 @@ function makeDefaultConnections(): Record<PlatformKey, OnboardingConnectionState
       connected: false,
       accountId: null,
       accounts: [],
+      integrationIds: [],
       lastSyncedAt: null,
     };
     return acc;
@@ -186,6 +203,7 @@ export function createDefaultOnboardingState(owner?: BrandMember): OnboardingSta
     members: owner ? [owner] : [],
     invites: [],
     completedAt: null,
+    preview: null,
   };
 }
 
@@ -260,6 +278,7 @@ export function mergeOnboardingState(
     members: [...current.members],
     invites: [...current.invites],
     completedAt: current.completedAt ?? null,
+    preview: current.preview ?? null,
   };
 
   if (patch.step !== undefined) {
@@ -294,6 +313,7 @@ export function mergeOnboardingState(
         connected: false,
         accountId: null,
         accounts: [],
+        integrationIds: [],
         lastSyncedAt: null,
       };
       next.connections[key] = {
@@ -303,6 +323,7 @@ export function mergeOnboardingState(
             ? update.accountId ?? null
             : existing.accountId ?? null,
         accounts: update.accounts ?? existing.accounts,
+        integrationIds: update.integrationIds ?? existing.integrationIds ?? [],
         lastSyncedAt:
           update.lastSyncedAt !== undefined
             ? update.lastSyncedAt ?? null
@@ -321,6 +342,10 @@ export function mergeOnboardingState(
 
   if (patch.completedAt !== undefined) {
     next.completedAt = patch.completedAt ?? null;
+  }
+
+  if (patch.preview !== undefined) {
+    next.preview = patch.preview ?? null;
   }
 
   return onboardingStateSchema.parse(next);

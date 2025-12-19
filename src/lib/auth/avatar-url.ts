@@ -9,8 +9,18 @@ function isGoogleHostedAvatarUrl(value: string): boolean {
   }
 }
 
-export function proxyAvatarUrlIfNeeded(value: string): string {
-  if (!isGoogleHostedAvatarUrl(value)) return value;
-  return `/api/avatar?src=${encodeURIComponent(value)}`;
+function getBrowserOrigin(): string | null {
+  if (typeof window === "undefined") return null;
+  const origin = window.location?.origin;
+  return typeof origin === "string" && origin.length > 0 ? origin : null;
 }
 
+export function proxyAvatarUrlIfNeeded(value: string, baseOrigin?: string): string {
+  if (!isGoogleHostedAvatarUrl(value)) return value;
+
+  const proxyPath = `/api/avatar?src=${encodeURIComponent(value)}`;
+  const origin = baseOrigin ?? getBrowserOrigin();
+  if (!origin) return proxyPath;
+
+  return new URL(proxyPath, origin).toString();
+}

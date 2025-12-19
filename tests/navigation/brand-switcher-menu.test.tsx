@@ -25,6 +25,7 @@ function normalizeLabel(label: string): string {
 }
 
 let routerPushSpy = vi.fn<(path: string) => void>();
+let routerRefreshSpy = vi.fn<() => void>();
 let logoutSpy = vi.fn<() => void>();
 let selectBrandSpy = vi.fn<(brandId: string) => void>();
 let toggleSpy = vi.fn<(checked: boolean) => void>();
@@ -110,7 +111,7 @@ vi.mock("@radix-ui/themes", () => {
 });
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: routerPushSpy }),
+  useRouter: () => ({ push: routerPushSpy, refresh: routerRefreshSpy }),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -149,6 +150,7 @@ beforeEach(() => {
   captured.items.length = 0;
 
   routerPushSpy.mockReset();
+  routerRefreshSpy.mockReset();
   logoutSpy.mockReset();
   selectBrandSpy.mockReset();
   toggleSpy.mockReset();
@@ -176,12 +178,13 @@ test("selectBrand is called when a brand menu item is selected", async () => {
   const target = captured.items.find((item) => item.label === "Pizza Test");
   expect(target).toBeTruthy();
 
-  (target!.props.onSelect as (e: { preventDefault: () => void }) => void)({
+  await (target!.props.onSelect as (e: { preventDefault: () => void }) => Promise<void>)({
     preventDefault: vi.fn(),
   });
 
   expect(selectBrandSpy).toHaveBeenCalledTimes(1);
   expect(selectBrandSpy).toHaveBeenCalledWith("brand-2");
+  expect(routerRefreshSpy).toHaveBeenCalledTimes(1);
 });
 
 test("routes to settings and integrations", async () => {

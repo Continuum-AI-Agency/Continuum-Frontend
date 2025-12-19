@@ -49,7 +49,7 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
         : (u.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
 
       if (avatarUrlFromMetadata && /^https?:\/\//i.test(avatarUrlFromMetadata)) {
-        setAvatarUrl(proxyAvatarUrlIfNeeded(avatarUrlFromMetadata));
+        setAvatarUrl(proxyAvatarUrlIfNeeded(avatarUrlFromMetadata, window.location.origin));
         return;
       }
 
