@@ -15,10 +15,9 @@ import {
 import { ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { useSelectableAssets } from "@/lib/api/integrations";
+import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets } from "@/lib/api/integrations";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-import { useUpdateBrandIntegrationAssignments } from "@/lib/api/brandIntegrations.client";
 import { useToast } from "@/components/ui/ToastProvider";
 
 type Props = {
@@ -85,6 +84,10 @@ function groupSelectableAssets(
   return grouped;
 }
 
+function resolveSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
+  return asset.name?.trim() || asset.external_id;
+}
+
 type AssignmentsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -102,7 +105,7 @@ function AssignmentsDialog({
 }: AssignmentsDialogProps) {
   const { show } = useToast();
   const selectableAssetsQuery = useSelectableAssets();
-  const updateAssignments = useUpdateBrandIntegrationAssignments();
+  const applyAssignments = useApplyBrandProfileIntegrationAccounts();
 
   const selectableAssets = selectableAssetsQuery.data?.assets ?? [];
   const groupedAssets = useMemo(
@@ -119,7 +122,10 @@ function AssignmentsDialog({
     const assignedSet = new Set(assignedIds);
     const defaults: Record<string, boolean> = {};
     selectableAssets.forEach(asset => {
-      defaults[asset.asset_pk] = assignedSet.has(asset.asset_pk);
+      if (!asset.integration_account_id) return;
+      defaults[asset.integration_account_id] = assignedSet.has(
+        asset.integration_account_id
+      );
     });
     setSelectedById(prev => {
       const prevKeys = Object.keys(prev);
@@ -134,40 +140,47 @@ function AssignmentsDialog({
     open,
     useMemo(() => [...assignedIds].sort().join("|"), [assignedIds]),
     useMemo(
-      () => selectableAssets.map(asset => asset.asset_pk).sort().join("|"),
+      () =>
+        selectableAssets
+          .map(asset => asset.integration_account_id)
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .join("|"),
       [selectableAssets]
     ),
   ]);
 
-  const desiredAssetPks = useMemo(
+  const desiredIntegrationAccountIds = useMemo(
     () =>
       Object.entries(selectedById)
         .filter(([, selected]) => selected)
-        .map(([assetPk]) => assetPk),
+        .map(([integrationAccountId]) => integrationAccountId),
     [selectedById]
   );
 
   const hasChanges = useMemo(() => {
     const assignedSet = new Set(assignedIds);
-    if (desiredAssetPks.length !== assignedSet.size) return true;
-    return desiredAssetPks.some(assetPk => !assignedSet.has(assetPk));
-  }, [assignedIds, desiredAssetPks]);
+    if (desiredIntegrationAccountIds.length !== assignedSet.size) return true;
+    return desiredIntegrationAccountIds.some(
+      integrationAccountId => !assignedSet.has(integrationAccountId)
+    );
+  }, [assignedIds, desiredIntegrationAccountIds]);
 
-  const handleToggle = (assetPk: string, checked: boolean) => {
-    setSelectedById(prev => ({ ...prev, [assetPk]: checked }));
+  const handleToggle = (integrationAccountId: string, checked: boolean) => {
+    setSelectedById(prev => ({ ...prev, [integrationAccountId]: checked }));
   };
 
   const handleSave = async () => {
     try {
-      const result = await updateAssignments.mutateAsync({
-        brandProfileId,
-        assetPks: desiredAssetPks,
+      const result = await applyAssignments.mutateAsync({
+        brandId: brandProfileId,
+        integrationAccountIds: desiredIntegrationAccountIds,
       });
       onOpenChange(false);
       await onSaved?.();
       show({
         title: "Assignments updated",
-        description: `Linked ${result.linked} and removed ${result.unlinked} account(s).`,
+        description: `Linked ${result.linked} account(s).`,
         variant: "success",
       });
     } catch (error: unknown) {
@@ -182,9 +195,14 @@ function AssignmentsDialog({
   };
 
   const isLoading = selectableAssetsQuery.isLoading;
-  const isSaving = updateAssignments.isPending;
+  const isSaving = applyAssignments.isPending;
   const stale = selectableAssetsQuery.data?.stale;
   const syncedAt = selectableAssetsQuery.data?.synced_at;
+  const unassignableCount = useMemo(
+    () =>
+      selectableAssets.filter(asset => !asset.integration_account_id).length,
+    [selectableAssets]
+  );
 
   const orderedPlatforms = PLATFORMS.filter(
     ({ key }) => groupedAssets[key]?.length
@@ -204,6 +222,15 @@ function AssignmentsDialog({
             <Callout.Text>
               Your integrations are marked stale. Refresh your provider sync in
               Settings → Your integrations if you don’t see recent accounts.
+            </Callout.Text>
+          </Callout.Root>
+        ) : null}
+
+        {unassignableCount > 0 ? (
+          <Callout.Root color="amber" className="mt-3">
+            <Callout.Text>
+              {unassignableCount} connected account(s) cannot be assigned yet.
+              Sync again if they should be available.
             </Callout.Text>
           </Callout.Root>
         ) : null}
@@ -233,7 +260,12 @@ function AssignmentsDialog({
                   <Heading size="3">{label}</Heading>
                   <div className="flex flex-col gap-2">
                     {assets.map(asset => {
-                      const checked = selectedById[asset.asset_pk] ?? false;
+                      const integrationAccountId =
+                        asset.integration_account_id;
+                      const checked = integrationAccountId
+                        ? selectedById[integrationAccountId] ?? false
+                        : false;
+                      const disabled = isSaving || !integrationAccountId;
                       return (
                         <label
                           key={asset.asset_pk}
@@ -241,11 +273,15 @@ function AssignmentsDialog({
                         >
                           <div className="flex flex-col">
                             <Text size="2" weight="medium" className="truncate">
-                              {asset.name}
+                              {resolveSelectableAssetLabel(asset)}
                             </Text>
                             {asset.business_id ? (
                               <Text size="1" color="gray">
                                 Business {asset.business_id}
+                              </Text>
+                            ) : !integrationAccountId ? (
+                              <Text size="1" color="gray">
+                                Not ready for assignment
                               </Text>
                             ) : null}
                           </div>
@@ -253,9 +289,14 @@ function AssignmentsDialog({
                             type="checkbox"
                             checked={checked}
                             onChange={event =>
-                              handleToggle(asset.asset_pk, event.target.checked)
+                              integrationAccountId
+                                ? handleToggle(
+                                    integrationAccountId,
+                                    event.target.checked
+                                  )
+                                : undefined
                             }
-                            disabled={isSaving}
+                            disabled={disabled}
                             className="h-4 w-4 accent-sky-500"
                           />
                         </label>

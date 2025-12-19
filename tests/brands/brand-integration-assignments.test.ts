@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  updateBrandIntegrationAccountsInputSchema,
-  updateBrandIntegrationAccountsResponseSchema,
-} from "../../src/lib/schemas/brandIntegrations";
+  applyBrandProfileIntegrationAccountsRequestSchema,
+  linkIntegrationAccountsResponseSchema,
+  selectableAssetsResponseSchema,
+} from "../../src/lib/schemas/integrations";
 import { hasProviderConnections } from "../../src/lib/integrations/providerConnections";
 import { PLATFORM_KEYS } from "../../src/components/onboarding/platforms";
 
@@ -18,38 +19,67 @@ function createEmptySummary(): Summary {
   return empty as Summary;
 }
 
-test("updateBrandIntegrationAccountsInputSchema accepts valid payload", () => {
-  const parsed = updateBrandIntegrationAccountsInputSchema.parse({
-    brandProfileId: "11111111-1111-1111-1111-111111111111",
-    assetPks: [
+test("applyBrandProfileIntegrationAccountsRequestSchema accepts asset_pks payload", () => {
+  const parsed = applyBrandProfileIntegrationAccountsRequestSchema.parse({
+    asset_pks: [
       "22222222-2222-2222-2222-222222222222",
       "33333333-3333-3333-3333-333333333333",
     ],
   });
-  assert.equal(parsed.assetPks.length, 2);
+  assert.ok("asset_pks" in parsed);
+  assert.equal(parsed.asset_pks.length, 2);
 });
 
-test("updateBrandIntegrationAccountsInputSchema rejects invalid ids", () => {
+test("applyBrandProfileIntegrationAccountsRequestSchema rejects invalid ids", () => {
   assert.throws(() =>
-    updateBrandIntegrationAccountsInputSchema.parse({
-      brandProfileId: "not-a-uuid",
-      assetPks: ["also-not-a-uuid"],
+    applyBrandProfileIntegrationAccountsRequestSchema.parse({
+      asset_pks: ["also-not-a-uuid"],
     })
   );
 });
 
-test("updateBrandIntegrationAccountsResponseSchema requires nonnegative ints", () => {
-  const parsed = updateBrandIntegrationAccountsResponseSchema.parse({
+test("applyBrandProfileIntegrationAccountsRequestSchema accepts integration_account_ids", () => {
+  const parsed = applyBrandProfileIntegrationAccountsRequestSchema.parse({
+    integration_account_ids: [
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
+    ],
+  });
+  assert.ok("integration_account_ids" in parsed);
+  assert.equal(parsed.integration_account_ids.length, 2);
+});
+
+test("linkIntegrationAccountsResponseSchema requires nonnegative ints", () => {
+  const parsed = linkIntegrationAccountsResponseSchema.parse({
     linked: 1,
-    unlinked: 0,
   });
   assert.equal(parsed.linked, 1);
   assert.throws(() =>
-    updateBrandIntegrationAccountsResponseSchema.parse({
+    linkIntegrationAccountsResponseSchema.parse({
       linked: -1,
-      unlinked: 0,
     })
   );
+});
+
+test("selectableAssetsResponseSchema accepts backend selectable asset shape", () => {
+  const parsed = selectableAssetsResponseSchema.parse({
+    synced_at: "2025-12-16T23:04:15.064+00:00",
+    stale: false,
+    assets: [
+      {
+        asset_pk: "11111111-1111-1111-1111-111111111111",
+        integration_account_id: null,
+        external_id: "external-1",
+        type: "meta_page",
+        name: null,
+        business_id: null,
+        ad_account_id: null,
+      },
+    ],
+  });
+  assert.equal(parsed.assets.length, 1);
+  assert.equal(parsed.assets[0]?.integration_account_id, null);
+  assert.equal(parsed.synced_at, "2025-12-16T23:04:15.064Z");
 });
 
 test("hasProviderConnections detects google and meta presence", () => {

@@ -1,24 +1,13 @@
 "use client";
 
-import { Avatar, Button, DropdownMenu, Flex, Text, IconButton, Switch, Callout } from "@radix-ui/themes";
+import { Callout, Flex, IconButton } from "@radix-ui/themes";
 import {
-  ExitIcon,
-  GearIcon,
   HamburgerMenuIcon,
-  LayersIcon,
-  PlusCircledIcon,
-  MixerHorizontalIcon,
-  MoonIcon,
   InfoCircledIcon,
-  CheckCircledIcon,
 } from "@radix-ui/react-icons";
-import Link from "next/link";
 import React from "react";
-import { useAuth } from "@/hooks/useAuth";
 import { useSession } from "@/hooks/useSession";
-import { useActiveBrandContext } from "./providers/ActiveBrandProvider";
-import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
-import { useTheme } from "./theme-provider";
+import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 
 const DISMISS_MS = 10_000;
 const TICK_MS = 120;
@@ -59,17 +48,9 @@ export function DashboardHeader({
 }: {
   onOpenMobile?: () => void;
 }) {
-  const { logout, isPending } = useAuth();
   const { user } = useSession();
-  const { activeBrandId, brandSummaries, isSwitching, selectBrand } = useActiveBrandContext();
-  const { appearance, toggle } = useTheme();
-  const [menuOpen, setMenuOpen] = React.useState(false);
-  const [isCreating, startCreate] = React.useTransition();
   const [welcomeVisible, setWelcomeVisible] = React.useState(true);
   const [progress, setProgress] = React.useState(0);
-
-  const roles = (user?.app_metadata as { roles?: string[] } | undefined)?.roles ?? [];
-  const isAdmin = Boolean(user?.app_metadata?.is_admin) || roles.includes("admin");
 
   React.useEffect(() => {
     if (!welcomeVisible) return;
@@ -111,138 +92,10 @@ export function DashboardHeader({
           </div>
 
           <Flex align="center" gap="3 sm:gap-4" className="ml-auto">
-            <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-              <DropdownMenu.Trigger>
-                <Button
-                  id="dashboard-brand-menu-trigger"
-                  variant="outline"
-                  size="2"
-                  onMouseEnter={() => setMenuOpen(true)}
-                  className="rounded-full shadow-sm"
-                >
-                  <Avatar
-                    size="2"
-                    src="/placeholder-avatar.jpg"
-                    fallback={<LayersIcon />}
-                    radius="full"
-                    className="mr-2"
-                  />
-                  {brandSummaries.find(b => b.id === activeBrandId)?.name || "Brands"}
-                </Button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content
-                align="end"
-                className="min-w-[260px] border"
-                style={{
-                  backgroundColor: "var(--popover)",
-                  color: "var(--popover-foreground)",
-                  borderColor: "var(--border)",
-                }}
-                onMouseLeave={() => setMenuOpen(false)}
-              >
-                {brandSummaries.map(brand => (
-                  <DropdownMenu.Item
-                    key={brand.id}
-                    disabled={isSwitching}
-                    onSelect={event => {
-                      event.preventDefault();
-                      selectBrand(brand.id);
-                    }}
-                    className="flex items-center justify-between gap-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <LayersIcon />
-                      <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
-                        {brand.name || "Untitled brand"}
-                      </Text>
-                    </div>
-                    {brand.id === activeBrandId && <BadgeIndicator />}
-                  </DropdownMenu.Item>
-                ))}
-                <DropdownMenu.Item
-                  disabled={isCreating}
-                  onSelect={event => {
-                    event.preventDefault();
-                    startCreate(async () => {
-                      await createBrandProfileAction();
-                    });
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <PlusCircledIcon />
-                  New brand profile
-                </DropdownMenu.Item>
-
-                <DropdownMenu.Separator />
-
-                <DropdownMenu.Item
-                  className="flex items-center justify-between w-full"
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  <div className="flex items-center gap-2">
-                    <MoonIcon />
-                    <Text>Dark mode</Text>
-                  </div>
-                  <Switch
-                    checked={appearance === "dark"}
-                    onCheckedChange={toggle}
-                    size="1"
-                    aria-label="Toggle dark mode"
-                  />
-                </DropdownMenu.Item>
-
-                <DropdownMenu.Item
-                  className="flex items-center gap-2"
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => (window.location.href = "/settings")}
-                >
-                  <GearIcon />
-                  Settings
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  className="flex items-center gap-2"
-                  onSelect={(e) => e.preventDefault()}
-                  onClick={() => (window.location.href = "/settings/integrations")}
-                >
-                  <MixerHorizontalIcon />
-                  Integrations
-                </DropdownMenu.Item>
-                {isAdmin && (
-                  <DropdownMenu.Item
-                    className="flex items-center gap-2"
-                    onSelect={(e) => e.preventDefault()}
-                    onClick={() => (window.location.href = "/admin")}
-                  >
-                    <CheckCircledIcon />
-                    Admin
-                  </DropdownMenu.Item>
-                )}
-
-                <DropdownMenu.Separator />
-
-                <DropdownMenu.Item
-                  color="red"
-                  onSelect={event => {
-                    event.preventDefault();
-                    logout();
-                  }}
-                  disabled={isPending}
-                  className="flex items-center gap-2"
-                >
-                  <ExitIcon />
-                  {isPending ? "Signing out..." : "Sign out"}
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
+            <BrandSwitcherMenu triggerId="dashboard-brand-menu-trigger" />
           </Flex>
         </Flex>
       </Flex>
     </div>
-  );
-}
-
-function BadgeIndicator() {
-  return (
-    <span className="inline-flex h-2 w-2 rounded-full bg-violet-500" aria-hidden="true" />
   );
 }

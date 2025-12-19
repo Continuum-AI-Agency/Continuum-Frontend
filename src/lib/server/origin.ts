@@ -75,6 +75,48 @@ function collectEnvOrigins(): string[] {
   return normalized;
 }
 
+function isLocalhostOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  return (
+    origin.startsWith("http://localhost") ||
+    origin.startsWith("https://localhost") ||
+    origin.startsWith("http://127.0.0.1") ||
+    origin.startsWith("https://127.0.0.1")
+  );
+}
+
+function normalizeFallbackOrigin(origin: string): string {
+  return normalizeOrigin(origin) ?? origin;
+}
+
+export function resolveHeadersOrigin(headerStore: Headers, fallbackOrigin: string): string {
+  const normalizedFallback = normalizeFallbackOrigin(fallbackOrigin);
+  const envOrigins = collectEnvOrigins();
+
+  const allowedOrigins = new Set<string>([normalizedFallback, ...envOrigins]);
+
+  const headerOrigin = normalizeOrigin(firstHeaderValue(headerStore.get("origin")));
+  const forwardedOrigin = parseForwardedOrigin({ headers: headerStore } as unknown as Request);
+
+  if (forwardedOrigin) {
+    allowedOrigins.add(forwardedOrigin);
+  }
+
+  if (process.env.NODE_ENV !== "production" && isLocalhostOrigin(headerOrigin)) {
+    return headerOrigin!;
+  }
+
+  if (headerOrigin && allowedOrigins.has(headerOrigin)) {
+    return headerOrigin;
+  }
+
+  if (forwardedOrigin && allowedOrigins.has(forwardedOrigin)) {
+    return forwardedOrigin;
+  }
+
+  return normalizedFallback;
+}
+
 export function resolveRequestOrigin(request: Request, url: URL, override?: string | null): string {
   const fallbackOrigin = normalizeOrigin(url.origin) ?? url.origin;
   const forwardedOrigin = parseForwardedOrigin(request);

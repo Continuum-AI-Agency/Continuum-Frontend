@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import { proxyAvatarUrlIfNeeded } from "@/lib/auth/avatar-url";
 
 type UseCurrentUserAvatarResult = {
   user: User | null;
@@ -48,7 +49,7 @@ export function useCurrentUserAvatar(): UseCurrentUserAvatarResult {
         : (u.user_metadata as { avatar_url?: string } | undefined)?.avatar_url;
 
       if (avatarUrlFromMetadata && /^https?:\/\//i.test(avatarUrlFromMetadata)) {
-        setAvatarUrl(avatarUrlFromMetadata);
+        setAvatarUrl(proxyAvatarUrlIfNeeded(avatarUrlFromMetadata));
         return;
       }
 

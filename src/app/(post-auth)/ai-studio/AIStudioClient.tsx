@@ -19,13 +19,12 @@ import "@xyflow/react/dist/style.css";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { motion } from "framer-motion";
-import { Badge, Button, Callout, Heading, Text, TextArea, Tabs } from "@radix-ui/themes";
+import { Badge, Button, Heading, Text, TextArea, Tabs } from "@radix-ui/themes";
 import {
   CheckIcon,
   ExclamationTriangleIcon,
   MagicWandIcon,
   PaperPlaneIcon,
-  ReloadIcon,
   StackIcon,
   ImageIcon,
   VideoIcon,
@@ -34,14 +33,13 @@ import {
 
 import { useToast } from "@/components/ui/ToastProvider";
 import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
-import { BrandSwitcherPill } from "@/components/navigation/BrandSwitcherPill";
+import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
-import { createAiStudioJob, getAiStudioJob } from "@/lib/api/aiStudio";
+import { createAiStudioJob } from "@/lib/api/aiStudio";
 import {
   providerAspectRatioOptions,
   type AiStudioJob,
   type AiStudioProvider,
-  type AiStudioTemplate,
 } from "@/lib/schemas/aiStudio";
 import {
   type AttachmentNodeData,
@@ -56,18 +54,9 @@ import {
 type AIStudioClientProps = {
   brandProfileId: string;
   brandName: string;
-  initialTemplates: AiStudioTemplate[];
-  initialJobs: AiStudioJob[];
-  loadErrors?: {
-    templates?: string;
-    jobs?: string;
-  };
 };
 
-type LoadErrorMap = NonNullable<AIStudioClientProps["loadErrors"]>;
-
 const DRAG_MIME = "application/reactflow-node-data";
-const PENDING_STATUSES = new Set<AiStudioJob["status"]>(["queued", "processing"]);
 
 const JOB_STATUS_META: Record<
   AiStudioJob["status"],
@@ -344,18 +333,10 @@ const paletteItems: PaletteItem[] = [
 export default function AIStudioClient({
   brandProfileId,
   brandName,
-  initialTemplates: _initialTemplates,
-  initialJobs,
-  loadErrors: initialLoadErrors,
 }: AIStudioClientProps) {
   const { show: showToast } = useToast();
-  void _initialTemplates;
-
-  const [loadErrors, setLoadErrors] = React.useState<LoadErrorMap>(() => initialLoadErrors ?? {});
-  const [jobs, setJobs] = React.useState(() => initialJobs);
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
   const [canvasOverlay, setCanvasOverlay] = React.useState(false);
   const [toolboxPos, setToolboxPos] = React.useState({ x: 96, y: 140 });
@@ -383,72 +364,6 @@ export default function AIStudioClient({
       { id: "e-gen-preview", source: "gen-1", target: "preview-1", type: "default" },
     ]);
   }, [setNodes, setEdges]);
-
-  React.useEffect(() => {
-    const activeJobs = jobs.filter((job) => PENDING_STATUSES.has(job.status));
-    if (activeJobs.length === 0) return;
-    let cancelled = false;
-    async function poll() {
-      for (const job of activeJobs) {
-        try {
-          const updated = await getAiStudioJob(job.id, brandProfileId);
-          if (!cancelled) {
-            setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
-            setNodes((prev) =>
-              prev.map((n) =>
-                (n.data as GeneratorNodeData).jobId === updated.id
-                  ? {
-                      ...n,
-                      data: {
-                        ...(n.data as GeneratorNodeData),
-                        status: updated.status,
-                        artifactPreview: updated.artifacts[0]?.previewUri ?? updated.artifacts[0]?.uri,
-                        artifactName: updated.artifacts[0]?.fileName,
-                      },
-                    }
-                  : n
-              )
-            );
-          }
-        } catch (err) {
-          console.error("Failed to poll job", err);
-        }
-      }
-    }
-    const interval = window.setInterval(poll, 6000);
-    void poll();
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [jobs, brandProfileId, setNodes]);
-
-  const handleRefreshJobs = React.useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      // Simple refresh: refetch active jobs only
-      const activeIds = jobs.filter((j) => PENDING_STATUSES.has(j.status)).map((j) => j.id);
-      const refreshed: AiStudioJob[] = [];
-      for (const id of activeIds) {
-        refreshed.push(await getAiStudioJob(id, brandProfileId));
-      }
-      if (refreshed.length > 0) {
-        setJobs((prev) =>
-          prev.map((j) => {
-            const found = refreshed.find((r) => r.id === j.id);
-            return found ?? j;
-          })
-        );
-      }
-      showToast({ title: "Job list refreshed", variant: "success" });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : undefined;
-      showToast({ title: "Unable to refresh jobs", description: message, variant: "error" });
-      setLoadErrors((current) => ({ ...current, jobs: message ?? "Unable to refresh jobs." }));
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [brandProfileId, jobs, showToast]);
 
   const updateNodeField = React.useCallback(
     (id: string, field: string, value: unknown) => {
@@ -496,10 +411,20 @@ export default function AIStudioClient({
           },
         };
         const job = await createAiStudioJob(payload);
-        setJobs((prev) => [job, ...prev.filter((j) => j.id !== job.id)]);
         setNodes((prev) =>
           prev.map((n) =>
-            n.id === node.id ? { ...n, data: { ...(n.data as GeneratorNodeData), jobId: job.id, status: job.status } } : n
+            n.id === node.id
+              ? {
+                  ...n,
+                  data: {
+                    ...(n.data as GeneratorNodeData),
+                    jobId: job.id,
+                    status: job.status,
+                    artifactPreview: job.artifacts[0]?.previewUri ?? job.artifacts[0]?.uri,
+                    artifactName: job.artifacts[0]?.fileName,
+                  },
+                }
+              : n
           )
         );
         showToast({ title: "Generation started", description: JOB_STATUS_META[job.status].label, variant: "success" });
@@ -600,8 +525,6 @@ export default function AIStudioClient({
     [setEdges]
   );
 
-  const pendingCount = React.useMemo(() => jobs.filter((j) => PENDING_STATUSES.has(j.status)).length, [jobs]);
-
   return (
     <div className="fixed inset-0 md:left-[88px] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
@@ -619,10 +542,7 @@ export default function AIStudioClient({
                 <Tabs.Trigger value="canvas">Canvas</Tabs.Trigger>
               </Tabs.List>
             </Tabs.Root>
-            <BrandSwitcherPill />
-            <Button size="2" variant="ghost" onClick={handleRefreshJobs} disabled={isRefreshing}>
-              <ReloadIcon /> Refresh
-            </Button>
+            <BrandSwitcherMenu />
           </div>
         </div>
 
@@ -636,27 +556,7 @@ export default function AIStudioClient({
               <div>
                 <Text color="gray">Build flows for {brandName}</Text>
               </div>
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Badge color={pendingCount > 0 ? "amber" : "green"} size="2">
-                  {pendingCount > 0 ? `${pendingCount} in queue` : "Idle"}
-                </Badge>
-                <Button variant="ghost" size="2" onClick={handleRefreshJobs} disabled={isRefreshing}>
-                  <ReloadIcon /> Refresh
-                </Button>
-              </div>
             </header>
-
-            {loadErrors && (loadErrors.templates || loadErrors.jobs) ? (
-              <Callout.Root color="red" variant="surface">
-                <Callout.Icon>
-                  <ExclamationTriangleIcon />
-                </Callout.Icon>
-                <Callout.Text>
-                  {loadErrors.templates ? `Templates: ${loadErrors.templates}` : ""}
-                  {loadErrors.jobs ? ` Jobs: ${loadErrors.jobs}` : ""}
-                </Callout.Text>
-              </Callout.Root>
-            ) : null}
 
             <motion.div
               className="pointer-events-auto fixed z-40 flex w-40 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2 shadow-xl"

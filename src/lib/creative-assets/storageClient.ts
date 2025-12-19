@@ -207,6 +207,14 @@ export async function createSignedAssetUrl(
   return data.signedUrl;
 }
 
+export async function createSignedDownloadUrl(
+  fullPath: string,
+  expiresInSeconds: number,
+  _fileName: string
+): Promise<string> {
+  return createSignedAssetUrl(fullPath, expiresInSeconds);
+}
+
 export async function getPublicAssetUrl(fullPath: string): Promise<string> {
   const supabase = createSupabaseBrowserClient();
   const bucket = getCreativeAssetsBucket();
@@ -215,4 +223,8 @@ export async function getPublicAssetUrl(fullPath: string): Promise<string> {
     throw new Error("Failed to resolve public URL");
   }
   return data.publicUrl;
+}
+
+export async function getPublicAssetDownloadUrl(fullPath: string, _fileName: string): Promise<string> {
+  return getPublicAssetUrl(fullPath);
 }

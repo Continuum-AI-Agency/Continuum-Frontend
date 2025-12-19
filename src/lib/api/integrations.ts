@@ -7,6 +7,7 @@ import {
   googleSyncResponseSchema,
   googleDrivePickerResponseSchema,
   selectableAssetsResponseSchema,
+  applyBrandProfileIntegrationAccountsRequestSchema,
   linkIntegrationAccountsResponseSchema,
   type SelectableAssetsResponse,
   type LinkIntegrationAccountsResponse,
@@ -18,6 +19,18 @@ import {
 function buildSyncPath(basePath: string, params: Record<string, string>): string {
   const search = new URLSearchParams(params);
   return `${basePath}?${search.toString()}`;
+}
+
+async function getBrowserUserId(): Promise<string | undefined> {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+    const supabase = createSupabaseBrowserClient();
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function startMetaSync(callbackUrl: string): Promise<MetaSyncResponse> {
@@ -107,9 +120,11 @@ export function useStartGoogleDrivePicker() {
 }
 
 export async function fetchSelectableAssets(userId?: string): Promise<SelectableAssetsResponse> {
-  const path = userId
-    ? `/brand-profiles/${encodeURIComponent(userId)}/selectable-assets`
-    : "/brand-profiles/selectable-assets";
+  const resolvedUserId = userId ?? (await getBrowserUserId());
+  if (!resolvedUserId) {
+    throw new Error("Unable to determine user id for selectable assets.");
+  }
+  const path = `/integrations/brand-profiles/${encodeURIComponent(resolvedUserId)}/selectable-assets`;
 
   return http.request({
     path,
@@ -128,18 +143,31 @@ export function useSelectableAssets(userId?: string) {
   });
 }
 
-export async function linkIntegrationAccounts(
-  brandId: string,
-  assetPks: string[]
+export type ApplyBrandProfileIntegrationAccountsParams =
+  | { brandId: string; assetPks: string[] }
+  | { brandId: string; integrationAccountIds: string[] };
+
+export async function applyBrandProfileIntegrationAccounts(
+  params: ApplyBrandProfileIntegrationAccountsParams
 ): Promise<LinkIntegrationAccountsResponse> {
-  if (!assetPks.length) {
-    throw new Error("No assets selected to link.");
-  }
+  const { brandId } = params;
+  const body = "assetPks" in params
+    ? { asset_pks: params.assetPks }
+    : { integration_account_ids: params.integrationAccountIds };
+
+  const parsedBody = applyBrandProfileIntegrationAccountsRequestSchema.parse(body);
+
   return http.request({
-    path: `/brand-profiles/${encodeURIComponent(brandId)}/integration-accounts`,
+    path: `/integrations/brand-profiles/${encodeURIComponent(brandId)}/integration-accounts`,
     method: "POST",
-    body: { asset_pks: assetPks },
+    body: parsedBody,
     schema: linkIntegrationAccountsResponseSchema,
     cache: "no-store",
+  });
+}
+
+export function useApplyBrandProfileIntegrationAccounts() {
+  return useMutation({
+    mutationFn: (params: ApplyBrandProfileIntegrationAccountsParams) => applyBrandProfileIntegrationAccounts(params),
   });
 }

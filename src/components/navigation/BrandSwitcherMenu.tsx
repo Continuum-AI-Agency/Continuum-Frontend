@@ -14,11 +14,20 @@ import {
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useSession } from "@/hooks/useSession";
-import { useActiveBrandContext } from "../providers/ActiveBrandProvider";
+import { useTheme } from "@/components/theme-provider";
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
-import { useTheme } from "../theme-provider";
+import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import {
+  getActiveBrandLabel,
+  getBrandMenuItemLabel,
+  isAdminUser,
+} from "@/lib/brands/brand-switcher-utils";
 
-export function BrandSwitcherPill() {
+type BrandSwitcherMenuProps = {
+  triggerId?: string;
+};
+
+export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const router = useRouter();
   const { logout, isPending } = useAuth();
   const { user } = useSession();
@@ -27,35 +36,37 @@ export function BrandSwitcherPill() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
 
-  const roles = (user?.app_metadata as { roles?: string[] } | undefined)?.roles ?? [];
-  const isAdmin = Boolean(user?.app_metadata?.is_admin) || roles.includes("admin");
+  const isAdmin = isAdminUser(user);
 
   return (
     <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
       <DropdownMenu.Trigger>
         <Button
-          variant="surface"
+          id={triggerId}
+          variant="outline"
           size="2"
-          radius="full"
-          className="gap-2 shadow-sm"
           onMouseEnter={() => setMenuOpen(true)}
+          className="rounded-full shadow-sm"
         >
           <Avatar
             size="2"
             src="/placeholder-avatar.jpg"
             fallback={<LayersIcon />}
             radius="full"
-            className="border border-gray-200/40"
+            className="mr-2"
           />
-          <span className="font-medium">
-            {brandSummaries.find((b) => b.id === activeBrandId)?.name || "Brands"}
-          </span>
+          {getActiveBrandLabel(brandSummaries, activeBrandId)}
         </Button>
       </DropdownMenu.Trigger>
+
       <DropdownMenu.Content
         align="end"
-        className="min-w-[260px] rounded-2xl border border-white/10 bg-slate-900/95 p-2 text-white shadow-2xl"
-        style={{ zIndex: 80 }}
+        className="min-w-[260px] border"
+        style={{
+          backgroundColor: "var(--popover)",
+          color: "var(--popover-foreground)",
+          borderColor: "var(--border)",
+        }}
         onMouseLeave={() => setMenuOpen(false)}
       >
         {brandSummaries.map((brand) => (
@@ -66,15 +77,15 @@ export function BrandSwitcherPill() {
               event.preventDefault();
               selectBrand(brand.id);
             }}
-            className="flex items-center justify-between gap-2 rounded-lg px-2 py-1"
+            className="flex items-center justify-between gap-2"
           >
             <div className="flex items-center gap-2">
               <LayersIcon />
               <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
-                {brand.name || "Untitled brand"}
+                {getBrandMenuItemLabel(brand)}
               </Text>
             </div>
-            {brand.id === activeBrandId ? <span className="h-2 w-2 rounded-full bg-violet-400" /> : null}
+            {brand.id === activeBrandId ? <BadgeIndicator /> : null}
           </DropdownMenu.Item>
         ))}
 
@@ -86,17 +97,17 @@ export function BrandSwitcherPill() {
               await createBrandProfileAction();
             });
           }}
-          className="flex items-center gap-2 rounded-lg px-2 py-1"
+          className="flex items-center gap-2"
         >
           <PlusCircledIcon />
           New brand profile
         </DropdownMenu.Item>
 
-        <DropdownMenu.Separator className="my-1 h-px bg-white/10" />
+        <DropdownMenu.Separator />
 
         <DropdownMenu.Item
+          className="flex items-center justify-between w-full"
           onSelect={(event) => event.preventDefault()}
-          className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1"
         >
           <div className="flex items-center gap-2">
             <MoonIcon />
@@ -111,45 +122,41 @@ export function BrandSwitcherPill() {
         </DropdownMenu.Item>
 
         <DropdownMenu.Item
-          className="rounded-lg px-2 py-1"
+          className="flex items-center gap-2"
           onSelect={(event) => {
             event.preventDefault();
             router.push("/settings");
           }}
         >
-          <div className="flex items-center gap-2">
-            <GearIcon />
-            Settings
-          </div>
+          <GearIcon />
+          Settings
         </DropdownMenu.Item>
+
         <DropdownMenu.Item
-          className="rounded-lg px-2 py-1"
+          className="flex items-center gap-2"
           onSelect={(event) => {
             event.preventDefault();
             router.push("/settings/integrations");
           }}
         >
-          <div className="flex items-center gap-2">
-            <MixerHorizontalIcon />
-            Integrations
-          </div>
+          <MixerHorizontalIcon />
+          Integrations
         </DropdownMenu.Item>
-        {isAdmin && (
+
+        {isAdmin ? (
           <DropdownMenu.Item
-            className="rounded-lg px-2 py-1"
+            className="flex items-center gap-2"
             onSelect={(event) => {
               event.preventDefault();
               router.push("/admin");
             }}
           >
-            <div className="flex items-center gap-2">
-              <CheckCircledIcon />
-              Admin
-            </div>
+            <CheckCircledIcon />
+            Admin
           </DropdownMenu.Item>
-        )}
+        ) : null}
 
-        <DropdownMenu.Separator className="my-1 h-px bg-white/10" />
+        <DropdownMenu.Separator />
 
         <DropdownMenu.Item
           color="red"
@@ -158,7 +165,7 @@ export function BrandSwitcherPill() {
             logout();
           }}
           disabled={isPending}
-          className="flex items-center gap-2 rounded-lg px-2 py-1 text-red-300"
+          className="flex items-center gap-2"
         >
           <ExitIcon />
           {isPending ? "Signing out..." : "Sign out"}
@@ -167,3 +174,8 @@ export function BrandSwitcherPill() {
     </DropdownMenu.Root>
   );
 }
+
+function BadgeIndicator() {
+  return <span className="inline-flex h-2 w-2 rounded-full bg-violet-500" aria-hidden="true" />;
+}
+

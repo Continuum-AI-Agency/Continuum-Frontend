@@ -1,20 +1,23 @@
-import { fetchBrandProfileIncludedAssets } from "@/lib/api/brandProfiles.server";
-import { fetchAvailableAssets } from "@/lib/api/integrations/server";
+import { fetchSelectableAssetsForCurrentUser } from "@/lib/api/integrations/server";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { BrandAssetsForm } from "./BrandAssetsForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: { brandProfileId: string } }) {
-	const [available, included] = await Promise.all([
-		fetchAvailableAssets(["instagram", "youtube"]),
-		fetchBrandProfileIncludedAssets(params.brandProfileId),
+	const [selectableAssetsResponse, integrationSummary] = await Promise.all([
+		fetchSelectableAssetsForCurrentUser(),
+		fetchBrandIntegrationSummary(params.brandProfileId),
 	]);
+
+	const assignedIntegrationAccountIds = Object.values(integrationSummary).flatMap(group =>
+		group.accounts.map(account => account.integrationAccountId)
+	);
 	return (
 		<BrandAssetsForm
 			brandProfileId={params.brandProfileId}
-			availableAssets={available}
-			includedAssets={included}
+			selectableAssetsResponse={selectableAssetsResponse}
+			assignedIntegrationAccountIds={assignedIntegrationAccountIds}
 		/>
 	);
 }
-

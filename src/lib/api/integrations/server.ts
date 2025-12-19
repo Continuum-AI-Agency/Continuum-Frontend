@@ -3,19 +3,61 @@
 import "server-only";
 
 import { httpServer } from "@/lib/api/http.server";
-import { assetsResponseSchema, type Asset } from "@/lib/schemas/brand-assets";
+import {
+  selectableAssetsResponseSchema,
+  applyBrandProfileIntegrationAccountsRequestSchema,
+  linkIntegrationAccountsResponseSchema,
+  type SelectableAssetsResponse,
+  type LinkIntegrationAccountsResponse,
+} from "@/lib/schemas/integrations";
 
-export async function fetchAvailableAssets(providers?: string[]): Promise<Asset[]> {
-  const query = providers?.length ? `?providers=${encodeURIComponent(providers.join(","))}` : "";
-  const res = await httpServer.request({
-    path: `/integrations/assets${query}`,
+async function getServerUserId(): Promise<string | undefined> {
+  try {
+    const { createSupabaseServerClient } = await import("@/lib/supabase/server");
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function fetchSelectableAssetsForUser(userId: string): Promise<SelectableAssetsResponse> {
+  return httpServer.request({
+    path: `/integrations/brand-profiles/${encodeURIComponent(userId)}/selectable-assets`,
     method: "GET",
-    schema: assetsResponseSchema,
+    schema: selectableAssetsResponseSchema,
     cache: "no-store",
   });
-  // Ensure included is always a concrete boolean for form consumers.
-  return res.assets.map(asset => ({
-    ...asset,
-    included: Boolean(asset.included),
-  }));
+}
+
+export async function fetchSelectableAssetsForCurrentUser(): Promise<SelectableAssetsResponse> {
+  const userId = await getServerUserId();
+  if (!userId) {
+    throw new Error("Unable to determine user id for selectable assets.");
+  }
+  return fetchSelectableAssetsForUser(userId);
+}
+
+export type ApplyBrandProfileIntegrationAccountsParams =
+  | { brandId: string; assetPks: string[] }
+  | { brandId: string; integrationAccountIds: string[] };
+
+export async function applyBrandProfileIntegrationAccountsServer(
+  params: ApplyBrandProfileIntegrationAccountsParams
+): Promise<LinkIntegrationAccountsResponse> {
+  const { brandId } = params;
+  const body = "assetPks" in params
+    ? { asset_pks: params.assetPks }
+    : { integration_account_ids: params.integrationAccountIds };
+
+  const parsedBody = applyBrandProfileIntegrationAccountsRequestSchema.parse(body);
+
+  return httpServer.request({
+    path: `/integrations/brand-profiles/${encodeURIComponent(brandId)}/integration-accounts`,
+    method: "POST",
+    body: parsedBody,
+    schema: linkIntegrationAccountsResponseSchema,
+    cache: "no-store",
+  });
 }

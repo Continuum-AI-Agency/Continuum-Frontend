@@ -5,12 +5,6 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 First, run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
 bun dev
 ```
 
@@ -55,7 +49,7 @@ This repository contains the Continuum web application. The app code uses Next.j
 
 1. Install dependencies:
    ```bash
-   npm install
+   bun install
    ```
 
 2. Configure environment variables:
@@ -68,10 +62,19 @@ This repository contains the Continuum web application. The app code uses Next.j
 
 3. Run the development server:
    ```bash
-   npm run dev
+   bun dev
    ```
 
 4. Open [http://localhost:3000](http://localhost:3000)
+
+## Build
+
+```bash
+bun run build
+bun start
+```
+
+Note: `bun build` is Bun's bundler subcommand and does not run the Next.js build.
 
 For detailed authentication setup instructions, see [AUTH_SETUP.md](./AUTH_SETUP.md).
 

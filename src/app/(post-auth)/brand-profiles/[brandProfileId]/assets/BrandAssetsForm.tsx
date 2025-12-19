@@ -4,16 +4,17 @@ import { useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { Asset } from "@/lib/schemas/brand-assets";
-import { updateBrandProfileAssets } from "@/lib/api/brandProfiles.client";
+import { applyBrandProfileIntegrationAccounts } from "@/lib/api/integrations";
+import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
 import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
-import { ProviderAssetList } from "@/components/assets/ProviderAssetList";
 import { useToast } from "@/components/ui/ToastProvider";
+import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
+import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 
 type Props = {
 	brandProfileId: string;
-	availableAssets: Asset[];
-	includedAssets: Asset[];
+	selectableAssetsResponse: SelectableAssetsResponse;
+	assignedIntegrationAccountIds: string[];
 };
 
 const formSchema = z.object({
@@ -21,24 +22,43 @@ const formSchema = z.object({
 });
 type FormValues = z.infer<typeof formSchema>;
 
-function makeKey(a: Pick<Asset, "provider" | "assetId">): string {
-	return `${a.provider}:${a.assetId}`;
+function resolveSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
+	return asset.name?.trim() || asset.external_id;
 }
 
-export function BrandAssetsForm({ brandProfileId, availableAssets, includedAssets }: Props) {
-	const includedSet = useMemo(() => {
-		const s = new Set<string>();
-		for (const a of includedAssets) s.add(makeKey(a));
-		return s;
-	}, [includedAssets]);
+function groupSelectableAssetsByPlatform(
+	assets: SelectableAsset[]
+): Record<PlatformKey, SelectableAsset[]> {
+	const grouped = PLATFORMS.reduce((acc, { key }) => {
+		acc[key] = [];
+		return acc;
+	}, {} as Record<PlatformKey, SelectableAsset[]>);
+
+	assets.forEach(asset => {
+		const platformKey = mapIntegrationTypeToPlatformKey(asset.type);
+		if (!platformKey) return;
+		grouped[platformKey].push(asset);
+	});
+
+	return grouped;
+}
+
+export function BrandAssetsForm({
+	brandProfileId,
+	selectableAssetsResponse,
+	assignedIntegrationAccountIds,
+}: Props) {
+	const selectableAssets = selectableAssetsResponse.assets ?? [];
+	const assignedSet = useMemo(() => new Set(assignedIntegrationAccountIds), [assignedIntegrationAccountIds]);
 
 	const defaultSelected: Record<string, boolean> = useMemo(() => {
-		const map: Record<string, boolean> = {};
-		for (const a of availableAssets) {
-			map[makeKey(a)] = includedSet.has(makeKey(a));
-		}
-		return map;
-	}, [availableAssets, includedSet]);
+		const selectedMap: Record<string, boolean> = {};
+		selectableAssets.forEach(asset => {
+			if (!asset.integration_account_id) return;
+			selectedMap[asset.integration_account_id] = assignedSet.has(asset.integration_account_id);
+		});
+		return selectedMap;
+	}, [assignedSet, selectableAssets]);
 
 	const [serverError, setServerError] = useState<string | undefined>();
 	const [isPending, startTransition] = useTransition();
@@ -56,30 +76,34 @@ export function BrandAssetsForm({ brandProfileId, availableAssets, includedAsset
 		form.setValue("selected", { ...selected, [key]: checked }, { shouldDirty: true, shouldTouch: true });
 	}
 
-	const grouped = useMemo(() => {
-		const byProvider: Record<string, Asset[]> = {};
-		for (const a of availableAssets) {
-			(byProvider[a.provider] ||= []).push(a);
-		}
-		return byProvider;
-	}, [availableAssets]);
+	const grouped = useMemo(
+		() => groupSelectableAssetsByPlatform(selectableAssets),
+		[selectableAssets]
+	);
+
+	const orderedPlatforms = useMemo(
+		() => PLATFORMS.filter(({ key }) => grouped[key]?.length),
+		[grouped]
+	);
+
+	const unassignableCount = useMemo(
+		() => selectableAssets.filter(asset => !asset.integration_account_id).length,
+		[selectableAssets]
+	);
 
 	async function onSubmit(values: FormValues) {
 		setServerError(undefined);
-		const chosen = Object.entries(values.selected)
-			.filter(([, v]) => Boolean(v))
-			.map(([k]) => k);
-		const payload = {
-			assets: chosen.map((key) => {
-				const [provider, assetId] = key.split(":");
-				return { provider, assetId };
-			}),
-		};
+		const selectedIntegrationAccountIds = Object.entries(values.selected)
+			.filter(([, isSelected]) => Boolean(isSelected))
+			.map(([integrationAccountId]) => integrationAccountId);
 		const previous = form.getValues();
 		startTransition(async () => {
 			try {
-				await updateBrandProfileAssets(brandProfileId, payload);
-				show({ title: "Assets saved", variant: "success" });
+				const result = await applyBrandProfileIntegrationAccounts({
+					brandId: brandProfileId,
+					integrationAccountIds: selectedIntegrationAccountIds,
+				});
+				show({ title: "Assignments saved", description: `Linked ${result.linked} account(s).`, variant: "success" });
 			} catch (e: unknown) {
 				setServerError((e as Error).message ?? "Failed to save changes");
 				form.reset(previous);
@@ -117,22 +141,72 @@ export function BrandAssetsForm({ brandProfileId, availableAssets, includedAsset
 					Save
 				</button>
 			</div>
+			<div className="text-sm text-slate-500">
+				{selectableAssetsResponse.stale ? (
+					<p className="text-amber-700">
+						Your integrations are marked stale. Sync your providers if accounts look out of date.
+					</p>
+				) : null}
+				{unassignableCount > 0 ? (
+					<p className="text-amber-700">
+						{unassignableCount} connected account(s) are not ready for assignment yet.
+					</p>
+				) : null}
+				{selectableAssetsResponse.synced_at ? (
+					<p>Last synced {new Date(selectableAssetsResponse.synced_at).toLocaleString()}</p>
+				) : null}
+			</div>
 			{serverError ? (
 				<div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
 					{serverError}
 				</div>
 			) : null}
 			<div className="flex flex-col gap-8">
-				{Object.entries(grouped).map(([provider, assets]) => (
-					<ProviderAssetList
-						key={provider}
-						provider={provider}
-						assets={assets}
-						selected={selected}
-						onToggle={handleToggle}
-						disabled={isPending}
-					/>
-				))}
+				{orderedPlatforms.length === 0 ? (
+					<p className="text-sm text-slate-500">
+						No connected accounts available yet. Connect providers from your personal integrations first.
+					</p>
+				) : (
+					orderedPlatforms.map(({ key, label }) => {
+						const assets = grouped[key] ?? [];
+						return (
+							<section key={key} className="space-y-3">
+								<h2 className="text-lg font-medium">{label}</h2>
+								<ul className="divide-y divide-gray-200 rounded border">
+									{assets.map(asset => {
+										const integrationAccountId = asset.integration_account_id;
+										const checked = integrationAccountId ? Boolean(selected[integrationAccountId]) : false;
+										const disabled = isPending || !integrationAccountId;
+										return (
+											<li key={asset.asset_pk} className="flex items-center justify-between gap-4 p-3">
+												<div>
+													<div className="text-sm font-medium">{resolveSelectableAssetLabel(asset)}</div>
+													<div className="text-xs text-gray-500">{asset.type}</div>
+													{asset.business_id ? (
+														<div className="text-xs text-gray-500">Business {asset.business_id}</div>
+													) : null}
+												</div>
+												<div className="flex items-center gap-3">
+													{!integrationAccountId ? (
+														<span className="text-xs text-amber-600">Not ready</span>
+													) : null}
+													<input
+														type="checkbox"
+														checked={checked}
+														onChange={(e) =>
+															integrationAccountId ? handleToggle(integrationAccountId, e.target.checked) : undefined
+														}
+														disabled={disabled}
+													/>
+												</div>
+											</li>
+										);
+									})}
+								</ul>
+							</section>
+						);
+					})
+				)}
 			</div>
 
 			<div className="rounded-lg border border-slate-200/40 bg-slate-950/40 p-4 text-white">

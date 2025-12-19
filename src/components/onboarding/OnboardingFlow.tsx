@@ -48,7 +48,7 @@ import {
   useStartGoogleSync,
   useStartGoogleDrivePicker,
   useSelectableAssets,
-  linkIntegrationAccounts,
+  applyBrandProfileIntegrationAccounts,
 } from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import { StrategicAnalysisRealtimeListener } from "@/components/strategic-analyses/StrategicAnalysisRealtimeListener";
@@ -76,7 +76,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useContinuumServerEvents } from "@/lib/sse/useContinuumServerEvents";
 import { Tabs } from "@/components/ui/StableTabs";
 import { Editor, EditorProvider } from "react-simple-wysiwyg";
-import { BrandSwitcherPill } from "@/components/navigation/BrandSwitcherPill";
+import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 
@@ -128,6 +128,10 @@ const glassPanelStyle: React.CSSProperties = {
 };
 
 const glassPanelClassName = "backdrop-blur-xl border";
+
+function resolveSelectableAssetLabel(asset: { name: string | null; external_id: string }): string {
+  return asset.name?.trim() || asset.external_id;
+}
 
 function normalizeTimezoneValue(input?: string): string {
   if (!input) return "GMT+00:00";
@@ -446,7 +450,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const startMetaSyncMutation = useStartMetaSync();
   const startGoogleSyncMutation = useStartGoogleSync();
   const startGoogleDrivePickerMutation = useStartGoogleDrivePicker();
-  const selectableAssetsQuery = useSelectableAssets();
+  const selectableAssetsQuery = useSelectableAssets(currentUserId ?? undefined);
   const isGoogleDrivePickerPending = startGoogleDrivePickerMutation.isPending;
   const { activeBrandId, brandSummaries, isSwitching } = useActiveBrandContext();
   const hasAdditionalBrands = brandSummaries.length > 1;
@@ -495,10 +499,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     selectableAssetsQuery.data.assets.forEach(asset => {
       const platformKey = mapIntegrationTypeToPlatformKey(asset.type);
       if (!platformKey) return;
+      if (!asset.integration_account_id) return;
       const current = accountsByPlatform.get(platformKey) ?? [];
       current.push({
-        id: asset.asset_pk,
-        name: asset.name,
+        id: asset.integration_account_id,
+        name: resolveSelectableAssetLabel(asset),
         status: "active",
         selected: undefined,
       });
@@ -510,8 +515,9 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       accountsByPlatform.forEach((accounts, key) => {
         const existing = prev.connections[key] ?? { connected: false, accountId: null, accounts: [], lastSyncedAt: null };
         const mergedAccounts = accounts.map(account => {
+          const selectedSet = selectedAccountIdsByKey[key] ?? new Set<string>();
           const existingAccount = existing.accounts?.find(a => a.id === account.id);
-          const selectedFromState = selectedAccountIdsByKey[key]?.has(account.id) ?? false;
+          const selectedFromState = selectedSet.has(account.id);
           return existingAccount
             ? { ...existingAccount, ...account, selected: existingAccount.selected ?? (selectedFromState ? true : undefined) }
             : { ...account, selected: selectedFromState ? true : account.selected };
@@ -855,12 +861,39 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   }, [getValues, isDraftingAudience, isDraftingVoice, reset, state.brand]);
 
   const getAllSelectedIds = useCallback((): string[] => {
-    const all: string[] = [];
+    const selected = new Set<string>();
     (Object.keys(selectedAccountIdsByKey) as PlatformKey[]).forEach(k => {
-      selectedAccountIdsByKey[k].forEach(id => all.push(id));
+      selectedAccountIdsByKey[k].forEach(id => selected.add(id));
     });
-    return all;
-  }, [selectedAccountIdsByKey]);
+
+    const availableIntegrationAccountIds = new Set<string>();
+    PLATFORM_KEYS.forEach(key => {
+      state.connections[key]?.accounts?.forEach(account => {
+        availableIntegrationAccountIds.add(account.id);
+      });
+    });
+
+    const assetPkToIntegrationAccountId = new Map<string, string>();
+    selectableAssetsQuery.data?.assets?.forEach(asset => {
+      if (!asset.integration_account_id) return;
+      availableIntegrationAccountIds.add(asset.integration_account_id);
+      assetPkToIntegrationAccountId.set(asset.asset_pk, asset.integration_account_id);
+    });
+
+    const resolved = new Set<string>();
+    selected.forEach(id => {
+      if (availableIntegrationAccountIds.has(id)) {
+        resolved.add(id);
+        return;
+      }
+      const mapped = assetPkToIntegrationAccountId.get(id);
+      if (mapped) {
+        resolved.add(mapped);
+      }
+    });
+
+    return Array.from(resolved).sort();
+  }, [selectedAccountIdsByKey, selectableAssetsQuery.data?.assets, state.connections]);
 
   const getAllAvailableIds = useCallback((): string[] => {
     const all: string[] = [];
@@ -870,7 +903,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       });
     });
     // Also include assets from the selectable-assets API in case they're not yet merged into state
-    selectableAssetsQuery.data?.assets?.forEach(asset => all.push(asset.asset_pk));
+    selectableAssetsQuery.data?.assets?.forEach(asset => {
+      if (asset.integration_account_id) {
+        all.push(asset.integration_account_id);
+      }
+    });
     return Array.from(new Set(all));
   }, [state.connections, selectableAssetsQuery.data?.assets]);
 
@@ -1933,7 +1970,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         previewPayloadRef.current = refreshedPayload;
         const selectedIds = getAllSelectedIds();
         if (selectedIds.length > 0) {
-          await linkIntegrationAccounts(brandId, selectedIds);
+          await applyBrandProfileIntegrationAccounts({ brandId, integrationAccountIds: selectedIds });
         }
         const approval = await approveOnboardingBrandProfile({ payload: refreshedPayload });
         setAgentBrandProfile(approval.brand_profile);
@@ -2636,7 +2673,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
               <Heading size="6">Welcome to Continuum</Heading>
               <Text color="gray">Set up your workspace so Continuum can produce on-brand creative from day one.</Text>
             </Box>
-            {hasAdditionalBrands ? <div className="ml-auto"><BrandSwitcherPill /></div> : null}
+            {hasAdditionalBrands ? <div className="ml-auto"><BrandSwitcherMenu /></div> : null}
           </Flex>
 
           <Tabs.Root baseId={`radix-onboarding-tabs-${brandId}`} value={`step-${step}`} onValueChange={() => {}}>
