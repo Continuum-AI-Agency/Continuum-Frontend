@@ -19,7 +19,7 @@ import {
   parseOnboardingMetadata,
 } from "./state";
 import type { PlatformKey } from "@/components/onboarding/platforms";
-import type { Database } from "@/lib/supabase/types";
+import type { Database, Json } from "@/lib/supabase/types";
 
 type SupabaseOnboardingClient = SupabaseClient<Database>;
 
@@ -365,7 +365,7 @@ async function upsertMetadataRows(
   const rows = entries.map(([brandId, state]) => ({
     user_id: userId,
     brand_id: brandId,
-    state,
+    state: state as unknown as Json,
     is_active: false,
     updated_at: now,
   }));
@@ -438,7 +438,7 @@ async function upsertActiveBrand(
         {
           user_id: userId,
           brand_id: brandId,
-          state,
+          state: state as unknown as Json,
           is_active: true,
           updated_at: now,
         },
