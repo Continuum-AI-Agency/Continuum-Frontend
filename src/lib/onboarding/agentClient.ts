@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getApiBaseUrl } from "@/lib/api/config";
 
 const CLIENT_BASE_URL_KEYS = [
   "NEXT_PUBLIC_ONBOARDING_AGENT_BASE_URL",
@@ -37,7 +38,7 @@ export function getOnboardingAgentBaseUrl(): string {
   const isBrowser = typeof window !== "undefined";
   const clientValue = readEnv(CLIENT_BASE_URL_KEYS);
   const serverValue = isBrowser ? null : readEnv(SERVER_BASE_URL_KEYS);
-  cachedBaseUrl = clientValue ?? serverValue ?? "http://localhost:4000";
+  cachedBaseUrl = clientValue ?? serverValue ?? getApiBaseUrl();
   return cachedBaseUrl;
 }
 
