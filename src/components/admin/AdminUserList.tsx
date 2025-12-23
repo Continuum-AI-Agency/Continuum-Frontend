@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Badge,
@@ -23,15 +23,21 @@ type Props = {
   users: AdminUser[];
   permissions: PermissionRow[];
   pagination: AdminPagination;
+  searchQuery: string;
 };
 
-export function AdminUserList({ users, permissions, pagination }: Props) {
+export function AdminUserList({ users, permissions, pagination, searchQuery }: Props) {
   const { show } = useToast();
   const [isPending, startTransition] = useTransition();
   const supabase = createSupabaseBrowserClient();
-  const [query, setQuery] = useState("");
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const [query, setQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    setQuery(searchQuery);
+  }, [searchQuery]);
 
   async function copyImpersonationLinkToClipboard(url: string): Promise<boolean> {
     try {
@@ -44,29 +50,39 @@ export function AdminUserList({ users, permissions, pagination }: Props) {
 
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
 
-  const filteredUsers = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => {
-      const name = u.name?.toLowerCase() ?? "";
-      const email = u.email.toLowerCase();
-      return name.includes(q) || email.includes(q);
-    });
-  }, [query, users]);
-
   const safePage = pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
   const totalCountLabel = pagination.totalCount.toLocaleString();
-  const pageSummary = query.trim()
-    ? `Filtered ${filteredUsers.length} of ${users.length} on this page`
-    : `Showing ${users.length} on this page`;
+  const trimmedQuery = query.trim();
+  const hasQuery = trimmedQuery.length > 0;
+  const pageSummary = `Showing ${users.length} on this page`;
+  const totalLabelSuffix = hasQuery ? "matches" : "total";
 
   function updatePage(nextPage: number) {
     if (nextPage === pagination.page) return;
-    const params = new URLSearchParams(searchParams?.toString());
+    const params = new URLSearchParams(searchParamsString);
     params.set("page", String(nextPage));
     params.set("pageSize", String(pagination.pageSize));
     router.push(`?${params.toString()}`);
   }
+
+  useEffect(() => {
+    const currentQuery = new URLSearchParams(searchParamsString).get("query") ?? "";
+    if (trimmedQuery === currentQuery.trim()) return;
+
+    const timeout = setTimeout(() => {
+      const params = new URLSearchParams(searchParamsString);
+      if (trimmedQuery) {
+        params.set("query", trimmedQuery);
+      } else {
+        params.delete("query");
+      }
+      params.set("page", "1");
+      params.set("pageSize", String(pagination.pageSize));
+      router.push(`?${params.toString()}`);
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [trimmedQuery, pagination.pageSize, router, searchParamsString]);
 
   return (
     <Flex direction="column" gap="5">
@@ -74,7 +90,7 @@ export function AdminUserList({ users, permissions, pagination }: Props) {
         <div>
           <Heading size="5">Users</Heading>
           <Text color="gray" size="2">
-            {pageSummary} · {totalCountLabel} total
+            {pageSummary} · {totalCountLabel} {totalLabelSuffix}
           </Text>
         </div>
         <TextField.Root
@@ -100,14 +116,14 @@ export function AdminUserList({ users, permissions, pagination }: Props) {
               <span className="text-right pr-2">Actions</span>
             </div>
             <div className="divide-y divide-[var(--gray-6)]">
-              {filteredUsers.length === 0 ? (
+              {users.length === 0 ? (
                 <div className="px-5 py-6">
                   <Text size="2" color="gray">
-                    No users match this search.
+                    {hasQuery ? "No users match this search." : "No users found."}
                   </Text>
                 </div>
               ) : (
-                filteredUsers.map((user) => {
+                users.map((user) => {
                   const memberships = permissionsByUserId.get(user.id) ?? [];
                   const tierLabel =
                     memberships

@@ -18,15 +18,26 @@ import type {
   BackendChatImageRequestPayload,
 } from "@/lib/types/chatImage";
 import { getApiUrl } from "@/lib/api/config";
+import type {
+  PromptTemplate,
+  PromptTemplateCreateInput,
+  PromptTemplateUpdateInput,
+} from "@/lib/schemas/promptTemplates";
 
 import { ChatPanel } from "./ChatPanel";
 import { PreviewPane } from "./PreviewPane";
 import { ReferenceDock } from "./ReferenceDock";
+import { ImageMarkupDialog } from "@/components/ai-studio/markup/ImageMarkupDialog";
 
 type ChatSurfaceProps = {
   brandProfileId: string;
   brandName: string;
   initialHistory?: ChatImageHistoryItem[];
+  promptTemplates?: PromptTemplate[];
+  templatesLoading?: boolean;
+  onCreatePromptTemplate?: (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => Promise<void>;
+  onUpdatePromptTemplate?: (input: PromptTemplateUpdateInput) => Promise<void>;
+  onDeletePromptTemplate?: (id: string) => Promise<void>;
 };
 
 type ChatFormValues = {
@@ -42,7 +53,16 @@ type ChatFormValues = {
   steps?: number;
 };
 
-export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatSurfaceProps) {
+export function ChatSurface({
+  brandProfileId,
+  brandName,
+  initialHistory,
+  promptTemplates,
+  templatesLoading,
+  onCreatePromptTemplate,
+  onUpdatePromptTemplate,
+  onDeletePromptTemplate,
+}: ChatSurfaceProps) {
   const { show } = useToast();
   const { state: streamState, start, cancel, reset } = useImageSseStream();
 
@@ -55,6 +75,7 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
   const [continueFrom, setContinueFrom] = React.useState<{ data: string; mime_type: string }[]>([]);
   const [resetNext, setResetNext] = React.useState(false);
   const [conversationTurns, setConversationTurns] = React.useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [previewMarkup, setPreviewMarkup] = React.useState<{ base64: string; mime: string } | null>(null);
 
   const handleSubmit = React.useCallback(
     async (form: ChatFormValues) => {
@@ -278,6 +299,13 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
     }
   }, [streamState.lastEvent, activeModel]);
 
+  const handleOpenPreviewMarkup = React.useCallback(() => {
+    if (streamState.videoUrl) return;
+    const base64 = streamState.currentBase64 ?? streamState.posterBase64;
+    if (!base64) return;
+    setPreviewMarkup({ base64, mime: "image/png" });
+  }, [streamState.currentBase64, streamState.posterBase64, streamState.videoUrl]);
+
   return (
     <div className="relative ml-6 sm:ml-10 md:ml-[96px] flex h-full min-h-[720px] flex-col gap-4" style={{ color: "var(--gray-12)" }}>
       <div className="flex min-h-[560px] flex-1 gap-6">
@@ -299,6 +327,17 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
               hasFirst: Boolean(firstFrame),
               hasLast: Boolean(lastFrame),
             }}
+            promptTemplates={
+              promptTemplates && onCreatePromptTemplate && onUpdatePromptTemplate && onDeletePromptTemplate
+                ? {
+                    templates: promptTemplates,
+                    isLoading: templatesLoading ?? false,
+                    onCreate: onCreatePromptTemplate,
+                    onUpdate: onUpdatePromptTemplate,
+                    onDelete: onDeletePromptTemplate,
+                  }
+                : undefined
+            }
           />
           <ReferenceDock
             mode={getMediumForModel(activeModel)}
@@ -324,11 +363,42 @@ export function ChatSurface({ brandProfileId, brandName, initialHistory }: ChatS
             streamState={streamState}
             onCancel={cancel}
             onReset={handleReset}
+            canMarkup={Boolean((streamState.currentBase64 ?? streamState.posterBase64) && !streamState.videoUrl)}
+            onMarkup={handleOpenPreviewMarkup}
           />
         </Card>
       </div>
 
       <HistoryPanel history={history} onSelectHistory={handleSelectHistory} />
+
+      {previewMarkup ? (
+        <ImageMarkupDialog
+          open={Boolean(previewMarkup)}
+          sourceBase64={previewMarkup.base64}
+          sourceMime={previewMarkup.mime}
+          title="Markup preview"
+          maxBytes={IMAGE_REFERENCE_MAX_BYTES}
+          onClose={() => setPreviewMarkup(null)}
+          onSave={(result) => {
+            const maxRefs = getMediumForModel(activeModel) === "video" ? 3 : 14;
+            if (refs.length >= maxRefs) {
+              show({ title: "Reference limit", description: `Max ${maxRefs} reference images`, variant: "error" });
+              return;
+            }
+            const nextRef: RefImage = {
+              id: `markup-${Date.now()}`,
+              name: "preview-markup.png",
+              path: "preview-markup.png",
+              mime: result.mime,
+              base64: result.base64,
+              referenceType: getMediumForModel(activeModel) === "video" ? "asset" : undefined,
+            };
+            setRefs((prev) => prev.concat(nextRef));
+            show({ title: "Markup saved", description: "Added to reference images.", variant: "success" });
+            setPreviewMarkup(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

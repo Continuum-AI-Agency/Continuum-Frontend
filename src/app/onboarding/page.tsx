@@ -32,17 +32,18 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const brandIdParam =
     typeof resolvedSearchParams?.brand === "string" ? resolvedSearchParams.brand : undefined;
-  const { brandId, state } = await ensureOnboardingState(brandIdParam);
+  const [{ brandId, state }, { data: perms }] = await Promise.all([
+    ensureOnboardingState(brandIdParam),
+    supabase
+      .schema("brand_profiles")
+      .from("permissions")
+      .select("brand_profile_id")
+      .eq("user_id", user.id),
+  ]);
 
   if (isOnboardingComplete(state)) {
     redirect("/dashboard");
   }
-
-  const { data: perms } = await supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .select("brand_profile_id")
-    .eq("user_id", user.id);
 
   const permittedBrandIds = new Set<string>(
     (perms ?? [])

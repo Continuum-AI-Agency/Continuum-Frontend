@@ -4,11 +4,14 @@
 import React from "react";
 import { Badge, Button, Callout, Card, Grid, ScrollArea, Text } from "@radix-ui/themes";
 import * as HoverCard from "@radix-ui/react-hover-card";
+import * as ContextMenu from "@radix-ui/react-context-menu";
 import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
 
+import { useToast } from "@/components/ui/ToastProvider";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
 import type { CreativeAsset } from "@/lib/creative-assets/types";
 import { useAssetPreviewUrl } from "@/lib/creative-assets/useAssetPreviewUrl";
+import { createSignedDownloadUrl, getPublicAssetDownloadUrl } from "@/lib/creative-assets/storageClient";
 
 export type LibraryStripProps = {
   brandProfileId: string;
@@ -18,6 +21,7 @@ export type LibraryStripProps = {
 
 export function LibraryStrip({ brandProfileId, medium, onUse }: LibraryStripProps) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const { show } = useToast();
 
   const {
     assets,
@@ -34,6 +38,38 @@ export function LibraryStrip({ brandProfileId, medium, onUse }: LibraryStripProp
     await uploadFiles(files);
     await refresh();
   };
+
+  const handleDownload = React.useCallback(
+    async (asset: CreativeAsset) => {
+      if (asset.kind !== "file") return;
+      try {
+        const url = await createSignedDownloadUrl(asset.fullPath, 600, asset.name);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = asset.name;
+        link.rel = "noopener";
+        link.target = "_blank";
+        link.click();
+      } catch {
+        try {
+          const fallback = await getPublicAssetDownloadUrl(asset.fullPath, asset.name);
+          const link = document.createElement("a");
+          link.href = fallback;
+          link.download = asset.name;
+          link.rel = "noopener";
+          link.target = "_blank";
+          link.click();
+        } catch (error) {
+          show({
+            title: "Download failed",
+            description: (error as Error)?.message ?? "Unable to download asset.",
+            variant: "error",
+          });
+        }
+      }
+    },
+    [show]
+  );
 
   return (
     <Card className="border border-white/10 bg-slate-900/80 shadow-lg">
@@ -63,27 +99,65 @@ export function LibraryStrip({ brandProfileId, medium, onUse }: LibraryStripProp
             {assets
               .filter((a) => a.kind === "file" && (a.contentType ?? "").startsWith("image/"))
               .map((asset) => (
-                <HoverCard.Root key={asset.id} openDelay={80} closeDelay={60}>
-                  <HoverCard.Trigger asChild>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="h-20 w-full overflow-hidden rounded-md bg-black/40">
-                        <AssetThumb asset={asset} />
-                      </div>
-                      <Text size="1" className="mt-1 block truncate text-white">{asset.name}</Text>
-                      <div className="mt-1 flex items-center gap-1">
-                        <Button size="1" variant="ghost" onClick={() => onUse("image-reference", asset)}>Seed</Button>
-                        <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("first-frame", asset)}>First</Button>
-                        <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("last-frame", asset)}>Last</Button>
-                      </div>
-                    </div>
-                  </HoverCard.Trigger>
-                  <AssetHoverPreview asset={asset} />
-                </HoverCard.Root>
+                <LibraryStripAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  medium={medium}
+                  onUse={onUse}
+                  onDownload={handleDownload}
+                />
               ))}
           </Grid>
         )}
       </ScrollArea>
     </Card>
+  );
+}
+
+type LibraryStripAssetCardProps = {
+  asset: CreativeAsset;
+  medium: "image" | "video";
+  onUse: LibraryStripProps["onUse"];
+  onDownload: (asset: CreativeAsset) => Promise<void>;
+};
+
+function LibraryStripAssetCard({ asset, medium, onUse, onDownload }: LibraryStripAssetCardProps) {
+  return (
+    <HoverCard.Root openDelay={80} closeDelay={60}>
+      <ContextMenu.Root>
+        <ContextMenu.Trigger asChild>
+          <HoverCard.Trigger asChild>
+            <div
+              className="rounded-lg border border-white/10 bg-white/5 p-2 transition data-[state=open]:border-purple-400/40 data-[state=open]:ring-1 data-[state=open]:ring-purple-500/30 data-[state=open]:shadow-brand-glow"
+            >
+              <div className="h-20 w-full overflow-hidden rounded-md bg-black/40">
+                <AssetThumb asset={asset} />
+              </div>
+              <Text size="1" className="mt-1 block truncate text-white">
+                {asset.name}
+              </Text>
+              <div className="mt-1 flex items-center gap-1">
+                <Button size="1" variant="ghost" onClick={() => onUse("image-reference", asset)}>
+                  Seed
+                </Button>
+                <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("first-frame", asset)}>
+                  First
+                </Button>
+                <Button size="1" variant="ghost" disabled={medium !== "video"} onClick={() => onUse("last-frame", asset)}>
+                  Last
+                </Button>
+              </div>
+            </div>
+          </HoverCard.Trigger>
+        </ContextMenu.Trigger>
+        <ContextMenu.Content className="min-w-[160px] rounded-md border border-white/10 bg-slate-900/95 p-1 text-sm text-white shadow-2xl backdrop-blur">
+          <ContextMenu.Item className="px-2 py-1 hover:bg-white/10" onSelect={() => void onDownload(asset)}>
+            Download
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Root>
+      <AssetHoverPreview asset={asset} />
+    </HoverCard.Root>
   );
 }
 

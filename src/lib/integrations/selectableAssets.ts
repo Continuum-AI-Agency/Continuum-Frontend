@@ -69,14 +69,11 @@ function sortSelectableAssetsByTypeThenLabel(assets: SelectableAsset[]): Selecta
 }
 
 export function getSelectableAssetsFlatList(response: SelectableAssetsResponse): SelectableAsset[] {
-  if (response.assets.length > 0) {
-    return response.assets;
-  }
-
+  const topLevelAssets = response.assets ?? [];
   const providerAssets = Object.values(response.providers ?? {}).flatMap(provider => provider.assets ?? []);
   const metaHierarchyAssets = flattenMetaSelectableHierarchy(response.providers?.meta?.hierarchy?.meta);
 
-  return dedupeSelectableAssets([...providerAssets, ...metaHierarchyAssets]);
+  return dedupeSelectableAssets([...topLevelAssets, ...providerAssets, ...metaHierarchyAssets]);
 }
 
 export function getMetaSelectableAdAccountBundles(

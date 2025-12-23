@@ -8,7 +8,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { chatImageRequestBase, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
+import type {
+  PromptTemplate,
+  PromptTemplateCreateInput,
+  PromptTemplateUpdateInput,
+} from "@/lib/schemas/promptTemplates";
 import type { SupportedModel } from "@/lib/types/chatImage";
+import { PromptTemplatePicker } from "./PromptTemplatePicker";
 
 const chatPanelFormSchema = chatImageRequestBase.pick({
   model: true,
@@ -34,6 +40,13 @@ type ChatPanelProps = {
   getAspectsForModel: typeof getAspectsForModel;
   mediumForModel: typeof getMediumForModel;
   refsSummary?: { refCount: number; hasFirst: boolean; hasLast: boolean };
+  promptTemplates?: {
+    templates: PromptTemplate[];
+    isLoading: boolean;
+    onCreate: (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => Promise<void>;
+    onUpdate: (input: PromptTemplateUpdateInput) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
+  };
 };
 
 const MODEL_OPTIONS: { value: SupportedModel; label: string; disabled?: boolean }[] = [
@@ -66,6 +79,7 @@ export function ChatPanel({
   getAspectsForModel,
   mediumForModel,
   refsSummary,
+  promptTemplates,
 }: ChatPanelProps) {
   const form = useForm<FormValues>({
     resolver: zodResolver(chatPanelFormSchema),
@@ -163,14 +177,29 @@ export function ChatPanel({
 
         <div className="space-y-1">
           <Text size="1" color="gray">Prompt</Text>
-          <TextArea
-            value={form.watch("prompt")}
-            onChange={(e) => form.setValue("prompt", e.target.value)}
-            placeholder="Describe what you want to see"
-            rows={6}
-            className="min-h-[300px]"
-            disabled={disabled || isStreaming}
-          />
+          <div className="relative">
+            <TextArea
+              value={form.watch("prompt")}
+              onChange={(e) => form.setValue("prompt", e.target.value)}
+              placeholder="Describe what you want to see"
+              rows={6}
+              className="min-h-[300px] pr-10"
+              disabled={disabled || isStreaming}
+            />
+            {promptTemplates ? (
+              <div className="absolute right-2 top-2">
+                <PromptTemplatePicker
+                  templates={promptTemplates.templates}
+                  isLoading={promptTemplates.isLoading}
+                  currentPrompt={form.watch("prompt")}
+                  onSelect={(template) => form.setValue("prompt", template.prompt)}
+                  onCreate={promptTemplates.onCreate}
+                  onUpdate={promptTemplates.onUpdate}
+                  onDelete={promptTemplates.onDelete}
+                />
+              </div>
+            ) : null}
+          </div>
           {form.formState.errors.prompt ? (
             <Text size="1" color="red" className="block">
               {form.formState.errors.prompt.message}

@@ -25,6 +25,15 @@ const SAMPLE_PAGE_ASSET = {
   business_id: "biz_1",
   ad_account_id: "act_1",
 };
+const SAMPLE_GOOGLE_ASSET = {
+  asset_pk: "66666666-6666-6666-6666-666666666666",
+  integration_account_id: "77777777-7777-7777-7777-777777777777",
+  external_id: "ext_google_1",
+  type: "google_ad_account",
+  name: "Google Ads 1",
+  business_id: null,
+  ad_account_id: null,
+};
 
 describe("selectable assets schemas", () => {
   test("selectableAssetsResponseSchema accepts legacy payload", () => {
@@ -174,6 +183,45 @@ describe("selectable assets schemas", () => {
     });
 
     expect(getSelectableAssetsFlatList(response)).toEqual([SAMPLE_ASSET, SAMPLE_PAGE_ASSET]);
+  });
+
+  test("getSelectableAssetsFlatList merges top-level assets with provider hierarchy", () => {
+    const response: SelectableAssetsResponse = selectableAssetsResponseSchema.parse({
+      synced_at: null,
+      stale: false,
+      assets: [SAMPLE_GOOGLE_ASSET],
+      providers: {
+        meta: {
+          hierarchy: {
+            integrations: [
+              {
+                integration_id: "33333333-3333-3333-3333-333333333333",
+                businesses: [
+                  {
+                    business_id: null,
+                    business_name: null,
+                    ad_accounts: [
+                      {
+                        ad_account_id: "act_1",
+                        ad_account: SAMPLE_ASSET,
+                        pages: [],
+                        instagram_accounts: [],
+                        threads_accounts: [],
+                      },
+                    ],
+                    pages_without_ad_account: [],
+                    instagram_accounts_without_ad_account: [],
+                    threads_accounts_without_ad_account: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(getSelectableAssetsFlatList(response)).toEqual([SAMPLE_GOOGLE_ASSET, SAMPLE_ASSET]);
   });
 
   test("getMetaSelectableAdAccountBundles groups by ad account and ignores businesses", () => {

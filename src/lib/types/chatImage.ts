@@ -23,6 +23,8 @@ export type RefImage = {
   path: string;
   mime: string;
   base64: string;
+  originalBase64?: string;
+  originalMime?: string;
   weight?: number;
   referenceType?: "asset" | "style"; // Veo reference_images
 };

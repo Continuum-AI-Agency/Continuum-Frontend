@@ -138,6 +138,11 @@ export async function fetchSelectableAssets(userId?: string): Promise<Selectable
 
 type UseSelectableAssetsOptions = {
   enabled?: boolean;
+  staleTimeMs?: number;
+  gcTimeMs?: number;
+  refetchOnMount?: boolean;
+  refetchOnWindowFocus?: boolean;
+  refetchOnReconnect?: boolean;
 };
 
 export function useSelectableAssets(userId?: string, options?: UseSelectableAssetsOptions) {
@@ -145,8 +150,11 @@ export function useSelectableAssets(userId?: string, options?: UseSelectableAsse
     queryKey: ["selectable-assets", userId ?? "self"],
     queryFn: () => fetchSelectableAssets(userId),
     enabled: options?.enabled ?? true,
-    staleTime: 0,
-    gcTime: 5 * 60 * 1000,
+    staleTime: options?.staleTimeMs ?? 0,
+    gcTime: options?.gcTimeMs ?? 5 * 60 * 1000,
+    refetchOnMount: options?.refetchOnMount,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus,
+    refetchOnReconnect: options?.refetchOnReconnect,
   });
 }
 

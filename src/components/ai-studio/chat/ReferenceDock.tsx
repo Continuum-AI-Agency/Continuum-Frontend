@@ -3,14 +3,16 @@
 import React from "react";
 import { Badge, Button, Card, Flex, IconButton, ScrollArea, Text } from "@radix-ui/themes";
 import Image from "next/image";
-import { ImageIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
+import { ImageIcon, Pencil2Icon, ReloadIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
 import { useDropzone, type FileRejection, type FileError } from "react-dropzone";
 import type { RefImage } from "@/lib/types/chatImage";
 
 import { Dropzone, DropzoneEmptyState } from "@/components/dropzone";
 import { useToast } from "@/components/ui/ToastProvider";
+import { ImageMarkupDialog } from "@/components/ai-studio/markup/ImageMarkupDialog";
 import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
 import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
+import { applyMarkupToRef, revertRefToOriginal } from "@/lib/ai-studio/referenceEdits";
 import {
   IMAGE_REFERENCE_MAX_BYTES,
   VIDEO_REFERENCE_MAX_BYTES,
@@ -140,6 +142,13 @@ export function ReferenceDock({
 }: ReferenceDockProps) {
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
+  const [markupState, setMarkupState] = React.useState<{
+    target: "ref" | "first" | "last";
+    refId?: string;
+    sourceBase64: string;
+    sourceMime: string;
+    title: string;
+  } | null>(null);
   const hasCreativeAssetPayload = React.useCallback((types: DataTransfer["types"]) => {
     const list = Array.from(types ?? []);
     return list.includes(CREATIVE_ASSET_DRAG_TYPE) || list.includes(RF_DRAG_MIME);
@@ -367,6 +376,17 @@ export function ReferenceDock({
     [enforceMaxAttachmentBytes, handleLocalFiles, refs, maxRefs, mode, onChangeRefs, onChangeFirstFrame, onChangeLastFrame, onChangeReferenceVideo, show]
   );
 
+  const openMarkup = React.useCallback((opts: { target: "ref" | "first" | "last"; ref?: RefImage }) => {
+    if (!opts.ref) return;
+    setMarkupState({
+      target: opts.target,
+      refId: opts.ref.id,
+      sourceBase64: opts.ref.base64,
+      sourceMime: opts.ref.mime,
+      title: `Edit ${opts.ref.name ?? "reference"}`,
+    });
+  }, []);
+
   const refsDropzone = useLocalDropzone(
     { maxFiles: maxRefs, allowedMimeTypes: ["image/*"], maxFileSize: Number.POSITIVE_INFINITY },
     async (files) => handleLocalFiles(files, undefined),
@@ -389,90 +409,165 @@ export function ReferenceDock({
   );
 
   return (
-    <Card
-      size="3"
-      className={`p-4 shadow-xl transition min-h-[220px] max-h-[520px] overflow-hidden flex flex-col gap-3 ${isDragging ? "ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]" : ""}`}
-      style={{
-        backgroundColor: "var(--color-surface)",
-        border: `1px solid var(--gray-6)`
-      }}
-      onDragOver={(e) => {
-        const types = Array.from(e.dataTransfer.types ?? []);
-        if (!types.includes("Files") && !hasCreativeAssetPayload(e.dataTransfer.types)) return;
-        e.preventDefault();
-        setIsDragging(true);
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDropCapture={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const slot = resolveDropSlot(e.target);
-        void handleDrop(e, slot);
-      }}
-    >
-      <Flex justify="between" align="center" className="mb-2">
-        <Flex gap="2" align="center">
-          <ImageIcon />
-          <Text weight="medium">References</Text>
+    <>
+      <Card
+        size="3"
+        className={`p-4 shadow-xl transition min-h-[220px] max-h-[520px] overflow-hidden flex flex-col gap-3 ${isDragging ? "ring-2 ring-offset-2 ring-offset-[var(--color-panel)] ring-[var(--accent-9)]" : ""}`}
+        style={{
+          backgroundColor: "var(--color-surface)",
+          border: `1px solid var(--gray-6)`
+        }}
+        onDragOver={(e) => {
+          const types = Array.from(e.dataTransfer.types ?? []);
+          if (!types.includes("Files") && !hasCreativeAssetPayload(e.dataTransfer.types)) return;
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDropCapture={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const slot = resolveDropSlot(e.target);
+          void handleDrop(e, slot);
+        }}
+      >
+        <Flex justify="between" align="center" className="mb-2">
+          <Flex gap="2" align="center">
+            <ImageIcon />
+            <Text weight="medium">References</Text>
+          </Flex>
+          <Badge variant="soft" color="gray" size="2">{refs.length}</Badge>
         </Flex>
-        <Badge variant="soft" color="gray" size="2">{refs.length}</Badge>
-      </Flex>
 
-      <div>
-        <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden">
-          <ScrollArea type="always" scrollbars="both" className="mb-3 max-h-44 pr-2">
-            <Flex gap="2" wrap="wrap">
-              {refs.map((ref) => (
-                <RefChip
-                  key={ref.id}
-                  refImage={ref}
-                  allowReferenceType={mode === "video"}
-                  onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
+        <div>
+          <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden">
+            <ScrollArea type="always" scrollbars="both" className="mb-3 max-h-44 pr-2">
+              <Flex gap="2" wrap="wrap">
+                {refs.map((ref) => (
+                  <RefChip
+                    key={ref.id}
+                    refImage={ref}
+                    allowReferenceType={mode === "video"}
+                    onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
+                  onEdit={() => openMarkup({ target: "ref", ref })}
+                  onRevert={
+                    ref.originalBase64
+                      ? () =>
+                          onChangeRefs(
+                            refs.map((r) =>
+                              r.id === ref.id
+                                ? revertRefToOriginal(r)
+                                : r
+                            )
+                          )
+                      : undefined
+                  }
                   onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
                 />
               ))}
-              {refs.length === 0 ? <Text size="1" color="gray">Drop or upload images.</Text> : null}
-            </Flex>
-          </ScrollArea>
-          <DropzoneEmptyState />
-        </Dropzone>
-      </div>
-
-      {mode === "video" ? (
-        <div className="grid grid-cols-3 gap-3">
-          <FrameTile
-            label="First frame"
-            refImage={firstFrame}
-            dropzoneProps={firstDropzone}
-            onClear={() => onChangeFirstFrame?.()}
-            dropSlot="first"
-          />
-          <FrameTile
-            label="Last frame"
-            refImage={lastFrame}
-            dropzoneProps={lastDropzone}
-            onClear={() => onChangeLastFrame?.()}
-            dropSlot="last"
-          />
-          <VideoTile
-            label="Reference video"
-            refVideo={referenceVideo}
-            dropzoneProps={videoDropzone}
-            onClear={() => onChangeReferenceVideo?.()}
-            dropSlot="video"
-          />
+                {refs.length === 0 ? <Text size="1" color="gray">Drop or upload images.</Text> : null}
+              </Flex>
+            </ScrollArea>
+            <DropzoneEmptyState />
+          </Dropzone>
         </div>
-      ) : null}
 
-      <Flex gap="2" className="mt-3" align="center">
-        <UploadIcon />
-        <Text size="1" color="gray">Drag from Creative Library to seed your generation.</Text>
-      </Flex>
-    </Card>
+        {mode === "video" ? (
+          <div className="grid grid-cols-3 gap-3">
+            <FrameTile
+              label="First frame"
+              refImage={firstFrame}
+              dropzoneProps={firstDropzone}
+              onClear={() => onChangeFirstFrame?.()}
+              onRevert={
+                firstFrame?.originalBase64
+                  ? () =>
+                      onChangeFirstFrame?.(revertRefToOriginal(firstFrame))
+                  : undefined
+              }
+              onEdit={() => openMarkup({ target: "first", ref: firstFrame })}
+              dropSlot="first"
+            />
+            <FrameTile
+              label="Last frame"
+              refImage={lastFrame}
+              dropzoneProps={lastDropzone}
+              onClear={() => onChangeLastFrame?.()}
+              onRevert={
+                lastFrame?.originalBase64
+                  ? () =>
+                      onChangeLastFrame?.(revertRefToOriginal(lastFrame))
+                  : undefined
+              }
+              onEdit={() => openMarkup({ target: "last", ref: lastFrame })}
+              dropSlot="last"
+            />
+            <VideoTile
+              label="Reference video"
+              refVideo={referenceVideo}
+              dropzoneProps={videoDropzone}
+              onClear={() => onChangeReferenceVideo?.()}
+              dropSlot="video"
+            />
+          </div>
+        ) : null}
+
+        <Flex gap="2" className="mt-3" align="center">
+          <UploadIcon />
+          <Text size="1" color="gray">Drag from Creative Library to seed your generation.</Text>
+        </Flex>
+      </Card>
+
+      {markupState ? (
+        <ImageMarkupDialog
+          open={Boolean(markupState)}
+          sourceBase64={markupState.sourceBase64}
+          sourceMime={markupState.sourceMime}
+          title={markupState.title}
+          maxBytes={IMAGE_REFERENCE_MAX_BYTES}
+          onClose={() => setMarkupState(null)}
+          onSave={(result) => {
+            if (markupState.target === "ref" && markupState.refId) {
+              onChangeRefs(
+                refs.map((r) =>
+                  r.id === markupState.refId
+                    ? applyMarkupToRef(r, result)
+                    : r
+                )
+              );
+              show({ title: "Markup saved", description: "Reference updated.", variant: "success" });
+            }
+            if (markupState.target === "first" && firstFrame) {
+              onChangeFirstFrame?.(applyMarkupToRef(firstFrame, result));
+              show({ title: "Markup saved", description: "First frame updated.", variant: "success" });
+            }
+            if (markupState.target === "last" && lastFrame) {
+              onChangeLastFrame?.(applyMarkupToRef(lastFrame, result));
+              show({ title: "Markup saved", description: "Last frame updated.", variant: "success" });
+            }
+            setMarkupState(null);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
-function RefChip({ refImage, onRemove, allowReferenceType, onTypeChange }: { refImage: RefImage; onRemove: () => void; allowReferenceType?: boolean; onTypeChange?: (type: "asset" | "style") => void }) {
+function RefChip({
+  refImage,
+  onRemove,
+  onEdit,
+  onRevert,
+  allowReferenceType,
+  onTypeChange,
+}: {
+  refImage: RefImage;
+  onRemove: () => void;
+  onEdit?: () => void;
+  onRevert?: () => void;
+  allowReferenceType?: boolean;
+  onTypeChange?: (type: "asset" | "style") => void;
+}) {
   return (
     <div className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-2 py-1 backdrop-blur max-w-full">
       <Image
@@ -484,6 +579,11 @@ function RefChip({ refImage, onRemove, allowReferenceType, onTypeChange }: { ref
         className="h-10 w-10 sm:h-12 sm:w-12 rounded-md object-cover"
       />
       <Text size="1" className="truncate max-w-[140px] sm:max-w-[180px]">{refImage.name ?? "ref"}</Text>
+      {refImage.originalBase64 ? (
+        <Badge size="1" variant="soft" color="amber">
+          edited
+        </Badge>
+      ) : null}
       {allowReferenceType ? (
         <select
           className="rounded border border-white/15 bg-slate-900/80 text-xs"
@@ -493,6 +593,16 @@ function RefChip({ refImage, onRemove, allowReferenceType, onTypeChange }: { ref
           <option value="asset">asset</option>
           <option value="style">style</option>
         </select>
+      ) : null}
+      {onRevert ? (
+        <IconButton size="1" variant="ghost" color="gray" onClick={onRevert}>
+          <ReloadIcon />
+        </IconButton>
+      ) : null}
+      {onEdit ? (
+        <IconButton size="1" variant="ghost" color="gray" onClick={onEdit}>
+          <Pencil2Icon />
+        </IconButton>
       ) : null}
       <IconButton size="1" variant="ghost" color="red" onClick={onRemove}>
         <TrashIcon />
@@ -505,12 +615,16 @@ function FrameTile({
   label,
   refImage,
   onClear,
+  onEdit,
+  onRevert,
   dropzoneProps,
   dropSlot,
 }: {
   label: string;
   refImage?: RefImage;
   onClear: () => void;
+  onEdit?: () => void;
+  onRevert?: () => void;
   dropzoneProps: ReturnType<typeof useDropzone> & {
     files: LocalFile[];
     setFiles: React.Dispatch<React.SetStateAction<LocalFile[]>>;
@@ -542,7 +656,24 @@ function FrameTile({
             sizes="(max-width: 640px) 80vw, 200px"
             className="rounded-md object-contain"
           />
-          <Button size="1" color="red" variant="surface" className="absolute right-1 top-1" onClick={onClear}>Clear</Button>
+          {refImage.originalBase64 ? (
+            <Badge size="1" variant="soft" color="amber" className="absolute left-1 top-1">
+              edited
+            </Badge>
+          ) : null}
+          <div className="absolute right-1 top-1 flex items-center gap-1">
+            {onRevert ? (
+              <IconButton size="1" variant="surface" onClick={onRevert}>
+                <ReloadIcon />
+              </IconButton>
+            ) : null}
+            {onEdit ? (
+              <IconButton size="1" variant="surface" onClick={onEdit}>
+                <Pencil2Icon />
+              </IconButton>
+            ) : null}
+            <Button size="1" color="red" variant="surface" onClick={onClear}>Clear</Button>
+          </div>
         </div>
       ) : (
         <Dropzone {...dropzoneProps} className="h-full w-full rounded-md border border-dashed border-white/15 bg-white/5 text-white min-h-[140px]">

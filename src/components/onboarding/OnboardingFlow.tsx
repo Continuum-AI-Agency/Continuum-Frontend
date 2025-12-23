@@ -8,13 +8,10 @@ import {
   Button,
   Callout,
   Card,
-  Checkbox,
   Container,
   Flex,
   Grid,
   Heading,
-  IconButton,
-  Separator,
   Select,
   Text,
   TextArea,
@@ -22,7 +19,6 @@ import {
 } from "@radix-ui/themes";
 import {
   CheckCircledIcon,
-  ChevronDownIcon,
   ExclamationTriangleIcon,
   ReloadIcon,
   TrashIcon,
@@ -31,7 +27,6 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { PLATFORMS, PLATFORM_KEYS, type PlatformKey } from "./platforms";
-import * as Accordion from "@radix-ui/react-accordion";
 import {
   clearPlatformConnectionAction,
   completeOnboardingAction,
@@ -49,7 +44,6 @@ import type {
   BrandVoiceTag,
   OnboardingDocument,
   OnboardingState,
-  OnboardingConnectionAccount,
 } from "@/lib/onboarding/state";
 import { BRAND_VOICE_TAGS } from "@/lib/onboarding/state";
 import { openCenteredPopup, waitForPopupMessage, waitForPopupClosed } from "@/lib/popup";
@@ -57,14 +51,13 @@ import {
   useStartMetaSync,
   useStartGoogleSync,
   useStartGoogleDrivePicker,
-  useSelectableAssets,
   applyBrandProfileIntegrationAccounts,
 } from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createIntegrationSelectionToastOptions } from "@/lib/ui/integrationSelectionToast";
 import { StrategicAnalysisRealtimeListener } from "@/components/strategic-analyses/StrategicAnalysisRealtimeListener";
 import { requestStrategicRunsCatchUp } from "@/components/strategic-analyses/realtimeBus";
-import { PlatformIcon, ExtraIcon, DocumentSourceIcon } from "./PlatformIcons";
+import { DocumentSourceIcon } from "./PlatformIcons";
 import { uploadCreativeAsset, createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
 import {
   approveOnboardingBrandProfile,
@@ -91,8 +84,15 @@ import { Editor, EditorProvider } from "react-simple-wysiwyg";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-import { getMetaSelectableAdAccountBundles, getSelectableAssetsFlatList } from "@/lib/integrations/selectableAssets";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
+import { resolveWebsiteDraftUrl } from "@/lib/onboarding/websiteDraft";
+import { resolveSelectableAssetLabel } from "@/components/onboarding/integrations/selectableAssetUtils";
+import { useSelectableAssetsState } from "@/components/onboarding/hooks/useSelectableAssetsState";
+import { IntegrationsStep } from "@/components/onboarding/steps/IntegrationsStep";
+import {
+  FACEBOOK_OAUTH_KEYS,
+  GOOGLE_OAUTH_KEYS,
+} from "@/components/onboarding/integrations/constants";
 
 const industries = [
   "Advertising",
@@ -142,20 +142,6 @@ const glassPanelStyle: React.CSSProperties = {
 };
 
 const glassPanelClassName = "backdrop-blur-xl border";
-
-function resolveSelectableAssetLabel(asset: { name: string | null; external_id: string }): string {
-  return asset.name?.trim() || asset.external_id;
-}
-
-function sortSelectableAssetsByTypeThenLabel(assets: SelectableAsset[]): SelectableAsset[] {
-  return [...assets].sort((a, b) => {
-    const typeCompare = a.type.localeCompare(b.type);
-    if (typeCompare !== 0) return typeCompare;
-    const aLabel = resolveSelectableAssetLabel(a);
-    const bLabel = resolveSelectableAssetLabel(b);
-    return aLabel.localeCompare(bLabel);
-  });
-}
 
 function normalizeTimezoneValue(input?: string): string {
   if (!input) return "GMT+00:00";
@@ -286,10 +272,6 @@ const CONNECTOR_SOURCES = [
 ] as const;
 
 // OAuth groupings and coming-soon platforms for the Integrations step
-const GOOGLE_OAUTH_KEYS: PlatformKey[] = ["youtube", "googleAds", "dv360"];
-const FACEBOOK_OAUTH_KEYS: PlatformKey[] = ["instagram", "facebook", "threads"];
-const COMING_SOON_KEYS: PlatformKey[] = ["amazonAds", "tiktok", "linkedin"];
-const COMING_SOON_EXTRA = [{ key: "x", label: "X" }] as const;
 
 const agentPhaseKeys = ["brand_profile", "voice", "audience", "website", "business"] as const;
 type AgentPhase = (typeof agentPhaseKeys)[number];
@@ -344,7 +326,8 @@ function getSiteOrigin(): string {
 function buildIntegrationCallbackUrl(group: "google" | "facebook", context: string): string {
   const origin = getSiteOrigin();
   const url = new URL("/integrations/callback", origin);
-  url.searchParams.set("provider", group);
+  const provider = group === "facebook" ? "meta" : "google";
+  url.searchParams.set("provider", provider);
   url.searchParams.set("context", context);
   return url.toString();
 }
@@ -504,16 +487,46 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const startMetaSyncMutation = useStartMetaSync();
   const startGoogleSyncMutation = useStartGoogleSync();
   const startGoogleDrivePickerMutation = useStartGoogleDrivePicker();
-  const selectableAssetsQuery = useSelectableAssets(currentUserId ?? undefined, {
-    enabled: state.step === 1 && Boolean(currentUserId),
+  const {
+    selectableAssetsQuery,
+    selectableAssetsFlatList,
+    selectableAccountIdToPlatformKey,
+    isHydrated: hasSelectableAssetsHydrated,
+    refetchSelectableAssets,
+  } = useSelectableAssetsState({
+    currentUserId: currentUserId ?? undefined,
+    brandId,
+    setState,
+    selectedAccountIdsByKeyRef,
   });
-  const selectableAssetsFlatList = useMemo(
-    () => (selectableAssetsQuery.data ? getSelectableAssetsFlatList(selectableAssetsQuery.data) : []),
-    [selectableAssetsQuery.data]
-  );
   const isGoogleDrivePickerPending = startGoogleDrivePickerMutation.isPending;
   const { activeBrandId, brandSummaries, isSwitching } = useActiveBrandContext();
   const hasAdditionalBrands = brandSummaries.length > 1;
+  const integrationAccountLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    selectableAssetsFlatList.forEach(asset => {
+      if (!asset.integration_account_id) return;
+      map.set(asset.integration_account_id, resolveSelectableAssetLabel(asset));
+    });
+    PLATFORM_KEYS.forEach(key => {
+      state.connections[key]?.accounts?.forEach(account => {
+        map.set(account.id, account.name);
+      });
+    });
+    return map;
+  }, [selectableAssetsFlatList, state.connections]);
+  const getReviewAccountLabels = useCallback(
+    (provider: PlatformKey): string[] => {
+      const selectedIds = Array.from(selectedAccountIdsByKey[provider] ?? []);
+      if (selectedIds.length > 0) {
+        const labels = selectedIds.map(id => integrationAccountLabelById.get(id) ?? `Account ${id.slice(0, 6)}`);
+        return Array.from(new Set(labels));
+      }
+      const accounts = state.connections[provider]?.accounts ?? [];
+      return accounts.map(account => account.name);
+    },
+    [integrationAccountLabelById, selectedAccountIdsByKey, state.connections]
+  );
 
   const {
     register,
@@ -541,13 +554,21 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   });
 
   const connectedKeys = useMemo(
-    () => PLATFORM_KEYS.filter(key => state.connections[key]?.connected),
-    [state.connections]
+    () =>
+      PLATFORM_KEYS.filter(
+        key => state.connections[key]?.connected || (selectedAccountIdsByKey[key]?.size ?? 0) > 0
+      ),
+    [selectedAccountIdsByKey, state.connections]
   );
 
   // Keep local selections in sync with the latest connection data (e.g., after resync)
   useEffect(() => {
     setSelectedAccountIdsByKey(prev => {
+      if (selectableAssetsFlatList.length === 0) {
+        const prevCount = PLATFORM_KEYS.reduce((count, key) => count + prev[key].size, 0);
+        if (prevCount > 0 && !hasSelectableAssetsHydrated) return prev;
+      }
+
       const next = createSelectionFromState(state);
       const prevCount = PLATFORM_KEYS.reduce((count, key) => count + prev[key].size, 0);
       const nextCount = PLATFORM_KEYS.reduce((count, key) => count + next[key].size, 0);
@@ -557,87 +578,22 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       if (prevCount > 0 && nextCount === 0 && !hasExplicitSelections) {
         return prev;
       }
+
+      PLATFORM_KEYS.forEach(key => {
+        const set = prev[key];
+        set.forEach(id => {
+          const mappedKey = selectableAccountIdToPlatformKey.get(id);
+          if (mappedKey) {
+            next[mappedKey].add(id);
+          } else {
+            next[key].add(id);
+          }
+        });
+      });
+
       return areAccountSelectionsEqual(prev, next) ? prev : next;
     });
-  }, [state]);
-
-  // When selectable-assets arrive, merge into connection accounts and preserve selection flags
-  useEffect(() => {
-    if (selectableAssetsFlatList.length === 0) return;
-
-    const accountsByPlatform = new Map<PlatformKey, OnboardingConnectionAccount[]>();
-
-    selectableAssetsFlatList.forEach(asset => {
-      const platformKey = mapIntegrationTypeToPlatformKey(asset.type);
-      if (!platformKey) return;
-      if (!asset.integration_account_id) return;
-      const current = accountsByPlatform.get(platformKey) ?? [];
-      current.push({
-        id: asset.integration_account_id,
-        name: resolveSelectableAssetLabel(asset),
-        status: "active",
-        selected: undefined,
-      });
-      accountsByPlatform.set(platformKey, current);
-    });
-
-    setState(prev => {
-      const nextConnections: OnboardingState["connections"] = { ...prev.connections } as OnboardingState["connections"];
-      const metaIntegrationIds =
-        selectableAssetsQuery.data?.providers?.meta?.hierarchy?.meta?.integrations
-          ?.map(integration => integration.integration_id)
-          .filter(Boolean) ?? [];
-      const integrationIdsByPlatform = new Map<PlatformKey, string[]>();
-      if (metaIntegrationIds.length > 0) {
-        integrationIdsByPlatform.set("facebook", metaIntegrationIds);
-        integrationIdsByPlatform.set("instagram", metaIntegrationIds);
-        integrationIdsByPlatform.set("threads", metaIntegrationIds);
-      }
-
-      const keysToUpdate = new Set<PlatformKey>([
-        ...Array.from(accountsByPlatform.keys()),
-        ...Array.from(integrationIdsByPlatform.keys()),
-      ]);
-
-      keysToUpdate.forEach(key => {
-        const accounts = accountsByPlatform.get(key) ?? [];
-        const existing = prev.connections[key] ?? {
-          connected: false,
-          accountId: null,
-          accounts: [],
-          integrationIds: [],
-          lastSyncedAt: null,
-        };
-        const mergedAccounts = accounts.map(account => {
-          const selectedSet = selectedAccountIdsByKeyRef.current[key] ?? new Set<string>();
-          const existingAccount = existing.accounts?.find(a => a.id === account.id);
-          const selectedFromState = selectedSet.has(account.id);
-          return existingAccount
-            ? { ...existingAccount, ...account, selected: existingAccount.selected ?? (selectedFromState ? true : undefined) }
-            : { ...account, selected: selectedFromState ? true : account.selected };
-        });
-
-        // Preserve any existing accounts that aren't part of the selectable-assets payload
-        const existingRemainder = (existing.accounts ?? []).filter(
-          account => !mergedAccounts.some(a => a.id === account.id)
-        );
-        const combinedAccounts = [...mergedAccounts, ...existingRemainder];
-
-        nextConnections[key] = {
-          connected: combinedAccounts.length > 0 || existing.connected,
-          accountId: existing.accountId,
-          accounts: combinedAccounts,
-          integrationIds: integrationIdsByPlatform.get(key) ?? existing.integrationIds ?? [],
-          lastSyncedAt: selectableAssetsQuery.data?.synced_at ?? existing.lastSyncedAt,
-        } as OnboardingState["connections"][PlatformKey];
-      });
-
-      return {
-        ...prev,
-        connections: nextConnections,
-      };
-    });
-  }, [selectableAssetsFlatList, selectableAssetsQuery.data]);
+  }, [hasSelectableAssetsHydrated, selectableAccountIdToPlatformKey, selectableAssetsFlatList.length, state]);
 
   const ownerId = useMemo(
     () => state.members.find(member => member.role === "owner")?.id ?? null,
@@ -827,6 +783,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const [isDraftingVoice, setIsDraftingVoice] = useState(false);
   const [isDraftingAudience, setIsDraftingAudience] = useState(false);
   const lastWebsiteTriggeredRef = useRef<string | null>(null);
+  const websiteTouchedRef = useRef(false);
   const userEditedRef = useRef<{
     brandVoice: boolean;
     targetAudience: boolean;
@@ -1440,6 +1397,40 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     }
   }, [brandId, getValues, setState, setValue, show, stopDrafting]);
 
+  const maybeStartDraftingFromWebsite = useCallback(
+    (rawValue: string) => {
+      if (step !== 0) return;
+      if (!websiteTouchedRef.current) return;
+      if (!userEditedRef.current.website) return;
+      const resolved = resolveWebsiteDraftUrl(rawValue);
+      if (!resolved) return;
+      void startDraftingFromWebsite(resolved);
+    },
+    [startDraftingFromWebsite, step]
+  );
+
+  useEffect(() => {
+    const resolved = resolveWebsiteDraftUrl(websiteValue ?? "");
+    if (!resolved) return;
+    if (step !== 0) return;
+    if (!websiteTouchedRef.current) return;
+    if (!userEditedRef.current.website) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void startDraftingFromWebsite(resolved);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [startDraftingFromWebsite, step, websiteValue]);
+
+  useEffect(() => {
+    if (step !== 0) {
+      websiteTouchedRef.current = false;
+    }
+  }, [step]);
+
   const handleUploadDocuments = useCallback(
     async (files: FileList | null) => {
       if (!files || files.length === 0) return;
@@ -1689,14 +1680,28 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     [brandId, show]
   );
 
-  // Group operations: single Google/Meta button that populates sub-lists after auth
-  const isAnyConnected = useCallback(
-    (keys: PlatformKey[]) => keys.some(key => state.connections[key]?.connected),
-    [state.connections]
-  );
-
   const connectGroup = useCallback(
     async (group: "google" | "facebook") => {
+      type IntegrationSuccess = {
+        type: string;
+        provider: string | null;
+        accountId?: string | null;
+        context?: string;
+        state?: string | null;
+      };
+      type IntegrationError = {
+        type: string;
+        provider?: string | null;
+        context?: string;
+        message?: string;
+        state?: string | null;
+      };
+      type PopupResult =
+        | { kind: "success"; payload: IntegrationSuccess }
+        | { kind: "error"; message: string }
+        | { kind: "closed" };
+
+      let cleanupPopup: (() => void) | null = null;
       try {
         const callbackUrl = buildIntegrationCallbackUrl(group, "onboarding");
         const syncResponse =
@@ -1723,47 +1728,34 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           } catch {}
           window.clearTimeout(timeoutId);
         };
+        cleanupPopup = cleanup;
 
-        type IntegrationSuccess = {
-          type: string;
-          provider: string | null;
-          accountId?: string | null;
-          context?: string;
-          state?: string | null;
+        const acceptedProviders = group === "facebook" ? new Set(["facebook", "meta"]) : new Set(["google"]);
+        const predicate = (message: IntegrationSuccess | IntegrationError) => {
+          const provider = message.provider ?? null;
+          const providerMatches = provider ? acceptedProviders.has(provider) : true;
+          return providerMatches && message.context === "onboarding" && (!expectedState || message.state === expectedState);
         };
-        type IntegrationError = {
-          type: string;
-          provider?: string | null;
-          context?: string;
-          message?: string;
-          state?: string | null;
-        };
-
-        const predicate = (message: IntegrationSuccess | IntegrationError) =>
-          message.provider === group &&
-          message.context === "onboarding" &&
-          (!expectedState || message.state === expectedState);
 
         const successPromise = waitForPopupMessage<IntegrationSuccess>("oauth:success", {
           predicate,
           signal: abortCtrl.signal,
-        });
+        }).then(payload => ({ kind: "success", payload }) as const);
 
         const errorPromise = waitForPopupMessage<IntegrationError>("oauth:error", {
           predicate,
           signal: abortCtrl.signal,
-        }).then(payload => {
-          throw new Error(payload.message ?? "Connection cancelled.");
-        });
+        }).then(payload => ({ kind: "error", message: payload.message ?? "Connection cancelled." }) as const);
 
-        const closedPromise = waitForPopupClosed(popup, { signal: abortCtrl.signal }).then(() => {
-          throw new Error("Connection cancelled.");
-        });
+        const closedPromise = waitForPopupClosed(popup, { signal: abortCtrl.signal }).then(
+          () => ({ kind: "closed" }) as const
+        );
 
-        const result = await Promise.race([successPromise, errorPromise, closedPromise]);
-        if (!result.provider || result.provider !== group) {
-          show({ title: "Connection incomplete", description: "We could not verify the provider.", variant: "error" });
+        const result: PopupResult = await Promise.race([successPromise, errorPromise, closedPromise]);
+
+        if (result.kind === "error") {
           cleanup();
+          show({ title: "Connection failed", description: result.message, variant: "error" });
           return;
         }
 
@@ -1776,28 +1768,38 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
         startTransition(() => {
           void (async () => {
-          const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
-          const next = await syncIntegrationAccountsAction(brandId, groups);
-          await selectableAssetsQuery.refetch();
-          setState(next);
-          show({ title: "Connected", description: `Accounts synced for ${group}.`, variant: "success" });
-        })().catch(() => {
+            const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
+            const next = await syncIntegrationAccountsAction(brandId, groups);
+            setState(next);
+            void refetchSelectableAssets();
+
+            const keys = group === "google" ? GOOGLE_OAUTH_KEYS : FACEBOOK_OAUTH_KEYS;
+            const didConnect = keys.some(key => {
+              const connection = next.connections[key];
+              return Boolean(connection?.connected || connection?.accounts?.length || connection?.integrationIds?.length);
+            });
+
+            if (!didConnect) {
+              show({
+                title: "Connection pending",
+                description: "We didn't receive account data yet. Try resyncing in a moment.",
+                variant: "warning",
+              });
+              return;
+            }
+
+            show({ title: "Connected", description: `Accounts synced for ${group}.`, variant: "success" });
+          })().catch(() => {
             show({ title: "Connection failed", description: "Please try again.", variant: "error" });
           });
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Please try again.";
         show({ title: "Connection failed", description: message, variant: "error" });
-      } finally {
-        // Ensure timers/listeners are cleared if they exist in scope
-        try {
-          // no-op if not defined in failure branches
-          // @ts-expect-error scoped cleanup may not exist if popup was blocked
-          cleanup?.();
-        } catch {}
+        cleanupPopup?.();
       }
     },
-    [brandId, show, startMetaSyncMutation, startGoogleSyncMutation, selectableAssetsQuery]
+    [brandId, refetchSelectableAssets, show, startMetaSyncMutation, startGoogleSyncMutation]
   );
 
   const disconnectGroup = useCallback(
@@ -1834,25 +1836,38 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         });
       });
     },
-    [brandId, show, selectableAssetsQuery]
+    [brandId, show]
   );
 
   const resyncGroup = useCallback(
     (group: "google" | "facebook") => {
       startTransition(() => {
         void (async () => {
-    const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
-    const next = await syncIntegrationAccountsAction(brandId, groups);
-    await selectableAssetsQuery.refetch();
-    setState(next);
-    show({ title: "Synced", description: `Pulled the latest accounts for ${group}.`, variant: "success" });
-  })().catch(() => {
+          const groups = [group === "google" ? "google" : "meta"] as ("google" | "meta")[];
+          const next = await syncIntegrationAccountsAction(brandId, groups);
+          setState(next);
+          void refetchSelectableAssets();
+          show({ title: "Synced", description: `Pulled the latest accounts for ${group}.`, variant: "success" });
+        })().catch(() => {
           show({ title: "Sync failed", description: "Unable to refresh this integration.", variant: "error" });
         });
       });
     },
-    [brandId, show]
+    [brandId, refetchSelectableAssets, show]
   );
+
+  const refreshAllIntegrations = useCallback(() => {
+    startTransition(() => {
+      void (async () => {
+        const groups: ("google" | "meta")[] = ["google", "meta"];
+        const next = await syncIntegrationAccountsAction(brandId, groups);
+        setState(next);
+        void refetchSelectableAssets();
+      })().catch(() => {
+        show({ title: "Refresh failed", description: "Unable to sync accounts.", variant: "error" });
+      });
+    });
+  }, [brandId, refetchSelectableAssets, show]);
 
   const showIntegrationSelectionToast = useCallback(
     (checked: boolean, label?: string | null, count?: number) => {
@@ -2292,396 +2307,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     );
   };
 
-  const renderConnections = () => {
-    const getLabel = (key: PlatformKey): string =>
-      PLATFORMS.find(p => p.key === key)?.label ?? key;
-
-    const ProviderDetails = ({ provider }: { provider: PlatformKey }) => {
-      const label = getLabel(provider);
-      const connection = state.connections[provider];
-      const isConnected = Boolean(connection?.connected);
-      const selectableAssetsForProvider = selectableAssetsFlatList.filter(
-        asset => mapIntegrationTypeToPlatformKey(asset.type) === provider
-      );
-      const metaManagedAssets = selectableAssetsForProvider.filter(asset => asset.ad_account_id);
-      const filteredSelectableAssets = (provider === "instagram" || provider === "threads")
-        ? selectableAssetsForProvider.filter(asset => !asset.ad_account_id)
-        : selectableAssetsForProvider;
-      const sortedSelectableAssets = sortSelectableAssetsByTypeThenLabel(filteredSelectableAssets);
-
-      const metaBundles =
-        provider === "facebook" && selectableAssetsQuery.data
-          ? getMetaSelectableAdAccountBundles(selectableAssetsQuery.data)
-          : null;
-      return (
-	      <Card key={provider} className={glassPanelClassName} style={glassPanelStyle}>
-	          <Flex direction="column" gap="3" p="4">
-	            <Flex align="center" justify="between">
-	              <Flex align="center" gap="2">
-                <PlatformIcon platform={provider} />
-                <Text weight="medium">{label}</Text>
-              </Flex>
-              <Badge color={isConnected ? "green" : "gray"}>
-                {isConnected ? "Connected" : "Not connected"}
-              </Badge>
-            </Flex>
-            {isConnected && (
-              <Flex direction="column" gap="2">
-		                <Text size="2" weight="medium">
-		                  Synced accounts
-		                </Text>
-                {metaBundles ? (
-                  <Flex direction="column" gap="2">
-                    <Accordion.Root type="multiple">
-                    {metaBundles.ad_accounts.map(bundle => {
-                      const adAccountLabel = bundle.ad_account
-                        ? resolveSelectableAssetLabel(bundle.ad_account)
-                        : bundle.ad_account_id;
-                      const selectionAssets = (bundle.ad_account ? [bundle.ad_account, ...bundle.assets] : bundle.assets)
-                        .filter(asset => {
-                          if (!asset.integration_account_id) return false;
-                          return Boolean(mapIntegrationTypeToPlatformKey(asset.type));
-                        });
-                      const uniqueSelections = new Map<string, { key: PlatformKey; id: string }>();
-                      selectionAssets.forEach(asset => {
-                        const id = asset.integration_account_id;
-                        const key = mapIntegrationTypeToPlatformKey(asset.type);
-                        if (!id || !key) return;
-                        uniqueSelections.set(`${key}:${id}`, { key, id });
-                      });
-
-                      let selectedCount = 0;
-                      uniqueSelections.forEach(({ key, id }) => {
-                        if (selectedAccountIdsByKey[key]?.has(id)) selectedCount += 1;
-                      });
-
-                      const totalSelectable = uniqueSelections.size;
-                      const allSelected = totalSelectable > 0 && selectedCount === totalSelectable;
-                      const partiallySelected = selectedCount > 0 && selectedCount < totalSelectable;
-                      const disabled = totalSelectable === 0;
-
-                      const selectionBadge = totalSelectable === 0
-                        ? { color: "gray" as const, label: "Unavailable" }
-                        : allSelected
-                          ? { color: "green" as const, label: `Selected ${selectedCount}/${totalSelectable}` }
-                          : partiallySelected
-                            ? { color: "amber" as const, label: `Selected ${selectedCount}/${totalSelectable}` }
-                            : { color: "gray" as const, label: `Selected ${selectedCount}/${totalSelectable}` };
-
-                        return (
-                          <Accordion.Item
-                            key={bundle.ad_account_id}
-                            value={bundle.ad_account_id}
-                            className="mb-2 last:mb-0"
-                          >
-                            <Card variant="surface">
-                              <Accordion.Header>
-                                <Flex justify="between" align="center" gap="2" p="2">
-                                  <Text as="label" size="2" className="min-w-0">
-                                    <Flex as="span" align="center" gap="2" className="min-w-0">
-                                      <Checkbox
-                                        checked={partiallySelected ? "indeterminate" : allSelected}
-                                        disabled={disabled}
-                                        onCheckedChange={(value) => {
-                                          handleToggleSelectableAssets(selectionAssets, value === true);
-                                        }}
-                                      />
-                                      <Text size="2" weight="medium" className="truncate">
-                                        {adAccountLabel}
-                                      </Text>
-                                      <Badge color="gray" variant="soft">
-                                        Ad account
-                                      </Badge>
-                                    </Flex>
-                                  </Text>
-                                  <Flex align="center" gap="2">
-                                    <Badge color={selectionBadge.color} variant="soft">
-                                      {selectionBadge.label}
-                                    </Badge>
-                                    <Accordion.Trigger asChild>
-                                      <IconButton
-                                        variant="ghost"
-                                        color="gray"
-                                        size="1"
-                                        aria-label={`Toggle ${adAccountLabel} assets`}
-                                        className="group"
-                                      >
-                                        <ChevronDownIcon className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                      </IconButton>
-                                    </Accordion.Trigger>
-                                  </Flex>
-                                </Flex>
-                              </Accordion.Header>
-
-                              <Accordion.Content className="overflow-hidden">
-                                <Box px="2" pb="2">
-                                  <Separator size="4" my="2" />
-                                  {bundle.assets.length > 0 ? (
-                                    <Flex direction="column" gap="2">
-                                      {bundle.assets.map(asset => {
-                                        const assetLabel = resolveSelectableAssetLabel(asset);
-                                        const isSelectable = Boolean(asset.integration_account_id)
-                                          && Boolean(mapIntegrationTypeToPlatformKey(asset.type));
-                                        return (
-                                          <Flex key={asset.asset_pk} justify="between" align="center" gap="2">
-                                            <Flex align="center" gap="2" className="min-w-0">
-                                              <Text size="2" color={!isSelectable ? "gray" : undefined} className="truncate">
-                                                {assetLabel}
-                                              </Text>
-                                              <Badge color="gray" variant="soft">
-                                                {asset.type}
-                                              </Badge>
-                                            </Flex>
-                                          </Flex>
-                                        );
-                                      })}
-                                    </Flex>
-                                  ) : (
-                                    <Text size="1" color="gray">
-                                      No assets for this ad account.
-                                    </Text>
-                                  )}
-                                </Box>
-                              </Accordion.Content>
-                            </Card>
-                          </Accordion.Item>
-                        );
-                      })}
-                    </Accordion.Root>
-
-                    {metaBundles.assets_without_ad_account.length > 0 ? (
-                      <Flex direction="column" gap="1">
-                        <Text size="1" color="gray">
-                          Other
-                        </Text>
-                        <Card variant="surface">
-                          <Flex direction="column" gap="1" p="2">
-                            {metaBundles.assets_without_ad_account.map(asset => {
-                              const integrationAccountId = asset.integration_account_id;
-                              const key = mapIntegrationTypeToPlatformKey(asset.type);
-                              const disabled = !integrationAccountId || !key;
-                              const selected = integrationAccountId && key
-                                ? (selectedAccountIdsByKey[key]?.has(integrationAccountId) ?? false)
-                                : false;
-                              const assetLabel = asset.business_id
-                                ? `${resolveSelectableAssetLabel(asset)} · ${asset.business_id}`
-                                : resolveSelectableAssetLabel(asset);
-
-                              return (
-                                <Flex key={asset.asset_pk} justify="between" align="center" gap="2">
-                                  <Flex align="center" gap="2" className="min-w-0">
-                                    <Checkbox
-                                      checked={selected}
-                                      disabled={disabled}
-                                      onCheckedChange={(value) => {
-                                        if (!integrationAccountId || !key) return;
-                                        handleToggleAccount(key, integrationAccountId, value === true, assetLabel);
-                                      }}
-                                    />
-                                    <Text size="2" color={disabled ? "gray" : undefined} className="truncate">
-                                      {assetLabel}
-                                    </Text>
-                                    <Badge color="gray" variant="soft">
-                                      {asset.type}
-                                    </Badge>
-                                  </Flex>
-                                  <Badge color="green" variant="soft">
-                                    active
-                                  </Badge>
-                                </Flex>
-                              );
-                            })}
-                          </Flex>
-                        </Card>
-                      </Flex>
-                    ) : null}
-                  </Flex>
-                ) : sortedSelectableAssets.length > 0 ? (
-                  <Flex direction="column" gap="1">
-		                    {sortedSelectableAssets.map(asset => {
-		                      const integrationAccountId = asset.integration_account_id;
-		                      const disabled = !integrationAccountId;
-	                      const selected = integrationAccountId
-	                        ? (selectedAccountIdsByKey[provider]?.has(integrationAccountId) ?? false)
-	                        : false;
-	                      const assetLabel = resolveSelectableAssetLabel(asset);
-	                      return (
-		                        <Card key={asset.asset_pk} variant="surface">
-		                          <Flex justify="between" align="center" p="2" gap="2">
-		                            <Flex align="center" gap="2" className="min-w-0">
-		                              <Checkbox
-		                                checked={selected}
-		                                disabled={disabled}
-		                                onCheckedChange={(value) => {
-		                                  if (!integrationAccountId) return;
-		                                  handleToggleAccount(provider, integrationAccountId, value === true, assetLabel);
-		                                }}
-		                              />
-		                              <Text size="2" className="truncate" color={disabled ? "gray" : undefined}>
-		                                {assetLabel}
-		                              </Text>
-		                              <Badge color="gray" variant="soft">
-		                                {asset.type}
-	                              </Badge>
-	                            </Flex>
-	                            <Badge color="green" variant="soft">
-	                              active
-	                            </Badge>
-	                          </Flex>
-	                        </Card>
-	                      );
-	                    })}
-	                  </Flex>
-                ) : connection?.accounts?.length ? (
-                  <Flex direction="column" gap="1">
-		                    {connection.accounts.map(account => {
-		                      const selected = selectedAccountIdsByKey[provider]?.has(account.id) ?? false;
-	                      return (
-		                        <Card key={account.id} variant="surface">
-		                          <Flex justify="between" align="center" p="2" gap="2">
-		                            <Flex align="center" gap="2">
-		                              <Checkbox
-		                                checked={selected}
-		                                onCheckedChange={(value) => handleToggleAccount(provider, account.id, value === true, account.name)}
-		                              />
-		                              <Text size="2">{account.name}</Text>
-		                            </Flex>
-		                            <Badge color={account.status === "active" ? "green" : account.status === "pending" ? "amber" : "red"}>
-		                              {account.status}
-	                            </Badge>
-	                          </Flex>
-	                        </Card>
-	                      );
-	                    })}
-	                  </Flex>
-                ) : (
-                  <Text size="1" color="gray">
-                    {metaManagedAssets.length > 0
-                      ? "Managed by Facebook ad accounts."
-                      : "No accounts returned yet. Try syncing again."}
-                  </Text>
-                )}
-	                <Text size="1" color="gray">
-	                  Last synced {connection?.lastSyncedAt ? new Date(connection.lastSyncedAt).toLocaleString() : "—"}
-	                </Text>
-	              </Flex>
-            )}
-          </Flex>
-        </Card>
-      );
-    };
-
-    const ComingSoonProviderCard = ({ provider }: { provider: PlatformKey }) => (
-      <Card
-        key={provider}
-        className={`${glassPanelClassName} opacity-60`}
-        style={glassPanelStyle}
-      >
-        <Flex direction="column" gap="3" p="4">
-          <Flex align="center" justify="between">
-            <Flex align="center" gap="2">
-              <PlatformIcon platform={provider} />
-              <Text weight="medium">{getLabel(provider)}</Text>
-            </Flex>
-            <Badge color="gray">Coming soon</Badge>
-          </Flex>
-          <Flex>
-            <Button disabled variant="soft" color="gray">
-              Connect
-            </Button>
-          </Flex>
-        </Flex>
-      </Card>
-    );
-
-    const ComingSoonExtraCard = ({ id, label }: { id: "x"; label: string }) => (
-      <Card
-        key={id}
-        className={`${glassPanelClassName} opacity-60`}
-        style={glassPanelStyle}
-      >
-        <Flex direction="column" gap="3" p="4">
-          <Flex align="center" justify="between">
-            <Flex align="center" gap="2">
-              <ExtraIcon id={id} />
-              <Text weight="medium">{label}</Text>
-            </Flex>
-            <Badge color="gray">Coming soon</Badge>
-          </Flex>
-          <Flex>
-            <Button disabled variant="soft" color="gray">
-              Connect
-            </Button>
-          </Flex>
-        </Flex>
-      </Card>
-    );
-
-    const renderGroup = (
-      title: string,
-      keys: PlatformKey[],
-      group: "google" | "facebook"
-    ) => {
-      const connected = isAnyConnected(keys);
-      return (
-        <Flex direction="column" gap="2">
-          <Flex align="center" justify="between">
-            <Text size="2" weight="medium">{title}</Text>
-            <Flex gap="2">
-              <Button
-                onClick={() => (connected ? disconnectGroup(group) : connectGroup(group))}
-                variant={connected ? "soft" : "solid"}
-                color={connected ? "gray" : "violet"}
-                disabled={isPending || isAgentRunning}
-              >
-                {connected ? "Disconnect" : "Connect"}
-              </Button>
-              {connected && (
-                <Button
-                  variant="outline"
-                  color="gray"
-                  onClick={() => resyncGroup(group)}
-                  disabled={isPending || isAgentRunning}
-                  aria-label={`Refresh ${title} accounts`}
-                >
-                  <ReloadIcon />
-                </Button>
-              )}
-            </Flex>
-          </Flex>
-          <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-            {keys.map(key => (
-              <ProviderDetails key={key} provider={key} />
-            ))}
-          </Grid>
-        </Flex>
-      );
-    };
-
-    const renderComingSoon = () => (
-      <Flex direction="column" gap="2">
-        <Text size="2" weight="medium">Coming soon</Text>
-        <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-          {COMING_SOON_KEYS.map(key => (
-            <ComingSoonProviderCard key={key} provider={key} />
-          ))}
-          {COMING_SOON_EXTRA.map(item => (
-            <ComingSoonExtraCard key={item.key} id={item.key} label={item.label} />
-          ))}
-        </Grid>
-      </Flex>
-    );
-
-    return (
-      <Flex direction="column" gap="4">
-        {renderGroup("Google OAuth", GOOGLE_OAUTH_KEYS, "google")}
-        {renderGroup("Facebook OAuth", FACEBOOK_OAUTH_KEYS, "facebook")}
-        {renderComingSoon()}
-      </Flex>
-    );
-  };
-
-    const renderReviewSummary = () => {
+  const renderReviewSummary = () => {
     const isSummaryActionDisabled = isPending || isPreviewRunning;
     const hasSavedPreview = Boolean(previewCompletePayload || state.preview?.payload);
     const handlePreviewAction = () => {
@@ -2770,6 +2396,10 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                   {connectedKeys.map(provider => {
                     const connection = state.connections[provider];
                     const label = PLATFORMS.find(p => p.key === provider)?.label ?? provider;
+                    const accountLabels = getReviewAccountLabels(provider);
+                    const isConnected = Boolean(connection?.connected);
+                    const statusLabel = isConnected ? "Connected" : "Selected";
+                    const statusColor = isConnected ? "green" : "violet";
                     return (
                       <Card
                         key={provider}
@@ -2780,13 +2410,13 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                         <Flex direction="column" gap="1" p="2">
                           <Flex justify="between">
                             <Text>{label}</Text>
-                            <Badge color="green">Connected</Badge>
+                            <Badge color={statusColor}>{statusLabel}</Badge>
                           </Flex>
-                          {connection?.accounts?.length ? (
+                          {accountLabels.length > 0 ? (
                             <Flex wrap="wrap" gap="2">
-                              {connection.accounts.map(account => (
-                                <Badge key={account.id} color="violet">
-                                  {account.name}
+                              {accountLabels.map(accountLabel => (
+                                <Badge key={`${provider}-${accountLabel}`} color="violet">
+                                  {accountLabel}
                                 </Badge>
                               ))}
                             </Flex>
@@ -3115,18 +2745,29 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
                       {...register("website", {
                         required: "Website is required",
                         onChange: () => {
+                          websiteTouchedRef.current = true;
                           userEditedRef.current.website = true;
                         },
                       })}
-                      onBlur={() => {
-                        const val = websiteValue?.trim() || "";
-                        // Must be >= 5 chars and parse as URL
-                        if (val.length >= 5) {
-                          const parsed = z.string().url().safeParse(val);
-                          if (parsed.success) {
-                            void startDraftingFromWebsite(parsed.data);
+                      onFocus={() => {
+                        websiteTouchedRef.current = true;
+                      }}
+                      onPaste={(event) => {
+                        websiteTouchedRef.current = true;
+                        userEditedRef.current.website = true;
+                        const pasted = event.clipboardData.getData("text");
+                        const resolved = resolveWebsiteDraftUrl(pasted);
+                        const target = event.currentTarget as HTMLInputElement;
+                        window.setTimeout(() => {
+                          const fallback = resolveWebsiteDraftUrl(target.value ?? "");
+                          const url = resolved ?? fallback;
+                          if (url) {
+                            maybeStartDraftingFromWebsite(url);
                           }
-                        }
+                        }, 0);
+                      }}
+                      onBlur={() => {
+                        maybeStartDraftingFromWebsite(websiteValue ?? "");
                       }}
                     />
                     {errors.website?.message && <Text color="red" size="1">{errors.website.message}</Text>}
@@ -3358,63 +2999,27 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           </Tabs.Content>
 
           <Tabs.Content value="step-1">
-            <Card className={glassPanelClassName} style={glassPanelStyle}>
-              <Flex direction="column" gap="4" p="4">
-                <Flex align="center" justify="between">
-                  <Heading size="4">Connect your channels</Heading>
-                  <Button
-                    variant="ghost"
-                    size="1"
-                    onClick={() => {
-                      startTransition(() => {
-                        void (async () => {
-                          const groups: ("google" | "meta")[] = ["google", "meta"];
-                          const next = await syncIntegrationAccountsAction(brandId, groups);
-                          await selectableAssetsQuery.refetch();
-                          setState(next);
-                        })().catch(() => {
-                          show({ title: "Refresh failed", description: "Unable to sync accounts.", variant: "error" });
-                        });
-                      });
-                    }}
-                    disabled={isPending || isAgentRunning}
-                  >
-                    Refresh
-                  </Button>
-                </Flex>
-                <Text color="gray">
-                  Secure popups handle authentication for each network. We’ll show live account data as soon as the provider confirms access.
-                </Text>
-                {renderConnections()}
-                <Callout.Root color="indigo">
-                  <Callout.Icon>
-                    <ExclamationTriangleIcon />
-                  </Callout.Icon>
-                  <Callout.Text>
-                    Popups talk to the Continuum integrations service. We cache the callback URL you pass in, exchange tokens with Google or Meta, then stream the connected accounts back into this brand automatically.
-                  </Callout.Text>
-                </Callout.Root>
-                <Flex justify="between" align="center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    color="gray"
-                    onClick={handleClear}
-                    disabled={isPending || isAgentRunning}
-                  >
-                    Clear
-                  </Button>
-                  <Flex gap="2">
-                    <Button variant="soft" onClick={handleBack} disabled={isPending || isAgentRunning}>
-                      Back
-                    </Button>
-                    <Button onClick={handleNext} disabled={!canContinueFrom(1) || isPending || isAgentRunning}>
-                      Continue
-                    </Button>
-                  </Flex>
-                </Flex>
-              </Flex>
-            </Card>
+            <IntegrationsStep
+              state={state}
+              selectableAssets={selectableAssetsFlatList}
+              selectableAssetsData={selectableAssetsQuery.data ?? null}
+              selectedAccountIdsByKey={selectedAccountIdsByKey}
+              isHydrated={hasSelectableAssetsHydrated}
+              isPending={isPending}
+              isAgentRunning={isAgentRunning}
+              onConnectGroup={connectGroup}
+              onDisconnectGroup={disconnectGroup}
+              onResyncGroup={resyncGroup}
+              onRefreshAll={refreshAllIntegrations}
+              onToggleAccount={handleToggleAccount}
+              onToggleAssets={handleToggleSelectableAssets}
+              onClear={handleClear}
+              onBack={handleBack}
+              onNext={handleNext}
+              canContinue={canContinueFrom(1)}
+              cardClassName={glassPanelClassName}
+              cardStyle={glassPanelStyle}
+            />
           </Tabs.Content>
 
           <Tabs.Content value="step-2">

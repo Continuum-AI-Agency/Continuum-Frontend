@@ -117,6 +117,7 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 * **Purpose:** MCP tools are for reference and guidance only; they must not mutate production data or state.
 * **Supabase MCP (Read-Only):** Use it for looking up schemas, tables, migrations, and query behavior to inform frontend work. Do not run write operations or migrations unless explicitly requested and approved.
 * **Radix MCP (Design System):** Use it to retrieve official Radix primitives documentation/source for building our UI foundations. Prefer Radix primitives over custom equivalents unless a clear gap exists.
+* **shadcn MCP (Component Recipes):** Use it for vetted component patterns and composition guidance; adapt to our styleguide and Radix-first foundations.
 * **Document Gaps:** If MCP data is missing or unclear, state assumptions and ask for clarification rather than guessing.
 
 ## 7. Tests

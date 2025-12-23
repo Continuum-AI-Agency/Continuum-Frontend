@@ -18,10 +18,6 @@ import type {
 } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/types";
-
-type IntegrationAccountAssetRow =
-  Database["brand_profiles"]["Tables"]["integration_accounts_assets"]["Row"];
 
 const MOCK_ACCOUNT_NAMES = [
   "Primary Brand Account",
@@ -327,33 +323,44 @@ export async function associateIntegrationAccountsAction(
   }
   const supabase = await createSupabaseServerClient();
 
-  // Read current payloads to preserve any existing metadata
-  const { data: rows } = await supabase
-    .schema("brand_profiles")
-    .from("integration_accounts_assets")
-    .select("id, raw_payload")
-    .in("id", idsToUpdate);
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData?.user) {
+    throw new Error("Unauthorized");
+  }
 
-  type MinimalAssetRow = Pick<IntegrationAccountAssetRow, "id" | "raw_payload">;
-  const updates = (rows ?? []).map((row: MinimalAssetRow) => {
-    const selected = integrationAccountIds.includes(row.id);
-    const merged =
-      row?.raw_payload && typeof row.raw_payload === "object"
-        ? { ...row.raw_payload, selected }
-        : { selected };
-    return { id: row.id, raw_payload: merged, updated_at: new Date().toISOString() };
-  });
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) {
+    throw new Error("Unauthorized");
+  }
 
-  // Apply updates per row (ensures we don't overwrite raw_payload blindly)
-  await Promise.all(
-    updates.map(update =>
-      supabase
-        .schema("brand_profiles")
-        .from("integration_accounts_assets")
-        .update(update)
-        .eq("id", update.id)
-    )
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  if (!supabaseUrl) {
+    throw new Error("Missing Supabase URL");
+  }
+
+  const edgeResponse = await fetch(
+    `${supabaseUrl}/functions/v1/update_integration_account_assets`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+      },
+      body: JSON.stringify({
+        assetIds: idsToUpdate,
+        selectedAssetIds: integrationAccountIds,
+      }),
+      cache: "no-store",
+    }
   );
+
+  if (!edgeResponse.ok) {
+    const message = await edgeResponse.text().catch(() => null);
+    const errorBody = message ? `Edge function failed: ${message}` : "Edge function failed";
+    throw new Error(errorBody);
+  }
 
   // Persist selection flags into onboarding state so reloads stay in sync
   const selectionSet = new Set(integrationAccountIds);

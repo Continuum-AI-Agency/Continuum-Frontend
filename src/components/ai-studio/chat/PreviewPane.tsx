@@ -3,7 +3,7 @@
 import React from "react";
 import { Badge, Button, Card, Flex, Text } from "@radix-ui/themes";
 import Image from "next/image";
-import { ReloadIcon, StopIcon } from "@radix-ui/react-icons";
+import { Pencil2Icon, ReloadIcon, StopIcon } from "@radix-ui/react-icons";
 
 import type { StreamState } from "@/lib/types/chatImage";
 
@@ -12,9 +12,11 @@ type PreviewPaneProps = {
   streamState: StreamState;
   onCancel?: () => void;
   onReset?: () => void;
+  onMarkup?: () => void;
+  canMarkup?: boolean;
 };
 
-export function PreviewPane({ brandName, streamState, onCancel, onReset }: PreviewPaneProps) {
+export function PreviewPane({ brandName, streamState, onCancel, onReset, onMarkup, canMarkup }: PreviewPaneProps) {
   return (
     <Card
       className="relative flex h-full min-h-[480px] flex-col overflow-hidden shadow-2xl"
@@ -33,6 +35,11 @@ export function PreviewPane({ brandName, streamState, onCancel, onReset }: Previ
           <Badge color={streamState.status === "streaming" ? "blue" : streamState.status === "error" ? "red" : "green"}>
             {streamState.status}
           </Badge>
+          {canMarkup ? (
+            <Button size="1" variant="outline" onClick={onMarkup}>
+              <Pencil2Icon /> Markup
+            </Button>
+          ) : null}
           <Button size="1" variant="ghost" onClick={onReset}>
             <ReloadIcon /> Reset
           </Button>

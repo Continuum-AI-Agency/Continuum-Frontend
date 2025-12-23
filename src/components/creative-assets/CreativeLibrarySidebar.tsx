@@ -29,7 +29,13 @@ import {
 
 import { getCreativeAssetsBucket } from "@/lib/creative-assets/config";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
-import { createSignedAssetUrl, listCreativeAssets, createCreativeFolder } from "@/lib/creative-assets/storageClient";
+import {
+  createSignedAssetUrl,
+  createSignedDownloadUrl,
+  getPublicAssetDownloadUrl,
+  listCreativeAssets,
+  createCreativeFolder,
+} from "@/lib/creative-assets/storageClient";
 import type { CreativeAsset } from "@/lib/creative-assets/types";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
@@ -517,6 +523,7 @@ function TreeRow(props: TreeRowProps) {
     folderCache,
     folderCacheOrder,
   } = props;
+  const { show } = useToast();
   const isFolder = asset.kind === "folder";
   const [children, setChildren] = React.useState<CreativeAsset[] | null>(() => {
     const cached = folderCache.current.get(stripBrandPath(asset.fullPath, brandProfileId));
@@ -529,6 +536,8 @@ function TreeRow(props: TreeRowProps) {
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [nextName, setNextName] = React.useState(asset.name);
   const [hoverOpen, setHoverOpen] = React.useState(false);
+  const [contextOpen, setContextOpen] = React.useState(false);
+  const [nameHovered, setNameHovered] = React.useState(false);
 
   React.useEffect(() => {
     setNextName(asset.name);
@@ -599,16 +608,51 @@ function TreeRow(props: TreeRowProps) {
     await ensureChildren();
   }, [ensureChildren, folderPath, onCreateFolder]);
 
+  const handleDownload = React.useCallback(async () => {
+    if (isFolder) return;
+    try {
+      const url = await createSignedDownloadUrl(asset.fullPath, 600, asset.name);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = asset.name;
+      link.rel = "noopener";
+      link.target = "_blank";
+      link.click();
+    } catch {
+      try {
+        const url = await getPublicAssetDownloadUrl(asset.fullPath, asset.name);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = asset.name;
+        link.rel = "noopener";
+        link.target = "_blank";
+        link.click();
+      } catch (error) {
+        show({
+          title: "Download failed",
+          description: (error as Error)?.message ?? "Unable to download asset.",
+          variant: "error",
+        });
+      }
+    }
+  }, [asset.fullPath, asset.name, isFolder, show]);
+
   const leftPadding = depth * 14;
+
+  const isHighlighted = contextOpen || nameHovered;
 
   return (
     <>
       <HoverCard.Root openDelay={120} closeDelay={80} open={hoverOpen} onOpenChange={setHoverOpen}>
-        <ContextMenu.Root>
+        <ContextMenu.Root onOpenChange={setContextOpen}>
           <ContextMenu.Trigger asChild>
             <HoverCard.Trigger asChild>
               <div
-                className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-white hover:bg-white/15"
+                className={`flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-white transition ${
+                  isHighlighted
+                    ? "bg-white/15 ring-1 ring-purple-500/30 shadow-brand-glow"
+                    : "hover:bg-white/15"
+                }`}
                 style={{ paddingLeft: leftPadding }}
                 onDoubleClick={toggle}
                 onClick={toggle}
@@ -637,7 +681,13 @@ function TreeRow(props: TreeRowProps) {
                 ) : (
                   <FileThumb asset={asset} resolvePreview={resolvePreview} />
                 )}
-                <span className="truncate">{asset.name}</span>
+                <span
+                  className="truncate"
+                  onMouseEnter={() => setNameHovered(true)}
+                  onMouseLeave={() => setNameHovered(false)}
+                >
+                  {asset.name}
+                </span>
                 {!isFolder ? (
                   <span className="ml-auto text-[10px] uppercase text-white/80">{asset.contentType?.split("/")[0]}</span>
                 ) : null}
@@ -648,6 +698,11 @@ function TreeRow(props: TreeRowProps) {
             {isFolder ? (
               <ContextMenu.Item className="px-2 py-1 text-sm text-white hover:bg-white/10" onSelect={handleCreateFolder}>
                 New folder
+              </ContextMenu.Item>
+            ) : null}
+            {!isFolder ? (
+              <ContextMenu.Item className="px-2 py-1 text-sm text-white hover:bg-white/10" onSelect={() => void handleDownload()}>
+                Download
               </ContextMenu.Item>
             ) : null}
             <ContextMenu.Item className="px-2 py-1 text-sm text-white hover:bg-white/10" onSelect={() => setRenameOpen(true)}>

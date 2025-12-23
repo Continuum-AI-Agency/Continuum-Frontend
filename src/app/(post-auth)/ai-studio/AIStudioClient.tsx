@@ -37,6 +37,11 @@ import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
 import { createAiStudioJob } from "@/lib/api/aiStudio";
 import {
+  createPromptTemplateAction,
+  deletePromptTemplateAction,
+  updatePromptTemplateAction,
+} from "./actions";
+import {
   providerAspectRatioOptions,
   type AiStudioJob,
   type AiStudioProvider,
@@ -50,10 +55,15 @@ import {
   type PromptNodeData,
   type StudioNode,
 } from "@/lib/ai-studio/nodeTypes";
+import type {
+  PromptTemplateCreateInput,
+  PromptTemplateUpdateInput,
+} from "@/lib/schemas/promptTemplates";
 
 type AIStudioClientProps = {
   brandProfileId: string;
   brandName: string;
+  promptTemplates?: import("@/lib/schemas/promptTemplates").PromptTemplate[];
 };
 
 const DRAG_MIME = "application/reactflow-node-data";
@@ -333,13 +343,75 @@ const paletteItems: PaletteItem[] = [
 export default function AIStudioClient({
   brandProfileId,
   brandName,
+  promptTemplates,
 }: AIStudioClientProps) {
   const { show: showToast } = useToast();
   const [nodes, setNodes, onNodesChange] = useNodesState<StudioNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
+  const [templates, setTemplates] = React.useState(promptTemplates ?? []);
+  const [templatesLoading, setTemplatesLoading] = React.useState(false);
   const [canvasOverlay, setCanvasOverlay] = React.useState(false);
   const [toolboxPos, setToolboxPos] = React.useState({ x: 96, y: 140 });
+
+  const handleCreateTemplate = React.useCallback(
+    async (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => {
+      setTemplatesLoading(true);
+      try {
+        const created = await createPromptTemplateAction({
+          brandProfileId,
+          name: input.name,
+          prompt: input.prompt,
+          category: input.category,
+        });
+        setTemplates((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
+        showToast({ title: "Template saved", variant: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to save template";
+        showToast({ title: "Save failed", description: message, variant: "error" });
+        throw error;
+      } finally {
+        setTemplatesLoading(false);
+      }
+    },
+    [brandProfileId, showToast]
+  );
+
+  const handleUpdateTemplate = React.useCallback(
+    async (input: PromptTemplateUpdateInput) => {
+      setTemplatesLoading(true);
+      try {
+        const updated = await updatePromptTemplateAction(input);
+        setTemplates((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)]);
+        showToast({ title: "Template updated", variant: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to update template";
+        showToast({ title: "Update failed", description: message, variant: "error" });
+        throw error;
+      } finally {
+        setTemplatesLoading(false);
+      }
+    },
+    [showToast]
+  );
+
+  const handleDeleteTemplate = React.useCallback(
+    async (id: string) => {
+      setTemplatesLoading(true);
+      try {
+        await deletePromptTemplateAction(id);
+        setTemplates((prev) => prev.filter((item) => item.id !== id));
+        showToast({ title: "Template deleted", variant: "success" });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to delete template";
+        showToast({ title: "Delete failed", description: message, variant: "error" });
+        throw error;
+      } finally {
+        setTemplatesLoading(false);
+      }
+    },
+    [showToast]
+  );
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -548,7 +620,15 @@ export default function AIStudioClient({
 
         {activeTab === "chat" ? (
           <div className="flex-1 min-h-0">
-            <ChatSurface brandProfileId={brandProfileId} brandName={brandName} />
+            <ChatSurface
+              brandProfileId={brandProfileId}
+              brandName={brandName}
+              promptTemplates={templates}
+              templatesLoading={templatesLoading}
+              onCreatePromptTemplate={handleCreateTemplate}
+              onUpdatePromptTemplate={handleUpdateTemplate}
+              onDeletePromptTemplate={handleDeleteTemplate}
+            />
           </div>
         ) : (
           <>

@@ -1,6 +1,27 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { applySupabaseCookies, getSupabaseCookieOptions } from "./cookies";
+import { SUPABASE_COOKIE_NAME, applySupabaseCookies, getSupabaseCookieOptions } from "./cookies";
+
+const SUPABASE_COOKIE_NAMES = new Set([
+  "sb",
+  SUPABASE_COOKIE_NAME,
+  "sb-access-token",
+  "sb-refresh-token",
+  "sb-auth-token",
+  "supabase-auth-token",
+  "supabase-refresh-token",
+  "supabase-session",
+]);
+
+function hasSupabaseAuthCookie(request: NextRequest): boolean {
+  const cookies = request.cookies.getAll();
+  if (cookies.length === 0) return false;
+  return cookies.some(({ name }) => {
+    if (SUPABASE_COOKIE_NAMES.has(name)) return true;
+    if (name.startsWith("sb-") || name.startsWith("supabase-")) return true;
+    return false;
+  });
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -14,6 +35,10 @@ export async function updateSession(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Supabase middleware client misconfigured: missing URL or key env vars.");
+  }
+
+  if (!hasSupabaseAuthCookie(request)) {
+    return supabaseResponse;
   }
 
   const supabase = createServerClient(
@@ -53,4 +78,3 @@ export async function updateSession(request: NextRequest) {
 
   return supabaseResponse;
 }
-

@@ -1,28 +1,7 @@
 import { beforeEach, expect, test, vi } from "bun:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-
-type CapturedItem = {
-  label: string;
-  props: Record<string, unknown>;
-};
-
-const captured = {
-  buttons: [] as Array<Record<string, unknown>>,
-  switches: [] as Array<Record<string, unknown>>,
-  items: [] as CapturedItem[],
-};
-
-function extractText(node: unknown): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(extractText).join(" ");
-  if (React.isValidElement(node)) return extractText(node.props.children);
-  return "";
-}
-
-function normalizeLabel(label: string): string {
-  return label.replace(/\s+/g, " ").trim();
-}
+import { radixThemesCaptured } from "../mocks/radixThemes";
 
 let routerPushSpy = vi.fn<(path: string) => void>();
 let routerRefreshSpy = vi.fn<() => void>();
@@ -49,64 +28,6 @@ vi.mock("@radix-ui/react-icons", () => {
     MixerHorizontalIcon: Icon,
     MoonIcon: Icon,
     PlusCircledIcon: Icon,
-  };
-});
-
-vi.mock("@radix-ui/themes", () => {
-  function Button(props: Record<string, unknown>) {
-    captured.buttons.push(props);
-    return React.createElement("button", props, props.children);
-  }
-
-  function Avatar(props: Record<string, unknown>) {
-    return React.createElement("span", { "data-avatar": true }, props.fallback ?? null);
-  }
-
-  function Switch(props: Record<string, unknown>) {
-    captured.switches.push(props);
-    return React.createElement("button", { "data-switch": true });
-  }
-
-  function Text(props: Record<string, unknown>) {
-    return React.createElement("span", props, props.children);
-  }
-
-  function Root(props: Record<string, unknown>) {
-    return React.createElement("div", { "data-dropdown-root": true }, props.children);
-  }
-
-  function Trigger(props: Record<string, unknown>) {
-    return React.createElement(React.Fragment, null, props.children);
-  }
-
-  function Content(props: Record<string, unknown>) {
-    return React.createElement("div", { "data-dropdown-content": true }, props.children);
-  }
-
-  function Item(props: Record<string, unknown>) {
-    captured.items.push({
-      label: normalizeLabel(extractText(props.children)),
-      props,
-    });
-    return React.createElement("div", { "data-dropdown-item": true }, props.children);
-  }
-
-  function Separator() {
-    return React.createElement("hr", { "data-dropdown-separator": true });
-  }
-
-  return {
-    Avatar,
-    Button,
-    DropdownMenu: {
-      Root,
-      Trigger,
-      Content,
-      Item,
-      Separator,
-    },
-    Switch,
-    Text,
   };
 });
 
@@ -145,9 +66,9 @@ async function renderBrandSwitcherMenu(props?: { triggerId?: string }) {
 }
 
 beforeEach(() => {
-  captured.buttons.length = 0;
-  captured.switches.length = 0;
-  captured.items.length = 0;
+  radixThemesCaptured.buttons.length = 0;
+  radixThemesCaptured.switches.length = 0;
+  radixThemesCaptured.items.length = 0;
 
   routerPushSpy.mockReset();
   routerRefreshSpy.mockReset();
@@ -169,13 +90,13 @@ test("renders trigger id and active brand label", async () => {
   const html = await renderBrandSwitcherMenu({ triggerId: "test-trigger" });
 
   expect(html).toContain("First ever");
-  expect(captured.buttons[0]?.id).toBe("test-trigger");
+  expect(radixThemesCaptured.buttons[0]?.id).toBe("test-trigger");
 });
 
 test("selectBrand is called when a brand menu item is selected", async () => {
   await renderBrandSwitcherMenu();
 
-  const target = captured.items.find((item) => item.label === "Pizza Test");
+  const target = radixThemesCaptured.items.find((item) => item.label === "Pizza Test");
   expect(target).toBeTruthy();
 
   await (target!.props.onSelect as (e: { preventDefault: () => void }) => Promise<void>)({
@@ -190,8 +111,8 @@ test("selectBrand is called when a brand menu item is selected", async () => {
 test("routes to settings and integrations", async () => {
   await renderBrandSwitcherMenu();
 
-  const settings = captured.items.find((item) => item.label === "Settings");
-  const integrations = captured.items.find((item) => item.label === "Integrations");
+  const settings = radixThemesCaptured.items.find((item) => item.label === "Settings");
+  const integrations = radixThemesCaptured.items.find((item) => item.label === "Integrations");
   expect(settings).toBeTruthy();
   expect(integrations).toBeTruthy();
 
@@ -219,7 +140,7 @@ test("toggles theme via switch handler", async () => {
   themeAppearance = "dark";
   await renderBrandSwitcherMenu();
 
-  const switchProps = captured.switches[0];
+  const switchProps = radixThemesCaptured.switches[0];
   expect(switchProps?.checked).toBe(true);
 
   (switchProps.onCheckedChange as (checked: boolean) => void)(false);
@@ -230,7 +151,7 @@ test("toggles theme via switch handler", async () => {
 test("logs out when sign out is selected", async () => {
   await renderBrandSwitcherMenu();
 
-  const signOut = captured.items.find((item) => item.label === "Sign out");
+  const signOut = radixThemesCaptured.items.find((item) => item.label === "Sign out");
   expect(signOut).toBeTruthy();
 
   (signOut!.props.onSelect as (e: { preventDefault: () => void }) => void)({

@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from "@radix-ui/themes";
 import * as HoverCard from "@radix-ui/react-hover-card";
+import * as ContextMenu from "@radix-ui/react-context-menu";
 import * as Accordion from "@radix-ui/react-accordion";
 import {
   ChevronLeftIcon,
@@ -34,7 +35,12 @@ import {
   type CreativeAssetDragPayload,
 } from "@/lib/creative-assets/drag";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
-import { createCreativeFolder, listCreativeAssets } from "@/lib/creative-assets/storageClient";
+import {
+  createCreativeFolder,
+  createSignedDownloadUrl,
+  getPublicAssetDownloadUrl,
+  listCreativeAssets,
+} from "@/lib/creative-assets/storageClient";
 import { useAssetPreviewUrl } from "@/lib/creative-assets/useAssetPreviewUrl";
 
 const FOLDER_CACHE_LIMIT = 20;
@@ -423,6 +429,7 @@ function AssetTile({
   const [name, setName] = useState(asset.name);
   const previewRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
 
   useEffect(() => {
     if (!scrollContainer) {
@@ -481,6 +488,35 @@ function AssetTile({
     }
   }, [asset, onDelete, show]);
 
+  const handleDownload = useCallback(async () => {
+    if (asset.kind !== "file") return;
+    try {
+      const url = await createSignedDownloadUrl(asset.fullPath, 600, asset.name);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = asset.name;
+      link.rel = "noopener";
+      link.target = "_blank";
+      link.click();
+    } catch {
+      try {
+        const url = await getPublicAssetDownloadUrl(asset.fullPath, asset.name);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = asset.name;
+        link.rel = "noopener";
+        link.target = "_blank";
+        link.click();
+      } catch (error) {
+        show({
+          title: "Download failed",
+          description: (error as Error)?.message ?? "Unable to download asset.",
+          variant: "error",
+        });
+      }
+    }
+  }, [asset, show]);
+
   const handleDoubleClick = useCallback(() => {
     if (asset.kind === "folder") {
       void onOpenFolder(asset);
@@ -505,85 +541,102 @@ function AssetTile({
   );
 
   return (
-    <div
-      className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition hover:border-violet-500 hover:shadow dark:border-gray-800 dark:bg-gray-950"
-      draggable={asset.kind === "file"}
-      onDragStart={handleDragStart}
-      onDoubleClick={handleDoubleClick}
-      onClick={() => {
-        if (asset.kind === "file") {
-          onSelect?.(asset);
-        }
-      }}
-    >
-      <HoverCard.Root openDelay={120} closeDelay={80}>
-        <HoverCard.Trigger asChild>
-          <div ref={previewRef} className="relative mb-3 h-44 w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-900">
-            {asset.kind === "folder" ? (
-              <Flex align="center" justify="center" className="h-full w-full text-gray-500 dark:text-gray-400">
-                <ArchiveIcon width={32} height={32} />
-              </Flex>
-            ) : isVisible ? (
-              <AssetPreview asset={asset} />
-            ) : (
-              <Flex align="center" justify="center" className="h-full w-full text-gray-400">
-                <ImageIcon width={24} height={24} />
-              </Flex>
-            )}
-          </div>
-        </HoverCard.Trigger>
-        {asset.kind === "file" ? (
-          <AssetHoverCardContent asset={asset} />
-        ) : null}
-      </HoverCard.Root>
-
-      {isEditing ? (
-        <TextField.Root
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void handleRename();
-            } else if (event.key === "Escape") {
-              setName(asset.name);
-              setIsEditing(false);
+    <ContextMenu.Root onOpenChange={setContextOpen}>
+      <ContextMenu.Trigger asChild>
+        <div
+          className={`rounded-lg border bg-white p-3 shadow-sm transition dark:bg-gray-950 ${
+            contextOpen
+              ? "border-violet-400/60 ring-1 ring-violet-500/30 shadow-brand-glow"
+              : "border-gray-200 hover:border-violet-500 hover:shadow dark:border-gray-800"
+          }`}
+          draggable={asset.kind === "file"}
+          onDragStart={handleDragStart}
+          onDoubleClick={handleDoubleClick}
+          onClick={() => {
+            if (asset.kind === "file") {
+              onSelect?.(asset);
             }
           }}
-          onBlur={() => void handleRename()}
-        />
-      ) : (
-        <Text size="2" weight="medium" className="truncate">
-          {asset.name}
-        </Text>
-      )}
+        >
+          <HoverCard.Root openDelay={120} closeDelay={80}>
+            <HoverCard.Trigger asChild>
+              <div ref={previewRef} className="relative mb-3 h-44 w-full overflow-hidden rounded-md bg-gray-100 dark:bg-gray-900">
+                {asset.kind === "folder" ? (
+                  <Flex align="center" justify="center" className="h-full w-full text-gray-500 dark:text-gray-400">
+                    <ArchiveIcon width={32} height={32} />
+                  </Flex>
+                ) : isVisible ? (
+                  <AssetPreview asset={asset} />
+                ) : (
+                  <Flex align="center" justify="center" className="h-full w-full text-gray-400">
+                    <ImageIcon width={24} height={24} />
+                  </Flex>
+                )}
+              </div>
+            </HoverCard.Trigger>
+            {asset.kind === "file" ? (
+              <AssetHoverCardContent asset={asset} />
+            ) : null}
+          </HoverCard.Root>
 
-      <Flex justify="between" align="center" mt="3">
-        <Text size="1" color="gray">
-          {asset.kind === "folder" ? "Folder" : asset.contentType ?? "File"}
-        </Text>
-        <Flex gap="2">
-          <IconButton
-            size="1"
-            variant="soft"
-            onClick={() => setIsEditing(true)}
-            aria-label="Rename"
-          >
-            <Pencil1Icon />
-          </IconButton>
-          <IconButton
-            size="1"
-            variant="soft"
-            color="red"
-            onClick={() => void handleDelete()}
-            aria-label="Delete"
-            disabled={asset.kind === "folder"}
-          >
-            <TrashIcon />
-          </IconButton>
-        </Flex>
-      </Flex>
-    </div>
+          {isEditing ? (
+            <TextField.Root
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleRename();
+                } else if (event.key === "Escape") {
+                  setName(asset.name);
+                  setIsEditing(false);
+                }
+              }}
+              onBlur={() => void handleRename()}
+            />
+          ) : (
+            <Text size="2" weight="medium" className="truncate">
+              {asset.name}
+            </Text>
+          )}
+
+          <Flex justify="between" align="center" mt="3">
+            <Text size="1" color="gray">
+              {asset.kind === "folder" ? "Folder" : asset.contentType ?? "File"}
+            </Text>
+            <Flex gap="2">
+              <IconButton
+                size="1"
+                variant="soft"
+                onClick={() => setIsEditing(true)}
+                aria-label="Rename"
+              >
+                <Pencil1Icon />
+              </IconButton>
+              <IconButton
+                size="1"
+                variant="soft"
+                color="red"
+                onClick={() => void handleDelete()}
+                aria-label="Delete"
+                disabled={asset.kind === "folder"}
+              >
+                <TrashIcon />
+              </IconButton>
+            </Flex>
+          </Flex>
+        </div>
+      </ContextMenu.Trigger>
+      <ContextMenu.Content className="min-w-[160px] rounded-md border border-gray-200 bg-white p-1 text-sm text-gray-900 shadow-lg dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100">
+        <ContextMenu.Item
+          className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-900"
+          disabled={asset.kind !== "file"}
+          onSelect={() => void handleDownload()}
+        >
+          Download
+        </ContextMenu.Item>
+      </ContextMenu.Content>
+    </ContextMenu.Root>
   );
 }
 

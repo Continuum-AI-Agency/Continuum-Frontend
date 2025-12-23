@@ -21,24 +21,34 @@ function parseNumericParam(
   return Math.floor(parsed);
 }
 
+function parseStringParam(value: string | string[] | undefined): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" ? raw : "";
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-async function fetchAdminUsers(params: { page: number; pageSize: number }): Promise<AdminData> {
+async function fetchAdminUsers(params: { page: number; pageSize: number; query?: string }): Promise<AdminData> {
   const server = await createSupabaseServerClient();
-  const { data: sessionData } = await server.auth.getSession();
-  const session = sessionData?.session;
-  const isAdmin = Boolean(session?.user?.app_metadata?.is_admin);
+  const { data: userData, error: userError } = await server.auth.getUser();
+  if (userError || !userData?.user) {
+    redirect("/login");
+  }
+
+  const isAdmin = Boolean((userData.user.app_metadata as Record<string, unknown> | undefined)?.is_admin);
   if (!isAdmin) {
     redirect("/"); // guard
   }
 
-  const accessToken = session?.access_token;
+  const { data: sessionData } = await server.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
     redirect("/login");
   }
 
+  const trimmedQuery = params.query?.trim();
   const { data, error } = await server.functions.invoke<AdminListResponse>("admin-list-users", {
     method: "POST",
     headers: {
@@ -47,6 +57,7 @@ async function fetchAdminUsers(params: { page: number; pageSize: number }): Prom
     body: {
       page: params.page,
       perPage: params.pageSize,
+      ...(trimmedQuery ? { query: trimmedQuery } : {}),
     },
   });
 
@@ -87,18 +98,20 @@ async function fetchAdminUsers(params: { page: number; pageSize: number }): Prom
 }
 
 type AdminPageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  const page = Math.max(1, parseNumericParam(searchParams?.page, 1));
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const page = Math.max(1, parseNumericParam(resolvedSearchParams.page, 1));
   const pageSize = clamp(
-    parseNumericParam(searchParams?.pageSize ?? searchParams?.perPage, DEFAULT_PAGE_SIZE),
+    parseNumericParam(resolvedSearchParams.pageSize ?? resolvedSearchParams.perPage, DEFAULT_PAGE_SIZE),
     1,
     MAX_PAGE_SIZE
   );
+  const query = parseStringParam(resolvedSearchParams.query).trim();
 
-  const { users, permissions, pagination, loadError } = await fetchAdminUsers({ page, pageSize });
+  const { users, permissions, pagination, loadError } = await fetchAdminUsers({ page, pageSize, query });
 
   return (
     <div className="py-10 w-full max-w-none px-3 sm:px-4 lg:px-6">
@@ -113,7 +126,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               {loadError}
             </Text>
           ) : null}
-          <AdminUserList users={users} permissions={permissions} pagination={pagination} />
+          <AdminUserList users={users} permissions={permissions} pagination={pagination} searchQuery={query} />
         </GlassPanel>
       </Flex>
     </div>

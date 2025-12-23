@@ -6,3 +6,18 @@ tests
 **/__tests__/**
 **/*.test.*
 **/*.spec.*
+
+# Project docs not needed at runtime.
+AGENTS.md
+AUTH_GUIDE.md
+GEMINI.md
+README.md
+docs
+
+# Build/system artifacts not required at runtime.
+node_modules
+.git
+.DS_Store
+coverage
+**/*.log
+tsconfig.tsbuildinfo

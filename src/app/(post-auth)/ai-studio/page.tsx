@@ -4,6 +4,7 @@ import AIStudioClient from "./AIStudioClient";
 import { ClientOnly } from "@/components/ui/ClientOnly";
 import { fetchOnboardingMetadata } from "@/lib/onboarding/storage";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { listPromptTemplatesAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,10 @@ export default async function AIStudioPage() {
       ? activeBrandState.brand.name
       : "Untitled brand";
 
+  const promptTemplates = await listPromptTemplatesAction({
+    brandProfileId: activeBrandId,
+  });
+
   return (
     <ClientOnly
       fallback={
@@ -57,7 +62,11 @@ export default async function AIStudioPage() {
         </div>
       }
     >
-      <AIStudioClient brandProfileId={activeBrandId} brandName={brandName} />
+      <AIStudioClient
+        brandProfileId={activeBrandId}
+        brandName={brandName}
+        promptTemplates={promptTemplates}
+      />
     </ClientOnly>
   );
 }

@@ -72,6 +72,7 @@ function createKeepAlive() {
 
 export function GET(request: NextRequest) {
   let cleanup: (() => void) | null = null;
+  let cleanedUp = false;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -80,7 +81,7 @@ export function GET(request: NextRequest) {
         controller.close();
       };
 
-      request.signal.addEventListener("abort", handleAbort);
+      request.signal.addEventListener("abort", handleAbort, { once: true });
 
       controller.enqueue(createHandshake());
 
@@ -93,6 +94,8 @@ export function GET(request: NextRequest) {
       }, 25_000);
 
       cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
         clearInterval(heartbeat);
         unsubscribe();
         request.signal.removeEventListener("abort", handleAbort);

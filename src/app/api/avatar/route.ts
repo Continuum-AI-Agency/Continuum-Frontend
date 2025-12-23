@@ -49,19 +49,92 @@ export async function GET(request: Request) {
     return Response.json({ error: "Upstream did not return an image" }, { status: 502 });
   }
 
-  const bytes = await upstream.arrayBuffer();
-  if (bytes.byteLength === 0) {
+  if (!upstream.body) {
     return Response.json({ error: "Upstream returned empty image" }, { status: 502 });
   }
 
-  return new Response(bytes, {
+  const reader = upstream.body.getReader();
+  let firstChunk: Uint8Array | null = null;
+  try {
+    const firstRead = await reader.read();
+    if (firstRead.done || !firstRead.value || firstRead.value.byteLength === 0) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore
+      }
+      return Response.json({ error: "Upstream returned empty image" }, { status: 502 });
+    }
+    firstChunk = firstRead.value;
+  } catch {
+    try {
+      await reader.cancel();
+    } catch {
+      // ignore
+    }
+    return Response.json({ error: "Avatar fetch failed" }, { status: 502 });
+  }
+
+  let abortHandler: (() => void) | null = null;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const cleanup = () => {
+        if (abortHandler) {
+          request.signal.removeEventListener("abort", abortHandler);
+          abortHandler = null;
+        }
+      };
+
+      abortHandler = () => {
+        cleanup();
+        void reader.cancel();
+        controller.close();
+      };
+
+      request.signal.addEventListener("abort", abortHandler);
+
+      controller.enqueue(firstChunk as Uint8Array);
+
+      const forward = (): void => {
+        reader
+          .read()
+          .then(({ done, value }) => {
+            if (done) {
+              cleanup();
+              controller.close();
+              return;
+            }
+            if (value) {
+              controller.enqueue(value);
+            }
+            forward();
+          })
+          .catch((err) => {
+            cleanup();
+            controller.error(err);
+          });
+      };
+
+      forward();
+    },
+    cancel() {
+      if (abortHandler) {
+        request.signal.removeEventListener("abort", abortHandler);
+        abortHandler = null;
+      }
+      void reader.cancel();
+    },
+  });
+
+  const contentLength = upstream.headers.get("content-length");
+  return new Response(stream, {
     status: 200,
     headers: {
       "content-type": contentType,
       "cache-control": "public, max-age=3600, s-maxage=86400",
       "content-disposition": "inline",
       "x-content-type-options": "nosniff",
-      "content-length": String(bytes.byteLength),
+      ...(contentLength ? { "content-length": contentLength } : {}),
     },
   });
 }

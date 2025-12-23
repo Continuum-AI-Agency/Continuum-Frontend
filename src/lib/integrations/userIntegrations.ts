@@ -8,6 +8,17 @@ import type { Database } from "@/lib/supabase/types";
 type UserIntegrationRow = Database["brand_profiles"]["Tables"]["user_integrations"]["Row"];
 type IntegrationAccountAssetRow =
   Database["brand_profiles"]["Tables"]["integration_accounts_assets"]["Row"];
+type IntegrationAccountAssetSummaryRow = Pick<
+  IntegrationAccountAssetRow,
+  | "id"
+  | "integration_id"
+  | "type"
+  | "name"
+  | "status"
+  | "external_account_id"
+  | "created_at"
+  | "updated_at"
+>;
 
 export type UserIntegrationAccount = {
   id: string;
@@ -56,7 +67,7 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
   const { data: assets, error: assetsError } = await supabase
     .schema("brand_profiles")
     .from("integration_accounts_assets")
-    .select("id, integration_id, type, name, status, external_account_id, created_at, updated_at, raw_payload")
+    .select("id, integration_id, type, name, status, external_account_id, created_at, updated_at")
     .in("integration_id", integrationIds);
 
   if (assetsError) {
@@ -64,12 +75,17 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
     return createEmptyUserIntegrationSummary();
   }
 
-  const assetsByIntegrationId = new Map<string, IntegrationAccountAssetRow[]>();
+  const assetsByIntegrationId = new Map<string, IntegrationAccountAssetSummaryRow[]>();
   for (const asset of assets ?? []) {
     const current = assetsByIntegrationId.get(asset.integration_id) ?? [];
     current.push({
-      ...asset,
-      raw_payload: asset.raw_payload ?? null,
+      id: asset.id,
+      integration_id: asset.integration_id,
+      type: asset.type,
+      name: asset.name,
+      status: asset.status,
+      external_account_id: asset.external_account_id,
+      created_at: asset.created_at,
       updated_at: asset.updated_at ?? asset.created_at ?? new Date().toISOString(),
     });
     assetsByIntegrationId.set(asset.integration_id, current);

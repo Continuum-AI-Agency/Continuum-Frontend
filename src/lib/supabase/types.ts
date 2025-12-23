@@ -386,6 +386,47 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_templates: {
+        Row: {
+          brand_profile_id: string
+          category: string
+          created_at: string
+          id: string
+          name: string
+          prompt: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          category?: string
+          created_at?: string
+          id?: string
+          name: string
+          prompt: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          prompt?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_templates_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       strategic_analyses: {
         Row: {
           analysis_embedding: string | null

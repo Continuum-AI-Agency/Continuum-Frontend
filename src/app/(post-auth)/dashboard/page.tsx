@@ -254,7 +254,7 @@ export default async function DashboardPage() {
               title="Review content"
               description="Check AI outputs before publish."
               icon={<StopwatchIcon />}
-              href="/brand-profiles"
+              href={`/brand-profiles/${brandId}/assets`}
             />
           </Grid>
         </SurfaceCard>
