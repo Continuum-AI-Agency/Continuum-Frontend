@@ -27,6 +27,22 @@ function jsonResponse(body: Record<string, JsonValue>, status = 200) {
   });
 }
 
+type LogFields = Record<string, JsonValue>;
+
+function logEvent(level: "info" | "error", event: string, fields: LogFields = {}) {
+  const payload = {
+    level,
+    event,
+    ts: new Date().toISOString(),
+    ...fields,
+  };
+  if (level === "error") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
 function createSupabaseClient(authHeader?: string | null) {
   const url = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -111,7 +127,17 @@ async function assertUserAccess(supabase: ReturnType<typeof createSupabaseClient
 }
 
 serve(async req => {
+  const requestId = crypto.randomUUID();
+  const requestIp = req.headers.get("x-forwarded-for") ?? "unknown";
+  logEvent("info", "delete_brand_profile.request", {
+    requestId,
+    method: req.method,
+    path: new URL(req.url).pathname,
+    ip: requestIp,
+  });
+
   if (req.method === "OPTIONS") {
+    logEvent("info", "delete_brand_profile.cors_preflight", { requestId });
     return new Response(null, {
       status: 204,
       headers: {
@@ -123,6 +149,7 @@ serve(async req => {
   }
 
   if (req.method !== "POST") {
+    logEvent("info", "delete_brand_profile.method_not_allowed", { requestId, method: req.method });
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
@@ -132,6 +159,7 @@ serve(async req => {
     input = InputSchema.parse(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid request body";
+    logEvent("error", "delete_brand_profile.invalid_body", { requestId, error: message });
     return jsonResponse({ error: message }, 400);
   }
 
@@ -142,13 +170,25 @@ serve(async req => {
     supabase = createSupabaseClient(authHeader);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Supabase client init failed";
+    logEvent("error", "delete_brand_profile.supabase_init_failed", { requestId, error: message });
     return jsonResponse({ error: message }, 500);
   }
 
   const authz = await assertUserAccess(supabase, input.brandId);
   if (authz.status !== 200) {
+    logEvent("info", "delete_brand_profile.unauthorized", {
+      requestId,
+      brandId: input.brandId,
+      status: authz.status,
+      message: authz.message ?? "Unauthorized",
+    });
     return jsonResponse({ error: authz.message }, authz.status);
   }
+
+  logEvent("info", "delete_brand_profile.authorized", {
+    requestId,
+    brandId: input.brandId,
+  });
 
   const { error: reportError, count: deactivatedReports } = await supabase
     .schema("brand_profiles")
@@ -158,8 +198,19 @@ serve(async req => {
     .select("id", { count: "exact" });
 
   if (reportError) {
+    logEvent("error", "delete_brand_profile.deactivate_reports_failed", {
+      requestId,
+      brandId: input.brandId,
+      error: reportError.message,
+    });
     return jsonResponse({ error: reportError.message }, 500);
   }
+
+  logEvent("info", "delete_brand_profile.deactivated_reports", {
+    requestId,
+    brandId: input.brandId,
+    count: deactivatedReports ?? 0,
+  });
 
   const { error: analysisError, count: deactivatedAnalyses } = await supabase
     .schema("brand_profiles")
@@ -169,8 +220,19 @@ serve(async req => {
     .select("brand_id", { count: "exact" });
 
   if (analysisError) {
+    logEvent("error", "delete_brand_profile.deactivate_analyses_failed", {
+      requestId,
+      brandId: input.brandId,
+      error: analysisError.message,
+    });
     return jsonResponse({ error: analysisError.message }, 500);
   }
+
+  logEvent("info", "delete_brand_profile.deactivated_analyses", {
+    requestId,
+    brandId: input.brandId,
+    count: deactivatedAnalyses ?? 0,
+  });
 
   // Clean up dependent records that may block deletion via FK constraints.
   const { error: integrationError } = await supabase
@@ -180,8 +242,18 @@ serve(async req => {
     .eq("brand_profile_id", input.brandId);
 
   if (integrationError) {
+    logEvent("error", "delete_brand_profile.integration_accounts_cleanup_failed", {
+      requestId,
+      brandId: input.brandId,
+      error: integrationError.message,
+    });
     return jsonResponse({ error: integrationError.message }, 500);
   }
+
+  logEvent("info", "delete_brand_profile.integration_accounts_deleted", {
+    requestId,
+    brandId: input.brandId,
+  });
 
   const { error: draftError } = await supabase
     .schema("brand_profiles")
@@ -190,8 +262,18 @@ serve(async req => {
     .eq("brand_profile_id", input.brandId);
 
   if (draftError) {
+    logEvent("error", "delete_brand_profile.drafts_cleanup_failed", {
+      requestId,
+      brandId: input.brandId,
+      error: draftError.message,
+    });
     return jsonResponse({ error: draftError.message }, 500);
   }
+
+  logEvent("info", "delete_brand_profile.drafts_deleted", {
+    requestId,
+    brandId: input.brandId,
+  });
 
   const { error: deleteError } = await supabase
     .schema("brand_profiles")
@@ -200,8 +282,20 @@ serve(async req => {
     .eq("id", input.brandId);
 
   if (deleteError) {
+    logEvent("error", "delete_brand_profile.delete_failed", {
+      requestId,
+      brandId: input.brandId,
+      error: deleteError.message,
+    });
     return jsonResponse({ error: deleteError.message }, 500);
   }
+
+  logEvent("info", "delete_brand_profile.deleted", {
+    requestId,
+    brandId: input.brandId,
+    deactivatedReports: deactivatedReports ?? 0,
+    deactivatedAnalyses: deactivatedAnalyses ?? 0,
+  });
 
   return jsonResponse({
     ok: true,
