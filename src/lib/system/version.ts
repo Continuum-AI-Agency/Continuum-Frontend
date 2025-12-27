@@ -7,11 +7,13 @@ type CommitEnv = {
   NEXT_PUBLIC_COMMIT_SHA?: string;
 };
 
-export function getServerCommitSha(env: CommitEnv = process.env): string {
+type CommitEnvSource = CommitEnv | NodeJS.ProcessEnv;
+
+export function getServerCommitSha(env: CommitEnvSource = process.env): string {
   return env.VERCEL_GIT_COMMIT_SHA ?? LOCAL_DEV_SHA;
 }
 
-export function getClientCommitSha(env: CommitEnv = process.env): string {
+export function getClientCommitSha(env: CommitEnvSource = process.env): string {
   return env.NEXT_PUBLIC_COMMIT_SHA ?? LOCAL_DEV_SHA;
 }
 
