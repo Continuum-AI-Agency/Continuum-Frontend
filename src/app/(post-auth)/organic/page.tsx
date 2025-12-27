@@ -3,6 +3,7 @@ import { LightningBoltIcon } from "@radix-ui/react-icons";
 
 import { OrganicExperience } from "@/components/organic/OrganicExperience";
 import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
+import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import {
   ORGANIC_PLATFORMS,
@@ -12,9 +13,16 @@ import {
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import type { Trend } from "@/lib/organic/trends";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { redirect } from "next/navigation";
+import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
 
 export default async function OrganicPage() {
-  const { brandId, state: onboarding } = await ensureOnboardingState();
+  const { activeBrandId } = await getActiveBrandContext();
+  if (!activeBrandId) {
+    redirect("/onboarding");
+  }
+  const { brandId, state: onboarding } = await ensureOnboardingState(activeBrandId);
   const brandProfileId = brandId;
 
   const platformAccounts = ORGANIC_PLATFORMS.map(({ key, label }) => {
@@ -55,8 +63,17 @@ export default async function OrganicPage() {
       tags: trend.source ? [trend.source] : [],
     }));
 
+    const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
+      insights,
+      errorMessage: null,
+    });
+
     return (
       <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
+        <BrandInsightsAutoGenerate
+          brandId={brandProfileId}
+          shouldGenerate={shouldAutoGenerateInsights}
+        />
         <BrandInsightsSignalsPanel
           trends={brandTrends}
           events={trendsAndEvents.events}
@@ -80,8 +97,16 @@ export default async function OrganicPage() {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load brand insights for this brand.";
+    const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
+      insights: null,
+      errorMessage: message,
+    });
     return (
       <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
+        <BrandInsightsAutoGenerate
+          brandId={brandProfileId}
+          shouldGenerate={shouldAutoGenerateInsights}
+        />
         <Heading size="6" className="text-white">
           Organic Planner
         </Heading>

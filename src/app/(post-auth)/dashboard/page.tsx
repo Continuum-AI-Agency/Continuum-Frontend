@@ -5,7 +5,6 @@ import {
   Button,
   Callout,
   Card,
-  Container,
   Flex,
   Grid,
   Heading,
@@ -22,16 +21,20 @@ import {
   Share2Icon,
 } from "@radix-ui/react-icons";
 import React from "react";
+import { redirect } from "next/navigation";
 
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
+import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import { InstagramOrganicReportingWidget } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { ClientOnly } from "@/components/ui/ClientOnly";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import type { BrandInsightsQuestionsByNiche, BrandInsightsTrendsAndEvents } from "@/lib/schemas/brandInsights";
-import { fetchOnboardingMetadata, ensureOnboardingState } from "@/lib/onboarding/storage";
+import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { needsOnboardingReminder } from "@/lib/onboarding/reminders";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 300;
@@ -45,17 +48,21 @@ const glassPanelStyle: React.CSSProperties = {
 const glassPanelClassName = "backdrop-blur-xl border";
 
 export default async function DashboardPage() {
-  const metadata = await fetchOnboardingMetadata();
-  const activeBrandId = metadata.activeBrandId ?? null;
-  const activeBrandState = activeBrandId ? metadata.brands[activeBrandId] : null;
-  const activeBrandName =
-    activeBrandState?.brand.name && activeBrandState.brand.name.trim().length > 0
-      ? activeBrandState.brand.name
-      : "Untitled brand";
-  const showOnboardingReminder = Boolean(activeBrandId && needsOnboardingReminder(activeBrandState));
+  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
+  if (!activeBrandId) {
+    redirect("/onboarding");
+  }
 
-  const { brandId } = await ensureOnboardingState(activeBrandId ?? undefined);
-  const integrationSummary = await fetchBrandIntegrationSummary(brandId);
+  const activeBrandName =
+    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? "Untitled brand";
+
+  const [integrationSummary, insightsResult] = await Promise.all([
+    fetchBrandIntegrationSummary(activeBrandId),
+    fetchBrandInsights(activeBrandId, { revalidateSeconds: revalidate })
+      .then((data) => ({ data }))
+      .catch((error: unknown) => ({ error })),
+  ]);
+
   const instagramAccounts = integrationSummary.instagram.accounts.map((account) => ({
     integrationAccountId: account.integrationAccountId,
     name: account.name,
@@ -64,11 +71,19 @@ export default async function DashboardPage() {
   let insightsError: string | null = null;
   let insights = null;
 
-  try {
-    insights = await fetchBrandInsights(brandId, { revalidateSeconds: revalidate });
-  } catch (error) {
-    insightsError = error instanceof Error ? error.message : "Unable to load brand insights.";
+  if ("error" in insightsResult) {
+    insightsError =
+      insightsResult.error instanceof Error
+        ? insightsResult.error.message
+        : "Unable to load brand insights.";
+  } else {
+    insights = insightsResult.data;
   }
+
+  const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
+    insights,
+    errorMessage: insightsError,
+  });
 
   const trendsAndEvents: BrandInsightsTrendsAndEvents =
     insights?.data.trendsAndEvents ?? {
@@ -110,31 +125,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 w-full max-w-none px-2 sm:px-3 lg:px-4">
-      {showOnboardingReminder && (
-        <SurfaceCard>
-          <Flex
-            align="center"
-            justify="between"
-            direction={{ initial: "column", sm: "row" }}
-            gap="3"
-          >
-            <Flex direction="column" gap="2" className="text-center sm:text-left">
-              <Heading size="4">Finish onboarding for {activeBrandName}</Heading>
-              <Text color="gray" size="2">
-                Complete onboarding to unlock brand-specific automations and analytics.
-              </Text>
-            </Flex>
-            <Flex gap="3">
-              <Button asChild variant="solid" size="3">
-                <Link href={`/onboarding?brand=${activeBrandId}`}>Complete onboarding</Link>
-              </Button>
-              <Button asChild variant="soft" size="3">
-                <Link href="/settings">Remind me later</Link>
-              </Button>
-            </Flex>
-          </Flex>
-        </SurfaceCard>
-      )}
+      <BrandInsightsAutoGenerate
+        brandId={activeBrandId}
+        shouldGenerate={shouldAutoGenerateInsights}
+      />
+      <React.Suspense fallback={null}>
+        <OnboardingReminder brandId={activeBrandId} brandName={activeBrandName} />
+      </React.Suspense>
 
       <HeaderBlock brandName={activeBrandName} />
 
@@ -182,7 +179,7 @@ export default async function DashboardPage() {
                   note={organicSummary.note}
                 />
                 <Box pt="4">
-                  <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
+                  <InstagramOrganicReportingWidget brandId={activeBrandId} accounts={instagramAccounts} />
                 </Box>
               </Tabs.Content>
               <Tabs.Content value="paid">
@@ -254,7 +251,7 @@ export default async function DashboardPage() {
               title="Review content"
               description="Check AI outputs before publish."
               icon={<StopwatchIcon />}
-              href={`/brand-profiles/${brandId}/assets`}
+              href={`/brand-profiles/${activeBrandId}/assets`}
             />
           </Grid>
         </SurfaceCard>
@@ -264,7 +261,7 @@ export default async function DashboardPage() {
         <SurfaceCard>
           <Flex align="center" justify="between" mb="3">
             <Heading size="4">Brand insights</Heading>
-            <BrandInsightsGenerateButton brandId={brandId} />
+            <BrandInsightsGenerateButton brandId={activeBrandId} />
           </Flex>
           <Separator my="3" />
           <Callout.Root color="red" variant="surface">
@@ -283,11 +280,50 @@ export default async function DashboardPage() {
           weekStartDate={insights?.data.weekStartDate}
           generatedAt={trendsAndEvents.generatedAt ?? insights?.generatedAt}
           status={trendsAndEvents.status}
-          brandId={brandId}
-          actionSlot={<BrandInsightsGenerateButton brandId={brandId} />}
+          brandId={activeBrandId}
+          actionSlot={<BrandInsightsGenerateButton brandId={activeBrandId} />}
         />
       )}
     </div>
+  );
+}
+
+async function OnboardingReminder({
+  brandId,
+  brandName,
+}: {
+  brandId: string;
+  brandName: string;
+}) {
+  const { state } = await ensureOnboardingState(brandId);
+  if (!needsOnboardingReminder(state)) {
+    return null;
+  }
+
+  return (
+    <SurfaceCard>
+      <Flex
+        align="center"
+        justify="between"
+        direction={{ initial: "column", sm: "row" }}
+        gap="3"
+      >
+        <Flex direction="column" gap="2" className="text-center sm:text-left">
+          <Heading size="4">Finish onboarding for {brandName}</Heading>
+          <Text color="gray" size="2">
+            Complete onboarding to unlock brand-specific automations and analytics.
+          </Text>
+        </Flex>
+        <Flex gap="3">
+          <Button asChild variant="solid" size="3">
+            <Link href={`/onboarding?brand=${brandId}`}>Complete onboarding</Link>
+          </Button>
+          <Button asChild variant="soft" size="3">
+            <Link href="/settings">Remind me later</Link>
+          </Button>
+        </Flex>
+      </Flex>
+    </SurfaceCard>
   );
 }
 

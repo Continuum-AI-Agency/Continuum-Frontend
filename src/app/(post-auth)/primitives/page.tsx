@@ -3,12 +3,18 @@ import { PrimitivesHub } from "@/components/paid-media/PrimitivesHub";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
 export default async function PrimitivesPage() {
-  const { brandId } = await ensureOnboardingState();
+  const { activeBrandId } = await getActiveBrandContext();
+  if (!activeBrandId) {
+    redirect("/onboarding");
+  }
+  const { brandId } = await ensureOnboardingState(activeBrandId);
   let questionsByNiche: BrandInsightsQuestionsByNiche = {
     questionsByNiche: {},
     status: undefined,

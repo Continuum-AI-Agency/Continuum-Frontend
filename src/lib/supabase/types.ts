@@ -718,6 +718,10 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_active_brand_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

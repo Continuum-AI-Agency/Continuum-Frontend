@@ -1,13 +1,13 @@
 import { Container, Flex, Heading, Text } from "@radix-ui/themes";
-import { fetchOnboardingMetadata, ensureOnboardingState } from "@/lib/onboarding/storage";
+import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export const revalidate = 0;
 
 export default async function IntegrationsSettingsPage() {
-  const metadata = await fetchOnboardingMetadata();
-  const activeBrandId = metadata.activeBrandId;
+  const { activeBrandId } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     return (

@@ -9,6 +9,7 @@ import { ThemeProvider } from "../components/theme-provider";
 import GalaxyBackground from "../components/ui/GalaxyBackground";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";
+import { VersionBanner } from "@/components/version-banner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -79,6 +80,7 @@ export default async function RootLayout({
           <ReactQueryProvider>
             <ToastProvider>
               <GalaxyBackground intensity={1} speed="glacial" />
+              <VersionBanner />
               <div className="relative z-10">
                 {children}
               </div>

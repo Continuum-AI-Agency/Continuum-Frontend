@@ -575,22 +575,29 @@ async function loadOnboardingContext(
 }
 
 export async function fetchOnboardingMetadata(): Promise<OnboardingMetadata> {
-  const context = await loadOnboardingContext();
+  const context = await fetchOnboardingContext();
   return context.metadata;
 }
 
 export async function ensureOnboardingState(
   brandId?: string
 ): Promise<{ brandId: string; state: OnboardingState }> {
-  const context = await loadOnboardingContext(brandId);
+  const context = await fetchOnboardingContext(brandId);
   return { brandId: context.brandId, state: context.state };
 }
 
 export async function fetchOnboardingState(
   brandId: string
 ): Promise<OnboardingState> {
-  const context = await loadOnboardingContext(brandId);
+  const context = await fetchOnboardingContext(brandId);
   return context.state;
+}
+
+export async function fetchOnboardingContext(
+  brandId?: string
+): Promise<{ metadata: OnboardingMetadata; state: OnboardingState; brandId: string }> {
+  const context = await loadOnboardingContext(brandId);
+  return { metadata: context.metadata, state: context.state, brandId: context.brandId };
 }
 
 async function updateBrandState(

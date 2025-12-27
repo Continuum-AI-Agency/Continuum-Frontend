@@ -1,6 +1,6 @@
 import { Container, Flex, Grid, Heading, Tabs, Text } from "@radix-ui/themes";
-import { ensureOnboardingState, fetchOnboardingMetadata } from "@/lib/onboarding/storage";
-import { type OnboardingState, type OnboardingMetadata } from "@/lib/onboarding/state";
+import { ensureOnboardingState } from "@/lib/onboarding/storage";
+import { type OnboardingState } from "@/lib/onboarding/state";
 import BrandSettingsPanel from "@/components/settings/BrandSettingsPanel";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
@@ -10,13 +10,13 @@ import { fetchBrandProfileDetails } from "@/lib/brands/profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { UserSettingsPanel } from "@/components/settings/UserSettingsPanel";
 import { createEmptyUserIntegrationSummary, fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
   const { data: userData } = await supabase.auth.getUser();
 
-  const metadata: OnboardingMetadata = await fetchOnboardingMetadata();
-  const activeBrandId = metadata.activeBrandId;
+  const { activeBrandId } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     return (

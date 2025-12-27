@@ -2,13 +2,12 @@ import { Container, Flex, Heading, Text } from "@radix-ui/themes";
 import { BrandIntegrationsCard } from "@/components/settings/BrandIntegrationsCard";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { fetchOnboardingMetadata } from "@/lib/onboarding/storage";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export const revalidate = 0;
 
 export default async function IntegrationsPage() {
-  const metadata = await fetchOnboardingMetadata();
-  const activeBrandId = metadata.activeBrandId;
+  const { activeBrandId } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     return (

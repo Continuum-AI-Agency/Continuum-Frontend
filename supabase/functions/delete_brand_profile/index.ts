@@ -43,11 +43,11 @@ function logEvent(level: "info" | "error", event: string, fields: LogFields = {}
   }
 }
 
-function createSupabaseClient(authHeader?: string | null) {
+function createAuthClient(authHeader?: string | null) {
   const url = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !serviceRoleKey) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anonKey) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY env vars");
   }
 
   const headers: Record<string, string> = {};
@@ -55,18 +55,33 @@ function createSupabaseClient(authHeader?: string | null) {
     headers.Authorization = authHeader;
   }
 
-  return createClient(url, serviceRoleKey, {
+  return createClient(url, anonKey, {
     global: { headers },
   });
 }
 
 type AuthzResult = { status: number; message?: string };
 
-async function assertUserAccess(supabase: ReturnType<typeof createSupabaseClient>, brandId: string): Promise<AuthzResult> {
+function createServiceClient() {
+  const url = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !serviceRoleKey) {
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env vars");
+  }
+  return createClient(url, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+}
+
+async function assertUserAccess(
+  authClient: ReturnType<typeof createAuthClient>,
+  serviceClient: ReturnType<typeof createServiceClient>,
+  brandId: string
+): Promise<AuthzResult & { userId?: string }> {
   const {
     data: userResult,
     error: userError,
-  } = await supabase.auth.getUser();
+  } = await authClient.auth.getUser();
 
   if (userError || !userResult?.user) {
     return { status: 401, message: "Unauthorized" };
@@ -74,7 +89,7 @@ async function assertUserAccess(supabase: ReturnType<typeof createSupabaseClient
 
   const userId = userResult.user.id;
 
-  const { data: brand, error: brandError } = await supabase
+  const { data: brand, error: brandError } = await serviceClient
     .schema("brand_profiles")
     .from("brand_profiles")
     .select("id, created_by")
@@ -90,11 +105,11 @@ async function assertUserAccess(supabase: ReturnType<typeof createSupabaseClient
   }
 
   if (brand.created_by === userId) {
-    return { status: 200 };
+    return { status: 200, userId };
   }
 
   // Only allow owners/admins associated to this brand.
-  const { data: onboardingRow, error: membershipError } = await supabase
+  const { data: onboardingRow, error: membershipError } = await serviceClient
     .schema("brand_profiles")
     .from("user_onboarding_states")
     .select("state")
@@ -120,7 +135,7 @@ async function assertUserAccess(supabase: ReturnType<typeof createSupabaseClient
   }
 
   if (matching.role === "owner" || matching.role === "admin") {
-    return { status: 200 };
+    return { status: 200, userId };
   }
 
   return { status: 403, message: "Only owners or admins can delete this brand profile" };
@@ -165,16 +180,18 @@ serve(async req => {
 
   const authHeader = req.headers.get("Authorization");
 
-  let supabase: ReturnType<typeof createSupabaseClient>;
+  let authClient: ReturnType<typeof createAuthClient>;
+  let serviceClient: ReturnType<typeof createServiceClient>;
   try {
-    supabase = createSupabaseClient(authHeader);
+    authClient = createAuthClient(authHeader);
+    serviceClient = createServiceClient();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Supabase client init failed";
     logEvent("error", "delete_brand_profile.supabase_init_failed", { requestId, error: message });
     return jsonResponse({ error: message }, 500);
   }
 
-  const authz = await assertUserAccess(supabase, input.brandId);
+  const authz = await assertUserAccess(authClient, serviceClient, input.brandId);
   if (authz.status !== 200) {
     logEvent("info", "delete_brand_profile.unauthorized", {
       requestId,
@@ -190,7 +207,7 @@ serve(async req => {
     brandId: input.brandId,
   });
 
-  const { error: reportError, count: deactivatedReports } = await supabase
+  const { error: reportError, count: deactivatedReports } = await serviceClient
     .schema("brand_profiles")
     .from("brand_reports")
     .update({ active: false })
@@ -212,7 +229,7 @@ serve(async req => {
     count: deactivatedReports ?? 0,
   });
 
-  const { error: analysisError, count: deactivatedAnalyses } = await supabase
+  const { error: analysisError, count: deactivatedAnalyses } = await serviceClient
     .schema("brand_profiles")
     .from("strategic_analyses")
     .update({ active: false })
@@ -235,7 +252,7 @@ serve(async req => {
   });
 
   // Clean up dependent records that may block deletion via FK constraints.
-  const { error: integrationError } = await supabase
+  const { error: integrationError } = await serviceClient
     .schema("brand_profiles")
     .from("brand_profile_integration_accounts")
     .delete()
@@ -255,7 +272,7 @@ serve(async req => {
     brandId: input.brandId,
   });
 
-  const { error: draftError } = await supabase
+  const { error: draftError } = await serviceClient
     .schema("brand_profiles")
     .from("brand_report_drafts")
     .delete()
@@ -275,22 +292,22 @@ serve(async req => {
     brandId: input.brandId,
   });
 
-  const { error: deleteError } = await supabase
+  const { error: deactivateError } = await serviceClient
     .schema("brand_profiles")
     .from("brand_profiles")
-    .delete()
+    .update({ active: false, updated_at: new Date().toISOString() })
     .eq("id", input.brandId);
 
-  if (deleteError) {
-    logEvent("error", "delete_brand_profile.delete_failed", {
+  if (deactivateError) {
+    logEvent("error", "delete_brand_profile.deactivate_failed", {
       requestId,
       brandId: input.brandId,
-      error: deleteError.message,
+      error: deactivateError.message,
     });
-    return jsonResponse({ error: deleteError.message }, 500);
+    return jsonResponse({ error: deactivateError.message }, 500);
   }
 
-  logEvent("info", "delete_brand_profile.deleted", {
+  logEvent("info", "delete_brand_profile.deactivated", {
     requestId,
     brandId: input.brandId,
     deactivatedReports: deactivatedReports ?? 0,
