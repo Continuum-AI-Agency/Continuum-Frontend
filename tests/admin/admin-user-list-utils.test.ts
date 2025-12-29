@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
-import { groupPermissionsByUserId } from "@/components/admin/adminUserListUtils";
-import type { PermissionRow } from "@/components/admin/adminUserTypes";
+import { filterAndSortAdminUsers, groupPermissionsByUserId } from "@/components/admin/adminUserListUtils";
+import type { AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
 
 test("groupPermissionsByUserId groups permissions and preserves order per user", () => {
   const permissions: PermissionRow[] = [
@@ -35,3 +35,26 @@ test("groupPermissionsByUserId groups permissions and preserves order per user",
   expect(map.get("missing")).toBeUndefined();
 });
 
+test("filterAndSortAdminUsers keeps original order when query is empty", () => {
+  const users: AdminUser[] = [
+    { id: "user-1", email: "zoe@example.com", name: "Zoe", isAdmin: false, createdAt: null },
+    { id: "user-2", email: "alex@example.com", name: "Alex", isAdmin: false, createdAt: null },
+  ];
+
+  const result = filterAndSortAdminUsers(users, "");
+
+  expect(result.map((user) => user.id)).toEqual(["user-1", "user-2"]);
+});
+
+test("filterAndSortAdminUsers filters and ranks name matches ahead of email matches", () => {
+  const users: AdminUser[] = [
+    { id: "user-1", email: "samuel@example.com", name: "Samuel", isAdmin: false, createdAt: null },
+    { id: "user-2", email: "sam@example.com", name: "Sam", isAdmin: false, createdAt: null },
+    { id: "user-3", email: "ally@example.com", name: "Allison", isAdmin: false, createdAt: null },
+    { id: "user-4", email: "samantha@example.com", name: null, isAdmin: false, createdAt: null },
+  ];
+
+  const result = filterAndSortAdminUsers(users, "sam");
+
+  expect(result.map((user) => user.id)).toEqual(["user-2", "user-1", "user-4"]);
+});

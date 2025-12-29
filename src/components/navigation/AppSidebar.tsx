@@ -25,9 +25,16 @@ export function AppSidebar() {
   useEffect(() => {
     // Reserve space for max width so content never shifts when expanding.
     const previous = document.body.style.paddingLeft;
+    const previousSidebarWidth = document.documentElement.style.getPropertyValue("--app-sidebar-width");
     document.body.style.paddingLeft = `${collapsedWidth}px`;
+    document.documentElement.style.setProperty("--app-sidebar-width", `${collapsedWidth}px`);
     return () => {
       document.body.style.paddingLeft = previous;
+      if (previousSidebarWidth) {
+        document.documentElement.style.setProperty("--app-sidebar-width", previousSidebarWidth);
+      } else {
+        document.documentElement.style.removeProperty("--app-sidebar-width");
+      }
     };
   }, [collapsedWidth]);
 

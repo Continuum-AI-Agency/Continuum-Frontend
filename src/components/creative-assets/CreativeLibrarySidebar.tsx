@@ -37,6 +37,7 @@ import {
   createCreativeFolder,
 } from "@/lib/creative-assets/storageClient";
 import type { CreativeAsset } from "@/lib/creative-assets/types";
+import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
 
@@ -133,7 +134,7 @@ export function CreativeLibrarySidebar({
       event.dataTransfer.effectAllowed = "copy";
       setIsDraggingAsset(true);
 
-      const cachedPreview = previewCache.current.get(asset.fullPath);
+      const cachedPreview = sanitizeCreativeAssetUrl(previewCache.current.get(asset.fullPath));
       const payload = {
         type: "asset_drop",
         payload: {
@@ -154,7 +155,7 @@ export function CreativeLibrarySidebar({
         CREATIVE_ASSET_DRAG_TYPE,
         JSON.stringify({ name: asset.name, path: asset.fullPath, contentType: asset.contentType })
       );
-      event.dataTransfer.setData("text/plain", cachedPreview ?? asset.fullPath);
+      event.dataTransfer.setData("text/plain", cachedPreview ?? "");
 
       if (!cachedPreview) {
         void ensurePreviewUrl(asset).then((url) => previewCache.current.set(asset.fullPath, url));
@@ -363,6 +364,7 @@ function SidebarHoverContent({
   const isVideo = asset.contentType?.startsWith("video/");
   const isImage = asset.contentType?.startsWith("image/");
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const safeUrl = sanitizeCreativeAssetUrl(url);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -390,9 +392,9 @@ function SidebarHoverContent({
           <div className="flex h-full items-center justify-center text-gray-400">
             Loading…
           </div>
-        ) : isVideo ? (
+        ) : isVideo && safeUrl ? (
           <video
-            src={url ? `${url}#t=0.01` : undefined}
+            src={`${safeUrl}#t=0.01`}
             ref={videoRef}
             preload="metadata"
             muted
@@ -404,8 +406,8 @@ function SidebarHoverContent({
               if (v) v.currentTime = 0.01;
             }}
           />
-        ) : isImage ? (
-          <img src={url ?? asset.fullPath} alt={asset.name} className="h-full w-full object-contain" />
+        ) : isImage && safeUrl ? (
+          <img src={safeUrl} alt={asset.name} className="h-full w-full object-contain" />
         ) : (
           <div className="flex h-full items-center justify-center text-gray-200">
             <FileIcon />
@@ -801,6 +803,7 @@ function FileThumb({
   const thumbRef = React.useRef<HTMLDivElement | null>(null);
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const [inView, setInView] = React.useState(false);
+  const safeUrl = sanitizeCreativeAssetUrl(url);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -861,16 +864,20 @@ function FileThumb({
   if (isImage) {
     return (
       <div ref={thumbRef} className="h-7 w-7 overflow-hidden rounded-sm bg-white/5">
-        <img src={url ?? asset.fullPath} alt={asset.name} className="h-full w-full object-cover" />
+        {safeUrl ? (
+          <img src={safeUrl} alt={asset.name} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[10px] text-white">?</div>
+        )}
       </div>
     );
   }
   if (isVideo) {
     return (
       <div ref={thumbRef} className="h-7 w-7 overflow-hidden rounded-sm bg-white/5">
-        {url ? (
+        {safeUrl ? (
           <video
-            src={`${url}#t=0.01`}
+            src={`${safeUrl}#t=0.01`}
             ref={videoRef}
             preload="metadata"
             muted

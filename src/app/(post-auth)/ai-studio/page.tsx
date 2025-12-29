@@ -33,7 +33,7 @@ export default async function AIStudioPage() {
   return (
     <ClientOnly
       fallback={
-        <div className="fixed inset-0 md:left-[88px] flex items-center justify-center bg-slate-950 text-white">
+        <div className="fixed inset-x-0 top-0 h-screen h-[100dvh] md:left-[var(--app-sidebar-width,88px)] flex items-center justify-center bg-slate-950 text-white">
           <div className="rounded-2xl border border-white/10 bg-slate-900/70 px-6 py-4 shadow-xl">
             Loading AI Studio…
           </div>

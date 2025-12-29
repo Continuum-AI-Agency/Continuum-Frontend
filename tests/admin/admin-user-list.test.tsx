@@ -18,6 +18,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@radix-ui/react-accordion", () => ({
   Root: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
+  Header: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
   Item: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
   Trigger: ({ children, ...props }: { children?: React.ReactNode }) => React.createElement("button", props, children),
   Content: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),

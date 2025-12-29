@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { resolveAuthUserName } from "./user-name.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,7 +71,7 @@ function mapAuthUser(user: AuthUser): AdminUser {
   return {
     id: user.id,
     email: user.email ?? "unknown",
-    name: (user.user_metadata as Record<string, unknown> | undefined)?.name ?? null,
+    name: resolveAuthUserName(user.user_metadata),
     isAdmin: Boolean((user.app_metadata as Record<string, unknown> | undefined)?.is_admin),
     createdAt: user.created_at ?? null,
   };

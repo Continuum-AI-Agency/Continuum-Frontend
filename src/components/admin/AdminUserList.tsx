@@ -17,7 +17,7 @@ import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AdminPagination, AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
-import { groupPermissionsByUserId } from "@/components/admin/adminUserListUtils";
+import { filterAndSortAdminUsers, groupPermissionsByUserId } from "@/components/admin/adminUserListUtils";
 
 type Props = {
   users: AdminUser[];
@@ -54,8 +54,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const totalCountLabel = pagination.totalCount.toLocaleString();
   const trimmedQuery = query.trim();
   const hasQuery = trimmedQuery.length > 0;
-  const pageSummary = `Showing ${users.length} on this page`;
-  const totalLabelSuffix = hasQuery ? "matches" : "total";
+  const serverQueryActive = searchQuery.trim().length > 0;
+  const visibleUsers = useMemo(() => filterAndSortAdminUsers(users, trimmedQuery), [users, trimmedQuery]);
+  const pageSummary = `Showing ${visibleUsers.length} on this page`;
+  const totalLabelSuffix = serverQueryActive ? "matches" : "total";
 
   function updatePage(nextPage: number) {
     if (nextPage === pagination.page) return;
@@ -116,14 +118,14 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               <span className="text-right pr-2">Actions</span>
             </div>
             <div className="divide-y divide-[var(--gray-6)]">
-              {users.length === 0 ? (
+              {visibleUsers.length === 0 ? (
                 <div className="px-5 py-6">
                   <Text size="2" color="gray">
                     {hasQuery ? "No users match this search." : "No users found."}
                   </Text>
                 </div>
               ) : (
-                users.map((user) => {
+                visibleUsers.map((user) => {
                   const memberships = permissionsByUserId.get(user.id) ?? [];
                   const tierLabel =
                     memberships
