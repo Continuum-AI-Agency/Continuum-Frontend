@@ -31,6 +31,7 @@ import {
   TextIcon,
 } from "@radix-ui/react-icons";
 
+import { ZoomControls } from "@/components/ai-studio/canvas/ZoomControls";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
@@ -353,6 +354,23 @@ export default function AIStudioClient({
   const [templatesLoading, setTemplatesLoading] = React.useState(false);
   const [canvasOverlay, setCanvasOverlay] = React.useState(false);
   const [toolboxPos, setToolboxPos] = React.useState({ x: 96, y: 140 });
+  const reactFlowInstanceRef = React.useRef<any>(null);
+
+  const onReactFlowInit = React.useCallback((instance: any) => {
+    reactFlowInstanceRef.current = instance;
+  }, []);
+
+  const handleZoomIn = () => {
+    (reactFlowInstanceRef.current as any)?.zoomIn?.({ duration: 300 });
+  };
+
+  const handleZoomOut = () => {
+    (reactFlowInstanceRef.current as any)?.zoomOut?.({ duration: 300 });
+  };
+
+  const handleFitView = () => {
+    (reactFlowInstanceRef.current as any)?.fitView?.({ padding: 0.1, duration: 300 });
+  };
 
   const handleCreateTemplate = React.useCallback(
     async (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => {
@@ -685,10 +703,8 @@ export default function AIStudioClient({
                 proOptions={{ hideAttribution: true }}
                 style={{ width: "100%", height: "100%" }}
               >
-                <Background />
-                <MiniMap />
-                <Controls />
-              </ReactFlow>
+                 <Background />
+               </ReactFlow>
               {canvasOverlay ? (
                 <div className="pointer-events-auto absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur">
                   <div className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/95 px-6 py-5 text-center shadow-2xl">

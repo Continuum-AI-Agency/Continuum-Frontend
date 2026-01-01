@@ -6,27 +6,25 @@ import {
   Box,
   Callout,
   Flex,
-  Grid,
-  Heading,
   Select,
   Switch,
   Text,
   TextField,
 } from "@radix-ui/themes";
 import {
+  ChevronDownIcon,
   CounterClockwiseClockIcon,
   LightningBoltIcon,
   MagnifyingGlassIcon,
   PinTopIcon,
 } from "@radix-ui/react-icons";
+import * as AccordionPrimitive from "@radix-ui/react-accordion";
 
-import GlassCard from "@/components/ui/GlassCard";
 import { Accordion } from "@/components/ui/Accordion";
 import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 import { cn } from "@/lib/utils";
 import {
   filterAndSortQuestionsByNiche,
-  getSupportedPlatformKey,
   getSupportedPlatformLabel,
   SUPPORTED_PLATFORMS,
   type SupportedPlatformKey,
@@ -139,163 +137,82 @@ export function BrandQuestionsList({
             content: (
               <Box
                 className={cn(
-                  "space-y-5",
-                  scrollWithinSection && (isCompact ? "max-h-[45vh] overflow-y-auto pr-1" : "max-h-[60vh] overflow-y-auto pr-1")
+                  "space-y-3",
+                  scrollWithinSection &&
+                    (isCompact ? "max-h-[45vh] overflow-y-auto pr-1" : "max-h-[60vh] overflow-y-auto pr-1")
                 )}
               >
-                {(
-                  [
-                    "youtube",
-                    "x",
-                    "linkedin",
-                  ] as SupportedPlatformKey[]
-                )
-                  .map((platformKey) => {
-                    const platformQuestions = entry.questions.filter(
-                      (question) => getSupportedPlatformKey(question.socialPlatform) === platformKey
-                    );
-                    if (platformQuestions.length === 0) return null;
-                    const platformLabel = SUPPORTED_PLATFORMS[platformKey].label;
+                <AccordionPrimitive.Root type="single" collapsible className="space-y-3">
+                  {entry.questions.map((question) => {
+                    const platformLabel =
+                      getSupportedPlatformLabel(question.socialPlatform) ??
+                      question.socialPlatform?.trim();
                     return (
-                      <Box key={platformKey} className="space-y-3">
-                        <Flex align="center" gap="2">
-                          <Text weight="medium" size={isCompact ? "2" : "3"} className="text-white">
-                            {platformLabel}
-                          </Text>
-                          <Badge color="gray" variant="soft" radius="full">
-                            {platformQuestions.length}
-                          </Badge>
-                        </Flex>
-                        <Grid columns={{ initial: "1", md: "2" }} gap="4">
-                          {platformQuestions.map((question) => {
-                            const supportedPlatformLabel = getSupportedPlatformLabel(question.socialPlatform);
-                            return (
-                              <GlassCard
-                                key={question.id}
-                                className={cn(
-                                  "p-4 space-y-3 border border-border/60",
-                                  question.isSelected && "border-teal-500/70 ring-1 ring-teal-500/40"
-                                )}
+                      <AccordionPrimitive.Item
+                        key={question.id}
+                        value={String(question.id)}
+                        className={cn(
+                          "rounded-xl border border-subtle bg-surface shadow-lg",
+                          question.isSelected && "border-teal-500/70 ring-1 ring-teal-500/40"
+                        )}
+                      >
+                        <AccordionPrimitive.Header>
+                          <AccordionPrimitive.Trigger className="flex w-full items-start justify-between gap-3 rounded-xl px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+                            <div className="min-w-0 space-y-1">
+                              <Text
+                                size={isCompact ? "2" : "3"}
+                                weight="medium"
+                                className="text-white leading-tight line-clamp-2"
                               >
-                                <Flex align="start" justify="between" gap="2">
-                                  <Heading size={isCompact ? "3" : "4"} className="text-white leading-tight">
-                                    {question.question}
-                                  </Heading>
-                                  <Flex gap="1" align="center">
-                                    {question.isSelected && (
-                                      <Badge color="teal" variant="solid">
-                                        <PinTopIcon className="mr-1 h-3.5 w-3.5" />
-                                        Selected
-                                      </Badge>
-                                    )}
-                                    {typeof question.timesUsed === "number" && question.timesUsed > 0 && (
-                                      <Badge color="green" variant="soft">
-                                        <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
-                                        Used {question.timesUsed}x
-                                      </Badge>
-                                    )}
-                                  </Flex>
-                                </Flex>
-
-                                {question.whyRelevant && (
-                                  <Text color="gray" size={isCompact ? "1" : "2"}>
-                                    {question.whyRelevant}
-                                  </Text>
-                                )}
-
-                                {question.contentTypeSuggestion && (
-                                  <Box className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-3">
-                                    <Text size="1" color="teal">
-                                      Content idea
-                                    </Text>
-                                    <Text size={isCompact ? "1" : "2"} color="gray">
-                                      {question.contentTypeSuggestion}
-                                    </Text>
-                                  </Box>
-                                )}
-
-                                {supportedPlatformLabel && (
-                                  <Badge color="gray" variant="surface">
-                                    {supportedPlatformLabel}
-                                  </Badge>
-                                )}
-                              </GlassCard>
-                            );
-                          })}
-                        </Grid>
-                      </Box>
-                    );
-                  })
-                  .filter(Boolean)}
-
-                {platformFilter === "all" && (
-                  (() => {
-                    const otherQuestions = entry.questions.filter(
-                      (question) => !getSupportedPlatformKey(question.socialPlatform)
-                    );
-                    if (otherQuestions.length === 0) return null;
-                    return (
-                      <Box key="other" className="space-y-3">
-                        <Flex align="center" gap="2">
-                          <Text weight="medium" size={isCompact ? "2" : "3"} className="text-white">
-                            Other / Unspecified
-                          </Text>
-                          <Badge color="gray" variant="soft" radius="full">
-                            {otherQuestions.length}
-                          </Badge>
-                        </Flex>
-                        <Grid columns={{ initial: "1", md: "2" }} gap="4">
-                          {otherQuestions.map((question) => (
-                            <GlassCard
-                              key={question.id}
-                              className={cn(
-                                "p-4 space-y-3 border border-border/60",
-                                question.isSelected && "border-teal-500/70 ring-1 ring-teal-500/40"
+                                {question.question}
+                              </Text>
+                              {platformLabel && (
+                                <Badge color="gray" variant="surface">
+                                  {platformLabel}
+                                </Badge>
                               )}
-                            >
-                              <Flex align="start" justify="between" gap="2">
-                                <Heading size={isCompact ? "3" : "4"} className="text-white leading-tight">
-                                  {question.question}
-                                </Heading>
-                                <Flex gap="1" align="center">
-                                  {question.isSelected && (
-                                    <Badge color="teal" variant="solid">
-                                      <PinTopIcon className="mr-1 h-3.5 w-3.5" />
-                                      Selected
-                                    </Badge>
-                                  )}
-                                  {typeof question.timesUsed === "number" && question.timesUsed > 0 && (
-                                    <Badge color="green" variant="soft">
-                                      <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
-                                      Used {question.timesUsed}x
-                                    </Badge>
-                                  )}
-                                </Flex>
-                              </Flex>
+                            </div>
+                            <Flex gap="2" align="center">
+                              {question.isSelected && (
+                                <Badge color="teal" variant="solid">
+                                  <PinTopIcon className="mr-1 h-3.5 w-3.5" />
+                                  Selected
+                                </Badge>
+                              )}
+                              {typeof question.timesUsed === "number" && question.timesUsed > 0 && (
+                                <Badge color="green" variant="soft">
+                                  <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
+                                  Used {question.timesUsed}x
+                                </Badge>
+                              )}
+                              <ChevronDownIcon className="h-4 w-4 text-[var(--accent-11)] transition-transform data-[state=open]:rotate-180" />
+                            </Flex>
+                          </AccordionPrimitive.Trigger>
+                        </AccordionPrimitive.Header>
+                        <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                          <Box className="space-y-3 px-4 pb-4 pt-1">
+                            {question.whyRelevant && (
+                              <Text color="gray" size={isCompact ? "1" : "2"}>
+                                {question.whyRelevant}
+                              </Text>
+                            )}
 
-                              {question.whyRelevant && (
-                                <Text color="gray" size={isCompact ? "1" : "2"}>
-                                  {question.whyRelevant}
+                            {question.contentTypeSuggestion && (
+                              <Box className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-3">
+                                <Text size="1" color="teal">
+                                  Content idea
                                 </Text>
-                              )}
-
-                              {question.contentTypeSuggestion && (
-                                <Box className="rounded-lg border border-teal-500/30 bg-teal-500/5 p-3">
-                                  <Text size="1" color="teal">
-                                    Content idea
-                                  </Text>
-                                  <Text size={isCompact ? "1" : "2"} color="gray">
-                                    {question.contentTypeSuggestion}
-                                  </Text>
-                                </Box>
-                              )}
-                            </GlassCard>
-                          ))}
-                        </Grid>
-                      </Box>
+                                <Text size={isCompact ? "1" : "2"} color="gray">
+                                  {question.contentTypeSuggestion}
+                                </Text>
+                              </Box>
+                            )}
+                          </Box>
+                        </AccordionPrimitive.Content>
+                      </AccordionPrimitive.Item>
                     );
-                  })()
-                )}
+                  })}
+                </AccordionPrimitive.Root>
               </Box>
             ),
           }))}

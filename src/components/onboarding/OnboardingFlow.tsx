@@ -80,6 +80,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useContinuumServerEvents } from "@/lib/sse/useContinuumServerEvents";
 import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
 import { Tabs } from "@/components/ui/StableTabs";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 import { Editor, EditorProvider } from "react-simple-wysiwyg";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
@@ -142,6 +143,13 @@ const glassPanelStyle: React.CSSProperties = {
 };
 
 const glassPanelClassName = "backdrop-blur-xl border";
+
+type PreviewEditMode = {
+  voice: boolean;
+  audience: boolean;
+  website: boolean;
+  business: boolean;
+};
 
 function normalizeTimezoneValue(input?: string): string {
   if (!input) return "GMT+00:00";
@@ -471,6 +479,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [hasPreviewRun, setHasPreviewRun] = useState(false);
+  const [previewEditMode, setPreviewEditMode] = useState<PreviewEditMode>({
+    voice: false,
+    audience: false,
+    website: false,
+    business: false,
+  });
   // Track selected integration accounts per provider
   const [selectedAccountIdsByKey, setSelectedAccountIdsByKey] = useState<Record<PlatformKey, Set<string>>>(() =>
     createSelectionFromState(initialState)
@@ -1148,6 +1162,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     setAgentBusiness(null);
     setPreviewCompletePayload(null);
     setAgentError(null);
+    setPreviewEditMode({
+      voice: false,
+      audience: false,
+      website: false,
+      business: false,
+    });
     previewEditTouchedRef.current = { voice: false, audience: false };
     setVoiceHtml(state.brand.brandVoice ?? "");
     setAudienceHtml(state.brand.targetAudience ?? "");
@@ -1213,6 +1233,24 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       ...(prev || {}),
       demographics: entries,
     }));
+  }, []);
+
+  const togglePreviewEditMode = useCallback((section: keyof PreviewEditMode) => {
+    setPreviewEditMode(prev => {
+      const nextValue = !prev[section];
+      if (nextValue) {
+        if (section === "voice") {
+          previewEditTouchedRef.current.voice = true;
+        }
+        if (section === "audience") {
+          previewEditTouchedRef.current.audience = true;
+        }
+      }
+      return {
+        ...prev,
+        [section]: nextValue,
+      };
+    });
   }, []);
 
   const handleClear = useCallback(() => {
@@ -2125,6 +2163,12 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const handleExitPreview = useCallback(() => {
     if (isAgentRunning) return;
     setIsPreviewVisible(false);
+    setPreviewEditMode({
+      voice: false,
+      audience: false,
+      website: false,
+      business: false,
+    });
   }, [isAgentRunning]);
 
   const completeOnboarding = useCallback(() => {
@@ -2228,15 +2272,18 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     );
   };
 
-  const renderPreviewSection = (title: string, content: ReactNode) => (
+  const renderPreviewSection = (title: string, content: ReactNode, action?: ReactNode) => (
     <Box
       key={title}
       className="border-t pt-3 first:border-t-0 first:pt-0 min-w-0"
       style={{ wordBreak: "break-word", borderColor: "var(--border)" }}
     >
-      <Text size="2" weight="medium">
-        {title}
-      </Text>
+      <Flex align="center" justify="between" gap="2">
+        <Text size="2" weight="medium">
+          {title}
+        </Text>
+        {action}
+      </Flex>
       <Box className="mt-2 min-w-0" style={{ wordBreak: "break-word" }}>
         {content}
       </Box>
@@ -2491,6 +2538,19 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     const streamingAudience = agentStreams.audience;
     const streamingWebsite = agentStreams.website;
     const streamingBusiness = agentStreams.business;
+    const editActionDisabled = isPreviewRunning || isCompleting;
+    const voiceIsEditing = previewEditMode.voice;
+    const audienceIsEditing = previewEditMode.audience;
+    const websiteIsEditing = previewEditMode.website;
+    const businessIsEditing = previewEditMode.business;
+    const voiceReadOnlyText = stripHtmlToText(voiceHtml);
+    const audienceReadOnlyText = stripHtmlToText(audienceHtml);
+    const websiteReadOnlyText = stripHtmlToText(websiteHtml);
+    const businessReadOnlyText = stripHtmlToText(businessHtml);
+    const audienceDemographics = (() => {
+      const entries = splitLinesToArray(stripHtmlToText(demographicsHtml));
+      return entries.length ? entries : agentAudience?.demographics;
+    })();
     const previewStatusBadges = (
       <Flex wrap="wrap" gap="2">
         {agentPhaseKeys.map(phase => (
@@ -2504,12 +2564,22 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
     const brandProfileContent = agentBrandProfile ? (
       <Flex direction="column" gap="2">
         <Text weight="medium">{agentBrandProfile.brand_name}</Text>
-        {agentBrandProfile.description && <Text color="gray" size="2">{agentBrandProfile.description}</Text>}
+        {agentBrandProfile.description && (
+          <SafeMarkdown
+            content={agentBrandProfile.description}
+            mode="static"
+            className="text-sm text-secondary"
+          />
+        )}
         {agentBrandProfile.website_url && <Text color="gray" size="2">Website: {agentBrandProfile.website_url}</Text>}
       </Flex>
     ) : (
       streamingBrandProfile ? (
-        <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingBrandProfile}</Text>
+        <SafeMarkdown
+          content={streamingBrandProfile}
+          isAnimating
+          className="text-sm text-secondary"
+        />
       ) : (
         <Text color="gray" size="2">Awaiting brand profile…</Text>
       )
@@ -2517,77 +2587,232 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
 
     const voiceEditable = agentPhases.voice === "completed" || Boolean(previewCompletePayload?.brand_profile?.brand_voice);
     const voiceContent = voiceEditable ? (
-      <Flex direction="column" gap="2">
-        {renderInlineEditor(voiceHtml, handleVoiceEdit, "Refine tone, style, and messaging")}
-        <Box>
-          <Text size="1" color="gray">Keywords</Text>
-          <Box className="mt-1">{renderBadgeList(agentVoice?.keywords, "No keywords identified yet.")}</Box>
-        </Box>
-      </Flex>
+      voiceIsEditing ? (
+        <Flex direction="column" gap="2">
+          {renderInlineEditor(voiceHtml, handleVoiceEdit, "Refine tone, style, and messaging")}
+          <Box>
+            <Text size="1" color="gray">Keywords</Text>
+            <Box className="mt-1">{renderBadgeList(agentVoice?.keywords, "No keywords identified yet.")}</Box>
+          </Box>
+        </Flex>
+      ) : (
+        <Flex direction="column" gap="2">
+          {voiceReadOnlyText ? (
+            <SafeMarkdown
+              content={voiceReadOnlyText}
+              mode="static"
+              className="text-sm text-secondary"
+            />
+          ) : (
+            <Text color="gray" size="2">No voice summary yet.</Text>
+          )}
+          <Box>
+            <Text size="1" color="gray">Keywords</Text>
+            <Box className="mt-1">{renderBadgeList(agentVoice?.keywords, "No keywords identified yet.")}</Box>
+          </Box>
+        </Flex>
+      )
     ) : streamingVoice ? (
-      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingVoice}</Text>
+      <SafeMarkdown
+        content={streamingVoice}
+        isAnimating
+        className="text-sm text-secondary"
+      />
     ) : (
       <Text color="gray" size="2">Awaiting voice insights…</Text>
     );
 
     const audienceEditable = agentPhases.audience === "completed" || Boolean(previewCompletePayload?.structured?.target_audience || agentAudience);
     const audienceContent = audienceEditable ? (
-      <Flex direction="column" gap="2">
-        {renderInlineEditor(audienceHtml, handleAudienceEdit, "Refine audience summary and segments")}
-        <Box>
-          <Text size="1" color="gray">Demographics</Text>
-          {renderInlineEditor(demographicsHtml, handleDemographicsEdit, "Edit demographics (one per line)")}
-        </Box>
-        <Box>
-          <Text size="1" color="gray">Motivations</Text>
-          <Box className="mt-1">{renderBadgeList(agentAudience?.motivations, "No motivations yet.")}</Box>
-        </Box>
-      </Flex>
+      audienceIsEditing ? (
+        <Flex direction="column" gap="2">
+          {renderInlineEditor(audienceHtml, handleAudienceEdit, "Refine audience summary and segments")}
+          <Box>
+            <Text size="1" color="gray">Demographics</Text>
+            {renderInlineEditor(demographicsHtml, handleDemographicsEdit, "Edit demographics (one per line)")}
+          </Box>
+          <Box>
+            <Text size="1" color="gray">Motivations</Text>
+            <Box className="mt-1">{renderBadgeList(agentAudience?.motivations, "No motivations yet.")}</Box>
+          </Box>
+        </Flex>
+      ) : (
+        <Flex direction="column" gap="2">
+          {audienceReadOnlyText ? (
+            <SafeMarkdown
+              content={audienceReadOnlyText}
+              mode="static"
+              className="text-sm text-secondary"
+            />
+          ) : (
+            <Text color="gray" size="2">No audience summary yet.</Text>
+          )}
+          <Box>
+            <Text size="1" color="gray">Demographics</Text>
+            <Box className="mt-1">{renderBadgeList(audienceDemographics, "No demographics yet.")}</Box>
+          </Box>
+          <Box>
+            <Text size="1" color="gray">Motivations</Text>
+            <Box className="mt-1">{renderBadgeList(agentAudience?.motivations, "No motivations yet.")}</Box>
+          </Box>
+        </Flex>
+      )
     ) : streamingAudience ? (
-      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingAudience}</Text>
+      <SafeMarkdown
+        content={streamingAudience}
+        isAnimating
+        className="text-sm text-secondary"
+      />
     ) : (
       <Text color="gray" size="2">Awaiting audience insights…</Text>
     );
 
     const websiteEditable = agentPhases.website === "completed" || Boolean(previewCompletePayload?.structured?.website || agentWebsite);
     const websiteContent = websiteEditable ? (
-      <Flex direction="column" gap="2">
-        {agentWebsite?.website_url && <Text color="gray" size="2">URL: {agentWebsite.website_url}</Text>}
-        {renderInlineEditor(websiteHtml, handleWebsiteEdit, "Edit hero statement")}
-      </Flex>
+      websiteIsEditing ? (
+        <Flex direction="column" gap="2">
+          {agentWebsite?.website_url && <Text color="gray" size="2">URL: {agentWebsite.website_url}</Text>}
+          {renderInlineEditor(websiteHtml, handleWebsiteEdit, "Edit hero statement")}
+        </Flex>
+      ) : (
+        <Flex direction="column" gap="2">
+          {agentWebsite?.website_url && <Text color="gray" size="2">URL: {agentWebsite.website_url}</Text>}
+          {websiteReadOnlyText ? (
+            <SafeMarkdown
+              content={websiteReadOnlyText}
+              mode="static"
+              className="text-sm text-secondary"
+            />
+          ) : (
+            <Text color="gray" size="2">No website summary yet.</Text>
+          )}
+        </Flex>
+      )
     ) : streamingWebsite ? (
-      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingWebsite}</Text>
+      <SafeMarkdown
+        content={streamingWebsite}
+        isAnimating
+        className="text-sm text-secondary"
+      />
     ) : (
       <Text color="gray" size="2">Awaiting website summary…</Text>
     );
 
     const businessEditable = agentPhases.business === "completed" || Boolean(previewCompletePayload?.structured?.business || agentBusiness);
     const businessContent = businessEditable ? (
-      <Flex direction="column" gap="2">
-        {agentBusiness?.business_name && <Text weight="medium">{agentBusiness.business_name}</Text>}
-        {renderInlineEditor(businessHtml, handleBusinessEdit, "Edit business overview")}
-        <Box>
-          <Text size="1" color="gray">Features</Text>
-          <Box className="mt-1">{renderBadgeList(agentBusiness?.business_features, "No features captured yet.")}</Box>
-        </Box>
-        <Box>
-          <Text size="1" color="gray">Benefits</Text>
-          <Box className="mt-1">{renderBadgeList(agentBusiness?.business_benefits, "No benefits captured yet.")}</Box>
-        </Box>
-        {agentBusiness?.business_cta && <Text color="gray" size="2">CTA: {agentBusiness.business_cta}</Text>}
-      </Flex>
+      businessIsEditing ? (
+        <Flex direction="column" gap="2">
+          {agentBusiness?.business_name && <Text weight="medium">{agentBusiness.business_name}</Text>}
+          {renderInlineEditor(businessHtml, handleBusinessEdit, "Edit business overview")}
+          <Box>
+            <Text size="1" color="gray">Features</Text>
+            <Box className="mt-1">{renderBadgeList(agentBusiness?.business_features, "No features captured yet.")}</Box>
+          </Box>
+          <Box>
+            <Text size="1" color="gray">Benefits</Text>
+            <Box className="mt-1">{renderBadgeList(agentBusiness?.business_benefits, "No benefits captured yet.")}</Box>
+          </Box>
+          {agentBusiness?.business_cta && <Text color="gray" size="2">CTA: {agentBusiness.business_cta}</Text>}
+        </Flex>
+      ) : (
+        <Flex direction="column" gap="2">
+          {agentBusiness?.business_name && <Text weight="medium">{agentBusiness.business_name}</Text>}
+          {businessReadOnlyText ? (
+            <SafeMarkdown
+              content={businessReadOnlyText}
+              mode="static"
+              className="text-sm text-secondary"
+            />
+          ) : (
+            <Text color="gray" size="2">No business overview yet.</Text>
+          )}
+          <Box>
+            <Text size="1" color="gray">Features</Text>
+            <Box className="mt-1">{renderBadgeList(agentBusiness?.business_features, "No features captured yet.")}</Box>
+          </Box>
+          <Box>
+            <Text size="1" color="gray">Benefits</Text>
+            <Box className="mt-1">{renderBadgeList(agentBusiness?.business_benefits, "No benefits captured yet.")}</Box>
+          </Box>
+          {agentBusiness?.business_cta && <Text color="gray" size="2">CTA: {agentBusiness.business_cta}</Text>}
+        </Flex>
+      )
     ) : streamingBusiness ? (
-      <Text color="gray" size="2" className="whitespace-pre-wrap">{streamingBusiness}</Text>
+      <SafeMarkdown
+        content={streamingBusiness}
+        isAnimating
+        className="text-sm text-secondary"
+      />
     ) : (
       <Text color="gray" size="2">Awaiting business summary…</Text>
     );
 
     const sections = [
       { title: "Brand profile", content: brandProfileContent },
-      { title: "Voice", content: voiceContent },
-      { title: "Audience", content: audienceContent },
-      { title: "Business overview", content: businessContent },
-      { title: "Website", content: websiteContent },
+      {
+        title: "Voice",
+        content: voiceContent,
+        action: voiceEditable ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="1"
+            color="gray"
+            disabled={editActionDisabled}
+            onClick={() => togglePreviewEditMode("voice")}
+          >
+            {voiceIsEditing ? "Done" : "Edit"}
+          </Button>
+        ) : null,
+      },
+      {
+        title: "Audience",
+        content: audienceContent,
+        action: audienceEditable ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="1"
+            color="gray"
+            disabled={editActionDisabled}
+            onClick={() => togglePreviewEditMode("audience")}
+          >
+            {audienceIsEditing ? "Done" : "Edit"}
+          </Button>
+        ) : null,
+      },
+      {
+        title: "Business overview",
+        content: businessContent,
+        action: businessEditable ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="1"
+            color="gray"
+            disabled={editActionDisabled}
+            onClick={() => togglePreviewEditMode("business")}
+          >
+            {businessIsEditing ? "Done" : "Edit"}
+          </Button>
+        ) : null,
+      },
+      {
+        title: "Website",
+        content: websiteContent,
+        action: websiteEditable ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="1"
+            color="gray"
+            disabled={editActionDisabled}
+            onClick={() => togglePreviewEditMode("website")}
+          >
+            {websiteIsEditing ? "Done" : "Edit"}
+          </Button>
+        ) : null,
+      },
     ];
 
     const [brandProfileSection, ...otherSections] = sections;
@@ -2646,13 +2871,13 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             style={glassPanelStyle}
           >
             <Flex direction="column" gap="3" p="3">
-              {renderPreviewSection(brandProfileSection.title, brandProfileSection.content)}
+              {renderPreviewSection(brandProfileSection.title, brandProfileSection.content, brandProfileSection.action)}
               <Grid columns={{ initial: "1", md: "2" }} gap="4" className="items-start" style={{ alignItems: "flex-start" }}>
                 <Flex direction="column" gap="3" className="min-w-0" style={{ minWidth: 0 }}>
-                  {leftSections.map(section => renderPreviewSection(section.title, section.content))}
+                  {leftSections.map(section => renderPreviewSection(section.title, section.content, section.action))}
                 </Flex>
                 <Flex direction="column" gap="3" className="min-w-0" style={{ minWidth: 0 }}>
-                  {rightSections.map(section => renderPreviewSection(section.title, section.content))}
+                  {rightSections.map(section => renderPreviewSection(section.title, section.content, section.action))}
                 </Flex>
               </Grid>
             </Flex>

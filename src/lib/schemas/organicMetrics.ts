@@ -54,6 +54,7 @@ export const instagramOrganicMetricsResponseSchema = z.object({
   accountId: z.string(),
   range: organicRangeSchema,
   metrics: instagramOrganicMetricsSchema,
+  // TODO: Extend with time-series (e.g., daily metrics array) when the organic metrics endpoint exposes it.
   comparison: z.record(metricComparisonSchema).nullable().optional(),
 });
 

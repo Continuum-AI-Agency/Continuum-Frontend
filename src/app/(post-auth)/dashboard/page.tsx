@@ -16,6 +16,7 @@ import {
   LightningBoltIcon,
   Link2Icon,
   MagicWandIcon,
+  OpenInNewWindowIcon,
   RocketIcon,
   StopwatchIcon,
   Share2Icon,
@@ -26,6 +27,7 @@ import { redirect } from "next/navigation";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
+import { AgenticActivityLog } from "@/components/dashboard/AgenticActivityLog";
 import { InstagramOrganicReportingWidget } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { ClientOnly } from "@/components/ui/ClientOnly";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
@@ -119,8 +121,28 @@ export default async function DashboardPage() {
     note: trendsCount + eventsCount + questionsCount === 0 ? "No organic signals yet." : "Organic signals from latest sync.",
   };
 
-  const aiActions: { title: string; meta: string; icon: React.ReactNode }[] = [
-    { title: "No automated actions yet", meta: "Enable DCO to see actions here.", icon: <LightningBoltIcon /> },
+  const agenticActivity = [
+    {
+      id: "dco-1",
+      actorName: "Continuum DCO",
+      summary: "Approved a new creative variant for the holiday launch set.",
+      timestamp: "Today, 9:18 AM",
+      highlight: "Approved",
+    },
+    {
+      id: "dco-2",
+      actorName: "Continuum DCO",
+      summary: "Paused low-performing ad group in Meta based on CTR drop.",
+      timestamp: "Yesterday, 6:42 PM",
+      highlight: "Paused",
+    },
+    {
+      id: "dco-3",
+      actorName: "Continuum DCO",
+      summary: "Queued 3 new video cuts for creative testing.",
+      timestamp: "Dec 29, 4:05 PM",
+      highlight: "Queued",
+    },
   ];
 
   return (
@@ -200,26 +222,15 @@ export default async function DashboardPage() {
 
       <Grid columns={{ initial: "1", lg: "2" }} gap="4">
         <SurfaceCard>
-          <Flex align="center" justify="between">
-            <Heading size="4">AI DCO actions</Heading>
+          <AgenticActivityLog items={agenticActivity} />
+          <Box pt="4">
             <Button variant="outline" size="2" asChild>
-              <Link href="/paid-media">View automations</Link>
+              <Link href="/paid-media" className="flex items-center gap-2">
+                View automations
+                <OpenInNewWindowIcon />
+              </Link>
             </Button>
-          </Flex>
-          <Separator my="3" />
-          <Flex direction="column" gap="3">
-            {aiActions.map(action => (
-              <Flex key={action.title} align="center" gap="3" className="rounded-lg px-2 py-2">
-                <Badge color="gray" variant="soft" radius="full">
-                  {action.icon}
-                </Badge>
-                <Flex direction="column" gap="1">
-                  <Text weight="medium">{action.title}</Text>
-                  <Text color="gray" size="2">{action.meta}</Text>
-                </Flex>
-              </Flex>
-            ))}
-          </Flex>
+          </Box>
         </SurfaceCard>
 
         <SurfaceCard>

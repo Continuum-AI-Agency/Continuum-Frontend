@@ -1,10 +1,8 @@
 import { Callout, Heading } from "@radix-ui/themes";
 import { LightningBoltIcon } from "@radix-ui/react-icons";
 
-import { OrganicExperience } from "@/components/organic/OrganicExperience";
-import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
+import { OrganicCalendarWorkspace } from "@/components/organic/primitives/OrganicCalendarWorkspace";
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
-import { GlassPanel } from "@/components/ui/GlassPanel";
 import {
   ORGANIC_PLATFORMS,
   ORGANIC_PLATFORM_KEYS,
@@ -16,6 +14,7 @@ import type { Trend } from "@/lib/organic/trends";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { redirect } from "next/navigation";
 import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
+import type { OrganicTrendType } from "@/components/organic/primitives/types";
 
 export default async function OrganicPage() {
   const { activeBrandId } = await getActiveBrandContext();
@@ -35,26 +34,21 @@ export default async function OrganicPage() {
     };
   });
 
-  const brandDescription = [
-    onboarding.brand.industry,
-    onboarding.brand.targetAudience,
-    onboarding.brand.brandVoice ?? undefined,
-  ]
-    .filter(Boolean)
-    .join(" • ");
+  const activePlatformKeys = platformAccounts
+    .filter((account) => account.connected && account.accountId)
+    .map((account) => account.platform);
+  const fallbackPlatforms =
+    activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_PLATFORM_KEYS];
+
+  let selectorTrends: Trend[] = [];
+  let trendTypes: OrganicTrendType[] = [];
+  let insightsError: string | null = null;
+  let insights: Awaited<ReturnType<typeof fetchBrandInsights>> | null = null;
 
   try {
-    const insights = await fetchBrandInsights(brandProfileId, { revalidateSeconds: 300 });
-    const trendsAndEvents = insights.data.trendsAndEvents;
-    const questionsByNiche = insights.data.questionsByNiche;
-    const brandTrends = trendsAndEvents.trends;
-    const activePlatformKeys = platformAccounts
-      .filter((account) => account.connected && account.accountId)
-      .map((account) => account.platform);
-    const fallbackPlatforms =
-      activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_PLATFORM_KEYS];
-
-    const selectorTrends: Trend[] = brandTrends.map((trend) => ({
+    insights = await fetchBrandInsights(brandProfileId, { revalidateSeconds: 300 });
+    const brandTrends = insights.data.trendsAndEvents.trends;
+    selectorTrends = brandTrends.map((trend) => ({
       id: trend.id,
       title: trend.title,
       summary: trend.description ?? trend.relevanceToBrand ?? "High-signal topic identified for your brand.",
@@ -63,60 +57,76 @@ export default async function OrganicPage() {
       tags: trend.source ? [trend.source] : [],
     }));
 
-    const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
-      insights,
-      errorMessage: null,
-    });
+    const momentumGroups = ["rising", "stable", "cooling"] as const;
+    const groups = momentumGroups
+      .map((momentum) => ({
+        id: momentum,
+        title: momentum === "rising" ? "Rising now" : momentum === "stable" ? "Stable interest" : "Cooling down",
+        trends: selectorTrends
+          .filter((trend) => trend.momentum === momentum)
+          .map((trend) => ({
+            id: trend.id,
+            title: trend.title,
+            summary: trend.summary,
+            momentum,
+            tags: trend.tags,
+          })),
+      }))
+      .filter((group) => group.trends.length > 0);
 
-    return (
-      <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
-        <BrandInsightsAutoGenerate
-          brandId={brandProfileId}
-          shouldGenerate={shouldAutoGenerateInsights}
-        />
-        <BrandInsightsSignalsPanel
-          trends={brandTrends}
-          events={trendsAndEvents.events}
-          questionsByNiche={questionsByNiche}
-          country={trendsAndEvents.country ?? insights.data.country}
-          weekStartDate={insights.data.weekStartDate}
-          generatedAt={trendsAndEvents.generatedAt ?? insights.generatedAt}
-          status={trendsAndEvents.status}
-          brandId={brandProfileId}
-        />
-        <GlassPanel className="p-6">
-          <OrganicExperience
-            brandName={onboarding.brand.name}
-            brandDescription={brandDescription}
-            platformAccounts={platformAccounts}
-            brandProfileId={brandProfileId}
-            trends={selectorTrends}
-          />
-        </GlassPanel>
-      </div>
-    );
+    trendTypes = groups.length
+      ? [
+          {
+            id: "momentum",
+            label: "Momentum",
+            groups,
+          },
+        ]
+      : [];
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load brand insights for this brand.";
-    const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
-      insights: null,
-      errorMessage: message,
-    });
-    return (
-      <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
-        <BrandInsightsAutoGenerate
-          brandId={brandProfileId}
-          shouldGenerate={shouldAutoGenerateInsights}
-        />
-        <Heading size="6" className="text-white">
-          Organic Planner
-        </Heading>
+    insightsError =
+      error instanceof Error ? error.message : "Unable to load brand insights for this brand.";
+  }
+
+  const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
+    insights,
+    errorMessage: insightsError,
+  });
+
+  const showNoTrendsMessage = selectorTrends.length === 0;
+
+  return (
+    <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
+      <BrandInsightsAutoGenerate
+        brandId={brandProfileId}
+        shouldGenerate={shouldAutoGenerateInsights}
+      />
+      <Heading size="6" className="text-white">
+        Organic Planner
+      </Heading>
+      {insightsError ? (
         <Callout.Root color="red" variant="surface">
           <Callout.Icon>
             <LightningBoltIcon />
           </Callout.Icon>
-          <Callout.Text>{message}</Callout.Text>
+          <Callout.Text>{insightsError}</Callout.Text>
         </Callout.Root>
-      </div>
-    );
-  }
+      ) : null}
+      {showNoTrendsMessage ? (
+        <Callout.Root color="amber" variant="surface">
+          <Callout.Icon>
+            <LightningBoltIcon />
+          </Callout.Icon>
+          <Callout.Text>No trends yet. You can still plan posts without them.</Callout.Text>
+        </Callout.Root>
+      ) : null}
+      <OrganicCalendarWorkspace
+        trendTypes={trendTypes}
+        trends={selectorTrends}
+        activePlatforms={fallbackPlatforms}
+        maxTrendSelections={5}
+        brandProfileId={brandProfileId}
+      />
+    </div>
+  );
 }

@@ -25,7 +25,6 @@ import {
 import { z } from "zod";
 
 import { useToast } from "@/components/ui/ToastProvider";
-import { CreativeAssetLibrary } from "@/components/creative-assets";
 import {
   ORGANIC_PLATFORM_KEYS,
   type OrganicPlatformKey,
@@ -62,7 +61,6 @@ type OrganicPlatformAccount = {
 
 type OrganicExperienceProps = {
   brandName: string;
-  brandDescription: string;
   platformAccounts: OrganicPlatformAccount[];
   brandProfileId: string;
   trends: Trend[];
@@ -294,7 +292,7 @@ const platformFieldSchema = z.object({
 const formSchema = z
   .object({
     language: z.enum(LANGUAGE_VALUES),
-    userPrompt: z.string().min(1, "Enter a prompt or choose a preset"),
+    userPrompt: z.string().trim().optional(),
     generationPrompt: z
       .string()
       .trim()
@@ -342,7 +340,6 @@ type FormInputValues = z.input<typeof formSchema>;
 type FormValues = z.output<typeof formSchema>;
 
 export function OrganicExperience({
-  brandDescription,
   brandName,
   platformAccounts,
   brandProfileId,
@@ -527,16 +524,9 @@ export function OrganicExperience({
   }, [brandProfileId, details.state.dailyTemplates, form, grid.state.weeklyGrid, show]);
 
   return (
-    <Flex
-      direction={{ initial: "column", xl: "row" }}
-      gap="6"
-      align="start"
-    >
+    <Flex direction="column" gap="6" align="start">
       <Flex direction="column" gap="5" className="flex-1">
-        <HeroCard
-          brandName={brandName}
-          brandDescription={brandDescription}
-        />
+        <HeroCard brandName={brandName} />
 
         <GenerationForm
           form={form}
@@ -585,9 +575,6 @@ export function OrganicExperience({
           />
         )}
       </Flex>
-      <Box className="w-full flex-shrink-0 xl:w-[400px]">
-        <CreativeAssetLibrary brandProfileId={brandProfileId} />
-      </Box>
     </Flex>
   );
 }
@@ -878,7 +865,7 @@ function GenerationForm({
             <Flex direction="column" gap="4">
               <Box>
                 <Heading size="4" mb="2">
-                  Campaign Objective
+                  Content focus (optional)
                 </Heading>
                 <Controller
                   name="userPrompt"
@@ -887,15 +874,10 @@ function GenerationForm({
                     <TextArea
                       {...field}
                       rows={4}
-                      placeholder="Describe the theme or objective for this week's content."
+                      placeholder="Optional: share a weekly focus, launch theme, or creative note."
                     />
                   )}
                 />
-                {errors.userPrompt?.message && (
-                  <Text size="1" color="red">
-                    {errors.userPrompt.message}
-                  </Text>
-                )}
               </Box>
               <PromptPresetList onSelect={onPromptPreset} />
               <Box>
@@ -1153,20 +1135,13 @@ function ProgressTimeline({ entries }: { entries: ProgressEntry[] }) {
   );
 }
 
-function HeroCard({
-  brandName,
-  brandDescription,
-}: {
-  brandName: string;
-  brandDescription: string;
-}) {
+function HeroCard({ brandName }: { brandName: string }) {
   return (
     <Card>
       <Box p="4">
         <Heading size="5">{brandName || "Organic Command Center"}</Heading>
         <Text color="gray" size="2">
-          {brandDescription ||
-            "Generate cohesive, on-brand content across every channel in a single flow."}
+          Generate cohesive, on-brand content across every channel in a single flow.
         </Text>
       </Box>
     </Card>
@@ -1202,9 +1177,10 @@ function buildGenerationPayload(values: FormValues): GenerationRequestPayload {
     content: values.prompt.content.trim(),
     source: values.prompt.source,
   } as GenerationRequestPayload["prompt"];
+  const resolvedUserPrompt = values.userPrompt?.trim() || values.prompt.content.trim();
   return {
     language: values.language,
-    userPrompt: values.userPrompt.trim(),
+    userPrompt: resolvedUserPrompt,
     generationPrompt: values.generationPrompt?.trim() || undefined,
     platformAccountIds: platformAccountIds as GenerationRequestPayload["platformAccountIds"],
     selectedTrendIds: values.selectedTrendIds ?? [],

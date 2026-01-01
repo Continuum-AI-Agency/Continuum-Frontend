@@ -1,9 +1,15 @@
 "use client";
 
-import { Badge, Box, Callout, Flex, Grid, Heading, Text } from "@radix-ui/themes";
-import { CalendarIcon, CounterClockwiseClockIcon, LightningBoltIcon, PinTopIcon } from "@radix-ui/react-icons";
+import { Badge, Box, Callout, Flex, Text } from "@radix-ui/themes";
+import {
+  CalendarIcon,
+  ChevronDownIcon,
+  CounterClockwiseClockIcon,
+  LightningBoltIcon,
+  PinTopIcon,
+} from "@radix-ui/react-icons";
+import * as Accordion from "@radix-ui/react-accordion";
 
-import GlassCard from "@/components/ui/GlassCard";
 import type { BrandInsightsEvent } from "@/lib/schemas/brandInsights";
 import { cn } from "@/lib/utils";
 
@@ -46,65 +52,73 @@ export function BrandEventsList({ events }: BrandEventsListProps) {
   });
 
   return (
-    <Grid columns={{ initial: "1", md: "2" }} gap="4">
+    <Accordion.Root type="single" collapsible className="space-y-3">
       {sortedEvents.map((event) => {
         const dateLabel = normalizeDate(event.date);
         return (
-          <GlassCard
+          <Accordion.Item
             key={event.id}
+            value={event.id}
             className={cn(
-              "p-4 space-y-3 border border-border/60",
+              "rounded-xl border border-subtle bg-surface shadow-lg",
               event.isSelected && "border-blue-500/70 ring-1 ring-blue-500/40"
             )}
           >
-            <Flex align="start" justify="between" gap="2">
-              <Heading size="4" className="text-white leading-tight">
-                {event.title}
-              </Heading>
-              <Flex gap="1" align="center">
-                {event.isSelected && (
-                  <Badge color="blue" variant="solid">
-                    <PinTopIcon className="mr-1 h-3.5 w-3.5" />
-                    Selected
-                  </Badge>
+            <Accordion.Header>
+              <Accordion.Trigger className="flex w-full items-start justify-between gap-3 rounded-xl px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+                <div className="min-w-0 space-y-1">
+                  <Text size="3" weight="medium" className="text-white leading-tight line-clamp-2">
+                    {event.title}
+                  </Text>
+                  {dateLabel && (
+                    <Flex align="center" gap="2" wrap="wrap">
+                      <Badge color="gray" variant="surface">
+                        <CalendarIcon className="mr-1 h-3.5 w-3.5" />
+                        {dateLabel}
+                      </Badge>
+                    </Flex>
+                  )}
+                </div>
+                <Flex gap="2" align="center">
+                  {event.isSelected && (
+                    <Badge color="blue" variant="solid">
+                      <PinTopIcon className="mr-1 h-3.5 w-3.5" />
+                      Selected
+                    </Badge>
+                  )}
+                  {typeof event.timesUsed === "number" && event.timesUsed > 0 && (
+                    <Badge color="green" variant="soft">
+                      <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
+                      Used {event.timesUsed}x
+                    </Badge>
+                  )}
+                  <ChevronDownIcon className="h-4 w-4 text-[var(--accent-11)] transition-transform data-[state=open]:rotate-180" />
+                </Flex>
+              </Accordion.Trigger>
+            </Accordion.Header>
+            <Accordion.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+              <Box className="space-y-3 px-4 pb-4 pt-1">
+                {event.description && (
+                  <Text color="gray" size="2">
+                    {event.description}
+                  </Text>
                 )}
-                {typeof event.timesUsed === "number" && event.timesUsed > 0 && (
-                  <Badge color="green" variant="soft">
-                    <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
-                    Used {event.timesUsed}x
-                  </Badge>
+
+                {event.opportunity && (
+                  <Box className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
+                    <Text size="1" color="blue">
+                      Opportunity
+                    </Text>
+                    <Text size="2" color="gray">
+                      {event.opportunity}
+                    </Text>
+                  </Box>
                 )}
-              </Flex>
-            </Flex>
-
-            {event.description && (
-              <Text color="gray" size="2">
-                {event.description}
-              </Text>
-            )}
-
-            {event.opportunity && (
-              <Box className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3">
-                <Text size="1" color="blue">
-                  Opportunity
-                </Text>
-                <Text size="2" color="gray">
-                  {event.opportunity}
-                </Text>
               </Box>
-            )}
-
-            <Flex gap="2" wrap="wrap">
-              {dateLabel && (
-                <Badge color="gray" variant="surface">
-                  <CalendarIcon className="mr-1 h-3.5 w-3.5" />
-                  {dateLabel}
-                </Badge>
-              )}
-            </Flex>
-          </GlassCard>
+            </Accordion.Content>
+          </Accordion.Item>
         );
       })}
-    </Grid>
+    </Accordion.Root>
   );
 }

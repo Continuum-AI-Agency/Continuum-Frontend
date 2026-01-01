@@ -1,13 +1,11 @@
 "use client";
 
-import * as Accordion from "@radix-ui/react-accordion";
-import { ChevronDownIcon, InstagramLogoIcon } from "@radix-ui/react-icons";
+import { ArrowDownIcon, ArrowUpIcon, InstagramLogoIcon } from "@radix-ui/react-icons";
 import {
   Badge,
   Box,
   Callout,
   Card,
-  DataList,
   Flex,
   Grid,
   Heading,
@@ -17,9 +15,17 @@ import {
   Text,
 } from "@radix-ui/themes";
 import React from "react";
+import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { fetchInstagramOrganicMetrics } from "@/lib/api/organicMetrics.client";
 import type { InstagramOrganicMetricsResponse, OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
+import { cn } from "@/lib/utils";
 
 export type InstagramAccountOption = {
   integrationAccountId: string;
@@ -40,6 +46,27 @@ type LoadState =
 
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
 
+type MetricKey = keyof InstagramOrganicMetricsResponse["metrics"];
+
+type MetricCard = {
+  key: MetricKey;
+  label: string;
+  value: number;
+};
+
+const METRIC_LABELS: Record<MetricKey, string> = {
+  reach: "Reach",
+  views: "Views",
+  newFollowers: "New followers",
+  accountsEngaged: "Accounts engaged",
+  reelsViews: "Reels views",
+  postViews: "Post views",
+  storiesViews: "Stories views",
+  profileVisitsYesterday: "Profile visits",
+  nonFollowerReach: "Non-follower reach",
+  followerReach: "Follower reach",
+};
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat().format(value);
 }
@@ -48,14 +75,19 @@ function rangeLabel(preset: OrganicDateRangePreset) {
   return preset.replaceAll("_", " ");
 }
 
+function formatPercent(value?: number) {
+  if (value === undefined) return null;
+  const rounded = Math.abs(value).toFixed(1);
+  return `${value >= 0 ? "+" : "-"}${rounded}%`;
+}
+
 export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
   const firstAccountId = accounts[0]?.integrationAccountId ?? null;
   const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(firstAccountId);
-  const [accordionValue, setAccordionValue] = React.useState<string>("");
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
+  const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
 
   const selectedAccount = accounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
-  const isExpanded = accordionValue === "details";
 
   React.useEffect(() => {
     if (selectedAccountId === null) return;
@@ -86,217 +118,221 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
   }, [brandId, selectedAccountId]);
 
   return (
-    <Card
-      variant="surface"
-      style={{
-        backgroundColor: "var(--muted)",
-        border: "1px solid var(--border)",
-        color: "var(--foreground)",
-      }}
-    >
-      <Box p="3">
-        <Accordion.Root
-          type="single"
-          collapsible
-          value={accordionValue}
-          onValueChange={setAccordionValue}
-        >
-          <Accordion.Item value="details">
-            <Flex align="center" justify="between" gap="3" wrap="wrap">
-              <Flex align="center" gap="2">
-                <Badge color="gray" variant="soft" radius="full">
-                  <InstagramLogoIcon />
-                </Badge>
-                <Flex direction="column" gap="1">
-                  <Text weight="medium">Instagram organic reporting</Text>
-                  <Text color="gray" size="2">{rangeLabel(DEFAULT_RANGE_PRESET)}</Text>
-                </Flex>
-              </Flex>
-
-              <Flex align="center" gap="2">
-                <Select.Root
-                  value={selectedAccountId ?? ""}
-                  onValueChange={(value) => setSelectedAccountId(value)}
-                >
-                  <Select.Trigger variant="surface" radius="large">
-                    {selectedAccount?.name ?? "Select an Instagram account"}
-                  </Select.Trigger>
-                  <Select.Content position="popper" variant="solid" highContrast>
-                    <Select.Group>
-                      <Select.Label>Instagram accounts</Select.Label>
-                      {accounts.map((account) => (
-                        <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
-                          {account.name}
-                        </Select.Item>
-                      ))}
-                    </Select.Group>
-                  </Select.Content>
-                </Select.Root>
-
-                <Accordion.Header>
-                  <Accordion.Trigger asChild>
-                    <IconButton
-                      aria-label={isExpanded ? "Collapse organic reporting" : "Expand organic reporting"}
-                      variant="soft"
-                      color="gray"
-                    >
-                      <ChevronDownIcon
-                        style={{
-                          transition: "transform 150ms ease",
-                          transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
-                        }}
-                      />
-                    </IconButton>
-                  </Accordion.Trigger>
-                </Accordion.Header>
-              </Flex>
-            </Flex>
-
-            <Box pt="3">
-              {accounts.length === 0 ? (
-                <Text color="gray" size="2">
-                  No Instagram accounts are linked to this brand profile.
-                </Text>
-              ) : state.status === "error" ? (
-                <Callout.Root color="red" variant="surface">
-                  <Callout.Text>{state.message}</Callout.Text>
-                </Callout.Root>
-              ) : state.status === "loading" ? (
-                <Flex align="center" gap="2">
-                  <Spinner size="2" />
-                  <Text color="gray" size="2">Loading metrics…</Text>
-                </Flex>
-              ) : state.status === "success" ? (
-                <MetricsBody data={state.data} expanded={isExpanded} />
-              ) : (
-                <Text color="gray" size="2">
-                  Select an Instagram account to view organic reporting.
-                </Text>
-              )}
+    <Card variant="surface" className="border border-subtle bg-surface">
+      <Box p="4">
+        <Flex align="center" justify="between" gap="3" wrap="wrap">
+          <Flex align="center" gap="2">
+            <Badge color="gray" variant="soft" radius="full">
+              <InstagramLogoIcon />
+            </Badge>
+            <Box>
+              <Text weight="medium">Instagram organic reporting</Text>
+              <Text color="gray" size="2">
+                {rangeLabel(DEFAULT_RANGE_PRESET)} overview
+              </Text>
             </Box>
+          </Flex>
 
-            <Accordion.Content>
-              <Box pt="3">
-                {state.status === "success" ? <ExpandedDetails data={state.data} /> : null}
-              </Box>
-            </Accordion.Content>
-          </Accordion.Item>
-        </Accordion.Root>
+          <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
+            <Select.Trigger variant="surface" radius="large">
+              {selectedAccount?.name ?? "Select an Instagram account"}
+            </Select.Trigger>
+            <Select.Content position="popper" variant="solid" highContrast>
+              <Select.Group>
+                <Select.Label>Instagram accounts</Select.Label>
+                {accounts.map((account) => (
+                  <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
+                    {account.name}
+                  </Select.Item>
+                ))}
+              </Select.Group>
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+
+        <Box pt="4">
+          {accounts.length === 0 ? (
+            <Text color="gray" size="2">
+              No Instagram accounts are linked to this brand profile.
+            </Text>
+          ) : state.status === "error" ? (
+            <Callout.Root color="red" variant="surface">
+              <Callout.Text>{state.message}</Callout.Text>
+            </Callout.Root>
+          ) : state.status === "loading" ? (
+            <Flex align="center" gap="2">
+              <Spinner size="2" />
+              <Text color="gray" size="2">
+                Loading metrics…
+              </Text>
+            </Flex>
+          ) : state.status === "success" ? (
+            <MetricsPanel
+              data={state.data}
+              expandedMetric={expandedMetric}
+              onMetricSelect={setExpandedMetric}
+            />
+          ) : (
+            <Text color="gray" size="2">
+              Select an Instagram account to view organic reporting.
+            </Text>
+          )}
+        </Box>
       </Box>
     </Card>
   );
 }
 
-function MetricsBody({ data, expanded }: { data: InstagramOrganicMetricsResponse; expanded: boolean }) {
-  const { metrics } = data;
+function MetricsPanel({
+  data,
+  expandedMetric,
+  onMetricSelect,
+}: {
+  data: InstagramOrganicMetricsResponse;
+  expandedMetric: MetricKey | null;
+  onMetricSelect: (key: MetricKey | null) => void;
+}) {
+  const { metrics, comparison, range } = data;
 
-  const headline = [
-    { label: "Reach", value: formatNumber(metrics.reach) },
-    { label: "Views", value: formatNumber(metrics.views) },
-    { label: "New followers", value: formatNumber(metrics.newFollowers) },
+  const metricCards: MetricCard[] = [
+    { key: "reach", label: METRIC_LABELS.reach, value: metrics.reach },
+    { key: "views", label: METRIC_LABELS.views, value: metrics.views },
+    { key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers },
+    { key: "accountsEngaged", label: METRIC_LABELS.accountsEngaged, value: metrics.accountsEngaged },
+    { key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews },
+    { key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews },
   ];
 
-  const headlineGrid = (
-    <Grid columns={{ initial: "1", sm: "3" }} gap="3">
-      {headline.map((item) => (
-        <Card key={item.label} variant="classic">
-          <Flex direction="column" gap="1" p="3">
-            <Text color="gray" size="2">{item.label}</Text>
-            <Heading size="5">{item.value}</Heading>
-          </Flex>
-        </Card>
-      ))}
-    </Grid>
-  );
+  const expandedKey = expandedMetric ?? metricCards[0]?.key;
+  const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
+  const expandedValue = expandedKey ? metrics[expandedKey] : 0;
+  const expandedComparison = expandedKey ? comparison?.[expandedKey] : undefined;
 
-  if (!expanded) {
-    return (
-      <Flex direction="column" gap="3">
-        {headlineGrid}
-        <Text color="gray" size="2">Expand to see the full breakdown.</Text>
-      </Flex>
-    );
-  }
-
-  const secondary = [
-    { label: "Accounts engaged", value: formatNumber(metrics.accountsEngaged) },
-    { label: "Reels views", value: formatNumber(metrics.reelsViews) },
-    { label: "Post views", value: formatNumber(metrics.postViews) },
-    { label: "Stories views", value: formatNumber(metrics.storiesViews) },
+  const chartData = [
+    {
+      name: expandedComparison ? "Comparison" : "Current",
+      current: expandedComparison?.current ?? expandedValue,
+      previous: expandedComparison?.previous ?? null,
+    },
   ];
+
+  const chartConfig = {
+    current: {
+      label: "Current",
+      color: "var(--color-primary)",
+    },
+    previous: {
+      label: "Previous",
+      color: "var(--color-muted)",
+    },
+  } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="3">
-      {headlineGrid}
-      <Grid columns={{ initial: "1", sm: "2", lg: "4" }} gap="3">
-        {secondary.map((item) => (
-          <Card key={item.label} variant="classic">
-            <Flex direction="column" gap="1" p="3">
-              <Text color="gray" size="2">{item.label}</Text>
-              <Heading size="5">{item.value}</Heading>
+    <Flex direction="column" gap="4">
+      <Grid columns={{ initial: "1", sm: "2", lg: "3" }} gap="3">
+        {metricCards.map((item) => {
+          const delta = comparison?.[item.key]?.percentageChange;
+          const formattedDelta = formatPercent(delta ?? undefined);
+          const isActive = expandedMetric === item.key;
+          const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
+
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onMetricSelect(expandedMetric === item.key ? null : item.key)}
+              className="text-left"
+              aria-pressed={isActive}
+            >
+              <Card
+                variant="surface"
+                className={cn(
+                  "border border-subtle bg-surface transition-all hover:shadow-md",
+                  isActive && "ring-2 ring-[var(--ring)]"
+                )}
+              >
+                <Box p="3">
+                  <Flex align="center" justify="between" gap="2">
+                    <Text color="gray" size="2">
+                      {item.label}
+                    </Text>
+                    {formattedDelta ? (
+                      <Badge color={deltaTone} variant="soft" radius="full">
+                        {delta !== undefined && delta !== 0 ? (
+                          delta > 0 ? <ArrowUpIcon /> : <ArrowDownIcon />
+                        ) : null}
+                        {formattedDelta}
+                      </Badge>
+                    ) : null}
+                  </Flex>
+                  <Heading size="5">{formatNumber(item.value)}</Heading>
+                  <Flex align="center" gap="2">
+                    <Text color="gray" size="1">
+                      Click to view trend
+                    </Text>
+                  </Flex>
+                </Box>
+              </Card>
+            </button>
+          );
+        })}
+      </Grid>
+
+      {expandedMetric ? (
+        <Card variant="surface" className="border border-subtle bg-surface">
+          <Box p="3">
+            <Flex align="center" justify="between" gap="2" wrap="wrap">
+              <Box>
+                <Heading size="4">{expandedLabel}</Heading>
+                <Text color="gray" size="2">
+                  {range.since} → {range.until} ({rangeLabel(range.preset)})
+                </Text>
+              </Box>
+              <IconButton
+                aria-label="Collapse metric chart"
+                variant="soft"
+                color="gray"
+                onClick={() => onMetricSelect(null)}
+              >
+                <ArrowDownIcon />
+              </IconButton>
             </Flex>
-          </Card>
-        ))}
-      </Grid>
-    </Flex>
-  );
-}
 
-function ExpandedDetails({ data }: { data: InstagramOrganicMetricsResponse }) {
-  const { metrics, range, accountId } = data;
+            <Box pt="3">
+              <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
+                <BarChart accessibilityLayer data={chartData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  {expandedComparison ? (
+                    <Bar dataKey="previous" fill="var(--color-previous)" radius={6} />
+                  ) : null}
+                  <Bar dataKey="current" fill="var(--color-current)" radius={6} />
+                </BarChart>
+              </ChartContainer>
+            </Box>
 
-  return (
-    <Flex direction="column" gap="3">
-      <Heading size="4">Details</Heading>
-      <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-        <Card variant="classic">
-          <Box p="3">
-            <DataList.Root orientation="vertical">
-              <DataList.Item>
-                <DataList.Label color="gray">Range</DataList.Label>
-                <DataList.Value>{rangeLabel(range.preset)}</DataList.Value>
-              </DataList.Item>
-              <DataList.Item>
-                <DataList.Label color="gray">Window</DataList.Label>
-                <DataList.Value>
-                  {range.since} → {range.until}
-                </DataList.Value>
-              </DataList.Item>
-              {range.adjusted ? (
-                <DataList.Item>
-                  <DataList.Label color="gray">Adjusted</DataList.Label>
-                  <DataList.Value>
-                    {range.adjusted.since} ({range.adjusted.reason})
-                  </DataList.Value>
-                </DataList.Item>
-              ) : null}
-              <DataList.Item>
-                <DataList.Label color="gray">Account ID</DataList.Label>
-                <DataList.Value>{accountId}</DataList.Value>
-              </DataList.Item>
-            </DataList.Root>
+            <Flex align="center" justify="between" gap="2" wrap="wrap">
+              <Text color="gray" size="2">
+                Current value: {formatNumber(expandedValue)}
+              </Text>
+              {expandedComparison ? (
+                <Text color="gray" size="2">
+                  Previous: {formatNumber(expandedComparison.previous)}
+                </Text>
+              ) : (
+                <Text color="gray" size="2">
+                  Comparison data unavailable
+                </Text>
+              )}
+            </Flex>
           </Box>
         </Card>
-
-        <Card variant="classic">
-          <Box p="3">
-            <DataList.Root orientation="vertical">
-              <DataList.Item>
-                <DataList.Label color="gray">Non-follower reach</DataList.Label>
-                <DataList.Value>{formatNumber(metrics.nonFollowerReach)}</DataList.Value>
-              </DataList.Item>
-              <DataList.Item>
-                <DataList.Label color="gray">Follower reach</DataList.Label>
-                <DataList.Value>{formatNumber(metrics.followerReach)}</DataList.Value>
-              </DataList.Item>
-              <DataList.Item>
-                <DataList.Label color="gray">Profile visits (yesterday)</DataList.Label>
-                <DataList.Value>{formatNumber(metrics.profileVisitsYesterday)}</DataList.Value>
-              </DataList.Item>
-            </DataList.Root>
-          </Box>
-        </Card>
-      </Grid>
+      ) : (
+        <Text color="gray" size="2">
+          Click a metric card to expand a comparison chart.
+        </Text>
+      )}
     </Flex>
   );
 }

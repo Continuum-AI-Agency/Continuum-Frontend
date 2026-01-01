@@ -26,7 +26,7 @@ import {
   removeSavedCompetitorAction,
 } from "@/lib/actions/competitors";
 import type { CompetitorDashboard, CompetitorPost, CompetitorSavedProfile } from "@/lib/schemas/competitors";
-import { cn } from "@/lib/utils";
+import { CompetitorPostCard } from "./CompetitorPostCard";
 
 type SortOption =
   | "recent-desc"
@@ -73,90 +73,6 @@ function sortPosts(posts: CompetitorPost[], sortBy: SortOption) {
   }
 }
 
-function isCdnUrl(url?: string) {
-  if (!url) return false;
-  return /cdninstagram|fbcdn|scontent/.test(url);
-}
-
-function getProxiedImageUrl(url?: string) {
-  if (!url) return "/placeholder.svg";
-  const base =
-    process.env.NEXT_PUBLIC_COMPETITORS_API_URL ||
-    process.env.NEXT_PUBLIC_COMPETITORS_API_BASE_URL ||
-    "https://api.beparsed.com/api/competitors";
-  if (isCdnUrl(url)) {
-    const proxyBase = base.replace(/\/competitors$/, "/competitors/proxy/image");
-    return `${proxyBase}?url=${encodeURIComponent(url)}`;
-  }
-  return url;
-}
-
-function getPostOpenUrl(shortCode?: string, productType?: string) {
-  if (!shortCode) return "#";
-  if (productType === "reel") return `https://www.instagram.com/reel/${shortCode}/`;
-  return `https://www.instagram.com/p/${shortCode}/`;
-}
-
-function PostCard({ post }: { post: CompetitorPost }) {
-  const primaryMedia = post.carouselItems?.[0] ?? post.mediaUrls?.[0];
-  const mediaSrc = getProxiedImageUrl(primaryMedia);
-  return (
-    <Box
-      className={cn(
-        "space-y-2 rounded-lg border border-border/60 bg-[var(--panel)] p-3",
-        post.isPinned && "border-amber-500/60"
-      )}
-    >
-      <Box className="relative aspect-square overflow-hidden rounded-md bg-[var(--muted)]">
-        {primaryMedia ? (
-          <Image
-            src={mediaSrc}
-            alt={post.caption ?? post.shortCode ?? "Competitor post"}
-            fill
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 33vw"
-            className="object-cover"
-            onError={(e) => {
-              const target = e.currentTarget;
-              target.src = "/placeholder.svg";
-            }}
-          />
-        ) : (
-          <Flex align="center" justify="center" className="h-full w-full text-gray-11 text-sm">
-            No media
-          </Flex>
-        )}
-      </Box>
-      <Flex align="center" justify="between" wrap="wrap" gap="2">
-        <Text size="2" weight="medium" className="truncate">
-          {post.caption?.slice(0, 80) || "Untitled post"}
-        </Text>
-        {post.isPinned && (
-          <Badge color="amber" variant="soft" radius="full">
-            Pinned
-          </Badge>
-        )}
-      </Flex>
-
-      <Flex gap="2" wrap="wrap">
-        <Badge color="gray" variant="surface">❤️ {formatNumber(post.likesCount)}</Badge>
-        <Badge color="gray" variant="surface">💬 {formatNumber(post.commentsCount)}</Badge>
-        {typeof post.views === "number" && (
-          <Badge color="gray" variant="surface">▶️ {formatNumber(post.views)}</Badge>
-        )}
-        <Badge color="gray" variant="surface">
-          {new Date(post.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </Badge>
-      </Flex>
-
-      <Button asChild variant="soft" color="gray" size="1">
-        <a href={getPostOpenUrl(post.shortCode, post.productType)} target="_blank" rel="noreferrer">
-          Open on Instagram
-        </a>
-      </Button>
-    </Box>
-  );
-}
 
 export function CompetitorSearchPanel({ brandId }: { brandId?: string }) {
   const [username, setUsername] = useState("");
@@ -464,7 +380,7 @@ const runSearch = async (force = false, overrideUsername?: string) => {
           ) : (
             <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
               {sortedPosts.map((post) => (
-                <PostCard key={post.id} post={post} />
+                <CompetitorPostCard key={post.id} post={post} />
               ))}
             </Grid>
           )}

@@ -18,6 +18,9 @@ export type GeneratorNodeData = {
   jobId?: string;
   artifactPreview?: string;
   artifactName?: string;
+  outputPath?: string;
+  outputUrl?: string;
+  outputType?: 'image' | 'video';
 };
 
 export type AttachmentNodeData = {
