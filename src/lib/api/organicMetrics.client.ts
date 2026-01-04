@@ -3,6 +3,16 @@
 import { instagramOrganicMetricsResponseSchema } from "@/lib/schemas/organicMetrics";
 import type { OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
 
+export type InsightsRequest = {
+  metrics: string[];
+  metric_type?: "total_value" | "time_series";
+  period?: "day" | "lifetime";
+  breakdown?: string | string[];
+  timeframe?: string;
+  since?: string;
+  until?: string;
+};
+
 export type InstagramOrganicMetricsRequest = {
   brandId: string;
   integrationAccountId: string;
@@ -10,6 +20,8 @@ export type InstagramOrganicMetricsRequest = {
     preset: OrganicDateRangePreset;
     custom?: { from: string; to: string };
   };
+  insightsRequests?: InsightsRequest[];
+  forceRefresh?: boolean;
 };
 
 export async function fetchInstagramOrganicMetrics(request: InstagramOrganicMetricsRequest) {

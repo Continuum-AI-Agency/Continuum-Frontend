@@ -7,6 +7,16 @@ import { normalizeInstagramOrganicMetricsResponse } from "@/lib/organic-metrics/
 import { organicDateRangePresetSchema } from "@/lib/schemas/organicMetrics";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+const insightsRequestSchema = z.object({
+  metrics: z.array(z.string()),
+  metric_type: z.enum(["total_value", "time_series"]).optional(),
+  period: z.enum(["day", "lifetime"]).optional(),
+  breakdown: z.union([z.string(), z.array(z.string())]).optional(),
+  timeframe: z.string().optional(),
+  since: z.string().optional(),
+  until: z.string().optional(),
+});
+
 const requestSchema = z.object({
   brandId: z.string(),
   integrationAccountId: z.string(),
@@ -19,6 +29,8 @@ const requestSchema = z.object({
       })
       .optional(),
   }),
+  insightsRequests: z.array(insightsRequestSchema).optional(),
+  forceRefresh: z.boolean().optional(),
 });
 
 async function getServerAccessToken(): Promise<string | undefined> {
@@ -60,6 +72,8 @@ export async function POST(request: Request) {
         brandId: parsed.data.brandId,
         integrationAccountId: parsed.data.integrationAccountId,
         range: parsed.data.range,
+        ...(parsed.data.insightsRequests && { insightsRequests: parsed.data.insightsRequests }),
+        ...(parsed.data.forceRefresh && { forceRefresh: parsed.data.forceRefresh }),
       }),
       cache: "no-store",
     });

@@ -1,6 +1,5 @@
 import { OrganicCalendarWorkspaceClient } from "./OrganicCalendarWorkspaceClient"
 import {
-  organicActivityFeed,
   organicCalendarDays,
   organicCreationSteps,
   organicEditorSlides,
@@ -14,6 +13,7 @@ type OrganicCalendarWorkspaceProps = {
   trendTypes?: OrganicTrendType[]
   trends?: Trend[]
   activePlatforms?: OrganicPlatformKey[]
+  platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>
   maxTrendSelections?: number
   brandProfileId?: string
   userId?: string
@@ -24,6 +24,7 @@ export function OrganicCalendarWorkspace({
   trendTypes,
   trends,
   activePlatforms,
+  platformAccountIds,
   maxTrendSelections,
   brandProfileId,
   userId,
@@ -33,11 +34,11 @@ export function OrganicCalendarWorkspace({
     <OrganicCalendarWorkspaceClient
       days={organicCalendarDays}
       steps={organicCreationSteps}
-      activityFeed={organicActivityFeed}
       editorSlides={organicEditorSlides}
       trendTypes={trendTypes ?? organicTrendTypes}
       trends={trends}
       activePlatforms={activePlatforms}
+      platformAccountIds={platformAccountIds}
       maxTrendSelections={maxTrendSelections}
       brandProfileId={brandProfileId}
       userId={userId}

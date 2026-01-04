@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { OrganicCalendarWorkspaceClient } from "@/components/organic/primitives/OrganicCalendarWorkspaceClient";
 import {
-  organicActivityFeed,
   organicCalendarDays,
   organicCreationSteps,
   organicEditorSlides,
@@ -16,7 +15,6 @@ test("OrganicCalendarWorkspace renders week canvas and workflow", () => {
     <OrganicCalendarWorkspaceClient
       days={organicCalendarDays}
       steps={organicCreationSteps}
-      activityFeed={organicActivityFeed}
       editorSlides={organicEditorSlides}
       trendTypes={organicTrendTypes}
       initialSelectedDraftId={null}

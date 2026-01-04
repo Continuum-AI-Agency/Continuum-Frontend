@@ -37,6 +37,12 @@ export default async function OrganicPage() {
   const activePlatformKeys = platformAccounts
     .filter((account) => account.connected && account.accountId)
     .map((account) => account.platform);
+  const platformAccountIds = platformAccounts.reduce<Record<string, string>>((acc, account) => {
+    if (account.connected && account.accountId) {
+      acc[account.platform] = account.accountId;
+    }
+    return acc;
+  }, {});
   const fallbackPlatforms =
     activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_PLATFORM_KEYS];
 
@@ -124,6 +130,7 @@ export default async function OrganicPage() {
         trendTypes={trendTypes}
         trends={selectorTrends}
         activePlatforms={fallbackPlatforms}
+        platformAccountIds={platformAccountIds}
         maxTrendSelections={5}
         brandProfileId={brandProfileId}
       />

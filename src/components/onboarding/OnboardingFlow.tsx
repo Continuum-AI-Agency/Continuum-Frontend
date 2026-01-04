@@ -2201,6 +2201,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         setState(next);
         await requestStrategicRunsCatchUp(brandId);
         show({ title: "Onboarding complete", description: "Redirecting to your dashboard.", variant: "success" });
+        sessionStorage.setItem('from_onboarding', 'true');
         router.replace("/dashboard");
       })().catch(error => {
         const message =

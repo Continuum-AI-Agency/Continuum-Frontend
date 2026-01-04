@@ -34,6 +34,23 @@ export const organicRangeSchema = z.object({
 
 export type OrganicRange = z.infer<typeof organicRangeSchema>;
 
+export const interactionBreakdownsSchema = z.record(z.record(z.number()));
+
+export const insightsRequestSchema = z.object({
+  metrics: z.array(z.string()),
+  metric_type: z.enum(["total_value", "time_series"]).optional(),
+  period: z.enum(["day", "lifetime"]).optional(),
+  breakdown: z.union([z.string(), z.array(z.string())]).optional(),
+  timeframe: z.string().optional(),
+  since: z.string().optional(),
+  until: z.string().optional(),
+});
+
+export const insightsResponseSchema = z.object({
+  request: insightsRequestSchema,
+  data: z.unknown(),
+});
+
 export const instagramOrganicMetricsSchema = z.object({
   newFollowers: z.number(),
   reach: z.number(),
@@ -45,6 +62,12 @@ export const instagramOrganicMetricsSchema = z.object({
   profileVisitsYesterday: z.number(),
   nonFollowerReach: z.number(),
   followerReach: z.number(),
+  likes: z.number().optional(),
+  comments: z.number().optional(),
+  replies: z.number().optional(),
+  shares: z.number().optional(),
+  saved: z.number().optional(),
+  totalInteractions: z.number().optional(),
 });
 
 export type InstagramOrganicMetrics = z.infer<typeof instagramOrganicMetricsSchema>;
@@ -52,10 +75,16 @@ export type InstagramOrganicMetrics = z.infer<typeof instagramOrganicMetricsSche
 export const instagramOrganicMetricsResponseSchema = z.object({
   platform: z.literal("instagram"),
   accountId: z.string(),
+  brandId: z.string().optional(),
+  integrationAccountId: z.string().optional(),
+  externalAccountId: z.string().optional(),
+  fetchedAt: z.string().optional(),
   range: organicRangeSchema,
+  warnings: z.array(z.string()).optional(),
   metrics: instagramOrganicMetricsSchema,
-  // TODO: Extend with time-series (e.g., daily metrics array) when the organic metrics endpoint exposes it.
+  interactionBreakdowns: interactionBreakdownsSchema.optional(),
   comparison: z.record(metricComparisonSchema).nullable().optional(),
+  insights: z.array(insightsResponseSchema).optional(),
 });
 
 export type InstagramOrganicMetricsResponse = z.infer<typeof instagramOrganicMetricsResponseSchema>;

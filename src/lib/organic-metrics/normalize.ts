@@ -6,6 +6,8 @@ import {
   organicRangeSchema,
   metricComparisonSchema,
   instagramOrganicMetricsSchema,
+  interactionBreakdownsSchema,
+  insightsResponseSchema,
   type InstagramOrganicMetricsResponse,
 } from "@/lib/schemas/organicMetrics";
 
@@ -51,6 +53,12 @@ const snakeInstagramOrganicMetricsSchema = z.object({
   profile_visits_yesterday: z.number(),
   non_follower_reach: z.number(),
   follower_reach: z.number(),
+  likes: z.number().optional(),
+  comments: z.number().optional(),
+  replies: z.number().optional(),
+  shares: z.number().optional(),
+  saved: z.number().optional(),
+  total_interactions: z.number().optional(),
 });
 
 const snakeInstagramOrganicMetricsResponseSchema = z.object({
@@ -91,6 +99,13 @@ const looseInstagramMetricsSchema = z
     non_follower_reach: z.number().optional(),
     followerReach: z.number().optional(),
     follower_reach: z.number().optional(),
+    likes: z.number().optional(),
+    comments: z.number().optional(),
+    replies: z.number().optional(),
+    shares: z.number().optional(),
+    saved: z.number().optional(),
+    totalInteractions: z.number().optional(),
+    total_interactions: z.number().optional(),
   })
   .passthrough();
 
@@ -113,6 +128,13 @@ const looseInstagramOrganicMetricsResponseSchema = z
     integration_account_id: z.string().optional(),
     externalAccountId: z.string().optional(),
     external_account_id: z.string().optional(),
+    brandId: z.string().optional(),
+    brand_id: z.string().optional(),
+    fetchedAt: z.string().optional(),
+    fetched_at: z.string().optional(),
+    warnings: z.array(z.unknown()).optional(),
+    interactionBreakdowns: z.record(z.unknown()).optional(),
+    insights: z.array(z.unknown()).optional(),
     range: z.unknown(),
     metrics: z.unknown(),
     comparison: z.record(z.unknown()).nullable().optional(),
@@ -203,6 +225,12 @@ function normalizeMetrics(metrics: unknown) {
     profileVisitsYesterday: parsed.profileVisitsYesterday ?? parsed.profile_visits_yesterday,
     nonFollowerReach: parsed.nonFollowerReach ?? parsed.non_follower_reach,
     followerReach: parsed.followerReach ?? parsed.follower_reach,
+    likes: parsed.likes ?? 0,
+    comments: parsed.comments ?? 0,
+    replies: parsed.replies ?? 0,
+    shares: parsed.shares ?? 0,
+    saved: parsed.saved ?? 0,
+    totalInteractions: parsed.totalInteractions ?? parsed.total_interactions ?? 0,
   });
 }
 
@@ -222,6 +250,17 @@ function normalizeComparison(comparison: unknown) {
       }),
     ])
   );
+}
+
+function normalizeInteractionBreakdowns(breakdowns: unknown) {
+  if (breakdowns === null || breakdowns === undefined) return undefined;
+  return interactionBreakdownsSchema.parse(breakdowns);
+}
+
+function normalizeInsights(insights: unknown) {
+  if (insights === null || insights === undefined) return undefined;
+  if (!Array.isArray(insights)) return undefined;
+  return insights.map(insight => insightsResponseSchema.parse(insight));
 }
 
 export function normalizeInstagramOrganicMetricsResponse(payload: unknown): InstagramOrganicMetricsResponse {
@@ -279,6 +318,12 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
         profileVisitsYesterday: snakeParsed.data.metrics.profile_visits_yesterday,
         nonFollowerReach: snakeParsed.data.metrics.non_follower_reach,
         followerReach: snakeParsed.data.metrics.follower_reach,
+        likes: snakeParsed.data.metrics.likes,
+        comments: snakeParsed.data.metrics.comments,
+        replies: snakeParsed.data.metrics.replies,
+        shares: snakeParsed.data.metrics.shares,
+        saved: snakeParsed.data.metrics.saved,
+        totalInteractions: snakeParsed.data.metrics.total_interactions,
       },
       comparison,
     });
@@ -290,13 +335,22 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
     const range = normalizeRange(looseParsed.data.range);
     const metrics = normalizeMetrics(looseParsed.data.metrics);
     const comparison = normalizeComparison(looseParsed.data.comparison);
+    const interactionBreakdowns = normalizeInteractionBreakdowns(looseParsed.data.interactionBreakdowns);
+    const insights = normalizeInsights(looseParsed.data.insights);
 
     return instagramOrganicMetricsResponseSchema.parse({
       platform: "instagram",
       accountId,
+      brandId: looseParsed.data.brandId ?? looseParsed.data.brand_id,
+      integrationAccountId: looseParsed.data.integrationAccountId ?? looseParsed.data.integration_account_id,
+      externalAccountId: looseParsed.data.externalAccountId ?? looseParsed.data.external_account_id,
+      fetchedAt: looseParsed.data.fetchedAt ?? looseParsed.data.fetched_at,
       range,
+      warnings: looseParsed.data.warnings,
       metrics,
+      interactionBreakdowns,
       comparison,
+      insights,
     });
   }
 

@@ -12,17 +12,9 @@ import {
   Text,
   Separator,
 } from "@radix-ui/themes";
-import {
-  LightningBoltIcon,
-  Link2Icon,
-  MagicWandIcon,
-  OpenInNewWindowIcon,
-  RocketIcon,
-  StopwatchIcon,
-  Share2Icon,
-} from "@radix-ui/react-icons";
 import React from "react";
 import { redirect } from "next/navigation";
+import DashboardLoader from "@/components/dashboard/DashboardLoader";
 
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
 import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
@@ -146,7 +138,8 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-6 w-full max-w-none px-2 sm:px-3 lg:px-4">
+    <div className="space-y-6 w-full max-w-none px-2 sm:px-3 lg:px-4 relative">
+      <DashboardLoader />
       <BrandInsightsAutoGenerate
         brandId={activeBrandId}
         shouldGenerate={shouldAutoGenerateInsights}
