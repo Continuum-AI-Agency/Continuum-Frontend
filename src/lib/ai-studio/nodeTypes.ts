@@ -52,12 +52,63 @@ export type PreviewNodeData = {
   medium?: AiStudioMedium;
 };
 
+export type ArrayNodeData = {
+  items: string[];
+};
+
+export type IteratorNodeData = {
+  arrayId?: string;
+  currentIndex?: number;
+  totalItems?: number;
+  status?: string;
+};
+
+export type ImageProcessorNodeData = {
+  operation: "inpainting" | "outpainting" | "relighting";
+  maskImage?: string;
+  prompt?: string;
+  strength?: number;
+  status?: string;
+  jobId?: string;
+  outputImage?: string;
+  outputName?: string;
+};
+
+export type LLMNodeData = {
+  provider: "openai" | "anthropic" | "google";
+  model: string;
+  systemPrompt?: string;
+  userPrompt: string;
+  temperature?: number;
+  maxTokens?: number;
+  status?: string;
+  generatedText?: string;
+};
+
+export type CompositeNodeData = {
+  operation: "text-overlay" | "image-blend" | "mask-apply";
+  textContent?: string;
+  textPosition?: "top-left" | "top-center" | "top-right" | "center" | "bottom-left" | "bottom-center" | "bottom-right";
+  fontSize?: number;
+  fontColor?: string;
+  blendMode?: "normal" | "multiply" | "screen" | "overlay";
+  opacity?: number;
+  status?: string;
+  outputImage?: string;
+  outputName?: string;
+};
+
 export type NodeData =
   | GeneratorNodeData
   | AttachmentNodeData
   | PromptNodeData
   | NegativeNodeData
   | ModelNodeData
-  | PreviewNodeData;
+  | PreviewNodeData
+  | ArrayNodeData
+  | IteratorNodeData
+  | ImageProcessorNodeData
+  | LLMNodeData
+  | CompositeNodeData;
 
 export type StudioNode = Node<NodeData>;

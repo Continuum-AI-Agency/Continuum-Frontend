@@ -498,6 +498,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const previewPayloadRef = useRef<AgentRequestPayload | null>(null);
   const previewEditTouchedRef = useRef<{ voice: boolean; audience: boolean }>({ voice: false, audience: false });
   const previewHydratedAtRef = useRef<string | null>(null);
+  const loaderPreloadRef = useRef(false);
   const startMetaSyncMutation = useStartMetaSync();
   const startGoogleSyncMutation = useStartGoogleSync();
   const startGoogleDrivePickerMutation = useStartGoogleDrivePicker();
@@ -2225,6 +2226,14 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
   const isCompleting = isPending;
   const shouldShowPreview = isPreviewVisible || isPreviewRunning;
 
+  useEffect(() => {
+    if (!shouldShowPreview || loaderPreloadRef.current) return;
+    loaderPreloadRef.current = true;
+    // Warm the dashboard loader bundle while the preview is open.
+    void import("@/components/loader-animations/OnboardingLoading");
+    router.prefetch("/dashboard");
+  }, [shouldShowPreview, router]);
+
   const renderBrandTags = () => (
     <Flex wrap="wrap" gap="2">
       {BRAND_VOICE_TAGS.map(tag => {
@@ -2562,6 +2571,8 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       </Flex>
     );
 
+    const previewMarkdownClassName = "text-sm text-secondary max-w-full break-words [overflow-wrap:anywhere]";
+
     const brandProfileContent = agentBrandProfile ? (
       <Flex direction="column" gap="2">
         <Text weight="medium">{agentBrandProfile.brand_name}</Text>
@@ -2569,7 +2580,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
           <SafeMarkdown
             content={agentBrandProfile.description}
             mode="static"
-            className="text-sm text-secondary"
+            className={previewMarkdownClassName}
           />
         )}
         {agentBrandProfile.website_url && <Text color="gray" size="2">Website: {agentBrandProfile.website_url}</Text>}
@@ -2579,7 +2590,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         <SafeMarkdown
           content={streamingBrandProfile}
           isAnimating
-          className="text-sm text-secondary"
+          className={previewMarkdownClassName}
         />
       ) : (
         <Text color="gray" size="2">Awaiting brand profile…</Text>
@@ -2602,7 +2613,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             <SafeMarkdown
               content={voiceReadOnlyText}
               mode="static"
-              className="text-sm text-secondary"
+              className={previewMarkdownClassName}
             />
           ) : (
             <Text color="gray" size="2">No voice summary yet.</Text>
@@ -2617,7 +2628,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       <SafeMarkdown
         content={streamingVoice}
         isAnimating
-        className="text-sm text-secondary"
+        className={previewMarkdownClassName}
       />
     ) : (
       <Text color="gray" size="2">Awaiting voice insights…</Text>
@@ -2643,7 +2654,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             <SafeMarkdown
               content={audienceReadOnlyText}
               mode="static"
-              className="text-sm text-secondary"
+              className={previewMarkdownClassName}
             />
           ) : (
             <Text color="gray" size="2">No audience summary yet.</Text>
@@ -2662,7 +2673,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       <SafeMarkdown
         content={streamingAudience}
         isAnimating
-        className="text-sm text-secondary"
+        className={previewMarkdownClassName}
       />
     ) : (
       <Text color="gray" size="2">Awaiting audience insights…</Text>
@@ -2682,7 +2693,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             <SafeMarkdown
               content={websiteReadOnlyText}
               mode="static"
-              className="text-sm text-secondary"
+              className={previewMarkdownClassName}
             />
           ) : (
             <Text color="gray" size="2">No website summary yet.</Text>
@@ -2693,7 +2704,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       <SafeMarkdown
         content={streamingWebsite}
         isAnimating
-        className="text-sm text-secondary"
+        className={previewMarkdownClassName}
       />
     ) : (
       <Text color="gray" size="2">Awaiting website summary…</Text>
@@ -2722,7 +2733,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
             <SafeMarkdown
               content={businessReadOnlyText}
               mode="static"
-              className="text-sm text-secondary"
+              className={previewMarkdownClassName}
             />
           ) : (
             <Text color="gray" size="2">No business overview yet.</Text>
@@ -2742,7 +2753,7 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
       <SafeMarkdown
         content={streamingBusiness}
         isAnimating
-        className="text-sm text-secondary"
+        className={previewMarkdownClassName}
       />
     ) : (
       <Text color="gray" size="2">Awaiting business summary…</Text>

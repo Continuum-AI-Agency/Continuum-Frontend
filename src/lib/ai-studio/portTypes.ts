@@ -71,6 +71,16 @@ export function getNodeOutputPortType(node: StudioNode): PortType | undefined {
       return attData.mimeType?.startsWith('video/') ? 'video' : 'image';
     case 'model':
       return 'provider';
+    case 'array':
+      return 'text'; // Array outputs individual text items
+    case 'iterator':
+      return 'text'; // Iterator outputs current array item
+    case 'imageProcessor':
+      return 'image'; // Processor outputs processed image
+    case 'llm':
+      return 'text'; // LLM outputs generated text
+    case 'composite':
+      return 'image'; // Composite outputs combined image
     case 'generator':
       const genData = node.data as GeneratorNodeData;
       return genData.outputType ?? 'image';

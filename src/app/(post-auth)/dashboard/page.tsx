@@ -12,6 +12,15 @@ import {
   Text,
   Separator,
 } from "@radix-ui/themes";
+import {
+  LightningBoltIcon,
+  Link2Icon,
+  MagicWandIcon,
+  OpenInNewWindowIcon,
+  RocketIcon,
+  Share2Icon,
+  StopwatchIcon,
+} from "@radix-ui/react-icons";
 import React from "react";
 import { redirect } from "next/navigation";
 import DashboardLoader from "@/components/dashboard/DashboardLoader";
@@ -149,12 +158,6 @@ export default async function DashboardPage() {
       </React.Suspense>
 
       <HeaderBlock brandName={activeBrandName} />
-
-      <Grid columns={{ initial: "1", sm: "3" }} gap="4">
-        <KpiCard label="Trends tracked" value={trendsCount.toString()} icon={<MagicWandIcon />} badge="Latest window" />
-        <KpiCard label="Events watched" value={eventsCount.toString()} icon={<RocketIcon />} badge="Opportunities" />
-        <KpiCard label="Audience questions" value={questionsCount.toString()} icon={<Link2Icon />} badge="Prompts" />
-      </Grid>
 
       <SurfaceCard>
         <Flex direction="column" gap="3">

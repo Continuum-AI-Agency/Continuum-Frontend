@@ -33,7 +33,7 @@ const buildSafeRehypePlugins = (defaultOrigin: string) => [
 export function SafeMarkdown({ content, className, isAnimating, mode = "streaming" }: SafeMarkdownProps) {
   if (!content || !content.trim()) return null;
 
-  const rehypePlugins = buildSafeRehypePlugins(getDefaultOrigin());
+  const rehypePlugins = buildSafeRehypePlugins(getDefaultOrigin()) as any;
 
   return (
     <Streamdown

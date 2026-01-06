@@ -4,3 +4,8 @@ export { ModelNode } from './ModelNode';
 export { AttachmentNode } from './AttachmentNode';
 export { GeneratorNode } from './GeneratorNode';
 export { PreviewNode } from './PreviewNode';
+export { ArrayNode } from './ArrayNode';
+export { IteratorNode } from './IteratorNode';
+export { ImageProcessorNode } from './ImageProcessorNode';
+export { LLMNode } from './LLMNode';
+export { CompositeNode } from './CompositeNode';

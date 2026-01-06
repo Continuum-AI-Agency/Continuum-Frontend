@@ -12,8 +12,12 @@ import {
   addEdge,
   useEdgesState,
   useNodesState,
+  useStore,
   type Connection,
   type Edge,
+  BaseEdge,
+  EdgeProps,
+  getBezierPath,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import * as ContextMenu from "@radix-ui/react-context-menu";
@@ -29,9 +33,12 @@ import {
   ImageIcon,
   VideoIcon,
   TextIcon,
+  ChatBubbleIcon,
+  MixIcon,
 } from "@radix-ui/react-icons";
 
 import { ZoomControls } from "@/components/ai-studio/canvas/ZoomControls";
+import { ArrayNode, IteratorNode, ImageProcessorNode, LLMNode, CompositeNode } from "@/components/ai-studio/canvas";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
@@ -48,14 +55,21 @@ import {
   type AiStudioProvider,
 } from "@/lib/schemas/aiStudio";
 import {
+  type ArrayNodeData,
   type AttachmentNodeData,
+  type CompositeNodeData,
   type GeneratorNodeData,
+  type ImageProcessorNodeData,
+  type IteratorNodeData,
+  type LLMNodeData,
   type ModelNodeData,
   type NegativeNodeData,
   type PreviewNodeData,
   type PromptNodeData,
   type StudioNode,
 } from "@/lib/ai-studio/nodeTypes";
+import { resolveGeneratorInputs } from "@/lib/ai-studio/inputResolution";
+import { arePortsCompatible, getNodeOutputPortType } from "@/lib/ai-studio/portTypes";
 import type {
   PromptTemplateCreateInput,
   PromptTemplateUpdateInput,
@@ -304,6 +318,50 @@ const GeneratorNode = ({ id, data, selected }: { id: string; data: GeneratorNode
   </ContextMenu.Root>
 );
 
+const CustomEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  source,
+  target,
+  style = {},
+  markerEnd,
+}: EdgeProps) => {
+  const nodes = useStore((state) => state.nodes);
+  const sourceNode = nodes.find((n: any) => n.id === source);
+  const isActive = sourceNode?.data?.status === 'processing' || sourceNode?.data?.status === 'queued';
+
+  const [edgePath] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition: Position.Bottom,
+    targetX,
+    targetY,
+    targetPosition: Position.Top,
+  });
+
+  return (
+    <>
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          ...style,
+          stroke: isActive ? '#10b981' : '#94a3b8',
+          strokeWidth: isActive ? 3 : 2,
+          filter: isActive ? 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.6))' : undefined,
+        }}
+      />
+    </>
+  );
+};
+
+const edgeTypes = {
+  default: CustomEdge,
+};
+
 const nodeTypes = {
   prompt: PromptNode,
   negative: NegativeNode,
@@ -311,9 +369,14 @@ const nodeTypes = {
   attachment: AttachmentNode,
   generator: GeneratorNode,
   preview: PreviewNode,
+  array: ArrayNode,
+  iterator: IteratorNode,
+  imageProcessor: ImageProcessorNode,
+  llm: LLMNode,
+  composite: CompositeNode,
 };
 
-type PaletteType = "prompt" | "negative" | "model" | "attachment" | "generator" | "preview";
+type PaletteType = "prompt" | "negative" | "model" | "attachment" | "array" | "iterator" | "imageProcessor" | "llm" | "composite" | "generator" | "preview";
 
 type PaletteItem = {
   id: string;
@@ -326,7 +389,12 @@ type PaletteItem = {
     | Partial<AttachmentNodeData>
     | Partial<ModelNodeData>
     | Partial<NegativeNodeData>
-    | Partial<PreviewNodeData>;
+    | Partial<PreviewNodeData>
+    | Partial<ArrayNodeData>
+    | Partial<IteratorNodeData>
+    | Partial<ImageProcessorNodeData>
+    | Partial<LLMNodeData>
+    | Partial<CompositeNodeData>;
   disabled?: boolean;
 };
 
@@ -335,6 +403,11 @@ const paletteItems: PaletteItem[] = [
   { id: "palette-negative", label: "Negative", type: "negative", icon: <TextIcon />, data: { negativePrompt: "" } },
   { id: "palette-model", label: "Model", type: "model", icon: <ImageIcon />, data: { provider: "nano-banana", medium: "image", aspectRatio: "1:1" } },
   { id: "palette-attachment", label: "Reference Image", type: "attachment", icon: <ImageIcon />, data: { label: "Ref", path: "", mimeType: "image/png", previewUrl: "" } },
+  { id: "palette-array", label: "Array", type: "array", icon: <StackIcon />, data: { items: [] } },
+  { id: "palette-iterator", label: "Iterator", type: "iterator", icon: <MagicWandIcon />, data: { arrayId: undefined, currentIndex: 0, totalItems: 0 } },
+  { id: "palette-image-processor", label: "Image Processor", type: "imageProcessor", icon: <ImageIcon />, data: { operation: "inpainting", prompt: "", strength: 0.5 } },
+  { id: "palette-llm", label: "LLM Generator", type: "llm", icon: <ChatBubbleIcon />, data: { provider: "openai", model: "gpt-4", userPrompt: "", temperature: 0.7, maxTokens: 500 } },
+  { id: "palette-composite", label: "Composite", type: "composite", icon: <MixIcon />, data: { operation: "text-overlay", textContent: "", textPosition: "center", fontSize: 32, fontColor: "#ffffff" } },
   { id: "palette-image-gen", label: "Image Generator", type: "generator", icon: <ImageIcon />, data: { provider: "nano-banana", medium: "image", prompt: "", aspectRatio: "1:1" } },
   { id: "palette-video-veo", label: "Video Gen (Veo 3.1)", type: "generator", icon: <VideoIcon />, data: { provider: "veo-3-1", medium: "video", prompt: "", aspectRatio: "16:9" }, disabled: true },
   { id: "palette-video-sora", label: "Video Gen (Sora 2)", type: "generator", icon: <VideoIcon />, data: { provider: "sora-2", medium: "video", prompt: "", aspectRatio: "16:9" }, disabled: true },
@@ -480,24 +553,28 @@ export default function AIStudioClient({
       const detail = (e as CustomEvent).detail as { id: string };
       const node = nodes.find((n) => n.id === detail.id && n.type === "generator");
       if (!node) return;
-      const data = node.data as GeneratorNodeData;
-      if (!data.prompt || !data.aspectRatio) {
+
+      const resolved = resolveGeneratorInputs(detail.id, nodes, edges);
+      if (!resolved.prompt || !resolved.aspectRatio) {
         showToast({ title: "Missing fields", description: "Prompt and aspect ratio required", variant: "error" });
         return;
       }
       try {
         updateNodeField(node.id, "status", "queued");
+        const generatorData = node.data as GeneratorNodeData;
         const payload = {
           brandProfileId,
-          provider: data.provider,
-          medium: data.medium,
-          prompt: data.prompt,
-          aspectRatio: data.aspectRatio,
-          negativePrompt: data.negativePrompt || undefined,
-          guidanceScale: data.guidanceScale || undefined,
-          seed: data.seed || undefined,
+          provider: resolved.provider,
+          medium: generatorData.medium,
+          prompt: resolved.prompt,
+          aspectRatio: resolved.aspectRatio,
+          negativePrompt: resolved.negativePrompt,
+          guidanceScale: generatorData.guidanceScale || undefined,
+          seed: generatorData.seed || undefined,
           metadata: {
-            referenceAssetPath: data.referenceAssetPath,
+            referenceAssetPath: resolved.refs.length > 0 ? resolved.refs[0].path : undefined,
+            firstFramePath: resolved.firstFrame?.path,
+            lastFramePath: resolved.lastFrame?.path,
           },
         };
         const job = await createAiStudioJob(payload);
@@ -542,15 +619,148 @@ export default function AIStudioClient({
       setEdges((prev) => prev.filter((edge) => edge.source !== id && edge.target !== id));
     };
 
+    const onIterate = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string };
+      const iteratorNode = nodes.find((n) => n.id === detail.id && n.type === "iterator");
+      if (!iteratorNode) return;
+
+      const arrayEdge = edges.find((edge) => edge.target === detail.id && edge.targetHandle === "array");
+      if (!arrayEdge) {
+        showToast({ title: "No array connected", description: "Connect an Array node to iterate over", variant: "error" });
+        return;
+      }
+
+      const arrayNode = nodes.find((n) => n.id === arrayEdge.source && n.type === "array");
+      if (!arrayNode) return;
+
+      const arrayData = arrayNode.data as ArrayNodeData;
+      const iteratorData = iteratorNode.data as IteratorNodeData;
+
+      const currentIndex = iteratorData.currentIndex ?? 0;
+      if (currentIndex >= arrayData.items.length) {
+        showToast({ title: "Iteration complete", description: "All items processed", variant: "success" });
+        return;
+      }
+
+      const newIndex = currentIndex + 1;
+      updateNodeField(iteratorNode.id, "currentIndex", newIndex);
+      updateNodeField(iteratorNode.id, "totalItems", arrayData.items.length);
+      updateNodeField(iteratorNode.id, "arrayId", arrayNode.id);
+
+      showToast({ title: "Iterating", description: `Processing item ${newIndex}/${arrayData.items.length}`, variant: "info" });
+    };
+
+    const onResetIterator = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string };
+      updateNodeField(detail.id, "currentIndex", 0);
+      updateNodeField(detail.id, "totalItems", 0);
+      updateNodeField(detail.id, "arrayId", undefined);
+      showToast({ title: "Iterator reset", variant: "info" });
+    };
+
+    const onProcess = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string };
+      const processorNode = nodes.find((n) => n.id === detail.id && n.type === "imageProcessor");
+      if (!processorNode) return;
+
+      const processorData = processorNode.data as ImageProcessorNodeData;
+      if (!processorData.prompt && processorData.operation !== "relighting") {
+        showToast({ title: "Missing prompt", description: "Prompt required for this operation", variant: "error" });
+        return;
+      }
+
+      try {
+        updateNodeField(processorNode.id, "status", "processing");
+        // For now, simulate processing - in real implementation, call image processing API
+        setTimeout(() => {
+          updateNodeField(processorNode.id, "status", "completed");
+          updateNodeField(processorNode.id, "outputImage", "processed-image.png");
+          updateNodeField(processorNode.id, "outputName", "processed.png");
+          showToast({ title: "Processing complete", variant: "success" });
+        }, 2000);
+        showToast({ title: "Processing started", variant: "info" });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to process image";
+        showToast({ title: "Processing failed", description: message, variant: "error" });
+        updateNodeField(processorNode.id, "status", "failed");
+      }
+    };
+
+    const onGenerateText = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string };
+      const llmNode = nodes.find((n) => n.id === detail.id && n.type === "llm");
+      if (!llmNode) return;
+
+      const llmData = llmNode.data as LLMNodeData;
+      if (!llmData.userPrompt) {
+        showToast({ title: "Missing prompt", description: "User prompt required", variant: "error" });
+        return;
+      }
+
+      try {
+        updateNodeField(llmNode.id, "status", "processing");
+        // For now, simulate LLM generation - in real implementation, call LLM API
+        setTimeout(() => {
+          const mockText = `Generated creative prompt: ${llmData.userPrompt} - Enhanced with artistic details, vibrant colors, and dramatic lighting.`;
+          updateNodeField(llmNode.id, "status", "completed");
+          updateNodeField(llmNode.id, "generatedText", mockText);
+          showToast({ title: "Text generated", variant: "success" });
+        }, 1500);
+        showToast({ title: "Generating text", variant: "info" });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to generate text";
+        showToast({ title: "Generation failed", description: message, variant: "error" });
+        updateNodeField(llmNode.id, "status", "failed");
+      }
+    };
+
+    const onComposite = async (e: Event) => {
+      const detail = (e as CustomEvent).detail as { id: string };
+      const compositeNode = nodes.find((n) => n.id === detail.id && n.type === "composite");
+      if (!compositeNode) return;
+
+      const compositeData = compositeNode.data as CompositeNodeData;
+      if (compositeData.operation === "text-overlay" && !compositeData.textContent) {
+        showToast({ title: "Missing text", description: "Text content required for overlay", variant: "error" });
+        return;
+      }
+
+      try {
+        updateNodeField(compositeNode.id, "status", "processing");
+        // For now, simulate compositing - in real implementation, call image compositing API
+        setTimeout(() => {
+          updateNodeField(compositeNode.id, "status", "completed");
+          updateNodeField(compositeNode.id, "outputImage", "composite-image.png");
+          updateNodeField(compositeNode.id, "outputName", "composite.png");
+          showToast({ title: "Compositing complete", variant: "success" });
+        }, 2000);
+        showToast({ title: "Compositing started", variant: "info" });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to composite";
+        showToast({ title: "Compositing failed", description: message, variant: "error" });
+        updateNodeField(compositeNode.id, "status", "failed");
+      }
+    };
+
     window.addEventListener("node:edit", onEdit);
     window.addEventListener("node:generate", onGenerate);
     window.addEventListener("node:duplicate", onDuplicate);
     window.addEventListener("node:delete", onDelete);
+    window.addEventListener("node:iterate", onIterate);
+    window.addEventListener("node:reset-iterator", onResetIterator);
+    window.addEventListener("node:process", onProcess);
+    window.addEventListener("node:generate-text", onGenerateText);
+    window.addEventListener("node:composite", onComposite);
     return () => {
       window.removeEventListener("node:edit", onEdit);
       window.removeEventListener("node:generate", onGenerate);
       window.removeEventListener("node:duplicate", onDuplicate);
       window.removeEventListener("node:delete", onDelete);
+      window.removeEventListener("node:iterate", onIterate);
+      window.removeEventListener("node:reset-iterator", onResetIterator);
+      window.removeEventListener("node:process", onProcess);
+      window.removeEventListener("node:generate-text", onGenerateText);
+      window.removeEventListener("node:composite", onComposite);
     };
   }, [nodes, brandProfileId, setNodes, setEdges, showToast, updateNodeField]);
 
@@ -611,8 +821,24 @@ export default function AIStudioClient({
   );
 
   const handleConnect = React.useCallback(
-    (params: Edge | Connection) => setEdges((eds) => addEdge({ ...params, type: "default" }, eds)),
-    [setEdges]
+    (params: Edge | Connection) => {
+      // Validate connection compatibility
+      const sourceNode = nodes.find(n => n.id === params.source);
+      const targetHandleType = params.targetHandle || undefined;
+      if (sourceNode) {
+        const sourcePortType = getNodeOutputPortType(sourceNode);
+        if (sourcePortType && !arePortsCompatible(sourcePortType, targetHandleType)) {
+          showToast({
+            title: "Incompatible connection",
+            description: "This connection type is not supported",
+            variant: "error"
+          });
+          return;
+        }
+      }
+      setEdges((eds) => addEdge({ ...params, type: "default" }, eds));
+    },
+    [nodes, setEdges, showToast]
   );
 
   return (
@@ -697,6 +923,7 @@ export default function AIStudioClient({
                 onEdgesChange={onEdgesChange}
                 onConnect={handleConnect}
                 nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
                 fitView
                 onDrop={handleCanvasDrop}
                 onDragOver={(e) => e.preventDefault()}

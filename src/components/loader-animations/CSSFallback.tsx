@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
 
 interface CSSFallbackProps {
   phrases?: string[];
@@ -12,11 +13,12 @@ interface CSSFallbackProps {
 
 // CSS-only wave animation using login.module.css classes
 const CSSFallback: React.FC<CSSFallbackProps> = ({
-  phrases = ["Hola", "Hello", "Welcome", "Bienvideo", "Olà", "Bem-vindo"],
+  phrases = DEFAULT_LOADING_PHRASES,
   cycleDuration = 2500,
   theme = "dark"
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const transitionDuration = Math.min(0.6, Math.max(0.25, cycleDuration / 1000 * 0.6));
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -96,7 +98,7 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.7, ease: "easeInOut" }}
+            transition={{ duration: transitionDuration, ease: "easeInOut" }}
             className={cn(
               "text-5xl md:text-7xl font-bold text-center tracking-tight drop-shadow-2xl",
               theme === "dark"

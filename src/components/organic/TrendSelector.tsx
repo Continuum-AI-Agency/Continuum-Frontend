@@ -52,7 +52,7 @@ export function TrendSelector({
   }, [trends]);
 
   const defaultTab = trendTypes[0]?.type ?? "rising";
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
   useEffect(() => {
     if (!trendTypes.find((entry) => entry.type === activeTab)) {

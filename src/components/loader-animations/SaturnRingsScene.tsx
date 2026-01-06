@@ -3,7 +3,7 @@
 import React, { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import SaturnRingsGroup from "./saturnRingsGroup";
+import SaturnRingsGroup from "./SaturnRingsGroup";
 import GalaxyParticles from "./GalaxyParticles";
 
 interface SaturnRingsSceneProps {

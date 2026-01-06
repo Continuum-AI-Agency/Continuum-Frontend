@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
 
 interface PhraseOverlayProps {
   phrases?: string[];
@@ -12,21 +13,22 @@ interface PhraseOverlayProps {
 }
 
 const PhraseOverlay: React.FC<PhraseOverlayProps> = ({
-  phrases = ["Hola", "Hello", "Welcome", "Bienvideo", "Olà", "Bem-vindo"],
+  phrases = DEFAULT_LOADING_PHRASES,
   cycleDuration = 2500,
   theme = "dark",
   fastMode = false
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const intervalDuration = fastMode ? 600 : cycleDuration;
+  const transitionDuration = Math.min(0.6, Math.max(0.25, intervalDuration / 1000 * 0.6));
 
   useEffect(() => {
-    const intervalDuration = fastMode ? 600 : cycleDuration;
     const interval = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % phrases.length);
     }, intervalDuration);
 
     return () => clearInterval(interval);
-  }, [phrases.length, cycleDuration, fastMode]);
+  }, [phrases.length, intervalDuration]);
 
   const variants = {
     enter: {
@@ -55,7 +57,7 @@ const PhraseOverlay: React.FC<PhraseOverlayProps> = ({
           initial="enter"
           animate="center"
           exit="exit"
-          transition={{ duration: 0.7, ease: "easeInOut" }}
+          transition={{ duration: transitionDuration, ease: "easeInOut" }}
           className={cn(
             "text-5xl md:text-7xl font-bold text-center tracking-tight drop-shadow-2xl",
             theme === "dark"

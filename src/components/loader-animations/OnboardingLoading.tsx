@@ -6,6 +6,7 @@ import SaturnRingsScene from "./SaturnRingsScene";
 import PhraseOverlay from "./PhraseOverlay";
 import CSSFallback from "./CSSFallback";
 import { useTheme } from "@/components/theme-provider";
+import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
 
 export interface OnboardingLoadingProps {
   /** Phrases to cycle through */
@@ -33,7 +34,7 @@ export interface OnboardingLoadingProps {
 }
 
 const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
-  phrases = ["Hola", "Hello", "Welcome", "Bienvideo", "Olà", "Bem-vindo"],
+  phrases = DEFAULT_LOADING_PHRASES,
   cycleDuration = 2500,
   use3D = true,
   isVisible = true,

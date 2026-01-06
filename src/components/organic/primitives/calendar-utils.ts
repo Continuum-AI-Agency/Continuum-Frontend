@@ -24,8 +24,8 @@ export function moveDraftToDay(
   return cleared.map((day) => {
     if (day.id !== targetDayId) return day
 
-    const updatedDraft = {
-      ...movedDraft,
+    const updatedDraft: OrganicCalendarDraft = {
+      ...movedDraft!,
       dateLabel: `${day.label}, ${day.dateLabel}`,
     }
 
