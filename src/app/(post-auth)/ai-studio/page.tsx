@@ -19,8 +19,8 @@ export default async function AIStudioPage() {
   const tier = permissions.find((perm) => perm.brand_profile_id === activeBrandId)?.tier ?? 0;
   if (tier === 0) {
     // Redirect back to dashboard with a clear message.
-    const msg = encodeURIComponent("This is a paid feature only. Please contact an Administrator.");
-    redirect(`/?error=${msg}`);
+    const msg = encodeURIComponent("Access Restricted: AI Studio is a paid feature. Please contact an Administrator.");
+    redirect(`/dashboard?error=${msg}`);
   }
 
   const brandName =

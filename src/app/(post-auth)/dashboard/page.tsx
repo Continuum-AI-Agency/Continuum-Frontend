@@ -30,6 +30,7 @@ import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsi
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import { AgenticActivityLog } from "@/components/dashboard/AgenticActivityLog";
 import { InstagramOrganicReportingWidget } from "@/components/dashboard/InstagramOrganicReportingWidget";
+import { DashboardErrorHandler } from "@/components/dashboard/DashboardErrorHandler";
 import { ClientOnly } from "@/components/ui/ClientOnly";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
@@ -50,7 +51,13 @@ const glassPanelStyle: React.CSSProperties = {
 
 const glassPanelClassName = "backdrop-blur-xl border";
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: Promise<{ error?: string }>;
+};
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = searchParams ? await searchParams : {};
+  const errorMessage = params.error;
   const { activeBrandId, brandSummaries } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
@@ -148,6 +155,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 w-full max-w-none px-2 sm:px-3 lg:px-4 relative">
+      <DashboardErrorHandler error={errorMessage} />
       <DashboardLoader />
       <BrandInsightsAutoGenerate
         brandId={activeBrandId}
