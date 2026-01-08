@@ -6,6 +6,9 @@ import {
   aiStudioJobSchema,
   aiStudioJobsResponseSchema,
   aiStudioTemplatesResponseSchema,
+  aiStudioWorkflowsResponseSchema,
+  aiStudioWorkflowSchema,
+  type AiStudioWorkflow,
   type AiStudioGenerationRequest,
   type AiStudioJob,
   type AiStudioMedium,
@@ -93,6 +96,40 @@ async function postInternal<T>(
   return parseJsonResponse(response, schema);
 }
 
+async function patchInternal<T>(
+  path: string,
+  body: unknown,
+  schema: JsonSchema<T>
+): Promise<T> {
+  const url = resolveInternalApiUrl(path);
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    await handleErrorResponse(response);
+  }
+
+  return parseJsonResponse(response, schema);
+}
+
+async function deleteInternal(path: string): Promise<void> {
+  const url = resolveInternalApiUrl(path);
+  const response = await fetch(url, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    await handleErrorResponse(response);
+  }
+}
+
 export async function createAiStudioJob(
   payload: AiStudioGenerationRequest
 ): Promise<AiStudioJob> {
@@ -167,4 +204,34 @@ export async function listAiStudioTemplates(
     init
   );
   return templates;
+}
+
+export async function listAiStudioWorkflows(
+  brandProfileId: string,
+  init?: RequestInit
+): Promise<AiStudioWorkflow[]> {
+  const search = new URLSearchParams({ brandProfileId });
+  const { workflows } = await getInternal(
+    `/api/ai-studio/workflows?${search.toString()}`,
+    aiStudioWorkflowsResponseSchema,
+    init
+  );
+  return workflows;
+}
+
+export async function createAiStudioWorkflow(
+  workflow: Omit<AiStudioWorkflow, "id" | "createdAt" | "updatedAt">
+): Promise<AiStudioWorkflow> {
+  return postInternal("/api/ai-studio/workflows", workflow, aiStudioWorkflowSchema);
+}
+
+export async function updateAiStudioWorkflow(
+  id: string,
+  workflow: Partial<AiStudioWorkflow>
+): Promise<AiStudioWorkflow> {
+  return patchInternal(`/api/ai-studio/workflows/${id}`, workflow, aiStudioWorkflowSchema);
+}
+
+export async function deleteAiStudioWorkflow(id: string): Promise<void> {
+  return deleteInternal(`/api/ai-studio/workflows/${id}`);
 }

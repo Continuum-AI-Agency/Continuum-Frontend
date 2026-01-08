@@ -4,11 +4,7 @@
 import React from "react";
 import {
   Background,
-  Controls,
-  MiniMap,
   ReactFlow,
-  Handle,
-  Position,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -18,41 +14,53 @@ import {
   BaseEdge,
   EdgeProps,
   getBezierPath,
+  Position,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import * as ContextMenu from "@radix-ui/react-context-menu";
-import * as Collapsible from "@radix-ui/react-collapsible";
 import { motion } from "framer-motion";
-import { Badge, Button, Heading, Text, TextArea, Tabs } from "@radix-ui/themes";
+import { Button, Heading, Text, Tabs, Dialog, TextField, Flex } from "@radix-ui/themes";
 import {
-  CheckIcon,
-  ExclamationTriangleIcon,
   MagicWandIcon,
-  PaperPlaneIcon,
   StackIcon,
   ImageIcon,
   VideoIcon,
   TextIcon,
   ChatBubbleIcon,
   MixIcon,
+  CheckIcon,
+  ExclamationTriangleIcon,
+  PaperPlaneIcon,
+  DownloadIcon,
+  UploadIcon,
 } from "@radix-ui/react-icons";
 
-import { ZoomControls } from "@/components/ai-studio/canvas/ZoomControls";
-import { ArrayNode, IteratorNode, ImageProcessorNode, LLMNode, CompositeNode } from "@/components/ai-studio/canvas";
+import { 
+  ArrayNode, 
+  IteratorNode, 
+  ImageProcessorNode, 
+  LLMNode, 
+  CompositeNode,
+  PromptNode,
+  NegativeNode,
+  ModelNode,
+  AttachmentNode,
+  PreviewNode,
+  GeneratorNode
+} from "@/components/ai-studio/canvas";
+
 import { useToast } from "@/components/ui/ToastProvider";
 import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
 import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
-import { createAiStudioJob } from "@/lib/api/aiStudio";
+import { createAiStudioJob, listAiStudioWorkflows, createAiStudioWorkflow, updateAiStudioWorkflow } from "@/lib/api/aiStudio";
 import {
   createPromptTemplateAction,
   deletePromptTemplateAction,
   updatePromptTemplateAction,
 } from "./actions";
 import {
-  providerAspectRatioOptions,
   type AiStudioJob,
-  type AiStudioProvider,
+  type AiStudioWorkflow,
 } from "@/lib/schemas/aiStudio";
 import {
   type ArrayNodeData,
@@ -70,6 +78,7 @@ import {
 } from "@/lib/ai-studio/nodeTypes";
 import { resolveGeneratorInputs } from "@/lib/ai-studio/inputResolution";
 import { arePortsCompatible, getNodeOutputPortType } from "@/lib/ai-studio/portTypes";
+import { GraphExecutor } from "@/lib/ai-studio/execution/GraphExecutor";
 import type {
   PromptTemplateCreateInput,
   PromptTemplateUpdateInput,
@@ -93,230 +102,6 @@ const JOB_STATUS_META: Record<
   failed: { label: "Failed", color: "red", icon: <ExclamationTriangleIcon /> },
   cancelled: { label: "Cancelled", color: "gray", icon: <ExclamationTriangleIcon /> },
 };
-
-const PromptNode = ({ id: nodeId, data, selected }: { id: string; data: PromptNodeData; selected: boolean }) => (
-  <div className={`relative w-64 rounded-xl border ${selected ? "border-blue-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
-    <Text className="text-gray-200">Prompt</Text>
-    <TextArea
-      value={data.prompt}
-      onChange={(e) =>
-        window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "prompt", value: e.target.value } }))
-      }
-      placeholder="Describe the visual..."
-      className="mt-2 h-28 bg-transparent text-white"
-    />
-    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-blue-400" />
-  </div>
-);
-
-const NegativeNode = ({ id: nodeId, data, selected }: { id: string; data: NegativeNodeData; selected: boolean }) => (
-  <div className={`relative w-64 rounded-xl border ${selected ? "border-amber-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
-    <Text className="text-gray-200">Negative Prompt</Text>
-    <TextArea
-      value={data.negativePrompt}
-      onChange={(e) =>
-        window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "negativePrompt", value: e.target.value } }))
-      }
-      placeholder="What to avoid..."
-      className="mt-2 h-28 bg-transparent text-white"
-    />
-    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-amber-400" />
-  </div>
-);
-
-const ModelNode = ({ id: nodeId, data, selected }: { id: string; data: ModelNodeData; selected: boolean }) => (
-  <div className={`relative w-64 rounded-xl border ${selected ? "border-purple-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
-    <Text className="text-gray-200">Model</Text>
-    <select
-      className="mt-2 w-full rounded-lg border border-white/10 bg-slate-800 px-2 py-1 text-sm text-white"
-      value={data.provider}
-      onChange={(e) =>
-        window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "provider", value: e.target.value as AiStudioProvider } }))
-      }
-    >
-      <option value="nano-banana">Nano Banana</option>
-      <option value="veo-3-1" disabled>
-        Veo 3.1 (coming soon)
-      </option>
-      <option value="sora-2" disabled>
-        Sora 2 (coming soon)
-      </option>
-    </select>
-    <div className="mt-2 flex flex-wrap gap-1">
-      {(providerAspectRatioOptions[data.provider]?.[data.medium] ?? ["1:1", "16:9"]).map((ratio) => (
-        <Button
-          key={ratio}
-          size="1"
-          variant={data.aspectRatio === ratio ? "solid" : "outline"}
-          className="rounded-full"
-          onClick={() =>
-            window.dispatchEvent(new CustomEvent("node:edit", { detail: { id: nodeId, field: "aspectRatio", value: ratio } }))
-          }
-        >
-          {ratio}
-        </Button>
-      ))}
-    </div>
-    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-purple-400" />
-  </div>
-);
-
-const AttachmentNode = ({ data, selected }: { data: AttachmentNodeData; selected: boolean }) => (
-  <div className={`relative w-56 rounded-xl border ${selected ? "border-blue-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-lg`}>
-    <Text className="text-gray-200">Attachment</Text>
-    <div className="mt-2 h-24 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-      {data.mimeType?.startsWith("video/") ? (
-        <video src={data.previewUrl} muted loop className="h-full w-full object-cover" />
-      ) : (
-        <img src={data.previewUrl} alt={data.label} className="h-full w-full object-cover" />
-      )}
-    </div>
-    <Text size="1" color="gray" className="mt-1 block truncate">
-      {data.label}
-    </Text>
-    <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-purple-400" />
-  </div>
-);
-
-const PreviewNode = ({ data, selected }: { data: PreviewNodeData; selected: boolean }) => (
-  <div className={`relative w-[320px] rounded-2xl border ${selected ? "border-green-400" : "border-white/10"} bg-slate-900/90 p-3 shadow-xl`}>
-    <Text className="text-gray-200">Preview</Text>
-    <div className="mt-2 overflow-hidden rounded-xl border border-white/10 bg-black/60 min-h-[220px] flex items-center justify-center">
-      {data.artifactPreview ? (
-        data.medium === "video" ? (
-          <video src={data.artifactPreview} controls className="h-full w-full object-cover" />
-        ) : (
-          <img src={data.artifactPreview} alt={data.artifactName ?? "artifact"} className="h-full w-full object-cover" />
-        )
-      ) : (
-        <Text color="gray" className="px-4 text-center">
-          Connect a generator to see output.
-        </Text>
-      )}
-    </div>
-    <Handle type="target" position={Position.Left} className="h-3 w-3 !bg-green-400" />
-  </div>
-);
-
-const GeneratorNode = ({ id, data, selected }: { id: string; data: GeneratorNodeData; selected: boolean }) => (
-  <ContextMenu.Root>
-    <ContextMenu.Trigger asChild>
-      <div className={`relative w-96 max-w-md rounded-2xl border ${selected ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.35)]" : "border-white/10"} bg-slate-900/95 p-3 shadow-xl`}>
-        <div className="flex items-center justify-between">
-          <Badge size="2" variant="soft">
-            Nano Banana
-          </Badge>
-          <Badge size="1" variant="soft" color="purple">
-            image
-          </Badge>
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          {(providerAspectRatioOptions["nano-banana"]?.image ?? ["1:1", "16:9"]).map((ratio) => (
-            <Button
-              key={ratio}
-              size="1"
-              variant={data.aspectRatio === ratio ? "solid" : "outline"}
-              className="rounded-full"
-              onClick={() =>
-                window.dispatchEvent(new CustomEvent("node:edit", { detail: { id, field: "aspectRatio", value: ratio } }))
-              }
-            >
-              {ratio}
-            </Button>
-          ))}
-        </div>
-
-        <TextArea
-          value={data.prompt}
-          onChange={(e) => window.dispatchEvent(new CustomEvent("node:edit", { detail: { id, field: "prompt", value: e.target.value } }))}
-          placeholder="Prompt..."
-          className="mt-2 min-h-[80px] bg-transparent text-white"
-        />
-
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-300">
-          <Badge size="1" variant="soft">
-            {data.aspectRatio}
-          </Badge>
-          {data.referenceAssetPath ? <Badge size="1" variant="soft">ref</Badge> : null}
-          {data.negativePrompt ? <Badge size="1" variant="soft" color="amber">neg</Badge> : null}
-        </div>
-
-        <div className="mt-3 flex items-center justify-between">
-          {(() => {
-            const meta = data.status ? JOB_STATUS_META[data.status as keyof typeof JOB_STATUS_META] : undefined;
-            return (
-              <Badge size="1" variant="surface" color={meta?.color ?? "gray"}>
-                {data.status ?? "idle"}
-              </Badge>
-            );
-          })()}
-          <Button size="2" onClick={() => window.dispatchEvent(new CustomEvent("node:generate", { detail: { id } }))}>
-            <PaperPlaneIcon /> Generate
-          </Button>
-        </div>
-
-        <Handle type="target" id="prompt" position={Position.Left} className="h-3 w-3 !bg-blue-400" />
-        <Handle type="target" id="ref" position={Position.Left} style={{ top: "60%" }} className="h-3 w-3 !bg-purple-400" />
-        <Handle type="target" id="negative" position={Position.Top} className="h-3 w-3 !bg-amber-400" />
-        <Handle type="source" position={Position.Right} className="h-3 w-3 !bg-green-400" />
-      </div>
-    </ContextMenu.Trigger>
-
-    <ContextMenu.Content className="rounded-lg border border-white/10 bg-slate-900/95 p-2 text-sm text-white shadow-xl">
-      <ContextMenu.Item onSelect={() => window.dispatchEvent(new CustomEvent("node:duplicate", { detail: { id } }))}>Duplicate</ContextMenu.Item>
-      <ContextMenu.Item onSelect={() => window.dispatchEvent(new CustomEvent("node:delete", { detail: { id } }))} className="text-red-300">
-        Delete
-      </ContextMenu.Item>
-      <ContextMenu.Separator className="my-1 h-px bg-white/10" />
-      <ContextMenu.Label className="text-gray-300">Advanced</ContextMenu.Label>
-      <Collapsible.Root>
-        <Collapsible.Trigger className="mt-1 w-full rounded-md px-1 py-1 text-left text-xs text-gray-300 hover:bg-white/5">Advanced</Collapsible.Trigger>
-        <Collapsible.Content className="space-y-2 px-1 py-1">
-          <div>
-            <label className="text-xs text-gray-300">Negative prompt</label>
-            <TextArea
-              value={data.negativePrompt ?? ""}
-              onChange={(e) => window.dispatchEvent(new CustomEvent("node:edit", { detail: { id, field: "negativePrompt", value: e.target.value } }))}
-              className="mt-1 h-16 bg-slate-800 text-white"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-300">Seed</label>
-              <input
-                type="number"
-                className="mt-1 w-full rounded-md bg-slate-800 border border-white/10 px-2 py-1 text-white"
-                value={data.seed ?? ""}
-                onChange={(e) =>
-                  window.dispatchEvent(
-                    new CustomEvent("node:edit", { detail: { id, field: "seed", value: e.target.value ? Number(e.target.value) : undefined } })
-                  )
-                }
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-300">Guidance</label>
-              <input
-                type="number"
-                step="0.5"
-                min={0}
-                max={20}
-                className="mt-1 w-full rounded-md bg-slate-800 border border-white/10 px-2 py-1 text-white"
-                value={data.guidanceScale ?? ""}
-                onChange={(e) =>
-                  window.dispatchEvent(
-                    new CustomEvent("node:edit", { detail: { id, field: "guidanceScale", value: e.target.value ? Number(e.target.value) : undefined } })
-                  )
-                }
-              />
-            </div>
-          </div>
-        </Collapsible.Content>
-      </Collapsible.Root>
-    </ContextMenu.Content>
-  </ContextMenu.Root>
-);
 
 const CustomEdge = ({
   id,
@@ -429,9 +214,64 @@ export default function AIStudioClient({
   const [toolboxPos, setToolboxPos] = React.useState({ x: 96, y: 140 });
   const reactFlowInstanceRef = React.useRef<any>(null);
 
+  // Workflow State
+  const [savedWorkflows, setSavedWorkflows] = React.useState<AiStudioWorkflow[]>([]);
+  const [saveDialogOpen, setSaveDialogOpen] = React.useState(false);
+  const [loadDialogOpen, setLoadDialogOpen] = React.useState(false);
+  const [workflowName, setWorkflowName] = React.useState("");
+  const [currentWorkflowId, setCurrentWorkflowId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    listAiStudioWorkflows(brandProfileId).then(setSavedWorkflows).catch(console.error);
+  }, [brandProfileId]);
+
   const onReactFlowInit = React.useCallback((instance: any) => {
     reactFlowInstanceRef.current = instance;
   }, []);
+
+  const handleSaveWorkflow = async () => {
+    try {
+      if (currentWorkflowId) {
+        // Update existing
+        await updateAiStudioWorkflow(currentWorkflowId, {
+          nodes: nodes as any,
+          edges: edges as any,
+        });
+        showToast({ title: "Workflow updated", variant: "success" });
+      } else {
+        // Create new
+        setSaveDialogOpen(true);
+      }
+    } catch (error) {
+      showToast({ title: "Failed to save", variant: "error" });
+    }
+  };
+
+  const confirmSaveNewWorkflow = async () => {
+    if (!workflowName) return;
+    try {
+      const newWorkflow = await createAiStudioWorkflow({
+        brandProfileId,
+        name: workflowName,
+        nodes: nodes as any,
+        edges: edges as any,
+      });
+      setSavedWorkflows(prev => [newWorkflow, ...prev]);
+      setCurrentWorkflowId(newWorkflow.id);
+      setSaveDialogOpen(false);
+      showToast({ title: "Workflow saved", variant: "success" });
+    } catch (error) {
+      showToast({ title: "Failed to create", variant: "error" });
+    }
+  };
+
+  const handleLoadWorkflow = (workflow: AiStudioWorkflow) => {
+    setNodes(workflow.nodes as StudioNode[]);
+    setEdges(workflow.edges as Edge[]);
+    setCurrentWorkflowId(workflow.id);
+    setLoadDialogOpen(false);
+    showToast({ title: "Workflow loaded", variant: "success" });
+  };
 
   const handleZoomIn = () => {
     (reactFlowInstanceRef.current as any)?.zoomIn?.({ duration: 300 });
@@ -444,6 +284,31 @@ export default function AIStudioClient({
   const handleFitView = () => {
     (reactFlowInstanceRef.current as any)?.fitView?.({ padding: 0.1, duration: 300 });
   };
+
+  const handleRunGraph = React.useCallback(async () => {
+    showToast({ title: "Starting execution...", variant: "info" });
+    const executor = new GraphExecutor(
+      nodes,
+      edges,
+      (nodeId, status) => {
+        // Optional: track status globally if needed, for now node update handles it
+      },
+      (nodeId, data) => {
+        setNodes((prev) =>
+          prev.map((n) =>
+            n.id === nodeId
+              ? {
+                  ...n,
+                  data: { ...(n.data as Record<string, unknown>), ...data },
+                }
+              : n
+          )
+        );
+      }
+    );
+    await executor.execute();
+    showToast({ title: "Execution finished", variant: "success" });
+  }, [nodes, edges, setNodes, showToast]);
 
   const handleCreateTemplate = React.useCallback(
     async (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => {
@@ -880,7 +745,76 @@ export default function AIStudioClient({
               <div>
                 <Text color="gray">Build flows for {brandName}</Text>
               </div>
+              <div className="flex gap-2">
+                <Button variant="soft" onClick={() => setLoadDialogOpen(true)}>
+                  <UploadIcon /> Load
+                </Button>
+                <Button variant="soft" onClick={handleSaveWorkflow}>
+                  <DownloadIcon /> Save
+                </Button>
+                <div className="w-px h-6 bg-white/10 mx-1" />
+                <Button variant="surface" onClick={handleFitView}>Fit View</Button>
+                <Button onClick={handleRunGraph}>
+                  <PaperPlaneIcon /> Run Graph
+                </Button>
+              </div>
             </header>
+
+            {/* Save Dialog */}
+            <Dialog.Root open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+              <Dialog.Content maxWidth="450px">
+                <Dialog.Title>Save Workflow</Dialog.Title>
+                <Dialog.Description size="2" mb="4">
+                  Name your workflow to save it for later.
+                </Dialog.Description>
+                <Flex direction="column" gap="3">
+                  <label>
+                    <Text as="div" size="2" mb="1" weight="bold">Name</Text>
+                    <TextField.Root
+                      value={workflowName}
+                      onChange={(e) => setWorkflowName(e.target.value)}
+                      placeholder="My Awesome Flow"
+                    />
+                  </label>
+                </Flex>
+                <Flex gap="3" mt="4" justify="end">
+                  <Dialog.Close>
+                    <Button variant="soft" color="gray">Cancel</Button>
+                  </Dialog.Close>
+                  <Button onClick={confirmSaveNewWorkflow}>Save</Button>
+                </Flex>
+              </Dialog.Content>
+            </Dialog.Root>
+
+            {/* Load Dialog */}
+            <Dialog.Root open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+              <Dialog.Content maxWidth="450px">
+                <Dialog.Title>Load Workflow</Dialog.Title>
+                <Flex direction="column" gap="2" className="mt-4 max-h-[300px] overflow-y-auto">
+                  {savedWorkflows.length === 0 ? (
+                    <Text color="gray">No saved workflows found.</Text>
+                  ) : (
+                    savedWorkflows.map(wf => (
+                      <div 
+                        key={wf.id}
+                        className="flex items-center justify-between p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+                        onClick={() => handleLoadWorkflow(wf)}
+                      >
+                        <div className="flex flex-col">
+                          <Text weight="bold">{wf.name}</Text>
+                          <Text size="1" color="gray">{new Date(wf.createdAt).toLocaleDateString()}</Text>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </Flex>
+                <Flex gap="3" mt="4" justify="end">
+                  <Dialog.Close>
+                    <Button variant="soft" color="gray">Cancel</Button>
+                  </Dialog.Close>
+                </Flex>
+              </Dialog.Content>
+            </Dialog.Root>
 
             <motion.div
               className="pointer-events-auto fixed z-40 flex w-40 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/80 p-2 shadow-xl"
