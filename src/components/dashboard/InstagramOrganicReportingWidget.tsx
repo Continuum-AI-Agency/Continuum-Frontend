@@ -11,7 +11,6 @@ import {
   Heading,
   IconButton,
   Select,
-  Spinner,
   Text,
 } from "@radix-ui/themes";
 import React from "react";
@@ -26,6 +25,7 @@ import {
 import { fetchInstagramOrganicMetrics, type InsightsRequest, type InstagramOrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
 import type { InstagramOrganicMetricsResponse, OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
 import { cn } from "@/lib/utils";
+import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 
 export type InstagramAccountOption = {
   integrationAccountId: string;
@@ -439,12 +439,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
               <Callout.Text>{state.message}</Callout.Text>
             </Callout.Root>
           ) : state.status === "loading" ? (
-            <Flex align="center" gap="2">
-              <Spinner size="2" />
-              <Text color="gray" size="2">
-                Loading metrics…
-              </Text>
-            </Flex>
+            <OrganicMetricsWidgetSkeleton />
            ) : state.status === "success" ? (
              viewMode === "overview" ? (
                <MetricsPanel
