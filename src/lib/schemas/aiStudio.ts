@@ -122,17 +122,19 @@ export const aiStudioGenerationResponseSchema = z.object({
   job: aiStudioJobSchema,
 });
 
-export const aiStudioWorkflowSchema = z.object({
+const workflowBaseSchema = z.object({
   id: z.string().min(1, "Workflow id is required"),
   brandProfileId: z.string().min(1, "brandProfileId is required"),
   name: z.string().min(1, "Workflow name is required"),
   description: z.string().optional(),
-  nodes: z.array(z.record(z.unknown())).default([]),
-  edges: z.array(z.record(z.unknown())).default([]),
+  nodes: z.array(z.record(z.unknown())).optional().default([]),
+  edges: z.array(z.record(z.unknown())).optional().default([]),
   metadata: z.record(z.unknown()).optional(),
   createdAt: z.string().datetime({ message: "Workflow createdAt must be an ISO timestamp" }),
   updatedAt: z.string().datetime({ message: "Workflow updatedAt must be an ISO timestamp" }).optional(),
 });
+
+export const aiStudioWorkflowSchema = workflowBaseSchema;
 
 export const aiStudioWorkflowsResponseSchema = z.object({
   workflows: z.array(aiStudioWorkflowSchema),

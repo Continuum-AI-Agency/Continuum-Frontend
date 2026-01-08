@@ -1,5 +1,5 @@
 import { type Edge, type Node } from "@xyflow/react";
-import { type StudioNode } from "../nodeTypes";
+import { type StudioNode, type ArrayNodeData } from "../nodeTypes";
 import { resolveGeneratorInputs } from "../inputResolution";
 import { createAiStudioJob } from "@/lib/api/aiStudio";
 
@@ -67,9 +67,12 @@ export class GraphExecutor {
     if (!arrayEdge) return; // No array connected
     
     const arrayNode = this.nodes.find(n => n.id === arrayEdge.source);
-    if (!arrayNode || !arrayNode.data.items) return;
-    
-    const items = (arrayNode.data as Record<string, unknown>).items as string[];
+    if (!arrayNode || arrayNode.type !== 'array') return;
+
+    const arrayNodeData = arrayNode.data as ArrayNodeData;
+    if (!arrayNodeData.items) return;
+
+    const items = arrayNodeData.items;
     
     // Find downstream nodes (e.g. Generator)
     const downstreamEdges = this.edges.filter(e => e.source === nodeId);

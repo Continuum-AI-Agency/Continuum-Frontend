@@ -216,20 +216,35 @@ export async function listAiStudioWorkflows(
     aiStudioWorkflowsResponseSchema,
     init
   );
-  return workflows;
+  // Ensure nodes and edges are always arrays (schema defaults may not be reflected in type)
+  return workflows.map(w => ({
+    ...w,
+    nodes: w.nodes ?? [],
+    edges: w.edges ?? [],
+  }));
 }
 
 export async function createAiStudioWorkflow(
   workflow: Omit<AiStudioWorkflow, "id" | "createdAt" | "updatedAt">
 ): Promise<AiStudioWorkflow> {
-  return postInternal("/api/ai-studio/workflows", workflow, aiStudioWorkflowSchema);
+  const result = await postInternal("/api/ai-studio/workflows", workflow, aiStudioWorkflowSchema);
+  return {
+    ...result,
+    nodes: result.nodes ?? [],
+    edges: result.edges ?? [],
+  };
 }
 
 export async function updateAiStudioWorkflow(
   id: string,
   workflow: Partial<AiStudioWorkflow>
 ): Promise<AiStudioWorkflow> {
-  return patchInternal(`/api/ai-studio/workflows/${id}`, workflow, aiStudioWorkflowSchema);
+  const result = await patchInternal(`/api/ai-studio/workflows/${id}`, workflow, aiStudioWorkflowSchema);
+  return {
+    ...result,
+    nodes: result.nodes ?? [],
+    edges: result.edges ?? [],
+  };
 }
 
 export async function deleteAiStudioWorkflow(id: string): Promise<void> {
