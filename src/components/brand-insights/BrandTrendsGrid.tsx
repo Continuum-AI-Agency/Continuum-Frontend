@@ -22,14 +22,21 @@ import * as Accordion from "@radix-ui/react-accordion";
 import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
 import { cn } from "@/lib/utils";
 import { filterAndSortTrends } from "./trends-utils";
+import { BrandTrendsGridSkeleton } from "./BrandTrendsSkeleton";
 
 type BrandTrendsGridProps = {
   trends: BrandInsightsTrend[];
+  isLoading?: boolean;
 };
 
-export function BrandTrendsGrid({ trends }: BrandTrendsGridProps) {
+export function BrandTrendsGrid({ trends, isLoading = false }: BrandTrendsGridProps) {
   const [query, setQuery] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
+
+  // Show skeleton when loading
+  if (isLoading) {
+    return <BrandTrendsGridSkeleton />;
+  }
 
   const filteredTrends = useMemo(() => {
     return filterAndSortTrends(trends, {

@@ -4,6 +4,7 @@ import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon } from "@radix-ui/react-
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
 import { BrandTrendsTabs } from "./BrandTrendsTabs";
+import { BrandTrendsPanelSkeleton } from "./BrandTrendsSkeleton";
 
 type BrandTrendsPanelProps = {
   trends: BrandInsightsTrend[];
@@ -13,6 +14,7 @@ type BrandTrendsPanelProps = {
   status?: string;
   actionSlot?: React.ReactNode;
   brandId?: string;
+  isLoading?: boolean;
 };
 
 function formatDate(value?: string) {
@@ -34,9 +36,15 @@ export function BrandTrendsPanel({
   status,
   actionSlot,
   brandId,
+  isLoading = false,
 }: BrandTrendsPanelProps) {
   const weekLabel = formatDate(weekStartDate);
   const generatedLabel = formatDate(generatedAt);
+
+  // Show skeleton when loading
+  if (isLoading) {
+    return <BrandTrendsPanelSkeleton />;
+  }
 
   return (
     <GlassPanel className="p-6 space-y-4">
