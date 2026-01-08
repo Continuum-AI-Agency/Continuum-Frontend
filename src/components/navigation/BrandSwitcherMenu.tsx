@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Avatar, Button, DropdownMenu, Switch, Text } from "@radix-ui/themes";
+import { Avatar, Button, DropdownMenu, Switch, Text, TextField, Box, ScrollArea } from "@radix-ui/themes";
 import {
   CheckCircledIcon,
   ExitIcon,
@@ -10,6 +10,7 @@ import {
   MixerHorizontalIcon,
   MoonIcon,
   PlusCircledIcon,
+  MagnifyingGlassIcon,
 } from "@radix-ui/react-icons";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -35,8 +36,20 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const { appearance, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   const isAdmin = isAdminUser(user);
+
+  // Reset search query when menu closes
+  React.useEffect(() => {
+    if (!menuOpen) {
+      setSearchQuery("");
+    }
+  }, [menuOpen]);
+
+  const filteredBrands = brandSummaries.filter((brand) =>
+    getBrandMenuItemLabel(brand).toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
@@ -69,30 +82,54 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         }}
         onMouseLeave={() => setMenuOpen(false)}
       >
-        {brandSummaries.map((brand) => (
-          <DropdownMenu.Item
-            key={brand.id}
-            disabled={isSwitching}
-            onSelect={async (event) => {
-              event.preventDefault();
-              if (brand.id === activeBrandId) {
-                return;
-              }
-
-              await selectBrand(brand.id);
-              router.refresh();
-            }}
-            className="flex items-center justify-between gap-2"
+        <Box p="2" pb="2">
+          <TextField.Root
+            placeholder="Search brands..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
+            size="2"
           >
-            <div className="flex items-center gap-2">
-              <LayersIcon />
-              <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
-                {getBrandMenuItemLabel(brand)}
+            <TextField.Slot>
+              <MagnifyingGlassIcon />
+            </TextField.Slot>
+          </TextField.Root>
+        </Box>
+
+        <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: "200px" }}>
+          {filteredBrands.length === 0 ? (
+            <Box p="2">
+              <Text size="2" color="gray" className="pl-2">
+                No brands found
               </Text>
-            </div>
-            {brand.id === activeBrandId ? <BadgeIndicator /> : null}
-          </DropdownMenu.Item>
-        ))}
+            </Box>
+          ) : (
+            filteredBrands.map((brand) => (
+              <DropdownMenu.Item
+                key={brand.id}
+                disabled={isSwitching}
+                onSelect={async (event) => {
+                  event.preventDefault();
+                  if (brand.id === activeBrandId) {
+                    return;
+                  }
+
+                  await selectBrand(brand.id);
+                  router.refresh();
+                }}
+                className="flex items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2">
+                  <LayersIcon />
+                  <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
+                    {getBrandMenuItemLabel(brand)}
+                  </Text>
+                </div>
+                {brand.id === activeBrandId ? <BadgeIndicator /> : null}
+              </DropdownMenu.Item>
+            ))
+          )}
+        </ScrollArea>
 
         <DropdownMenu.Item
           disabled={isCreating}
@@ -102,7 +139,7 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
               await createBrandProfileAction();
             });
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 mt-1"
         >
           <PlusCircledIcon />
           New brand profile
