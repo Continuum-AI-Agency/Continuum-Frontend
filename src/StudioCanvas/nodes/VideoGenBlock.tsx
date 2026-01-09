@@ -14,7 +14,6 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
   const checkConnectable = useCallback((params: any) => {
     let baseConnectable = true;
     
-    // Handle isConnectable prop safely
     if (typeof isConnectable === 'boolean') {
         baseConnectable = isConnectable;
     } else if (typeof isConnectable === 'function') {
@@ -35,7 +34,7 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
     return true;
   }, [edges, maxConnections, isConnectable]);
 
-  return <Handle {...props} isConnectable={checkConnectable} />;
+  return <Handle {...props} isConnectable={checkConnectable as any} />;
 };
 
 export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VeoDirectorNodeData>>) {
