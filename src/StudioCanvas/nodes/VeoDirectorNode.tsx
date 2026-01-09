@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VeoDirectorNodeData } from '../types';
+import { CustomHandle } from '../components/CustomHandle';
 
 export function VeoDirectorNode({ id, data }: NodeProps<Node<VeoDirectorNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
@@ -27,19 +28,47 @@ export function VeoDirectorNode({ id, data }: NodeProps<Node<VeoDirectorNodeData
     <Card className="w-80 border-2 border-purple-500/20 bg-background/95 backdrop-blur shadow-xl">
       <CardHeader className="py-3 bg-purple-500/10">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          🎥 Veo Director
+          🎥 Veo Director (Model)
           {data.isExecuting && <span className="animate-spin ml-auto">⚙️</span>}
         </CardTitle>
       </CardHeader>
       
       <CardContent className="space-y-4 p-4 relative">
         <div className="absolute left-0 top-16 flex flex-col gap-4 -ml-1.5">
-           <Handle type="target" position={Position.Left} id="first-frame" className="relative !bg-indigo-500 !w-3 !h-3 mb-4" title="First Frame" />
-           <Handle type="target" position={Position.Left} id="last-frame" className="relative !bg-indigo-500 !w-3 !h-3 mb-4" title="Last Frame" />
-           <Handle type="target" position={Position.Left} id="ref-image" className="relative !bg-indigo-500 !w-3 !h-3" title="Reference" />
+           <CustomHandle 
+             type="target" 
+             position={Position.Left} 
+             id="first-frame" 
+             maxConnections={1}
+             className="relative !bg-indigo-500 !w-3 !h-3 mb-4" 
+             title="First frame"
+           />
+           <CustomHandle 
+             type="target" 
+             position={Position.Left} 
+             id="last-frame" 
+             maxConnections={1}
+             className="relative !bg-indigo-500 !w-3 !h-3 mb-4" 
+             title="Last frame"
+           />
+           <CustomHandle 
+             type="target" 
+             position={Position.Left} 
+             id="ref-image" 
+             maxConnections={3}
+             className="relative !bg-indigo-500 !w-3 !h-3" 
+             title="Reference image"
+           />
         </div>
         
-        <Handle type="target" position={Position.Left} id="prompt-in" className="!bg-slate-400 !w-3 !h-3" style={{ top: '55%' }} />
+        <CustomHandle 
+          type="target" 
+          position={Position.Left} 
+          id="prompt-in" 
+          maxConnections={1}
+          className="!bg-slate-400 !w-3 !h-3" 
+          style={{ top: '55%' }}
+        />
 
         <div className="space-y-2 pl-2">
           <Label className="text-xs text-muted-foreground">Model</Label>
@@ -68,6 +97,18 @@ export function VeoDirectorNode({ id, data }: NodeProps<Node<VeoDirectorNodeData
           <Switch id="enhance" checked={data.enhancePrompt} onCheckedChange={handleEnhanceChange} />
           <Label htmlFor="enhance" className="text-xs">Enhance Prompt</Label>
         </div>
+
+        {data.isExecuting && (
+          <div className="mt-2 text-xs text-purple-500 animate-pulse pl-2">
+            Generating Video...
+          </div>
+        )}
+
+        {data.error && (
+          <div className="mt-2 text-xs text-red-500 p-2 bg-red-50 rounded mx-2">
+            {data.error}
+          </div>
+        )}
 
         {data.generatedVideo && (
           <div className="mt-2 rounded-md overflow-hidden border aspect-video bg-black">
