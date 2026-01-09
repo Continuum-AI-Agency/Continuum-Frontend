@@ -67,6 +67,18 @@ export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, c
     });
   }
 
+  // Veo 3.1 does not support 9:16 when references are attached
+  if ((value.model === "veo-3-1" || value.model === "veo-3-1-fast") && value.aspectRatio === "9:16") {
+    const hasReferences = !!(value.refs?.length || value.firstFrame || value.lastFrame || value.referenceVideo);
+    if (hasReferences) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["aspectRatio"],
+        message: "9:16 aspect ratio is not supported when references are attached to Veo 3.1 generations. Please use 16:9 or remove references.",
+      });
+    }
+  }
+
   if (medium === "video" && value.refs && value.refs.length > 3) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -135,8 +147,14 @@ export function getMediumForModel(model: SupportedModel): "image" | "video" {
   return modelMedium[model];
 }
 
-export function getAspectsForModel(model: SupportedModel): readonly string[] {
+export function getAspectsForModel(model: SupportedModel, hasReferences: boolean = false): readonly string[] {
   const medium = modelMedium[model];
+
+  // When references are attached to Veo 3.1, only 16:9 is supported
+  if ((model === "veo-3-1" || model === "veo-3-1-fast") && hasReferences) {
+    return ["16:9"] as const;
+  }
+
   if (model === "gemini-3-pro-image-preview") {
     return ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const;
   }

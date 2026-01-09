@@ -39,6 +39,7 @@ type ChatPanelProps = {
   onModelChange?: (model: SupportedModel) => void;
   getAspectsForModel: typeof getAspectsForModel;
   mediumForModel: typeof getMediumForModel;
+  hasAnyReferences?: boolean;
   refsSummary?: { refCount: number; hasFirst: boolean; hasLast: boolean };
   promptTemplates?: {
     templates: PromptTemplate[];
@@ -78,6 +79,7 @@ export function ChatPanel({
   onModelChange,
   getAspectsForModel,
   mediumForModel,
+  hasAnyReferences,
   refsSummary,
   promptTemplates,
 }: ChatPanelProps) {
@@ -96,7 +98,7 @@ export function ChatPanel({
 
   const model = form.watch("model");
   const medium = mediumForModel(model);
-  const aspectOptions = React.useMemo(() => getAspectsForModel(model), [getAspectsForModel, model]);
+  const aspectOptions = React.useMemo(() => getAspectsForModel(model, hasAnyReferences), [getAspectsForModel, model, hasAnyReferences]);
 
   React.useEffect(() => {
     onModelChange?.(model);
@@ -122,6 +124,14 @@ export function ChatPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, aspectOptions, medium]);
+
+  // Auto-select 16:9 when references are attached to Veo 3.1 and 9:16 is currently selected
+  React.useEffect(() => {
+    if (hasAnyReferences && (model === "veo-3-1" || model === "veo-3-1-fast") && form.getValues("aspectRatio") === "9:16") {
+      form.setValue("aspectRatio", "16:9");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAnyReferences, model]);
 
   const handleSubmit = form.handleSubmit(
     (values) => onSubmit(values),
@@ -254,7 +264,7 @@ export function ChatPanel({
               e.preventDefault();
               form.setValue("aspectRatio", ratio);
             }}
-            disabled={disabled || isStreaming}
+            disabled={disabled || isStreaming || (ratio === "9:16" && hasAnyReferences && (model === "veo-3-1" || model === "veo-3-1-fast"))}
           >
             {ratio}
           </Button>

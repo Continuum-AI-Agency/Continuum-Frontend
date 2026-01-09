@@ -77,6 +77,11 @@ export function ChatSurface({
   const [conversationTurns, setConversationTurns] = React.useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [previewMarkup, setPreviewMarkup] = React.useState<{ base64: string; mime: string } | null>(null);
 
+  // Compute if any references are attached
+  const hasAnyReferences = React.useMemo(() => {
+    return refs.length > 0 || firstFrame !== undefined || lastFrame !== undefined || referenceVideo !== undefined;
+  }, [refs, firstFrame, lastFrame, referenceVideo]);
+
   const handleSubmit = React.useCallback(
     async (form: ChatFormValues) => {
       setActiveModel(form.model);
@@ -322,6 +327,7 @@ export function ChatSurface({
             onModelChange={setActiveModel}
             getAspectsForModel={getAspectsForModel}
             mediumForModel={getMediumForModel}
+            hasAnyReferences={hasAnyReferences}
             refsSummary={{
               refCount: refs.length,
               hasFirst: Boolean(firstFrame),
