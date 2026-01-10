@@ -1,16 +1,19 @@
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Panel, Node } from '@xyflow/react';
+import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Panel, Node, Connection, Edge, SelectionMode } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useStudioStore } from '../stores/useStudioStore';
-import { TextNode } from '../nodes/TextGenBlock';
+import { StringNode } from '../nodes/StringNode';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { VideoGenBlock } from '../nodes/VideoGenBlock';
 import { ImageNode } from '../nodes/ImageNode';
+import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { Toolbar } from './Toolbar';
 import { Badge } from '@/components/ui/badge';
 import { v4 as uuidv4 } from 'uuid';
 import { ButtonEdge, DataTypeEdge } from '../edges';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
+import { useProximityConnect } from '../hooks/useProximityConnect';
+import CustomConnectionLine from './CustomConnectionLine';
 import { ContextMenu } from './ContextMenu';
 
 const DRAG_ITEMS = [
@@ -23,7 +26,7 @@ const DRAG_ITEMS = [
   },
   {
     type: 'nanoGen' as const,
-    label: 'Image Block',
+    label: 'Image Generation',
     desc: 'Canvas & Generator',
     tag: 'Creative',
     borderColor: 'hover:border-indigo-500',
@@ -35,20 +38,28 @@ const DRAG_ITEMS = [
     tag: 'Creative',
     borderColor: 'hover:border-purple-500',
   },
-  {
-    type: 'image' as const,
-    label: 'Image Input',
-    desc: 'Simple File Input',
-    tag: 'Utility',
-    borderColor: 'hover:border-indigo-400',
-  },
+   {
+     type: 'image' as const,
+     label: 'Image Reference',
+     desc: 'Simple File Input',
+     tag: 'Utility',
+     borderColor: 'hover:border-indigo-400',
+   },
+   {
+     type: 'video' as const,
+     label: 'Video Reference',
+     desc: 'Simple Video Input',
+     tag: 'Utility',
+     borderColor: 'hover:border-pink-400',
+   },
 ];
 
 const nodeTypes = {
   nanoGen: ImageGenBlock,
   veoDirector: VideoGenBlock,
-  string: TextNode,
+  string: StringNode,
   image: ImageNode,
+  video: VideoReferenceNode,
 };
 
 const edgeTypes = {
@@ -57,12 +68,26 @@ const edgeTypes = {
 };
 
 function Flow() {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo } = useStudioStore();
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById } = useStudioStore();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, deleteElements } = useReactFlow();
-  const { onConnectEnd, onReconnectStart, onReconnect, onReconnectEnd } = useEdgeDropNode();
-  
+  const { onConnectStart, onConnectEnd } = useEdgeDropNode();
+  const { onNodeDrag, onNodeDragStop } = useProximityConnect();
+
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+
+  const onPaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+    event.preventDefault();
+    setMenu({
+      id: 'pane',
+      top: event.clientY,
+      left: event.clientX,
+    });
+  }, []);
+
+  const onPaneClick = useCallback(() => {
+    setMenu(null);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -105,24 +130,6 @@ function Flow() {
     takeSnapshot();
   }, [takeSnapshot]);
 
-  const onNodeContextMenu = useCallback(
-    (event: React.MouseEvent, node: Node) => {
-      event.preventDefault();
-
-      if (!reactFlowWrapper.current) return;
-      const pane = reactFlowWrapper.current.getBoundingClientRect();
-      
-      setMenu({
-        id: node.id,
-        top: event.clientY < pane.height - 200 ? event.clientY : event.clientY - 200,
-        left: event.clientX < pane.width - 200 ? event.clientX : event.clientX - 200,
-      });
-    },
-    [setMenu]
-  );
-
-  const onPaneClick = useCallback(() => setMenu(null), [setMenu]);
-
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -140,28 +147,108 @@ function Flow() {
       });
 
       let data: Record<string, unknown> = { label: `New ${type}` };
+      let style = {};
 
       if (type === 'nanoGen') {
-          data = { model: 'nano-banana', positivePrompt: '', negativePrompt: '', aspectRatio: '1:1' };
+          data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '1:1' };
+          style = { width: 400, height: 400 };
       } else if (type === 'veoDirector') {
-          data = { model: 'veo-3.1', prompt: '', enhancePrompt: false };
+           data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false };
+          style = { width: 512, height: 288 }; // 16:9
       } else if (type === 'string') {
           data = { value: '' };
-      } else if (type === 'image') {
-          data = { image: undefined };
-      }
+       } else if (type === 'image') {
+           data = { image: undefined };
+       } else if (type === 'video') {
+           data = { video: undefined };
+       }
 
       const newNode = {
         id: uuidv4(),
         type,
         position,
         data,
+        style,
       };
 
       setNodes(nodes.concat(newNode as any));
     },
     [screenToFlowPosition, nodes, setNodes],
   );
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => {
+    const target = connection.target;
+    const source = connection.source;
+    const targetHandle = connection.targetHandle;
+
+    const sourceNode = getNodeById(source);
+    const targetNode = getNodeById(target);
+
+    if (!sourceNode || !targetNode) return false;
+
+    // Check handle compatibility
+    if (sourceNode.type === 'string') {
+        if (!['prompt', 'negative', 'prompt-in'].includes(targetHandle || '')) return false;
+    } else if (sourceNode.type === 'image') {
+        // Image reference nodes can only connect to generation nodes, not to other reference nodes
+        if (!['ref-image', 'first-frame', 'last-frame', 'ref-video'].includes(targetHandle || '')) return false;
+        // Prevent image nodes from connecting to other image nodes
+        if (targetNode.type === 'image' || targetNode.type === 'video') return false;
+    } else if (sourceNode.type === 'video') {
+        // Video reference nodes can only connect to generation nodes
+        if (!['ref-video', 'first-frame', 'last-frame'].includes(targetHandle || '')) return false;
+        // Prevent video nodes from connecting to other video nodes
+        if (targetNode.type === 'video') return false;
+    } else if (sourceNode.type === 'nanoGen') {
+        if (!['ref-image', 'first-frame', 'last-frame', 'ref-video'].includes(targetHandle || '')) return false;
+    } else if (sourceNode.type === 'veoDirector') {
+        if (!['ref-video'].includes(targetHandle || '')) return false;
+    }
+
+    // Special case: video nodes can accept ref-images connections
+    if (targetNode.type === 'veoDirector' && targetHandle === 'ref-images') {
+        if (sourceNode.type !== 'image') return false;
+    }
+
+    // Check connection limits based on target node type and handle
+    if (targetNode.type === 'nanoGen' && targetHandle === 'ref-image') {
+      // Nano Banana supports up to 14 reference images
+      const existingRefImageConnections = edges.filter(
+        edge => edge.target === target && edge.targetHandle === 'ref-image'
+      ).length;
+      if (existingRefImageConnections >= 14) return false;
+    }
+
+    if (targetNode.type === 'veoDirector') {
+      if (targetHandle === 'first-frame') {
+        // First frame: max 1 connection
+        const existingConnections = edges.filter(
+          edge => edge.target === target && edge.targetHandle === 'first-frame'
+        ).length;
+        if (existingConnections >= 1) return false;
+      } else if (targetHandle === 'last-frame') {
+        // Last frame: max 1 connection
+        const existingConnections = edges.filter(
+          edge => edge.target === target && edge.targetHandle === 'last-frame'
+        ).length;
+        if (existingConnections >= 1) return false;
+      } else if (targetHandle === 'ref-video') {
+        // Reference video: max 1 connection
+        const existingConnections = edges.filter(
+          edge => edge.target === target && edge.targetHandle === 'ref-video'
+        ).length;
+        if (existingConnections >= 1) return false;
+      } else if (targetHandle === 'ref-images') {
+        // Reference images: max 3 connections
+        const existingConnections = edges.filter(
+          edge => edge.target === target && edge.targetHandle === 'ref-images'
+        ).length;
+        if (existingConnections >= 3) return false;
+      }
+    }
+
+    return true;
+  }, [getNodeById, edges]);
 
   return (
     <div className="w-full h-full" ref={reactFlowWrapper}>
@@ -176,13 +263,18 @@ function Flow() {
         onDragOver={onDragOver}
         onDrop={onDrop}
         onNodeDragStart={onNodeDragStart}
-        onNodeContextMenu={onNodeContextMenu}
-        onPaneClick={onPaneClick}
+        onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd as any}
-        onReconnectStart={onReconnectStart}
-        onReconnect={onReconnect}
-        onReconnectEnd={onReconnectEnd}
+        onNodeDrag={onNodeDrag as any}
+        onNodeDragStop={onNodeDragStop as any}
+        isValidConnection={isValidConnection}
+        connectionLineComponent={CustomConnectionLine}
+        onPaneContextMenu={onPaneContextMenu}
         fitView
+        panOnDrag={true}
+        panOnScroll={true}
+        selectionOnDrag={true}
+        selectionMode={SelectionMode.Partial}
         className="bg-slate-50 dark:bg-slate-900"
         defaultEdgeOptions={{
           type: 'bezier',
@@ -190,9 +282,9 @@ function Flow() {
         }}
       >
         <Background color="#94a3b8" gap={16} />
+        {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
         <Controls />
         <MiniMap />
-        {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
       </ReactFlow>
     </div>
   );

@@ -19,6 +19,7 @@ interface ContextMenuProps {
 
 export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMenuProps) {
   const { getNode, deleteElements, addNodes } = useReactFlow();
+  const { setNodes } = useStudioStore();
 
   const duplicateNode = useCallback(() => {
     const node = getNode(id);
@@ -34,7 +35,7 @@ export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMe
       id: `${node.id}-copy-${Date.now()}`,
       position,
       selected: false,
-      data: { ...node.data }, 
+      data: { ...node.data },
     };
 
     addNodes(newNode);
@@ -45,6 +46,12 @@ export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMe
     if (!node) return;
     deleteElements({ nodes: [node] });
   }, [id, getNode, deleteElements]);
+
+  const clearCanvas = useCallback(() => {
+    setNodes([]);
+  }, [setNodes]);
+
+  const isPaneMenu = id === 'pane';
 
   return (
     <div
@@ -60,18 +67,29 @@ export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMe
       onClick={onClick}
     >
       <div className="flex flex-col text-sm">
-        <button
-          className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full"
-          onClick={duplicateNode}
-        >
-          Duplicate
-        </button>
-        <button
-          className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full text-red-500"
-          onClick={handleDelete}
-        >
-          Delete
-        </button>
+        {isPaneMenu ? (
+          <button
+            className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full text-red-500"
+            onClick={clearCanvas}
+          >
+            Clear Canvas
+          </button>
+        ) : (
+          <>
+            <button
+              className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full"
+              onClick={duplicateNode}
+            >
+              Duplicate
+            </button>
+            <button
+              className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full text-red-500"
+              onClick={handleDelete}
+            >
+              Delete
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

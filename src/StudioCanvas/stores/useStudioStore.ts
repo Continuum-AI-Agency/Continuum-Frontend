@@ -78,6 +78,29 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
     }
   }
   
+  if (sourceHandle === 'text' && targetHandle === 'negative') {
+    const hasPositivePrompt = edges.some(e => 
+      e.target === connection.target && 
+      (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
+    );
+    if (!hasPositivePrompt) {
+      console.warn('Cannot connect negative prompt without a positive prompt first.');
+      return false;
+    }
+  }
+
+  if (sourceHandle === 'text') {
+    const existingConnectionToTarget = edges.find(e => 
+      e.source === connection.source && 
+      e.target === connection.target
+    );
+    
+    if (existingConnectionToTarget) {
+        console.warn('This text node is already connected to this target block.');
+        return false;
+    }
+  }
+  
   if (sourceHandle === 'text' && (targetHandle === 'prompt' || targetHandle === 'prompt-in' || targetHandle === 'negative')) return true;
   
   if (sourceHandle === 'image' && (targetHandle === 'first-frame' || targetHandle === 'last-frame' || targetHandle === 'ref-image' || targetHandle === 'ref-images')) return true;

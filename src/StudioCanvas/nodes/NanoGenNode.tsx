@@ -10,6 +10,7 @@ import { NanoGenNodeData } from '../types';
 import { CustomHandle } from '../components/CustomHandle';
 import { Link2Icon } from '@radix-ui/react-icons';
 import { NodeStatus, NodeExecutionStatus } from '../components/NodeStatus';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
@@ -35,12 +36,11 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
     updateNodeData(id, { positivePrompt: e.target.value });
   }, [id, updateNodeData]);
 
-  const handleNegativeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    updateNodeData(id, { negativePrompt: e.target.value });
-  }, [id, updateNodeData]);
+
 
   return (
-    <Card className="w-80 border-2 border-indigo-500/20 bg-background/95 backdrop-blur shadow-xl relative">
+    <TooltipProvider>
+      <Card className="w-80 border-2 border-indigo-500/20 bg-background/95 backdrop-blur shadow-xl relative">
       <NodeStatus status={status} errorMessage={data.error} />
       <CardHeader className="py-3 bg-indigo-500/10">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -106,25 +106,7 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-xs text-muted-foreground">Negative</Label>
-          <div className="relative">
-             <Input 
-                value={data.negativePrompt} 
-                onChange={handleNegativeChange} 
-                className="h-8 text-xs" 
-                placeholder="blurry, bad quality" 
-             />
-             <CustomHandle 
-               type="target" 
-               position={Position.Left} 
-               id="negative" 
-               maxConnections={1}
-               className="!bg-slate-400 !w-3 !h-3" 
-               style={{ top: '50%', left: '-18px' }}
-             />
-          </div>
-        </div>
+
 
         {data.isExecuting && (
           <div className="mt-2 text-xs text-indigo-500 animate-pulse">
@@ -145,8 +127,16 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
         )}
 
         {/* Output Handle */}
-        <Handle type="source" position={Position.Right} id="image" className="!bg-indigo-500 !w-3 !h-3" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Handle type="source" position={Position.Right} id="image" className="!bg-indigo-500 !w-3 !h-3" />
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Generated Image Output</p>
+          </TooltipContent>
+        </Tooltip>
       </CardContent>
     </Card>
+    </TooltipProvider>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer, HandleProps } from '@xyflow/react';
+import { Handle, Position, NodeProps, Node, NodeResizer, NodeToolbar, HandleProps } from '@xyflow/react';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -8,6 +8,15 @@ import { BlockToolbar } from '../components/BlockToolbar';
 import { ImageIcon, UploadIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+
+import { AspectRatio } from "@/components/ui/aspect-ratio"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
   const edges = useStudioStore((state) => state.edges);
@@ -49,6 +58,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
     updateNodeData(id, { model: value as any });
   }, [id, updateNodeData]);
 
+  const handleAspectRatioChange = useCallback((value: string) => {
+    updateNodeData(id, { aspectRatio: value });
+  }, [id, updateNodeData]);
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -77,6 +90,31 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         handleClassName="h-3 w-3 bg-indigo-500 border-2 border-white rounded-full"
       />
 
+      <NodeToolbar isVisible={selected} position={Position.Top} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
+          <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">Image Generation</Label>
+          <Select value={data.model || 'nano-banana'} onValueChange={handleModelChange}>
+            <SelectTrigger className="h-7 text-xs border-slate-200 w-32 bg-white">
+              <SelectValue placeholder="Model" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nano-banana">Nano Banana</SelectItem>
+              <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={data.aspectRatio || '1:1'} onValueChange={handleAspectRatioChange}>
+            <SelectTrigger className="h-7 text-xs border-slate-200 w-20 bg-white">
+              <SelectValue placeholder="Ratio" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1:1">1:1</SelectItem>
+              <SelectItem value="16:9">16:9</SelectItem>
+              <SelectItem value="9:16">9:16</SelectItem>
+              <SelectItem value="4:3">4:3</SelectItem>
+              <SelectItem value="3:4">3:4</SelectItem>
+            </SelectContent>
+          </Select>
+      </NodeToolbar>
+
       <BlockToolbar 
         isVisible={isHovered || !!data.isToolbarVisible}
         onDuplicate={() => duplicateNode(id)}
@@ -86,30 +124,28 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
       />
 
       <Card className="h-full border-2 border-slate-200 shadow-md bg-white flex flex-col overflow-hidden">
-        <div className="p-2 border-b bg-slate-50 flex items-center justify-between gap-2 z-10">
-           <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Image Block</Label>
-           <Select value={data.model || 'nano-banana'} onValueChange={handleModelChange}>
-            <SelectTrigger className="h-6 text-[10px] border-slate-200 w-32 bg-white">
-              <SelectValue placeholder="Model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="nano-banana">Nano Banana</SelectItem>
-              <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="relative flex-1 bg-slate-100 group/preview min-h-0">
            {previewImage ? (
-             <img 
-               src={previewImage as string} 
-               alt="Result" 
-               className="w-full h-full object-cover"
-             />
+             <div className="w-full h-full flex items-center justify-center bg-slate-950">
+                 <AspectRatio ratio={1 / 1} className="w-full h-full">
+                     <img 
+                       src={previewImage as string} 
+                       alt="Result" 
+                       className="w-full h-full object-cover"
+                     />
+                 </AspectRatio>
+             </div>
            ) : (
              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2">
-               <ImageIcon className="w-8 h-8 opacity-50" />
-               <span className="text-xs">No image yet</span>
+               <Empty>
+                 <EmptyHeader>
+                   <EmptyMedia variant="icon">
+                     <ImageIcon />
+                   </EmptyMedia>
+                   <EmptyTitle>No Image</EmptyTitle>
+                   <EmptyDescription>Generated image will appear here</EmptyDescription>
+                 </EmptyHeader>
+               </Empty>
              </div>
            )}
            
@@ -125,52 +161,66 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
               </label>
            </div>
            
-           <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-center gap-4 py-8 pointer-events-none">
-              <div className="relative pointer-events-auto">
-                <LimitedHandle 
-                  type="target" 
-                  position={Position.Left} 
-                  id="prompt" 
-                  maxConnections={1}
-                  className="!w-3 !h-3 !bg-indigo-500 !-left-1.5" 
-                  title="Positive Prompt"
-                />
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-medium text-white bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Prompt</span>
-              </div>
-              
-              <div className="relative pointer-events-auto">
-                <LimitedHandle 
-                  type="target" 
-                  position={Position.Left} 
-                  id="negative" 
-                  maxConnections={1}
-                  className="!w-3 !h-3 !bg-red-400 !-left-1.5" 
-                  title="Negative Prompt"
-                />
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-medium text-white bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Neg</span>
-              </div>
-
-              <div className="relative pointer-events-auto">
-                <LimitedHandle 
-                  type="target" 
-                  position={Position.Left} 
-                  id="ref-image" 
-                  maxConnections={refImageLimit}
-                  className="!w-3 !h-3 !bg-purple-400 !-left-1.5" 
-                  title={`Reference Images (Max ${refImageLimit})`}
-                />
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[9px] font-medium text-white bg-black/50 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Ref</span>
-              </div>
-           </div>
-
            <Handle 
              type="source" 
              position={Position.Right} 
              id="image" 
-             className="!bg-indigo-500 !w-3 !h-3 top-1/2" 
+             className="!w-4 !h-4 !bg-indigo-500 !border-2 !border-white shadow-sm !-right-2 transition-transform hover:scale-125" 
            />
         </div>
       </Card>
+
+      {/* Handles Container - Outside of Card to prevent clipping */}
+      <div className="absolute -left-2 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
+          
+          <div className="relative pointer-events-auto group/handle">
+            <LimitedHandle 
+              type="target" 
+              position={Position.Left} 
+              id="prompt" 
+              maxConnections={1}
+              className="!w-4 !h-4 !bg-indigo-500 !border-2 !border-white shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className={cn(
+              "absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-medium text-white bg-indigo-500 px-2 py-1 rounded-md shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+              (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
+            )}>
+              Prompt
+            </span>
+          </div>
+          
+          <div className="relative pointer-events-auto group/handle">
+            <LimitedHandle 
+              type="target" 
+              position={Position.Left} 
+              id="negative" 
+              maxConnections={1}
+              className="!w-4 !h-4 !bg-red-500 !border-2 !border-white shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className={cn(
+              "absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-medium text-white bg-red-500 px-2 py-1 rounded-md shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+              (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
+            )}>
+              Negative
+            </span>
+          </div>
+
+          <div className="relative pointer-events-auto group/handle">
+            <LimitedHandle 
+              type="target" 
+              position={Position.Left} 
+              id="ref-image" 
+              maxConnections={refImageLimit}
+              className="!w-4 !h-4 !bg-purple-500 !border-2 !border-white shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className={cn(
+              "absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-medium text-white bg-purple-500 px-2 py-1 rounded-md shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+              (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
+            )}>
+              Ref Image
+            </span>
+          </div>
+       </div>
     </div>
   );
 }

@@ -1,216 +1,353 @@
 "use client";
 
 import { useCallback, useRef } from 'react';
-import { useReactFlow, type Connection, type XYPosition, type Node, type Edge } from '@xyflow/react';
+import { useReactFlow, type XYPosition, type Node, type Edge, useStoreApi, type OnNodeDrag } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
 
-export type NodeType = 'nanoGen' | 'veoDirector' | 'string';
+export type NodeType = 'nanoGen' | 'veoDirector' | 'string' | 'image' | 'video';
 
-/**
- * Context information for smart node creation
- */
 export interface SmartNodeContext {
   sourceHandle: string | null;
   sourceNode: Node | undefined;
   targetPosition: XYPosition;
 }
 
-/**
- * Determine the best node type to create based on the connection context
- */
 export function determineBestNodeType(context: SmartNodeContext): NodeType {
   const { sourceHandle } = context;
 
-  // Text output → create StringNode as prompt source
-  if (sourceHandle === 'text') {
+  if (sourceHandle === 'prompt' || sourceHandle === 'negative' || sourceHandle === 'prompt-in') {
     return 'string';
   }
 
-  // Image output → create NanoGenNode (can accept image references)
-  if (sourceHandle === 'image') {
-    return 'nanoGen';
+  if (sourceHandle === 'ref-image' || sourceHandle === 'ref-images' || sourceHandle === 'first-frame' || sourceHandle === 'last-frame') {
+    return 'image';
   }
 
-  // Video output → create VeoDirectorNode (can accept video refs)
-  if (sourceHandle === 'video') {
-    return 'veoDirector';
+  if (sourceHandle === 'ref-video') {
+    return 'video';
   }
 
-  // Trigger output → create NanoGenNode (triggers generation)
-  if (sourceHandle === 'trigger') {
-    return 'nanoGen';
-  }
-
-  // Default: StringNode for unknown handles
   return 'string';
 }
 
-/**
- * Get default data for a node type
- */
-export function getDefaultNodeData(type: NodeType): Record<string, unknown> {
+export function getDefaultNodeData(type: NodeType): { data: Record<string, unknown>, style?: Record<string, number | string> } {
   switch (type) {
     case 'nanoGen':
       return {
-        model: 'nano-banana',
-        positivePrompt: '',
-        negativePrompt: '',
-        aspectRatio: '1:1',
-        label: 'Nano Gen',
+        data: {
+            model: 'nano-banana',
+            positivePrompt: '',
+            negativePrompt: '',
+            aspectRatio: '1:1',
+            label: 'Image Block',
+        },
+        style: { width: 400, height: 400 }
       };
     case 'veoDirector':
       return {
-        model: 'veo-3.1',
-        prompt: '',
-        enhancePrompt: false,
-        label: 'Veo Director',
+        data: {
+            model: 'veo-3.1',
+            prompt: '',
+            enhancePrompt: false,
+            label: 'Video Block',
+        },
+        style: { width: 512, height: 288 }
       };
+    case 'image':
+        return {
+            data: {
+                label: 'Image Input',
+                image: undefined
+            }
+        }
+    case 'video':
+        return {
+            data: {
+                label: 'Video Input',
+                video: undefined
+            }
+        }
     case 'string':
     default:
       return {
-        value: '',
-        label: 'String',
+        data: {
+            value: '',
+            label: 'Text Block',
+        }
       };
   }
 }
 
-/**
- * Hook for handling edge drop to create new nodes with smart context detection
- */
+function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | null): string | undefined {
+    if (nodeType === 'string') {
+        return 'text';
+    }
+
+    if (nodeType === 'image') {
+        return 'image';
+    }
+
+    if (nodeType === 'video') {
+        return 'video';
+    }
+
+    if (nodeType === 'nanoGen') {
+        if (sourceHandle === 'text') return 'prompt';
+        if (sourceHandle === 'image') return 'ref-image';
+        return 'prompt'; // Default
+    }
+
+    return 'image'; // Default for image nodes
+}
+
 export function useEdgeDropNode() {
   const { screenToFlowPosition, setNodes, setEdges, getNodes } = useReactFlow();
-  const edgeReconnectSuccessful = useRef(true);
+  const connectionStartRef = useRef<{ nodeId: string; handleId: string; handleType: 'source' | 'target' } | null>(null);
 
-  /**
-   * Handle connection end - either complete connection or create new node
-   */
+  const onConnectStart = useCallback((_: any, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
+      if (params.nodeId && params.handleId && params.handleType) {
+          connectionStartRef.current = {
+              nodeId: params.nodeId,
+              handleId: params.handleId,
+              handleType: params.handleType
+          };
+      }
+  }, []);
+
   const onConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean; connection?: Connection }) => {
-      // If connection is valid, let React Flow handle it normally
-      if (connectionState.isValid && connectionState.connection) {
-        return;
-      }
+    (event: MouseEvent | TouchEvent) => {
+        const startParams = connectionStartRef.current;
+        if (!startParams) return;
+        
+        const target = event.target as Element;
+        const isPane = target.classList.contains('react-flow__pane');
+        
+        if (isPane) {
+             const { clientX, clientY } = 'changedTouches' in event ? (event as TouchEvent).changedTouches[0] : (event as MouseEvent);
+             
+             const position = screenToFlowPosition({
+                x: clientX,
+                y: clientY,
+             });
 
-      // Get mouse/touch position
-      const { clientX, clientY } =
-        'changedTouches' in event ? event.changedTouches[0] : event;
+             const context: SmartNodeContext = {
+                sourceHandle: startParams.handleId,
+                sourceNode: getNodes().find(n => n.id === startParams.nodeId),
+                targetPosition: position
+             };
 
-      // Convert to flow position
-      const position = screenToFlowPosition({
-        x: clientX,
-        y: clientY,
-      });
+             const nodeType = determineBestNodeType(context);
+             const newNodeId = uuidv4();
+             
+             const { data, style } = getDefaultNodeData(nodeType);
+             
+             const newNode: Node = {
+                id: newNodeId,
+                type: nodeType,
+                position: { x: position.x - 100, y: position.y - 50 }, 
+                data,
+                style,
+             };
 
-      // Get the source node from the connection state if available
-      const connection = connectionState.connection;
-      let sourceHandle: string | null = null;
-      let sourceNode: Node | undefined;
+              let newEdge: Edge;
 
-      if (connection) {
-        const nodes = getNodes();
-        sourceNode = nodes.find((n) => n.id === connection.source);
-        sourceHandle = connection.sourceHandle || null;
-      }
+              if (startParams.handleType === 'target') {
+                  newEdge = {
+                      id: `e-${newNodeId}-${startParams.nodeId}-${Date.now()}`,
+                      source: newNodeId,
+                      sourceHandle: getTargetHandleForNodeType(nodeType, startParams.handleId),
+                      target: startParams.nodeId,
+                      targetHandle: startParams.handleId,
+                      type: 'dataType',
+                      animated: true,
+                      data: { dataType: nodeType === 'string' ? 'text' : 'image' }
+                  };
+              } else {
+                  newEdge = {
+                      id: `e-${startParams.nodeId}-${newNodeId}-${Date.now()}`,
+                      source: startParams.nodeId,
+                      sourceHandle: startParams.handleId,
+                      target: newNodeId,
+                      targetHandle: getTargetHandleForNodeType(nodeType, startParams.handleId), 
+                      type: 'dataType',
+                      animated: true,
+                      data: { dataType: startParams.handleId === 'text' ? 'text' : 'image' }
+                  };
+              }
 
-      // Determine best node type based on source
-      const context: SmartNodeContext = {
-        sourceHandle,
-        sourceNode,
-        targetPosition: position,
-      };
-
-      const nodeType = determineBestNodeType(context);
-      const nodeId = uuidv4();
-
-      // Create new node
-      const newNode: Node = {
-        id: nodeId,
-        type: nodeType,
-        position,
-        data: getDefaultNodeData(nodeType),
-      };
-
-      // Create edge from source to new node
-      const newEdge: Edge = {
-        id: `e-${sourceNode?.id || 'source'}-${nodeId}-${Date.now()}`,
-        source: sourceNode?.id || '',
-        target: nodeId,
-        sourceHandle: sourceHandle || undefined,
-        targetHandle: getTargetHandleForNodeType(nodeType),
-        type: 'default',
-        animated: true,
-      };
-
-      setNodes((nds) => nds.concat(newNode));
-      setEdges((eds) => eds.concat(newEdge));
+             setNodes((nds) => nds.concat(newNode));
+             setEdges((eds) => eds.concat(newEdge));
+        }
+        
+        connectionStartRef.current = null;
     },
     [screenToFlowPosition, setNodes, setEdges, getNodes]
   );
 
-  /**
-   * Handle reconnection start - track when we start dragging an edge
-   */
-  const onReconnectStart = useCallback(() => {
-    edgeReconnectSuccessful.current = false;
-  }, []);
-
-  /**
-   * Handle reconnection - if successful, update the edge
-   */
-  const onReconnect = useCallback(
-    (oldEdge: Edge, newConnection: Connection) => {
-      edgeReconnectSuccessful.current = true;
-      setEdges((eds) =>
-        eds.map((edge) => {
-          if (edge.id === oldEdge.id) {
-            return {
-              ...edge,
-              source: newConnection.source,
-              target: newConnection.target,
-              sourceHandle: newConnection.sourceHandle,
-              targetHandle: newConnection.targetHandle,
-            };
-          }
-          return edge;
-        })
-      );
-    },
-    [setEdges]
-  );
-
-  /**
-   * Handle reconnection end - if not successful, delete the edge
-   */
-  const onReconnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent, edge: Edge) => {
-      if (!edgeReconnectSuccessful.current) {
-        setEdges((eds) => eds.filter((e) => e.id !== edge.id));
-      }
-      edgeReconnectSuccessful.current = true;
-    },
-    [setEdges]
-  );
-
   return {
+    onConnectStart,
     onConnectEnd,
-    onReconnectStart,
-    onReconnect,
-    onReconnectEnd,
   };
 }
 
-/**
- * Get the appropriate target handle for a node type
- */
-function getTargetHandleForNodeType(nodeType: NodeType): string | undefined {
-  switch (nodeType) {
-    case 'string':
-      return 'text'; // StringNode outputs text
-    case 'nanoGen':
-      return 'prompt'; // NanoGenNode accepts prompt
-    case 'veoDirector':
-      return 'prompt-in'; // VeoDirectorNode accepts prompt
-    default:
-      return undefined;
-  }
+export function useProximityConnect() {
+    const store = useStoreApi();
+    const { getInternalNode, setEdges, getEdges } = useReactFlow();
+    const MIN_DISTANCE = 500;
+
+    const getClosestEdge = useCallback((node: Node) => {
+        const { nodeLookup } = store.getState();
+        const internalNode = getInternalNode(node.id);
+        if (!internalNode) return null;
+
+        const closestNode = Array.from(nodeLookup.values()).reduce(
+          (res, n) => {
+            if (n.id !== internalNode.id) {
+              
+              const nWidth = n.measured?.width ?? n.width ?? 200; 
+              const nHeight = n.measured?.height ?? n.height ?? 200;
+              
+              const internalNodeWidth = internalNode.measured?.width ?? internalNode.width ?? 200;
+              const internalNodeHeight = internalNode.measured?.height ?? internalNode.height ?? 200;
+
+              const nCenter = {
+                  x: n.internals.positionAbsolute.x + nWidth / 2,
+                  y: n.internals.positionAbsolute.y + nHeight / 2
+              };
+              const internalCenter = {
+                  x: internalNode.internals.positionAbsolute.x + internalNodeWidth / 2,
+                  y: internalNode.internals.positionAbsolute.y + internalNodeHeight / 2
+              };
+
+              const d = Math.sqrt(
+                  Math.pow(nCenter.x - internalCenter.x, 2) + 
+                  Math.pow(nCenter.y - internalCenter.y, 2)
+              );
+    
+              if (d < res.distance && d < MIN_DISTANCE) {
+                res.distance = d;
+                res.node = n;
+              }
+            }
+    
+            return res;
+          },
+          {
+            distance: Number.MAX_VALUE,
+            node: null as any
+          },
+        );
+    
+        if (!closestNode.node) {
+          return null;
+        }
+    
+        const closeNodeIsSource =
+          closestNode.node.internals.positionAbsolute.x <
+          internalNode.internals.positionAbsolute.x;
+        
+        const sourceNode = closeNodeIsSource ? closestNode.node : node;
+        const targetNode = closeNodeIsSource ? node : closestNode.node;
+
+        let sourceHandle = 'image';
+        let targetHandle = 'ref-image';
+
+        if (sourceNode.type === 'string') sourceHandle = 'text';
+        if (targetNode.type === 'string') targetHandle = 'input'; 
+        
+        if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector') {
+             if (sourceNode.type === 'string') {
+                 const currentEdges = getEdges();
+                 const isPromptFilled = currentEdges.some(
+                     (e) => e.target === targetNode.id && (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
+                 );
+                 
+                 if (isPromptFilled) {
+                     const isNegativeFilled = currentEdges.some(
+                         (e) => e.target === targetNode.id && e.targetHandle === 'negative'
+                     );
+                     
+                     if (!isNegativeFilled) {
+                         targetHandle = 'negative';
+                     } else {
+                         return null;
+                     }
+                 } else {
+                     targetHandle = targetNode.type === 'veoDirector' ? 'prompt-in' : 'prompt';
+                 }
+             }
+             if (sourceNode.type === 'image') {
+                 targetHandle = targetNode.type === 'veoDirector' ? 'first-frame' : 'ref-image';
+             }
+        }
+
+        return {
+          id: `${sourceNode.id}-${targetNode.id}`,
+          source: sourceNode.id,
+          target: targetNode.id,
+          sourceHandle,
+          targetHandle,
+          className: 'temp',
+          style: { strokeDasharray: 5, stroke: '#94a3b8', strokeWidth: 2 },
+          type: 'dataType', 
+          data: { dataType: sourceNode.type === 'string' ? 'text' : 'image' }
+        };
+      }, [getInternalNode, store, getEdges]);
+
+      const onNodeDrag: OnNodeDrag = useCallback(
+        (_: any, node: Node) => {
+          const closeEdge = getClosestEdge(node);
+    
+          setEdges((es) => {
+            const nextEdges = es.filter((e) => e.className !== 'temp');
+    
+            if (
+              closeEdge &&
+              !nextEdges.find(
+                (ne) =>
+                  ne.source === closeEdge.source && ne.target === closeEdge.target && ne.targetHandle === closeEdge.targetHandle,
+              )
+            ) {
+              nextEdges.push(closeEdge as unknown as Edge);
+            }
+    
+            return nextEdges;
+          });
+        },
+        [getClosestEdge, setEdges],
+      );
+    
+      const onNodeDragStop: OnNodeDrag = useCallback(
+        (_: any, node: Node) => {
+          const closeEdge = getClosestEdge(node);
+    
+          setEdges((es) => {
+            const nextEdges = es.filter((e) => e.className !== 'temp');
+    
+            if (
+              closeEdge &&
+              !nextEdges.find(
+                (ne) =>
+                  ne.source === closeEdge.source && ne.target === closeEdge.target && ne.targetHandle === closeEdge.targetHandle,
+              )
+            ) {
+              const validEdge = {
+                  ...closeEdge,
+                  id: `e-${closeEdge.source}-${closeEdge.target}-${Date.now()}`,
+                  className: undefined,
+                  style: undefined,
+                  animated: true,
+                  type: 'dataType', 
+                  data: { dataType: closeEdge.sourceHandle === 'text' ? 'text' : 'image' }
+              }
+              nextEdges.push(validEdge as unknown as Edge);
+            }
+    
+            return nextEdges;
+          });
+        },
+        [getClosestEdge, setEdges],
+      );
+
+      return { onNodeDrag, onNodeDragStop };
 }

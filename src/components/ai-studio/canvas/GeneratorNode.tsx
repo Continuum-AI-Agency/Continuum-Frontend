@@ -148,18 +148,20 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
             Advanced
           </Collapsible.Trigger>
           <Collapsible.Content className="space-y-2 px-1 py-1">
-            <div>
-              <label className="text-xs text-gray-300">Negative prompt</label>
-              <TextArea
-                value={data.negativePrompt ?? ""}
-                onChange={(e) =>
-                  window.dispatchEvent(
-                    new CustomEvent("node:edit", { detail: { id, field: "negativePrompt", value: e.target.value } })
-                  )
-                }
-                className="mt-1 h-16 bg-slate-800 text-white"
-              />
-            </div>
+            {!isVideo && (
+              <div>
+                <label className="text-xs text-gray-300">Negative prompt</label>
+                <TextArea
+                  value={data.negativePrompt ?? ""}
+                  onChange={(e) =>
+                    window.dispatchEvent(
+                      new CustomEvent("node:edit", { detail: { id, field: "negativePrompt", value: e.target.value } })
+                    )
+                  }
+                  className="mt-1 h-16 bg-slate-800 text-white"
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-gray-300">Seed</label>

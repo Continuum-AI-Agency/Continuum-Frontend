@@ -2,7 +2,7 @@ import type { Edge } from '@xyflow/react';
 import { StudioNode } from '../types';
 import { GenerationPayload, NodeOutput } from '../types/execution';
 import { BackendChatImageRequestPayload } from '@/lib/types/chatImage';
-import { NanoGenNodeData, VeoDirectorNodeData } from '../types';
+import { NanoGenNodeData, VideoGenNodeData } from '../types';
 
 const BRAND_PROFILE_ID = "default-brand";
 
@@ -54,11 +54,7 @@ export function buildNanoGenPayload(
     prompt = promptInput.text;
   }
 
-  let negativePrompt = data.negativePrompt || "";
-  const negativeInput = resolveInputValue(node.id, 'negative', resolvedData, allNodes, allEdges);
-  if (negativeInput?.text) {
-    negativePrompt = negativeInput.text;
-  }
+
 
   if (!prompt.trim()) {
     return null;
@@ -91,7 +87,6 @@ export function buildNanoGenPayload(
     model: backendModel,
     medium: 'image',
     prompt,
-    negativePrompt: negativePrompt || undefined,
     aspectRatio: data.aspectRatio || '1:1',
     resolution: '1024x1024',
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
@@ -104,13 +99,15 @@ export function buildVeoPayload(
   allNodes: StudioNode[],
   allEdges: Edge[]
 ): GenerationPayload | null {
-  const data = node.data as VeoDirectorNodeData;
+  const data = node.data as VideoGenNodeData;
 
   let prompt = data.prompt || "";
   const promptInput = resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges) || resolveInputValue(node.id, 'prompt-in', resolvedData, allNodes, allEdges);
   if (promptInput?.text) {
     prompt = promptInput.text;
   }
+
+  let negativePrompt = data.negativePrompt || "";
 
   if (!prompt.trim()) {
     return null;
@@ -152,7 +149,7 @@ export function buildVeoPayload(
   }
 
   const refImageEdges = allEdges.filter(
-    (e) => e.target === node.id && e.targetHandle === 'ref-image'
+    (e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images' || e.targetHandle === 'ref-video')
   );
   const referenceImages = refImageEdges
     .map((edge) => {
@@ -178,6 +175,7 @@ export function buildVeoPayload(
     model: backendModel,
     medium: 'video',
     prompt,
+    negativePrompt: negativePrompt || undefined,
     aspectRatio: '16:9',
     resolution: '720p',
     durationSeconds: 8,

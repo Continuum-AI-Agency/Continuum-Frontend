@@ -6,7 +6,7 @@ export type DataType = 'string' | 'image' | 'video' | 'trigger';
 
 export interface ConnectorData {
   type: DataType;
-  value: any; 
+  value: any;
 }
 
 export interface BaseNodeData extends Record<string, unknown> {
@@ -20,6 +20,28 @@ export interface BaseNodeData extends Record<string, unknown> {
 
 export type LLMModel = 'claude-3-5-sonnet' | 'gpt-4o' | 'gemini-1.5-pro';
 
+export interface FrameSlot {
+  id: string;
+  src?: string;
+  type: 'image' | 'video';
+}
+
+export type ImageStylePreset = 'photorealistic' | 'anime' | '3d-render' | 'cyberpunk' | 'studio-ghibli' | 'clay' | 'none';
+
+export interface NanoGenNodeData extends BaseNodeData {
+  model: 'nano-banana' | 'nano-banana-pro';
+  positivePrompt: string;
+  aspectRatio: string;
+  stylePreset?: ImageStylePreset;
+  seed?: number;
+  steps?: number;
+  guidance?: number;
+  scheduler?: string;
+  promptEnhancement?: boolean;
+  uploadedImage?: string;
+  generatedImage?: string | Blob;
+}
+
 export interface StringNodeData extends BaseNodeData {
   value: string;
   model?: LLMModel;
@@ -32,38 +54,21 @@ export interface ImageNodeData extends BaseNodeData {
   fileName?: string;
 }
 
-export type ImageStylePreset = 'photorealistic' | 'anime' | '3d-render' | 'cyberpunk' | 'studio-ghibli' | 'clay' | 'none';
-
-export interface NanoGenNodeData extends BaseNodeData {
-  model: 'nano-banana' | 'nano-banana-pro';
-  positivePrompt: string;
-  negativePrompt: string;
-  aspectRatio: string;
-  stylePreset?: ImageStylePreset;
-  seed?: number;
-  steps?: number;
-  guidance?: number;
-  scheduler?: string;
-  promptEnhancement?: boolean;
-  uploadedImage?: string;
-  generatedImage?: string | Blob; 
+export interface VideoNodeData extends BaseNodeData {
+  video?: string;
+  fileName?: string;
 }
 
-export interface FrameSlot {
-  id: string;
-  src?: string;
-  type: 'image' | 'video';
-}
-
-export interface VeoDirectorNodeData extends BaseNodeData {
+export interface VideoGenNodeData extends BaseNodeData {
   model: 'veo-3.1' | 'veo-3.1-fast';
   prompt: string;
+  negativePrompt?: string;
   enhancePrompt: boolean;
   frameList?: FrameSlot[];
-  generatedVideo?: string | Blob; 
+  generatedVideo?: string | Blob;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VeoDirectorNodeData | ImageNodeData;
+export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ImageNodeData | VideoNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed';
