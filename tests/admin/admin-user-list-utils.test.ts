@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 
-import { filterAndSortAdminUsers, groupPermissionsByUserId } from "@/components/admin/adminUserListUtils";
-import type { AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
+import {
+  buildAdminPaginationRange,
+  buildAdminUserListPaginationParams,
+  buildAdminUserListSearchParams,
+  groupPermissionsByUserId,
+} from "@/components/admin/adminUserListUtils";
+import type { PermissionRow } from "@/components/admin/adminUserTypes";
 
 test("groupPermissionsByUserId groups permissions and preserves order per user", () => {
   const permissions: PermissionRow[] = [
@@ -35,26 +40,44 @@ test("groupPermissionsByUserId groups permissions and preserves order per user",
   expect(map.get("missing")).toBeUndefined();
 });
 
-test("filterAndSortAdminUsers keeps original order when query is empty", () => {
-  const users: AdminUser[] = [
-    { id: "user-1", email: "zoe@example.com", name: "Zoe", isAdmin: false, createdAt: null },
-    { id: "user-2", email: "alex@example.com", name: "Alex", isAdmin: false, createdAt: null },
-  ];
+test("buildAdminPaginationRange returns full range when page count is small", () => {
+  const result = buildAdminPaginationRange({ currentPage: 2, totalPages: 5, siblingCount: 1 });
 
-  const result = filterAndSortAdminUsers(users, "");
-
-  expect(result.map((user) => user.id)).toEqual(["user-1", "user-2"]);
+  expect(result).toEqual([1, 2, 3, 4, 5]);
 });
 
-test("filterAndSortAdminUsers filters and ranks name matches ahead of email matches", () => {
-  const users: AdminUser[] = [
-    { id: "user-1", email: "samuel@example.com", name: "Samuel", isAdmin: false, createdAt: null },
-    { id: "user-2", email: "sam@example.com", name: "Sam", isAdmin: false, createdAt: null },
-    { id: "user-3", email: "ally@example.com", name: "Allison", isAdmin: false, createdAt: null },
-    { id: "user-4", email: "samantha@example.com", name: null, isAdmin: false, createdAt: null },
-  ];
+test("buildAdminPaginationRange inserts ellipsis for larger ranges", () => {
+  const result = buildAdminPaginationRange({ currentPage: 6, totalPages: 12, siblingCount: 1 });
 
-  const result = filterAndSortAdminUsers(users, "sam");
+  expect(result).toEqual([1, "ellipsis", 5, 6, 7, "ellipsis", 12]);
+});
 
-  expect(result.map((user) => user.id)).toEqual(["user-2", "user-1", "user-4"]);
+test("buildAdminPaginationRange returns empty list when totalPages is zero", () => {
+  const result = buildAdminPaginationRange({ currentPage: 1, totalPages: 0, siblingCount: 1 });
+
+  expect(result).toEqual([]);
+});
+
+test("buildAdminUserListPaginationParams keeps query and updates paging", () => {
+  const result = buildAdminUserListPaginationParams("query=duane&page=2&pageSize=50", 3, 50);
+
+  expect(result).toContain("query=duane");
+  expect(result).toContain("page=3");
+  expect(result).toContain("pageSize=50");
+});
+
+test("buildAdminUserListSearchParams updates query and resets page", () => {
+  const result = buildAdminUserListSearchParams("page=2&pageSize=50", "sam", 25);
+
+  expect(result).toContain("query=sam");
+  expect(result).toContain("page=1");
+  expect(result).toContain("pageSize=25");
+});
+
+test("buildAdminUserListSearchParams clears query when empty", () => {
+  const result = buildAdminUserListSearchParams("query=duane&page=2&pageSize=50", "   ", 50);
+
+  expect(result).not.toContain("query=duane");
+  expect(result).toContain("page=1");
+  expect(result).toContain("pageSize=50");
 });

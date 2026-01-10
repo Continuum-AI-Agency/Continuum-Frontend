@@ -1,4 +1,4 @@
-import type { AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
+import type { PermissionRow } from "@/components/admin/adminUserTypes";
 
 export function groupPermissionsByUserId(permissions: PermissionRow[]) {
   const byUserId = new Map<string, PermissionRow[]>();
@@ -15,47 +15,73 @@ export function groupPermissionsByUserId(permissions: PermissionRow[]) {
   return byUserId;
 }
 
-type AdminUserMatch = {
-  user: AdminUser;
-  rank: number;
-  label: string;
+export type PaginationItem = number | "ellipsis";
+
+type PaginationRangeInput = {
+  currentPage: number;
+  totalPages: number;
+  siblingCount?: number;
 };
 
-function normalizeSearchQuery(query: string) {
-  return query.trim().toLowerCase();
+export function buildAdminPaginationRange({
+  currentPage,
+  totalPages,
+  siblingCount = 1,
+}: PaginationRangeInput): PaginationItem[] {
+  if (totalPages <= 0) return [];
+  if (totalPages <= 2 * siblingCount + 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const clampedPage = Math.max(1, Math.min(currentPage, totalPages));
+  const leftSibling = Math.max(2, clampedPage - siblingCount);
+  const rightSibling = Math.min(totalPages - 1, clampedPage + siblingCount);
+
+  const items: PaginationItem[] = [1];
+
+  if (leftSibling > 2) {
+    items.push("ellipsis");
+  }
+
+  for (let page = leftSibling; page <= rightSibling; page += 1) {
+    items.push(page);
+  }
+
+  if (rightSibling < totalPages - 1) {
+    items.push("ellipsis");
+  }
+
+  items.push(totalPages);
+
+  return items;
 }
 
-function getUserLabel(user: AdminUser) {
-  return (user.name ?? user.email).trim();
+export function buildAdminUserListPaginationParams(
+  currentParams: string,
+  nextPage: number,
+  pageSize: number
+) {
+  const params = new URLSearchParams(currentParams);
+  params.set("page", String(nextPage));
+  params.set("pageSize", String(pageSize));
+  return params.toString();
 }
 
-function getMatchRank(user: AdminUser, normalizedQuery: string): number | null {
-  if (!normalizedQuery) return null;
-  const name = (user.name ?? "").toLowerCase();
-  const email = user.email.toLowerCase();
+export function buildAdminUserListSearchParams(
+  currentParams: string,
+  query: string,
+  pageSize: number
+) {
+  const params = new URLSearchParams(currentParams);
+  const trimmedQuery = query.trim();
 
-  if (name.startsWith(normalizedQuery)) return 0;
-  if (email.startsWith(normalizedQuery)) return 1;
-  if (name.includes(normalizedQuery)) return 2;
-  if (email.includes(normalizedQuery)) return 3;
+  if (trimmedQuery) {
+    params.set("query", trimmedQuery);
+  } else {
+    params.delete("query");
+  }
 
-  return null;
-}
-
-export function filterAndSortAdminUsers(users: AdminUser[], query: string) {
-  const normalizedQuery = normalizeSearchQuery(query);
-  if (!normalizedQuery) return users;
-
-  return users
-    .reduce<AdminUserMatch[]>((matches, user) => {
-      const rank = getMatchRank(user, normalizedQuery);
-      if (rank === null) return matches;
-      matches.push({ user, rank, label: getUserLabel(user) });
-      return matches;
-    }, [])
-    .sort((a, b) => {
-      if (a.rank !== b.rank) return a.rank - b.rank;
-      return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
-    })
-    .map((match) => match.user);
+  params.set("page", "1");
+  params.set("pageSize", String(pageSize));
+  return params.toString();
 }

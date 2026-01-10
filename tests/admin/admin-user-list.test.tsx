@@ -2,7 +2,6 @@ import { beforeEach, expect, test, vi } from "bun:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { radixThemesCaptured } from "../mocks/radixThemes";
 import type { AdminPagination, AdminUser } from "@/components/admin/adminUserTypes";
 
 let routerPushSpy = vi.fn<(path: string) => void>();
@@ -16,16 +15,9 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("@radix-ui/react-accordion", () => ({
-  Root: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
-  Header: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
-  Item: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
-  Trigger: ({ children, ...props }: { children?: React.ReactNode }) => React.createElement("button", props, children),
-  Content: ({ children }: { children?: React.ReactNode }) => React.createElement("div", null, children),
-}));
-
 vi.mock("@radix-ui/react-icons", () => ({
   MagnifyingGlassIcon: () => React.createElement("span", { "data-icon": "search" }),
+  ChevronDownIcon: () => React.createElement("span", { "data-icon": "chevron-down" }),
 }));
 
 vi.mock("@/components/ui/ToastProvider", () => ({
@@ -51,9 +43,6 @@ async function renderAdminUserList(props: {
 
 beforeEach(() => {
   routerPushSpy.mockReset();
-  radixThemesCaptured.buttons.length = 0;
-  radixThemesCaptured.switches.length = 0;
-  radixThemesCaptured.items.length = 0;
   searchParams = new URLSearchParams({ query: "duane", page: "2", pageSize: "50" });
 });
 
@@ -76,14 +65,5 @@ test("keeps query param when paging search results", async () => {
   const html = await renderAdminUserList({ users, pagination, searchQuery: "duane" });
 
   expect(html).toContain("matches");
-
-  const nextButton = radixThemesCaptured.buttons.find((button) => button.children === "Next");
-  expect(nextButton).toBeTruthy();
-
-  (nextButton!.onClick as () => void)();
-
-  expect(routerPushSpy).toHaveBeenCalledTimes(1);
-  const pushedPath = routerPushSpy.mock.calls[0]?.[0] ?? "";
-  expect(pushedPath).toContain("query=duane");
-  expect(pushedPath).toContain("page=3");
+  expect(html).toContain("?query=duane&amp;page=3&amp;pageSize=50");
 });

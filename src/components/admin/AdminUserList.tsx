@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Badge,
@@ -12,12 +12,28 @@ import {
   Text,
   TextField,
 } from "@radix-ui/themes";
-import * as Accordion from "@radix-ui/react-accordion";
-import { MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import { ChevronDownIcon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AdminPagination, AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
-import { filterAndSortAdminUsers, groupPermissionsByUserId } from "@/components/admin/adminUserListUtils";
+import {
+  buildAdminPaginationRange,
+  buildAdminUserListPaginationParams,
+  buildAdminUserListSearchParams,
+  groupPermissionsByUserId,
+} from "@/components/admin/adminUserListUtils";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type Props = {
   users: AdminUser[];
@@ -28,16 +44,22 @@ type Props = {
 
 export function AdminUserList({ users, permissions, pagination, searchQuery }: Props) {
   const { show } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [isNavPending, startNavTransition] = useTransition();
+  const [isActionPending, startActionTransition] = useTransition();
   const supabase = createSupabaseBrowserClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
   const [query, setQuery] = useState(searchQuery);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     setQuery(searchQuery);
   }, [searchQuery]);
+
+  useEffect(() => {
+    setExpandedUserId(null);
+  }, [pagination.page, searchQuery]);
 
   async function copyImpersonationLinkToClipboard(url: string): Promise<boolean> {
     try {
@@ -51,20 +73,32 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const permissionsByUserId = useMemo(() => groupPermissionsByUserId(permissions), [permissions]);
 
   const safePage = pagination.totalPages > 0 ? Math.min(pagination.page, pagination.totalPages) : pagination.page;
+  const totalPages = Math.max(pagination.totalPages, 1);
   const totalCountLabel = pagination.totalCount.toLocaleString();
   const trimmedQuery = query.trim();
-  const hasQuery = trimmedQuery.length > 0;
   const serverQueryActive = searchQuery.trim().length > 0;
-  const visibleUsers = useMemo(() => filterAndSortAdminUsers(users, trimmedQuery), [users, trimmedQuery]);
+  const visibleUsers = users;
   const pageSummary = `Showing ${visibleUsers.length} on this page`;
   const totalLabelSuffix = serverQueryActive ? "matches" : "total";
+  const paginationItems = useMemo(
+    () => buildAdminPaginationRange({ currentPage: safePage, totalPages, siblingCount: 1 }),
+    [safePage, totalPages]
+  );
 
-  function updatePage(nextPage: number) {
+  function handlePageNavigation(event: React.MouseEvent<HTMLAnchorElement>, nextPage: number) {
     if (nextPage === pagination.page) return;
-    const params = new URLSearchParams(searchParamsString);
-    params.set("page", String(nextPage));
-    params.set("pageSize", String(pagination.pageSize));
-    router.push(`?${params.toString()}`);
+    if (event.defaultPrevented) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    startNavTransition(() => {
+      const params = buildAdminUserListPaginationParams(searchParamsString, nextPage, pagination.pageSize);
+      router.push(`?${params}`);
+    });
+  }
+
+  function getPageHref(nextPage: number) {
+    const params = buildAdminUserListPaginationParams(searchParamsString, nextPage, pagination.pageSize);
+    return `?${params}`;
   }
 
   useEffect(() => {
@@ -72,19 +106,14 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     if (trimmedQuery === currentQuery.trim()) return;
 
     const timeout = setTimeout(() => {
-      const params = new URLSearchParams(searchParamsString);
-      if (trimmedQuery) {
-        params.set("query", trimmedQuery);
-      } else {
-        params.delete("query");
-      }
-      params.set("page", "1");
-      params.set("pageSize", String(pagination.pageSize));
-      router.push(`?${params.toString()}`);
+      startNavTransition(() => {
+        const params = buildAdminUserListSearchParams(searchParamsString, trimmedQuery, pagination.pageSize);
+        router.push(`?${params}`);
+      });
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [trimmedQuery, pagination.pageSize, router, searchParamsString]);
+  }, [trimmedQuery, pagination.pageSize, router, searchParamsString, startNavTransition]);
 
   return (
     <Flex direction="column" gap="5">
@@ -93,6 +122,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           <Heading size="5">Users</Heading>
           <Text color="gray" size="2">
             {pageSummary} · {totalCountLabel} {totalLabelSuffix}
+            {isNavPending ? " · Updating..." : null}
           </Text>
         </div>
         <TextField.Root
@@ -108,90 +138,213 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
         </TextField.Root>
       </Flex>
 
-      <div className="w-full rounded-xl border border-[var(--gray-6)] bg-[var(--color-panel)] shadow-[0_12px_50px_-24px_rgba(0,0,0,0.35)]">
+      <div className="w-full rounded-xl border border-subtle bg-surface shadow-xl">
         <ScrollArea type="auto" scrollbars="both" style={{ maxHeight: "70vh" }}>
           <div className="min-w-[940px]">
-            <div className="sticky top-0 z-10 grid grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-3 px-5 py-3 border-b border-[var(--gray-6)] bg-[var(--color-panel)] text-sm text-[var(--gray-11)] uppercase tracking-[0.04em]">
-              <span>Users</span>
-              <span>Brands</span>
-              <span>Tier</span>
-              <span className="text-right pr-2">Actions</span>
-            </div>
-            <div className="divide-y divide-[var(--gray-6)]">
-              {visibleUsers.length === 0 ? (
-                <div className="px-5 py-6">
-                  <Text size="2" color="gray">
-                    {hasQuery ? "No users match this search." : "No users found."}
-                  </Text>
-                </div>
-              ) : (
-                visibleUsers.map((user) => {
-                  const memberships = permissionsByUserId.get(user.id) ?? [];
-                  const tierLabel =
-                    memberships
-                      .map((m) => m.tier)
-                      .filter((t) => t !== null && t !== undefined)
-                      .map((t) => String(t))
-                      .join(", ") || "None";
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-surface">
+                <TableRow>
+                  <TableHead>Users</TableHead>
+                  <TableHead>Brands</TableHead>
+                  <TableHead>Tier</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="px-5 py-6">
+                      <Text size="2" color="gray">
+                        {serverQueryActive ? "No users match this search." : "No users found."}
+                      </Text>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  visibleUsers.map((user) => {
+                    const memberships = permissionsByUserId.get(user.id) ?? [];
+                    const isExpanded = expandedUserId === user.id;
+                    const detailId = `admin-user-${user.id}-brands`;
+                    const tierLabel =
+                      memberships
+                        .map((m) => m.tier)
+                        .filter((t) => t !== null && t !== undefined)
+                        .map((t) => String(t))
+                        .join(", ") || "None";
+                    const brandNames = memberships.map((m) => m.brand_name ?? m.brand_profile_id).filter(Boolean);
+                    const primaryBrands = brandNames.slice(0, 2);
+                    const remainingBrandCount = Math.max(0, brandNames.length - primaryBrands.length);
+                    const summaryTitle =
+                      memberships.length === 0
+                        ? "No brand memberships"
+                        : `${memberships.length} brand${memberships.length > 1 ? "s" : ""}`;
+                    const summaryDetail =
+                      memberships.length === 0
+                        ? "No memberships yet"
+                        : `${primaryBrands.join(", ")}${remainingBrandCount > 0 ? ` +${remainingBrandCount} more` : ""}`;
 
-                  return (
-                    <div key={user.id} className="px-5 py-4 hover:bg-[var(--gray-3)] transition-colors">
-                      <div className="grid grid-cols-[minmax(240px,1.4fr)_minmax(220px,1fr)_minmax(220px,1fr)_120px] gap-3 items-center">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-[var(--gray-4)] text-[var(--gray-12)] grid place-items-center text-sm font-semibold">
-                            {(user.name ?? user.email).slice(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <Heading size="4">{user.name ?? user.email}</Heading>
-                            <Text size="2" color="gray">
-                              {user.email}
-                            </Text>
-                          </div>
-                        </div>
-                        <div>
-                          {memberships.length === 0 ? (
-                            <Text size="2" color="gray">
-                              No brand memberships
-                            </Text>
-                          ) : (
-                            <Accordion.Root type="single" collapsible>
-                              <Accordion.Item value="brands">
-                                <Accordion.Trigger>
+                    return (
+                      <Fragment key={user.id}>
+                        <TableRow className="group/row hover:bg-accent/30">
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-sm font-semibold text-primary">
+                                {(user.name ?? user.email).slice(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <Heading size="4">{user.name ?? user.email}</Heading>
+                                <Text size="2" color="gray">
+                                  {user.email}
+                                </Text>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            {memberships.length === 0 ? (
+                              <Text size="2" color="gray">
+                                No brand memberships
+                              </Text>
+                            ) : (
+                              <button
+                                type="button"
+                                aria-expanded={isExpanded}
+                                aria-controls={detailId}
+                                onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
+                                className={cn(
+                                  "flex w-full items-center justify-between gap-3 rounded-md px-2 py-1 text-left transition-colors",
+                                  "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                                  "group-hover/row:bg-accent/30",
+                                  isExpanded && "bg-accent/50"
+                                )}
+                              >
+                                <span className="flex flex-col">
                                   <Text size="2" weight="medium">
-                                    {memberships.length} brand{memberships.length > 1 ? "s" : ""} • expand
+                                    {summaryTitle}
                                   </Text>
-                                </Accordion.Trigger>
-                                <Accordion.Content>
-                                  <Flex direction="column" gap="2" className="pt-2">
-                                    {memberships.map((m) => (
-                                      <Flex
-                                        key={`${m.user_id}-${m.brand_profile_id}`}
-                                        justify="between"
-                                        align="center"
-                                        className="rounded-lg border border-[var(--gray-6)] bg-[var(--gray-3)] px-3 py-2"
-                                        gap="3"
-                                        wrap="wrap"
+                                  <Text size="1" color="gray">
+                                    {summaryDetail}
+                                  </Text>
+                                </span>
+                                <ChevronDownIcon
+                                  className={cn(
+                                    "size-4 text-secondary transition-transform",
+                                    isExpanded && "rotate-180"
+                                  )}
+                                />
+                              </button>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Text size="2" color="gray">
+                              {tierLabel}
+                            </Text>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <Flex gap="2" justify="end" wrap="wrap">
+                              {user.isAdmin && <Badge color="green">Admin</Badge>}
+                              <Button
+                                size="1"
+                                variant="soft"
+                                disabled={isActionPending}
+                                onClick={() =>
+                                  startActionTransition(async () => {
+                                    try {
+                                      const { data, error } = await supabase.functions.invoke("impersonate-user", {
+                                        body: { target_id: user.id },
+                                      });
+                                      if (error || !data?.signInLink) {
+                                        throw new Error(error?.message ?? "Failed to generate link");
+                                      }
+                                      const copied = await copyImpersonationLinkToClipboard(data.signInLink);
+                                      show({
+                                        title: "Impersonation link ready",
+                                        description: copied
+                                          ? "Link copied to clipboard."
+                                          : "Copy blocked by the browser. Use a different browser or allow clipboard permissions.",
+                                        variant: copied ? "success" : "warning",
+                                      });
+                                    } catch (error) {
+                                      show({
+                                        title: "Failed to impersonate",
+                                        description: error instanceof Error ? error.message : "Unable to generate link.",
+                                        variant: "error",
+                                      });
+                                    }
+                                  })
+                                }
+                              >
+                                Impersonate
+                              </Button>
+                              <Button
+                                size="1"
+                                variant="outline"
+                                color={user.isAdmin ? "red" : "green"}
+                                disabled={isActionPending}
+                                onClick={() =>
+                                  startActionTransition(async () => {
+                                    try {
+                                      const { error } = await supabase.functions.invoke("admin-set-admin", {
+                                        method: "POST",
+                                        body: { userId: user.id, isAdmin: !user.isAdmin },
+                                      });
+                                      if (error) throw new Error(error.message);
+                                      show({ title: user.isAdmin ? "Admin revoked" : "Admin granted", variant: "success" });
+                                    } catch (error) {
+                                      show({
+                                        title: "Update failed",
+                                        description: error instanceof Error ? error.message : "Unable to update admin flag.",
+                                        variant: "error",
+                                      });
+                                    }
+                                  })
+                                }
+                              >
+                                {user.isAdmin ? "Revoke admin" : "Make admin"}
+                              </Button>
+                            </Flex>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded ? (
+                          <TableRow className="bg-accent/20">
+                            <TableCell colSpan={4} className="px-5 pb-5 pt-2">
+                              <div id={detailId} className="rounded-lg border border-subtle bg-default/60 p-4">
+                                <div className="flex flex-col gap-3">
+                                  {memberships.map((membership) => {
+                                    const tierValue =
+                                      membership.tier === null || membership.tier === undefined
+                                        ? "none"
+                                        : String(membership.tier);
+
+                                    return (
+                                      <div
+                                        key={`${membership.user_id}-${membership.brand_profile_id}`}
+                                        className="flex flex-col gap-3 rounded-md border border-subtle bg-surface px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                                       >
                                         <div>
-                                          <Text weight="medium">{m.brand_name ?? m.brand_profile_id}</Text>
+                                          <Text weight="medium">
+                                            {membership.brand_name ?? membership.brand_profile_id}
+                                          </Text>
                                           <Text color="gray" size="2">
-                                            Role: {m.role ?? "unknown"}
+                                            Role: {membership.role ?? "unknown"}
                                           </Text>
                                         </div>
-                                        <Flex gap="2" align="center">
-                                          <Text size="2" color="gray">
+                                        <div className="flex items-center gap-2">
+                                          <Text size="1" color="gray">
                                             Tier
                                           </Text>
-                                          <select
-                                            className="bg-[var(--color-panel)] border border-[var(--gray-6)] rounded px-2 py-1 text-sm"
-                                            defaultValue={m.tier ?? ""}
-                                            onChange={(e) =>
-                                              startTransition(async () => {
-                                                const value = e.target.value === "" ? null : Number(e.target.value);
+                                          <Select
+                                            defaultValue={tierValue}
+                                            onValueChange={(value) =>
+                                              startActionTransition(async () => {
+                                                const nextTier = value === "none" ? null : Number(value);
+                                                if (value !== "none" && !Number.isFinite(nextTier)) return;
                                                 try {
                                                   const { error } = await supabase.functions.invoke("admin-update-tier", {
                                                     method: "POST",
-                                                    body: { userId: m.user_id, brandProfileId: m.brand_profile_id, tier: value },
+                                                    body: {
+                                                      userId: membership.user_id,
+                                                      brandProfileId: membership.brand_profile_id,
+                                                      tier: nextTier,
+                                                    },
                                                   });
                                                   if (error) throw new Error(error.message);
                                                   show({ title: "Tier updated", variant: "success" });
@@ -204,135 +357,96 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                                 }
                                               })
                                             }
+                                            disabled={isActionPending}
                                           >
-                                            <option value="">None</option>
-                                            <option value="1">1 — Studio+</option>
-                                            <option value="2">2 — Social+</option>
-                                            <option value="3">3 — Creative+</option>
-                                          </select>
-                                        </Flex>
-                                      </Flex>
-                                    ))}
-                                  </Flex>
-                                </Accordion.Content>
-                              </Accordion.Item>
-                            </Accordion.Root>
-                          )}
-                        </div>
-                        <div>
-                          <Text size="2" color="gray">
-                            {tierLabel}
-                          </Text>
-                        </div>
-                        <Flex gap="2" justify="end" wrap="wrap">
-                          {user.isAdmin && <Badge color="green">Admin</Badge>}
-                          <Button
-                            size="1"
-                            variant="soft"
-                            disabled={isPending}
-                            onClick={() =>
-                              startTransition(async () => {
-                                try {
-                                  const { data, error } = await supabase.functions.invoke("impersonate-user", {
-                                    body: { target_id: user.id },
-                                  });
-                                  if (error || !data?.signInLink) {
-                                    throw new Error(error?.message ?? "Failed to generate link");
-                                  }
-                                  const copied = await copyImpersonationLinkToClipboard(data.signInLink);
-                                  show({
-                                    title: "Impersonation link ready",
-                                    description: copied
-                                      ? "Link copied to clipboard."
-                                      : "Copy blocked by the browser. Use a different browser or allow clipboard permissions.",
-                                    variant: copied ? "success" : "warning",
-                                  });
-                                } catch (error) {
-                                  show({
-                                    title: "Failed to impersonate",
-                                    description: error instanceof Error ? error.message : "Unable to generate link.",
-                                    variant: "error",
-                                  });
-                                }
-                              })
-                            }
-                          >
-                            Impersonate
-                          </Button>
-                          <Button
-                            size="1"
-                            variant="outline"
-                            color={user.isAdmin ? "red" : "green"}
-                            disabled={isPending}
-                            onClick={() =>
-                              startTransition(async () => {
-                                try {
-                                  const { error } = await supabase.functions.invoke("admin-set-admin", {
-                                    method: "POST",
-                                    body: { userId: user.id, isAdmin: !user.isAdmin },
-                                  });
-                                  if (error) throw new Error(error.message);
-                                  show({ title: user.isAdmin ? "Admin revoked" : "Admin granted", variant: "success" });
-                                } catch (error) {
-                                  show({
-                                    title: "Update failed",
-                                    description: error instanceof Error ? error.message : "Unable to update admin flag.",
-                                    variant: "error",
-                                  });
-                                }
-                              })
-                            }
-                          >
-                            {user.isAdmin ? "Revoke admin" : "Make admin"}
-                          </Button>
-                        </Flex>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                                            <SelectTrigger size="sm" className="min-w-[160px]">
+                                              <SelectValue placeholder="None" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="none">None</SelectItem>
+                                              <SelectItem value="1">1 — Studio+</SelectItem>
+                                              <SelectItem value="2">2 — Social+</SelectItem>
+                                              <SelectItem value="3">3 — Creative+</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
           </div>
         </ScrollArea>
       </div>
       <Flex align="center" justify="between" gap="3" wrap="wrap">
         <Text size="2" color="gray">
-          Page {safePage} of {Math.max(pagination.totalPages, 1)}
+          Page {safePage} of {totalPages}
         </Text>
-        <Flex gap="2" align="center" wrap="wrap">
-          <Button
-            size="1"
-            variant="soft"
-            disabled={!pagination.hasPrevPage}
-            onClick={() => updatePage(1)}
-          >
-            First
-          </Button>
-          <Button
-            size="1"
-            variant="soft"
-            disabled={!pagination.hasPrevPage}
-            onClick={() => updatePage(Math.max(1, pagination.page - 1))}
-          >
-            Previous
-          </Button>
-          <Button
-            size="1"
-            variant="soft"
-            disabled={!pagination.hasNextPage}
-            onClick={() => updatePage(pagination.page + 1)}
-          >
-            Next
-          </Button>
-          <Button
-            size="1"
-            variant="soft"
-            disabled={!pagination.hasNextPage || pagination.totalPages <= 1}
-            onClick={() => updatePage(Math.max(1, pagination.totalPages))}
-          >
-            Last
-          </Button>
-        </Flex>
+        <Pagination className="w-auto justify-end">
+          <PaginationContent className="flex-wrap justify-end">
+            <PaginationItem>
+              <PaginationLink
+                size="default"
+                href={getPageHref(1)}
+                onClick={(event) => handlePageNavigation(event, 1)}
+                disabled={!pagination.hasPrevPage || isNavPending}
+              >
+                First
+              </PaginationLink>
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationPrevious
+                href={getPageHref(Math.max(1, pagination.page - 1))}
+                onClick={(event) => handlePageNavigation(event, Math.max(1, pagination.page - 1))}
+                disabled={!pagination.hasPrevPage || isNavPending}
+              />
+            </PaginationItem>
+            {paginationItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <PaginationItem key={`ellipsis-${index}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={`page-${item}`}>
+                  <PaginationLink
+                    href={getPageHref(item)}
+                    onClick={(event) => handlePageNavigation(event, item)}
+                    isActive={item === safePage}
+                    disabled={isNavPending}
+                  >
+                    {item}
+                  </PaginationLink>
+                </PaginationItem>
+              )
+            )}
+            <PaginationItem>
+              <PaginationNext
+                href={getPageHref(Math.min(totalPages, pagination.page + 1))}
+                onClick={(event) => handlePageNavigation(event, Math.min(totalPages, pagination.page + 1))}
+                disabled={!pagination.hasNextPage || isNavPending}
+              />
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationLink
+                size="default"
+                href={getPageHref(totalPages)}
+                onClick={(event) => handlePageNavigation(event, totalPages)}
+                disabled={!pagination.hasNextPage || totalPages <= 1 || isNavPending}
+              >
+                Last
+              </PaginationLink>
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </Flex>
       <Callout.Root color="amber">
         <Callout.Text>Admin actions use service-role access; changes apply immediately.</Callout.Text>
