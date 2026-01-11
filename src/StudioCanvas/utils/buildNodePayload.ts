@@ -87,7 +87,9 @@ export function buildNanoGenPayload(
     model: backendModel,
     medium: 'image',
     prompt,
-    negativePrompt: data.negativePrompt || undefined,
+    negativePrompt: typeof data.negativePrompt === 'string' && data.negativePrompt.trim()
+      ? data.negativePrompt
+      : undefined,
     aspectRatio: data.aspectRatio || '1:1',
     resolution: '1024x1024',
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,

@@ -52,7 +52,7 @@ export function ImageNode({ id, data }: NodeProps<Node<ImageNodeData>>) {
     }
   }, [id, updateNodeData]);
 
-  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'copy';
@@ -65,7 +65,7 @@ export function ImageNode({ id, data }: NodeProps<Node<ImageNodeData>>) {
     reader.readAsDataURL(file);
   }), []);
 
-  const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = useCallback(async (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
 

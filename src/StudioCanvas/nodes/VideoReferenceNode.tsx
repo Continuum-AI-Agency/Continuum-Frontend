@@ -50,7 +50,7 @@ export function VideoReferenceNode({ id, data }: NodeProps<Node<VideoNodeData>>)
     }
   }, [id, updateNodeData]);
 
-  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = 'copy';
@@ -63,7 +63,7 @@ export function VideoReferenceNode({ id, data }: NodeProps<Node<VideoNodeData>>)
     reader.readAsDataURL(file);
   }), []);
 
-  const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = useCallback(async (event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
 
