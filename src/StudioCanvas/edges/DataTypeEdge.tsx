@@ -1,7 +1,14 @@
 "use client";
 
 import React, { memo } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react';
+import {
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+  getSmoothStepPath,
+  getStraightPath,
+  type EdgeProps,
+} from '@xyflow/react';
 
 /**
  * DataTypeEdge - An edge colored and styled based on the data type it carries
@@ -14,45 +21,33 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyf
 export interface DataTypeEdgeData {
   dataType?: 'text' | 'image' | 'video';
   label?: string;
+  isActive?: boolean;
+  pathType?: 'bezier' | 'straight' | 'step' | 'smoothstep';
 }
 
 /**
  * Get edge styling based on data type
  */
 export function getDataTypeEdgeStyle(dataType?: string): React.CSSProperties {
-  switch (dataType) {
-    case 'image':
-      return {
-        stroke: '#6366f1', // indigo-500
-        strokeWidth: 2,
-      };
-    case 'video':
-      return {
-        stroke: '#10b981', // emerald-500
-        strokeWidth: 2,
-      };
-    case 'text':
-    default:
-      return {
-        stroke: '#94a3b8', // slate-400
-        strokeWidth: 2,
-      };
-  }
+  const token =
+    dataType === 'image'
+      ? 'var(--edge-image)'
+      : dataType === 'video'
+        ? 'var(--edge-video)'
+        : 'var(--edge-text)';
+
+  return {
+    ['--edge-color' as keyof React.CSSProperties]: token,
+  };
 }
 
 /**
  * Get marker color based on data type
  */
 export function getDataTypeMarkerColor(dataType?: string): string {
-  switch (dataType) {
-    case 'image':
-      return '#6366f1'; // indigo-500
-    case 'video':
-      return '#10b981'; // emerald-500
-    case 'text':
-    default:
-      return '#94a3b8'; // slate-400
-  }
+  if (dataType === 'image') return 'var(--edge-image)';
+  if (dataType === 'video') return 'var(--edge-video)';
+  return 'var(--edge-text)';
 }
 
 export const DataTypeEdge = memo(({ 
@@ -66,28 +61,34 @@ export const DataTypeEdge = memo(({
   data,
   markerEnd,
 }: EdgeProps) => {
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
-
   const edgeData = data as DataTypeEdgeData | undefined;
   
-  // Data type determines animation speed
   const dataType = edgeData?.dataType || 'text';
-  const animationDuration = dataType === 'video' ? '1s' : dataType === 'image' ? '1.5s' : '2s';
+  const isActive = edgeData?.isActive ?? false;
+  const pathType = edgeData?.pathType || 'bezier';
+
+  const getPath = () => {
+    const params = {
+      sourceX,
+      sourceY,
+      sourcePosition,
+      targetX,
+      targetY,
+      targetPosition,
+    };
+
+    if (pathType === 'straight') return getStraightPath(params);
+    if (pathType === 'step' || pathType === 'smoothstep') return getSmoothStepPath(params);
+    return getBezierPath(params);
+  };
+
+  const [edgePath, labelX, labelY] = getPath();
 
   // Merge custom style with data type style
   const dataTypeStyle = getDataTypeEdgeStyle(edgeData?.dataType);
   const mergedStyle = {
     ...dataTypeStyle,
     ...style,
-    strokeDasharray: '8 4',
-    animation: `flowAnimation ${animationDuration} linear infinite`,
   };
 
   return (
@@ -96,17 +97,20 @@ export const DataTypeEdge = memo(({
         path={edgePath}
         markerEnd={markerEnd}
         style={mergedStyle}
-      />
-      <style>{`
-        @keyframes flowAnimation {
-          from {
-            stroke-dashoffset: 24;
-          }
-          to {
-            stroke-dashoffset: 0;
-          }
+        className={
+          isActive
+            ? 'studio-edge-path studio-edge-path--active-base'
+            : 'studio-edge-path studio-edge-path--inactive'
         }
-      `}</style>
+      />
+      {isActive && (
+        <path
+          className="studio-edge-path studio-edge-path--flow"
+          d={edgePath}
+          fill="none"
+          style={mergedStyle}
+        />
+      )}
       {edgeData?.label && (
         <EdgeLabelRenderer>
           <div
@@ -114,9 +118,10 @@ export const DataTypeEdge = memo(({
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               pointerEvents: 'all',
+              ...getDataTypeEdgeStyle(edgeData?.dataType),
             }}
           >
-            <div className="rounded-md bg-background/90 px-2 py-1 text-xs font-medium text-foreground shadow-sm border">
+            <div className="studio-handle-pill rounded-md px-2 py-1 text-[10px] font-medium uppercase tracking-tight shadow-sm">
               {edgeData.label}
             </div>
           </div>

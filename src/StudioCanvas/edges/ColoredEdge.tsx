@@ -21,18 +21,14 @@ export function ColoredEdge({
     targetPosition,
   });
 
-  let edgeColor = '#94a3b8'; 
-
-  if (targetHandleId === 'prompt' || targetHandleId === 'prompt-in') {
-    edgeColor = '#6366f1'; 
-  } else if (targetHandleId === 'negative') {
-    edgeColor = '#ef4444'; 
+  let edgeColor = 'var(--edge-text)'; 
+  
+  if (targetHandleId === 'prompt' || targetHandleId === 'prompt-in' || targetHandleId === 'trigger') {
+    edgeColor = 'var(--edge-text)';
   } else if (targetHandleId === 'ref-image' || targetHandleId === 'image' || targetHandleId === 'first-frame' || targetHandleId === 'last-frame') {
-    if (targetHandleId === 'first-frame') edgeColor = '#10b981'; 
-    else if (targetHandleId === 'last-frame') edgeColor = '#f97316'; 
-    else edgeColor = '#a855f7'; 
+    edgeColor = 'var(--edge-image)'; 
   } else if (targetHandleId === 'ref-video' || targetHandleId === 'video') {
-    edgeColor = '#ec4899'; 
+    edgeColor = 'var(--edge-video)'; 
   }
 
   return (
@@ -40,8 +36,11 @@ export function ColoredEdge({
       <BaseEdge 
         path={edgePath} 
         markerEnd={markerEnd} 
-        style={{ ...style, strokeWidth: 3, stroke: edgeColor }} 
-        className="react-flow__edge-path"
+        style={{ 
+          ...style, 
+          ['--edge-color' as keyof React.CSSProperties]: edgeColor, 
+        }} 
+        className="studio-edge-path"
       />
     </>
   );

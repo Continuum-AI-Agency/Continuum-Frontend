@@ -1,14 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import React from 'react';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { ImageNode } from './ImageNode';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ReactFlowProvider } from '@xyflow/react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 
 const updateNodeData = mock();
+let originalUpdateNodeData: any;
 
 describe('ImageNode', () => {
   beforeEach(() => {
+    originalUpdateNodeData = useStudioStore.getState().updateNodeData;
     useStudioStore.setState({
       nodes: [],
       edges: [],
@@ -18,6 +21,9 @@ describe('ImageNode', () => {
   });
 
   afterEach(() => {
+    if (originalUpdateNodeData) {
+      useStudioStore.setState({ updateNodeData: originalUpdateNodeData });
+    }
     cleanup();
   });
 
@@ -39,12 +45,13 @@ describe('ImageNode', () => {
 
   it('should render correctly', () => {
     render(
-      <ReactFlowProvider>
-        <ImageNode {...defaultProps} />
-      </ReactFlowProvider>
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...defaultProps} />
+        </ReactFlowProvider>
+      </ToastProvider>
     );
 
-    expect(screen.getByText('Image Input')).toBeTruthy();
     expect(screen.getByText('Upload Image')).toBeTruthy();
   });
 
@@ -58,14 +65,42 @@ describe('ImageNode', () => {
     };
 
     render(
-      <ReactFlowProvider>
-        <ImageNode {...propsWithImage} />
-      </ReactFlowProvider>
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...propsWithImage} />
+        </ReactFlowProvider>
+      </ToastProvider>
     );
 
     const img = screen.getByAltText('Preview');
     expect(img).toBeTruthy();
     expect(img.getAttribute('src')).toBe('base64img');
     expect(screen.getByText('test.png')).toBeTruthy();
+  });
+
+  it('should accept dropped image data URLs', async () => {
+    const dataUrl = 'data:image/png;base64,drop_base64';
+    const { container } = render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...defaultProps} />
+        </ReactFlowProvider>
+      </ToastProvider>
+    );
+
+    const dropTarget = container.querySelector('div.relative.group') as HTMLElement;
+    const dataTransfer = {
+      getData: (type: string) => (type === 'text/plain' ? dataUrl : ''),
+      files: [],
+      types: ['text/plain'],
+      dropEffect: 'copy',
+    };
+
+    fireEvent.dragOver(dropTarget, { dataTransfer });
+    fireEvent.drop(dropTarget, { dataTransfer });
+
+    await waitFor(() => {
+      expect(updateNodeData).toHaveBeenCalledWith('1', { image: dataUrl, fileName: undefined });
+    });
   });
 });

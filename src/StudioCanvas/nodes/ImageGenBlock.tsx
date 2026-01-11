@@ -5,9 +5,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useStudioStore } from '../stores/useStudioStore';
 import { NanoGenNodeData } from '../types';
 import { BlockToolbar } from '../components/BlockToolbar';
-import { ImageIcon, UploadIcon } from '@radix-ui/react-icons';
+import { ImageIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
@@ -62,18 +63,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
     updateNodeData(id, { aspectRatio: value });
   }, [id, updateNodeData]);
 
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        updateNodeData(id, { uploadedImage: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
-  }, [id, updateNodeData]);
-
-  const previewImage = data.generatedImage || data.uploadedImage;
+  const previewImage = data.generatedImage;
   const refImageLimit = data.model === 'nano-banana-pro' ? 4 : 1;
 
   return (
@@ -125,96 +115,87 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
 
       <Card className="h-full border-2 border-slate-200 shadow-md bg-white flex flex-col overflow-hidden">
         <div className="relative flex-1 bg-slate-100 group/preview min-h-0">
-           {previewImage ? (
-             <div className="w-full h-full flex items-center justify-center bg-slate-950">
-                 <AspectRatio ratio={1 / 1} className="w-full h-full">
-                     <img 
-                       src={previewImage as string} 
-                       alt="Result" 
-                       className="w-full h-full object-cover"
-                     />
-                 </AspectRatio>
-             </div>
-           ) : (
-             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2">
-               <Empty>
-                 <EmptyHeader>
-                   <EmptyMedia variant="icon">
-                     <ImageIcon />
-                   </EmptyMedia>
-                   <EmptyTitle>No Image</EmptyTitle>
-                   <EmptyDescription>Generated image will appear here</EmptyDescription>
-                 </EmptyHeader>
-               </Empty>
-             </div>
-           )}
-           
-           <div className={cn(
-             "absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 transition-opacity z-10",
-             !previewImage && "opacity-100 pointer-events-none", 
-             previewImage && "group-hover/preview:opacity-100"
-           )}>
-              <label className="cursor-pointer bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-md flex items-center gap-2 border border-white/20 transition-all pointer-events-auto">
-                <UploadIcon className="w-3 h-3" />
-                {previewImage ? 'Replace Image' : 'Upload Image'}
-                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
-              </label>
-           </div>
-           
-           <Handle 
-             type="source" 
-             position={Position.Right} 
-             id="image" 
-             className="!w-4 !h-4 !bg-indigo-500 !border-2 !border-white shadow-sm !-right-2 transition-transform hover:scale-125" 
-           />
+            {data.isExecuting ? (
+              <div className="w-full h-full flex items-center justify-center bg-slate-950 p-4">
+                  <AspectRatio ratio={1 / 1} className="w-full h-full">
+                      <Skeleton className="w-full h-full bg-slate-800" />
+                  </AspectRatio>
+              </div>
+            ) : previewImage ? (
+              <div className="w-full h-full flex items-center justify-center bg-slate-950">
+                  <AspectRatio ratio={1 / 1} className="w-full h-full">
+                      <img
+                        src={previewImage as string}
+                        alt="Generated Image"
+                        className="w-full h-full object-cover"
+                      />
+                  </AspectRatio>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2">
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <ImageIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>No Image</EmptyTitle>
+                    <EmptyDescription>Generated image will appear here</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              </div>
+            )}
         </div>
       </Card>
+
+      <div
+        className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
+        style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+      >
+        <Handle 
+          type="source" 
+          position={Position.Right} 
+          id="image" 
+          className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto" 
+        />
+      </div>
 
       {/* Handles Container - Outside of Card to prevent clipping */}
       <div className="absolute -left-2 top-0 bottom-0 flex flex-col justify-evenly py-4 pointer-events-none h-full z-20">
           
-          <div className="relative pointer-events-auto group/handle">
+          <div
+            className="relative pointer-events-auto group/handle"
+            style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+          >
             <LimitedHandle 
               type="target" 
               position={Position.Left} 
               id="prompt" 
               maxConnections={1}
-              className="!w-4 !h-4 !bg-indigo-500 !border-2 !border-white shadow-sm transition-transform hover:scale-125" 
+              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
             <span className={cn(
-              "absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-medium text-white bg-indigo-500 px-2 py-1 rounded-md shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+              "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
               (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
             )}>
               Prompt
             </span>
           </div>
           
-          <div className="relative pointer-events-auto group/handle">
-            <LimitedHandle 
-              type="target" 
-              position={Position.Left} 
-              id="negative" 
-              maxConnections={1}
-              className="!w-4 !h-4 !bg-red-500 !border-2 !border-white shadow-sm transition-transform hover:scale-125" 
-            />
-            <span className={cn(
-              "absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-medium text-white bg-red-500 px-2 py-1 rounded-md shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-              (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-            )}>
-              Negative
-            </span>
-          </div>
 
-          <div className="relative pointer-events-auto group/handle">
+
+          <div
+            className="relative pointer-events-auto group/handle"
+            style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+          >
             <LimitedHandle 
               type="target" 
               position={Position.Left} 
               id="ref-image" 
               maxConnections={refImageLimit}
-              className="!w-4 !h-4 !bg-purple-500 !border-2 !border-white shadow-sm transition-transform hover:scale-125" 
+              className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
             <span className={cn(
-              "absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-medium text-white bg-purple-500 px-2 py-1 rounded-md shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+              "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
               (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
             )}>
               Ref Image

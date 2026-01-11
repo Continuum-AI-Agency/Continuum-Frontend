@@ -5,9 +5,6 @@ import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 
 describe('executeWorkflow', () => {
-  let originalUpdateNodeData: any;
-  let updateNodeDataSpy: any;
-
   beforeEach(() => {
     // Reset store state
     useStudioStore.setState({
@@ -15,22 +12,6 @@ describe('executeWorkflow', () => {
       edges: [],
       defaultEdgeType: 'bezier',
     });
-
-    if (!originalUpdateNodeData) {
-      originalUpdateNodeData = useStudioStore.getState().updateNodeData;
-    }
-
-    updateNodeDataSpy = mock((id: string, data: any) => {
-        return originalUpdateNodeData(id, data);
-    });
-
-    useStudioStore.setState({ updateNodeData: updateNodeDataSpy });
-  });
-
-  afterEach(() => {
-      if (originalUpdateNodeData) {
-        useStudioStore.setState({ updateNodeData: originalUpdateNodeData });
-      }
   });
 
   it('should execute a linear workflow', async () => {
@@ -151,5 +132,80 @@ describe('executeWorkflow', () => {
 
     const veoNode = useStudioStore.getState().nodes.find(n => n.id === '3');
     expect(veoNode?.data.generatedVideo).toBe('video_url');
+  });
+
+  it('should include image reference outputs in generation payloads', async () => {
+    const dataUrl = 'data:image/png;base64,ref_base64';
+    const nodes: StudioNode[] = [
+      { id: 'img', position: { x: 0, y: 0 }, data: { image: dataUrl }, type: 'image' },
+      { id: 'txt', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
+      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'txt', target: 'nano', targetHandle: 'prompt' },
+      { id: 'e2', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => {
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      };
+    });
+
+    const controls = {
+      executeGeneration,
+      cancel: () => {},
+      reset: () => {},
+      isExecuting: true,
+      error: null,
+    };
+
+    await executeWorkflow(controls as any);
+
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_images?.length).toBe(1);
+    expect(payload.reference_images?.[0]).toEqual(expect.objectContaining({
+      data: 'ref_base64',
+      mime_type: 'image/png',
+    }));
+  });
+
+  it('should treat video reference nodes as completed dependencies', async () => {
+    const dataUrl = 'data:video/mp4;base64,video_base64';
+    const nodes: StudioNode[] = [
+      { id: 'vid', position: { x: 0, y: 0 }, data: { video: dataUrl }, type: 'video' },
+      { id: 'veo', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: 'video prompt' }, type: 'veoDirector' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'veo', targetHandle: 'ref-video' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (nodeId) => {
+      if (nodeId === 'veo') {
+        return { success: true, output: { type: 'video', url: 'video_url' } };
+      }
+      return { success: false, error: 'Unexpected node' };
+    });
+
+    const controls = {
+      executeGeneration,
+      cancel: () => {},
+      reset: () => {},
+      isExecuting: true,
+      error: null,
+    };
+
+    await executeWorkflow(controls as any);
+
+    expect(executeGeneration).toHaveBeenCalledWith('veo', expect.anything());
   });
 });

@@ -109,6 +109,25 @@ describe('buildNodePayload', () => {
       expect(payload?.model).toBe('veo-3.1-generate-preview');
     });
 
+    it('should prioritize negative prompt from edge input', () => {
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: { prompt: 'video', negativePrompt: 'old negative' },
+      };
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'text1', target: 'veo', sourceHandle: 'text', targetHandle: 'negative' },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('text1', { type: 'text', value: 'new negative' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.negativePrompt).toBe('new negative');
+    });
+
     it('should handle first and last frames', () => {
       const node: StudioNode = {
         id: 'veo',

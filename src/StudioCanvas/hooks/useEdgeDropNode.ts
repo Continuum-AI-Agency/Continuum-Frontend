@@ -3,6 +3,8 @@
 import { useCallback, useRef } from 'react';
 import { useReactFlow, type XYPosition, type Node, type Edge, useStoreApi, type OnNodeDrag } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
+import { canAcceptSingleTextInput } from '../utils/connectionValidation';
+import { useStudioStore } from '../stores/useStudioStore';
 
 export type NodeType = 'nanoGen' | 'veoDirector' | 'string' | 'image' | 'video';
 
@@ -101,7 +103,8 @@ function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | n
 }
 
 export function useEdgeDropNode() {
-  const { screenToFlowPosition, setNodes, setEdges, getNodes } = useReactFlow();
+  const { screenToFlowPosition, setNodes, setEdges, getNodes, getEdges } = useReactFlow();
+  const defaultEdgeType = useStudioStore((state) => state.defaultEdgeType);
   const connectionStartRef = useRef<{ nodeId: string; handleId: string; handleType: 'source' | 'target' } | null>(null);
 
   const onConnectStart = useCallback((_: any, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
@@ -149,9 +152,19 @@ export function useEdgeDropNode() {
                 style,
              };
 
+              const resolveDataType = (handleId?: string | null) => {
+                if (handleId === 'video') return 'video';
+                if (handleId === 'text') return 'text';
+                return 'image';
+              };
+
               let newEdge: Edge;
 
               if (startParams.handleType === 'target') {
+                  if (!canAcceptSingleTextInput(getEdges(), startParams.nodeId, startParams.handleId)) {
+                      connectionStartRef.current = null;
+                      return;
+                  }
                   newEdge = {
                       id: `e-${newNodeId}-${startParams.nodeId}-${Date.now()}`,
                       source: newNodeId,
@@ -159,8 +172,11 @@ export function useEdgeDropNode() {
                       target: startParams.nodeId,
                       targetHandle: startParams.handleId,
                       type: 'dataType',
-                      animated: true,
-                      data: { dataType: nodeType === 'string' ? 'text' : 'image' }
+                      className: 'studio-edge',
+                      data: { 
+                        dataType: nodeType === 'string' ? 'text' : nodeType === 'veoDirector' ? 'video' : 'image',
+                        pathType: defaultEdgeType,
+                      }
                   };
               } else {
                   newEdge = {
@@ -170,8 +186,11 @@ export function useEdgeDropNode() {
                       target: newNodeId,
                       targetHandle: getTargetHandleForNodeType(nodeType, startParams.handleId), 
                       type: 'dataType',
-                      animated: true,
-                      data: { dataType: startParams.handleId === 'text' ? 'text' : 'image' }
+                      className: 'studio-edge',
+                      data: { 
+                        dataType: resolveDataType(startParams.handleId),
+                        pathType: defaultEdgeType,
+                      }
                   };
               }
 
@@ -181,7 +200,7 @@ export function useEdgeDropNode() {
         
         connectionStartRef.current = null;
     },
-    [screenToFlowPosition, setNodes, setEdges, getNodes]
+    [screenToFlowPosition, setNodes, setEdges, getNodes, getEdges, defaultEdgeType]
   );
 
   return {
@@ -331,14 +350,19 @@ export function useProximityConnect() {
                   ne.source === closeEdge.source && ne.target === closeEdge.target && ne.targetHandle === closeEdge.targetHandle,
               )
             ) {
+              const resolveDataType = (handleId?: string | null) => {
+                if (handleId === 'video') return 'video';
+                if (handleId === 'text') return 'text';
+                return 'image';
+              };
+
               const validEdge = {
                   ...closeEdge,
                   id: `e-${closeEdge.source}-${closeEdge.target}-${Date.now()}`,
-                  className: undefined,
                   style: undefined,
-                  animated: true,
-                  type: 'dataType', 
-                  data: { dataType: closeEdge.sourceHandle === 'text' ? 'text' : 'image' }
+                  type: 'dataType',
+                  className: 'studio-edge',
+                  data: { dataType: resolveDataType(closeEdge.sourceHandle) }
               }
               nextEdges.push(validEdge as unknown as Edge);
             }

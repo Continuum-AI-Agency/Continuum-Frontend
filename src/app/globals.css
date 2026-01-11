@@ -67,6 +67,25 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
+  /* Studio Canvas connector tokens (light) */
+  --edge-text: #94a3b8;
+  --edge-image: #6366f1;
+  --edge-video: #a855f7;
+  --edge-alpha-base: 95%;
+  --edge-alpha-hover: 96%;
+  --edge-alpha-selected: 100%;
+  --edge-alpha-muted: 65%;
+  --edge-alpha-glow: 22%;
+  --edge-alpha-base-glow: 16%;
+  --edge-stroke-width: 2.75px;
+  --edge-flow-dash: 22;
+  --edge-flow-gap: 9999;
+  --edge-flow-duration: 3.2s;
+  --edge-flow-offset: -10000;
+  --edge-handle-border: var(--surface-default);
+  --studio-grid-dot: rgba(15, 23, 42, 0.06);
+  --studio-canvas-vignette: radial-gradient(120% 120% at 30% 0%, rgba(15, 23, 42, 0.04), transparent 60%);
+
   /* Glass surface tokens (light) */
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-border: rgba(15, 23, 42, 0.08);
@@ -143,6 +162,25 @@ html {
   --bg-galaxy-c3-dark: rgba(0,0,0,0.18);
   --bg-galaxy-vignette-dark: rgba(0,0,0,0.25);
   --bg-galaxy-c1-overlay-dark: rgba(160,140,207,0.06);
+
+  /* Studio Canvas connector tokens (dark) */
+  --edge-text: #94a3b8;
+  --edge-image: #6366f1;
+  --edge-video: #a855f7;
+  --edge-alpha-base: 88%;
+  --edge-alpha-hover: 92%;
+  --edge-alpha-selected: 100%;
+  --edge-alpha-muted: 55%;
+  --edge-alpha-glow: 30%;
+  --edge-alpha-base-glow: 22%;
+  --edge-stroke-width: 2.75px;
+  --edge-flow-dash: 22;
+  --edge-flow-gap: 9999;
+  --edge-flow-duration: 3.2s;
+  --edge-flow-offset: -10000;
+  --edge-handle-border: var(--surface-default);
+  --studio-grid-dot: rgba(226, 232, 240, 0.08);
+  --studio-canvas-vignette: radial-gradient(120% 120% at 30% 0%, rgba(148, 163, 184, 0.06), transparent 60%);
 }
 
 /* System preference fallback when no explicit data-theme is set */
@@ -174,6 +212,100 @@ html {
 
 body {
   background-color: var(--background);
+}
+
+.studio-canvas {
+  background-color: var(--surface-default);
+  background-image: var(--studio-canvas-vignette);
+  background-size: cover;
+}
+
+.react-flow__edge.studio-edge .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-base), transparent);
+  stroke-width: var(--edge-stroke-width);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: none;
+  animation: none;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent));
+}
+
+.react-flow__edge.studio-edge:hover .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-hover), transparent);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+}
+
+.react-flow__edge.studio-edge.selected .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+}
+
+.studio-edge-path {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-base), transparent);
+  stroke-width: var(--edge-stroke-width);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: none;
+  animation: none;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent));
+}
+
+.studio-edge-path--active-base {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
+}
+
+.studio-edge-path--inactive {
+  stroke-dasharray: 6 6;
+}
+
+.studio-edge-path--flow {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
+  stroke-dasharray: var(--edge-flow-dash) var(--edge-flow-gap);
+  animation: studio-edge-flow var(--edge-flow-duration) linear infinite;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+}
+
+.studio-edge-path--active {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-selected), transparent);
+  stroke-dasharray: var(--edge-flow-dash) var(--edge-flow-gap);
+  animation: studio-edge-flow var(--edge-flow-duration) linear infinite;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+}
+
+.studio-connection-line {
+  stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-hover), transparent);
+  stroke-width: var(--edge-stroke-width);
+  stroke-linecap: round;
+}
+
+.studio-handle {
+  background-color: var(--edge-color) !important;
+  border-color: var(--edge-handle-border) !important;
+}
+
+.studio-handle-pill {
+  background-color: color-mix(in srgb, var(--surface-accent) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--edge-color) 28%, transparent);
+  color: color-mix(in srgb, var(--edge-color) 85%, var(--text-primary));
+  backdrop-filter: blur(6px);
+}
+
+@keyframes studio-edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: var(--edge-flow-offset);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__edge.studio-edge--active .react-flow__edge-path,
+  .studio-edge-path--active,
+  .studio-edge-path--flow {
+    animation: none;
+    stroke-dasharray: none;
+  }
 }
 
 .particle-layer {

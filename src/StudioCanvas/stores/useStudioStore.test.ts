@@ -71,7 +71,7 @@ describe('useStudioStore', () => {
   it('should allow valid NanoGenNode connections', () => {
     const nodes: StudioNode[] = [
       { id: 'text1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
-      { id: 'text2', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
       { id: 'nano', position: { x: 0, y: 0 }, data: {}, type: 'nanoGen' },
     ];
     useStudioStore.getState().setNodes(nodes);
@@ -84,15 +84,65 @@ describe('useStudioStore', () => {
       targetHandle: 'prompt',
     });
     
-    // Text to Negative
+    // Image to Ref Images
     useStudioStore.getState().onConnect({
-      source: 'text2',
-      sourceHandle: 'text',
+      source: 'img1',
+      sourceHandle: 'image',
       target: 'nano',
-      targetHandle: 'negative',
+      targetHandle: 'ref-images',
     });
 
     expect(useStudioStore.getState().edges).toHaveLength(2);
+  });
+
+  it('should allow only one prompt-in connection', () => {
+    const nodes: StudioNode[] = [
+      { id: 'text1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'text2', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'veo', position: { x: 0, y: 0 }, data: {}, type: 'veoDirector' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().onConnect({
+      source: 'text1',
+      sourceHandle: 'text',
+      target: 'veo',
+      targetHandle: 'prompt-in',
+    });
+
+    useStudioStore.getState().onConnect({
+      source: 'text2',
+      sourceHandle: 'text',
+      target: 'veo',
+      targetHandle: 'prompt-in',
+    });
+
+    expect(useStudioStore.getState().edges).toHaveLength(1);
+  });
+
+  it('should allow only one negative connection', () => {
+    const nodes: StudioNode[] = [
+      { id: 'text1', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'text2', position: { x: 0, y: 0 }, data: {}, type: 'string' },
+      { id: 'veo', position: { x: 0, y: 0 }, data: {}, type: 'veoDirector' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().onConnect({
+      source: 'text1',
+      sourceHandle: 'text',
+      target: 'veo',
+      targetHandle: 'negative',
+    });
+
+    useStudioStore.getState().onConnect({
+      source: 'text2',
+      sourceHandle: 'text',
+      target: 'veo',
+      targetHandle: 'negative',
+    });
+
+    expect(useStudioStore.getState().edges).toHaveLength(1);
   });
 
   it('should enforce connection types', () => {
@@ -118,6 +168,23 @@ describe('useStudioStore', () => {
       sourceHandle: 'image',
       target: 'nano',
       targetHandle: 'ref-images',
+    });
+
+    expect(useStudioStore.getState().edges).toHaveLength(1);
+  });
+
+  it('should allow video reference connections', () => {
+    const nodes: StudioNode[] = [
+      { id: 'vid1', position: { x: 0, y: 0 }, data: {}, type: 'video' },
+      { id: 'veo', position: { x: 0, y: 0 }, data: {}, type: 'veoDirector' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().onConnect({
+      source: 'vid1',
+      sourceHandle: 'video',
+      target: 'veo',
+      targetHandle: 'ref-video',
     });
 
     expect(useStudioStore.getState().edges).toHaveLength(1);

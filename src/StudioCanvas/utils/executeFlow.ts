@@ -22,20 +22,12 @@ export async function executeFlow() {
     
     // Check for inputs from edges
     const promptEdge = edges.find(e => e.target === node.id && e.targetHandle === 'prompt');
-    const negativeEdge = edges.find(e => e.target === node.id && e.targetHandle === 'negative');
     const refImageEdges = edges.filter(e => e.target === node.id && e.targetHandle === 'ref-images');
 
     if (promptEdge) {
         const sourceNode = nodes.find(n => n.id === promptEdge.source);
         if (sourceNode?.data && 'value' in sourceNode.data) {
             console.log(`Using Prompt from Edge: ${sourceNode.data.value}`);
-        }
-    }
-    
-    if (negativeEdge) {
-        const sourceNode = nodes.find(n => n.id === negativeEdge.source);
-        if (sourceNode?.data && 'value' in sourceNode.data) {
-             console.log(`Using Negative Prompt from Edge: ${sourceNode.data.value}`);
         }
     }
 

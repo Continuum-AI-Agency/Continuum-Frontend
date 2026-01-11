@@ -6,6 +6,7 @@ import { NodeExecutionState, NodeOutput, GenerationPayload } from "../types/exec
 import { useStudioStore } from "../stores/useStudioStore";
 import { buildDependencyGraph, getExecutableNodes } from "./buildDependencyGraph";
 import { buildNanoGenPayload, buildVeoPayload, toBackendPayload } from "./buildNodePayload";
+import { parseDataUrl } from "./dataUrl";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
@@ -47,6 +48,17 @@ export async function executeWorkflow(
       completedNodes.add(node.id);
     }
     if (node.type === 'image') {
+      const parsed = parseDataUrl(node.data.image as string | undefined);
+      if (parsed) {
+        completedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+      }
+      completedNodes.add(node.id);
+    }
+    if (node.type === 'video') {
+      const video = node.data.video;
+      if (typeof video === 'string' && video.trim().length > 0) {
+        completedOutputs.set(node.id, { type: 'video', url: video });
+      }
       completedNodes.add(node.id);
     }
   }

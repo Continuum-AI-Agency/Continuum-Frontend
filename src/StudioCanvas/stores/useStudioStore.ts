@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { create } from 'zustand';
 import {
   addEdge,
@@ -10,9 +11,9 @@ import {
   Connection,
   NodeChange,
   EdgeChange,
-  MarkerType,
 } from '@xyflow/react';
 import { StudioNode } from '../types';
+import { canAcceptSingleTextInput, textInputHandles } from '../utils/connectionValidation';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 
@@ -61,15 +62,22 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
   ).length;
 
   const connectionLimits: Record<string, number> = {
-    'prompt': 1,        
-    'negative': 1,      
-    'prompt-in': 1,     
-    'trigger': 1,       
-    'first-frame': 1,   
-    'last-frame': 1,    
+    'prompt': 1,
+    'prompt-in': 1,
+    'trigger': 1,
+    'negative': 1,
+    'input': 1,
+    'first-frame': 1,
+    'last-frame': 1,
+    'ref-video': 1,
     'ref-image': 3,
-    'ref-images': 14,     
+    'ref-images': 14,
   };
+
+  if (!canAcceptSingleTextInput(edges, connection.target!, targetHandle)) {
+    console.warn(`Text input handle already connected: ${targetHandle ?? 'unknown'}`);
+    return false;
+  }
 
   if (targetHandle && connectionLimits[targetHandle] !== undefined) {
     if (targetEdgeCount >= connectionLimits[targetHandle]) {
@@ -77,17 +85,7 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
       return false;
     }
   }
-  
-  if (sourceHandle === 'text' && targetHandle === 'negative') {
-    const hasPositivePrompt = edges.some(e => 
-      e.target === connection.target && 
-      (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
-    );
-    if (!hasPositivePrompt) {
-      console.warn('Cannot connect negative prompt without a positive prompt first.');
-      return false;
-    }
-  }
+
 
   if (sourceHandle === 'text') {
     const existingConnectionToTarget = edges.find(e => 
@@ -105,33 +103,17 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
   
   if (sourceHandle === 'image' && (targetHandle === 'first-frame' || targetHandle === 'last-frame' || targetHandle === 'ref-image' || targetHandle === 'ref-images')) return true;
 
+  if (sourceHandle === 'video' && targetHandle === 'ref-video') return true;
+
   return false;
 };
 
-const getEdgeStyle = (sourceHandle: string | null, edgeType: EdgeType) => {
+const getEdgeStyle = (sourceHandle: string | null, _edgeType: EdgeType) => {
   const dataType = getDataTypeFromHandle(sourceHandle);
-  
-  // Base colors by data type
-  const colors: Record<DataType, string> = {
-    text: '#94a3b8',   // slate-400
-    image: '#6366f1',  // indigo-500
-    video: '#a855f7',  // purple-500
+
+  return {
+    ['--edge-color' as keyof CSSProperties]: `var(--edge-${dataType})`,
   };
-  
-  const color = colors[dataType];
-  
-  // Style based on edge type
-  switch (edgeType) {
-    case 'straight':
-      return { stroke: color, strokeWidth: 2 };
-    case 'step':
-      return { stroke: color, strokeWidth: 2 };
-    case 'smoothstep':
-      return { stroke: color, strokeWidth: 2 };
-    case 'bezier':
-    default:
-      return { stroke: color, strokeWidth: 2 };
-  }
 };
 
 export const useStudioStore = create<StudioState>((set, get) => ({
@@ -163,11 +145,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const newEdge = {
       ...connection,
       id: `e-${connection.source}-${connection.target}-${Date.now()}`,
-      type: edgeType,
-      animated: true,
+      type: 'dataType',
+      className: 'studio-edge',
       style,
       data: {
         dataType: getDataTypeFromHandle(connection.sourceHandle),
+        pathType: edgeType,
       },
     };
 

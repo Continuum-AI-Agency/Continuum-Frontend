@@ -1,7 +1,8 @@
 "use client";
 
 import React, { memo } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyflow/react';
+import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react';
+import { getDataTypeEdgeStyle, type DataTypeEdgeData } from './DataTypeEdge';
 
 /**
  * AnimatedEdge - An edge with animated stroke dash array to show data flow
@@ -20,7 +21,7 @@ export const AnimatedEdge = memo(({
   data,
   markerEnd,
 }: EdgeProps) => {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -29,9 +30,8 @@ export const AnimatedEdge = memo(({
     targetPosition,
   });
 
-  // Data type determines animation speed and color intensity
-  const dataType = data?.dataType || 'text';
-  const animationDuration = dataType === 'video' ? '1s' : dataType === 'image' ? '1.5s' : '2s';
+  const edgeData = data as DataTypeEdgeData | undefined;
+  const isActive = edgeData?.isActive ?? false;
 
   return (
     <>
@@ -39,21 +39,11 @@ export const AnimatedEdge = memo(({
         path={edgePath}
         markerEnd={markerEnd}
         style={{
+          ...getDataTypeEdgeStyle(edgeData?.dataType),
           ...style,
-          strokeDasharray: '8 4',
-          animation: `flowAnimation ${animationDuration} linear infinite`,
         }}
+        className={isActive ? 'studio-edge-path studio-edge-path--active' : 'studio-edge-path'}
       />
-      <style>{`
-        @keyframes flowAnimation {
-          from {
-            stroke-dashoffset: 24;
-          }
-          to {
-            stroke-dashoffset: 0;
-          }
-        }
-      `}</style>
     </>
   );
 });

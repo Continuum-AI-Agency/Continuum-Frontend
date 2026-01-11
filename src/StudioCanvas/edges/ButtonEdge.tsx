@@ -21,6 +21,7 @@ export const ButtonEdge = memo(({
   sourcePosition, 
   targetPosition,
   markerEnd,
+  data,
 }: EdgeProps) => {
   const { deleteElements } = useReactFlow();
 
@@ -37,12 +38,15 @@ export const ButtonEdge = memo(({
     deleteElements({ edges: [{ id }] });
   }, [id, deleteElements]);
 
+  const isActive = (data as { isActive?: boolean } | undefined)?.isActive ?? false;
+
   return (
     <>
       <BaseEdge
         path={edgePath}
         markerEnd={markerEnd}
         style={style}
+        className={isActive ? 'studio-edge-path studio-edge-path--active' : 'studio-edge-path'}
       />
       <EdgeLabelRenderer>
         <div
@@ -53,7 +57,7 @@ export const ButtonEdge = memo(({
           }}
         >
           <button
-            className="nodrag group flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background shadow-sm transition-all hover:scale-110 hover:border-red-500 hover:bg-red-50"
+            className="nodrag group flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background shadow-sm transition-all hover:scale-110 hover:border-red-500 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1"
             onClick={onDelete}
             onPointerDown={(e) => e.stopPropagation()}
             title="Delete edge"

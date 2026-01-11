@@ -1,11 +1,14 @@
 import { useCallback } from 'react';
 import { useReactFlow, type Node, useStoreApi, Edge, type OnNodeDrag } from '@xyflow/react';
+import { canAcceptSingleTextInput } from '../utils/connectionValidation';
+import { useStudioStore } from '../stores/useStudioStore';
 
 const MIN_DISTANCE = 500;
 
 export function useProximityConnect() {
     const store = useStoreApi();
     const { getInternalNode, setEdges, getEdges } = useReactFlow();
+    const defaultEdgeType = useStudioStore((state) => state.defaultEdgeType);
 
     const getClosestEdge = useCallback((node: Node) => {
         const { nodeLookup } = store.getState();
@@ -70,28 +73,16 @@ export function useProximityConnect() {
         if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector') {
              if (sourceNode.type === 'string') {
                  const currentEdges = getEdges();
-                 const isPromptFilled = currentEdges.some(
-                     (e) => e.target === targetNode.id && (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
-                 );
-                 
-                 // If prompt is filled, use negative handle IF negative is not filled
-                 // If both are filled, do nothing (keep current targetHandle default or null)
-                 
-                 if (isPromptFilled) {
-                     const isNegativeFilled = currentEdges.some(
-                         (e) => e.target === targetNode.id && e.targetHandle === 'negative'
-                     );
-                     
-                     if (!isNegativeFilled) {
-                         targetHandle = 'negative';
-                     } else {
-                         // Both slots filled - maybe prevent connection?
-                         // Returning null here would stop the proximity line
-                         return null;
-                     }
-                 } else {
-                     targetHandle = targetNode.type === 'veoDirector' ? 'prompt-in' : 'prompt';
-                 }
+                  const isPromptFilled = currentEdges.some(
+                      (e) => e.target === targetNode.id && (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
+                  );
+
+                  if (isPromptFilled) {
+                      // Prompt is filled - prevent additional connections
+                      return null;
+                  } else {
+                      targetHandle = targetNode.type === 'veoDirector' ? 'prompt-in' : 'prompt';
+                  }
              }
               if (sourceNode.type === 'image') {
                   if (targetNode.type === 'veoDirector') {
@@ -144,6 +135,19 @@ export function useProximityConnect() {
               }
         }
 
+        if (!canAcceptSingleTextInput(getEdges(), targetNode.id, targetHandle)) {
+          return null;
+        }
+
+        if (targetNode.type === 'veoDirector' && targetHandle !== 'prompt-in') {
+          const hasPrompt = getEdges().some(
+            (edge) => edge.target === targetNode.id && edge.targetHandle === 'prompt-in'
+          );
+          if (!hasPrompt) {
+            return null;
+          }
+        }
+
         return {
           id: `${sourceNode.id}-${targetNode.id}`,
           source: sourceNode.id,
@@ -177,7 +181,7 @@ export function useProximityConnect() {
             return nextEdges;
           });
         },
-        [getClosestEdge, setEdges],
+        [getClosestEdge, setEdges, defaultEdgeType],
       );
     
       const onNodeDragStop: OnNodeDrag = useCallback(
@@ -194,14 +198,22 @@ export function useProximityConnect() {
                   ne.source === closeEdge.source && ne.target === closeEdge.target && ne.targetHandle === closeEdge.targetHandle,
               )
             ) {
+              const resolveDataType = (handleId?: string | null) => {
+                if (handleId === 'video') return 'video';
+                if (handleId === 'text') return 'text';
+                return 'image';
+              };
+
               const validEdge = {
                   ...closeEdge,
                   id: `e-${closeEdge.source}-${closeEdge.target}-${Date.now()}`,
-                  className: undefined,
                   style: undefined,
-                  animated: true,
-                  type: 'dataType', 
-                  data: { dataType: closeEdge.sourceHandle === 'text' ? 'text' : 'image' }
+                  type: 'dataType',
+                  className: 'studio-edge',
+                  data: { 
+                    dataType: resolveDataType(closeEdge.sourceHandle),
+                    pathType: defaultEdgeType,
+                  }
               }
               nextEdges.push(validEdge as unknown as Edge);
             }

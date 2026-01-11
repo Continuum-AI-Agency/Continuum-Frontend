@@ -55,20 +55,23 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
           position={Position.Left} 
           id="trigger" 
           maxConnections={1}
-          className="!bg-emerald-500 !w-3 !h-3" 
-          style={{ top: '20%' }}
+          style={{ top: '20%', ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+          className="studio-handle !w-3 !h-3" 
         />
         <CustomHandle 
           type="target" 
           position={Position.Left} 
           id="ref-images" 
           maxConnections={14}
-          className="!bg-indigo-500 !w-3 !h-3" 
-          style={{ top: '35%' }}
+          style={{ top: '35%', ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+          className="studio-handle !w-3 !h-3" 
           title="Reference Images (Max 14)"
         />
         {refImageCount > 0 && (
-          <div className="absolute left-[-24px] top-[32%] bg-indigo-500 text-white text-[9px] px-1 rounded-full font-bold shadow-sm pointer-events-none">
+          <div
+            className="absolute left-[-24px] top-[32%] studio-handle-pill text-[9px] px-1 rounded-full font-bold shadow-sm pointer-events-none"
+            style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+          >
             {refImageCount}
           </div>
         )}
@@ -100,8 +103,8 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
                position={Position.Left} 
                id="prompt" 
                maxConnections={1}
-               className="!bg-slate-400 !w-3 !h-3" 
-               style={{ top: '50%', left: '-18px' }}
+               style={{ top: '50%', left: '-18px', ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-text)' }}
+               className="studio-handle !w-3 !h-3" 
              />
           </div>
         </div>
@@ -128,8 +131,14 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
 
         {/* Output Handle */}
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Handle type="source" position={Position.Right} id="image" className="!bg-indigo-500 !w-3 !h-3" />
+          <TooltipTrigger>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id="image"
+              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+              className="studio-handle !w-3 !h-3"
+            />
           </TooltipTrigger>
           <TooltipContent>
             <p>Generated Image Output</p>

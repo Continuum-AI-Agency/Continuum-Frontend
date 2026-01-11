@@ -34,7 +34,6 @@ describe('NanoGenNode', () => {
     data: {
       model: 'nano-banana' as const,
       positivePrompt: '',
-      negativePrompt: '',
       aspectRatio: '1:1',
     },
     type: 'nanoGen',
@@ -72,18 +71,7 @@ describe('NanoGenNode', () => {
     expect(updateNodeData).toHaveBeenCalledWith('1', { positivePrompt: 'New prompt' });
   });
 
-  it('should update negative prompt on change', () => {
-    render(
-      <ReactFlowProvider>
-        <NanoGenNode {...defaultProps} />
-      </ReactFlowProvider>
-    );
 
-    const negInput = screen.getByPlaceholderText('blurry, bad quality');
-    fireEvent.change(negInput, { target: { value: 'bad anatomy' } });
-
-    expect(updateNodeData).toHaveBeenCalledWith('1', { negativePrompt: 'bad anatomy' });
-  });
 
   it('should display generated image', () => {
     const propsWithImage = {

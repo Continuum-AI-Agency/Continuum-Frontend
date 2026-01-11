@@ -87,6 +87,7 @@ export function buildNanoGenPayload(
     model: backendModel,
     medium: 'image',
     prompt,
+    negativePrompt: data.negativePrompt || undefined,
     aspectRatio: data.aspectRatio || '1:1',
     resolution: '1024x1024',
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
@@ -108,6 +109,10 @@ export function buildVeoPayload(
   }
 
   let negativePrompt = data.negativePrompt || "";
+  const negativeInput = resolveInputValue(node.id, 'negative', resolvedData, allNodes, allEdges);
+  if (negativeInput?.text) {
+    negativePrompt = negativeInput.text;
+  }
 
   if (!prompt.trim()) {
     return null;

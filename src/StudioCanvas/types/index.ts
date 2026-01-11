@@ -38,7 +38,6 @@ export interface NanoGenNodeData extends BaseNodeData {
   guidance?: number;
   scheduler?: string;
   promptEnhancement?: boolean;
-  uploadedImage?: string;
   generatedImage?: string | Blob;
 }
 

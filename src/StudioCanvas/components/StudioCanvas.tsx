@@ -1,5 +1,5 @@
-import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Panel, Node, Connection, Edge, SelectionMode } from '@xyflow/react';
+import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
+import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Connection, Edge, SelectionMode } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useStudioStore } from '../stores/useStudioStore';
 import { StringNode } from '../nodes/StringNode';
@@ -15,6 +15,15 @@ import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
 import { useProximityConnect } from '../hooks/useProximityConnect';
 import CustomConnectionLine from './CustomConnectionLine';
 import { ContextMenu } from './ContextMenu';
+import { useToast } from '@/components/ui/ToastProvider';
+import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
+import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
+import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
+import { canAcceptSingleTextInput } from '../utils/connectionValidation';
+
+const RF_DRAG_MIME = 'application/reactflow-node-data';
+const TEXT_MIME = 'text/plain';
+import { StudioNode } from '../types';
 
 const DRAG_ITEMS = [
   {
@@ -73,6 +82,7 @@ function Flow() {
   const { screenToFlowPosition, deleteElements } = useReactFlow();
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { onNodeDrag, onNodeDragStop } = useProximityConnect();
+  const { show } = useToast();
 
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
 
@@ -121,6 +131,86 @@ function Flow() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [nodes, edges, deleteElements, undo, redo, takeSnapshot]);
 
+  const readyNodeIds = useMemo(() => {
+    const isGeneratorReady = (node: StudioNode) => {
+      if (node.type === 'nanoGen') {
+        const hasPromptEdge = edges.some(
+          (edge) => edge.target === node.id && edge.targetHandle === 'prompt',
+        );
+        const promptValue =
+          typeof (node.data as { positivePrompt?: string }).positivePrompt === 'string'
+            ? (node.data as { positivePrompt?: string }).positivePrompt?.trim()
+            : '';
+        return hasPromptEdge || !!promptValue;
+      }
+
+      if (node.type === 'veoDirector') {
+        const hasPromptEdge = edges.some(
+          (edge) => edge.target === node.id && edge.targetHandle === 'prompt-in',
+        );
+        const promptValue =
+          typeof (node.data as { prompt?: string }).prompt === 'string'
+            ? (node.data as { prompt?: string }).prompt?.trim()
+            : '';
+        return hasPromptEdge || !!promptValue;
+      }
+
+      return false;
+    };
+
+    return new Set(nodes.filter(isGeneratorReady).map((node) => node.id));
+  }, [nodes, edges]);
+
+  const styledEdges = useMemo(() => {
+    const nodeTypeById = new Map(nodes.map((node) => [node.id, node.type]));
+    const resolveDataType = (edge: Edge) => {
+      const dataType = (edge.data as { dataType?: string } | undefined)?.dataType;
+      if (dataType === 'image' || dataType === 'video' || dataType === 'text') return dataType;
+      if (edge.sourceHandle === 'image') return 'image';
+      if (edge.sourceHandle === 'video') return 'video';
+      return 'text';
+    };
+
+    const resolvePathType = (edge: Edge) => {
+      const dataPathType = (edge.data as { pathType?: string } | undefined)?.pathType;
+      if (dataPathType === 'bezier' || dataPathType === 'straight' || dataPathType === 'step' || dataPathType === 'smoothstep') {
+        return dataPathType;
+      }
+      if (edge.type === 'bezier' || edge.type === 'straight' || edge.type === 'step' || edge.type === 'smoothstep') {
+        return edge.type;
+      }
+      return 'bezier';
+    };
+
+    return edges.map((edge) => {
+      const dataType = resolveDataType(edge);
+      const targetType = nodeTypeById.get(edge.target);
+      const isTargetGenerator = targetType === 'nanoGen' || targetType === 'veoDirector';
+      const isActive = !isTargetGenerator || readyNodeIds.has(edge.target);
+      const pathType = resolvePathType(edge);
+      const className = [edge.className, 'studio-edge', isActive ? 'studio-edge--active' : 'studio-edge--inactive']
+        .filter(Boolean)
+        .join(' ');
+
+      return {
+        ...edge,
+        type: 'dataType',
+        animated: false,
+        className,
+        style: {
+          ...edge.style,
+          ['--edge-color' as keyof React.CSSProperties]: `var(--edge-${dataType})`,
+        },
+        data: {
+          ...(edge.data as Record<string, unknown> | undefined),
+          dataType,
+          isActive,
+          pathType,
+        },
+      };
+    });
+  }, [edges, nodes, readyNodeIds]);
+
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -131,49 +221,82 @@ function Flow() {
   }, [takeSnapshot]);
 
   const onDrop = useCallback(
-    (event: React.DragEvent) => {
+    async (event: React.DragEvent) => {
       event.preventDefault();
       takeSnapshot();
 
       const type = event.dataTransfer.getData('application/reactflow');
-
-      if (typeof type === 'undefined' || !type) {
-        return;
-      }
 
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
 
-      let data: Record<string, unknown> = { label: `New ${type}` };
-      let style = {};
+      if (typeof type !== 'undefined' && type) {
+        let data: Record<string, unknown> = { label: `New ${type}` };
+        let style = {};
 
-      if (type === 'nanoGen') {
+        if (type === 'nanoGen') {
           data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '1:1' };
           style = { width: 400, height: 400 };
-      } else if (type === 'veoDirector') {
-           data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false };
+        } else if (type === 'veoDirector') {
+          data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false };
           style = { width: 512, height: 288 }; // 16:9
-      } else if (type === 'string') {
+        } else if (type === 'string') {
           data = { value: '' };
-       } else if (type === 'image') {
-           data = { image: undefined };
-       } else if (type === 'video') {
-           data = { video: undefined };
-       }
+        } else if (type === 'image') {
+          data = { image: undefined };
+        } else if (type === 'video') {
+          data = { video: undefined };
+        }
+
+        const newNode = {
+          id: uuidv4(),
+          type,
+          position,
+          data,
+          style,
+        };
+
+        setNodes(nodes.concat(newNode as any));
+        return;
+      }
+
+      const rawPayload =
+        event.dataTransfer.getData(CREATIVE_ASSET_DRAG_TYPE) ||
+        event.dataTransfer.getData(RF_DRAG_MIME) ||
+        event.dataTransfer.getData(TEXT_MIME);
+
+      if (!rawPayload) {
+        return;
+      }
+
+      const resolved = await resolveCreativeAssetDrop(rawPayload, resolveDroppedBase64);
+      if (resolved.status === 'error') {
+        show({
+          title: resolved.title,
+          description: resolved.description,
+          variant: resolved.variant ?? 'error',
+        });
+        return;
+      }
+
+      const assetNodeType = resolved.nodeType;
+      const assetData =
+        assetNodeType === 'image'
+          ? { image: resolved.dataUrl, fileName: resolved.fileName }
+          : { video: resolved.dataUrl, fileName: resolved.fileName };
 
       const newNode = {
         id: uuidv4(),
-        type,
+        type: assetNodeType,
         position,
-        data,
-        style,
+        data: assetData,
       };
 
       setNodes(nodes.concat(newNode as any));
     },
-    [screenToFlowPosition, nodes, setNodes],
+    [screenToFlowPosition, nodes, setNodes, takeSnapshot, show],
   );
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {
@@ -188,15 +311,15 @@ function Flow() {
 
     // Check handle compatibility
     if (sourceNode.type === 'string') {
-        if (!['prompt', 'negative', 'prompt-in'].includes(targetHandle || '')) return false;
+        if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle || '')) return false;
     } else if (sourceNode.type === 'image') {
         // Image reference nodes can only connect to generation nodes, not to other reference nodes
         if (!['ref-image', 'first-frame', 'last-frame', 'ref-video'].includes(targetHandle || '')) return false;
         // Prevent image nodes from connecting to other image nodes
         if (targetNode.type === 'image' || targetNode.type === 'video') return false;
     } else if (sourceNode.type === 'video') {
-        // Video reference nodes can only connect to generation nodes
-        if (!['ref-video', 'first-frame', 'last-frame'].includes(targetHandle || '')) return false;
+        // Video reference nodes can only connect to ref-video
+        if (!['ref-video'].includes(targetHandle || '')) return false;
         // Prevent video nodes from connecting to other video nodes
         if (targetNode.type === 'video') return false;
     } else if (sourceNode.type === 'nanoGen') {
@@ -208,6 +331,10 @@ function Flow() {
     // Special case: video nodes can accept ref-images connections
     if (targetNode.type === 'veoDirector' && targetHandle === 'ref-images') {
         if (sourceNode.type !== 'image') return false;
+    }
+
+    if (!canAcceptSingleTextInput(edges, target, targetHandle)) {
+      return false;
     }
 
     // Check connection limits based on target node type and handle
@@ -254,7 +381,7 @@ function Flow() {
     <div className="w-full h-full" ref={reactFlowWrapper}>
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={styledEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -275,13 +402,14 @@ function Flow() {
         panOnScroll={true}
         selectionOnDrag={true}
         selectionMode={SelectionMode.Partial}
-        className="bg-slate-50 dark:bg-slate-900"
+        className="studio-canvas"
         defaultEdgeOptions={{
-          type: 'bezier',
-          animated: true,
+          type: 'dataType',
+          animated: false,
+          className: 'studio-edge',
         }}
       >
-        <Background color="#94a3b8" gap={16} />
+        <Background color="var(--studio-grid-dot)" gap={16} />
         {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
         <Controls />
         <MiniMap />
