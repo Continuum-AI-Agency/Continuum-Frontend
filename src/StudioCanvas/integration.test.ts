@@ -36,7 +36,7 @@ describe('StudioCanvas Integration', () => {
     const nodes: StudioNode[] = [
       { id: 'prompt-node', type: 'string', position: { x: 0, y: 0 }, data: { value: 'A majestic lion' } },
       { id: 'image-gen', type: 'nanoGen', position: { x: 200, y: 0 }, data: { model: 'nano-banana' } },
-      { id: 'video-gen', type: 'veoDirector', position: { x: 400, y: 0 }, data: { model: 'veo-3.1' } },
+      { id: 'video-gen', type: 'veoDirector', position: { x: 400, y: 0 }, data: { model: 'veo-3.1', prompt: 'A majestic lion video', enhancePrompt: false } },
     ];
 
     // 2. Setup Edges
@@ -44,7 +44,7 @@ describe('StudioCanvas Integration', () => {
       // Text -> Image Gen (Prompt)
       { id: 'e1', source: 'prompt-node', target: 'image-gen', sourceHandle: 'text', targetHandle: 'prompt' },
       // Image Gen -> Video Gen (Ref Image)
-      { id: 'e2', source: 'image-gen', target: 'video-gen', sourceHandle: 'image', targetHandle: 'ref-image' },
+      { id: 'e2', source: 'image-gen', target: 'video-gen', sourceHandle: 'image', targetHandle: 'ref-images' },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -61,7 +61,7 @@ describe('StudioCanvas Integration', () => {
       }
       if (nodeId === 'video-gen') {
         // Verify payload has correct inputs from previous step
-        if (payload.referenceImages?.[0]?.data === 'lion_image_base64') {
+        if (payload.reference_images?.[0]?.data === 'lion_image_base64') {
              return {
                 success: true,
                 output: { type: 'video', url: 'https://video.url/lion.mp4' },

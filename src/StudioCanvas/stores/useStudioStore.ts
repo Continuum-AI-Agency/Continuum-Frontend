@@ -116,6 +116,35 @@ const getEdgeStyle = (sourceHandle: string | null, _edgeType: EdgeType) => {
   };
 };
 
+const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+  return edges.map((edge) => {
+    const targetNode = nodeById.get(edge.target);
+    if (!targetNode || !edge.targetHandle) return edge;
+
+    let targetHandle = edge.targetHandle;
+    if (targetHandle === 'text') {
+      if (targetNode.type === 'nanoGen') {
+        targetHandle = 'prompt';
+      } else if (targetNode.type === 'veoDirector') {
+        targetHandle = 'prompt-in';
+      }
+    }
+
+    if (targetHandle === 'ref-image' && targetNode.type === 'veoDirector') {
+      targetHandle = 'ref-images';
+    }
+
+    if (targetHandle === edge.targetHandle) return edge;
+
+    return {
+      ...edge,
+      targetHandle,
+    };
+  });
+};
+
 export const useStudioStore = create<StudioState>((set, get) => ({
   nodes: [],
   edges: [],
@@ -128,8 +157,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
+    const nextEdges = applyEdgeChanges(changes, get().edges);
     set({
-      edges: applyEdgeChanges(changes, get().edges),
+      edges: normalizeEdges(nextEdges, get().nodes),
     });
   },
 
@@ -160,11 +190,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   setNodes: (nodes: StudioNode[]) => {
-    set({ nodes });
+    const normalizedEdges = normalizeEdges(get().edges, nodes);
+    set({ nodes, edges: normalizedEdges });
   },
   
   setEdges: (edges: Edge[]) => {
-    set({ edges });
+    set({ edges: normalizeEdges(edges, get().nodes) });
   },
 
   updateNodeData: (id: string, data: Partial<StudioNode['data']>) => {

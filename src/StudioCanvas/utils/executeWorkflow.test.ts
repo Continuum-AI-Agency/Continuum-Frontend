@@ -175,6 +175,41 @@ describe('executeWorkflow', () => {
     }));
   });
 
+  it('should block when connected optional input is missing', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'img', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'nano', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'prompt' }, type: 'nanoGen' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-images' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => {
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      };
+    });
+
+    const controls = {
+      executeGeneration,
+      cancel: () => {},
+      reset: () => {},
+      isExecuting: true,
+      error: null,
+    };
+
+    await executeWorkflow(controls as any);
+
+    expect(executeGeneration).toHaveBeenCalledTimes(0);
+    const node = useStudioStore.getState().nodes.find(n => n.id === 'nano');
+    expect(node?.data.error).toBe('Missing connected input for ref-images');
+  });
+
   it('should treat video reference nodes as completed dependencies', async () => {
     const dataUrl = 'data:video/mp4;base64,video_base64';
     const nodes: StudioNode[] = [
@@ -207,5 +242,68 @@ describe('executeWorkflow', () => {
     await executeWorkflow(controls as any);
 
     expect(executeGeneration).toHaveBeenCalledWith('veo', expect.anything());
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_video?.data).toBe('video_base64');
+    expect(payload.reference_video?.mime_type).toBe('video/mp4');
+  });
+
+  it('should respect concurrency limit', async () => {
+    const nodes: StudioNode[] = Array.from({ length: 5 }, (_, index) => ({
+      id: `nano-${index}`,
+      position: { x: 0, y: 0 },
+      data: { model: 'nano-banana', positivePrompt: `prompt ${index}` },
+      type: 'nanoGen',
+    }));
+
+    useStudioStore.getState().setNodes(nodes);
+
+    let running = 0;
+    let maxRunning = 0;
+
+    const executeGeneration = mock(async () => {
+      running += 1;
+      maxRunning = Math.max(maxRunning, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      return { success: true, output: { type: 'image', base64: 'out', mimeType: 'image/png' } };
+    });
+
+    const controls = {
+      executeGeneration,
+      cancel: () => {},
+      reset: () => {},
+      isExecuting: true,
+      error: null,
+    };
+
+    await executeWorkflow(controls as any);
+
+    expect(maxRunning).toBe(3);
+  });
+
+  it('should scope execution to a target node', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'nano-1', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'one' }, type: 'nanoGen' },
+      { id: 'nano-2', position: { x: 0, y: 0 }, data: { model: 'nano-banana', positivePrompt: 'two' }, type: 'nanoGen' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+
+    const executeGeneration = mock(async (nodeId) => {
+      return { success: true, output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' } };
+    });
+
+    const controls = {
+      executeGeneration,
+      cancel: () => {},
+      reset: () => {},
+      isExecuting: true,
+      error: null,
+    };
+
+    await executeWorkflow(controls as any, { targetNodeId: 'nano-2' });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    expect(executeGeneration.mock.calls[0][0]).toBe('nano-2');
   });
 });

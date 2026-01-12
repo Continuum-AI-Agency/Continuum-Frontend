@@ -9,6 +9,8 @@ import { ImageIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { executeWorkflow } from '../utils/executeWorkflow';
 
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
@@ -68,6 +70,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const executionControls = useWorkflowExecution();
   
   const [isHovered, setIsHovered] = useState(false);
 
@@ -78,6 +81,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const handleAspectRatioChange = useCallback((value: string) => {
     updateNodeData(id, { aspectRatio: value });
   }, [id, updateNodeData]);
+
+  const handleRun = useCallback(async () => {
+    await executeWorkflow(executionControls, { targetNodeId: id });
+  }, [executionControls, id]);
 
   const previewImage = data.generatedImage;
   const refImageLimit = 14;
@@ -98,7 +105,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
 
-      <NodeToolbar isVisible={selected} position={Position.Top} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
+      <NodeToolbar isVisible={selected} position={Position.Bottom} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
           <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Image Generation</Label>
           <Select value={data.model || 'nano-banana'} onValueChange={handleModelChange}>
             <SelectTrigger className="h-7 text-xs border-subtle w-32 bg-surface text-primary">
@@ -127,7 +134,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         isVisible={isHovered || !!data.isToolbarVisible}
         onDuplicate={() => duplicateNode(id)}
         onDelete={() => deleteNode(id)}
-        onRun={() => console.log('Run image node')}
+        onRun={handleRun}
         onDownload={() => console.log('Download image')}
       />
 

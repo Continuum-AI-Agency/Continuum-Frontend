@@ -3,6 +3,7 @@ import { StudioNode } from '../types';
 import { GenerationPayload, NodeOutput } from '../types/execution';
 import { BackendChatImageRequestPayload } from '@/lib/types/chatImage';
 import { NanoGenNodeData, VideoGenNodeData } from '../types';
+import { parseDataUrl } from './dataUrl';
 
 const BRAND_PROFILE_ID = "default-brand";
 
@@ -34,6 +35,54 @@ function resolveInputValue(
   if (sourceNode) {
     if (sourceNode.type === 'string' && sourceNode.data.value) {
       return { text: sourceNode.data.value as string };
+    }
+    if (sourceNode.type === 'image') {
+      const parsed = parseDataUrl((sourceNode.data as any).image as string | undefined);
+      if (parsed) {
+        return {
+          image: parsed.base64,
+          fileName: (sourceNode.data as any).fileName,
+        };
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function resolveVideoInput(
+  nodeId: string,
+  handleId: string,
+  resolvedData: Map<string, NodeOutput>,
+  nodes: StudioNode[],
+  edges: Edge[]
+): { base64: string; mimeType: string; fileName?: string } | undefined {
+  const incomingEdge = edges.find(
+    (e) => e.target === nodeId && e.targetHandle === handleId
+  );
+
+  if (!incomingEdge) return undefined;
+
+  const sourceOutput = resolvedData.get(incomingEdge.source);
+  if (sourceOutput?.type === 'video' && sourceOutput.url) {
+    const parsed = parseDataUrl(sourceOutput.url);
+    if (parsed) {
+      return {
+        base64: parsed.base64,
+        mimeType: parsed.mimeType,
+      };
+    }
+  }
+
+  const sourceNode = nodes.find(n => n.id === incomingEdge.source);
+  if (sourceNode?.type === 'video') {
+    const parsed = parseDataUrl((sourceNode.data as any).video as string | undefined);
+    if (parsed) {
+      return {
+        base64: parsed.base64,
+        mimeType: parsed.mimeType,
+        fileName: (sourceNode.data as any).fileName,
+      };
     }
   }
 
@@ -156,7 +205,7 @@ export function buildVeoPayload(
   }
 
   const refImageEdges = allEdges.filter(
-    (e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images' || e.targetHandle === 'ref-video')
+    (e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images')
   );
   const referenceImages = refImageEdges
     .map((edge) => {
@@ -172,6 +221,8 @@ export function buildVeoPayload(
       return null;
     })
     .filter(Boolean) as GenerationPayload['referenceImages'];
+
+  const referenceVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
 
   const backendModel = data.model === 'veo-3.1-fast'
     ? 'veo-3.1-fast-generate-preview'
@@ -189,6 +240,13 @@ export function buildVeoPayload(
     firstFrame,
     lastFrame,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    referenceVideo: referenceVideoInput
+      ? {
+          data: referenceVideoInput.base64,
+          mimeType: referenceVideoInput.mimeType,
+          filename: referenceVideoInput.fileName,
+        }
+      : undefined,
   };
 }
 
@@ -215,5 +273,12 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       weight: img.weight,
       referenceType: img.referenceType,
     })),
+    reference_video: payload.referenceVideo
+      ? {
+          data: payload.referenceVideo.data,
+          mime_type: payload.referenceVideo.mimeType,
+          filename: payload.referenceVideo.filename,
+        }
+      : undefined,
   };
 }

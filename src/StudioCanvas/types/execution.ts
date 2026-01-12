@@ -60,6 +60,11 @@ export interface GenerationPayload {
     mimeType: string;
     filename?: string;
   };
+  referenceVideo?: {
+    data: string;
+    mimeType: string;
+    filename?: string;
+  };
   seed?: number;
   cfgScale?: number;
   steps?: number;

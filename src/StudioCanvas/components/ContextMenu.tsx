@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
 import {
@@ -20,6 +20,32 @@ interface ContextMenuProps {
 export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMenuProps) {
   const { getNode, deleteElements, addNodes } = useReactFlow();
   const { setNodes } = useStudioStore();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!onClick) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!menuRef.current || !target) return;
+      if (!menuRef.current.contains(target)) {
+        onClick();
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClick();
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClick]);
 
   const duplicateNode = useCallback(() => {
     const node = getNode(id);
@@ -55,6 +81,7 @@ export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMe
 
   return (
     <div
+      ref={menuRef}
       style={{
         top,
         left,

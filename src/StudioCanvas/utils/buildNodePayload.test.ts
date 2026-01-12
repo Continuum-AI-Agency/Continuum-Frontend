@@ -151,5 +151,35 @@ describe('buildNodePayload', () => {
       expect(payload?.firstFrame?.data).toBe('first_base64');
       expect(payload?.lastFrame?.data).toBe('last_base64');
     });
+
+    it('should include reference video when connected', () => {
+      const videoDataUrl = 'data:video/mp4;base64,video_base64';
+
+      const nodes: StudioNode[] = [
+        {
+          id: 'video-ref',
+          type: 'video',
+          position: { x: 0, y: 0 },
+          data: { video: videoDataUrl, fileName: 'ref.mp4' },
+        },
+        {
+          id: 'veo',
+          type: 'veoDirector',
+          position: { x: 0, y: 0 },
+          data: { model: 'veo-3.1', prompt: 'video', enhancePrompt: false },
+        },
+      ];
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'video-ref', target: 'veo', sourceHandle: 'video', targetHandle: 'ref-video' },
+      ];
+
+      const payload = buildVeoPayload(nodes[1], new Map(), nodes, edges);
+      expect(payload?.referenceVideo).toEqual(expect.objectContaining({
+        data: 'video_base64',
+        mimeType: 'video/mp4',
+        filename: 'ref.mp4',
+      }));
+    });
   });
 });
