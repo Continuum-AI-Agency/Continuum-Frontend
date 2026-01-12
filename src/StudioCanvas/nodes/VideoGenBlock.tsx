@@ -80,14 +80,14 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
         minWidth={300} 
         minHeight={170} 
         isVisible={selected} 
-        lineClassName="border-purple-400" 
-        handleClassName="h-3 w-3 bg-purple-500 border-2 border-white rounded-full"
+        lineClassName="border-brand-primary/60" 
+        handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
 
       <NodeToolbar isVisible={selected} position={Position.Top} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
-          <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">Video Block</Label>
+          <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Video Block</Label>
           <Select value={data.model} onValueChange={handleModelChange}>
-            <SelectTrigger className="h-7 text-xs border-slate-200 w-32 bg-white">
+            <SelectTrigger className="h-7 text-xs border-subtle w-32 bg-surface text-primary">
               <SelectValue placeholder="Model" />
             </SelectTrigger>
             <SelectContent>
@@ -105,15 +105,15 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
         onDownload={() => console.log('Download video')}
       />
 
-       <Card className="h-full border-2 border-slate-200 shadow-md bg-white flex flex-col overflow-hidden">
-        <div className="relative flex-1 bg-black group/preview min-h-0">
+       <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
+        <div className="relative flex-1 bg-default/60 group/preview min-h-0">
             <AspectRatio ratio={16 / 9} className="h-full w-full">
             {data.isExecuting ? (
-              <div className="w-full h-full flex items-center justify-center bg-black p-4">
-                      <Skeleton className="w-full h-full bg-slate-800" />
+              <div className="w-full h-full flex items-center justify-center bg-default p-4">
+                      <Skeleton className="w-full h-full bg-muted" />
               </div>
             ) : data.generatedVideo ? (
-              <div className="w-full h-full flex items-center justify-center bg-black">
+              <div className="w-full h-full flex items-center justify-center bg-default">
                       <video
                         src={data.generatedVideo as string}
                         controls
@@ -121,10 +121,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
                       />
               </div>
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-2">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
                 <Empty>
                   <EmptyHeader>
-                    <EmptyMedia variant="icon" className="bg-slate-800 text-slate-400">
+                    <EmptyMedia variant="icon" className="bg-default text-secondary">
                       <VideoIcon />
                     </EmptyMedia>
                     <EmptyTitle>No Video</EmptyTitle>

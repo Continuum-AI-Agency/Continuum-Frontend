@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node } from '@xyflow/react';
+import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,7 @@ import { useEdges } from '@xyflow/react';
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
-export function ImageNode({ id, data }: NodeProps<Node<ImageNodeData>>) {
+export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
@@ -126,12 +126,23 @@ export function ImageNode({ id, data }: NodeProps<Node<ImageNodeData>>) {
 
   return (
     <TooltipProvider>
-      <div className="relative group w-48 h-48" onDragOver={handleDragOver} onDrop={handleDrop}>
-      <Card className="w-full h-full border border-slate-200 shadow-sm overflow-hidden p-0 relative">
-        <div className="absolute inset-0">
+      <div className="relative group w-full h-full min-w-[180px] min-h-[180px]" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <NodeResizer
+        minWidth={160}
+        minHeight={160}
+        keepAspectRatio
+        isVisible={selected}
+        lineClassName="border-brand-primary/60"
+        handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+      />
+      <Card className="w-full h-full border border-subtle bg-surface shadow-sm overflow-hidden p-0 relative flex flex-col">
+        <div className="flex items-center justify-between px-3 py-1 border-b border-subtle text-[10px] font-semibold uppercase tracking-widest text-secondary bg-default/70 cursor-grab">
+          <span>Image Reference</span>
+        </div>
+        <div className="relative flex-1 min-h-0 nodrag">
             <Label
               htmlFor={`file-${id}`}
-              className="cursor-pointer flex items-center justify-center w-full h-full hover:bg-slate-50 transition-colors"
+              className="cursor-pointer flex items-center justify-center w-full h-full hover:bg-default/60 transition-colors"
               onDragOver={handleDragOver}
               onDrop={handleDrop}
             >
@@ -162,13 +173,13 @@ export function ImageNode({ id, data }: NodeProps<Node<ImageNodeData>>) {
                 className="hidden" 
                 onChange={handleFileUpload}
             />
-        </div>
         
-        {data.fileName && (
-            <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-white/90 backdrop-blur border-t text-[9px] text-slate-600 truncate">
-                {data.fileName}
-            </div>
-        )}
+            {data.fileName && (
+                <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-surface/90 backdrop-blur border-t border-subtle text-[9px] text-secondary truncate">
+                    {data.fileName}
+                </div>
+            )}
+        </div>
       </Card>
       
       <Tooltip>

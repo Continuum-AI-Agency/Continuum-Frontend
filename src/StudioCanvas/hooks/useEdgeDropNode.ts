@@ -40,7 +40,7 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
             model: 'nano-banana',
             positivePrompt: '',
             negativePrompt: '',
-            aspectRatio: '1:1',
+            aspectRatio: '16:9',
             label: 'Image Block',
         },
         style: { width: 400, height: 400 }
@@ -60,14 +60,16 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
             data: {
                 label: 'Image Input',
                 image: undefined
-            }
+            },
+            style: { width: 192, height: 192 }
         }
     case 'video':
         return {
             data: {
                 label: 'Video Input',
                 video: undefined
-            }
+            },
+            style: { width: 192, height: 192 }
         }
     case 'string':
     default:

@@ -70,8 +70,8 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
     'first-frame': 1,
     'last-frame': 1,
     'ref-video': 1,
-    'ref-image': 3,
-    'ref-images': 14,
+    'ref-image': 14,
+    'ref-images': 3,
   };
 
   if (!canAcceptSingleTextInput(edges, connection.target!, targetHandle)) {

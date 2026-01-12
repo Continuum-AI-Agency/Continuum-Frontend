@@ -20,48 +20,68 @@ import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { canAcceptSingleTextInput } from '../utils/connectionValidation';
+import * as AccordionPrimitive from '@radix-ui/react-accordion';
+import { ChevronDownIcon } from '@radix-ui/react-icons';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 import { StudioNode } from '../types';
 
-const DRAG_ITEMS = [
+const LIBRARY_SECTIONS = [
   {
-    type: 'string' as const,
-    label: 'Text Block',
-    desc: 'LLM & Prompting',
-    tag: 'Intelligence',
-    borderColor: 'hover:border-slate-500',
+    value: 'generators',
+    label: 'Generators',
+    defaultOpen: true,
+    items: [
+      {
+        type: 'nanoGen' as const,
+        label: 'Image Generation',
+        desc: 'Canvas & Generator',
+        tag: 'Creative',
+        borderColor: 'hover:border-[color:var(--edge-image)]',
+      },
+      {
+        type: 'veoDirector' as const,
+        label: 'Video Block',
+        desc: 'Director & Timeline',
+        tag: 'Creative',
+        borderColor: 'hover:border-[color:var(--edge-video)]',
+      },
+    ],
   },
   {
-    type: 'nanoGen' as const,
-    label: 'Image Generation',
-    desc: 'Canvas & Generator',
-    tag: 'Creative',
-    borderColor: 'hover:border-indigo-500',
+    value: 'inputs',
+    label: 'Inputs & References',
+    defaultOpen: false,
+    items: [
+      {
+        type: 'string' as const,
+        label: 'Text Block',
+        desc: 'LLM & Prompting',
+        tag: 'Intelligence',
+        borderColor: 'hover:border-[color:var(--edge-text)]',
+      },
+      {
+        type: 'image' as const,
+        label: 'Image Reference',
+        desc: 'Simple File Input',
+        tag: 'Utility',
+        borderColor: 'hover:border-[color:var(--edge-image)]',
+      },
+      {
+        type: 'video' as const,
+        label: 'Video Reference',
+        desc: 'Simple Video Input',
+        tag: 'Utility',
+        borderColor: 'hover:border-[color:var(--edge-video)]',
+      },
+    ],
   },
-  {
-    type: 'veoDirector' as const,
-    label: 'Video Block',
-    desc: 'Director & Timeline',
-    tag: 'Creative',
-    borderColor: 'hover:border-purple-500',
-  },
-   {
-     type: 'image' as const,
-     label: 'Image Reference',
-     desc: 'Simple File Input',
-     tag: 'Utility',
-     borderColor: 'hover:border-indigo-400',
-   },
-   {
-     type: 'video' as const,
-     label: 'Video Reference',
-     desc: 'Simple Video Input',
-     tag: 'Utility',
-     borderColor: 'hover:border-pink-400',
-   },
 ];
+
+const DEFAULT_OPEN_LIBRARY_SECTIONS = LIBRARY_SECTIONS
+  .filter((section) => section.defaultOpen)
+  .map((section) => section.value);
 
 const nodeTypes = {
   nanoGen: ImageGenBlock,
@@ -101,6 +121,14 @@ function Flow() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName;
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
+      }
+
       if ((event.metaKey || event.ctrlKey) && event.key === 'z') {
         if (event.shiftKey) {
           redo();
@@ -186,9 +214,10 @@ function Flow() {
       const dataType = resolveDataType(edge);
       const targetType = nodeTypeById.get(edge.target);
       const isTargetGenerator = targetType === 'nanoGen' || targetType === 'veoDirector';
-      const isActive = !isTargetGenerator || readyNodeIds.has(edge.target);
+      const isActive = isTargetGenerator && readyNodeIds.has(edge.target);
+      const isDotted = isTargetGenerator && !readyNodeIds.has(edge.target);
       const pathType = resolvePathType(edge);
-      const className = [edge.className, 'studio-edge', isActive ? 'studio-edge--active' : 'studio-edge--inactive']
+      const className = [edge.className, 'studio-edge', isActive ? 'studio-edge--active' : '', isDotted ? 'studio-edge--inactive' : '']
         .filter(Boolean)
         .join(' ');
 
@@ -205,6 +234,7 @@ function Flow() {
           ...(edge.data as Record<string, unknown> | undefined),
           dataType,
           isActive,
+          isDotted,
           pathType,
         },
       };
@@ -236,8 +266,8 @@ function Flow() {
         let data: Record<string, unknown> = { label: `New ${type}` };
         let style = {};
 
-        if (type === 'nanoGen') {
-          data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '1:1' };
+      if (type === 'nanoGen') {
+          data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' };
           style = { width: 400, height: 400 };
         } else if (type === 'veoDirector') {
           data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false };
@@ -246,8 +276,10 @@ function Flow() {
           data = { value: '' };
         } else if (type === 'image') {
           data = { image: undefined };
+          style = { width: 192, height: 192 };
         } else if (type === 'video') {
           data = { video: undefined };
+          style = { width: 192, height: 192 };
         }
 
         const newNode = {
@@ -292,6 +324,7 @@ function Flow() {
         type: assetNodeType,
         position,
         data: assetData,
+        style: { width: 192, height: 192 },
       };
 
       setNodes(nodes.concat(newNode as any));
@@ -436,27 +469,53 @@ export function StudioCanvas({ embedded = false }: StudioCanvasProps) {
             </header>
         )}
         <div className="flex-1 flex overflow-hidden">
-            <aside className="w-64 border-r bg-muted/30 p-4 flex flex-col gap-3 overflow-y-auto z-10">
-                <div className="font-medium text-sm text-muted-foreground flex justify-between items-center">
+            <aside className="w-64 border-r border-subtle bg-default p-4 flex flex-col gap-3 overflow-y-auto z-10">
+                <div className="font-medium text-sm text-secondary flex justify-between items-center">
                     Library
                     {embedded && <div className="scale-75 origin-right"><Toolbar /></div>}
                 </div>
-                {DRAG_ITEMS.map((item) => (
-                  <div
-                    key={item.type}
-                    className={`p-3 border rounded bg-background cursor-grab ${item.borderColor} transition-colors shadow-sm`}
-                    draggable
-                    onDragStart={(event) => event.dataTransfer.setData('application/reactflow', item.type)}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="font-medium text-sm">{item.label}</div>
-                      <Badge variant="secondary" className="text-xs">
-                        {item.tag}
-                      </Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground">{item.desc}</div>
-                  </div>
-                ))}
+                <AccordionPrimitive.Root
+                  type="multiple"
+                  defaultValue={DEFAULT_OPEN_LIBRARY_SECTIONS}
+                  className="flex flex-col gap-2"
+                >
+                  {LIBRARY_SECTIONS.map((section) => (
+                    <AccordionPrimitive.Item
+                      key={section.value}
+                      value={section.value}
+                      className="rounded-lg border border-subtle bg-surface"
+                    >
+                      <AccordionPrimitive.Header>
+                        <AccordionPrimitive.Trigger className="group flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
+                          {section.label}
+                          <ChevronDownIcon className="h-4 w-4 text-secondary transition-transform group-data-[state=open]:rotate-180" />
+                        </AccordionPrimitive.Trigger>
+                      </AccordionPrimitive.Header>
+                      <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                        <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
+                          {section.items.map((item) => (
+                            <div
+                              key={item.type}
+                              className={`p-3 border border-subtle rounded-md bg-surface cursor-grab ${item.borderColor} transition-colors shadow-sm`}
+                              draggable
+                              onDragStart={(event) =>
+                                event.dataTransfer.setData('application/reactflow', item.type)
+                              }
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="font-medium text-sm text-primary">{item.label}</div>
+                                <Badge variant="secondary" className="text-xs">
+                                  {item.tag}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-secondary">{item.desc}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionPrimitive.Content>
+                    </AccordionPrimitive.Item>
+                  ))}
+                </AccordionPrimitive.Root>
             </aside>
             <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
                 <Flow />

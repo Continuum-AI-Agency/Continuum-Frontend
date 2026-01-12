@@ -90,7 +90,7 @@ export function buildNanoGenPayload(
     negativePrompt: typeof data.negativePrompt === 'string' && data.negativePrompt.trim()
       ? data.negativePrompt
       : undefined,
-    aspectRatio: data.aspectRatio || '1:1',
+    aspectRatio: data.aspectRatio || '16:9',
     resolution: '1024x1024',
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
@@ -198,7 +198,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     model: payload.model as any,
     medium: payload.medium,
     prompt: payload.prompt,
-    aspect_ratio: payload.aspectRatio || '1:1',
+    aspect_ratio: payload.aspectRatio || '16:9',
     resolution: payload.resolution,
     duration_seconds: payload.durationSeconds ? String(payload.durationSeconds) as "4" | "6" | "8" : undefined,
     negative_prompt: payload.negativePrompt,

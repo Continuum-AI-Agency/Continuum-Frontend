@@ -61,14 +61,25 @@ export function useProximityConnect() {
           closestNode.node.internals.positionAbsolute.x <
           internalNode.internals.positionAbsolute.x;
         
-        const sourceNode = closeNodeIsSource ? closestNode.node : node;
-        const targetNode = closeNodeIsSource ? node : closestNode.node;
+        let sourceNode = closeNodeIsSource ? closestNode.node : node;
+        let targetNode = closeNodeIsSource ? node : closestNode.node;
+
+        const isGenerator = (n: Node) => n.type === 'nanoGen' || n.type === 'veoDirector';
+        if (sourceNode.type === 'string' && isGenerator(targetNode)) {
+          // keep string as source
+        } else if (targetNode.type === 'string' && isGenerator(sourceNode)) {
+          const temp = sourceNode;
+          sourceNode = targetNode;
+          targetNode = temp;
+        }
 
         let sourceHandle = 'image';
         let targetHandle = 'ref-image';
 
         if (sourceNode.type === 'string') sourceHandle = 'text';
-        if (targetNode.type === 'string') targetHandle = 'input'; 
+        if (targetNode.type === 'string') {
+          return null;
+        }
         
         if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector') {
              if (sourceNode.type === 'string') {

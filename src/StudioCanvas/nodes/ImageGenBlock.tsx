@@ -19,6 +19,22 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 
+const resolveAspectRatioValue = (value?: string) => {
+  switch (value) {
+    case '16:9':
+      return 16 / 9;
+    case '9:16':
+      return 9 / 16;
+    case '4:3':
+      return 4 / 3;
+    case '3:4':
+      return 3 / 4;
+    case '1:1':
+    default:
+      return 1;
+  }
+};
+
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
   const edges = useStudioStore((state) => state.edges);
   
@@ -64,7 +80,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   }, [id, updateNodeData]);
 
   const previewImage = data.generatedImage;
-  const refImageLimit = data.model === 'nano-banana-pro' ? 4 : 1;
+  const refImageLimit = 14;
+  const aspectRatio = data.aspectRatio || '16:9';
+  const ratio = resolveAspectRatioValue(aspectRatio);
 
   return (
     <div 
@@ -76,14 +94,14 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         minWidth={200} 
         minHeight={200} 
         isVisible={selected} 
-        lineClassName="border-indigo-400" 
-        handleClassName="h-3 w-3 bg-indigo-500 border-2 border-white rounded-full"
+        lineClassName="border-brand-primary/60" 
+        handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
 
       <NodeToolbar isVisible={selected} position={Position.Top} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
-          <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">Image Generation</Label>
+          <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Image Generation</Label>
           <Select value={data.model || 'nano-banana'} onValueChange={handleModelChange}>
-            <SelectTrigger className="h-7 text-xs border-slate-200 w-32 bg-white">
+            <SelectTrigger className="h-7 text-xs border-subtle w-32 bg-surface text-primary">
               <SelectValue placeholder="Model" />
             </SelectTrigger>
             <SelectContent>
@@ -91,8 +109,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
               <SelectItem value="nano-banana-pro">Nano Banana Pro</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={data.aspectRatio || '1:1'} onValueChange={handleAspectRatioChange}>
-            <SelectTrigger className="h-7 text-xs border-slate-200 w-20 bg-white">
+          <Select value={data.aspectRatio || '16:9'} onValueChange={handleAspectRatioChange}>
+            <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
               <SelectValue placeholder="Ratio" />
             </SelectTrigger>
             <SelectContent>
@@ -113,17 +131,17 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         onDownload={() => console.log('Download image')}
       />
 
-      <Card className="h-full border-2 border-slate-200 shadow-md bg-white flex flex-col overflow-hidden">
-        <div className="relative flex-1 bg-slate-100 group/preview min-h-0">
+      <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
+        <div className="relative flex-1 bg-default/60 group/preview min-h-0">
             {data.isExecuting ? (
-              <div className="w-full h-full flex items-center justify-center bg-slate-950 p-4">
-                  <AspectRatio ratio={1 / 1} className="w-full h-full">
-                      <Skeleton className="w-full h-full bg-slate-800" />
+              <div className="w-full h-full flex items-center justify-center bg-default p-4">
+                  <AspectRatio ratio={ratio} className="w-full h-full">
+                      <Skeleton className="w-full h-full bg-muted" />
                   </AspectRatio>
               </div>
             ) : previewImage ? (
-              <div className="w-full h-full flex items-center justify-center bg-slate-950">
-                  <AspectRatio ratio={1 / 1} className="w-full h-full">
+              <div className="w-full h-full flex items-center justify-center bg-default">
+                  <AspectRatio ratio={ratio} className="w-full h-full">
                       <img
                         src={previewImage as string}
                         alt="Generated Image"
@@ -132,7 +150,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
                   </AspectRatio>
               </div>
             ) : (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2">
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
                 <Empty>
                   <EmptyHeader>
                     <EmptyMedia variant="icon">

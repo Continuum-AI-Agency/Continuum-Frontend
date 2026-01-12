@@ -216,7 +216,7 @@ body {
 
 .studio-canvas {
   background-color: var(--surface-default);
-  background-image: var(--studio-canvas-vignette);
+  background-image: none;
   background-size: cover;
 }
 

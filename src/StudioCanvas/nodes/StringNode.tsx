@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { Handle, Position, NodeProps, Node, useEdges } from '@xyflow/react';
+import { Handle, Position, NodeProps, Node, NodeResizer, useEdges } from '@xyflow/react';
 import { Textarea } from '@/components/ui/textarea';
 import { useStudioStore } from '../stores/useStudioStore';
 import { StringNodeData } from '../types';
@@ -12,13 +12,13 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
   const connectedEdge = edges.find(e => e.source === id);
   
   const context = useMemo(() => {
-    if (!connectedEdge) return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-slate-200' };
+    if (!connectedEdge) return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-subtle' };
     
     if (connectedEdge.targetHandle === 'prompt' || connectedEdge.targetHandle === 'prompt-in') {
-      return { label: 'Positive Prompt', icon: '✨', edgeColor: 'var(--edge-text)', border: 'border-indigo-400 shadow-indigo-100' };
+      return { label: 'Positive Prompt', icon: '✨', edgeColor: 'var(--edge-text)', border: 'border-brand-primary/60 shadow-brand-glow' };
     }
     
-    return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-slate-200' };
+    return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-subtle' };
   }, [connectedEdge]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -26,20 +26,28 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
   }, [id, updateNodeData]);
 
   return (
-    <div className="relative w-60">
+    <div className="relative w-full h-full min-w-[240px] min-h-[140px]">
+      <NodeResizer
+        minWidth={200}
+        minHeight={120}
+        isVisible={selected}
+        lineClassName="border-brand-primary/60"
+        handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+      />
       <div className={cn(
-          "border-2 shadow-md bg-white rounded-lg overflow-hidden transition-all duration-300", 
+          "border shadow-md bg-surface rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col", 
           context.border
       )}>
-          <div className="bg-slate-50/80 px-3 py-1 border-b flex items-center gap-1.5 min-h-[24px]">
-              <span className="text-[10px] grayscale brightness-125">{context.icon}</span>
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{context.label}</span>
+          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center gap-1.5 min-h-[24px]">
+              <span className="text-[10px] text-secondary">{context.icon}</span>
+              <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">{context.label}</span>
           </div>
-          <div className="relative">
+          <div className="relative flex-1 min-h-0">
               <Textarea 
               value={data.value} 
               onChange={handleChange} 
-              className="text-xs min-h-[80px] w-full resize-y border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
+              onKeyDown={(event) => event.stopPropagation()}
+              className="nodrag text-xs text-primary placeholder:text-secondary/70 h-full min-h-[80px] w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
               placeholder="Enter prompt..." 
               />
           </div>

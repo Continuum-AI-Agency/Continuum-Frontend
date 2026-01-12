@@ -22,6 +22,7 @@ export interface DataTypeEdgeData {
   dataType?: 'text' | 'image' | 'video';
   label?: string;
   isActive?: boolean;
+  isDotted?: boolean;
   pathType?: 'bezier' | 'straight' | 'step' | 'smoothstep';
 }
 
@@ -65,6 +66,7 @@ export const DataTypeEdge = memo(({
   
   const dataType = edgeData?.dataType || 'text';
   const isActive = edgeData?.isActive ?? false;
+  const isDotted = edgeData?.isDotted ?? false;
   const pathType = edgeData?.pathType || 'bezier';
 
   const getPath = () => {
@@ -98,9 +100,13 @@ export const DataTypeEdge = memo(({
         markerEnd={markerEnd}
         style={mergedStyle}
         className={
-          isActive
-            ? 'studio-edge-path studio-edge-path--active-base'
-            : 'studio-edge-path studio-edge-path--inactive'
+          [
+            'studio-edge-path',
+            isDotted ? 'studio-edge-path--inactive' : '',
+            isActive ? 'studio-edge-path--active-base' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
         }
       />
       {isActive && (
