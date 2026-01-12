@@ -24,7 +24,7 @@ export function BlockToolbar({
 
   return (
     <div className={cn(
-      "absolute -top-14 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 bg-background/95 backdrop-blur border border-border rounded-md shadow-lg z-50 animate-in fade-in zoom-in-95 duration-200",
+      "absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 p-1 bg-background/95 backdrop-blur border border-border rounded-md shadow-lg z-50 animate-in fade-in zoom-in-95 duration-200",
       className
     )}>
       {onRun && (

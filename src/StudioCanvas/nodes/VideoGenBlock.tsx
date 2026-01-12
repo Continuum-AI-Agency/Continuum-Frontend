@@ -12,6 +12,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { useToast } from '@/components/ui/ToastProvider';
+import { downloadAsset } from '../utils/downloadAsset';
 
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
@@ -57,6 +59,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
+  const { show } = useToast();
 
   const [isHovered, setIsHovered] = useState(false);
 
@@ -75,6 +78,24 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
   const handleRun = useCallback(async () => {
     await executeWorkflow(executionControls, { targetNodeId: id });
   }, [executionControls, id]);
+
+  const fileBaseName = `video-${id}`;
+
+  const handleDownload = useCallback(() => {
+    const success = downloadAsset({
+      data: data.generatedVideo as string | Blob | undefined,
+      baseName: fileBaseName,
+      fallbackExtension: 'mp4',
+    });
+
+    if (!success) {
+      show({
+        title: 'Download unavailable',
+        description: 'Run the node to generate a video before downloading.',
+        variant: 'warning',
+      });
+    }
+  }, [data.generatedVideo, fileBaseName, show]);
 
   return (
     <TooltipProvider>
@@ -109,7 +130,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
         onDuplicate={() => duplicateNode(id)}
         onDelete={() => deleteNode(id)}
         onRun={handleRun}
-        onDownload={() => console.log('Download video')}
+        onDownload={handleDownload}
       />
 
        <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">

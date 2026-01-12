@@ -11,6 +11,14 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { useToast } from '@/components/ui/ToastProvider';
+import { downloadAsset } from '../utils/downloadAsset';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
@@ -71,6 +79,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const executionControls = useWorkflowExecution();
+  const { show } = useToast();
   
   const [isHovered, setIsHovered] = useState(false);
 
@@ -90,6 +99,23 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const refImageLimit = 14;
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = resolveAspectRatioValue(aspectRatio);
+  const fileBaseName = `image-${id}`;
+
+  const handleDownload = useCallback(() => {
+    const success = downloadAsset({
+      data: previewImage as string | Blob | undefined,
+      baseName: fileBaseName,
+      fallbackExtension: 'png',
+    });
+
+    if (!success) {
+      show({
+        title: 'Download unavailable',
+        description: 'Run the node to generate an image before downloading.',
+        variant: 'warning',
+      });
+    }
+  }, [previewImage, fileBaseName, show]);
 
   return (
     <div 
@@ -135,7 +161,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         onDuplicate={() => duplicateNode(id)}
         onDelete={() => deleteNode(id)}
         onRun={handleRun}
-        onDownload={() => console.log('Download image')}
+        onDownload={handleDownload}
       />
 
       <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
@@ -148,13 +174,22 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
               </div>
             ) : previewImage ? (
               <div className="w-full h-full flex items-center justify-center bg-default">
-                  <AspectRatio ratio={ratio} className="w-full h-full">
-                      <img
-                        src={previewImage as string}
-                        alt="Generated Image"
-                        className="w-full h-full object-cover"
-                      />
-                  </AspectRatio>
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <div className="w-full h-full" onContextMenu={(event) => event.stopPropagation()}>
+                      <AspectRatio ratio={ratio} className="w-full h-full">
+                        <img
+                          src={previewImage as string}
+                          alt="Generated Image"
+                          className="w-full h-full object-cover"
+                        />
+                      </AspectRatio>
+                    </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="min-w-[160px]">
+                    <ContextMenuItem onClick={handleDownload}>Download Image</ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               </div>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
