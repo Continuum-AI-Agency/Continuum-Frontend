@@ -17,6 +17,7 @@ import type {
   PromptTemplateUpdateInput,
 } from "@/lib/schemas/promptTemplates";
 import { StudioCanvas } from "@/StudioCanvas";
+import { useSearchParams, useRouter } from "next/navigation";
 
 type AIStudioClientProps = {
   brandProfileId: string;
@@ -30,7 +31,18 @@ export default function AIStudioClient({
   promptTemplates,
 }: AIStudioClientProps) {
   const { show: showToast } = useToast();
-  const [activeTab, setActiveTab] = React.useState<"chat" | "canvas">("chat");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  const mode = searchParams.get("mode") as "chat" | "canvas" | null;
+  const activeTab = mode === "canvas" ? "canvas" : "chat";
+
+  const setActiveTab = (tab: "chat" | "canvas") => {
+    const params = new URLSearchParams(searchParams);
+    params.set("mode", tab);
+    router.replace(`?${params.toString()}`);
+  };
+
   const [templates, setTemplates] = React.useState(promptTemplates ?? []);
   const [templatesLoading, setTemplatesLoading] = React.useState(false);
 

@@ -190,6 +190,7 @@ const getNodeReadiness = (
 
 type ExecuteWorkflowOptions = {
   targetNodeId?: string;
+  clearDownstream?: boolean;
 };
 
 const buildUpstreamScope = (nodes: StudioNode[], edges: Edge[], targetNodeId: string): Set<string> => {
@@ -216,6 +217,32 @@ const buildUpstreamScope = (nodes: StudioNode[], edges: Edge[], targetNodeId: st
   return scope;
 };
 
+const buildDownstreamScope = (nodes: StudioNode[], edges: Edge[], sourceIds: Set<string>): Set<string> => {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const scope = new Set<string>();
+  const queue: string[] = [];
+
+  for (const id of sourceIds) {
+    if (nodeIds.has(id)) {
+      queue.push(id);
+      scope.add(id);
+    }
+  }
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const outgoing = edges.filter((edge) => edge.source === current);
+    for (const edge of outgoing) {
+      if (!nodeIds.has(edge.target)) continue;
+      if (scope.has(edge.target)) continue;
+      scope.add(edge.target);
+      queue.push(edge.target);
+    }
+  }
+
+  return scope;
+};
+
 export async function executeWorkflow(
   controls: ExecutorControls,
   options: ExecuteWorkflowOptions = {}
@@ -235,7 +262,16 @@ export async function executeWorkflow(
     return;
   }
 
-  for (const nodeId of executableNodeIds) {
+  const clearDownstream = options.clearDownstream ?? true;
+  const downstreamScope = clearDownstream
+    ? buildDownstreamScope(nodes, edges, new Set(executableNodeIds))
+    : new Set(executableNodeIds);
+
+  const resetNodeIds = nodes
+    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector') && downstreamScope.has(node.id))
+    .map((node) => node.id);
+
+  for (const nodeId of resetNodeIds) {
     updateNodeData(nodeId, {
       isExecuting: false,
       isComplete: false,

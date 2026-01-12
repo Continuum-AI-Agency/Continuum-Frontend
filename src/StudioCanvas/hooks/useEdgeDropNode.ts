@@ -48,7 +48,7 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
     case 'veoDirector':
       return {
         data: {
-            model: 'veo-3.1',
+            model: 'veo-3.1-fast',
             prompt: '',
             enhancePrompt: false,
             label: 'Video Block',

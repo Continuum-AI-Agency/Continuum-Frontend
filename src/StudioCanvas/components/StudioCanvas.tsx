@@ -270,7 +270,7 @@ function Flow() {
           data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' };
           style = { width: 400, height: 400 };
         } else if (type === 'veoDirector') {
-          data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false };
+          data = { model: 'veo-3.1-fast', prompt: '', negativePrompt: '', enhancePrompt: false };
           style = { width: 512, height: 288 }; // 16:9
         } else if (type === 'string') {
           data = { value: '' };

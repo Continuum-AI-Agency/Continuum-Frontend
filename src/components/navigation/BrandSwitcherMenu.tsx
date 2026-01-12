@@ -63,7 +63,6 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         >
           <Avatar
             size="2"
-            src="/placeholder-avatar.jpg"
             fallback={<LayersIcon />}
             radius="full"
             className="mr-2"

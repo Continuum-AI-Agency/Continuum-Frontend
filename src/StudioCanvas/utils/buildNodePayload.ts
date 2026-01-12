@@ -127,9 +127,11 @@ export function buildNanoGenPayload(
     })
     .filter(Boolean) as GenerationPayload['referenceImages'];
 
-  const backendModel = data.model === 'nano-banana' 
-    ? 'gemini-2.5-flash-image' 
-    : data.model;
+  const backendModel = data.model === 'nano-banana'
+    ? 'gemini-2.5-flash-image'
+    : data.model === 'nano-banana-pro'
+      ? 'gemini-3-pro-image-preview'
+      : data.model;
 
   return {
     brandId: BRAND_PROFILE_ID,

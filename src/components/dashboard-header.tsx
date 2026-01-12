@@ -1,9 +1,6 @@
 "use client";
 
-import { Flex, IconButton } from "@radix-ui/themes";
-import {
-  HamburgerMenuIcon,
-} from "@radix-ui/react-icons";
+import { Flex } from "@radix-ui/themes";
 import React from "react";
 import { useSession } from "@/hooks/useSession";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
@@ -13,30 +10,53 @@ import {
   createDashboardWelcomeToastOptions,
   shouldShowDashboardWelcomeToast,
 } from "@/lib/ui/dashboardWelcomeToast";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./navigation/routes";
 
-export function DashboardHeader({
-  onOpenMobile,
-}: {
-  onOpenMobile?: () => void;
-}) {
+export function DashboardHeader() {
   useDashboardWelcomeToast();
+  const pathname = usePathname();
+  
+  // Find current route label for breadcrumb
+  const allRoutes = [...APP_NAVIGATION, ...APP_NAVIGATION_FOOTER];
+  const currentRoute = allRoutes.find(r => r.href === pathname) 
+    || allRoutes.flatMap(r => r.items || []).find(sub => sub.href === pathname);
+
+  const breadcrumbLabel = currentRoute?.label || "Dashboard";
 
   return (
-    <div className="px-4 sm:px-6 pt-3 sm:pt-4">
-      <Flex direction="column" gap="3">
-        <Flex align="center" justify="between" gap="3">
-          <div className="sm:hidden">
-            <IconButton variant="ghost" onClick={onOpenMobile} aria-label="Open navigation">
-              <HamburgerMenuIcon />
-            </IconButton>
-          </div>
-
-          <Flex align="center" gap="3 sm:gap-4" className="ml-auto">
-            <BrandSwitcherMenu triggerId="dashboard-brand-menu-trigger" />
-          </Flex>
-        </Flex>
-      </Flex>
-    </div>
+    <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[var(--color-border)] px-4">
+      <div className="flex items-center gap-2">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem className="hidden md:block">
+              <BreadcrumbLink href="/dashboard">
+                Continuum
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden md:block" />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{breadcrumbLabel}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
+      
+      <div className="ml-auto flex items-center gap-3">
+         <BrandSwitcherMenu triggerId="dashboard-brand-menu-trigger" />
+      </div>
+    </header>
   );
 }
 

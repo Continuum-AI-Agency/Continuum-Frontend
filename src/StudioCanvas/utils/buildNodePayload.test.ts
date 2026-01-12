@@ -26,6 +26,21 @@ describe('buildNodePayload', () => {
       expect(payload?.model).toBe('gemini-2.5-flash-image');
     });
 
+    it('should map nano-banana-pro to gemini-3-pro-image-preview', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana-pro',
+          positivePrompt: 'A cat',
+        },
+      };
+
+      const payload = buildNanoGenPayload(node, new Map(), [], []);
+      expect(payload?.model).toBe('gemini-3-pro-image-preview');
+    });
+
     it('should prioritize edge inputs', () => {
       const node: StudioNode = {
         id: 'nano',
