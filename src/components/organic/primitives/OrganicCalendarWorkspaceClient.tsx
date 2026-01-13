@@ -57,6 +57,7 @@ import type {
   OrganicPlatformTag,
   OrganicTrendType,
 } from "./types"
+import { useCalendarStore, type GridSlot, type GridStatus, type WeeklyGrid } from "@/lib/organic/store"
 import { moveDraftToDay } from "./calendar-utils"
 
 type WorkspaceMode = "week" | "month"
@@ -113,48 +114,6 @@ type MonthCell = {
   drafts: OrganicCalendarDraft[]
 }
 
-type GridSlot = {
-  slotId: string
-  schedule: {
-    dayId: string
-    dayOfWeek: string
-    timeOfDay?: string | null
-    postIndex: number
-  }
-  platform: {
-    name: string
-    accountId: string
-  }
-  strategy: {
-    objective?: string | null
-    target?: string | null
-    tone?: string | null
-    cta?: string | null
-  }
-  contentPlan: {
-    titleTopic?: string | null
-    type?: string | null
-    format?: string | null
-    numSlides?: number | null
-  }
-  tags?: {
-    trendIds?: string[] | null
-  } | null
-}
-
-type WeeklyGrid = {
-  meta: {
-    weekStart: string
-    timezone: string
-    language: string
-    intent?: string | null
-    platformAccountIds: Partial<Record<OrganicPlatformKey, string>>
-    prompt?: string | null
-    generatedAt?: string | null
-  }
-  slots: GridSlot[]
-}
-
 type DetailedPostTemplate = {
   slotId: string
   schedule: GridSlot["schedule"]
@@ -197,8 +156,6 @@ type GridProgressPayload = {
   percent?: number
 }
 
-type GridStatus = "idle" | "running" | "awaiting_approval" | "approved" | "complete" | "error"
-
 const DEFAULT_PROMPT = {
   id: "organic-default",
   name: "Organic default",
@@ -206,6 +163,8 @@ const DEFAULT_PROMPT = {
   content: "Generate a week of organic social drafts for the connected platforms.",
   source: "default",
 } as const
+
+
 
 function formatDateId(date: Date) {
   const year = date.getFullYear()
@@ -417,11 +376,13 @@ function CalendarDraftCard({
   isSelected,
   onSelect,
   onDragStart,
+  onRegenerate,
 }: {
   draft: OrganicCalendarDraft
   isSelected: boolean
   onSelect: (id: string) => void
   onDragStart: (event: React.DragEvent<HTMLButtonElement>, draftId: string) => void
+  onRegenerate?: (draftId: string) => void
 }) {
   return (
     <HoverCard openDelay={250} closeDelay={120}>
@@ -435,7 +396,7 @@ function CalendarDraftCard({
               onDragStart={(event) => onDragStart(event, draft.id)}
               aria-selected={isSelected}
               className={cn(
-                "w-full rounded-lg border px-3 py-2 text-left transition",
+                "group relative w-full rounded-lg border px-3 py-2 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
                 isSelected
                   ? "border-2 border-brand-primary bg-brand-primary/15 shadow-brand-glow"
@@ -447,7 +408,22 @@ function CalendarDraftCard({
                 <span className="text-[11px] uppercase tracking-wide text-secondary">
                   {draft.timeLabel}
                 </span>
-                <StatusBadge status={draft.status} />
+                <div className="flex items-center gap-1">
+                  {onRegenerate && draft.status !== "streaming" && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRegenerate(draft.id);
+                      }}
+                    >
+                      <LightningBoltIcon className="h-3 w-3" />
+                    </Button>
+                  )}
+                  <StatusBadge status={draft.status} />
+                </div>
               </div>
               <p className="mt-1 text-sm font-semibold text-primary line-clamp-2">
                 {draft.title}
@@ -468,7 +444,6 @@ function CalendarDraftCard({
               ) : null}
             </button>
           </HoverCardTrigger>
-        </ContextMenuTrigger>
         <ContextMenuContent className="w-56">
           <ContextMenuLabel>Draft actions</ContextMenuLabel>
           <ContextMenuItem onSelect={() => onSelect(draft.id)}>Open composer</ContextMenuItem>
@@ -498,17 +473,21 @@ function CalendarDayColumn({
   onSelectDraft,
   onMoveDraft,
   onCreateDraft,
+  onGenerateFromTrend,
 }: {
   day: OrganicCalendarDay
   selectedDraftId: string | null
   onSelectDraft: (id: string) => void
   onMoveDraft: (draftId: string, targetDayId: string) => void
-  onCreateDraft: (dayId: string) => void
+  onCreateDraft: (dayId: string, timeOfDay?: string) => void
+  onGenerateFromTrend: (dayId: string, trendId: string, timeOfDay?: string) => void
 }) {
   const visibleDrafts = day.slots.slice(0, 2)
   const hiddenCount = Math.max(day.slots.length - visibleDrafts.length, 0)
   const [isDragOver, setIsDragOver] = React.useState(false)
   const isSelectedDay = Boolean(selectedDraftId && day.slots.some((draft) => draft.id === selectedDraftId))
+
+  const ghosts = useCalendarStore((s) => s.ghosts[day.id] || 0)
 
   return (
     <div
@@ -519,13 +498,26 @@ function CalendarDayColumn({
       )}
       onDragOver={(event) => {
         event.preventDefault()
+        event.dataTransfer.dropEffect = "move"
       }}
       onDragEnter={() => setIsDragOver(true)}
       onDragLeave={() => setIsDragOver(false)}
       onDrop={(event) => {
         event.preventDefault()
-        const draftId = event.dataTransfer.getData("text/plain")
         setIsDragOver(false)
+        
+        try {
+          const rawData = event.dataTransfer.getData("application/json")
+          if (rawData) {
+            const data = JSON.parse(rawData)
+            if (data.type === "trend") {
+              onGenerateFromTrend(day.id, data.trendId)
+              return
+            }
+          }
+        } catch (e) {}
+
+        const draftId = event.dataTransfer.getData("text/plain")
         if (draftId) {
           onMoveDraft(draftId, day.id)
         }
@@ -547,13 +539,17 @@ function CalendarDayColumn({
         </div>
       </div>
       <div className="relative z-10 flex flex-wrap gap-1">
-        {day.suggestedTimes.slice(0, 2).map((time) => (
-          <span
+        {["morning", "afternoon", "evening"].map((time) => (
+          <button
             key={`${day.id}-${time}`}
-            className="rounded-full border border-subtle bg-default px-2 py-0.5 text-[10px] text-secondary"
+            onClick={() => onCreateDraft(day.id, time)}
+            className="group relative rounded-full border border-subtle bg-default px-2 py-0.5 text-[10px] text-secondary hover:border-brand-primary/50 hover:text-primary transition-colors"
           >
             {time}
-          </span>
+            <span className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 bg-brand-primary text-white rounded-full w-3 h-3 flex items-center justify-center text-[8px]">
+              +
+            </span>
+          </button>
         ))}
       </div>
       <div className="relative z-10 flex flex-col gap-3">
@@ -568,6 +564,12 @@ function CalendarDayColumn({
               event.dataTransfer.effectAllowed = "move"
             }}
           />
+        ))}
+        {Array.from({ length: ghosts }).map((_, i) => (
+          <div key={`ghost-${i}`} className="w-full rounded-lg border border-dashed border-subtle bg-default/20 px-3 py-4 animate-pulse">
+            <div className="h-3 w-1/3 bg-subtle rounded mb-2" />
+            <div className="h-4 w-3/4 bg-subtle rounded" />
+          </div>
         ))}
       </div>
       {hiddenCount > 0 ? (
@@ -591,13 +593,15 @@ function WeekCanvas({
   onBuild,
   onMoveDraft,
   onCreateDraft,
+  onGenerateFromTrend,
 }: {
   days: OrganicCalendarDay[]
   selectedDraftId: string | null
   onSelectDraft: (id: string) => void
   onBuild: () => void
   onMoveDraft: (draftId: string, targetDayId: string) => void
-  onCreateDraft: (dayId: string) => void
+  onCreateDraft: (dayId: string, timeOfDay?: string) => void
+  onGenerateFromTrend: (dayId: string, trendId: string, timeOfDay?: string) => void
 }) {
   const hasDrafts = days.some((day) => day.slots.length > 0)
 
@@ -620,6 +624,7 @@ function WeekCanvas({
               onSelectDraft={onSelectDraft}
               onMoveDraft={onMoveDraft}
               onCreateDraft={onCreateDraft}
+              onGenerateFromTrend={onGenerateFromTrend}
             />
           ))}
           </div>
@@ -638,6 +643,7 @@ function WeekCanvas({
     </GlassPanel>
   )
 }
+
 
 function MonthCanvas({
   days,
@@ -1299,7 +1305,7 @@ export function OrganicCalendarWorkspaceClient({
     setCalendarDays((current) => moveDraftToDay(current, draftId, targetDayId))
   }, [])
 
-  const handleCreateDraft = React.useCallback(async (dayId: string) => {
+  const handleCreateDraft = React.useCallback(async (dayId: string, timeOfDay?: string) => {
     const targetDay = calendarDays.find((day) => day.id === dayId)
     if (!targetDay) return
     const accountIds = Object.values(platformAccountIds ?? {}).filter(Boolean)
@@ -1312,7 +1318,7 @@ export function OrganicCalendarWorkspaceClient({
       id: `draft-${Date.now()}`,
       title: "Generating draft",
       summary: "Streaming a draft for this slot.",
-      timeLabel: targetDay.suggestedTimes[0] ?? "9:00 AM",
+      timeLabel: timeOfDay ? resolveTimeLabel(timeOfDay, []) : (targetDay.suggestedTimes[0] ?? "9:00 AM"),
       dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
       status: "streaming",
       platforms: ["instagram"],
@@ -1347,7 +1353,7 @@ export function OrganicCalendarWorkspaceClient({
     const payload = {
       platformAccountIds,
       dayId,
-      timeOfDay: mapTimeOfDay(newDraft.timeLabel),
+      timeOfDay: timeOfDay || mapTimeOfDay(newDraft.timeLabel),
       language: "English",
       selectedTrendIds,
     }
@@ -1416,6 +1422,10 @@ export function OrganicCalendarWorkspaceClient({
     setGridProgress({ status: "starting", percent: 0 })
     setGridStatus("running")
     reservePlaceholders()
+    
+    calendarDays.forEach(day => {
+      useCalendarStore.getState().setGhosts(day.id, 1)
+    })
 
     const payload = {
       platformAccountIds,
@@ -1461,14 +1471,16 @@ export function OrganicCalendarWorkspaceClient({
       source.addEventListener("slot", (event) => {
         const payload = parseJsonSafely<{ slot?: GridSlot }>((event as MessageEvent).data)
         if (payload?.slot) {
+          const slot = payload.slot
           setGridSlots((current) => {
-            const exists = current.find((slot) => slot.slotId === payload.slot!.slotId)
+            const exists = current.find((s) => s.slotId === slot.slotId)
             if (exists) {
-              return current.map((slot) => (slot.slotId === payload.slot!.slotId ? payload.slot! : slot))
+              return current.map((s) => (s.slotId === slot.slotId ? slot : s))
             }
-            return [...current, payload.slot!]
+            return [...current, slot]
           })
-          replacePlaceholderWithSlot(payload.slot)
+          replacePlaceholderWithSlot(slot)
+          useCalendarStore.getState().setGhosts(slot.schedule.dayId, Math.max(0, (useCalendarStore.getState().ghosts[slot.schedule.dayId] || 0) - 1))
         }
       })
 
@@ -1476,7 +1488,7 @@ export function OrganicCalendarWorkspaceClient({
         const payload = parseJsonSafely<{ grid?: WeeklyGrid; status?: string }>((event as MessageEvent).data)
         if (payload?.grid) {
           setGridSlots(payload.grid.slots ?? [])
-          payload.grid.slots?.forEach((slot) => replacePlaceholderWithSlot(slot))
+          payload.grid.slots?.forEach((slot: GridSlot) => replacePlaceholderWithSlot(slot))
         }
         setGridStatus("awaiting_approval")
       })
@@ -1485,9 +1497,10 @@ export function OrganicCalendarWorkspaceClient({
         const payload = parseJsonSafely<{ grid?: WeeklyGrid }>((event as MessageEvent).data)
         if (payload?.grid) {
           setGridSlots(payload.grid.slots ?? [])
-          payload.grid.slots?.forEach((slot) => replacePlaceholderWithSlot(slot))
+          payload.grid.slots?.forEach((slot: GridSlot) => replacePlaceholderWithSlot(slot))
         }
         setGridStatus("complete")
+        useCalendarStore.getState().clearGhosts()
         source.close()
       })
 
@@ -1495,6 +1508,7 @@ export function OrganicCalendarWorkspaceClient({
         const payload = parseJsonSafely<{ message?: string }>((event as MessageEvent).data)
         setGridStatus("error")
         setGridError(payload?.message ?? "Grid generation failed.")
+        useCalendarStore.getState().clearGhosts()
         source.close()
       })
 
@@ -1576,6 +1590,50 @@ export function OrganicCalendarWorkspaceClient({
     setActiveStepIndex(2)
     void handleGenerateDrafts()
   }, [handleGenerateDrafts])
+
+  const addDraft = useCalendarStore((s) => s.addDraft)
+
+  const handleGenerateFromTrend = React.useCallback(async (dayId: string, trendId: string, timeOfDay?: string) => {
+    const targetDay = calendarDays.find((day) => day.id === dayId)
+    if (!targetDay) return
+    
+    useCalendarStore.getState().setGhosts(dayId, (useCalendarStore.getState().ghosts[dayId] || 0) + 1)
+
+    const payload = {
+      platformAccountIds,
+      dayId,
+      timeOfDay: timeOfDay || "morning",
+      language: "English",
+      selectedTrendIds: [trendId],
+    }
+
+    try {
+      const response = await fetch("/api/organic/generate-slot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      
+      if (!response.ok) throw new Error("Failed")
+
+      await streamNdjson<DetailedPostTemplate>(response, (template) => {
+        const draft = buildDraftFromSlot({
+          slotId: template.slotId,
+          schedule: template.schedule,
+          platform: template.platform,
+          strategy: template.strategy,
+          contentPlan: template.contentPlan,
+          tags: { trendIds: [trendId] }
+        })
+        const finalDraft = applyTemplateToDraft(draft, template)
+        addDraft(dayId, finalDraft)
+      })
+    } catch (e) {
+      setGridError("Failed to generate slot from trend.")
+    } finally {
+      useCalendarStore.getState().setGhosts(dayId, Math.max(0, (useCalendarStore.getState().ghosts[dayId] || 0) - 1))
+    }
+  }, [calendarDays, platformAccountIds, buildDraftFromSlot, applyTemplateToDraft, addDraft])
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-3 overflow-hidden sm:gap-4">
@@ -1716,6 +1774,7 @@ export function OrganicCalendarWorkspaceClient({
               onBuild={handleBuild}
               onMoveDraft={handleMoveDraft}
               onCreateDraft={handleCreateDraft}
+              onGenerateFromTrend={handleGenerateFromTrend}
             />
           ) : (
             <MonthCanvas

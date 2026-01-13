@@ -5,6 +5,7 @@ import { StudioNode } from "../types";
 import { NodeOutput } from "../types/execution";
 import { useStudioStore } from "../stores/useStudioStore";
 import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, toBackendExtendVideoPayload, toBackendPayload } from "./buildNodePayload";
+import type { ExtendVideoPayload } from "../types/execution";
 import { buildDataUrl, parseDataUrl } from "./dataUrl";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
 
@@ -379,22 +380,14 @@ export async function executeWorkflow(
     updateNodeStatus(nodeId, 'running');
 
     try {
-      let payload = null;
-
-      if (node.type === 'nanoGen') {
-        payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges);
-      } else if (node.type === 'veoDirector') {
-        payload = buildVeoPayload(node, resolvedOutputs, nodes, edges);
-      } else if (node.type === 'extendVideo') {
-        payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges);
-      }
-
-      if (!payload) {
-        updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
-        return false;
-      }
-
       if (node.type === 'extendVideo') {
+        const payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges);
+
+        if (!payload) {
+          updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
+          return false;
+        }
+
         if (!('executeVideoExtension' in controls) || typeof controls.executeVideoExtension !== 'function') {
           updateNodeStatus(nodeId, 'failed', 'Video extension execution unavailable');
           return false;
@@ -420,6 +413,19 @@ export async function executeWorkflow(
         }
 
         updateNodeStatus(nodeId, 'failed', 'No output received');
+        return false;
+      }
+
+      let payload = null;
+
+      if (node.type === 'nanoGen') {
+        payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges);
+      } else if (node.type === 'veoDirector') {
+        payload = buildVeoPayload(node, resolvedOutputs, nodes, edges);
+      }
+
+      if (!payload) {
+        updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
         return false;
       }
 

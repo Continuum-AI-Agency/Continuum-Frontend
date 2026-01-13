@@ -48,7 +48,7 @@ export function CustomHandle({
   const connections = useHandleConnections({
     id: props.id,
     type: connectionType,
-    nodeId,
+    nodeId: nodeId ?? undefined,
   });
 
   const isAtLimit = useMemo(() => {
@@ -109,7 +109,7 @@ export function useConnectionLimit(handleId: string, maxConnections?: number, ty
   const connections = useHandleConnections({
     id: handleId,
     type,
-    nodeId,
+    nodeId: nodeId ?? undefined,
   });
 
   return useMemo(() => {

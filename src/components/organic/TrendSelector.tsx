@@ -150,22 +150,33 @@ export function TrendSelector({
                             const selectionDisabled =
                               !isSelected && hasLimit && selectedTrendIds.length >= (maxSelections ?? 0);
 
-                            const toggle = () => {
-                              if (selectionDisabled) return;
-                              onToggleTrend(trend.id);
-                            };
+                             const toggle = () => {
+                               if (selectionDisabled) return;
+                               onToggleTrend(trend.id);
+                             };
 
-                            return (
-                              <HoverCard key={trend.id} openDelay={200} closeDelay={120}>
-                                <div
-                                  className={cn(
-                                    "group flex items-center justify-between gap-2 rounded-lg border px-2 py-2 transition",
-                                    isSelected
-                                      ? "border-brand-primary/60 bg-brand-primary/10 shadow-brand-glow"
-                                      : "border-subtle bg-default/40 hover:border-brand-primary/40",
-                                    selectionDisabled && "cursor-not-allowed opacity-60"
-                                  )}
-                                >
+                             const handleDragStart = (e: React.DragEvent) => {
+                               e.dataTransfer.setData("application/json", JSON.stringify({ 
+                                 type: "trend", 
+                                 trendId: trend.id,
+                                 title: trend.title 
+                               }));
+                               e.dataTransfer.effectAllowed = "copy";
+                             };
+
+                             return (
+                               <HoverCard key={trend.id} openDelay={200} closeDelay={120}>
+                                 <div
+                                   draggable
+                                   onDragStart={handleDragStart}
+                                   className={cn(
+                                     "group flex items-center justify-between gap-2 rounded-lg border px-2 py-2 transition cursor-grab active:cursor-grabbing",
+                                     isSelected
+                                       ? "border-brand-primary/60 bg-brand-primary/10 shadow-brand-glow"
+                                       : "border-subtle bg-default/40 hover:border-brand-primary/40",
+                                     selectionDisabled && "cursor-not-allowed opacity-60"
+                                   )}
+                                 >
                                   <HoverCardTrigger asChild>
                                     <button
                                       type="button"
