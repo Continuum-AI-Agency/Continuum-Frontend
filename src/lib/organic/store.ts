@@ -53,8 +53,10 @@ export type GridStatus = "idle" | "running" | "awaiting_approval" | "approved" |
 
 interface CalendarState {
   days: OrganicCalendarDay[];
+  unscheduledDrafts: OrganicCalendarDraft[];
   ghosts: Record<string, number>;
   selectedDraftId: string | null;
+  selectedDraftIds: string[];
   selectedTrendIds: string[];
   gridStatus: GridStatus;
   gridProgress: {
@@ -65,10 +67,13 @@ interface CalendarState {
   gridJobId: string | null;
   
   setDays: (days: OrganicCalendarDay[]) => void;
+  setUnscheduledDrafts: (drafts: OrganicCalendarDraft[]) => void;
   updateDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
-  moveDraft: (draftId: string, targetDayId: string) => void;
-  addDraft: (dayId: string, draft: OrganicCalendarDraft) => void;
+  moveDraft: (draftId: string, targetDayId: string | "unscheduled") => void;
+  addDraft: (dayId: string | "unscheduled", draft: OrganicCalendarDraft) => void;
   setSelectedDraftId: (id: string | null) => void;
+  toggleDraftSelection: (id: string) => void;
+  clearDraftSelection: () => void;
   toggleTrend: (trendId: string, maxSelections?: number) => void;
   setGridStatus: (status: GridStatus) => void;
   setGridProgress: (progress: { percent: number; message?: string }) => void;
@@ -82,8 +87,10 @@ export const useCalendarStore = create<CalendarState>()(
   persist(
     (set) => ({
       days: [],
+      unscheduledDrafts: [],
       ghosts: {},
       selectedDraftId: null,
+      selectedDraftIds: [],
       selectedTrendIds: [],
       gridStatus: "idle",
       gridProgress: { percent: 0 },
@@ -91,6 +98,7 @@ export const useCalendarStore = create<CalendarState>()(
       gridJobId: null,
 
       setDays: (days) => set({ days }),
+      setUnscheduledDrafts: (drafts) => set({ unscheduledDrafts: drafts }),
       
       updateDraft: (draftId, updater) =>
         set((state) => ({
@@ -98,40 +106,73 @@ export const useCalendarStore = create<CalendarState>()(
             ...day,
             slots: day.slots.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
           })),
+          unscheduledDrafts: state.unscheduledDrafts.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
         })),
 
       moveDraft: (draftId, targetDayId) =>
         set((state) => {
           let movedDraft: OrganicCalendarDraft | undefined;
+          
           const nextDays = state.days.map((day) => {
             const draftIndex = day.slots.findIndex((s) => s.id === draftId);
             if (draftIndex !== -1) {
-              [movedDraft] = day.slots.splice(draftIndex, 1);
+              const slots = [...day.slots];
+              [movedDraft] = slots.splice(draftIndex, 1);
+              return { ...day, slots };
             }
             return day;
           });
 
-          if (movedDraft) {
+          let nextUnscheduled = state.unscheduledDrafts.filter((d) => {
+            if (d.id === draftId) {
+              movedDraft = d;
+              return false;
+            }
+            return true;
+          });
+
+          if (!movedDraft) return { days: nextDays, unscheduledDrafts: nextUnscheduled };
+
+          if (targetDayId === "unscheduled") {
             return {
-              days: nextDays.map((day) => {
-                if (day.id === targetDayId) {
-                  return { ...day, slots: [...day.slots, movedDraft!] };
-                }
-                return day;
-              }),
+              days: nextDays,
+              unscheduledDrafts: [...nextUnscheduled, movedDraft],
             };
           }
-          return { days: nextDays };
+
+          return {
+            days: nextDays.map((day) => {
+              if (day.id === targetDayId) {
+                return { ...day, slots: [...day.slots, movedDraft!] };
+              }
+              return day;
+            }),
+            unscheduledDrafts: nextUnscheduled,
+          };
         }),
 
       addDraft: (dayId, draft) =>
-        set((state) => ({
-          days: state.days.map((day) =>
-            day.id === dayId ? { ...day, slots: [...day.slots, draft] } : day
-          ),
-        })),
+        set((state) => {
+          if (dayId === "unscheduled") {
+            return { unscheduledDrafts: [...state.unscheduledDrafts, draft] };
+          }
+          return {
+            days: state.days.map((day) =>
+              day.id === dayId ? { ...day, slots: [...day.slots, draft] } : day
+            ),
+          };
+        }),
 
       setSelectedDraftId: (id) => set({ selectedDraftId: id }),
+      
+      toggleDraftSelection: (id) => set((state) => {
+        const next = new Set(state.selectedDraftIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return { selectedDraftIds: Array.from(next) };
+      }),
+      
+      clearDraftSelection: () => set({ selectedDraftIds: [] }),
 
       toggleTrend: (trendId, maxSelections = 5) =>
         set((state) => {
