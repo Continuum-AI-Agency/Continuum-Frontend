@@ -2,7 +2,6 @@
 "use client";
 
 import React from "react";
-import { createPortal } from "react-dom";
 import {
   Archive,
   ChevronRight,
@@ -32,6 +31,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Sheet,
+  SheetClose,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import * as SheetPrimitive from "@radix-ui/react-dialog";
 
 import { getCreativeAssetsBucket } from "@/lib/creative-assets/config";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
@@ -197,113 +202,116 @@ function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { bran
   // Sidebar with collapsible="offcanvas" doesn't automatically add an overlay backdrop usually.
   // We can add a backdrop manually if open.
   
-  return createPortal(
+  return (
     <>
       {/* Floating Trigger Button */}
       <div className="pointer-events-auto fixed right-4 top-1/2 z-40 -translate-y-1/2">
-         <Button
-            className="h-10 w-10 rounded-full shadow-xl bg-slate-900 text-white hover:bg-slate-800"
-            onClick={() => setOpen(true)}
-            aria-label="Open creative library"
-         >
-            <Archive className="h-5 w-5" />
-         </Button>
+          <Button
+             className="h-10 w-10 rounded-full shadow-xl bg-slate-900 text-white hover:bg-slate-800"
+             onClick={() => setOpen(true)}
+             aria-label="Open creative library"
+          >
+             <Archive className="h-5 w-5" />
+          </Button>
       </div>
 
-      {/* Backdrop for mobile-like overlay behavior on desktop if needed */}
-      {open && (
-         <div
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 pointer-events-auto"
-            onClick={() => setOpen(false)}
-         />
-      )}
-
-      <div
-         className="fixed right-0 top-0 h-full w-96 bg-slate-950/95 border-l border-white/10 shadow-2xl backdrop-blur-xl z-50"
-         style={{ width: expandedWidth }}
-         onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex flex-col h-full">
-          <div className="border-b border-white/5 p-4 flex-shrink-0">
-            <div className="flex items-center justify-between mb-4">
-               <div className="flex items-center gap-2 text-white">
-                  <Archive className="h-5 w-5" />
-                  <span className="font-medium">Creative Library</span>
+      <Sheet open={open} onOpenChange={setOpen} modal={false}>
+        <SheetPrimitive.Portal>
+          <SheetPrimitive.Content
+            className={cn(
+              "fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+              "bg-slate-950/95 border-l border-white/10 text-white backdrop-blur-xl",
+              "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right",
+              "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
+              "inset-y-0 right-0 h-full focus:outline-none"
+            )}
+            style={{ width: expandedWidth, maxWidth: "100vw" }}
+            onPointerDownOutside={() => setOpen(false)}
+          >
+          <div className="flex flex-col h-full">
+             <div className="border-b border-white/5 p-4 flex-shrink-0">
+               <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-white">
+                     <Archive className="h-5 w-5" />
+                     <SheetTitle className="font-medium text-white">Creative Library</SheetTitle>
+                  </div>
+                  <SheetClose asChild>
+                    <Button
+                       variant="ghost"
+                       size="1"
+                       className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10 rounded-full"
+                    >
+                       <X className="h-4 w-4" />
+                    </Button>
+                  </SheetClose>
                </div>
-               <Button
-                  variant="ghost"
-                  size="1"
-                  className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10 rounded-full"
-                  onClick={() => setOpen(false)}
-               >
-                  <X className="h-4 w-4" />
-               </Button>
-            </div>
 
-            <div className="flex items-center gap-2 mb-2">
-              <BreadcrumbTrail
-                 items={browser.breadcrumbs}
-                 onSelect={(path) => void browser.navigateTo(path)}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-               <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                     className="w-full bg-white/5 border border-white/10 rounded-md py-1.5 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                     placeholder="Search assets..."
-                     value={query}
-                     onChange={(e) => setQuery(e.target.value)}
-                  />
-               </div>
-               <Tooltip content="Upload files">
-                  <label className="cursor-pointer inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10">
-                     <Upload className="h-4 w-4" />
-                     <input type="file" multiple className="hidden" onChange={handleUpload} />
-                  </label>
-               </Tooltip>
-               <Tooltip content="New folder">
-                  <button
-                     className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10"
-                     onClick={() => {
-                        const name = window.prompt("New folder name?");
-                        if (name) void createFolderAt(name, "");
-                     }}
-                  >
-                     <FolderPlus className="h-4 w-4" />
-                  </button>
-               </Tooltip>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-hidden">
-            <div className="p-2 h-full overflow-y-auto">
-              {browser.loading ? (
-                <div className="p-4 text-sm text-gray-400">Loading assets...</div>
-              ) : filteredAssets.length === 0 ? (
-                <div className="p-4 text-sm text-gray-400">No assets found.</div>
-              ) : (
-                <TreeList
-                   brandProfileId={brandProfileId}
-                   assets={filteredAssets}
-                   expandedPaths={expandedPaths}
-                   setExpandedPaths={setExpandedPaths}
-                   resolvePreview={ensurePreviewUrl}
-                   onRename={browser.renameAssetPath}
-                   onDelete={browser.deleteAssetPath}
-                   onDragStart={handleDragStart}
-                   onCreateFolder={createFolderAt}
-                   folderCache={folderCache}
-                   folderCacheOrder={folderCacheOrder}
+              <div className="flex items-center gap-2 mb-2">
+                <BreadcrumbTrail
+                   items={browser.breadcrumbs}
+                   onSelect={(path) => void browser.navigateTo(path)}
                 />
-              )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                 <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                       className="w-full bg-white/5 border border-white/10 rounded-md py-1.5 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                       placeholder="Search assets..."
+                       value={query}
+                       onChange={(e) => setQuery(e.target.value)}
+                    />
+                 </div>
+                 <Tooltip content="Upload files">
+                    <label className="cursor-pointer inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10">
+                       <Upload className="h-4 w-4" />
+                       <input type="file" multiple className="hidden" onChange={handleUpload} />
+                    </label>
+                 </Tooltip>
+                 <Tooltip content="New folder">
+                    <button
+                       className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10"
+                       onClick={() => {
+                          const name = window.prompt("New folder name?");
+                          if (name) void createFolderAt(name, "");
+                       }}
+                    >
+                       <FolderPlus className="h-4 w-4" />
+                    </button>
+                 </Tooltip>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              <div className="p-2 h-full overflow-y-auto">
+                {browser.loading ? (
+                  <div className="p-4 text-sm text-gray-400">Loading assets...</div>
+                ) : filteredAssets.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-400">No assets found.</div>
+                ) : (
+                  <TreeList
+                     brandProfileId={brandProfileId}
+                     assets={filteredAssets}
+                     expandedPaths={expandedPaths}
+                     setExpandedPaths={setExpandedPaths}
+                     resolvePreview={ensurePreviewUrl}
+                     onRename={browser.renameAssetPath}
+                     onDelete={browser.deleteAssetPath}
+                     onDragStart={handleDragStart}
+                     onCreateFolder={createFolderAt}
+                     folderCache={folderCache}
+                     folderCacheOrder={folderCacheOrder}
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </SheetPrimitive.Content>
+        </SheetPrimitive.Portal>
+      </Sheet>
     </>
-  , document.body);
+  );
 }
 
 // ------------------------------------------------------------------
