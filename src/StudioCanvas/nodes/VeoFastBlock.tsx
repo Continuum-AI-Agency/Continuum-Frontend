@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, Node, NodeResizer, NodeToolbar, HandleProps, useEdges, type Edge } from '@xyflow/react';
 import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VideoGenNodeData } from '../types';
 import { BlockToolbar } from '../components/BlockToolbar';
@@ -53,6 +54,7 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
 };
 
 export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNodeData>>) {
+  const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const flowEdges = useEdges();
@@ -66,6 +68,10 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
   const negativeConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'negative').length;
   const firstFrameConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'first-frame').length;
   const lastFrameConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'last-frame').length;
+
+  const handleAspectRatioChange = useCallback((value: string) => {
+    updateNodeData(id, { aspectRatio: value as '16:9' | '9:16' });
+  }, [id, updateNodeData]);
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run veo-fast node", { nodeId: id });
@@ -107,6 +113,15 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
 
       <NodeToolbar isVisible={selected} position={Position.Bottom} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
           <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Veo 3.1 Fast</Label>
+          <Select value={data.aspectRatio ?? '16:9'} onValueChange={handleAspectRatioChange}>
+            <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
+              <SelectValue placeholder="Ratio" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="16:9">16:9</SelectItem>
+              <SelectItem value="9:16">9:16</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 border-l border-subtle pl-2">
             <span className="text-[10px] font-medium text-secondary px-2">First/Last Frame Only</span>
           </div>
@@ -122,7 +137,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
 
        <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
         <div className="relative flex-1 bg-default/60 group/preview min-h-0">
-            <AspectRatio ratio={16 / 9} className="h-full w-full">
+            <AspectRatio ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16} className="h-full w-full">
             {data.isExecuting ? (
               <div className="w-full h-full flex items-center justify-center bg-default p-4">
                       <Skeleton className="w-full h-full bg-muted" />

@@ -357,115 +357,96 @@ function Flow() {
 
     const sourceHandle = connection.sourceHandle ?? '';
     const targetHandle = connection.targetHandle ?? '';
-    const isFrameHandle = ['first-frame', 'last-frame', 'ref-image', 'ref-images'].includes(sourceHandle);
-    const isImageSource = targetHandle === 'image' && (targetNode.type === 'image' || targetNode.type === 'nanoGen');
 
-    const normalizedConnection = (sourceNode.type === 'veoDirector' || sourceNode.type === 'veoFast') && isFrameHandle && isImageSource
-      ? {
-          ...connection,
-          source: connection.target,
-          sourceHandle: 'image',
-          target: connection.source,
-          targetHandle: sourceHandle,
-        }
-      : connection;
-
-    const target = normalizedConnection.target;
-    const source = normalizedConnection.source;
-    const normalizedTargetHandle = normalizedConnection.targetHandle;
-
-    const normalizedSourceNode = getNodeById(source);
-    const normalizedTargetNode = getNodeById(target);
-
-    if (!normalizedSourceNode || !normalizedTargetNode) return false;
+    const normalizedConnection = connection;
 
     // Check handle compatibility
-    if (normalizedTargetNode.type === 'extendVideo') {
-        const handle = normalizedTargetHandle || '';
+    if (targetNode.type === 'extendVideo') {
+        const handle = targetHandle || '';
         if (handle === 'video') {
-          if (!(normalizedSourceNode.type === 'video' || normalizedSourceNode.type === 'veoDirector' || normalizedSourceNode.type === 'veoFast')) return false;
+          if (!(sourceNode.type === 'video' || sourceNode.type === 'veoDirector' || sourceNode.type === 'veoFast')) return false;
         } else if (handle === 'prompt') {
-          if (normalizedSourceNode.type !== 'string') return false;
+          if (sourceNode.type !== 'string') return false;
         } else {
           return false;
         }
-    } else if (normalizedSourceNode.type === 'string') {
-        if (!['prompt', 'prompt-in', 'negative'].includes(normalizedTargetHandle || '')) return false;
-    } else if (normalizedSourceNode.type === 'image' || normalizedSourceNode.type === 'nanoGen') {
+    } else if (sourceNode.type === 'string') {
+        if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle || '')) return false;
+    } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
         // Image sources can only connect to generation nodes, not to other reference nodes
-        const handle = normalizedTargetHandle || '';
-        if (normalizedTargetNode.type === 'veoDirector') {
+        const handle = targetHandle || '';
+        if (targetNode.type === 'veoDirector') {
           const referenceModeFromHandle = ['first-frame', 'last-frame'].includes(handle) ? 'frames' : undefined;
           const referenceMode =
             referenceModeFromHandle ??
-            ((normalizedTargetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
+            ((targetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
           if (referenceMode === 'frames') {
             if (!['first-frame', 'last-frame'].includes(handle)) return false;
           } else {
             if (!['ref-image', 'ref-images'].includes(handle)) return false;
           }
-        } else if (normalizedTargetNode.type === 'veoFast') {
+        } else if (targetNode.type === 'veoFast') {
            if (!['first-frame', 'last-frame'].includes(handle)) return false;
         } else if (!['ref-image'].includes(handle)) {
           return false;
         }
-        if (normalizedTargetNode.type === 'image' || normalizedTargetNode.type === 'video') return false;
-    } else if (normalizedSourceNode.type === 'video' || normalizedSourceNode.type === 'veoDirector' || normalizedSourceNode.type === 'veoFast') {
+        if (targetNode.type === 'image' || targetNode.type === 'video') return false;
+    } else if (sourceNode.type === 'video' || sourceNode.type === 'veoDirector' || sourceNode.type === 'veoFast') {
         return false;
     }
 
     // Special case: video nodes can accept ref-images connections
-    if (normalizedTargetNode.type === 'veoDirector' && normalizedTargetHandle === 'ref-images') {
+    if (targetNode.type === 'veoDirector' && targetHandle === 'ref-images') {
         const referenceMode =
-          ((normalizedTargetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
-        if (normalizedSourceNode.type !== 'image' && normalizedSourceNode.type !== 'nanoGen') return false;
+          ((targetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
+        if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
         if (referenceMode !== 'images') return false;
     }
 
-    if (!canAcceptSingleTextInput(edges, target, normalizedTargetHandle)) {
+    if (!canAcceptSingleTextInput(edges, connection.target, targetHandle)) {
       return false;
     }
 
     // Check connection limits based on target node type and handle
-    if (normalizedTargetNode.type === 'nanoGen' && normalizedTargetHandle === 'ref-image') {
+    if (targetNode.type === 'nanoGen' && targetHandle === 'ref-image') {
       // Nano Banana supports up to 14 reference images
       const existingRefImageConnections = edges.filter(
-        edge => edge.target === target && edge.targetHandle === 'ref-image'
+        edge => edge.target === connection.target && edge.targetHandle === 'ref-image'
       ).length;
       if (existingRefImageConnections >= 14) return false;
     }
 
-    if (normalizedTargetNode.type === 'veoDirector') {
-      if (normalizedTargetHandle === 'first-frame') {
+    if (targetNode.type === 'veoDirector') {
+      if (targetHandle === 'first-frame') {
         // First frame: max 1 connection
         const existingConnections = edges.filter(
-          edge => edge.target === target && edge.targetHandle === 'first-frame'
+          edge => edge.target === connection.target && edge.targetHandle === 'first-frame'
         ).length;
         if (existingConnections >= 1) return false;
-      } else if (normalizedTargetHandle === 'last-frame') {
+      } else if (targetHandle === 'last-frame') {
         // Last frame: max 1 connection
         const existingConnections = edges.filter(
-          edge => edge.target === target && edge.targetHandle === 'last-frame'
+          edge => edge.target === connection.target && edge.targetHandle === 'last-frame'
         ).length;
         if (existingConnections >= 1) return false;
-      } else if (normalizedTargetHandle === 'ref-images') {
+      } else if (targetHandle === 'ref-images') {
         // Reference images: max 3 connections
         const existingConnections = edges.filter(
-          edge => edge.target === target && edge.targetHandle === 'ref-images'
+          edge => edge.target === connection.target && edge.targetHandle === 'ref-images'
         ).length;
         if (existingConnections >= 3) return false;
       }
     }
 
-    if (normalizedTargetNode.type === 'veoFast') {
-        if (normalizedTargetHandle === 'first-frame') {
+    if (targetNode.type === 'veoFast') {
+        if (targetHandle === 'first-frame') {
           const existingConnections = edges.filter(
-            edge => edge.target === target && edge.targetHandle === 'first-frame'
+            edge => edge.target === connection.target && edge.targetHandle === 'first-frame'
           ).length;
           if (existingConnections >= 1) return false;
-        } else if (normalizedTargetHandle === 'last-frame') {
+        } else if (targetHandle === 'last-frame') {
           const existingConnections = edges.filter(
-            edge => edge.target === target && edge.targetHandle === 'last-frame'
+            edge => edge.target === connection.target && edge.targetHandle === 'last-frame'
           ).length;
           if (existingConnections >= 1) return false;
         } else {
@@ -473,9 +454,9 @@ function Flow() {
         }
     }
 
-    if (normalizedTargetNode.type === 'extendVideo' && normalizedTargetHandle === 'video') {
+    if (targetNode.type === 'extendVideo' && targetHandle === 'video') {
       const existingConnections = edges.filter(
-        edge => edge.target === target && edge.targetHandle === 'video'
+        edge => edge.target === connection.target && edge.targetHandle === 'video'
       ).length;
       if (existingConnections >= 1) return false;
     }

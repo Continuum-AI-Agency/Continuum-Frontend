@@ -78,6 +78,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
     updateNodeData(id, { model: value as any });
   }, [id, updateNodeData]);
 
+  const handleAspectRatioChange = useCallback((value: string) => {
+    updateNodeData(id, { aspectRatio: value as '16:9' | '9:16' });
+  }, [id, updateNodeData]);
+
   const referenceMode = data.referenceMode ?? 'images';
   const referenceSwitchId = `veo-reference-${id}`;
 
@@ -149,6 +153,15 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
               <SelectItem value="veo-3.1">Veo 3.1 (Cinematic)</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={data.aspectRatio ?? '16:9'} onValueChange={handleAspectRatioChange}>
+            <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
+              <SelectValue placeholder="Ratio" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="16:9">16:9</SelectItem>
+              <SelectItem value="9:16">9:16</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 border-l border-subtle pl-2">
             <Label htmlFor={referenceSwitchId} className="text-[10px] font-bold text-secondary uppercase tracking-wider">
               Frame Anchors
@@ -171,7 +184,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
 
        <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
         <div className="relative flex-1 bg-default/60 group/preview min-h-0">
-            <AspectRatio ratio={16 / 9} className="h-full w-full">
+            <AspectRatio ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16} className="h-full w-full">
             {data.isExecuting ? (
               <div className="w-full h-full flex items-center justify-center bg-default p-4">
                       <Skeleton className="w-full h-full bg-muted" />

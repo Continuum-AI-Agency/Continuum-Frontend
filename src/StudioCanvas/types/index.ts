@@ -63,6 +63,7 @@ export interface VideoGenNodeData extends BaseNodeData {
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
+  aspectRatio?: '16:9' | '9:16';
   referenceMode?: 'images' | 'frames';
   frameList?: FrameSlot[];
   generatedVideo?: string | Blob;
