@@ -1,8 +1,8 @@
 import type { Edge } from '@xyflow/react';
 import { StudioNode } from '../types';
-import { GenerationPayload, NodeOutput } from '../types/execution';
-import { BackendChatImageRequestPayload } from '@/lib/types/chatImage';
-import { NanoGenNodeData, VideoGenNodeData } from '../types';
+import { ExtendVideoPayload, GenerationPayload, NodeOutput } from '../types/execution';
+import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from '@/lib/types/chatImage';
+import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData } from '../types';
 import { parseDataUrl } from './dataUrl';
 
 const BRAND_PROFILE_ID = "default-brand";
@@ -56,7 +56,7 @@ function resolveVideoInput(
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
   edges: Edge[]
-): { base64: string; mimeType: string; fileName?: string } | undefined {
+): { data: string; mimeType: string; filename?: string } | undefined {
   const incomingEdge = edges.find(
     (e) => e.target === nodeId && e.targetHandle === handleId
   );
@@ -64,24 +64,22 @@ function resolveVideoInput(
   if (!incomingEdge) return undefined;
 
   const sourceOutput = resolvedData.get(incomingEdge.source);
-  if (sourceOutput?.type === 'video' && sourceOutput.url) {
+  if (sourceOutput?.type === 'video') {
     const parsed = parseDataUrl(sourceOutput.url);
-    if (parsed) {
-      return {
-        base64: parsed.base64,
-        mimeType: parsed.mimeType,
-      };
+    if (parsed?.base64) {
+      return { data: parsed.base64, mimeType: parsed.mimeType };
     }
+    return undefined;
   }
 
   const sourceNode = nodes.find(n => n.id === incomingEdge.source);
   if (sourceNode?.type === 'video') {
     const parsed = parseDataUrl((sourceNode.data as any).video as string | undefined);
-    if (parsed) {
+    if (parsed?.base64) {
       return {
-        base64: parsed.base64,
+        data: parsed.base64,
         mimeType: parsed.mimeType,
-        fileName: (sourceNode.data as any).fileName,
+        filename: (sourceNode.data as any).fileName,
       };
     }
   }
@@ -171,60 +169,63 @@ export function buildVeoPayload(
     return null;
   }
 
-  const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
-  let firstFrame = frame0Input?.image
-    ? { data: frame0Input.image, mimeType: 'image/png', filename: frame0Input.fileName || 'frame-0.png' }
+  const referenceMode = data.referenceMode ?? 'images';
+  let firstFrame: GenerationPayload['firstFrame'] = undefined;
+  let lastFrame: GenerationPayload['lastFrame'] = undefined;
+
+  if (referenceMode === 'frames') {
+    const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
+    firstFrame = frame0Input?.image
+      ? { data: frame0Input.image, mimeType: 'image/png', filename: frame0Input.fileName || 'frame-0.png' }
+      : undefined;
+
+    if (!firstFrame) {
+        const legacyFirst = resolveInputValue(node.id, 'first-frame', resolvedData, allNodes, allEdges);
+        if (legacyFirst?.image) {
+            firstFrame = { data: legacyFirst.image, mimeType: 'image/png', filename: legacyFirst.fileName || 'frame-0.png' };
+        }
+    }
+
+    const frameList = (data as any).frameList || [];
+    if (!firstFrame && frameList[0]?.src) {
+        firstFrame = { data: frameList[0].src, mimeType: 'image/png', filename: 'frame-0.png' };
+    }
+
+    const legacyLast = resolveInputValue(node.id, 'last-frame', resolvedData, allNodes, allEdges);
+    if (legacyLast?.image) {
+        lastFrame = { data: legacyLast.image, mimeType: 'image/png', filename: legacyLast.fileName || 'frame-last.png' };
+    } else {
+        for (let i = 8; i > 0; i--) {
+            const frameInput = resolveInputValue(node.id, `frame-${i}`, resolvedData, allNodes, allEdges);
+            if (frameInput?.image) {
+                lastFrame = { data: frameInput.image, mimeType: 'image/png', filename: frameInput.fileName || `frame-${i}.png` };
+                break;
+            }
+            if (frameList[i]?.src) {
+                lastFrame = { data: frameList[i].src, mimeType: 'image/png', filename: `frame-${i}.png` };
+                break;
+            }
+        }
+    }
+  }
+
+  const referenceImages = referenceMode === 'images'
+    ? allEdges
+        .filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'))
+        .map((edge) => {
+          const output = resolvedData.get(edge.source);
+          if (output?.type === 'image') {
+            return {
+              data: output.base64,
+              mimeType: output.mimeType,
+              weight: 1,
+              referenceType: 'asset' as const,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean) as GenerationPayload['referenceImages']
     : undefined;
-
-  if (!firstFrame) {
-      const legacyFirst = resolveInputValue(node.id, 'first-frame', resolvedData, allNodes, allEdges);
-      if (legacyFirst?.image) {
-          firstFrame = { data: legacyFirst.image, mimeType: 'image/png', filename: legacyFirst.fileName || 'frame-0.png' };
-      }
-  }
-
-  const frameList = (data as any).frameList || []; 
-  if (!firstFrame && frameList[0]?.src) {
-      firstFrame = { data: frameList[0].src, mimeType: 'image/png', filename: 'frame-0.png' };
-  }
-
-  let lastFrame = undefined;
-  const legacyLast = resolveInputValue(node.id, 'last-frame', resolvedData, allNodes, allEdges);
-  if (legacyLast?.image) {
-      lastFrame = { data: legacyLast.image, mimeType: 'image/png', filename: legacyLast.fileName || 'frame-last.png' };
-  } else {
-      for (let i = 8; i > 0; i--) {
-          const frameInput = resolveInputValue(node.id, `frame-${i}`, resolvedData, allNodes, allEdges);
-          if (frameInput?.image) {
-              lastFrame = { data: frameInput.image, mimeType: 'image/png', filename: frameInput.fileName || `frame-${i}.png` };
-              break;
-          }
-          if (frameList[i]?.src) {
-              lastFrame = { data: frameList[i].src, mimeType: 'image/png', filename: `frame-${i}.png` };
-              break;
-          }
-      }
-  }
-
-  const refImageEdges = allEdges.filter(
-    (e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images')
-  );
-  const referenceImages = refImageEdges
-    .map((edge) => {
-      const output = resolvedData.get(edge.source);
-      if (output?.type === 'image') {
-        return {
-          data: output.base64,
-          mimeType: output.mimeType,
-          weight: 1,
-          referenceType: 'asset' as const,
-        };
-      }
-      return null;
-    })
-    .filter(Boolean) as GenerationPayload['referenceImages'];
-
-  const referenceVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
 
   const backendModel = data.model === 'veo-3.1-fast'
     ? 'veo-3.1-fast-generate-preview'
@@ -242,13 +243,37 @@ export function buildVeoPayload(
     firstFrame,
     lastFrame,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
-    referenceVideo: referenceVideoInput
-      ? {
-          data: referenceVideoInput.base64,
-          mimeType: referenceVideoInput.mimeType,
-          filename: referenceVideoInput.fileName,
-        }
-      : undefined,
+  };
+}
+
+export function buildExtendVideoPayload(
+  node: StudioNode,
+  resolvedData: Map<string, NodeOutput>,
+  allNodes: StudioNode[],
+  allEdges: Edge[]
+): ExtendVideoPayload | null {
+  const data = node.data as ExtendVideoNodeData;
+
+  const promptInput = resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges);
+  const prompt = (promptInput?.text ?? data.prompt ?? '').trim();
+
+  const videoInput = resolveVideoInput(node.id, 'video', resolvedData, allNodes, allEdges);
+  if (!videoInput?.data) {
+    return null;
+  }
+
+  return {
+    brandId: BRAND_PROFILE_ID,
+    service: 'veo-3.1',
+    model: 'veo-3.1-generate-preview',
+    prompt,
+    aspectRatio: '16:9',
+    resolution: '720p',
+    video: {
+      data: videoInput.data,
+      mimeType: videoInput.mimeType,
+      filename: videoInput.filename,
+    },
   };
 }
 
@@ -275,12 +300,27 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       weight: img.weight,
       referenceType: img.referenceType,
     })),
-    reference_video: payload.referenceVideo
-      ? {
-          data: payload.referenceVideo.data,
-          mime_type: payload.referenceVideo.mimeType,
-          filename: payload.referenceVideo.filename,
-        }
-      : undefined,
+  };
+}
+
+export function toBackendExtendVideoPayload(
+  payload: ExtendVideoPayload
+): BackendExtendVideoRequestPayload {
+  const videoPayload = 'data' in payload.video
+    ? {
+        data: payload.video.data,
+        mime_type: payload.video.mimeType,
+        filename: payload.video.filename,
+      }
+    : { uri: payload.video.uri };
+
+  return {
+    service: payload.service,
+    model: payload.model,
+    prompt: payload.prompt,
+    brand_id: payload.brandId,
+    aspect_ratio: payload.aspectRatio,
+    resolution: payload.resolution,
+    video: videoPayload,
   };
 }

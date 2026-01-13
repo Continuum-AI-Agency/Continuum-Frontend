@@ -12,7 +12,7 @@ import {
   NodeChange,
   EdgeChange,
 } from '@xyflow/react';
-import { StudioNode } from '../types';
+import { StudioNode, VideoGenNodeData } from '../types';
 import { canAcceptSingleTextInput, textInputHandles } from '../utils/connectionValidation';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
@@ -54,8 +54,36 @@ const getDataTypeFromHandle = (handleId: string | null): DataType => {
   }
 };
 
-const isValidConnection = (connection: Connection, edges: Edge[]) => {
+const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): Connection => {
+  const sourceNode = nodes.find((node) => node.id === connection.source);
+  const targetNode = nodes.find((node) => node.id === connection.target);
+
+  if (!sourceNode || !targetNode) return connection;
+
+  const sourceHandle = connection.sourceHandle ?? '';
+  const targetHandle = connection.targetHandle ?? '';
+  const isFrameHandle = ['first-frame', 'last-frame', 'ref-image', 'ref-images'].includes(sourceHandle);
+  const isImageSource = targetHandle === 'image' && (targetNode.type === 'image' || targetNode.type === 'nanoGen');
+
+  if (sourceNode.type === 'veoDirector' && isFrameHandle && isImageSource) {
+    return {
+      ...connection,
+      source: connection.target,
+      sourceHandle: 'image',
+      target: connection.source,
+      targetHandle: sourceHandle,
+    };
+  }
+
+  return connection;
+};
+
+const isValidConnection = (connection: Connection, edges: Edge[], nodes: StudioNode[]) => {
   const { sourceHandle, targetHandle } = connection;
+  const targetNode = nodes.find((node) => node.id === connection.target);
+  const referenceMode = targetNode?.type === 'veoDirector'
+    ? ((targetNode.data as VideoGenNodeData | undefined)?.referenceMode ?? 'images')
+    : null;
   
   const targetEdgeCount = edges.filter(
     (e) => e.target === connection.target && e.targetHandle === targetHandle
@@ -67,9 +95,9 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
     'trigger': 1,
     'negative': 1,
     'input': 1,
+    'video': 1,
     'first-frame': 1,
     'last-frame': 1,
-    'ref-video': 1,
     'ref-image': 14,
     'ref-images': 3,
   };
@@ -99,11 +127,16 @@ const isValidConnection = (connection: Connection, edges: Edge[]) => {
     }
   }
   
+  if (referenceMode && targetHandle) {
+    if (['ref-image', 'ref-images'].includes(targetHandle) && referenceMode !== 'images') return false;
+    // Frame handles are only visible in frame mode, so allow regardless of stored mode.
+  }
+
   if (sourceHandle === 'text' && (targetHandle === 'prompt' || targetHandle === 'prompt-in' || targetHandle === 'negative')) return true;
   
   if (sourceHandle === 'image' && (targetHandle === 'first-frame' || targetHandle === 'last-frame' || targetHandle === 'ref-image' || targetHandle === 'ref-images')) return true;
 
-  if (sourceHandle === 'video' && targetHandle === 'ref-video') return true;
+  if (sourceHandle === 'video' && targetHandle === 'video') return true;
 
   return false;
 };
@@ -116,10 +149,45 @@ const getEdgeStyle = (sourceHandle: string | null, _edgeType: EdgeType) => {
   };
 };
 
+const getAllowedTargetHandles = (node: StudioNode): string[] => {
+  switch (node.type) {
+    case 'nanoGen':
+      return ['prompt', 'ref-image', 'ref-images', 'trigger'];
+    case 'veoDirector':
+      return ['prompt-in', 'prompt', 'negative', 'ref-images', 'ref-image', 'first-frame', 'last-frame'];
+    case 'extendVideo':
+      return ['prompt', 'video'];
+    case 'string':
+    case 'image':
+    case 'video':
+    default:
+      return [];
+  }
+};
+
+const getAllowedSourceHandles = (node: StudioNode): string[] => {
+  switch (node.type) {
+    case 'string':
+      return ['text'];
+    case 'image':
+      return ['image'];
+    case 'video':
+      return ['video'];
+    case 'nanoGen':
+      return ['image'];
+    case 'veoDirector':
+      return ['video'];
+    case 'extendVideo':
+      return ['video'];
+    default:
+      return [];
+  }
+};
+
 const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
-  return edges.map((edge) => {
+  return edges.flatMap((edge) => {
     const targetNode = nodeById.get(edge.target);
     if (!targetNode || !edge.targetHandle) return edge;
 
@@ -132,8 +200,28 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
       }
     }
 
+    if (targetHandle === 'prompt' && targetNode.type === 'veoDirector') {
+      targetHandle = 'prompt-in';
+    }
+
     if (targetHandle === 'ref-image' && targetNode.type === 'veoDirector') {
       targetHandle = 'ref-images';
+    }
+
+    const allowedTargets = getAllowedTargetHandles(targetNode);
+    const isFrameHandle = targetHandle.startsWith('frame-');
+    const isValidTarget = allowedTargets.includes(targetHandle) || isFrameHandle;
+
+    if (!isValidTarget) {
+      return [];
+    }
+
+    const sourceNode = nodeById.get(edge.source);
+    if (edge.sourceHandle && sourceNode) {
+      const allowedSources = getAllowedSourceHandles(sourceNode);
+      if (allowedSources.length > 0 && !allowedSources.includes(edge.sourceHandle)) {
+        return [];
+      }
     }
 
     if (targetHandle === edge.targetHandle) return edge;
@@ -164,22 +252,24 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   onConnect: (connection: Connection) => {
-    if (!isValidConnection(connection, get().edges)) {
+    const normalized = normalizeFrameConnection(connection, get().nodes);
+
+    if (!isValidConnection(normalized, get().edges, get().nodes)) {
       console.warn('Invalid connection:', connection);
       return; 
     }
 
     const edgeType = get().defaultEdgeType;
-    const style = getEdgeStyle(connection.sourceHandle, edgeType);
+    const style = getEdgeStyle(normalized.sourceHandle, edgeType);
 
     const newEdge = {
-      ...connection,
-      id: `e-${connection.source}-${connection.target}-${Date.now()}`,
+      ...normalized,
+      id: `e-${normalized.source}-${normalized.target}-${Date.now()}`,
       type: 'dataType',
       className: 'studio-edge',
       style,
       data: {
-        dataType: getDataTypeFromHandle(connection.sourceHandle),
+        dataType: getDataTypeFromHandle(normalized.sourceHandle),
         pathType: edgeType,
       },
     };

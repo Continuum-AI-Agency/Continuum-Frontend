@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { canAcceptSingleTextInput } from '../utils/connectionValidation';
 import { useStudioStore } from '../stores/useStudioStore';
 
-export type NodeType = 'nanoGen' | 'veoDirector' | 'string' | 'image' | 'video';
+export type NodeType = 'nanoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video';
 
 export interface SmartNodeContext {
   sourceHandle: string | null;
@@ -25,8 +25,8 @@ export function determineBestNodeType(context: SmartNodeContext): NodeType {
     return 'image';
   }
 
-  if (sourceHandle === 'ref-video') {
-    return 'video';
+  if (sourceHandle === 'video') {
+    return 'extendVideo';
   }
 
   return 'string';
@@ -51,9 +51,18 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
             model: 'veo-3.1-fast',
             prompt: '',
             enhancePrompt: false,
+            referenceMode: 'images',
             label: 'Video Block',
         },
         style: { width: 512, height: 288 }
+      };
+    case 'extendVideo':
+      return {
+        data: {
+          prompt: '',
+          label: 'Extend Video',
+        },
+        style: { width: 360, height: 200 },
       };
     case 'image':
         return {
@@ -95,6 +104,11 @@ function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | n
         return 'video';
     }
 
+    if (nodeType === 'extendVideo') {
+        if (sourceHandle === 'video') return 'video';
+        return 'prompt';
+    }
+
     if (nodeType === 'nanoGen') {
         if (sourceHandle === 'text') return 'prompt';
         if (sourceHandle === 'image') return 'ref-image';
@@ -108,6 +122,12 @@ export function useEdgeDropNode() {
   const { screenToFlowPosition, setNodes, setEdges, getNodes, getEdges } = useReactFlow();
   const defaultEdgeType = useStudioStore((state) => state.defaultEdgeType);
   const connectionStartRef = useRef<{ nodeId: string; handleId: string; handleType: 'source' | 'target' } | null>(null);
+
+  const resolveDataType = useCallback((handleId?: string | null) => {
+    if (handleId === 'video') return 'video';
+    if (handleId === 'text') return 'text';
+    return 'image';
+  }, []);
 
   const onConnectStart = useCallback((_: any, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
       if (params.nodeId && params.handleId && params.handleType) {
@@ -154,12 +174,6 @@ export function useEdgeDropNode() {
                 style,
              };
 
-              const resolveDataType = (handleId?: string | null) => {
-                if (handleId === 'video') return 'video';
-                if (handleId === 'text') return 'text';
-                return 'image';
-              };
-
               let newEdge: Edge;
 
               if (startParams.handleType === 'target') {
@@ -167,16 +181,17 @@ export function useEdgeDropNode() {
                       connectionStartRef.current = null;
                       return;
                   }
+                  const resolvedSourceHandle = getTargetHandleForNodeType(nodeType, startParams.handleId);
                   newEdge = {
                       id: `e-${newNodeId}-${startParams.nodeId}-${Date.now()}`,
                       source: newNodeId,
-                      sourceHandle: getTargetHandleForNodeType(nodeType, startParams.handleId),
+                      sourceHandle: resolvedSourceHandle,
                       target: startParams.nodeId,
                       targetHandle: startParams.handleId,
                       type: 'dataType',
                       className: 'studio-edge',
                       data: { 
-                        dataType: nodeType === 'string' ? 'text' : nodeType === 'veoDirector' ? 'video' : 'image',
+                        dataType: resolveDataType(resolvedSourceHandle),
                         pathType: defaultEdgeType,
                       }
                   };
@@ -202,7 +217,7 @@ export function useEdgeDropNode() {
         
         connectionStartRef.current = null;
     },
-    [screenToFlowPosition, setNodes, setEdges, getNodes, getEdges, defaultEdgeType]
+    [screenToFlowPosition, setNodes, setEdges, getNodes, getEdges, defaultEdgeType, resolveDataType]
   );
 
   return {

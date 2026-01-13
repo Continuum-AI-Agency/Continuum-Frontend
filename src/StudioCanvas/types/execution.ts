@@ -60,12 +60,21 @@ export interface GenerationPayload {
     mimeType: string;
     filename?: string;
   };
-  referenceVideo?: {
-    data: string;
-    mimeType: string;
-    filename?: string;
-  };
   seed?: number;
   cfgScale?: number;
   steps?: number;
+}
+
+export type ExtendVideoInput =
+  | { data: string; mimeType: string; filename?: string }
+  | { uri: string };
+
+export interface ExtendVideoPayload {
+  brandId: string;
+  service: string;
+  model: string;
+  prompt: string;
+  aspectRatio?: string;
+  resolution?: string;
+  video: ExtendVideoInput;
 }

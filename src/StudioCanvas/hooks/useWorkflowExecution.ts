@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { getApiUrl } from "@/lib/api/config";
-import type { BackendChatImageRequestPayload, StreamState } from "@/lib/types/chatImage";
+import type { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload, StreamState } from "@/lib/types/chatImage";
 import type { NodeOutput } from "../types/execution";
 import { useToast } from "@/components/ui/ToastProvider";
 import { parseDataUrl } from "../utils/dataUrl";
@@ -19,10 +19,9 @@ type ExecutionResult = {
 
 export function useWorkflowExecution() {
   const [streamState, setStreamState] = useState<ExecutionStreamState>({ status: "idle" });
-  const abortRef = useRef<AbortController | null>(null);
-  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const activeControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const activeReadersRef = useRef<Map<string, ReadableStreamDefaultReader<Uint8Array>>>(new Map());
   const isCancelledRef = useRef(false);
-  const outputRef = useRef<NodeOutput | null>(null);
   const { show } = useToast();
 
   const resolveInitUrl = useCallback((path: string) => {
@@ -43,29 +42,31 @@ export function useWorkflowExecution() {
 
   const cancel = useCallback(() => {
     isCancelledRef.current = true;
-    abortRef.current?.abort();
-    readerRef.current?.cancel().catch(() => {});
+    for (const controller of activeControllersRef.current.values()) {
+      controller.abort();
+    }
+    for (const reader of activeReadersRef.current.values()) {
+      reader.cancel().catch(() => {});
+    }
+    activeControllersRef.current.clear();
+    activeReadersRef.current.clear();
     setStreamState((prev) => ({ ...prev, status: "idle" }));
   }, []);
 
   const reset = useCallback(() => {
     isCancelledRef.current = false;
-    abortRef.current = null;
-    readerRef.current = null;
+    activeControllersRef.current.clear();
+    activeReadersRef.current.clear();
     setStreamState({ status: "idle" });
   }, []);
 
-  const executeGeneration = useCallback(
+  const executeStreamRequest = useCallback(
     async (
       nodeId: string,
-      payload: BackendChatImageRequestPayload
+      payload: unknown,
+      initUrl: string,
+      expectedMedium: "image" | "video",
     ): Promise<ExecutionResult> => {
-      outputRef.current = null;
-      const expectedMedium = payload.medium;
-      const initUrl = payload.medium === "video"
-        ? resolveInitUrl("/ai-studio/generate-video")
-        : resolveInitUrl("/ai-studio/generate");
-
       if (isCancelledRef.current) {
         return { success: false, error: "Execution cancelled" };
       }
@@ -73,7 +74,7 @@ export function useWorkflowExecution() {
       setStreamState({ status: "starting", currentNodeId: nodeId });
 
       const controller = new AbortController();
-      abortRef.current = controller;
+      activeControllersRef.current.set(nodeId, controller);
 
       let jobId: string | undefined;
       try {
@@ -98,7 +99,7 @@ export function useWorkflowExecution() {
         setStreamState({ status: "streaming", progressPct: 0, currentNodeId: nodeId });
 
         const reader = res.body.getReader();
-        readerRef.current = reader;
+        activeReadersRef.current.set(nodeId, reader);
         const decoder = new TextDecoder();
         let buffer = "";
         let finalOutput: NodeOutput | undefined;
@@ -153,10 +154,11 @@ export function useWorkflowExecution() {
                 parsed.base64 ??
                 parsed.data_url ??
                 parsed.bytes;
-              const parsedImage = rawImageValue?.startsWith("data:")
-                ? parseDataUrl(rawImageValue)
+              const rawImageString = typeof rawImageValue === "string" ? rawImageValue : undefined;
+              const parsedImage = rawImageString?.startsWith("data:")
+                ? parseDataUrl(rawImageString)
                 : null;
-              const imageBase64 = parsedImage?.base64 ?? (rawImageValue ? rawImageValue.replace(/^data:image\/[^;]+;base64,/, "") : undefined);
+              const imageBase64 = parsedImage?.base64 ?? (rawImageString ? rawImageString.replace(/^data:image\/[^;]+;base64,/, "") : undefined);
               const normalizedImageBase64 = imageBase64 ? imageBase64.replace(/\s+/g, "") : undefined;
               const imageMimeType = parsedImage?.mimeType ?? parsed.mime_type ?? "image/png";
 
@@ -172,18 +174,25 @@ export function useWorkflowExecution() {
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
                   };
-                  outputRef.current = finalOutput;
                 }
               }
 
               const videoMime = parsed.mime_type ?? "video/mp4";
-              const videoUrl =
-                parsed.signed_url ??
-                parsed.storage?.signed_url ??
-                parsed.download_url ??
-                parsed.data_url ??
-                (parsed.bytes ? `data:${videoMime};base64,${parsed.bytes}` : undefined) ??
-                (parsed.base64 ? `data:${videoMime};base64,${parsed.base64}` : undefined);
+              const rawVideoString =
+                typeof parsed.signed_url === "string"
+                  ? parsed.signed_url
+                  : typeof parsed.storage?.signed_url === "string"
+                    ? parsed.storage?.signed_url
+                    : typeof parsed.download_url === "string"
+                      ? parsed.download_url
+                      : typeof parsed.data_url === "string"
+                        ? parsed.data_url
+                        : typeof parsed.bytes === "string"
+                          ? `data:${videoMime};base64,${parsed.bytes}`
+                          : typeof parsed.base64 === "string"
+                            ? `data:${videoMime};base64,${parsed.base64}`
+                            : undefined;
+              const videoUrl = rawVideoString;
 
               if ((eventName === "video" || eventName === "stored") && videoUrl) {
                 if (expectedMedium !== "video") {
@@ -194,7 +203,6 @@ export function useWorkflowExecution() {
                   url: videoUrl,
                   posterBase64: parsed.poster_base64,
                 };
-                outputRef.current = finalOutput;
               }
 
               if (eventName === "complete" && !finalOutput) {
@@ -204,14 +212,12 @@ export function useWorkflowExecution() {
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
                   };
-                  outputRef.current = finalOutput;
                 } else if (expectedMedium === "video" && videoUrl) {
                   finalOutput = {
                     type: "video",
                     url: videoUrl,
                     posterBase64: parsed.poster_base64,
                   };
-                  outputRef.current = finalOutput;
                 }
               }
 
@@ -263,10 +269,6 @@ export function useWorkflowExecution() {
           return { success: false, error: "Execution cancelled" };
         }
 
-        if (!finalOutput && outputRef.current) {
-          finalOutput = outputRef.current;
-        }
-
         if (finalOutput) {
           console.info("[studio] executeGeneration returning output", {
             nodeId,
@@ -295,10 +297,39 @@ export function useWorkflowExecution() {
           });
         }
         return { success: false, error: message };
+      } finally {
+        activeControllersRef.current.delete(nodeId);
+        activeReadersRef.current.delete(nodeId);
       }
     },
-    [streamState.status, streamState.error, show, resolveInitUrl]
+    [streamState.status, streamState.error, show]
   );
 
-  return { streamState, executeGeneration, cancel, reset };
+  const executeGeneration = useCallback(
+    async (
+      nodeId: string,
+      payload: BackendChatImageRequestPayload
+    ): Promise<ExecutionResult> => {
+      const expectedMedium = payload.medium;
+      const initUrl = payload.medium === "video"
+        ? resolveInitUrl("/ai-studio/generate-video")
+        : resolveInitUrl("/ai-studio/generate");
+
+      return executeStreamRequest(nodeId, payload, initUrl, expectedMedium);
+    },
+    [resolveInitUrl, executeStreamRequest]
+  );
+
+  const executeVideoExtension = useCallback(
+    async (
+      nodeId: string,
+      payload: BackendExtendVideoRequestPayload
+    ): Promise<ExecutionResult> => {
+      const initUrl = resolveInitUrl("/ai-studio/extend-video");
+      return executeStreamRequest(nodeId, payload, initUrl, "video");
+    },
+    [resolveInitUrl, executeStreamRequest]
+  );
+
+  return { streamState, executeGeneration, executeVideoExtension, cancel, reset };
 }

@@ -13,11 +13,15 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
   
   const context = useMemo(() => {
     if (!connectedEdge) return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-subtle' };
-    
+
     if (connectedEdge.targetHandle === 'prompt' || connectedEdge.targetHandle === 'prompt-in') {
-      return { label: 'Positive Prompt', icon: '✨', edgeColor: 'var(--edge-text)', border: 'border-brand-primary/60 shadow-brand-glow' };
+      return { label: 'Prompt', icon: '✨', edgeColor: 'var(--edge-text)', border: 'border-brand-primary/60 shadow-brand-glow' };
     }
-    
+
+    if (connectedEdge.targetHandle === 'negative') {
+      return { label: 'Negative Prompt', icon: '🚫', edgeColor: 'var(--edge-text)', border: 'border-red-500/60' };
+    }
+
     return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-subtle' };
   }, [connectedEdge]);
 

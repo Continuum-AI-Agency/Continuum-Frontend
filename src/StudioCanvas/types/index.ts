@@ -63,11 +63,16 @@ export interface VideoGenNodeData extends BaseNodeData {
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
+  referenceMode?: 'images' | 'frames';
   frameList?: FrameSlot[];
   generatedVideo?: string | Blob;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ImageNodeData | VideoNodeData;
+export interface ExtendVideoNodeData extends BaseNodeData {
+  prompt?: string;
+}
+
+export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | ImageNodeData | VideoNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed';

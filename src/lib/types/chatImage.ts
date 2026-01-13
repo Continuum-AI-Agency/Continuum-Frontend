@@ -122,3 +122,13 @@ export type BackendChatImageRequestPayload = {
   history?: { role: "user" | "assistant"; content: string }[];
   reset?: boolean;
 };
+
+export type BackendExtendVideoRequestPayload = {
+  service: string;
+  model: SupportedBackendModel | string;
+  prompt: string;
+  brand_id: string;
+  aspect_ratio?: string;
+  resolution?: string;
+  video: { data: string; mime_type: string; filename?: string } | { uri: string };
+};

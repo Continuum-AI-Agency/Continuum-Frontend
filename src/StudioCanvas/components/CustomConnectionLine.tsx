@@ -24,7 +24,7 @@ const CustomConnectionLine = ({
       strokeColor = 'var(--edge-text)';
   } else if (handleId === 'image' || handleId === 'ref-image' || handleId === 'ref-images' || handleId === 'first-frame' || handleId === 'last-frame') {
       strokeColor = 'var(--edge-image)';
-  } else if (handleId === 'video' || handleId === 'ref-video') {
+  } else if (handleId === 'video') {
       strokeColor = 'var(--edge-video)'; 
   }
 

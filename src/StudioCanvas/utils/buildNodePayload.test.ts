@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { buildNanoGenPayload, buildVeoPayload } from './buildNodePayload';
+import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload } from './buildNodePayload';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 import { NodeOutput } from '../types/execution';
@@ -148,7 +148,7 @@ describe('buildNodePayload', () => {
         id: 'veo',
         type: 'veoDirector',
         position: { x: 0, y: 0 },
-        data: { prompt: 'video' },
+        data: { prompt: 'video', referenceMode: 'frames' },
       };
 
       const edges: Edge[] = [
@@ -166,35 +166,55 @@ describe('buildNodePayload', () => {
       expect(payload?.firstFrame?.data).toBe('first_base64');
       expect(payload?.lastFrame?.data).toBe('last_base64');
     });
+  });
 
-    it('should include reference video when connected', () => {
-      const videoDataUrl = 'data:video/mp4;base64,video_base64';
-
-      const nodes: StudioNode[] = [
-        {
-          id: 'video-ref',
-          type: 'video',
-          position: { x: 0, y: 0 },
-          data: { video: videoDataUrl, fileName: 'ref.mp4' },
-        },
-        {
-          id: 'veo',
-          type: 'veoDirector',
-          position: { x: 0, y: 0 },
-          data: { model: 'veo-3.1', prompt: 'video', enhancePrompt: false },
-        },
-      ];
+  describe('buildExtendVideoPayload', () => {
+    it('should build payload with base64 video input', () => {
+      const node: StudioNode = {
+        id: 'extend',
+        type: 'extendVideo',
+        position: { x: 0, y: 0 },
+        data: {},
+      };
 
       const edges: Edge[] = [
-        { id: 'e1', source: 'video-ref', target: 'veo', sourceHandle: 'video', targetHandle: 'ref-video' },
+        {
+          id: 'e1',
+          source: 'vid1',
+          target: 'extend',
+          sourceHandle: 'video',
+          targetHandle: 'video',
+        },
+        {
+          id: 'e2',
+          source: 'txt1',
+          target: 'extend',
+          sourceHandle: 'text',
+          targetHandle: 'prompt',
+        },
       ];
 
-      const payload = buildVeoPayload(nodes[1], new Map(), nodes, edges);
-      expect(payload?.referenceVideo).toEqual(expect.objectContaining({
-        data: 'video_base64',
-        mimeType: 'video/mp4',
-        filename: 'ref.mp4',
-      }));
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('vid1', { type: 'video', url: 'data:video/mp4;base64,video_base64' });
+      resolvedData.set('txt1', { type: 'text', value: 'Extend prompt' });
+
+      const payload = buildExtendVideoPayload(node, resolvedData, [], edges);
+      expect(payload).not.toBeNull();
+      expect(payload?.prompt).toBe('Extend prompt');
+      expect('data' in (payload?.video ?? {})).toBe(true);
+      expect((payload?.video as any).data).toBe('video_base64');
+    });
+
+    it('should return null when video input is missing', () => {
+      const node: StudioNode = {
+        id: 'extend',
+        type: 'extendVideo',
+        position: { x: 0, y: 0 },
+        data: {},
+      };
+
+      const payload = buildExtendVideoPayload(node, new Map(), [], []);
+      expect(payload).toBeNull();
     });
   });
 });

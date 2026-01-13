@@ -1969,11 +1969,11 @@ export default function OnboardingFlow({ brandId, initialState }: OnboardingFlow
         return name.length >= 2 && selectedVoiceTags.length <= 8;
       }
       if (stepIndex === 1) {
-        return connectedKeys.length > 0;
+        return true;
       }
       return true;
     },
-    [connectedKeys.length, getValues, selectedVoiceTags.length]
+    [getValues, selectedVoiceTags.length]
   );
 
   const handleNext = useCallback(() => {

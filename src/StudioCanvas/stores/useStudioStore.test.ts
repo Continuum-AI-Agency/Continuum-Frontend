@@ -173,20 +173,29 @@ describe('useStudioStore', () => {
     expect(useStudioStore.getState().edges).toHaveLength(1);
   });
 
-  it('should allow video reference connections', () => {
+  it('should gate video reference mode inputs', () => {
     const nodes: StudioNode[] = [
-      { id: 'vid1', position: { x: 0, y: 0 }, data: {}, type: 'video' },
-      { id: 'veo', position: { x: 0, y: 0 }, data: {}, type: 'veoDirector' },
+      { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
+      { id: 'veo', position: { x: 0, y: 0 }, data: { referenceMode: 'frames' }, type: 'veoDirector' },
     ];
     useStudioStore.getState().setNodes(nodes);
 
+    // Ref images not allowed in frames mode
     useStudioStore.getState().onConnect({
-      source: 'vid1',
-      sourceHandle: 'video',
+      source: 'img1',
+      sourceHandle: 'image',
       target: 'veo',
-      targetHandle: 'ref-video',
+      targetHandle: 'ref-images',
     });
+    expect(useStudioStore.getState().edges).toHaveLength(0);
 
+    // First frame allowed in frames mode
+    useStudioStore.getState().onConnect({
+      source: 'img1',
+      sourceHandle: 'image',
+      target: 'veo',
+      targetHandle: 'first-frame',
+    });
     expect(useStudioStore.getState().edges).toHaveLength(1);
   });
 

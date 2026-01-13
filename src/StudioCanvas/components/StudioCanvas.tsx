@@ -5,6 +5,8 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { StringNode } from '../nodes/StringNode';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { VideoGenBlock } from '../nodes/VideoGenBlock';
+import { VeoFastBlock } from '../nodes/VeoFastBlock';
+import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
 import { ImageNode } from '../nodes/ImageNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { Toolbar } from './Toolbar';
@@ -42,8 +44,22 @@ const LIBRARY_SECTIONS = [
       },
       {
         type: 'veoDirector' as const,
-        label: 'Video Block',
-        desc: 'Director & Timeline',
+        label: 'Veo 3.1',
+        desc: 'Cinematic Video',
+        tag: 'Creative',
+        borderColor: 'hover:border-[color:var(--edge-video)]',
+      },
+      {
+        type: 'veoFast' as const,
+        label: 'Veo 3.1 Fast',
+        desc: 'Fast Social Video',
+        tag: 'Creative',
+        borderColor: 'hover:border-[color:var(--edge-video)]',
+      },
+      {
+        type: 'extendVideo' as const,
+        label: 'Extend Video',
+        desc: 'Continue from existing footage',
         tag: 'Creative',
         borderColor: 'hover:border-[color:var(--edge-video)]',
       },
@@ -68,13 +84,6 @@ const LIBRARY_SECTIONS = [
         tag: 'Utility',
         borderColor: 'hover:border-[color:var(--edge-image)]',
       },
-      {
-        type: 'video' as const,
-        label: 'Video Reference',
-        desc: 'Simple Video Input',
-        tag: 'Utility',
-        borderColor: 'hover:border-[color:var(--edge-video)]',
-      },
     ],
   },
 ];
@@ -86,6 +95,8 @@ const DEFAULT_OPEN_LIBRARY_SECTIONS = LIBRARY_SECTIONS
 const nodeTypes = {
   nanoGen: ImageGenBlock,
   veoDirector: VideoGenBlock,
+  veoFast: VeoFastBlock,
+  extendVideo: ExtendVideoBlock,
   string: StringNode,
   image: ImageNode,
   video: VideoReferenceNode,
@@ -172,7 +183,7 @@ function Flow() {
         return hasPromptEdge || !!promptValue;
       }
 
-      if (node.type === 'veoDirector') {
+      if (node.type === 'veoDirector' || node.type === 'veoFast') {
         const hasPromptEdge = edges.some(
           (edge) => edge.target === node.id && edge.targetHandle === 'prompt-in',
         );
@@ -213,7 +224,7 @@ function Flow() {
     return edges.map((edge) => {
       const dataType = resolveDataType(edge);
       const targetType = nodeTypeById.get(edge.target);
-      const isTargetGenerator = targetType === 'nanoGen' || targetType === 'veoDirector';
+      const isTargetGenerator = targetType === 'nanoGen' || targetType === 'veoDirector' || targetType === 'veoFast';
       const isActive = isTargetGenerator && readyNodeIds.has(edge.target);
       const isDotted = isTargetGenerator && !readyNodeIds.has(edge.target);
       const pathType = resolvePathType(edge);
@@ -270,8 +281,14 @@ function Flow() {
           data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' };
           style = { width: 400, height: 400 };
         } else if (type === 'veoDirector') {
-          data = { model: 'veo-3.1-fast', prompt: '', negativePrompt: '', enhancePrompt: false };
+          data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'images' };
           style = { width: 512, height: 288 }; // 16:9
+        } else if (type === 'veoFast') {
+          data = { model: 'veo-3.1-fast', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'frames' };
+          style = { width: 512, height: 288 }; // 16:9
+        } else if (type === 'extendVideo') {
+          data = { prompt: '' };
+          style = { width: 360, height: 200 };
         } else if (type === 'string') {
           data = { value: '' };
         } else if (type === 'image') {
@@ -333,45 +350,84 @@ function Flow() {
   );
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {
-    const target = connection.target;
-    const source = connection.source;
-    const targetHandle = connection.targetHandle;
-
-    const sourceNode = getNodeById(source);
-    const targetNode = getNodeById(target);
+    const sourceNode = getNodeById(connection.source);
+    const targetNode = getNodeById(connection.target);
 
     if (!sourceNode || !targetNode) return false;
 
+    const sourceHandle = connection.sourceHandle ?? '';
+    const targetHandle = connection.targetHandle ?? '';
+    const isFrameHandle = ['first-frame', 'last-frame', 'ref-image', 'ref-images'].includes(sourceHandle);
+    const isImageSource = targetHandle === 'image' && (targetNode.type === 'image' || targetNode.type === 'nanoGen');
+
+    const normalizedConnection = (sourceNode.type === 'veoDirector' || sourceNode.type === 'veoFast') && isFrameHandle && isImageSource
+      ? {
+          ...connection,
+          source: connection.target,
+          sourceHandle: 'image',
+          target: connection.source,
+          targetHandle: sourceHandle,
+        }
+      : connection;
+
+    const target = normalizedConnection.target;
+    const source = normalizedConnection.source;
+    const normalizedTargetHandle = normalizedConnection.targetHandle;
+
+    const normalizedSourceNode = getNodeById(source);
+    const normalizedTargetNode = getNodeById(target);
+
+    if (!normalizedSourceNode || !normalizedTargetNode) return false;
+
     // Check handle compatibility
-    if (sourceNode.type === 'string') {
-        if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle || '')) return false;
-    } else if (sourceNode.type === 'image') {
-        // Image reference nodes can only connect to generation nodes, not to other reference nodes
-        if (!['ref-image', 'first-frame', 'last-frame', 'ref-video'].includes(targetHandle || '')) return false;
-        // Prevent image nodes from connecting to other image nodes
-        if (targetNode.type === 'image' || targetNode.type === 'video') return false;
-    } else if (sourceNode.type === 'video') {
-        // Video reference nodes can only connect to ref-video
-        if (!['ref-video'].includes(targetHandle || '')) return false;
-        // Prevent video nodes from connecting to other video nodes
-        if (targetNode.type === 'video') return false;
-    } else if (sourceNode.type === 'nanoGen') {
-        if (!['ref-image', 'first-frame', 'last-frame', 'ref-video'].includes(targetHandle || '')) return false;
-    } else if (sourceNode.type === 'veoDirector') {
-        if (!['ref-video'].includes(targetHandle || '')) return false;
+    if (normalizedTargetNode.type === 'extendVideo') {
+        const handle = normalizedTargetHandle || '';
+        if (handle === 'video') {
+          if (!(normalizedSourceNode.type === 'video' || normalizedSourceNode.type === 'veoDirector' || normalizedSourceNode.type === 'veoFast')) return false;
+        } else if (handle === 'prompt') {
+          if (normalizedSourceNode.type !== 'string') return false;
+        } else {
+          return false;
+        }
+    } else if (normalizedSourceNode.type === 'string') {
+        if (!['prompt', 'prompt-in', 'negative'].includes(normalizedTargetHandle || '')) return false;
+    } else if (normalizedSourceNode.type === 'image' || normalizedSourceNode.type === 'nanoGen') {
+        // Image sources can only connect to generation nodes, not to other reference nodes
+        const handle = normalizedTargetHandle || '';
+        if (normalizedTargetNode.type === 'veoDirector') {
+          const referenceModeFromHandle = ['first-frame', 'last-frame'].includes(handle) ? 'frames' : undefined;
+          const referenceMode =
+            referenceModeFromHandle ??
+            ((normalizedTargetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
+          if (referenceMode === 'frames') {
+            if (!['first-frame', 'last-frame'].includes(handle)) return false;
+          } else {
+            if (!['ref-image', 'ref-images'].includes(handle)) return false;
+          }
+        } else if (normalizedTargetNode.type === 'veoFast') {
+           if (!['first-frame', 'last-frame'].includes(handle)) return false;
+        } else if (!['ref-image'].includes(handle)) {
+          return false;
+        }
+        if (normalizedTargetNode.type === 'image' || normalizedTargetNode.type === 'video') return false;
+    } else if (normalizedSourceNode.type === 'video' || normalizedSourceNode.type === 'veoDirector' || normalizedSourceNode.type === 'veoFast') {
+        return false;
     }
 
     // Special case: video nodes can accept ref-images connections
-    if (targetNode.type === 'veoDirector' && targetHandle === 'ref-images') {
-        if (sourceNode.type !== 'image') return false;
+    if (normalizedTargetNode.type === 'veoDirector' && normalizedTargetHandle === 'ref-images') {
+        const referenceMode =
+          ((normalizedTargetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
+        if (normalizedSourceNode.type !== 'image' && normalizedSourceNode.type !== 'nanoGen') return false;
+        if (referenceMode !== 'images') return false;
     }
 
-    if (!canAcceptSingleTextInput(edges, target, targetHandle)) {
+    if (!canAcceptSingleTextInput(edges, target, normalizedTargetHandle)) {
       return false;
     }
 
     // Check connection limits based on target node type and handle
-    if (targetNode.type === 'nanoGen' && targetHandle === 'ref-image') {
+    if (normalizedTargetNode.type === 'nanoGen' && normalizedTargetHandle === 'ref-image') {
       // Nano Banana supports up to 14 reference images
       const existingRefImageConnections = edges.filter(
         edge => edge.target === target && edge.targetHandle === 'ref-image'
@@ -379,32 +435,49 @@ function Flow() {
       if (existingRefImageConnections >= 14) return false;
     }
 
-    if (targetNode.type === 'veoDirector') {
-      if (targetHandle === 'first-frame') {
+    if (normalizedTargetNode.type === 'veoDirector') {
+      if (normalizedTargetHandle === 'first-frame') {
         // First frame: max 1 connection
         const existingConnections = edges.filter(
           edge => edge.target === target && edge.targetHandle === 'first-frame'
         ).length;
         if (existingConnections >= 1) return false;
-      } else if (targetHandle === 'last-frame') {
+      } else if (normalizedTargetHandle === 'last-frame') {
         // Last frame: max 1 connection
         const existingConnections = edges.filter(
           edge => edge.target === target && edge.targetHandle === 'last-frame'
         ).length;
         if (existingConnections >= 1) return false;
-      } else if (targetHandle === 'ref-video') {
-        // Reference video: max 1 connection
-        const existingConnections = edges.filter(
-          edge => edge.target === target && edge.targetHandle === 'ref-video'
-        ).length;
-        if (existingConnections >= 1) return false;
-      } else if (targetHandle === 'ref-images') {
+      } else if (normalizedTargetHandle === 'ref-images') {
         // Reference images: max 3 connections
         const existingConnections = edges.filter(
           edge => edge.target === target && edge.targetHandle === 'ref-images'
         ).length;
         if (existingConnections >= 3) return false;
       }
+    }
+
+    if (normalizedTargetNode.type === 'veoFast') {
+        if (normalizedTargetHandle === 'first-frame') {
+          const existingConnections = edges.filter(
+            edge => edge.target === target && edge.targetHandle === 'first-frame'
+          ).length;
+          if (existingConnections >= 1) return false;
+        } else if (normalizedTargetHandle === 'last-frame') {
+          const existingConnections = edges.filter(
+            edge => edge.target === target && edge.targetHandle === 'last-frame'
+          ).length;
+          if (existingConnections >= 1) return false;
+        } else {
+            return false;
+        }
+    }
+
+    if (normalizedTargetNode.type === 'extendVideo' && normalizedTargetHandle === 'video') {
+      const existingConnections = edges.filter(
+        edge => edge.target === target && edge.targetHandle === 'video'
+      ).length;
+      if (existingConnections >= 1) return false;
     }
 
     return true;
@@ -493,14 +566,19 @@ export function StudioCanvas({ embedded = false }: StudioCanvasProps) {
                       </AccordionPrimitive.Header>
                       <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                         <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
-                          {section.items.map((item) => (
+                          {section.items.map((item) => {
+                            const isDisabled = Boolean((item as { disabled?: boolean }).disabled);
+                            return (
                             <div
                               key={item.type}
-                              className={`p-3 border border-subtle rounded-md bg-surface cursor-grab ${item.borderColor} transition-colors shadow-sm`}
-                              draggable
-                              onDragStart={(event) =>
-                                event.dataTransfer.setData('application/reactflow', item.type)
-                              }
+                              className={`p-3 border border-subtle rounded-md bg-surface transition-colors shadow-sm ${
+                                isDisabled ? 'cursor-not-allowed opacity-60' : `cursor-grab ${item.borderColor}`
+                              }`}
+                              draggable={!isDisabled}
+                              onDragStart={(event) => {
+                                if (isDisabled) return;
+                                event.dataTransfer.setData('application/reactflow', item.type);
+                              }}
                             >
                               <div className="flex items-center justify-between mb-1">
                                 <div className="font-medium text-sm text-primary">{item.label}</div>
@@ -510,7 +588,8 @@ export function StudioCanvas({ embedded = false }: StudioCanvasProps) {
                               </div>
                               <div className="text-xs text-secondary">{item.desc}</div>
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       </AccordionPrimitive.Content>
                     </AccordionPrimitive.Item>

@@ -8,7 +8,7 @@ spec: |
 
 ### Feature 1: Extend Node Ecosystem
 Description: Add new node types beyond current basic ones (Prompt, Negative, Model, Attachment, Generator, Preview) to support Weavy's multi-modal capabilities
-- [ ] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text
+- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.)
 - [ ] 1.02 Create VideoNode for video-specific processing and generation
 - [ ] 1.03 Add ImageProcessingNode for consistency controls and transformations
 - [ ] 1.04 Implement SubjectConsistencyNode for maintaining character/object consistency across generations

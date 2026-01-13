@@ -2,15 +2,22 @@
 "use client";
 
 import React from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import {
-  Box,
+  Archive,
+  ChevronRight,
+  File as FileIcon,
+  Folder,
+  FolderPlus,
+  Search,
+  Upload,
+  MoreHorizontal,
+  X,
+  Play
+} from "lucide-react";
+import {
   Button,
-  Flex,
   IconButton,
-  ScrollArea,
-  Separator,
-  Text,
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
@@ -18,14 +25,13 @@ import * as HoverCard from "@radix-ui/react-hover-card";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
+
+
 import {
-  ArchiveIcon,
-  ChevronRightIcon,
-  FileIcon,
-  MagnifyingGlassIcon,
-  UploadIcon,
-  VideoIcon,
-} from "@radix-ui/react-icons";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 import { getCreativeAssetsBucket } from "@/lib/creative-assets/config";
 import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetBrowser";
@@ -40,6 +46,7 @@ import type { CreativeAsset } from "@/lib/creative-assets/types";
 import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
+import { cn } from "@/lib/utils";
 
 const DRAG_MIME = "application/reactflow-node-data";
 const FOLDER_CACHE_LIMIT = 20;
@@ -51,17 +58,19 @@ type CreativeLibrarySidebarProps = {
 
 export function CreativeLibrarySidebar({
   brandProfileId,
-  expandedWidth = 540,
+  expandedWidth = 400,
 }: CreativeLibrarySidebarProps) {
-  const { show } = useToast();
+  return <CreativeLibrarySidebarContent brandProfileId={brandProfileId} expandedWidth={expandedWidth} />;
+}
+
+function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { brandProfileId: string; expandedWidth: number }) {
   const [open, setOpen] = React.useState(false);
+  const { show } = useToast();
   const [query, setQuery] = React.useState("");
   const browser = useCreativeAssetBrowser(brandProfileId);
   const previewCache = React.useRef<Map<string, string>>(new Map());
   const folderCache = React.useRef<Map<string, CreativeAsset[]>>(new Map());
   const folderCacheOrder = React.useRef<string[]>([]);
-  const [panelWidth, setPanelWidth] = React.useState(expandedWidth);
-  const dragState = React.useRef<{ startX: number; startWidth: number } | null>(null);
   const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(() => new Set());
   const [isDraggingAsset, setIsDraggingAsset] = React.useState(false);
 
@@ -184,250 +193,126 @@ export function CreativeLibrarySidebar({
     [browser, show]
   );
 
-  return (
+  // Close when clicking outside on the overlay part (if Sidebar doesn't handle it)
+  // Sidebar with collapsible="offcanvas" doesn't automatically add an overlay backdrop usually.
+  // We can add a backdrop manually if open.
+  
+  return createPortal(
     <>
+      {/* Floating Trigger Button */}
       <div className="pointer-events-auto fixed right-4 top-1/2 z-40 -translate-y-1/2">
-        <IconButton
-          size="3"
-          variant="solid"
-          color="gray"
-          highContrast
-          aria-label="Open creative library"
-          className="rounded-full shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
-          onClick={() => setOpen(true)}
-        >
-          <ArchiveIcon />
-        </IconButton>
+         <Button
+            className="h-10 w-10 rounded-full shadow-xl bg-slate-900 text-white hover:bg-slate-800"
+            onClick={() => setOpen(true)}
+            aria-label="Open creative library"
+         >
+            <Archive className="h-5 w-5" />
+         </Button>
       </div>
+
+      {/* Backdrop for mobile-like overlay behavior on desktop if needed */}
+      {open && (
+         <div
+            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 pointer-events-auto"
+            onClick={() => setOpen(false)}
+         />
+      )}
 
       <div
-        className={`fixed inset-0 z-50 flex justify-end ${
-          open ? (isDraggingAsset ? "pointer-events-none" : "pointer-events-auto") : "pointer-events-none"
-        }`}
-        onClick={() => {
-          if (open && !isDraggingAsset) setOpen(false);
-        }}
+         className="fixed right-0 top-0 h-full w-96 bg-slate-950/95 border-l border-white/10 shadow-2xl backdrop-blur-xl z-50"
+         style={{ width: expandedWidth }}
+         onClick={(event) => event.stopPropagation()}
       >
-        <AnimatePresence initial={false}>
-          {open ? (
-            <motion.div
-              key="library"
-              initial={{ x: expandedWidth, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: expandedWidth, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 260, damping: 30 }}
-              className="pointer-events-auto h-full"
-              style={{ width: panelWidth }}
-            >
-              <>
-                <div className="flex-1" />
-                <Box
-                  className="relative h-full rounded-l-2xl border border-white/10 bg-slate-950/85 shadow-2xl backdrop-blur-xl"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                <IconButton
-                  size="2"
+        <div className="flex flex-col h-full">
+          <div className="border-b border-white/5 p-4 flex-shrink-0">
+            <div className="flex items-center justify-between mb-4">
+               <div className="flex items-center gap-2 text-white">
+                  <Archive className="h-5 w-5" />
+                  <span className="font-medium">Creative Library</span>
+               </div>
+               <Button
                   variant="ghost"
-                  className="absolute right-3 top-3 rounded-full border border-white/15 bg-slate-900/90 shadow-lg"
+                  size="1"
+                  className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10 rounded-full"
                   onClick={() => setOpen(false)}
-                  aria-label="Close library"
-                >
-                    <ChevronRightIcon className="rotate-180 text-white" />
-                </IconButton>
+               >
+                  <X className="h-4 w-4" />
+               </Button>
+            </div>
 
-                <div
-                  className="absolute left-0 top-0 h-full w-2 cursor-col-resize"
-                  onMouseDown={(e) => {
-                    dragState.current = { startX: e.clientX, startWidth: panelWidth };
-                    const onMove = (ev: MouseEvent) => {
-                      if (!dragState.current) return;
-                      const delta = dragState.current.startX - ev.clientX;
-                      const next = Math.min(expandedWidth * 2, Math.max(expandedWidth, dragState.current.startWidth + delta));
-                      setPanelWidth(next);
-                    };
-                    const onUp = () => {
-                      dragState.current = null;
-                      window.removeEventListener("mousemove", onMove);
-                      window.removeEventListener("mouseup", onUp);
-                    };
-                    window.addEventListener("mousemove", onMove);
-                    window.addEventListener("mouseup", onUp);
-                  }}
-                />
+            <div className="flex items-center gap-2 mb-2">
+              <BreadcrumbTrail
+                 items={browser.breadcrumbs}
+                 onSelect={(path) => void browser.navigateTo(path)}
+              />
+            </div>
 
-                <div className="flex h-full flex-col gap-3 p-3">
-                  <Flex align="center" justify="between">
-                    <Flex align="center" gap="2">
-                      <ArchiveIcon />
-                      <Text weight="medium">Creative Library</Text>
-                    </Flex>
-                    <Text color="gray" size="1">
-                      {getCreativeAssetsBucket()}
-                    </Text>
-                  </Flex>
-
-                  <Flex align="center" gap="2" className="flex-wrap">
-                    <BreadcrumbTrail
-                      items={browser.breadcrumbs}
-                      onSelect={(path) => void browser.navigateTo(path)}
-                    />
-                    <Tooltip content="New folder">
-                      <IconButton size="2" variant="soft" onClick={() => {
+            <div className="flex items-center gap-2">
+               <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                     className="w-full bg-white/5 border border-white/10 rounded-md py-1.5 pl-9 pr-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                     placeholder="Search assets..."
+                     value={query}
+                     onChange={(e) => setQuery(e.target.value)}
+                  />
+               </div>
+               <Tooltip content="Upload files">
+                  <label className="cursor-pointer inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10">
+                     <Upload className="h-4 w-4" />
+                     <input type="file" multiple className="hidden" onChange={handleUpload} />
+                  </label>
+               </Tooltip>
+               <Tooltip content="New folder">
+                  <button
+                     className="inline-flex items-center justify-center h-8 w-8 rounded-md bg-white/5 hover:bg-white/10 text-white transition-colors border border-white/10"
+                     onClick={() => {
                         const name = window.prompt("New folder name?");
-                        if (name) void browser.createFolder(name);
-                      }}>
-                <ChevronRightIcon className="rotate-90 text-white" />
-                      </IconButton>
-                    </Tooltip>
-                  </Flex>
+                        if (name) void createFolderAt(name, "");
+                     }}
+                  >
+                     <FolderPlus className="h-4 w-4" />
+                  </button>
+               </Tooltip>
+            </div>
+          </div>
 
-                  <Flex gap="2" align="center">
-                    <TextField.Root
-                      size="2"
-                      placeholder="Search"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    >
-                      <TextField.Slot>
-                        <MagnifyingGlassIcon />
-                      </TextField.Slot>
-                    </TextField.Root>
-                    <Tooltip content="Upload">
-                      <IconButton asChild variant="soft">
-                        <label className="cursor-pointer">
-                          <UploadIcon />
-                          <input type="file" multiple className="hidden" onChange={handleUpload} />
-                        </label>
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip content="New folder">
-                      <IconButton
-                        variant="soft"
-                        onClick={() => {
-                          const name = window.prompt("New folder name?");
-                          if (name) void createFolderAt(name, "");
-                        }}
-                      >
-                        <ArchiveIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </Flex>
-
-                  <Separator className="bg-white/10" />
-
-                  <ScrollArea className="h-full rounded-xl border border-white/5 bg-black/75">
-                    {browser.loading ? (
-                      <div className="p-4 text-sm text-gray-300">Loading assets…</div>
-                    ) : filteredAssets.length === 0 ? (
-                      <div className="p-4 text-sm text-gray-400">No assets yet.</div>
-                    ) : (
-                      <div className="p-2">
-                        <TreeList
-                          brandProfileId={brandProfileId}
-                          assets={filteredAssets}
-                          depth={0}
-                          expandedPaths={expandedPaths}
-                          setExpandedPaths={setExpandedPaths}
-                          resolvePreview={ensurePreviewUrl}
-                          onRename={browser.renameAssetPath}
-                          onDelete={browser.deleteAssetPath}
-                          onDragStart={handleDragStart}
-                          onCreateFolder={createFolderAt}
-                          folderCache={folderCache}
-                          folderCacheOrder={folderCacheOrder}
-                        />
-                      </div>
-                    )}
-                  </ScrollArea>
-                </div>
-                </Box>
-              </>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+          <div className="flex-1 overflow-hidden">
+            <div className="p-2 h-full overflow-y-auto">
+              {browser.loading ? (
+                <div className="p-4 text-sm text-gray-400">Loading assets...</div>
+              ) : filteredAssets.length === 0 ? (
+                <div className="p-4 text-sm text-gray-400">No assets found.</div>
+              ) : (
+                <TreeList
+                   brandProfileId={brandProfileId}
+                   assets={filteredAssets}
+                   expandedPaths={expandedPaths}
+                   setExpandedPaths={setExpandedPaths}
+                   resolvePreview={ensurePreviewUrl}
+                   onRename={browser.renameAssetPath}
+                   onDelete={browser.deleteAssetPath}
+                   onDragStart={handleDragStart}
+                   onCreateFolder={createFolderAt}
+                   folderCache={folderCache}
+                   folderCacheOrder={folderCacheOrder}
+                />
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </>
-  );
+  , document.body);
 }
 
-function SidebarHoverContent({
-  asset,
-  resolvePreview,
-  open,
-}: {
-  asset: CreativeAsset;
-  resolvePreview: (asset: CreativeAsset) => Promise<string>;
-  open: boolean;
-}) {
-  const [url, setUrl] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const isVideo = asset.contentType?.startsWith("video/");
-  const isImage = asset.contentType?.startsWith("image/");
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const safeUrl = sanitizeCreativeAssetUrl(url);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    if (!open) return () => { cancelled = true; };
-    setLoading(true);
-    resolvePreview(asset)
-      .then((resolved) => {
-        if (!cancelled) setUrl(resolved);
-      })
-      .catch(() => {
-        if (!cancelled) setUrl(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asset, resolvePreview, open]);
-
-  return (
-    <HoverCard.Content sideOffset={10} className="rounded-lg border border-white/10 bg-slate-900/90 p-2 shadow-xl">
-      <div className="relative h-64 w-64 overflow-hidden rounded-md bg-black/60">
-        {loading ? (
-          <div className="flex h-full items-center justify-center text-gray-400">
-            Loading…
-          </div>
-        ) : isVideo && safeUrl ? (
-          <video
-            src={`${safeUrl}#t=0.01`}
-            ref={videoRef}
-            preload="metadata"
-            muted
-            playsInline
-            controls
-            className="h-full w-full object-contain"
-            onLoadedMetadata={() => {
-              const v = videoRef.current;
-              if (v) v.currentTime = 0.01;
-            }}
-          />
-        ) : isImage && safeUrl ? (
-          <img src={safeUrl} alt={asset.name} className="h-full w-full object-contain" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-gray-200">
-            <FileIcon />
-          </div>
-        )}
-      </div>
-      <Text size="2" weight="medium" className="mt-2 block truncate text-white">
-        {asset.name}
-      </Text>
-      <Text size="1" color="gray">
-        {asset.contentType ?? "file"}
-      </Text>
-    </HoverCard.Content>
-  );
-}
+// ------------------------------------------------------------------
+// Recursive Tree Components
+// ------------------------------------------------------------------
 
 type TreeListProps = {
   brandProfileId: string;
   assets: CreativeAsset[];
-  depth: number;
   expandedPaths: Set<string>;
   setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
   resolvePreview: (asset: CreativeAsset) => Promise<string>;
@@ -439,489 +324,388 @@ type TreeListProps = {
   folderCacheOrder: React.MutableRefObject<string[]>;
 };
 
-function TreeList({
-  brandProfileId,
-  assets,
-  depth,
-  expandedPaths,
-  setExpandedPaths,
-  resolvePreview,
-  onRename,
-  onDelete,
-  onDragStart,
-  onCreateFolder,
-  folderCache,
-  folderCacheOrder,
-}: TreeListProps) {
+type TreeItemProps = {
+  brandProfileId: string;
+  expandedPaths: Set<string>;
+  setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
+  resolvePreview: (asset: CreativeAsset) => Promise<string>;
+  onRename: (asset: CreativeAsset, nextName: string) => Promise<string>;
+  onDelete: (asset: CreativeAsset) => Promise<void>;
+  onDragStart: (event: React.DragEvent<HTMLDivElement>, asset: CreativeAsset) => void;
+  onCreateFolder: (name: string, parentPath: string) => Promise<void>;
+  folderCache: React.MutableRefObject<Map<string, CreativeAsset[]>>;
+  folderCacheOrder: React.MutableRefObject<string[]>;
+};
+
+function TreeList({ assets, ...props }: TreeListProps) {
   const folders = React.useMemo(() => assets.filter((a) => a.kind === "folder"), [assets]);
   const files = React.useMemo(() => assets.filter((a) => a.kind === "file"), [assets]);
+
   return (
-    <div className="space-y-[2px]">
+    <div className="space-y-1">
       {folders.map((folder) => (
-        <TreeRow
-          key={folder.fullPath}
-          brandProfileId={brandProfileId}
-          asset={folder}
-          depth={depth}
-          expandedPaths={expandedPaths}
-          setExpandedPaths={setExpandedPaths}
-          resolvePreview={resolvePreview}
-          onRename={onRename}
-          onDelete={onDelete}
-          onDragStart={onDragStart}
-          onCreateFolder={onCreateFolder}
-          folderCache={folderCache}
-          folderCacheOrder={folderCacheOrder}
-        />
+        <FolderTreeItem key={folder.fullPath} asset={folder} {...props} />
       ))}
       {files.map((file) => (
-        <TreeRow
-          key={file.fullPath}
-          brandProfileId={brandProfileId}
-          asset={file}
-          depth={depth}
-          expandedPaths={expandedPaths}
-          setExpandedPaths={setExpandedPaths}
-          resolvePreview={resolvePreview}
-          onRename={onRename}
-          onDelete={onDelete}
-          onDragStart={onDragStart}
-          onCreateFolder={onCreateFolder}
-          folderCache={folderCache}
-          folderCacheOrder={folderCacheOrder}
-        />
+        <FileTreeItem key={file.fullPath} asset={file} {...props} />
       ))}
     </div>
   );
 }
 
-type TreeRowProps = {
-  brandProfileId: string;
-  asset: CreativeAsset;
-  depth: number;
-  expandedPaths: Set<string>;
-  setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
-  resolvePreview: (asset: CreativeAsset) => Promise<string>;
-  onRename: (asset: CreativeAsset, nextName: string) => Promise<string>;
-  onDelete: (asset: CreativeAsset) => Promise<void>;
-  onDragStart: (event: React.DragEvent<HTMLDivElement>, asset: CreativeAsset) => void;
-  onCreateFolder: (name: string, parentPath: string) => Promise<void>;
-  folderCache: React.MutableRefObject<Map<string, CreativeAsset[]>>;
-  folderCacheOrder: React.MutableRefObject<string[]>;
-};
+function FolderTreeItem({
+  asset,
+  brandProfileId,
+  expandedPaths,
+  setExpandedPaths,
+  folderCache,
+  folderCacheOrder,
+  onCreateFolder,
+  ...props
 
-function TreeRow(props: TreeRowProps) {
-  const {
-    brandProfileId,
-    asset,
-    depth,
-    expandedPaths,
-    setExpandedPaths,
-    resolvePreview,
-    onRename,
-    onDelete,
-    onDragStart,
-    onCreateFolder,
-    folderCache,
-    folderCacheOrder,
-  } = props;
+}: TreeItemProps & { asset: CreativeAsset }) {
   const { show } = useToast();
-  const isFolder = asset.kind === "folder";
+  const folderPath = stripBrandPath(asset.fullPath, brandProfileId);
+  const isExpanded = expandedPaths.has(asset.fullPath);
   const [children, setChildren] = React.useState<CreativeAsset[] | null>(() => {
-    const cached = folderCache.current.get(stripBrandPath(asset.fullPath, brandProfileId));
+    const cached = folderCache.current.get(folderPath);
     return cached ?? null;
   });
-  const [loading, setLoading] = React.useState(false);
-  const expanded = expandedPaths.has(asset.fullPath);
-  const folderPath = stripBrandPath(asset.fullPath, brandProfileId);
-  const [renameOpen, setRenameOpen] = React.useState(false);
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [nextName, setNextName] = React.useState(asset.name);
-  const [hoverOpen, setHoverOpen] = React.useState(false);
-  const [contextOpen, setContextOpen] = React.useState(false);
-  const [nameHovered, setNameHovered] = React.useState(false);
-
-  React.useEffect(() => {
-    setNextName(asset.name);
-  }, [asset.name]);
+  const [isLoading, setIsLoading] = React.useState(false);
 
   const ensureChildren = React.useCallback(async () => {
-    if (!isFolder) return [];
-    const cached = folderCache.current.get(folderPath);
-    if (cached) return cached;
-    setLoading(true);
-    try {
-      const listing = await listCreativeAssets(brandProfileId, folderPath);
-      folderCache.current.set(folderPath, listing.assets);
-      folderCacheOrder.current.push(folderPath);
-      while (folderCacheOrder.current.length > FOLDER_CACHE_LIMIT) {
-        const oldest = folderCacheOrder.current.shift();
-        if (oldest) folderCache.current.delete(oldest);
-      }
-      setChildren(listing.assets);
-      return listing.assets;
-    } catch (error) {
-      console.error("Failed to load folder", error);
-      setChildren([]);
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [brandProfileId, folderPath, folderCache, folderCacheOrder, isFolder]);
+     const cached = folderCache.current.get(folderPath);
+     if (cached) {
+        setChildren(cached);
+        return;
+     }
+     setIsLoading(true);
+     try {
+        const listing = await listCreativeAssets(brandProfileId, folderPath);
+        folderCache.current.set(folderPath, listing.assets);
+        folderCacheOrder.current.push(folderPath);
+        if (folderCacheOrder.current.length > FOLDER_CACHE_LIMIT) {
+           const oldest = folderCacheOrder.current.shift();
+           if (oldest) folderCache.current.delete(oldest);
+        }
+        setChildren(listing.assets);
+     } catch (err) {
+        console.error("Failed to load folder", err);
+     } finally {
+        setIsLoading(false);
+     }
+  }, [brandProfileId, folderPath, folderCache, folderCacheOrder]);
 
-  const toggle = React.useCallback(async () => {
-    if (!isFolder) return;
-    if (!expanded) {
-      await ensureChildren();
-      setExpandedPaths((prev) => {
-        const next = new Set(prev);
-        next.add(asset.fullPath);
-        return next;
-      });
-    } else {
-      setExpandedPaths((prev) => {
-        const next = new Set(prev);
-        next.delete(asset.fullPath);
-        return next;
-      });
-    }
-  }, [asset.fullPath, expanded, isFolder, ensureChildren, setExpandedPaths]);
-
-  const handleRename = React.useCallback(async () => {
-    const trimmed = nextName.trim();
-    if (!trimmed || trimmed === asset.name) {
-      setRenameOpen(false);
-      setNextName(asset.name);
-      return;
-    }
-    await onRename(asset, trimmed);
-    setRenameOpen(false);
-  }, [asset, nextName, onRename]);
-
-  const handleDelete = React.useCallback(async () => {
-    await onDelete(asset);
-    setDeleteOpen(false);
-  }, [asset, onDelete]);
-
-  const handleCreateFolder = React.useCallback(async () => {
-    const name = window.prompt("New folder name?");
-    if (!name) return;
-    await onCreateFolder(name, folderPath);
-    await ensureChildren();
-  }, [ensureChildren, folderPath, onCreateFolder]);
-
-  const handleDownload = React.useCallback(async () => {
-    if (isFolder) return;
-    try {
-      const url = await createSignedDownloadUrl(asset.fullPath, 600, asset.name);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = asset.name;
-      link.rel = "noopener";
-      link.target = "_blank";
-      link.click();
-    } catch {
-      try {
-        const url = await getPublicAssetDownloadUrl(asset.fullPath, asset.name);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = asset.name;
-        link.rel = "noopener";
-        link.target = "_blank";
-        link.click();
-      } catch (error) {
-        show({
-          title: "Download failed",
-          description: (error as Error)?.message ?? "Unable to download asset.",
-          variant: "error",
+  const toggle = React.useCallback(async (open: boolean) => {
+     if (open) {
+        setExpandedPaths(prev => new Set(prev).add(asset.fullPath));
+        await ensureChildren();
+     } else {
+        setExpandedPaths(prev => {
+           const next = new Set(prev);
+           next.delete(asset.fullPath);
+           return next;
         });
-      }
-    }
-  }, [asset.fullPath, asset.name, isFolder, show]);
-
-  const leftPadding = depth * 14;
-
-  const isHighlighted = contextOpen || nameHovered;
+     }
+  }, [asset.fullPath, ensureChildren, setExpandedPaths]);
 
   return (
-    <>
-      <HoverCard.Root openDelay={120} closeDelay={80} open={hoverOpen} onOpenChange={setHoverOpen}>
-        <ContextMenu.Root onOpenChange={setContextOpen}>
-          <ContextMenu.Trigger asChild>
-            <HoverCard.Trigger asChild>
-              <div
-                className={`flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm text-white transition ${
-                  isHighlighted
-                    ? "bg-white/15 ring-1 ring-purple-500/30 shadow-brand-glow"
-                    : "hover:bg-white/15"
-                }`}
-                style={{ paddingLeft: leftPadding }}
-                onDoubleClick={toggle}
-                onClick={toggle}
-                draggable={!isFolder}
-                onDragStart={(event) => {
-                  if (!isFolder) onDragStart(event, asset);
-                }}
-              >
-                <button
-                  type="button"
-                  className="flex h-5 w-5 items-center justify-center text-white/80"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void toggle();
-                  }}
-                  aria-label={expanded ? "Collapse" : "Expand"}
-                >
-                  {isFolder ? (
-                    <ChevronRightIcon className={`${expanded ? "rotate-90" : ""} transition-transform text-white`} />
-                  ) : (
-                    <span className="inline-block w-3" />
-                  )}
-                </button>
-                {isFolder ? (
-                  <ArchiveIcon className="text-white" />
-                ) : (
-                  <FileThumb asset={asset} resolvePreview={resolvePreview} />
-                )}
-                <span
-                  className="truncate"
-                  onMouseEnter={() => setNameHovered(true)}
-                  onMouseLeave={() => setNameHovered(false)}
-                >
-                  {asset.name}
-                </span>
-                {!isFolder ? (
-                  <span className="ml-auto text-[10px] uppercase text-white/80">{asset.contentType?.split("/")[0]}</span>
-                ) : null}
-              </div>
-            </HoverCard.Trigger>
-          </ContextMenu.Trigger>
-          <ContextMenu.Content className="min-w-[180px] rounded-md border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur">
-            {isFolder ? (
-              <ContextMenu.Item className="px-2 py-1 text-sm text-white hover:bg-white/10" onSelect={handleCreateFolder}>
-                New folder
-              </ContextMenu.Item>
-            ) : null}
-            {!isFolder ? (
-              <ContextMenu.Item className="px-2 py-1 text-sm text-white hover:bg-white/10" onSelect={() => void handleDownload()}>
-                Download
-              </ContextMenu.Item>
-            ) : null}
-            <ContextMenu.Item className="px-2 py-1 text-sm text-white hover:bg-white/10" onSelect={() => setRenameOpen(true)}>
-              Rename
-            </ContextMenu.Item>
-            <ContextMenu.Item className="px-2 py-1 text-sm text-red-400 hover:bg-white/10" onSelect={() => setDeleteOpen(true)}>
-              Delete
-            </ContextMenu.Item>
-          </ContextMenu.Content>
-        </ContextMenu.Root>
-        {!isFolder ? <SidebarHoverContent asset={asset} resolvePreview={resolvePreview} open={hoverOpen} /> : null}
-      </HoverCard.Root>
-      <Dialog.Root open={renameOpen} onOpenChange={setRenameOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-slate-950/80 backdrop-blur-lg p-4 shadow-2xl">
-            <Dialog.Title className="text-white text-lg font-medium">Rename</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-white/70">
-              Update “{asset.name}”.
-            </Dialog.Description>
-            <div className="mt-3">
-              <TextField.Root value={nextName} onChange={(e) => setNextName(e.target.value)} autoFocus />
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setRenameOpen(false)}>Cancel</Button>
-              <Button variant="solid" onClick={() => void handleRename()}>Save</Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-      <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialog.Portal>
-          <AlertDialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-          <AlertDialog.Content className="fixed left-1/2 top-1/2 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-slate-950/80 backdrop-blur-lg p-4 shadow-2xl">
-            <AlertDialog.Title className="text-white text-lg font-medium">Delete “{asset.name}”?</AlertDialog.Title>
-            <AlertDialog.Description className="mt-2 text-sm text-white/70">
-              This action removes the asset from storage. It cannot be undone.
-            </AlertDialog.Description>
-            <div className="mt-4 flex justify-end gap-2">
-              <AlertDialog.Cancel asChild>
-                <Button variant="ghost">Cancel</Button>
-              </AlertDialog.Cancel>
-              <AlertDialog.Action asChild>
-                <Button color="red" onClick={() => void handleDelete()}>Delete</Button>
-              </AlertDialog.Action>
-            </div>
-          </AlertDialog.Content>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
-      {isFolder && expanded ? (
-        <div className="ml-2 pl-1">
-          {loading ? (
-            <Text size="1" color="gray">
-              Loading…
-            </Text>
-          ) : children ? (
-            <TreeList
-              brandProfileId={brandProfileId}
-              assets={children}
-              depth={depth + 1}
-              expandedPaths={expandedPaths}
-              setExpandedPaths={setExpandedPaths}
-              resolvePreview={resolvePreview}
-              onRename={onRename}
-              onDelete={async (child) => {
-                await onDelete(child);
+    <div>
+      <Collapsible
+         open={isExpanded}
+         onOpenChange={toggle}
+         className="group/collapsible"
+      >
+         <ContextMenuWrapper asset={asset} onRename={props.onRename} onDelete={props.onDelete} onCreateFolder={async () => {
+             const name = window.prompt("New folder name?");
+             if (name) {
+                await onCreateFolder(name, folderPath);
                 await ensureChildren();
-              }}
-              onDragStart={onDragStart}
-              onCreateFolder={onCreateFolder}
-              folderCache={folderCache}
-              folderCacheOrder={folderCacheOrder}
-            />
-          ) : (
-            <Text size="1" color="gray">
-              Empty
-            </Text>
-          )}
-        </div>
-      ) : null}
-    </>
+             }
+         }}>
+            <CollapsibleTrigger asChild>
+               <button className="flex items-center gap-2 w-full px-2 py-1.5 text-left text-gray-300 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                  <ChevronRight className="w-4 h-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-gray-500" />
+                  <Folder className="w-4 h-4 text-blue-400" />
+                  <span className="truncate">{asset.name}</span>
+               </button>
+            </CollapsibleTrigger>
+         </ContextMenuWrapper>
+
+         <CollapsibleContent>
+            <div className="ml-6 mt-1">
+               {isLoading ? (
+                  <div className="py-1 text-xs text-gray-500">Loading...</div>
+               ) : children && children.length > 0 ? (
+                  <TreeList
+                     assets={children}
+                     brandProfileId={brandProfileId}
+                     expandedPaths={expandedPaths}
+                     setExpandedPaths={setExpandedPaths}
+                     resolvePreview={props.resolvePreview}
+                     onRename={props.onRename}
+                     onDelete={props.onDelete}
+                     onDragStart={props.onDragStart}
+                     onCreateFolder={onCreateFolder}
+                     folderCache={folderCache}
+                     folderCacheOrder={folderCacheOrder}
+                  />
+               ) : children ? (
+                  <div className="py-1 text-xs text-gray-500">Empty</div>
+               ) : null}
+            </div>
+         </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 
-function FileThumb({
-  asset,
-  resolvePreview,
-}: {
-  asset: CreativeAsset;
-  resolvePreview: (asset: CreativeAsset) => Promise<string>;
-}) {
-  const [url, setUrl] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const isImage = asset.contentType?.startsWith("image/");
-  const isVideo = asset.contentType?.startsWith("video/");
-  const thumbRef = React.useRef<HTMLDivElement | null>(null);
-  const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const [inView, setInView] = React.useState(false);
-  const safeUrl = sanitizeCreativeAssetUrl(url);
+function FileTreeItem({ asset, resolvePreview, onDragStart, ...props }: TreeItemProps & { asset: CreativeAsset }) {
+  const [hoverOpen, setHoverOpen] = React.useState(false);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    if (asset.kind === "folder" || isVideo) return;
-    setLoading(true);
-    resolvePreview(asset)
-      .then((resolved) => {
-        if (!cancelled) setUrl(resolved);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asset, resolvePreview, isVideo]);
-
-  React.useEffect(() => {
-    if (!isVideo) return;
-    const target = thumbRef.current;
-    if (!target) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setInView(true);
-      },
-      { rootMargin: "80px" }
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [isVideo]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    if (!isVideo || !inView || url) return;
-    setLoading(true);
-    resolvePreview(asset)
-      .then((resolved) => {
-        if (!cancelled) setUrl(resolved);
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [asset, inView, isVideo, resolvePreview, url]);
-
-  if (loading) {
-    return (
-      <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-white/10 text-[10px] text-white">
-        …
-      </div>
-    );
-  }
-
-  if (isImage) {
-    return (
-      <div ref={thumbRef} className="h-7 w-7 overflow-hidden rounded-sm bg-white/5">
-        {safeUrl ? (
-          <img src={safeUrl} alt={asset.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[10px] text-white">?</div>
-        )}
-      </div>
-    );
-  }
-  if (isVideo) {
-    return (
-      <div ref={thumbRef} className="h-7 w-7 overflow-hidden rounded-sm bg-white/5">
-        {safeUrl ? (
-          <video
-            src={`${safeUrl}#t=0.01`}
-            ref={videoRef}
-            preload="metadata"
-            muted
-            playsInline
-            className="h-full w-full object-cover"
-            onLoadedMetadata={() => {
-              const v = videoRef.current;
-              if (v) v.currentTime = 0.01;
-            }}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-[10px] text-white">▶</div>
-        )}
-      </div>
-    );
-  }
-  return <FileIcon className="h-6 w-6 text-white" />;
+  return (
+     <div>
+        <HoverCard.Root openDelay={200} closeDelay={100} open={hoverOpen} onOpenChange={setHoverOpen}>
+           <ContextMenuWrapper asset={asset} onRename={props.onRename} onDelete={props.onDelete}>
+              <HoverCard.Trigger asChild>
+                 <div
+                    draggable
+                    onDragStart={(e) => onDragStart(e, asset)}
+                    className="w-full"
+                 >
+                    <button className="flex items-center gap-2 w-full px-2 py-1.5 text-left text-gray-300 hover:text-white hover:bg-white/10 rounded-md transition-colors">
+                       <FileThumb asset={asset} resolvePreview={resolvePreview} />
+                       <span className="truncate">{asset.name}</span>
+                    </button>
+                 </div>
+              </HoverCard.Trigger>
+           </ContextMenuWrapper>
+           <SidebarHoverContent asset={asset} resolvePreview={resolvePreview} open={hoverOpen} />
+        </HoverCard.Root>
+     </div>
+  );
 }
+
+// ------------------------------------------------------------------
+// Utilities & Helpers
+// ------------------------------------------------------------------
+
+function ContextMenuWrapper({ 
+   children, 
+   asset, 
+   onRename, 
+   onDelete,
+   onCreateFolder
+}: { 
+   children: React.ReactNode, 
+   asset: CreativeAsset,
+   onRename: (asset: CreativeAsset, name: string) => Promise<string>,
+   onDelete: (asset: CreativeAsset) => Promise<void>,
+   onCreateFolder?: () => void
+}) {
+   const [renameOpen, setRenameOpen] = React.useState(false);
+   const [deleteOpen, setDeleteOpen] = React.useState(false);
+   const [nextName, setNextName] = React.useState(asset.name);
+   
+   const handleRename = async () => {
+      const trimmed = nextName.trim();
+      if (trimmed && trimmed !== asset.name) {
+         await onRename(asset, trimmed);
+      }
+      setRenameOpen(false);
+   };
+
+   return (
+      <>
+         <ContextMenu.Root>
+            <ContextMenu.Trigger asChild>
+               {children}
+            </ContextMenu.Trigger>
+            <ContextMenu.Content className="min-w-[160px] rounded-md border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur-md z-50">
+               {onCreateFolder && (
+                  <ContextMenu.Item 
+                     className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none text-white hover:bg-white/10 focus:bg-white/10"
+                     onSelect={onCreateFolder}
+                  >
+                     New folder
+                  </ContextMenu.Item>
+               )}
+               {asset.kind === "file" && (
+                  <ContextMenu.Item 
+                     className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none text-white hover:bg-white/10 focus:bg-white/10"
+                     onSelect={async () => {
+                        try {
+                           const url = await createSignedDownloadUrl(asset.fullPath, 600, asset.name);
+                           window.open(url, "_blank");
+                        } catch {
+                           console.error("Download failed");
+                        }
+                     }}
+                  >
+                     Download
+                  </ContextMenu.Item>
+               )}
+               <ContextMenu.Item 
+                  className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none text-white hover:bg-white/10 focus:bg-white/10"
+                  onSelect={() => setRenameOpen(true)}
+               >
+                  Rename
+               </ContextMenu.Item>
+               <ContextMenu.Item 
+                  className="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none text-red-400 hover:bg-white/10 focus:bg-white/10"
+                  onSelect={() => setDeleteOpen(true)}
+               >
+                  Delete
+               </ContextMenu.Item>
+            </ContextMenu.Content>
+         </ContextMenu.Root>
+
+         {/* Rename Dialog */}
+         <Dialog.Root open={renameOpen} onOpenChange={setRenameOpen}>
+            <Dialog.Portal>
+               <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" />
+               <Dialog.Content className="fixed left-1/2 top-1/2 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-slate-950 p-4 shadow-2xl z-[70]">
+                  <Dialog.Title className="text-white text-lg font-medium">Rename</Dialog.Title>
+                  <div className="mt-3">
+                     <TextField.Root value={nextName} onChange={(e) => setNextName(e.target.value)} autoFocus />
+                  </div>
+                  <div className="mt-4 flex justify-end gap-2">
+                     <Button variant="ghost" onClick={() => setRenameOpen(false)}>Cancel</Button>
+                     <Button variant="solid" onClick={() => void handleRename()}>Save</Button>
+                  </div>
+               </Dialog.Content>
+            </Dialog.Portal>
+         </Dialog.Root>
+
+         {/* Delete Alert */}
+         <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialog.Portal>
+               <AlertDialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" />
+               <AlertDialog.Content className="fixed left-1/2 top-1/2 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/15 bg-slate-950 p-4 shadow-2xl z-[70]">
+                  <AlertDialog.Title className="text-white text-lg font-medium">Delete “{asset.name}”?</AlertDialog.Title>
+                  <AlertDialog.Description className="mt-2 text-sm text-white/70">
+                     This cannot be undone.
+                  </AlertDialog.Description>
+                  <div className="mt-4 flex justify-end gap-2">
+                     <AlertDialog.Cancel asChild>
+                        <Button variant="ghost">Cancel</Button>
+                     </AlertDialog.Cancel>
+                     <AlertDialog.Action asChild>
+                        <Button color="red" onClick={async () => {
+                           await onDelete(asset);
+                           setDeleteOpen(false);
+                        }}>Delete</Button>
+                     </AlertDialog.Action>
+                  </div>
+               </AlertDialog.Content>
+            </AlertDialog.Portal>
+         </AlertDialog.Root>
+      </>
+   );
+}
+
+function SidebarHoverContent({
+   asset,
+   resolvePreview,
+   open,
+ }: {
+   asset: CreativeAsset;
+   resolvePreview: (asset: CreativeAsset) => Promise<string>;
+   open: boolean;
+ }) {
+   const [url, setUrl] = React.useState<string | null>(null);
+   const [loading, setLoading] = React.useState(false);
+   const isVideo = asset.contentType?.startsWith("video/");
+   const isImage = asset.contentType?.startsWith("image/");
+   const safeUrl = sanitizeCreativeAssetUrl(url);
+ 
+   React.useEffect(() => {
+     let cancelled = false;
+     if (!open) return () => { cancelled = true; };
+     setLoading(true);
+     resolvePreview(asset)
+       .then((resolved) => {
+         if (!cancelled) setUrl(resolved);
+       })
+       .catch(() => {
+         if (!cancelled) setUrl(null);
+       })
+       .finally(() => {
+         if (!cancelled) setLoading(false);
+       });
+     return () => {
+       cancelled = true;
+     };
+   }, [asset, resolvePreview, open]);
+ 
+   return (
+     <HoverCard.Content sideOffset={10} className="rounded-lg border border-white/10 bg-slate-900/95 p-2 shadow-xl z-50 backdrop-blur-sm">
+       <div className="relative h-64 w-64 overflow-hidden rounded-md bg-black/60 flex items-center justify-center">
+         {loading ? (
+           <div className="text-sm text-gray-400">Loading...</div>
+         ) : isVideo && safeUrl ? (
+           <video
+             src={`${safeUrl}#t=0.01`}
+             preload="metadata"
+             muted
+             playsInline
+             controls
+             className="h-full w-full object-contain"
+           />
+         ) : isImage && safeUrl ? (
+           <img src={safeUrl} alt={asset.name} className="h-full w-full object-contain" />
+         ) : (
+           <FileIcon className="h-12 w-12 text-gray-600" />
+         )}
+       </div>
+       <div className="mt-2">
+          <p className="text-sm font-medium text-white truncate max-w-[16rem]">{asset.name}</p>
+          <p className="text-xs text-gray-400">{asset.contentType ?? "file"}</p>
+       </div>
+     </HoverCard.Content>
+   );
+ }
+
+function FileThumb({ asset, resolvePreview }: { asset: CreativeAsset; resolvePreview: (asset: CreativeAsset) => Promise<string> }) {
+   const [url, setUrl] = React.useState<string | null>(null);
+   const isImage = asset.contentType?.startsWith("image/");
+   const isVideo = asset.contentType?.startsWith("video/");
+   
+   React.useEffect(() => {
+      if (isImage || isVideo) {
+         resolvePreview(asset).then(setUrl).catch(() => {});
+      }
+   }, [asset, isImage, isVideo, resolvePreview]);
+
+   if (isImage && url) {
+      return <div className="h-4 w-4 rounded-sm overflow-hidden bg-white/10"><img src={url} alt="" className="h-full w-full object-cover" /></div>;
+   }
+   if (isVideo) {
+      return <Play className="h-4 w-4 text-purple-400" />;
+   }
+   return <FileIcon className="h-4 w-4 text-gray-400" />;
+}
+
+function BreadcrumbTrail({ items, onSelect }: { items: { label: string; path: string }[]; onSelect: (path: string) => void }) {
+   if (!items.length) return null;
+   return (
+     <div className="flex flex-wrap items-center gap-1 text-xs text-gray-400 mb-2">
+       {items.map((crumb, index) => (
+         <React.Fragment key={crumb.path ?? index}>
+           <button
+             type="button"
+             className="hover:text-white hover:underline transition-colors"
+             onClick={() => onSelect(crumb.path)}
+           >
+             {crumb.label || "Root"}
+           </button>
+           {index < items.length - 1 ? <span>/</span> : null}
+         </React.Fragment>
+       ))}
+     </div>
+   );
+ }
 
 function stripBrandPath(fullPath: string, brandProfileId: string) {
   return fullPath.replace(new RegExp(`^${brandProfileId}/?`), "");
-}
-
-type BreadcrumbTrailProps = {
-  items: { label: string; path: string }[];
-  onSelect: (path: string) => void;
-};
-
-function BreadcrumbTrail({ items, onSelect }: BreadcrumbTrailProps) {
-  if (!items.length) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1 text-xs text-gray-200">
-      {items.map((crumb, index) => (
-        <React.Fragment key={crumb.path ?? index}>
-          <button
-            type="button"
-            className="rounded px-1 py-0.5 hover:bg-white/10"
-            onClick={() => onSelect(crumb.path)}
-          >
-            {crumb.label || "Root"}
-          </button>
-          {index < items.length - 1 ? <span className="text-gray-500">/</span> : null}
-        </React.Fragment>
-      ))}
-    </div>
-  );
 }

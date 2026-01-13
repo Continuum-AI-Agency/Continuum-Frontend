@@ -27,7 +27,7 @@ export function ColoredEdge({
     edgeColor = 'var(--edge-text)';
   } else if (targetHandleId === 'ref-image' || targetHandleId === 'image' || targetHandleId === 'first-frame' || targetHandleId === 'last-frame') {
     edgeColor = 'var(--edge-image)'; 
-  } else if (targetHandleId === 'ref-video' || targetHandleId === 'video') {
+  } else if (targetHandleId === 'video') {
     edgeColor = 'var(--edge-video)'; 
   }
 

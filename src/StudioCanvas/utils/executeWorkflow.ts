@@ -4,7 +4,7 @@ import type { Edge } from '@xyflow/react';
 import { StudioNode } from "../types";
 import { NodeOutput } from "../types/execution";
 import { useStudioStore } from "../stores/useStudioStore";
-import { buildNanoGenPayload, buildVeoPayload, toBackendPayload } from "./buildNodePayload";
+import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, toBackendExtendVideoPayload, toBackendPayload } from "./buildNodePayload";
 import { buildDataUrl, parseDataUrl } from "./dataUrl";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
 
@@ -87,7 +87,6 @@ const resolveVideoInput = (
 
   return undefined;
 };
-
 const getPromptValue = (
   node: StudioNode,
   incomingEdges: Edge[],
@@ -131,24 +130,19 @@ const findMissingOptionalInput = (
   }
 
   if (node.type === 'veoDirector') {
+    const referenceMode = ((node.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
     for (const edge of incomingEdges) {
       const handle = edge.targetHandle ?? "";
       if (handle === 'negative') {
         if (!resolveTextInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
-      } else if (handle === 'ref-video') {
-        if (!resolveVideoInput(edge, resolvedOutputs, nodeById)) {
+      } else if (handle === 'ref-image' || handle === 'ref-images') {
+        if (referenceMode === 'images' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
-      } else if (
-        handle === 'ref-image' ||
-        handle === 'ref-images' ||
-        handle === 'first-frame' ||
-        handle === 'last-frame' ||
-        handle.startsWith('frame-')
-      ) {
-        if (!resolveImageInput(edge, resolvedOutputs, nodeById)) {
+      } else if (handle === 'first-frame' || handle === 'last-frame' || handle.startsWith('frame-')) {
+        if (referenceMode === 'frames' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
       }
@@ -170,6 +164,29 @@ const getNodeReadiness = (
   const failedEdge = incomingEdges.find((edge) => failedNodes.has(edge.source));
   if (failedEdge) {
     return { ready: false, reason: 'Upstream dependency failed' };
+  }
+
+  if (node.type === 'extendVideo') {
+    const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
+    if (videoEdges.length === 0) {
+      return { ready: false, reason: 'Missing required video input' };
+    }
+    const hasVideo = videoEdges.some((edge) => resolveVideoInput(edge, resolvedOutputs, nodeById));
+    if (!hasVideo) {
+      return { ready: false, reason: 'Missing connected input for video' };
+    }
+
+    const promptEdges = incomingEdges.filter((edge) => edge.targetHandle === 'prompt');
+    if (promptEdges.length > 0) {
+      const promptValue = promptEdges
+        .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById))
+        .find(Boolean);
+      if (!promptValue) {
+        return { ready: false, reason: 'Missing connected input for prompt' };
+      }
+    }
+
+    return { ready: true };
   }
 
   const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById);
@@ -249,18 +266,29 @@ export async function executeWorkflow(
 ) {
   const { nodes, edges, updateNodeData } = useStudioStore.getState();
   const { executeGeneration } = controls;
+  console.info("[studio] executeWorkflow start", {
+    targetNodeId: options.targetNodeId,
+    nodeCount: nodes.length,
+    edgeCount: edges.length,
+  });
 
   const executionScope = options.targetNodeId
     ? buildUpstreamScope(nodes, edges, options.targetNodeId)
     : new Set(nodes.map((node) => node.id));
 
-  const executableNodes = nodes.filter((n) => (n.type === 'nanoGen' || n.type === 'veoDirector') && executionScope.has(n.id));
+  const executableNodes = nodes.filter(
+    (n) => (n.type === 'nanoGen' || n.type === 'veoDirector' || n.type === 'extendVideo') && executionScope.has(n.id)
+  );
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
     console.log("No executable nodes found");
     return;
   }
+  console.info("[studio] executeWorkflow scope", {
+    targetNodeId: options.targetNodeId,
+    executableNodeIds,
+  });
 
   const clearDownstream = options.clearDownstream ?? true;
   const downstreamScope = clearDownstream
@@ -268,7 +296,7 @@ export async function executeWorkflow(
     : new Set(executableNodeIds);
 
   const resetNodeIds = nodes
-    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector') && downstreamScope.has(node.id))
+    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector' || node.type === 'extendVideo') && downstreamScope.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
@@ -357,10 +385,41 @@ export async function executeWorkflow(
         payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges);
       } else if (node.type === 'veoDirector') {
         payload = buildVeoPayload(node, resolvedOutputs, nodes, edges);
+      } else if (node.type === 'extendVideo') {
+        payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges);
       }
 
       if (!payload) {
         updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
+        return false;
+      }
+
+      if (node.type === 'extendVideo') {
+        if (!('executeVideoExtension' in controls) || typeof controls.executeVideoExtension !== 'function') {
+          updateNodeStatus(nodeId, 'failed', 'Video extension execution unavailable');
+          return false;
+        }
+        const backendPayload = toBackendExtendVideoPayload(payload);
+        const result = await controls.executeVideoExtension(nodeId, backendPayload);
+        console.info("[studio] executeVideoExtension result", {
+          nodeId,
+          success: result.success,
+          hasOutput: Boolean(result.output),
+          error: result.error,
+        });
+
+        if (!result.success) {
+          updateNodeStatus(nodeId, 'failed', result.error || 'Generation failed');
+          return false;
+        }
+
+        if (result.output) {
+          setNodeOutput(nodeId, result.output);
+          updateNodeStatus(nodeId, 'completed');
+          return true;
+        }
+
+        updateNodeStatus(nodeId, 'failed', 'No output received');
         return false;
       }
 

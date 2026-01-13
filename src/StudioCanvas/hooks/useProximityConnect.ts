@@ -84,37 +84,44 @@ export function useProximityConnect() {
         if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector') {
              if (sourceNode.type === 'string') {
                  const currentEdges = getEdges();
-                  const isPromptFilled = currentEdges.some(
-                      (e) => e.target === targetNode.id && (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
-                  );
+                 const hasPrompt = currentEdges.some(
+                   (e) => e.target === targetNode.id && (e.targetHandle === 'prompt' || e.targetHandle === 'prompt-in')
+                 );
+                 const hasNegative = currentEdges.some(
+                   (e) => e.target === targetNode.id && e.targetHandle === 'negative'
+                 );
 
-                  if (isPromptFilled) {
-                      // Prompt is filled - prevent additional connections
-                      return null;
-                  } else {
-                      targetHandle = targetNode.type === 'veoDirector' ? 'prompt-in' : 'prompt';
-                  }
+                 if (!hasPrompt) {
+                   targetHandle = targetNode.type === 'veoDirector' ? 'prompt-in' : 'prompt';
+                 } else if (targetNode.type === 'veoDirector' && !hasNegative) {
+                   targetHandle = 'negative';
+                 } else {
+                   return null;
+                 }
              }
-              if (sourceNode.type === 'image') {
+              if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
                   if (targetNode.type === 'veoDirector') {
-                      // For video nodes, try first-frame, then last-frame, then ref-images (up to 3), then ref-video
                       const currentEdges = getEdges();
-                      const hasFirstFrame = currentEdges.some(e => e.target === targetNode.id && e.targetHandle === 'first-frame');
-                      const hasLastFrame = currentEdges.some(e => e.target === targetNode.id && e.targetHandle === 'last-frame');
-                      const refImagesCount = currentEdges.filter(e => e.target === targetNode.id && e.targetHandle === 'ref-images').length;
-                      const hasRefVideo = currentEdges.some(e => e.target === targetNode.id && e.targetHandle === 'ref-video');
+                      const referenceMode = (targetNode.data as { referenceMode?: 'images' | 'frames' } | undefined)?.referenceMode ?? 'images';
 
-                      if (!hasFirstFrame) {
-                          targetHandle = 'first-frame';
-                      } else if (!hasLastFrame) {
-                          targetHandle = 'last-frame';
-                      } else if (refImagesCount < 3) {
-                          targetHandle = 'ref-images';
-                      } else if (!hasRefVideo) {
-                          targetHandle = 'ref-video';
+                      if (referenceMode === 'frames') {
+                          const hasFirstFrame = currentEdges.some(e => e.target === targetNode.id && e.targetHandle === 'first-frame');
+                          const hasLastFrame = currentEdges.some(e => e.target === targetNode.id && e.targetHandle === 'last-frame');
+
+                          if (!hasFirstFrame) {
+                              targetHandle = 'first-frame';
+                          } else if (!hasLastFrame) {
+                              targetHandle = 'last-frame';
+                          } else {
+                              return null;
+                          }
                       } else {
-                          // All slots filled
-                          return null;
+                          const refImagesCount = currentEdges.filter(e => e.target === targetNode.id && e.targetHandle === 'ref-images').length;
+                          if (refImagesCount < 3) {
+                              targetHandle = 'ref-images';
+                          } else {
+                              return null;
+                          }
                       }
                   } else if (targetNode.type === 'nanoGen') {
                       // For image nodes, check ref-image limit (max 14)
@@ -129,28 +136,34 @@ export function useProximityConnect() {
                   }
               }
               if (sourceNode.type === 'video') {
-                  if (targetNode.type === 'veoDirector') {
-                      // For video nodes connecting to video blocks, only ref-video is available
-                      const currentEdges = getEdges();
-                      const hasRefVideo = currentEdges.some(e => e.target === targetNode.id && e.targetHandle === 'ref-video');
-
-                      if (!hasRefVideo) {
-                          targetHandle = 'ref-video';
-                      } else {
-                          // Ref video slot filled
-                          return null;
-                      }
-                  } else {
-                      targetHandle = 'ref-video';
-                  }
+                  return null;
               }
+        }
+
+        if (targetNode.type === 'extendVideo') {
+          if (sourceNode.type === 'string') {
+            sourceHandle = 'text';
+            targetHandle = 'prompt';
+          } else if (sourceNode.type === 'video' || sourceNode.type === 'veoDirector') {
+            sourceHandle = 'video';
+            targetHandle = 'video';
+          } else {
+            return null;
+          }
+
+          if (targetHandle === 'video') {
+            const existingVideo = getEdges().some(
+              (edge) => edge.target === targetNode.id && edge.targetHandle === 'video'
+            );
+            if (existingVideo) return null;
+          }
         }
 
         if (!canAcceptSingleTextInput(getEdges(), targetNode.id, targetHandle)) {
           return null;
         }
 
-        if (targetNode.type === 'veoDirector' && targetHandle !== 'prompt-in') {
+        if (targetNode.type === 'veoDirector' && targetHandle === 'negative') {
           const hasPrompt = getEdges().some(
             (edge) => edge.target === targetNode.id && edge.targetHandle === 'prompt-in'
           );
@@ -158,6 +171,12 @@ export function useProximityConnect() {
             return null;
           }
         }
+
+        const resolveDataType = () => {
+          if (sourceNode.type === 'string') return 'text';
+          if (sourceNode.type === 'video' || sourceNode.type === 'veoDirector') return 'video';
+          return 'image';
+        };
 
         return {
           id: `${sourceNode.id}-${targetNode.id}`,
@@ -168,7 +187,7 @@ export function useProximityConnect() {
           className: 'temp',
           style: { strokeDasharray: 5, stroke: '#94a3b8', strokeWidth: 2 },
           type: 'dataType', 
-          data: { dataType: sourceNode.type === 'string' ? 'text' : 'image' }
+          data: { dataType: resolveDataType() }
         };
       }, [getInternalNode, store, getEdges]);
 

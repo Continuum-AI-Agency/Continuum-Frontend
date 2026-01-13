@@ -14,6 +14,20 @@ describe('executeWorkflow', () => {
     });
   });
 
+  const buildControls = (
+    executeGeneration: ReturnType<typeof mock>,
+    executeVideoExtension: ReturnType<typeof mock> = mock(async () => {
+      return { success: true, output: { type: 'video', url: 'video_url' } };
+    }),
+  ) => ({
+    executeGeneration,
+    executeVideoExtension,
+    cancel: () => {},
+    reset: () => {},
+    isExecuting: true,
+    error: null,
+  });
+
   it('should execute a linear workflow', async () => {
     const nodes: StudioNode[] = [
       { id: '1', position: { x: 0, y: 0 }, data: { value: 'prompt' }, type: 'string' },
@@ -34,13 +48,7 @@ describe('executeWorkflow', () => {
       };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
 
@@ -71,13 +79,7 @@ describe('executeWorkflow', () => {
       };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
 
@@ -111,13 +113,7 @@ describe('executeWorkflow', () => {
       return { success: false, error: 'Unknown node' };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
 
@@ -157,13 +153,7 @@ describe('executeWorkflow', () => {
       };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
 
@@ -195,56 +185,13 @@ describe('executeWorkflow', () => {
       };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
 
     expect(executeGeneration).toHaveBeenCalledTimes(0);
     const node = useStudioStore.getState().nodes.find(n => n.id === 'nano');
     expect(node?.data.error).toBe('Missing connected input for ref-images');
-  });
-
-  it('should treat video reference nodes as completed dependencies', async () => {
-    const dataUrl = 'data:video/mp4;base64,video_base64';
-    const nodes: StudioNode[] = [
-      { id: 'vid', position: { x: 0, y: 0 }, data: { video: dataUrl }, type: 'video' },
-      { id: 'veo', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: 'video prompt' }, type: 'veoDirector' },
-    ];
-
-    const edges: Edge[] = [
-      { id: 'e1', source: 'vid', sourceHandle: 'video', target: 'veo', targetHandle: 'ref-video' },
-    ];
-
-    useStudioStore.getState().setNodes(nodes);
-    useStudioStore.getState().setEdges(edges);
-
-    const executeGeneration = mock(async (nodeId) => {
-      if (nodeId === 'veo') {
-        return { success: true, output: { type: 'video', url: 'video_url' } };
-      }
-      return { success: false, error: 'Unexpected node' };
-    });
-
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
-
-    await executeWorkflow(controls as any);
-
-    expect(executeGeneration).toHaveBeenCalledWith('veo', expect.anything());
-    const payload = executeGeneration.mock.calls[0][1];
-    expect(payload.reference_video?.data).toBe('video_base64');
-    expect(payload.reference_video?.mime_type).toBe('video/mp4');
   });
 
   it('should respect concurrency limit', async () => {
@@ -268,13 +215,7 @@ describe('executeWorkflow', () => {
       return { success: true, output: { type: 'image', base64: 'out', mimeType: 'image/png' } };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
 
@@ -293,17 +234,44 @@ describe('executeWorkflow', () => {
       return { success: true, output: { type: 'image', base64: `out-${nodeId}`, mimeType: 'image/png' } };
     });
 
-    const controls = {
-      executeGeneration,
-      cancel: () => {},
-      reset: () => {},
-      isExecuting: true,
-      error: null,
-    };
+    const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any, { targetNodeId: 'nano-2' });
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     expect(executeGeneration.mock.calls[0][0]).toBe('nano-2');
+  });
+
+  it('should execute extend video nodes with base64 input', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'vid-1', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,base64_video' }, type: 'video' },
+      { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'vid-1', sourceHandle: 'video', target: 'extend-1', targetHandle: 'video' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => {
+      return { success: true, output: { type: 'image', base64: 'out', mimeType: 'image/png' } };
+    });
+
+    const executeVideoExtension = mock(async (_nodeId, payload) => {
+      return { success: true, output: { type: 'video', url: 'data:video/mp4;base64,extended_video' } };
+    });
+
+    const controls = buildControls(executeGeneration, executeVideoExtension);
+
+    await executeWorkflow(controls as any);
+
+    expect(executeVideoExtension).toHaveBeenCalledTimes(1);
+    const payload = executeVideoExtension.mock.calls[0][1];
+    expect(payload.video?.data).toBe('base64_video');
+
+    const updatedNode = useStudioStore.getState().nodes.find(n => n.id === 'extend-1');
+    expect(updatedNode?.data.generatedVideo).toBe('data:video/mp4;base64,extended_video');
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo } from 'react';
-import { Handle, Position, useHandleConnections, type HandleProps, type Connection } from '@xyflow/react';
+import { Handle, Position, useHandleConnections, useNodeId, type HandleProps, type Connection } from '@xyflow/react';
 
 export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnectable'> {
   /**
@@ -44,9 +44,11 @@ export function CustomHandle({
   className,
   ...props
 }: ConnectionLimitHandleProps) {
+  const nodeId = useNodeId();
   const connections = useHandleConnections({
     id: props.id,
     type: connectionType,
+    nodeId,
   });
 
   const isAtLimit = useMemo(() => {
@@ -103,9 +105,11 @@ export function CustomHandle({
  * Hook to check if a handle has reached its connection limit
  */
 export function useConnectionLimit(handleId: string, maxConnections?: number, type: 'source' | 'target' = 'target') {
+  const nodeId = useNodeId();
   const connections = useHandleConnections({
     id: handleId,
     type,
+    nodeId,
   });
 
   return useMemo(() => {

@@ -92,6 +92,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   }, [id, updateNodeData]);
 
   const handleRun = useCallback(async () => {
+    console.info("[studio] run image node", { nodeId: id });
     await executeWorkflow(executionControls, { targetNodeId: id });
   }, [executionControls, id]);
 

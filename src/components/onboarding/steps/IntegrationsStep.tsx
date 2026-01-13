@@ -67,6 +67,9 @@ export const IntegrationsStep = React.memo(function IntegrationsStep({
         <Text color="gray">
           Secure popups handle authentication for each network. We’ll show live account data as soon as the provider confirms access.
         </Text>
+        <Text color="gray" size="2">
+          You can continue without connecting accounts and finish setup later in Settings.
+        </Text>
         <ConnectionsPanel
           connections={state.connections}
           selectableAssets={selectableAssets}

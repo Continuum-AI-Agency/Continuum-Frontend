@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, Node, NodeResizer, NodeToolbar, HandleProps, useEdges, type Edge } from '@xyflow/react';
 import { Card } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VideoGenNodeData } from '../types';
 import { BlockToolbar } from '../components/BlockToolbar';
@@ -14,8 +13,6 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useToast } from '@/components/ui/ToastProvider';
 import { downloadAsset } from '../utils/downloadAsset';
-import { Switch } from '@/components/ui/switch';
-
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
   Empty,
@@ -55,54 +52,23 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
   return <Handle {...props} isConnectable={checkConnectable as any} />;
 };
 
-export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNodeData>>) {
-  const updateNodeData = useStudioStore((state) => state.updateNodeData);
+export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNodeData>>) {
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const flowEdges = useEdges();
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
-  const storeEdges = useStudioStore((state) => state.edges);
-  const setEdges = useStudioStore((state) => state.setEdges);
 
   const [isHovered, setIsHovered] = useState(false);
 
   // Calculate connection counts for tooltips
   const promptConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'prompt-in').length;
   const negativeConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'negative').length;
-  const refImageCount = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'ref-images').length;
   const firstFrameConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'first-frame').length;
   const lastFrameConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'last-frame').length;
 
-  const handleModelChange = useCallback((value: string) => {
-    updateNodeData(id, { model: value as any });
-  }, [id, updateNodeData]);
-
-  const referenceMode = data.referenceMode ?? 'images';
-  const referenceSwitchId = `veo-reference-${id}`;
-
-  const handleReferenceModeChange = useCallback((checked: boolean) => {
-    const nextMode = checked ? 'frames' : 'images';
-    updateNodeData(id, { referenceMode: nextMode });
-
-    const nextEdges = storeEdges.filter((edge) => {
-      if (edge.target !== id) return true;
-      const handle = edge.targetHandle ?? '';
-
-      if (handle === 'ref-video') return false;
-
-      if (nextMode === 'frames') {
-        return !['ref-image', 'ref-images'].includes(handle);
-      }
-
-      return !(handle === 'first-frame' || handle === 'last-frame' || handle.startsWith('frame-'));
-    });
-
-    setEdges(nextEdges);
-  }, [id, setEdges, storeEdges, updateNodeData]);
-
   const handleRun = useCallback(async () => {
-    console.info("[studio] run video node", { nodeId: id });
+    console.info("[studio] run veo-fast node", { nodeId: id });
     await executeWorkflow(executionControls, { targetNodeId: id });
   }, [executionControls, id]);
 
@@ -140,24 +106,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
       />
 
       <NodeToolbar isVisible={selected} position={Position.Bottom} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
-          <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Veo 3.1</Label>
-          <Select value={data.model} onValueChange={handleModelChange}>
-            <SelectTrigger className="h-7 text-xs border-subtle w-32 bg-surface text-primary">
-              <SelectValue placeholder="Model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="veo-3.1">Veo 3.1 (Cinematic)</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Veo 3.1 Fast</Label>
           <div className="flex items-center gap-2 border-l border-subtle pl-2">
-            <Label htmlFor={referenceSwitchId} className="text-[10px] font-bold text-secondary uppercase tracking-wider">
-              Frame Anchors
-            </Label>
-            <Switch
-              id={referenceSwitchId}
-              checked={referenceMode === 'frames'}
-              onCheckedChange={handleReferenceModeChange}
-            />
+            <span className="text-[10px] font-medium text-secondary px-2">First/Last Frame Only</span>
           </div>
       </NodeToolbar>
 
@@ -275,92 +226,58 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
           </TooltipContent>
         </Tooltip>
 
-        {referenceMode === 'images' ? (
-          <Tooltip>
+        {/* Always Frames Mode for Veo Fast */}
+        <Tooltip>
             <TooltipTrigger asChild>
-              <div
+            <div
                 className="relative pointer-events-auto group/handle"
                 style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-              >
+            >
                 <LimitedHandle
-                  type="target"
-                  position={Position.Left}
-                  id="ref-images"
-                  maxConnections={3}
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                type="target"
+                position={Position.Left}
+                id="first-frame"
+                maxConnections={1}
+                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                 />
                 <span className={cn(
-                  "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-                  (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
+                "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+                (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
                 )}>
-                  Ref Images (Max 3)
+                First Frame
                 </span>
-                {refImageCount > 0 && (
-                  <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-[9px] px-1 rounded-full font-bold shadow-sm pointer-events-none">
-                    {refImageCount}
-                  </div>
-                )}
-              </div>
+            </div>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Reference Images: {refImageCount}/3</p>
+            <p>First Frame: {firstFrameConnections}/1</p>
             </TooltipContent>
-          </Tooltip>
-        ) : (
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="relative pointer-events-auto group/handle"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                >
-                  <LimitedHandle
-                    type="target"
-                    position={Position.Left}
-                    id="first-frame"
-                    maxConnections={1}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                  />
-                  <span className={cn(
-                    "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-                    (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-                  )}>
-                    First Frame
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>First Frame: {firstFrameConnections}/1</p>
-              </TooltipContent>
-            </Tooltip>
+        </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="relative pointer-events-auto group/handle"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                >
-                  <LimitedHandle
-                    type="target"
-                    position={Position.Left}
-                    id="last-frame"
-                    maxConnections={1}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                  />
-                  <span className={cn(
-                    "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-                    (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-                  )}>
-                    Last Frame
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Last Frame: {lastFrameConnections}/1</p>
-              </TooltipContent>
-            </Tooltip>
-          </>
-        )}
+        <Tooltip>
+            <TooltipTrigger asChild>
+            <div
+                className="relative pointer-events-auto group/handle"
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+            >
+                <LimitedHandle
+                type="target"
+                position={Position.Left}
+                id="last-frame"
+                maxConnections={1}
+                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+                />
+                <span className={cn(
+                "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+                (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
+                )}>
+                Last Frame
+                </span>
+            </div>
+            </TooltipTrigger>
+            <TooltipContent>
+            <p>Last Frame: {lastFrameConnections}/1</p>
+            </TooltipContent>
+        </Tooltip>
       </div>
      </div>
     </TooltipProvider>

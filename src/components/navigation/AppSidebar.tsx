@@ -64,7 +64,7 @@ function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams
 export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isMobile, state } = useSidebar();
+  const { isMobile, state, toggleSidebar } = useSidebar();
   const { user } = useSession();
   const { logout, isPending } = useAuth();
   const isAdmin = isAdminUser(user);
@@ -74,8 +74,15 @@ export function AppSidebar() {
       collapsible="icon"
       className="border-r border-[var(--color-border)] bg-slate-950/90 backdrop-blur-xl"
     >
-      <SidebarHeader>
+      <SidebarHeader className="flex items-center justify-between px-3">
         <BrandSwitcher />
+        <button
+          onClick={toggleSidebar}
+          className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-slate-800 transition-colors text-slate-400 hover:text-slate-100"
+          aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          <ChevronRightIcon className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />
+        </button>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-6">
