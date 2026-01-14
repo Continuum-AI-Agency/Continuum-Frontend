@@ -21,7 +21,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { canAcceptSingleTextInput } from '../utils/connectionValidation';
+import { canAcceptSingleTextInput, hasExistingTargetConnection } from '../utils/connectionValidation';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
 
@@ -351,12 +351,20 @@ function Flow() {
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {
     const sourceNode = getNodeById(connection.source);
+    const targetHandle = connection.targetHandle ?? '';
+
+    if (!sourceNode) return false;
+
+    // Allow text connections to known text handles without requiring targetNode lookup
+    if (sourceNode.type === 'string' && ['prompt', 'prompt-in', 'negative'].includes(targetHandle)) {
+      return !hasExistingTargetConnection(edges, connection.target!, targetHandle);
+    }
+
     const targetNode = getNodeById(connection.target);
 
-    if (!sourceNode || !targetNode) return false;
+    if (!targetNode) return false;
 
     const sourceHandle = connection.sourceHandle ?? '';
-    const targetHandle = connection.targetHandle ?? '';
 
     const normalizedConnection = connection;
 
