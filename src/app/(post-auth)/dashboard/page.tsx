@@ -14,12 +14,6 @@ import {
 } from "@radix-ui/themes";
 import {
   LightningBoltIcon,
-  Link2Icon,
-  MagicWandIcon,
-  OpenInNewWindowIcon,
-  RocketIcon,
-  Share2Icon,
-  StopwatchIcon,
 } from "@radix-ui/react-icons";
 import React from "react";
 import { redirect } from "next/navigation";
@@ -29,6 +23,7 @@ import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandIn
 import { BrandInsightsSignalsPanel } from "@/components/brand-insights/BrandInsightsSignalsPanel";
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import { AgenticActivityLog } from "@/components/dashboard/AgenticActivityLog";
+import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { InstagramOrganicReportingWidget } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { DashboardErrorHandler } from "@/components/dashboard/DashboardErrorHandler";
 import { ClientOnly } from "@/components/ui/ClientOnly";
@@ -129,30 +124,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     note: trendsCount + eventsCount + questionsCount === 0 ? "No organic signals yet." : "Organic signals from latest sync.",
   };
 
-  const agenticActivity = [
-    {
-      id: "dco-1",
-      actorName: "Continuum DCO",
-      summary: "Approved a new creative variant for the holiday launch set.",
-      timestamp: "Today, 9:18 AM",
-      highlight: "Approved",
-    },
-    {
-      id: "dco-2",
-      actorName: "Continuum DCO",
-      summary: "Paused low-performing ad group in Meta based on CTR drop.",
-      timestamp: "Yesterday, 6:42 PM",
-      highlight: "Paused",
-    },
-    {
-      id: "dco-3",
-      actorName: "Continuum DCO",
-      summary: "Queued 3 new video cuts for creative testing.",
-      timestamp: "Dec 29, 4:05 PM",
-      highlight: "Queued",
-    },
-  ];
-
   return (
     <div className="space-y-6 w-full max-w-none px-2 sm:px-3 lg:px-4 relative">
       <DashboardErrorHandler error={errorMessage} />
@@ -224,53 +195,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </Flex>
       </SurfaceCard>
 
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4">
-        <SurfaceCard>
-          <AgenticActivityLog items={agenticActivity} />
-          <Box pt="4">
-            <Button variant="outline" size="2" asChild>
-              <Link href="/paid-media" className="flex items-center gap-2">
-                View automations
-                <OpenInNewWindowIcon />
-              </Link>
-            </Button>
-          </Box>
-        </SurfaceCard>
-
-        <SurfaceCard>
-          <Flex align="center" justify="between">
-            <Heading size="4">Quick actions</Heading>
-            <Text color="gray" size="2">Move faster with shortcuts</Text>
-          </Flex>
-          <Separator my="3" />
-          <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-            <ActionTile
-              title="Create campaign"
-              description="Launch a new AI-driven flight."
-              icon={<RocketIcon />}
-              href="/paid-media"
-            />
-            <ActionTile
-              title="Connect integrations"
-              description="Share ad accounts and pages."
-              icon={<Share2Icon />}
-              href="/settings/integrations"
-            />
-            <ActionTile
-              title="Run brand analysis"
-              description="Generate fresh insights."
-              icon={<LightningBoltIcon />}
-              href="/ai-studio"
-            />
-            <ActionTile
-              title="Review content"
-              description="Check AI outputs before publish."
-              icon={<StopwatchIcon />}
-              href={`/brand-profiles/${activeBrandId}/assets`}
-            />
-          </Grid>
-        </SurfaceCard>
-      </Grid>
+      <SurfaceCard>
+        <ClientOnly
+          fallback={
+            <Box>
+              <AgenticActivityLog items={[]} emptyMessage="Loading DCO actions..." />
+            </Box>
+          }
+        >
+                <DCOActionsWidget 
+                  brandId={activeBrandId}
+                />
+        </ClientOnly>
+      </SurfaceCard>
 
       {insightsError ? (
         <SurfaceCard>
@@ -415,38 +352,7 @@ function ReportingGrid({
   );
 }
 
-function ActionTile({
-  title,
-  description,
-  icon,
-  href,
-}: {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  href: string;
-}) {
-  return (
-    <Card
-      className="transition-colors"
-      style={{
-        backgroundColor: "var(--card)",
-        border: "1px solid var(--border)",
-        color: "var(--foreground)",
-      }}
-    >
-      <Link href={href} className="block h-full">
-        <Flex direction="column" gap="2" p="3">
-          <Flex align="center" gap="2">
-            <Badge color="gray" variant="soft" radius="full">{icon}</Badge>
-            <Text weight="medium">{title}</Text>
-          </Flex>
-          <Text color="gray" size="2">{description}</Text>
-        </Flex>
-      </Link>
-    </Card>
-  );
-}
+
 
 function HeaderBlock({ brandName }: { brandName: string }) {
   return (

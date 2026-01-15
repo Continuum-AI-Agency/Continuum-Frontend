@@ -51,6 +51,15 @@ export type WeeklyGrid = {
 
 export type GridStatus = "idle" | "running" | "awaiting_approval" | "approved" | "complete" | "error";
 
+export interface ScheduledEvent {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  date: string;
+  draftId?: string;
+}
+
 interface CalendarState {
   days: OrganicCalendarDay[];
   unscheduledDrafts: OrganicCalendarDraft[];
@@ -65,6 +74,9 @@ interface CalendarState {
   };
   gridError: string | null;
   gridJobId: string | null;
+
+  scheduledEvents: Record<string, ScheduledEvent[]>;
+  viewMode: "day" | "week" | "month";
   
   setDays: (days: OrganicCalendarDay[]) => void;
   setUnscheduledDrafts: (drafts: OrganicCalendarDraft[]) => void;
@@ -81,6 +93,11 @@ interface CalendarState {
   setGridJobId: (jobId: string | null) => void;
   setGhosts: (dayId: string, count: number) => void;
   clearGhosts: () => void;
+
+  addScheduledEvent: (date: string, event: Omit<ScheduledEvent, "id">) => void;
+  updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
+  moveEventToDay: (eventId: string, targetDate: string) => void;
+  setViewMode: (mode: "day" | "week" | "month") => void;
 }
 
 export const useCalendarStore = create<CalendarState>()(
@@ -96,6 +113,8 @@ export const useCalendarStore = create<CalendarState>()(
       gridProgress: { percent: 0 },
       gridError: null,
       gridJobId: null,
+      scheduledEvents: {},
+      viewMode: "week",
 
       setDays: (days) => set({ days }),
       setUnscheduledDrafts: (drafts) => set({ unscheduledDrafts: drafts }),
@@ -196,11 +215,66 @@ export const useCalendarStore = create<CalendarState>()(
         })),
         
       clearGhosts: () => set({ ghosts: {} }),
+
+      addScheduledEvent: (date, event) =>
+        set((state) => {
+          const newId = crypto.randomUUID();
+          const currentEvents = state.scheduledEvents[date] || [];
+          return {
+            scheduledEvents: {
+              ...state.scheduledEvents,
+              [date]: [...currentEvents, { ...event, id: newId }],
+            },
+          };
+        }),
+
+      updateEventTime: (eventId, newTime) =>
+        set((state) => {
+          const newEvents = { ...state.scheduledEvents };
+          for (const date in newEvents) {
+            const index = newEvents[date].findIndex((e) => e.id === eventId);
+            if (index !== -1) {
+              newEvents[date][index] = {
+                ...newEvents[date][index],
+                startTime: newTime.start,
+                endTime: newTime.end,
+              };
+              return { scheduledEvents: newEvents };
+            }
+          }
+          return state;
+        }),
+
+      moveEventToDay: (eventId, targetDate) =>
+        set((state) => {
+          let eventToMove: ScheduledEvent | undefined;
+          const newEvents = { ...state.scheduledEvents };
+          
+          for (const date in newEvents) {
+            const index = newEvents[date].findIndex((e) => e.id === eventId);
+            if (index !== -1) {
+              [eventToMove] = newEvents[date].splice(index, 1);
+              if (newEvents[date].length === 0) delete newEvents[date];
+              break;
+            }
+          }
+
+          if (!eventToMove) return state;
+
+          const targetEvents = newEvents[targetDate] || [];
+          newEvents[targetDate] = [...targetEvents, { ...eventToMove, date: targetDate }];
+
+          return { scheduledEvents: newEvents };
+        }),
+
+      setViewMode: (mode) => set({ viewMode: mode }),
     }),
     {
       name: "organic-calendar-storage",
       partialize: (state) => ({ 
         selectedTrendIds: state.selectedTrendIds,
+        scheduledEvents: state.scheduledEvents,
+        viewMode: state.viewMode,
       }),
     }
   )
