@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useStudioStore } from '../stores/useStudioStore';
+import { cn } from '@/lib/utils';
 import { NanoGenNodeData } from '../types';
 import { CustomHandle } from '../components/CustomHandle';
 import { Link2Icon } from '@radix-ui/react-icons';
@@ -86,17 +87,20 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
             )}
           </div>
           <div className="relative">
-             {isPromptConnected ? (
-                <div className="h-20 w-full rounded-md border border-indigo-200 bg-indigo-50/50 p-2 text-xs text-indigo-600 flex items-center justify-center text-center italic">
-                  Using connected prompt node
-                </div>
-             ) : (
-                <Textarea 
-                   value={data.positivePrompt} 
-                   onChange={handlePromptChange} 
-                   className="text-xs h-20 resize-none" 
-                   placeholder="A cyberpunk city..." 
-                />
+             <Textarea
+                value={isPromptConnected ? '' : data.positivePrompt}
+                onChange={handlePromptChange}
+                disabled={isPromptConnected}
+                className={cn(
+                  "text-xs h-20 resize-none",
+                  isPromptConnected && "bg-indigo-50/50 text-indigo-600 italic placeholder:text-indigo-400"
+                )}
+                placeholder={isPromptConnected ? "Using connected prompt node" : "A cyberpunk city..."}
+             />
+             {isPromptConnected && (
+               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                 <span className="text-xs text-indigo-600 font-medium">Using connected prompt node</span>
+               </div>
              )}
              <CustomHandle 
                type="target" 
