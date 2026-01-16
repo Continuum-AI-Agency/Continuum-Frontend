@@ -6,7 +6,9 @@ import { PaidMetricsResponseSchema } from "@/lib/schemas/paidMetrics";
 
 const requestSchema = z.object({
   brandId: z.string(),
-  adAccountId: z.string().optional(),
+  platform: z.enum(["meta", "google-ads", "dv360"]).optional().default("meta"),
+  accountId: z.string().optional(),
+  campaignId: z.string().optional(),
   range: z.object({
     preset: z.string(),
     since: z.string().optional(),

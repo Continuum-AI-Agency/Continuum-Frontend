@@ -37,9 +37,11 @@ export type PaidMetricsResponse = z.infer<typeof PaidMetricsResponseSchema>;
 
 export type PaidMetricsRequest = {
     brandId: string;
-    adAccountId?: string;
+    platform?: "meta" | "google-ads" | "dv360";
+    accountId?: string;
+    campaignId?: string;
     range: {
-        preset: string; // e.g., "last_7d"
+        preset: string;
         since?: string;
         until?: string;
     };
