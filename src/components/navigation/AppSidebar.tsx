@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, ComponentType } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Badge } from "@radix-ui/themes";
 import {
@@ -21,7 +22,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronRightIcon, ExitIcon } from "@radix-ui/react-icons";
-import { APP_NAVIGATION, APP_NAVIGATION_FOOTER, type AppNavigationItem } from "./routes";
+import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { BrandSwitcher } from "./BrandSwitcher";
+import { motion } from "framer-motion";
+
+const transitionStandard = {
+  duration: 0.25,
+  ease: [0.2, 0.8, 0.2, 1],
+};
 
 function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams, item: { href: string }) {
   // Exact match for dashboard
@@ -61,6 +68,38 @@ function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams
   return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
 }
 
+interface AnimatedIconProps {
+  icon: ComponentType<{ className?: string }>;
+  isHovered: boolean;
+  active?: boolean;
+}
+
+function AnimatedIcon({ icon: Icon, isHovered, active }: AnimatedIconProps) {
+  return (
+    <div className="relative flex items-center justify-center">
+      <Icon className={cn(
+        "z-10 !h-5 !w-5 transition-colors duration-200",
+        active ? "text-[var(--ring)]" : "text-slate-400"
+      )} />
+      <motion.div
+        className="absolute -bottom-1.5 h-[1.5px] w-4 rounded-full bg-[var(--ring)]"
+        initial={{ scaleX: 0, opacity: 0 }}
+        animate={{ 
+          scaleX: isHovered ? 1 : 0, 
+          opacity: isHovered ? 1 : 0 
+        }}
+        transition={{ 
+          type: "spring", 
+          stiffness: 400, 
+          damping: 25,
+          mass: 0.5
+        }}
+        style={{ originX: 0.5 }}
+      />
+    </div>
+  );
+}
+
 export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -68,6 +107,7 @@ export function AppSidebar() {
   const { user } = useSession();
   const { logout, isPending } = useAuth();
   const isAdmin = isAdminUser(user);
+  const [hoveredHref, setHoveredHref] = useState<string | null>(null);
 
   return (
     <Sidebar
@@ -90,12 +130,10 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
               {APP_NAVIGATION.map((item) => {
-                const Icon = item.icon;
                 const active = isRouteActive(pathname, searchParams, item);
                 const hasSubItems = item.items && item.items.length > 0;
 
                 if (hasSubItems) {
-                  // Check if any sub-item is active to open the accordion
                   const isSubActive = item.items?.some(sub => isRouteActive(pathname, searchParams, sub));
                   
                   return (
@@ -112,12 +150,18 @@ export function AppSidebar() {
                               <SidebarMenuButton
                                 size="lg"
                                 isActive={active || isSubActive}
+                                onMouseEnter={() => setHoveredHref(item.href)}
+                                onMouseLeave={() => setHoveredHref(null)}
                                 className={cn(
-                                  "transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
+                                  "group transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
                                   (active || isSubActive) ? "text-[var(--ring)]" : "text-slate-400"
                                 )}
                               >
-                                <Icon className="!h-5 !w-5" />
+                                <AnimatedIcon 
+                                  icon={item.icon} 
+                                  isHovered={hoveredHref === item.href} 
+                                  active={active || isSubActive} 
+                                />
                                 <span className="group-data-[collapsible=icon]:hidden">
                                   {item.label}
                                 </span>
@@ -145,14 +189,21 @@ export function AppSidebar() {
                                     asChild
                                     isActive={subActive}
                                     size="md"
+                                    onMouseEnter={() => setHoveredHref(subItem.href)}
+                                    onMouseLeave={() => setHoveredHref(null)}
                                     className={cn(
-                                       "text-slate-400 hover:text-slate-100 data-[active=true]:text-[var(--ring)]",
-                                       // Override hidden state in icon mode
+                                       "group text-slate-400 hover:text-slate-100 data-[active=true]:text-[var(--ring)]",
                                        "group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
                                     )}
                                   >
                                     <Link href={subItem.href}>
-                                      {SubIcon && <SubIcon className="h-4 w-4" />}
+                                      {SubIcon && (
+                                        <AnimatedIcon 
+                                          icon={SubIcon} 
+                                          isHovered={hoveredHref === subItem.href} 
+                                          active={subActive} 
+                                        />
+                                      )}
                                       <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
                                     </Link>
                                   </SidebarMenuSubButton>
@@ -173,13 +224,19 @@ export function AppSidebar() {
                       isActive={active}
                       tooltip={item.label}
                       size="lg"
+                      onMouseEnter={() => setHoveredHref(item.href)}
+                      onMouseLeave={() => setHoveredHref(null)}
                       className={cn(
-                        "transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
+                        "group transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
                          active ? "text-[var(--ring)]" : "text-slate-400"
                       )}
                     >
                       <Link href={item.href}>
-                        <Icon className="!h-5 !w-5" />
+                        <AnimatedIcon 
+                          icon={item.icon} 
+                          isHovered={hoveredHref === item.href} 
+                          active={active} 
+                        />
                         <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -225,7 +282,6 @@ export function AppSidebar() {
         <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
           {APP_NAVIGATION_FOOTER.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
-            const Icon = item.icon;
             const active = isRouteActive(pathname, searchParams, item);
 
             return (
@@ -235,13 +291,19 @@ export function AppSidebar() {
                   isActive={active}
                   tooltip={item.label}
                   size="lg"
+                  onMouseEnter={() => setHoveredHref(item.href)}
+                  onMouseLeave={() => setHoveredHref(null)}
                   className={cn(
-                    "transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
+                    "group transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
                      active ? "text-[var(--ring)]" : "text-slate-400"
                   )}
                 >
                   <Link href={item.href}>
-                    <Icon className="!h-5 !w-5" />
+                    <AnimatedIcon 
+                      icon={item.icon} 
+                      isHovered={hoveredHref === item.href} 
+                      active={active} 
+                    />
                     <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
@@ -255,9 +317,15 @@ export function AppSidebar() {
               size="lg"
               disabled={isPending}
               onClick={() => logout()}
-              className="text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-all duration-200"
+              onMouseEnter={() => setHoveredHref("sign-out")}
+              onMouseLeave={() => setHoveredHref(null)}
+              className="group text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-all duration-200"
             >
-              <ExitIcon className="!h-5 !w-5" />
+              <AnimatedIcon 
+                icon={ExitIcon as any} 
+                isHovered={hoveredHref === "sign-out"} 
+                active={false} 
+              />
               <span className="group-data-[collapsible=icon]:hidden">
                 {isPending ? "Signing out..." : "Sign out"}
               </span>

@@ -22,8 +22,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { fetchPaidMediaMetrics } from "@/lib/api/paidMetrics.client";
-import type { PaidMetricsRequest, PaidMetricsResponse } from "@/lib/schemas/paidMetrics";
+import type { PaidMetricsResponse } from "@/lib/schemas/paidMetrics";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -38,7 +37,8 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "success"; data: PaidMetricsResponse };
+  | { status: "success"; data: PaidMetricsResponse }
+  | { status: "development" };
 
 type MetricKey = keyof PaidMetricsResponse["metrics"];
 
@@ -162,32 +162,8 @@ export function PaidMediaReportingWidget({ brandId, adAccountId }: Props) {
   const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
 
   React.useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      setState({ status: "loading" });
-      try {
-        const request: PaidMetricsRequest = {
-          brandId,
-          adAccountId,
-          range: { preset: "last_7d" },
-        };
-
-        const data = await fetchPaidMediaMetrics(request);
-        if (cancelled) return;
-        setState({ status: "success", data });
-      } catch (error) {
-        if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unable to load Paid Media metrics.";
-        setState({ status: "error", message });
-      }
-    }
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, adAccountId, viewMode]);
+    setState({ status: "development" });
+  }, []);
 
   return (
     <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
@@ -225,6 +201,15 @@ export function PaidMediaReportingWidget({ brandId, adAccountId }: Props) {
              <Flex direction="column" gap="3">
                  <Skeleton className="h-24 w-full" />
                  <Skeleton className="h-24 w-full" />
+             </Flex>
+           ) : state.status === "development" ? (
+             <Flex direction="column" align="center" justify="center" gap="3" className="h-full min-h-[200px]">
+               <Text size="3" color="gray" align="center">
+                 Feature under Development
+               </Text>
+               <Text size="2" color="gray" align="center">
+                 Paid Media reporting functionality is coming soon.
+               </Text>
              </Flex>
            ) : state.status === "success" ? (
              viewMode === "overview" ? (
