@@ -16,6 +16,7 @@ Main wrapper component that handles WebGL detection, theme integration, and fade
 - `showParticles?: boolean` - Show floating galaxy particles
 - `size?: "sm" | "md" | "lg" | "full"` - Component size variant
 - `overlay?: boolean` - Full-screen overlay mode
+- `className?: string` - Optional container class overrides
 
 ### `SaturnRingsScene.tsx`
 React Three Fiber Canvas setup with WebGPU/WebGL support and lighting.

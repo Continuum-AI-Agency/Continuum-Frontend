@@ -6,6 +6,8 @@ import SaturnRingsScene from "./SaturnRingsScene";
 import PhraseOverlay from "./PhraseOverlay";
 import CSSFallback from "./CSSFallback";
 import { useTheme } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
+import { LOGIN_GLOW_GRADIENT } from "@/lib/ui/backgrounds";
 import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
 
 export interface OnboardingLoadingProps {
@@ -31,6 +33,8 @@ export interface OnboardingLoadingProps {
   overlay?: boolean;
   /** Enable fast 600ms phrase cycling */
   fastMode?: boolean;
+  /** Extra class names for the container */
+  className?: string;
 }
 
 const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
@@ -45,6 +49,7 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
   size = "full",
   overlay = true,
   fastMode = false,
+  className,
 }) => {
   const { appearance } = useTheme();
   const [internalVisible, setInternalVisible] = useState(autoFadeIn ? false : isVisible);
@@ -65,19 +70,23 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
     checkWebGL();
   }, []);
 
-  // Handle visibility changes
+  // Handle visibility changes (fade in/out)
   useEffect(() => {
-    if (isVisible && autoFadeIn && !internalVisible) {
-      setInternalVisible(true);
+    if (isVisible) {
+      if (autoFadeIn) {
+        setInternalVisible(true);
+      } else {
+        setInternalVisible(isVisible);
+      }
+      return;
     }
-  }, [isVisible, autoFadeIn, internalVisible]);
 
-  // Handle fade in
-  useEffect(() => {
-    if (internalVisible && autoFadeIn) {
-      // Already visible, no fade needed
+    if (autoFadeOut) {
+      setInternalVisible(false);
+    } else {
+      setInternalVisible(isVisible);
     }
-  }, [internalVisible, autoFadeIn]);
+  }, [isVisible, autoFadeIn, autoFadeOut]);
 
   // Handle ready callback
   useEffect(() => {
@@ -96,15 +105,18 @@ const OnboardingLoading: React.FC<OnboardingLoadingProps> = ({
   const shouldUse3D = use3D && webGLSupported === true;
 
   const containerClasses = overlay
-    ? "fixed inset-0 z-50"
+    ? "fixed inset-0 z-50 bg-default overflow-hidden"
     : size === "full" ? "absolute inset-0"
     : size === "lg" ? "w-full h-96"
     : size === "md" ? "w-full h-64"
     : "w-full h-48";
 
+  const backdropStyle = overlay ? { backgroundImage: LOGIN_GLOW_GRADIENT } : undefined;
+
   return (
     <motion.div
-      className={containerClasses}
+      className={cn(containerClasses, className)}
+      style={backdropStyle}
       initial={{ opacity: 0 }}
       animate={{ opacity: internalVisible ? 1 : 0 }}
       transition={{ duration: 0.8, ease: "easeInOut" }}
