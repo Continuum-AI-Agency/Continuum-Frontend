@@ -12,6 +12,7 @@ import {
   IconButton,
   Select,
   Text,
+  Separator,
 } from "@radix-ui/themes";
 import React from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, LineChart, Line, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
@@ -22,10 +23,11 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { fetchInstagramOrganicMetrics, type InsightsRequest, type InstagramOrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
-import type { InstagramOrganicMetricsResponse, OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
+import { fetchOrganicMetrics, type InsightsRequest, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
+import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform } from "@/lib/schemas/organicMetrics";
 import { cn } from "@/lib/utils";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
+import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 
 export type InstagramAccountOption = {
   integrationAccountId: string;
@@ -36,6 +38,7 @@ export type InstagramAccountOption = {
 type Props = {
   brandId: string;
   accounts: InstagramAccountOption[];
+  initialPlatform?: OrganicPlatform;
 };
 
 type ViewMode = "overview" | "trends";
@@ -44,11 +47,11 @@ type LoadState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "success"; data: InstagramOrganicMetricsResponse };
+  | { status: "success"; data: OrganicMetricsResponse };
 
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
 
-type MetricKey = keyof InstagramOrganicMetricsResponse["metrics"];
+type MetricKey = keyof OrganicMetricsResponse["metrics"];
 
 type MetricCard = {
   key: MetricKey;
@@ -56,7 +59,7 @@ type MetricCard = {
   value: number;
 };
 
-const METRIC_LABELS: Record<MetricKey, string> = {
+const METRIC_LABELS: Record<string, string> = {
   reach: "Reach",
   views: "Views",
   newFollowers: "New followers",
@@ -73,6 +76,8 @@ const METRIC_LABELS: Record<MetricKey, string> = {
   shares: "Shares",
   saved: "Saved",
   totalInteractions: "Total interactions",
+  subscribers: "Subscribers",
+  impressions: "Impressions",
 };
 
 function formatNumber(value: number) {
@@ -89,11 +94,10 @@ function formatPercent(value?: number) {
   return `${value >= 0 ? "+" : "-"}${rounded}%`;
 }
 
-function TrendsPanel({ data }: { data: InstagramOrganicMetricsResponse }) {
+function TrendsPanel({ data }: { data: OrganicMetricsResponse }) {
   const { insights, range } = data;
 
   // Generate sample daily trend data based on the current period
-  // In a real implementation, this would come from insights API response
   const generateSampleTrendData = () => {
     const days = [];
     const startDate = new Date(range.since);
@@ -110,8 +114,8 @@ function TrendsPanel({ data }: { data: InstagramOrganicMetricsResponse }) {
 
       days.push({
         date: dateStr,
-        reach: Math.round((data.metrics.reach / (daysDiff + 1)) * baseMultiplier),
-        views: Math.round((data.metrics.views / (daysDiff + 1)) * baseMultiplier),
+        reach: Math.round(((data.metrics.reach ?? 0) / (daysDiff + 1)) * baseMultiplier),
+        views: Math.round(((data.metrics.views ?? 0) / (daysDiff + 1)) * baseMultiplier),
         likes: data.metrics.likes ? Math.round((data.metrics.likes / (daysDiff + 1)) * baseMultiplier) : undefined,
         comments: data.metrics.comments ? Math.round((data.metrics.comments / (daysDiff + 1)) * baseMultiplier) : undefined,
         shares: data.metrics.shares ? Math.round((data.metrics.shares / (daysDiff + 1)) * baseMultiplier) : undefined,
@@ -296,7 +300,7 @@ function InteractionBreakdownCharts({ breakdowns }: { breakdowns: Record<string,
           return (
             <Card variant="surface" className="border border-subtle bg-surface" key={metric}>
               <Box p="3">
-                <Text size="2" color="gray" mb="2">{METRIC_LABELS[metric as MetricKey]}</Text>
+                <Text size="2" color="gray" mb="2">{METRIC_LABELS[metric]}</Text>
                 <ChartContainer config={{}} className="aspect-square h-[120px] w-full">
                   <PieChart>
                     <Pie
@@ -332,7 +336,8 @@ function getColorForType(type: string): string {
   }
 }
 
-export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
+export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlatform = "instagram" }: Props) {
+  const [platform, setPlatform] = React.useState<OrganicPlatform>(initialPlatform);
   const firstAccountId = accounts[0]?.integrationAccountId ?? null;
   const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(firstAccountId);
   const [viewMode, setViewMode] = React.useState<ViewMode>("overview");
@@ -342,16 +347,22 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
   const selectedAccount = accounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
 
   React.useEffect(() => {
-    if (selectedAccountId === null) return;
+    if (selectedAccountId === null || platform !== "instagram") {
+      if (platform !== "instagram") {
+        setState({ status: "idle" });
+      }
+      return;
+    }
     const accountId = selectedAccountId;
     let cancelled = false;
 
     async function run() {
       setState({ status: "loading" });
       try {
-        const request: InstagramOrganicMetricsRequest = {
+        const request: OrganicMetricsRequest = {
           brandId,
           integrationAccountId: accountId,
+          platform,
           range: { preset: DEFAULT_RANGE_PRESET },
         };
 
@@ -368,12 +379,12 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
           ];
         }
 
-        const data = await fetchInstagramOrganicMetrics(request);
+        const data = await fetchOrganicMetrics(request);
         if (cancelled) return;
         setState({ status: "success", data });
       } catch (error) {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : "Unable to load Instagram organic metrics.";
+        const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
         setState({ status: "error", message });
       }
     }
@@ -382,18 +393,48 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [brandId, selectedAccountId, viewMode]);
+  }, [brandId, selectedAccountId, viewMode, platform]);
 
   return (
     <Card variant="surface" className="border border-subtle bg-surface">
       <Box p="4">
         <Flex align="center" justify="between" gap="3" wrap="wrap">
           <Flex align="center" gap="2">
-            <Badge color="gray" variant="soft" radius="full">
-              <InstagramLogoIcon />
-            </Badge>
+            <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
+              <Select.Trigger variant="ghost" className="p-0 h-auto">
+                <Badge color="gray" variant="soft" radius="full">
+                  <PlatformIcon platform={platform === "x" ? "threads" : platform} />
+                </Badge>
+              </Select.Trigger>
+              <Select.Content position="popper">
+                <Select.Item value="instagram">
+                  <Flex align="center" gap="2">
+                    <PlatformIcon platform="instagram" />
+                    <Text>Instagram</Text>
+                  </Flex>
+                </Select.Item>
+                <Select.Item value="youtube" disabled>
+                  <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                    <PlatformIcon platform="youtube" />
+                    <Text>YouTube</Text>
+                  </Flex>
+                </Select.Item>
+                <Select.Item value="x" disabled>
+                  <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                    <PlatformIcon platform="threads" />
+                    <Text>X</Text>
+                  </Flex>
+                </Select.Item>
+                <Select.Item value="tiktok" disabled>
+                  <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                    <PlatformIcon platform="tiktok" />
+                    <Text>TikTok</Text>
+                  </Flex>
+                </Select.Item>
+              </Select.Content>
+            </Select.Root>
             <Box>
-              <Text weight="medium">Instagram organic reporting</Text>
+              <Text weight="medium" style={{ textTransform: "capitalize" }}>{platform} organic reporting</Text>
               <Text color="gray" size="2">
                 {rangeLabel(DEFAULT_RANGE_PRESET)} {viewMode}
               </Text>
@@ -413,11 +454,11 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
 
             <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
               <Select.Trigger variant="surface" radius="large">
-                {selectedAccount?.name ?? "Select an Instagram account"}
+                {selectedAccount?.name ?? `Select a ${platform} account`}
               </Select.Trigger>
               <Select.Content position="popper" variant="solid" highContrast>
                 <Select.Group>
-                  <Select.Label>Instagram accounts</Select.Label>
+                  <Select.Label>{platform} accounts</Select.Label>
                   {accounts.map((account) => (
                     <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
                       {account.name}
@@ -430,9 +471,19 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
         </Flex>
 
         <Box pt="4">
-          {accounts.length === 0 ? (
+          {platform !== "instagram" ? (
+             <Box py="8">
+                <Flex direction="column" align="center" justify="center" gap="3">
+                  <PlatformIcon platform={platform === "x" ? "threads" : platform} size={48} className="opacity-20" />
+                  <Heading size="4" color="gray">{platform} Support Coming Soon</Heading>
+                  <Text color="gray" size="2" align="center" style={{ maxWidth: 300 }}>
+                    We&apos;re currently working on integrating {platform} organic metrics into your dashboard.
+                  </Text>
+                </Flex>
+             </Box>
+          ) : accounts.length === 0 ? (
             <Text color="gray" size="2">
-              No Instagram accounts are linked to this brand profile.
+              No {platform} accounts are linked to this brand profile.
             </Text>
           ) : state.status === "error" ? (
             <Callout.Root color="red" variant="surface">
@@ -452,7 +503,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts }: Props) {
              )
            ) : (
             <Text color="gray" size="2">
-              Select an Instagram account to view organic reporting.
+              Select a {platform} account to view organic reporting.
             </Text>
           )}
         </Box>
@@ -466,36 +517,25 @@ function MetricsPanel({
   expandedMetric,
   onMetricSelect,
 }: {
-  data: InstagramOrganicMetricsResponse;
+  data: OrganicMetricsResponse;
   expandedMetric: MetricKey | null;
   onMetricSelect: (key: MetricKey | null) => void;
 }) {
   const { metrics, comparison, range, interactionBreakdowns } = data;
 
-  const baseMetrics: MetricCard[] = [
-    { key: "reach", label: METRIC_LABELS.reach, value: metrics.reach },
-    { key: "views", label: METRIC_LABELS.views, value: metrics.views },
-    { key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers },
-    { key: "accountsEngaged", label: METRIC_LABELS.accountsEngaged, value: metrics.accountsEngaged },
-    { key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews },
-    { key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews },
-  ];
+  const metricCards: MetricCard[] = [];
+  
+  if (metrics.reach !== undefined) metricCards.push({ key: "reach", label: METRIC_LABELS.reach, value: metrics.reach });
+  if (metrics.views !== undefined) metricCards.push({ key: "views", label: METRIC_LABELS.views, value: metrics.views });
+  if (metrics.newFollowers !== undefined) metricCards.push({ key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers });
+  if (metrics.accountsEngaged !== undefined) metricCards.push({ key: "accountsEngaged", label: METRIC_LABELS.accountsEngaged, value: metrics.accountsEngaged });
+  if (metrics.reelsViews !== undefined) metricCards.push({ key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews });
+  if (metrics.postViews !== undefined) metricCards.push({ key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews });
 
-  const interactionMetrics: MetricCard[] = [];
-  if (metrics.likes !== undefined) {
-    interactionMetrics.push({ key: "likes", label: METRIC_LABELS.likes, value: metrics.likes });
-  }
-  if (metrics.comments !== undefined) {
-    interactionMetrics.push({ key: "comments", label: METRIC_LABELS.comments, value: metrics.comments });
-  }
-  if (metrics.shares !== undefined) {
-    interactionMetrics.push({ key: "shares", label: METRIC_LABELS.shares, value: metrics.shares });
-  }
-  if (metrics.totalInteractions !== undefined) {
-    interactionMetrics.push({ key: "totalInteractions", label: METRIC_LABELS.totalInteractions, value: metrics.totalInteractions });
-  }
-
-  const metricCards = [...baseMetrics, ...interactionMetrics];
+  if (metrics.likes !== undefined) metricCards.push({ key: "likes", label: METRIC_LABELS.likes, value: metrics.likes });
+  if (metrics.comments !== undefined) metricCards.push({ key: "comments", label: METRIC_LABELS.comments, value: metrics.comments });
+  if (metrics.shares !== undefined) metricCards.push({ key: "shares", label: METRIC_LABELS.shares, value: metrics.shares });
+  if (metrics.totalInteractions !== undefined) metricCards.push({ key: "totalInteractions", label: METRIC_LABELS.totalInteractions, value: metrics.totalInteractions });
 
   const expandedKey = expandedMetric ?? metricCards[0]?.key;
   const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";

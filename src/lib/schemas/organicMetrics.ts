@@ -72,8 +72,34 @@ export const instagramOrganicMetricsSchema = z.object({
 
 export type InstagramOrganicMetrics = z.infer<typeof instagramOrganicMetricsSchema>;
 
+export const organicMetricsSchema = z.object({
+  newFollowers: z.number().optional(),
+  reach: z.number().optional(),
+  views: z.number().optional(),
+  accountsEngaged: z.number().optional(),
+  reelsViews: z.number().optional(),
+  postViews: z.number().optional(),
+  storiesViews: z.number().optional(),
+  profileVisitsYesterday: z.number().optional(),
+  nonFollowerReach: z.number().optional(),
+  followerReach: z.number().optional(),
+  likes: z.number().optional(),
+  comments: z.number().optional(),
+  replies: z.number().optional(),
+  shares: z.number().optional(),
+  saved: z.number().optional(),
+  totalInteractions: z.number().optional(),
+  subscribers: z.number().optional(),
+  impressions: z.number().optional(),
+});
+
+export type OrganicMetrics = z.infer<typeof organicMetricsSchema>;
+
+export const organicPlatformSchema = z.enum(["instagram", "youtube", "x", "tiktok"]);
+export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
+
 export const instagramOrganicMetricsResponseSchema = z.object({
-  platform: z.literal("instagram"),
+  platform: organicPlatformSchema,
   accountId: z.string(),
   brandId: z.string().optional(),
   integrationAccountId: z.string().optional(),
@@ -81,10 +107,14 @@ export const instagramOrganicMetricsResponseSchema = z.object({
   fetchedAt: z.string().optional(),
   range: organicRangeSchema,
   warnings: z.array(z.string()).optional(),
-  metrics: instagramOrganicMetricsSchema,
+  metrics: organicMetricsSchema,
   interactionBreakdowns: interactionBreakdownsSchema.optional(),
   comparison: z.record(metricComparisonSchema).nullable().optional(),
   insights: z.array(insightsResponseSchema).optional(),
 });
 
-export type InstagramOrganicMetricsResponse = z.infer<typeof instagramOrganicMetricsResponseSchema>;
+export const organicMetricsResponseSchema = instagramOrganicMetricsResponseSchema;
+
+export type OrganicMetricsResponse = z.infer<typeof organicMetricsResponseSchema>;
+
+export type InstagramOrganicMetricsResponse = OrganicMetricsResponse;

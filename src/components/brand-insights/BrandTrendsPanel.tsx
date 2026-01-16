@@ -15,6 +15,7 @@ type BrandTrendsPanelProps = {
   actionSlot?: React.ReactNode;
   brandId?: string;
   isLoading?: boolean;
+  className?: string;
 };
 
 function formatDate(value?: string) {
@@ -28,6 +29,8 @@ function formatDate(value?: string) {
   });
 }
 
+import { cn } from "@/lib/utils";
+
 export function BrandTrendsPanel({
   trends,
   country,
@@ -37,6 +40,7 @@ export function BrandTrendsPanel({
   actionSlot,
   brandId,
   isLoading = false,
+  className,
 }: BrandTrendsPanelProps) {
   const weekLabel = formatDate(weekStartDate);
   const generatedLabel = formatDate(generatedAt);
@@ -47,7 +51,7 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <GlassPanel className="p-6 space-y-4">
+    <GlassPanel className={cn("p-6 space-y-4", className)}>
       <Flex justify="between" align="start" wrap="wrap" gap="3">
         <Box className="space-y-1">
           <Flex align="center" gap="2">
