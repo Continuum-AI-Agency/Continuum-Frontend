@@ -26,6 +26,7 @@ import {
   removeSavedCompetitorAction,
 } from "@/lib/actions/competitors";
 import type { CompetitorDashboard, CompetitorPost, CompetitorSavedProfile } from "@/lib/schemas/competitors";
+import { CompetitorService } from "@/services/competitorService";
 import { CompetitorPostCard } from "./CompetitorPostCard";
 
 type SortOption =
@@ -247,7 +248,7 @@ const runSearch = async (force = false, overrideUsername?: string) => {
                   <Flex align="center" gap="2">
                     {item.profilePicUrl ? (
                       <Image
-                        src={item.profilePicUrl}
+                        src={CompetitorService.getProxiedImageUrl(item.profilePicUrl)}
                         alt={item.username}
                         width={32}
                         height={32}
@@ -296,7 +297,7 @@ const runSearch = async (force = false, overrideUsername?: string) => {
             <Flex align="center" gap="3">
               {dashboard.profile.profilePicUrl ? (
                 <Image
-                  src={dashboard.profile.profilePicUrl}
+                  src={CompetitorService.getProxiedImageUrl(dashboard.profile.profilePicUrl)}
                   alt={dashboard.profile.username}
                   width={48}
                   height={48}

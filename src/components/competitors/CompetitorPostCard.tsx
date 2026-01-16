@@ -17,26 +17,28 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
 
-  const carousel = (post as { carousel_items?: { type: "image" | "video"; url: string }[] }).carousel_items ?? [];
-  const mediaUrls = (post as { media_urls?: string[] }).media_urls ?? [];
-  const allMedia = carousel.length > 0
-    ? carousel
-    : mediaUrls.map(url => ({ type: post.type === 'Video' ? 'video' as const : 'image' as const, url }));
+  const carouselUrls = post.carouselItems ?? [];
+  const mediaUrls = post.mediaUrls ?? [];
+  const productType = post.productType?.toLowerCase() ?? "";
+  const postType = post.type?.toLowerCase() ?? "";
+  const isVideoPost = productType === "reel" || postType === "video";
+  const sourceUrls = carouselUrls.length > 0 ? carouselUrls : mediaUrls;
+  const allMedia = sourceUrls.map((url) => ({
+    type: isVideoPost ? ("video" as const) : ("image" as const),
+    url,
+  }));
 
   const hasMultipleMedia = allMedia.length > 1;
   const currentMedia = allMedia[currentMediaIndex];
   
   const engagementRate = post.views
-    ? CompetitorService.calculateVideoEngagementRate(
-        (post as { likes_count?: number }).likes_count ?? post.likesCount,
-        (post as { comments_count?: number }).comments_count ?? post.commentsCount,
-        post.views
-      )
+    ? CompetitorService.calculateVideoEngagementRate(post.likesCount, post.commentsCount, post.views)
     : null;
 
   const goToNext = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (allMedia.length === 0) return;
     setCurrentMediaIndex((prev) => (prev + 1) % allMedia.length);
     setImageError(false);
   };
@@ -44,6 +46,7 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
   const goToPrevious = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (allMedia.length === 0) return;
     setCurrentMediaIndex((prev) => (prev - 1 + allMedia.length) % allMedia.length);
     setImageError(false);
   };
@@ -52,9 +55,8 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
     setImageError(true);
   };
 
-  const getProxiedUrl = (url: string) => {
-    return CompetitorService.getProxiedImageUrl(url);
-  };
+  const getMediaUrl = (url: string, type: "image" | "video") =>
+    type === "video" ? url : CompetitorService.getProxiedImageUrl(url);
 
   return (
     <div className="relative group">
@@ -64,7 +66,7 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
               {currentMedia.type === 'video' ? (
                 <div className="relative w-full h-full bg-black flex items-center justify-center cursor-pointer group/video">
                   <video
-                    src={getProxiedUrl(currentMedia.url)}
+                    src={getMediaUrl(currentMedia.url, "video")}
                     className="object-contain w-full h-full"
                     controls
                     playsInline
@@ -74,7 +76,7 @@ export const CompetitorPostCard = ({ post }: CompetitorPostCardProps) => {
                 </div>
               ) : (
                 <Image
-                  src={imageError ? CompetitorService.getPlaceholderImage() : getProxiedUrl(currentMedia.url)}
+                  src={imageError ? CompetitorService.getPlaceholderImage() : getMediaUrl(currentMedia.url, "image")}
                   alt={CompetitorService.truncateCaption(post.caption || '', 50)}
                   fill
                   unoptimized

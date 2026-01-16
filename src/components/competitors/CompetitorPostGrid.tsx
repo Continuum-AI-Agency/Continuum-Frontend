@@ -41,14 +41,11 @@ type ViewPost = {
 };
 
 function normalizePost(post: CompetitorPost): ViewPost {
+  const isVideo = post.productType === "reel" || post.type?.toLowerCase() === "video";
   const mediaSources = (post.carouselItems ?? post.mediaUrls ?? []).map((url) => ({
-    displayUrl: url,
-    type:
-      post.productType === "reel" || post.type?.toLowerCase() === "video" ? ("Video" as const) : ("Image" as const),
-    videoUrl:
-      post.productType === "reel" || post.type?.toLowerCase() === "video"
-        ? url
-        : undefined,
+    displayUrl: CompetitorService.getProxiedImageUrl(url),
+    type: isVideo ? ("Video" as const) : ("Image" as const),
+    videoUrl: isVideo ? url : undefined,
   }));
 
   return {

@@ -286,10 +286,14 @@ export class CompetitorService {
    */
   static isValidImageUrl(url: string): boolean {
     try {
-      new URL(url);
+      const parsed = new URL(url);
+      const isProxyPath = parsed.pathname.includes("/competitors/proxy/image");
       return (
         url.startsWith("http") &&
-        (url.includes("instagram") || url.includes("fbcdn") || url.includes("cdninstagram"))
+        (url.includes("instagram") ||
+          url.includes("fbcdn") ||
+          url.includes("cdninstagram") ||
+          isProxyPath)
       );
     } catch {
       return false;
@@ -307,15 +311,15 @@ export class CompetitorService {
    * Get first media URL from post (with proxy)
    */
   static getFirstMediaUrl(post: {
-    carousel_items?: { url: string }[];
-    media_urls?: string[];
+    carouselItems?: string[];
+    mediaUrls?: string[];
   }): string {
     let url: string | undefined;
 
-    if (post.carousel_items && post.carousel_items.length > 0) {
-      url = post.carousel_items[0].url;
-    } else if (post.media_urls && post.media_urls.length > 0) {
-      url = post.media_urls[0];
+    if (post.carouselItems && post.carouselItems.length > 0) {
+      url = post.carouselItems[0];
+    } else if (post.mediaUrls && post.mediaUrls.length > 0) {
+      url = post.mediaUrls[0];
     }
 
     if (!url) {
