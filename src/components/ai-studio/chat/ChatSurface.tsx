@@ -7,7 +7,14 @@ import Image from "next/image";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useImageSseStream } from "@/hooks/useImageSseStream";
 import { chatImageRequestSchema, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
-import { IMAGE_REFERENCE_MAX_BYTES, VIDEO_REFERENCE_MAX_BYTES, estimateBase64DecodedBytes, formatMiB } from "@/lib/ai-studio/referenceDrop";
+import {
+  IMAGE_REFERENCE_MAX_BYTES,
+  VIDEO_REFERENCE_MAX_BYTES,
+  VIDEO_REFERENCE_MAX_DURATION_SECONDS,
+  estimateBase64DecodedBytes,
+  formatMiB,
+} from "@/lib/ai-studio/referenceDrop";
+import { getVideoDuration } from "@/lib/ai-studio/referenceDropClient";
 import type {
   ChatImageHistoryItem,
   ChatImageRequestPayload,
@@ -76,6 +83,60 @@ export function ChatSurface({
   const [resetNext, setResetNext] = React.useState(false);
   const [conversationTurns, setConversationTurns] = React.useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [previewMarkup, setPreviewMarkup] = React.useState<{ base64: string; mime: string } | null>(null);
+  const [isEnriching, setIsEnriching] = React.useState(false);
+  const [enrichedPrompt, setEnrichedPrompt] = React.useState<string | null>(null);
+
+  const handleEnrich = React.useCallback(async (currentPrompt: string) => {
+    if (!currentPrompt || isEnriching) return;
+    setIsEnriching(true);
+    setEnrichedPrompt("");
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ prompt: currentPrompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.delta) {
+                accumulated += data.delta;
+                setEnrichedPrompt(accumulated);
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
+    } catch (err) {
+      show({ title: "Enrichment failed", description: String(err), variant: "error" });
+    } finally {
+      setIsEnriching(false);
+    }
+  }, [isEnriching, show]);
 
   // Compute if any references are attached
   const hasAnyReferences = React.useMemo(() => {
@@ -166,6 +227,8 @@ export function ChatSurface({
                 data: payload.referenceVideo.base64,
                 mime_type: payload.referenceVideo.mime,
                 filename: payload.referenceVideo.filename ?? payload.referenceVideo.name,
+                start_time: payload.referenceVideo.startTime,
+                end_time: payload.referenceVideo.endTime,
               }
             : undefined,
         negative_prompt: payload.negativePrompt || undefined,
@@ -195,6 +258,19 @@ export function ChatSurface({
         checkBase64("First frame", payload.firstFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
         checkBase64("Last frame", payload.lastFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
         checkBase64("Reference video", payload.referenceVideo?.base64, VIDEO_REFERENCE_MAX_BYTES);
+
+        if (payload.referenceVideo?.base64) {
+          try {
+            const duration = await getVideoDuration(payload.referenceVideo.base64);
+            if (duration > VIDEO_REFERENCE_MAX_DURATION_SECONDS) {
+              attachmentIssues.push(
+                `Reference video duration: ${duration.toFixed(1)}s (max ${VIDEO_REFERENCE_MAX_DURATION_SECONDS}s)`
+              );
+            }
+          } catch (e) {
+            console.error("Failed final duration check", e);
+          }
+        }
       }
 
       if (attachmentIssues.length > 0) {
@@ -322,6 +398,9 @@ export function ChatSurface({
           <ChatPanel
             disabled={streamState.status === "starting"}
             isStreaming={streamState.status === "streaming"}
+            isEnriching={isEnriching}
+            onEnrich={handleEnrich}
+            enrichedValue={enrichedPrompt}
             onSubmit={handleSubmit}
             onCancel={cancel}
             onModelChange={setActiveModel}

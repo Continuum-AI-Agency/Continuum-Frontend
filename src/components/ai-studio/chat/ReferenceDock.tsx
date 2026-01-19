@@ -15,12 +15,14 @@ import { applyMarkupToRef, revertRefToOriginal } from "@/lib/ai-studio/reference
 import {
   IMAGE_REFERENCE_MAX_BYTES,
   VIDEO_REFERENCE_MAX_BYTES,
+  VIDEO_REFERENCE_MAX_DURATION_SECONDS,
   formatMiB,
   inferMimeTypeFromPath,
   parseReferenceDropPayload,
   resolveReferenceMimeType,
 } from "@/lib/ai-studio/referenceDrop";
-import { resolveDroppedBase64 } from "@/lib/ai-studio/referenceDropClient";
+import { resolveDroppedBase64, getVideoDuration } from "@/lib/ai-studio/referenceDropClient";
+import { VideoCutDialog } from "./VideoCutDialog";
 
 type ReferenceDockProps = {
   mode: "image" | "video";
@@ -29,11 +31,29 @@ type ReferenceDockProps = {
   refs: RefImage[];
   firstFrame?: RefImage;
   lastFrame?: RefImage;
-  referenceVideo?: { id: string; name?: string; mime: string; base64: string; filename?: string };
+  referenceVideo?: {
+    id: string;
+    name?: string;
+    mime: string;
+    base64: string;
+    filename?: string;
+    startTime?: number;
+    endTime?: number;
+  };
   onChangeRefs: (refs: RefImage[]) => void;
   onChangeFirstFrame?: (ref?: RefImage) => void;
   onChangeLastFrame?: (ref?: RefImage) => void;
-  onChangeReferenceVideo?: (ref?: { id: string; name?: string; mime: string; base64: string; filename?: string }) => void;
+  onChangeReferenceVideo?: (
+    ref?: {
+      id: string;
+      name?: string;
+      mime: string;
+      base64: string;
+      filename?: string;
+      startTime?: number;
+      endTime?: number;
+    }
+  ) => void;
 };
 
 const RF_DRAG_MIME = "application/reactflow-node-data";
@@ -144,6 +164,13 @@ export function ReferenceDock({
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
 
+  const [cutState, setCutState] = React.useState<{
+    sourceBase64: string;
+    sourceMime: string;
+    initialStart?: number;
+    initialEnd?: number;
+  } | null>(null);
+
   const supportsRefImages = mode === "image" || model === "veo-3-1";
   const supportsFrames = model === "veo-3-1-fast";
   const supportsRefVideo = mode === "video";
@@ -186,6 +213,25 @@ export function ReferenceDock({
     [show]
   );
 
+  const enforceMaxVideoDuration = React.useCallback(
+    async (source: File | string) => {
+      try {
+        const duration = await getVideoDuration(source);
+        if (duration <= VIDEO_REFERENCE_MAX_DURATION_SECONDS) return true;
+        show({
+          title: "Video too long",
+          description: `Reference video is ${duration.toFixed(1)}s (max ${VIDEO_REFERENCE_MAX_DURATION_SECONDS}s).`,
+          variant: "error",
+        });
+        return false;
+      } catch (error) {
+        console.error("Failed to check video duration", error);
+        return true;
+      }
+    },
+    [show]
+  );
+
   const handleLocalFiles = React.useCallback(
     async (files: FileList | File[] | null, slot?: "first" | "last" | "video") => {
       if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
@@ -211,6 +257,9 @@ export function ReferenceDock({
             return;
           }
           if (!enforceMaxAttachmentBytes({ label: "Reference video", sizeBytes: file.size, maxBytes: VIDEO_REFERENCE_MAX_BYTES })) {
+            return;
+          }
+          if (!(await enforceMaxVideoDuration(file))) {
             return;
           }
 
@@ -342,6 +391,9 @@ export function ReferenceDock({
         }
 
         if (slot === "video") {
+          if (!(await enforceMaxVideoDuration(base64))) {
+            return;
+          }
           const safeName = sourceName ?? "reference-video";
           onChangeReferenceVideo?.({
             id: `${safeName}-${Date.now()}`,
@@ -520,6 +572,12 @@ export function ReferenceDock({
                 refVideo={referenceVideo}
                 dropzoneProps={videoDropzone}
                 onClear={() => onChangeReferenceVideo?.()}
+                onCut={() => setCutState({
+                  sourceBase64: referenceVideo!.base64,
+                  sourceMime: referenceVideo!.mime,
+                  initialStart: referenceVideo!.startTime,
+                  initialEnd: referenceVideo!.endTime,
+                })}
                 dropSlot="video"
               />
             ) : null}
@@ -531,6 +589,28 @@ export function ReferenceDock({
           <Text size="1" color="gray">Drag from Creative Library to seed your generation.</Text>
         </Flex>
       </Card>
+
+      {cutState && (
+        <VideoCutDialog
+          open={Boolean(cutState)}
+          sourceBase64={cutState.sourceBase64}
+          sourceMime={cutState.sourceMime}
+          initialStart={cutState.initialStart}
+          initialEnd={cutState.initialEnd}
+          onClose={() => setCutState(null)}
+          onSave={({ startTime, endTime }) => {
+            if (referenceVideo) {
+              onChangeReferenceVideo?.({
+                ...referenceVideo,
+                startTime,
+                endTime,
+              });
+            }
+            setCutState(null);
+            show({ title: "Video cut saved", variant: "success" });
+          }}
+        />
+      )}
 
       {markupState ? (
         <ImageMarkupDialog
@@ -702,12 +782,14 @@ function VideoTile({
   label,
   refVideo,
   onClear,
+  onCut,
   dropzoneProps,
   dropSlot,
 }: {
   label: string;
-  refVideo?: { mime: string; base64: string; name?: string };
+  refVideo?: { mime: string; base64: string; name?: string; startTime?: number; endTime?: number };
   onClear: () => void;
+  onCut?: () => void;
   dropzoneProps: ReturnType<typeof useDropzone> & {
     files: LocalFile[];
     setFiles: React.Dispatch<React.SetStateAction<LocalFile[]>>;
@@ -732,7 +814,19 @@ function VideoTile({
       {refVideo ? (
         <div className="relative h-full min-h-[140px]">
           <video src={`data:${refVideo.mime};base64,${refVideo.base64}`} className="h-full w-full rounded-md object-contain" muted playsInline />
-          <Button size="1" color="red" variant="surface" className="absolute right-1 top-1" onClick={onClear}>Clear</Button>
+          {refVideo.startTime !== undefined || refVideo.endTime !== undefined ? (
+            <Badge size="1" variant="soft" color="amber" className="absolute left-1 top-1">
+              cut
+            </Badge>
+          ) : null}
+          <div className="absolute right-1 top-1 flex items-center gap-1">
+            {onCut ? (
+              <IconButton size="1" variant="surface" onClick={onCut}>
+                <Pencil2Icon />
+              </IconButton>
+            ) : null}
+            <Button size="1" color="red" variant="surface" onClick={onClear}>Clear</Button>
+          </div>
         </div>
       ) : (
         <Dropzone {...dropzoneProps} className="h-full w-full rounded-md border border-dashed border-white/15 bg-white/5 text-white min-h-[140px]">

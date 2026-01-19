@@ -35,6 +35,8 @@ export type RefVideo = {
   mime: string;
   base64: string;
   filename?: string;
+  startTime?: number;
+  endTime?: number;
 };
 
 export type ChatImageRequestPayload = {
@@ -113,7 +115,13 @@ export type BackendChatImageRequestPayload = {
   reference_images?: { data: string; mime_type: string; filename?: string; weight?: number; referenceType?: "asset" | "style" }[];
   first_frame?: { data: string; mime_type: string; filename?: string };
   last_frame?: { data: string; mime_type: string; filename?: string };
-  reference_video?: { data: string; mime_type: string; filename?: string };
+  reference_video?: {
+    data: string;
+    mime_type: string;
+    filename?: string;
+    start_time?: number;
+    end_time?: number;
+  };
   negative_prompt?: string;
   seed?: number;
   cfg_scale?: number;
