@@ -2,6 +2,10 @@ import { z } from "zod";
 
 const templateSourceSchema = z.enum(["custom", "preset"]);
 
+const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
+  message: "Invalid ISO timestamp",
+});
+
 export const promptTemplateRowSchema = z.object({
   id: z.string().uuid(),
   brand_profile_id: z.string().uuid(),
@@ -9,8 +13,8 @@ export const promptTemplateRowSchema = z.object({
   prompt: z.string().trim().min(1),
   category: z.string().trim().min(1),
   source: templateSourceSchema,
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
 });
 
 export type PromptTemplateRow = z.infer<typeof promptTemplateRowSchema>;

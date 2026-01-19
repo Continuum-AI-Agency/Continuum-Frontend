@@ -46,6 +46,10 @@ export const aiStudioTemplateSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
+  message: "Invalid ISO timestamp",
+});
+
 export const aiStudioArtifactSchema = z.object({
   id: z.string().min(1, "Artifact id is required"),
   uri: z.string().url(),
@@ -55,7 +59,7 @@ export const aiStudioArtifactSchema = z.object({
   fileName: z.string().optional(),
   sizeBytes: z.number().int().nonnegative().optional(),
   metadata: z.record(z.unknown()).optional(),
-  createdAt: z.string().datetime({ message: "Artifact createdAt must be an ISO timestamp" }),
+  createdAt: timestampSchema,
 });
 
 export const aiStudioJobFailureSchema = z
@@ -78,8 +82,8 @@ export const aiStudioJobSchema = z.object({
   aspectRatio: aiStudioAspectRatioSchema.optional(),
   durationSeconds: z.number().int().positive().optional(),
   status: aiStudioJobStatusSchema,
-  createdAt: z.string().datetime({ message: "Job createdAt must be an ISO timestamp" }),
-  updatedAt: z.string().datetime({ message: "Job updatedAt must be an ISO timestamp" }).optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema.optional(),
   artifacts: z.array(aiStudioArtifactSchema).default([]),
   failure: aiStudioJobFailureSchema,
   metadata: z.record(z.unknown()).optional(),

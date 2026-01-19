@@ -15,6 +15,10 @@ import {
   type AiStudioTemplatesResponse,
 } from "@/lib/schemas/aiStudio";
 
+const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
+  message: "Invalid ISO timestamp",
+});
+
 const backendArtifactSchema = z.object({
   id: z.string(),
   uri: z.string().url(),
@@ -24,7 +28,7 @@ const backendArtifactSchema = z.object({
   file_name: z.string().nullish(),
   size_bytes: z.number().int().nonnegative().nullish(),
   metadata: z.record(z.unknown()).nullish(),
-  created_at: z.string().datetime({ message: "Artifact created_at must be ISO formatted" }),
+  created_at: timestampSchema,
 });
 
 const backendJobSchema = z.object({
@@ -38,8 +42,8 @@ const backendJobSchema = z.object({
   aspect_ratio: z.string().nullish(),
   duration_seconds: z.number().int().positive().nullish(),
   status: aiStudioJobStatusSchema,
-  created_at: z.string().datetime({ message: "Job created_at must be ISO formatted" }),
-  updated_at: z.string().datetime({ message: "Job updated_at must be ISO formatted" }).nullish(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema.nullish(),
   artifacts: z.array(backendArtifactSchema).default([]),
   failure: z
     .object({
