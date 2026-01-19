@@ -525,19 +525,18 @@ function MetricsPanel({
 
   const metricCards: MetricCard[] = [];
   
-  if (metrics.reach !== undefined) metricCards.push({ key: "reach", label: METRIC_LABELS.reach, value: metrics.reach });
   if (metrics.views !== undefined) metricCards.push({ key: "views", label: METRIC_LABELS.views, value: metrics.views });
+  if (metrics.reach !== undefined) metricCards.push({ key: "reach", label: METRIC_LABELS.reach, value: metrics.reach });
   if (metrics.newFollowers !== undefined) metricCards.push({ key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers });
   if (metrics.accountsEngaged !== undefined) metricCards.push({ key: "accountsEngaged", label: METRIC_LABELS.accountsEngaged, value: metrics.accountsEngaged });
-  if (metrics.reelsViews !== undefined) metricCards.push({ key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews });
-  if (metrics.postViews !== undefined) metricCards.push({ key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews });
-
+  if (metrics.totalInteractions !== undefined) metricCards.push({ key: "totalInteractions", label: METRIC_LABELS.totalInteractions, value: metrics.totalInteractions });
   if (metrics.likes !== undefined) metricCards.push({ key: "likes", label: METRIC_LABELS.likes, value: metrics.likes });
   if (metrics.comments !== undefined) metricCards.push({ key: "comments", label: METRIC_LABELS.comments, value: metrics.comments });
   if (metrics.shares !== undefined) metricCards.push({ key: "shares", label: METRIC_LABELS.shares, value: metrics.shares });
-  if (metrics.totalInteractions !== undefined) metricCards.push({ key: "totalInteractions", label: METRIC_LABELS.totalInteractions, value: metrics.totalInteractions });
+  if (metrics.reelsViews !== undefined) metricCards.push({ key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews });
+  if (metrics.postViews !== undefined) metricCards.push({ key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews });
 
-  const expandedKey = expandedMetric ?? metricCards[0]?.key;
+  const expandedKey = expandedMetric ?? "views";
   const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
   const expandedValue = expandedKey ? (metrics[expandedKey as keyof typeof metrics] as number | undefined) ?? 0 : 0;
   const expandedComparison = expandedKey ? comparison?.[expandedKey] : undefined;
@@ -562,113 +561,95 @@ function MetricsPanel({
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="4">
-      <Grid columns={{ initial: "1", sm: "2", lg: "3" }} gap="3">
-        {metricCards.map((item) => {
-          const delta = comparison?.[item.key]?.percentageChange;
-          const formattedDelta = formatPercent(delta ?? undefined);
-          const isActive = expandedMetric === item.key;
-          const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
+    <Flex direction="column" gap="4" className="h-full">
+      <Grid columns={{ initial: "1", lg: "2" }} gap="4" className="h-full">
+        <Box className="w-full">
+          <Grid columns="4" gap="1">
+            {metricCards.map((item) => {
+              const delta = comparison?.[item.key]?.percentageChange;
+              const formattedDelta = formatPercent(delta ?? undefined);
+              const isActive = expandedKey === item.key;
+              const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
 
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onMetricSelect(expandedMetric === item.key ? null : item.key)}
-              className="text-left"
-              aria-pressed={isActive}
-            >
-              <Card
-                variant="surface"
-                className={cn(
-                  "border border-subtle bg-surface transition-all hover:shadow-md",
-                  isActive && "ring-2 ring-[var(--ring)]"
-                )}
-              >
-                <Box p="3">
-                  <Flex align="center" justify="between" gap="2">
-                    <Text color="gray" size="2">
-                      {item.label}
-                    </Text>
-                    {formattedDelta ? (
-                      <Badge color={deltaTone} variant="soft" radius="full">
-                        {delta !== undefined && delta !== 0 ? (
-                          delta > 0 ? <ArrowUpIcon /> : <ArrowDownIcon />
-                        ) : null}
-                        {formattedDelta}
-                      </Badge>
-                    ) : null}
-                  </Flex>
-                  <Heading size="5">{formatNumber(item.value)}</Heading>
-                  <Flex align="center" gap="2">
-                    <Text color="gray" size="1">
-                      Click to view trend
-                    </Text>
-                  </Flex>
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => onMetricSelect(item.key)}
+                  className="text-left w-full h-full"
+                  aria-pressed={isActive}
+                >
+                  <Card
+                    variant="surface"
+                    className={cn(
+                      "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[54px] overflow-hidden",
+                      isActive && "ring-1 ring-primary bg-accent/10"
+                    )}
+                  >
+                    <Box p="1" className="w-full">
+                      <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
+                        <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: '9px' }}>
+                          {item.label}
+                        </Text>
+                        <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: '11px' }}>{formatNumber(item.value)}</Heading>
+                        {formattedDelta ? (
+                          <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: '9px' }}>
+                            {formattedDelta}
+                          </Text>
+                        ) : (
+                          <Box className="h-2" />
+                        )}
+                      </Flex>
+                    </Box>
+                  </Card>
+                </button>
+              );
+            })}
+          </Grid>
+        </Box>
+
+        <Box className="w-full h-full min-h-[300px]">
+          <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
+            <Box p="3" className="flex-1 flex flex-col">
+              <Flex align="center" justify="between" gap="2" mb="2">
+                <Box>
+                  <Heading size="3">{expandedLabel}</Heading>
+                  <Text color="gray" size="1">
+                    {range.since} → {range.until} ({rangeLabel(range.preset)})
+                  </Text>
                 </Box>
-              </Card>
-            </button>
-          );
-        })}
+              </Flex>
+
+              <Box className="flex-1 min-h-0">
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <BarChart accessibilityLayer data={chartData} margin={{ left: -10, right: 10 }}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    {expandedComparison ? (
+                      <Bar dataKey="previous" fill="var(--color-previous)" radius={6} barSize={40} />
+                    ) : null}
+                    <Bar dataKey="current" fill="var(--color-current)" radius={6} barSize={40} />
+                  </BarChart>
+                </ChartContainer>
+              </Box>
+
+              <Flex align="center" justify="center" gap="4" mt="2">
+                <Text color="gray" size="1">
+                  Curr: {formatNumber(expandedValue)}
+                </Text>
+                {expandedComparison && (
+                  <Text color="gray" size="1">
+                    Prev: {formatNumber(expandedComparison.previous)}
+                  </Text>
+                )}
+              </Flex>
+            </Box>
+          </Card>
+        </Box>
       </Grid>
 
       {interactionBreakdowns && <InteractionBreakdownCharts breakdowns={interactionBreakdowns} />}
-
-      {expandedMetric ? (
-        <Card variant="surface" className="border border-subtle bg-surface">
-          <Box p="3">
-            <Flex align="center" justify="between" gap="2" wrap="wrap">
-              <Box>
-                <Heading size="4">{expandedLabel}</Heading>
-                <Text color="gray" size="2">
-                  {range.since} → {range.until} ({rangeLabel(range.preset)})
-                </Text>
-              </Box>
-              <IconButton
-                aria-label="Collapse metric chart"
-                variant="soft"
-                color="gray"
-                onClick={() => onMetricSelect(null)}
-              >
-                <ArrowDownIcon />
-              </IconButton>
-            </Flex>
-
-            <Box pt="3">
-              <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
-                <BarChart accessibilityLayer data={chartData}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  {expandedComparison ? (
-                    <Bar dataKey="previous" fill="var(--color-previous)" radius={6} />
-                  ) : null}
-                  <Bar dataKey="current" fill="var(--color-current)" radius={6} />
-                </BarChart>
-              </ChartContainer>
-            </Box>
-
-            <Flex align="center" justify="between" gap="2" wrap="wrap">
-              <Text color="gray" size="2">
-                Current value: {formatNumber(expandedValue)}
-              </Text>
-              {expandedComparison ? (
-                <Text color="gray" size="2">
-                  Previous: {formatNumber(expandedComparison.previous)}
-                </Text>
-              ) : (
-                <Text color="gray" size="2">
-                  Comparison data unavailable
-                </Text>
-              )}
-            </Flex>
-          </Box>
-        </Card>
-      ) : (
-        <Text color="gray" size="2">
-          Click a metric card to expand a comparison chart.
-        </Text>
-      )}
     </Flex>
   );
 }

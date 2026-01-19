@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -18,11 +18,18 @@ import {
   MagnifyingGlassIcon,
   PinTopIcon,
 } from "@radix-ui/react-icons";
-import * as AccordionPrimitive from "@radix-ui/react-accordion";
+import { Badge as ShadcnBadge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 
-import { Accordion } from "@/components/ui/Accordion";
 import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
-import { cn } from "@/lib/utils";
 import {
   filterAndSortQuestionsByNiche,
   getSupportedPlatformLabel,
@@ -38,13 +45,21 @@ type BrandQuestionsListProps = {
 
 export function BrandQuestionsList({
   questionsByNiche,
-  density = "default",
-  scrollWithinSection = false,
 }: BrandQuestionsListProps) {
-  const isCompact = density === "compact";
   const [query, setQuery] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
   const [platformFilter, setPlatformFilter] = useState<SupportedPlatformKey | "all">("all");
+  const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
+
+  const toggleRow = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
+  };
 
   const totalQuestions = useMemo(() => {
     return Object.values(questionsByNiche ?? {}).reduce((total, niche) => {
@@ -59,6 +74,16 @@ export function BrandQuestionsList({
       platformFilter,
     });
   }, [questionsByNiche, query, onlySelected, platformFilter]);
+
+  // Flatten questions for table display
+  const allQuestions = useMemo(() => {
+    return audienceEntries.flatMap((entry) =>
+      entry.questions.map((question) => ({
+        ...question,
+        audience: entry.audience,
+      }))
+    );
+  }, [audienceEntries]);
 
   if (totalQuestions === 0) {
     return (
@@ -110,7 +135,7 @@ export function BrandQuestionsList({
         </Flex>
       </Flex>
 
-      {audienceEntries.length === 0 ? (
+      {allQuestions.length === 0 ? (
         <Callout.Root color="gray" variant="surface">
           <Callout.Icon>
             <LightningBoltIcon />
@@ -120,79 +145,76 @@ export function BrandQuestionsList({
           </Callout.Text>
         </Callout.Root>
       ) : (
-        <Accordion
-          type="multiple"
-          items={audienceEntries.map((entry) => ({
-            value: entry.audience,
-            header: (
-              <Flex align="center" gap="2">
-                <Text as="span" weight="medium">
-                  {entry.audience}
-                </Text>
-                <Badge color="gray" variant="soft" radius="full">
-                  {entry.questions.length}
-                </Badge>
-              </Flex>
-            ),
-            content: (
-              <Box
-                className={cn(
-                  "space-y-3",
-                  scrollWithinSection &&
-                    (isCompact ? "max-h-[45vh] overflow-y-auto pr-1" : "max-h-[60vh] overflow-y-auto pr-1")
-                )}
-              >
-                <AccordionPrimitive.Root type="single" collapsible className="space-y-3">
-                  {entry.questions.map((question) => {
-                    const platformLabel =
-                      getSupportedPlatformLabel(question.socialPlatform) ??
-                      question.socialPlatform?.trim();
-                    return (
-                      <AccordionPrimitive.Item
-                        key={question.id}
-                        value={String(question.id)}
-                        className={cn(
-                          "rounded-xl border border-subtle bg-surface shadow-lg",
-                          question.isSelected && "border-teal-500/70 ring-1 ring-teal-500/40"
+        <Box className="flex-1 min-h-0 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[50px]"></TableHead>
+                <TableHead>Question</TableHead>
+                <TableHead>Audience</TableHead>
+                <TableHead>Platform</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allQuestions.map((question) => {
+                const isExpanded = expandedRows.has(question.id);
+                const platformLabel =
+                  getSupportedPlatformLabel(question.socialPlatform) ??
+                  question.socialPlatform?.trim();
+                return (
+                  <React.Fragment key={question.id}>
+                    <TableRow
+                      className="group cursor-pointer hover:bg-muted/50"
+                      onClick={() => toggleRow(question.id)}
+                    >
+                      <TableCell>
+                        <Button variant="ghost" size="sm" className="p-0 h-6 w-6">
+                          <ChevronDownIcon
+                            className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                          />
+                        </Button>
+                      </TableCell>
+                      <TableCell>
+                        <Text weight="medium" className="text-white line-clamp-2">
+                          {question.question}
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        <Text size="2" color="gray">
+                          {question.audience}
+                        </Text>
+                      </TableCell>
+                      <TableCell>
+                        {platformLabel && (
+                          <ShadcnBadge variant="outline">
+                            {platformLabel}
+                          </ShadcnBadge>
                         )}
-                      >
-                        <AccordionPrimitive.Header>
-                          <AccordionPrimitive.Trigger className="flex w-full items-start justify-between gap-3 rounded-xl px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
-                            <div className="min-w-0 space-y-1">
-                              <Text
-                                size={isCompact ? "2" : "3"}
-                                weight="medium"
-                                className="text-white leading-tight line-clamp-2"
-                              >
-                                {question.question}
-                              </Text>
-                              {platformLabel && (
-                                <Badge color="gray" variant="surface">
-                                  {platformLabel}
-                                </Badge>
-                              )}
-                            </div>
-                            <Flex gap="2" align="center">
-                              {question.isSelected && (
-                                <Badge color="teal" variant="solid">
-                                  <PinTopIcon className="mr-1 h-3.5 w-3.5" />
-                                  Selected
-                                </Badge>
-                              )}
-                              {typeof question.timesUsed === "number" && question.timesUsed > 0 && (
-                                <Badge color="green" variant="soft">
-                                  <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
-                                  Used {question.timesUsed}x
-                                </Badge>
-                              )}
-                              <ChevronDownIcon className="h-4 w-4 text-[var(--accent-11)] transition-transform data-[state=open]:rotate-180" />
-                            </Flex>
-                          </AccordionPrimitive.Trigger>
-                        </AccordionPrimitive.Header>
-                        <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                          <Box className="space-y-3 px-4 pb-4 pt-1">
+                      </TableCell>
+                      <TableCell>
+                        <Flex gap="1" wrap="wrap">
+                          {question.isSelected && (
+                            <ShadcnBadge variant="default">
+                              <PinTopIcon className="mr-1 h-3.5 w-3.5" />
+                              Selected
+                            </ShadcnBadge>
+                          )}
+                          {typeof question.timesUsed === "number" && question.timesUsed > 0 && (
+                            <ShadcnBadge variant="secondary">
+                              <CounterClockwiseClockIcon className="mr-1 h-3.5 w-3.5" />
+                              Used {question.timesUsed}x
+                            </ShadcnBadge>
+                          )}
+                        </Flex>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow className="bg-[var(--gray-2)] hover:bg-[var(--gray-2)]">
+                        <TableCell colSpan={5} className="p-0 border-b">
+                          <Box className="space-y-3 p-4">
                             {question.whyRelevant && (
-                              <Text color="gray" size={isCompact ? "1" : "2"}>
+                              <Text color="gray" size="2">
                                 {question.whyRelevant}
                               </Text>
                             )}
@@ -202,21 +224,21 @@ export function BrandQuestionsList({
                                 <Text size="1" color="teal">
                                   Content idea
                                 </Text>
-                                <Text size={isCompact ? "1" : "2"} color="gray">
+                                <Text size="2" color="gray">
                                   {question.contentTypeSuggestion}
                                 </Text>
                               </Box>
                             )}
                           </Box>
-                        </AccordionPrimitive.Content>
-                      </AccordionPrimitive.Item>
-                    );
-                  })}
-                </AccordionPrimitive.Root>
-              </Box>
-            ),
-          }))}
-        />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Box>
       )}
     </Box>
   );

@@ -7,13 +7,14 @@ import { PaidMediaReportingWidget } from "@/components/paid-media/PaidMediaRepor
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
-import type { BrandInsightsTrendsAndEvents } from "@/lib/schemas/brandInsights";
+import type { BrandInsightsTrendsAndEvents, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
 
 type Props = {
   brandId: string;
   instagramAccounts: InstagramAccountOption[];
   trendsAndEvents: BrandInsightsTrendsAndEvents;
+  questionsByNiche?: BrandInsightsQuestionsByNiche;
   insightsGeneratedAt?: string;
   insightsStatus?: string;
 };
@@ -22,6 +23,7 @@ export function HomeBaseDashboard({
   brandId,
   instagramAccounts,
   trendsAndEvents,
+  questionsByNiche,
   insightsGeneratedAt,
   insightsStatus,
 }: Props) {
@@ -61,15 +63,17 @@ export function HomeBaseDashboard({
                className="h-full flex flex-col"
              />
            ) : (
-             <BrandTrendsPanel 
-               trends={trendsAndEvents.trends}
-               className="h-full overflow-y-auto"
-               brandId={brandId}
-               country={trendsAndEvents.country}
-               generatedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
-               status={trendsAndEvents.status ?? insightsStatus}
-               actionSlot={<BrandInsightsGenerateButton brandId={brandId} />}
-             />
+              <BrandTrendsPanel
+                trends={trendsAndEvents.trends}
+                events={trendsAndEvents.events}
+                questionsByNiche={questionsByNiche}
+                className="h-full overflow-y-auto"
+                brandId={brandId}
+                country={trendsAndEvents.country}
+                generatedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
+                status={trendsAndEvents.status ?? insightsStatus}
+                actionSlot={<BrandInsightsGenerateButton brandId={brandId} />}
+              />
            )}
         </div>
 

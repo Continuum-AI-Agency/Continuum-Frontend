@@ -552,78 +552,86 @@ function MetricsPanel({
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="4">
-      <Grid columns={{ initial: "1", sm: "2", lg: "3" }} gap="3">
-        {metricCards.map((item) => {
-          const delta = comparison?.[item.key]?.percentageChange;
-          const formattedDelta = formatPercent(delta);
-          const isActive = expandedMetric === item.key;
-          const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
+    <Grid columns={{ initial: "1", lg: "2" }} gap="4" className="h-full">
+      <Box className="w-full">
+        <Grid columns="4" gap="1">
+          {metricCards.map((item) => {
+            const delta = comparison?.[item.key]?.percentageChange;
+            const formattedDelta = formatPercent(delta);
+            const isActive = expandedKey === item.key;
+            const deltaTone = delta === undefined ? "gray" : delta > 0 ? "green" : delta < 0 ? "red" : "gray";
 
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onMetricSelect(expandedMetric === item.key ? null : item.key)}
-              className="text-left"
-              aria-pressed={isActive}
-            >
-              <Card
-                variant="surface"
-                className={cn(
-                  "border border-subtle bg-surface transition-all hover:shadow-md",
-                  isActive && "ring-2 ring-[var(--ring)]"
-                )}
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onMetricSelect(item.key)}
+                className="text-left w-full"
+                aria-pressed={isActive}
               >
-                <Box p="3">
-                  <Flex align="center" justify="between" gap="2">
-                    <Text color="gray" size="2">{item.label}</Text>
-                    {formattedDelta ? (
-                      <Badge color={deltaTone} variant="soft" radius="full">
-                        {delta !== undefined && delta !== 0 ? (
-                          delta > 0 ? <ArrowUpIcon /> : <ArrowDownIcon />
-                        ) : null}
-                        {formattedDelta}
-                      </Badge>
-                    ) : null}
-                  </Flex>
-                  <Heading size="5">{formatValue(item.value, item.format)}</Heading>
-                  <Text color="gray" size="1">Click to view trend</Text>
-                </Box>
-              </Card>
-            </button>
-          );
-        })}
-      </Grid>
+                <Card
+                  variant="surface"
+                  className={cn(
+                    "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[54px] overflow-hidden",
+                    isActive && "ring-1 ring-primary bg-accent/10"
+                  )}
+                >
+                  <Box p="1" className="w-full">
+                    <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
+                      <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: '9px' }}>{item.label}</Text>
+                      <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: '11px' }}>{formatValue(item.value, item.format)}</Heading>
+                      {formattedDelta ? (
+                        <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: '9px' }}>
+                          {formattedDelta}
+                        </Text>
+                      ) : (
+                        <Box className="h-2" />
+                      )}
+                    </Flex>
+                  </Box>
+                </Card>
+              </button>
+            );
+          })}
+        </Grid>
+      </Box>
 
-      {expandedMetric ? (
-        <Card variant="surface" className="border border-subtle bg-surface animate-in fade-in slide-in-from-right-5">
-          <Box p="3">
-            <Flex align="center" justify="between" gap="2">
+      <Box className="w-full h-full min-h-[300px]">
+        <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
+          <Box p="3" className="flex-1 flex flex-col">
+            <Flex align="center" justify="between" gap="2" mb="2">
               <Box>
-                <Heading size="4">{expandedLabel}</Heading>
-                <Text color="gray" size="2">{range.since} → {range.until}</Text>
+                <Heading size="3">{expandedLabel}</Heading>
+                <Text color="gray" size="1">{range.since} → {range.until}</Text>
               </Box>
-              <IconButton variant="soft" color="gray" onClick={() => onMetricSelect(null)}>
-                <ArrowDownIcon />
-              </IconButton>
             </Flex>
 
-            <Box pt="3">
-              <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
-                <BarChart accessibilityLayer data={chartData} layout="vertical">
+            <Box className="flex-1 min-h-0">
+              <ChartContainer config={chartConfig} className="h-full w-full">
+                <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: -30, right: 10 }}>
                   <CartesianGrid horizontal={false} />
                   <YAxis dataKey="name" type="category" hide />
                   <XAxis type="number" hide />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="previous" fill="var(--color-previous)" radius={4} barSize={20} />
-                  <Bar dataKey="current" fill="var(--color-current)" radius={4} barSize={20} />
+                  <Bar dataKey="previous" fill="var(--color-previous)" radius={4} barSize={40} />
+                  <Bar dataKey="current" fill="var(--color-current)" radius={4} barSize={40} />
                 </BarChart>
               </ChartContainer>
             </Box>
+            
+            <Flex align="center" justify="center" gap="4" mt="2">
+              <Flex align="center" gap="1">
+                <Box className="w-2 h-2 rounded-full bg-muted" />
+                <Text size="1" color="gray">Prev</Text>
+              </Flex>
+              <Flex align="center" gap="1">
+                <Box className="w-2 h-2 rounded-full bg-primary" />
+                <Text size="1" color="gray">Curr</Text>
+              </Flex>
+            </Flex>
           </Box>
         </Card>
-      ) : null}
-    </Flex>
+      </Box>
+    </Grid>
   );
 }

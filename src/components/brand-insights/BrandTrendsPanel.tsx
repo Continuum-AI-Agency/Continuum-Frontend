@@ -2,12 +2,14 @@ import { Badge, Box, Flex, Heading, Separator, Text } from "@radix-ui/themes";
 import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon } from "@radix-ui/react-icons";
 
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
+import type { BrandInsightsTrend, BrandInsightsEvent, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 import { BrandTrendsTabs } from "./BrandTrendsTabs";
 import { BrandTrendsPanelSkeleton } from "./BrandTrendsSkeleton";
 
 type BrandTrendsPanelProps = {
   trends: BrandInsightsTrend[];
+  events?: BrandInsightsEvent[];
+  questionsByNiche?: BrandInsightsQuestionsByNiche;
   country?: string;
   weekStartDate?: string;
   generatedAt?: string;
@@ -33,6 +35,8 @@ import { cn } from "@/lib/utils";
 
 export function BrandTrendsPanel({
   trends,
+  events = [],
+  questionsByNiche,
   country,
   weekStartDate,
   generatedAt,
@@ -98,7 +102,12 @@ export function BrandTrendsPanel({
 
       <Separator size="4" />
 
-      <BrandTrendsTabs trends={trends} brandId={brandId} />
+       <BrandTrendsTabs
+         trends={trends}
+         events={events}
+         questionsByNiche={questionsByNiche}
+         brandId={brandId}
+       />
     </GlassPanel>
   );
 }
