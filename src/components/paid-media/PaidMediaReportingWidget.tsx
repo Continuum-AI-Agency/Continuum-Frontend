@@ -249,11 +249,35 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
         },
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Campaigns API error:", response.status, response.statusText, errorText);
-        throw new Error(`Failed to fetch campaigns: ${response.status} ${response.statusText}`);
-      }
+       if (!response.ok) {
+         const errorText = await response.text();
+         console.error("Campaigns API error:", response.status, response.statusText, errorText);
+
+         // Try to parse JSON error response
+         let parsedError = null;
+         try {
+           parsedError = JSON.parse(errorText);
+         } catch {
+           // Not JSON, use raw text
+         }
+
+         // Handle different error scenarios
+         if (response.status === 404) {
+           throw new Error("Campaigns not found. This ad account may not have active campaigns or the account configuration may be incorrect.");
+         } else if (response.status === 500 && parsedError?.error) {
+           // Extract nested error message from edge function
+           const nestedError = parsedError.error;
+           if (nestedError.includes("404")) {
+             throw new Error("Unable to retrieve campaign data. The ad account may not be properly connected or campaigns may not exist.");
+           } else {
+             throw new Error("Server error occurred while fetching campaigns. Please try again later.");
+           }
+         } else if (response.status === 401 || response.status === 403) {
+           throw new Error("Authentication failed. Please reconfigure your ad account connection.");
+         } else {
+           throw new Error(`Failed to fetch campaigns: ${response.status} ${response.statusText}`);
+         }
+       }
       const data = await response.json();
       setCampaigns(data.campaigns || []);
 

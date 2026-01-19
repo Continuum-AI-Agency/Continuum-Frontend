@@ -1,8 +1,8 @@
 import type { Edge } from '@xyflow/react';
 import { StudioNode } from '../types';
-import { ExtendVideoPayload, GenerationPayload, NodeOutput } from '../types/execution';
+import { EnrichPromptPayload, ExtendVideoPayload, GenerationPayload, NodeOutput } from '../types/execution';
 import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from '@/lib/types/chatImage';
-import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData } from '../types';
+import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData, StringNodeData, ImageNodeData } from '../types';
 import { parseDataUrl } from './dataUrl';
 
 const BRAND_PROFILE_ID = "default-brand";
@@ -87,6 +87,121 @@ function resolveVideoInput(
   return undefined;
 }
 
+function resolveImageInput(
+  edge: Edge,
+  resolvedData: Map<string, NodeOutput>,
+  nodeById: Map<string, StudioNode>
+): { base64: string; mimeType: string } | undefined {
+  const output = resolvedData.get(edge.source);
+  if (output?.type === 'image' && output.base64) {
+    return { base64: output.base64, mimeType: output.mimeType };
+  }
+
+  const sourceNode = nodeById.get(edge.source);
+  if (sourceNode?.type === 'image') {
+    const parsed = parseDataUrl((sourceNode.data as any).image as string | undefined);
+    if (parsed?.base64) {
+      return { base64: parsed.base64, mimeType: parsed.mimeType };
+    }
+  }
+
+  return undefined;
+}
+
+function resolveAudioInput(
+  nodeId: string,
+  handleId: string,
+  resolvedData: Map<string, NodeOutput>,
+  nodes: StudioNode[],
+  edges: Edge[]
+): { base64: string; mimeType: string } | undefined {
+  const incomingEdge = edges.find(
+    (e) => e.target === nodeId && e.targetHandle === handleId
+  );
+
+  if (!incomingEdge) return undefined;
+
+  const sourceNode = nodes.find(n => n.id === incomingEdge.source);
+  if (sourceNode?.type === 'audio') {
+    const parsed = parseDataUrl((sourceNode.data as any).audio as string | undefined);
+    if (parsed?.base64) {
+      return { base64: parsed.base64, mimeType: parsed.mimeType };
+    }
+  }
+
+  return undefined;
+}
+
+function resolveDocumentInput(
+  nodeId: string,
+  handleId: string,
+  resolvedData: Map<string, NodeOutput>,
+  nodes: StudioNode[],
+  edges: Edge[]
+): Array<{ name: string; content: string }> | undefined {
+  const incomingEdges = edges.filter(
+    (e) => e.target === nodeId && e.targetHandle === handleId
+  );
+
+  if (incomingEdges.length === 0) return undefined;
+
+  const documents: Array<{ name: string; content: string }> = [];
+
+  for (const edge of incomingEdges) {
+    const sourceNode = nodes.find(n => n.id === edge.source);
+    if (sourceNode?.type === 'document') {
+        const docs = (sourceNode.data as any).documents || [];
+        for (const doc of docs) {
+            if (doc.content) {
+                documents.push({ name: doc.name || 'document', content: doc.content });
+            }
+        }
+    }
+  }
+
+  return documents.length > 0 ? documents : undefined;
+}
+
+export function buildEnrichPayload(
+  node: StudioNode,
+  resolvedData: Map<string, NodeOutput>,
+  allNodes: StudioNode[],
+  allEdges: Edge[]
+): EnrichPromptPayload | null {
+  const data = node.data as StringNodeData;
+  const prompt = data.value || "";
+
+  // Resolve Images (Multiple allowed)
+  const imageEdges = allEdges.filter(
+    (e) => e.target === node.id && e.targetHandle === 'image'
+  );
+  
+  const images = imageEdges.map(edge => resolveImageInput(edge, resolvedData, new Map(allNodes.map(n => [n.id, n])) as any)).filter(Boolean);
+
+  // Resolve Audio (Single)
+  const audio = resolveAudioInput(node.id, 'audio', resolvedData, allNodes, allEdges);
+
+  const video = resolveVideoInput(node.id, 'video', resolvedData, allNodes, allEdges);
+
+  // Resolve Documents (Multiple)
+  const documents = resolveDocumentInput(node.id, 'document', resolvedData, allNodes, allEdges);
+
+  if (!prompt && !images.length && !audio && !documents?.length && !video) {
+    return null;
+  }
+
+  return {
+    prompt,
+    brandId: BRAND_PROFILE_ID,
+    context: {
+      images: images.length > 0 ? images.map(img => ({ type: 'base64', data: img!.base64, mimeType: img!.mimeType })) : undefined,
+      audio: audio ? { type: 'base64', data: audio.base64, mimeType: audio.mimeType } : undefined,
+      video: video ? { type: 'base64', data: video.data, mimeType: video.mimeType } : undefined,
+      documents: documents,
+    }
+  };
+}
+
 export function buildNanoGenPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
@@ -110,9 +225,26 @@ export function buildNanoGenPayload(
   const refImageEdges = allEdges.filter(
     (e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images')
   );
+
+  const injectionParts: string[] = [];
+
   const referenceImages = refImageEdges
-    .map((edge) => {
+    .map((edge, index) => {
       const output = resolvedData.get(edge.source);
+      const sourceNode = allNodes.find(n => n.id === edge.source);
+      const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
+
+      if (refType !== 'default') {
+          const refNumber = index + 1;
+          if (refType === 'product') {
+              injectionParts.push(`Ref. Image #${refNumber} is the primary Product to feature.`);
+          } else if (refType === 'color') {
+              injectionParts.push(`Ref. Image #${refNumber} provides the Color/Theme to generate in compliance with.`);
+          } else if (refType === 'person') {
+              injectionParts.push(`Ref. Image #${refNumber} is a Person/Character that must appear in the generation.`);
+          }
+      }
+
       if (output?.type === 'image') {
         return {
           data: output.base64,
@@ -124,6 +256,10 @@ export function buildNanoGenPayload(
       return null;
     })
     .filter(Boolean) as GenerationPayload['referenceImages'];
+
+  if (injectionParts.length > 0) {
+      prompt += `\n\n[System Context Injection]\n${injectionParts.join('\n')}`;
+  }
 
   const backendModel = data.model === 'nano-banana'
     ? 'gemini-2.5-flash-image'
@@ -141,6 +277,7 @@ export function buildNanoGenPayload(
       : undefined,
     aspectRatio: data.aspectRatio || '16:9',
     resolution: '1024x1024',
+    imageSize: data.model === 'nano-banana-pro' ? data.imageSize || '1K' : undefined,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
 }
@@ -210,10 +347,26 @@ export function buildVeoPayload(
   }
 
   const referenceImages = referenceMode === 'images'
-    ? allEdges
-        .filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'))
-        .map((edge) => {
+    ? (() => {
+        const edges = allEdges.filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'));
+        const injectionParts: string[] = [];
+        
+        const refs = edges.map((edge, index) => {
           const output = resolvedData.get(edge.source);
+          const sourceNode = allNodes.find(n => n.id === edge.source);
+          const refType = (sourceNode?.data as ImageNodeData)?.referenceType || 'default';
+
+          if (refType !== 'default') {
+              const refNumber = index + 1;
+              if (refType === 'product') {
+                  injectionParts.push(`Ref. Image #${refNumber} is the primary Product to feature.`);
+              } else if (refType === 'color') {
+                  injectionParts.push(`Ref. Image #${refNumber} provides the Color/Theme to generate in compliance with.`);
+              } else if (refType === 'person') {
+                  injectionParts.push(`Ref. Image #${refNumber} is a Person/Character that must appear in the generation.`);
+              }
+          }
+
           if (output?.type === 'image') {
             return {
               data: output.base64,
@@ -223,11 +376,16 @@ export function buildVeoPayload(
             };
           }
           return null;
-        })
-        .filter(Boolean) as GenerationPayload['referenceImages']
+        }).filter(Boolean) as GenerationPayload['referenceImages'];
+
+        if (injectionParts.length > 0) {
+            prompt += `\n\n[System Context Injection]\n${injectionParts.join('\n')}`;
+        }
+        return refs;
+    })()
     : undefined;
 
-  const backendModel = data.model === 'veo-3.1-fast'
+  const backendModel = (data.model === 'veo-3.1-fast' || node.type === 'veoFast')
     ? 'veo-3.1-fast-generate-preview'
     : 'veo-3.1-generate-preview';
 
@@ -237,9 +395,9 @@ export function buildVeoPayload(
     medium: 'video',
     prompt,
     negativePrompt: negativePrompt || undefined,
-    aspectRatio: '16:9',
-    resolution: '720p',
-    durationSeconds: 8,
+    aspectRatio: data.aspectRatio || '16:9',
+    resolution: (data as any).resolution || '720p',
+    durationSeconds: data.durationSeconds ? Number(data.durationSeconds) : 8,
     firstFrame,
     lastFrame,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
@@ -285,6 +443,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     prompt: payload.prompt,
     aspect_ratio: payload.aspectRatio || '16:9',
     resolution: payload.resolution,
+    image_size: payload.imageSize,
     duration_seconds: payload.durationSeconds ? String(payload.durationSeconds) as "4" | "6" | "8" : undefined,
     negative_prompt: payload.negativePrompt,
     first_frame: payload.firstFrame

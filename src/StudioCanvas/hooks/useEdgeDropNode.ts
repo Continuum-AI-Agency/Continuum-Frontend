@@ -6,27 +6,48 @@ import { v4 as uuidv4 } from 'uuid';
 import { canAcceptSingleTextInput } from '../utils/connectionValidation';
 import { useStudioStore } from '../stores/useStudioStore';
 
-export type NodeType = 'nanoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video';
+export type NodeType = 'nanoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video' | 'audio' | 'document';
 
 export interface SmartNodeContext {
   sourceHandle: string | null;
   sourceNode: Node | undefined;
   targetPosition: XYPosition;
+  handleType: 'source' | 'target';
 }
 
 export function determineBestNodeType(context: SmartNodeContext): NodeType {
-  const { sourceHandle } = context;
+  const { sourceHandle, handleType } = context;
 
+  // If dragging from an input (target handle), we want to create the SOURCE for that input.
+  if (handleType === 'target') {
+      if (sourceHandle === 'image') return 'image';
+      if (sourceHandle === 'audio') return 'audio';
+      if (sourceHandle === 'video') return 'video';
+      if (sourceHandle === 'document') return 'document';
+      if (sourceHandle === 'ref-image' || sourceHandle === 'ref-images') return 'image';
+      if (sourceHandle === 'first-frame' || sourceHandle === 'last-frame') return 'image';
+      return 'string'; // Default fallback
+  }
+
+  // If dragging from an output (source handle), we want to create a CONSUMER for that output.
   if (sourceHandle === 'prompt' || sourceHandle === 'negative' || sourceHandle === 'prompt-in') {
     return 'string';
   }
 
-  if (sourceHandle === 'ref-image' || sourceHandle === 'ref-images' || sourceHandle === 'first-frame' || sourceHandle === 'last-frame') {
+  if (sourceHandle === 'image') {
     return 'image';
   }
 
   if (sourceHandle === 'video') {
     return 'extendVideo';
+  }
+
+  if (sourceHandle === 'audio') {
+    return 'string'; 
+  }
+
+  if (sourceHandle === 'document') {
+    return 'string'; 
   }
 
   return 'string';
@@ -80,6 +101,22 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
             },
             style: { width: 192, height: 192 }
         }
+    case 'audio':
+        return {
+            data: {
+                label: 'Audio Input',
+                audio: undefined
+            },
+            style: { width: 192, height: 100 }
+        }
+    case 'document':
+        return {
+            data: {
+                label: 'Document Input',
+                documents: []
+            },
+            style: { width: 200, height: 200 }
+        }
     case 'string':
     default:
       return {
@@ -93,6 +130,9 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
 
 function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | null): string | undefined {
     if (nodeType === 'string') {
+        if (sourceHandle === 'audio') return 'audio';
+        if (sourceHandle === 'document') return 'document';
+        if (sourceHandle === 'image') return 'image';
         return 'text';
     }
 
@@ -102,6 +142,14 @@ function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | n
 
     if (nodeType === 'video') {
         return 'video';
+    }
+
+    if (nodeType === 'audio') {
+        return 'audio';
+    }
+
+    if (nodeType === 'document') {
+        return 'document';
     }
 
     if (nodeType === 'extendVideo') {
@@ -126,6 +174,8 @@ export function useEdgeDropNode() {
   const resolveDataType = useCallback((handleId?: string | null) => {
     if (handleId === 'video') return 'video';
     if (handleId === 'text') return 'text';
+    if (handleId === 'audio') return 'audio';
+    if (handleId === 'document') return 'document';
     return 'image';
   }, []);
 
@@ -158,7 +208,8 @@ export function useEdgeDropNode() {
              const context: SmartNodeContext = {
                 sourceHandle: startParams.handleId,
                 sourceNode: getNodes().find(n => n.id === startParams.nodeId),
-                targetPosition: position
+                targetPosition: position,
+                handleType: startParams.handleType
              };
 
              const nodeType = determineBestNodeType(context);

@@ -3,7 +3,7 @@ import { StudioNode } from '../types';
 import { DependencyGraph } from '../types/execution';
 
 function isExecutableNode(node: StudioNode): boolean {
-  return node.type === 'nanoGen' || node.type === 'veoDirector';
+  return ['nanoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(node.type || '');
 }
 
 function topologicalSort(

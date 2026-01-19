@@ -122,6 +122,18 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
               <SelectItem value="9:16">9:16</SelectItem>
             </SelectContent>
           </Select>
+          <Select 
+            value={(data as any).resolution ?? '720p'} 
+            onValueChange={(val) => updateNodeData(id, { resolution: val })}
+          >
+            <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
+              <SelectValue placeholder="Res" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="720p">720p</SelectItem>
+              <SelectItem value="1080p">1080p</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 border-l border-subtle pl-2">
             <span className="text-[10px] font-medium text-secondary px-2">First/Last Frame Only</span>
           </div>

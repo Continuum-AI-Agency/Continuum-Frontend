@@ -39,14 +39,57 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
 
 
 
+  const handleAspectRatioChange = useCallback((value: string) => {
+    updateNodeData(id, { aspectRatio: value });
+  }, [id, updateNodeData]);
+
+  const handleImageSizeChange = useCallback((value: string) => {
+    updateNodeData(id, { imageSize: value as '1K' | '2K' | '4K' });
+  }, [id, updateNodeData]);
+
   return (
     <TooltipProvider>
       <Card className="w-80 border-2 border-indigo-500/20 bg-background/95 backdrop-blur shadow-xl relative">
       <NodeStatus status={status} errorMessage={data.error} />
-      <CardHeader className="py-3 bg-indigo-500/10">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          🍌 Nano Gen (Model)
+      <CardHeader className="py-3 bg-indigo-500/10 flex flex-row items-center justify-between gap-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2 whitespace-nowrap">
+          🍌 Nano Gen
         </CardTitle>
+        <div className="flex gap-1">
+            <Select value={data.model} onValueChange={handleModelChange}>
+                <SelectTrigger className="h-6 text-[10px] px-2 py-0 border-subtle bg-background/50 min-w-[60px]">
+                    <SelectValue placeholder="Model" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="nano-banana">Flash</SelectItem>
+                    <SelectItem value="nano-banana-pro">Pro</SelectItem>
+                </SelectContent>
+            </Select>
+            {data.model === 'nano-banana-pro' && (
+                <Select value={data.imageSize || '1K'} onValueChange={handleImageSizeChange}>
+                    <SelectTrigger className="h-6 w-14 text-[10px] px-2 py-0 border-subtle bg-background/50">
+                        <SelectValue placeholder="Size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="1K">1K</SelectItem>
+                        <SelectItem value="2K">2K</SelectItem>
+                        <SelectItem value="4K">4K</SelectItem>
+                    </SelectContent>
+                </Select>
+            )}
+            <Select value={data.aspectRatio || '16:9'} onValueChange={handleAspectRatioChange}>
+                <SelectTrigger className="h-6 w-16 text-[10px] px-2 py-0 border-subtle bg-background/50">
+                    <SelectValue placeholder="Ratio" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="16:9">16:9</SelectItem>
+                    <SelectItem value="9:16">9:16</SelectItem>
+                    <SelectItem value="1:1">1:1</SelectItem>
+                    <SelectItem value="4:3">4:3</SelectItem>
+                    <SelectItem value="3:4">3:4</SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
       </CardHeader>
       
       <CardContent className="space-y-4 p-4">

@@ -71,6 +71,8 @@
   --edge-text: #94a3b8;
   --edge-image: #6366f1;
   --edge-video: #a855f7;
+  --edge-audio: #10b981;
+  --edge-document: #f59e0b;
   --edge-alpha-base: 95%;
   --edge-alpha-hover: 96%;
   --edge-alpha-selected: 100%;
@@ -167,6 +169,8 @@ html {
   --edge-text: #94a3b8;
   --edge-image: #6366f1;
   --edge-video: #a855f7;
+  --edge-audio: #10b981;
+  --edge-document: #f59e0b;
   --edge-alpha-base: 88%;
   --edge-alpha-hover: 92%;
   --edge-alpha-selected: 100%;

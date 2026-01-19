@@ -8,7 +8,7 @@ spec: |
 
 ### Feature 1: Extend Node Ecosystem
 Description: Add new node types beyond current basic ones (Prompt, Negative, Model, Attachment, Generator, Preview) to support Weavy's multi-modal capabilities
-- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.)
+- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.) (note: Completed LLMNode implementation via StringNode upgrade with inputs and Enrich execution)
 - [ ] 1.02 Create VideoNode for video-specific processing and generation
 - [ ] 1.03 Add ImageProcessingNode for consistency controls and transformations
 - [ ] 1.04 Implement SubjectConsistencyNode for maintaining character/object consistency across generations
@@ -19,7 +19,7 @@ Description: Implement intelligent data routing between nodes, allowing outputs 
 - [ ] 2.01 Design data type system (text, image, video, 3D) with validation for connections
 - [ ] 2.02 Implement dynamic handle generation based on node capabilities
 - [ ] 2.03 Create data transformation utilities for type conversion (e.g., image to text via OCR)
-- [ ] 2.04 Add connection validation and error handling for incompatible data flows
+- [x] 2.04 Add connection validation and error handling for incompatible data flows (note: Audited and fixed connection validation logic for all node types, including new audio/document nodes. Fixed random string node drop bug.)
 
 ### Feature 3: Model Agnostic Architecture
 Description: Enable seamless mixing of AI providers and models within the same workflow, supporting 100+ tools like Weavy

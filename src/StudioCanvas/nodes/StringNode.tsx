@@ -1,16 +1,29 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Handle, Position, NodeProps, Node, NodeResizer, useEdges } from '@xyflow/react';
 import { Textarea } from '@/components/ui/textarea';
 import { useStudioStore } from '../stores/useStudioStore';
 import { StringNodeData } from '../types';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { MagicWandIcon } from '@radix-ui/react-icons';
+import { Badge } from '@/components/ui/badge';
 
 export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const edges = useEdges();
   
   const connectedEdge = edges.find(e => e.source === id);
+  const incomingEdges = edges.filter(e => e.target === id);
   
+  const hasInputs = incomingEdges.length > 0;
+  
+  const inputCounts = useMemo(() => ({
+    image: incomingEdges.filter(e => e.targetHandle === 'image').length,
+    audio: incomingEdges.filter(e => e.targetHandle === 'audio').length,
+    video: incomingEdges.filter(e => e.targetHandle === 'video').length,
+    document: incomingEdges.filter(e => e.targetHandle === 'document').length,
+  }), [incomingEdges]);
+
   const context = useMemo(() => {
     if (!connectedEdge) return { label: 'Text', icon: '📝', edgeColor: 'var(--edge-text)', border: 'border-subtle' };
 
@@ -29,31 +42,126 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
     updateNodeData(id, { value: e.target.value });
   }, [id, updateNodeData]);
 
+  const handleEnrich = useCallback(async () => {
+    console.log("Trigger enrich for node", id);
+    updateNodeData(id, { isExecuting: true });
+    
+    setTimeout(() => {
+        updateNodeData(id, { isExecuting: false });
+    }, 1000);
+  }, [id, updateNodeData]);
+
   return (
     <div className="relative w-full h-full min-w-[240px] min-h-[140px]">
       <NodeResizer
-        minWidth={200}
-        minHeight={120}
+        minWidth={240}
+        minHeight={160}
         isVisible={selected}
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
+      
+      <div className="absolute -left-2 top-8 flex flex-col gap-3 z-10">
+        <div className="relative group/handle">
+            <Handle 
+                type="target" 
+                position={Position.Left} 
+                id="image" 
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+                className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
+                IMG
+            </span>
+        </div>
+        <div className="relative group/handle">
+            <Handle 
+                type="target" 
+                position={Position.Left} 
+                id="audio" 
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-audio, #10b981)' }}
+                className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
+                AUD
+            </span>
+        </div>
+        <div className="relative group/handle">
+            <Handle 
+                type="target" 
+                position={Position.Left} 
+                id="video" 
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
+                className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
+                VID
+            </span>
+        </div>
+        <div className="relative group/handle">
+            <Handle 
+                type="target" 
+                position={Position.Left} 
+                id="document" 
+                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-document, #f59e0b)' }}
+                className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
+            />
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
+                DOC
+            </span>
+        </div>
+      </div>
+
       <div className={cn(
           "border shadow-md bg-surface rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col", 
-          context.border
+          context.border,
+          hasInputs && "ring-1 ring-brand-primary/30"
       )}>
-          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center gap-1.5 min-h-[24px]">
-              <span className="text-[10px] text-secondary">{context.icon}</span>
-              <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">{context.label}</span>
+          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center justify-between min-h-[32px]">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-secondary">{context.icon}</span>
+                <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">{context.label}</span>
+              </div>
+              
+              {hasInputs && (
+                  <div className="flex items-center gap-1">
+                      {inputCounts.image > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-indigo-100 text-indigo-700 hover:bg-indigo-100">{inputCounts.image} img</Badge>}
+                      {inputCounts.audio > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{inputCounts.audio} aud</Badge>}
+                      {inputCounts.video > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-purple-100 text-purple-700 hover:bg-purple-100">{inputCounts.video} vid</Badge>}
+                      {inputCounts.document > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">{inputCounts.document} doc</Badge>}
+                  </div>
+              )}
           </div>
-          <div className="relative flex-1 min-h-0">
+          
+          <div className="relative flex-1 min-h-0 flex flex-col">
               <Textarea 
-              value={data.value} 
-              onChange={handleChange} 
-              onKeyDown={(event) => event.stopPropagation()}
-              className="nodrag text-xs text-primary placeholder:text-secondary/70 h-full min-h-[80px] w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
-              placeholder="Enter prompt..." 
+                value={data.value} 
+                onChange={handleChange} 
+                onKeyDown={(event) => event.stopPropagation()}
+                className="nodrag text-xs text-primary placeholder:text-secondary/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
+                placeholder={hasInputs ? "Enter instructions for prompt enrichment..." : "Enter prompt..."} 
               />
+              
+              {hasInputs && (
+                  <div className="p-2 border-t border-subtle bg-background/50 flex justify-end">
+                      <Button 
+                        size="sm" 
+                        variant="default" 
+                        className="h-6 text-[10px] bg-brand-primary hover:bg-brand-primary/90"
+                        onClick={handleEnrich}
+                        disabled={data.isExecuting}
+                      >
+                        {data.isExecuting ? (
+                            <>Enriching...</>
+                        ) : (
+                            <>
+                                <MagicWandIcon className="w-3 h-3 mr-1" />
+                                Enrich Prompt
+                            </>
+                        )}
+                      </Button>
+                  </div>
+              )}
           </div>
       </div>
 

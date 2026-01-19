@@ -19,7 +19,7 @@ import {
  * - video: Green/emerald colored edges
  */
 export interface DataTypeEdgeData {
-  dataType?: 'text' | 'image' | 'video';
+  dataType?: 'text' | 'image' | 'video' | 'audio' | 'document';
   label?: string;
   isActive?: boolean;
   isDotted?: boolean;
@@ -35,7 +35,11 @@ export function getDataTypeEdgeStyle(dataType?: string): React.CSSProperties {
       ? 'var(--edge-image)'
       : dataType === 'video'
         ? 'var(--edge-video)'
-        : 'var(--edge-text)';
+        : dataType === 'audio'
+          ? 'var(--edge-audio, #10b981)'
+          : dataType === 'document'
+            ? 'var(--edge-document, #f59e0b)'
+            : 'var(--edge-text)';
 
   return {
     ['--edge-color' as keyof React.CSSProperties]: token,
@@ -48,6 +52,8 @@ export function getDataTypeEdgeStyle(dataType?: string): React.CSSProperties {
 export function getDataTypeMarkerColor(dataType?: string): string {
   if (dataType === 'image') return 'var(--edge-image)';
   if (dataType === 'video') return 'var(--edge-video)';
+  if (dataType === 'audio') return 'var(--edge-audio, #10b981)';
+  if (dataType === 'document') return 'var(--edge-document, #f59e0b)';
   return 'var(--edge-text)';
 }
 

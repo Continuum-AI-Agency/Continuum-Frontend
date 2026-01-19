@@ -43,3 +43,6 @@ next-env.d.ts
 .ralph-state/state.json
 
 calendar/
+.ralph-state
+.sisyphus
+.cursor

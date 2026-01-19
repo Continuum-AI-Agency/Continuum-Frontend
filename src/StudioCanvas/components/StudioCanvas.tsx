@@ -8,20 +8,21 @@ import { VideoGenBlock } from '../nodes/VideoGenBlock';
 import { VeoFastBlock } from '../nodes/VeoFastBlock';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
 import { ImageNode } from '../nodes/ImageNode';
+import { AudioNode } from '../nodes/AudioNode';
+import { DocumentNode } from '../nodes/DocumentNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { Toolbar } from './Toolbar';
 import { Badge } from '@/components/ui/badge';
 import { v4 as uuidv4 } from 'uuid';
 import { ButtonEdge, DataTypeEdge } from '../edges';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
-import { useProximityConnect } from '../hooks/useProximityConnect';
 import CustomConnectionLine from './CustomConnectionLine';
 import { ContextMenu } from './ContextMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
-import { canAcceptSingleTextInput, hasExistingTargetConnection } from '../utils/connectionValidation';
+import { isValidConnection } from '../utils/isValidConnection';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
 
@@ -84,6 +85,27 @@ const LIBRARY_SECTIONS = [
         tag: 'Utility',
         borderColor: 'hover:border-[color:var(--edge-image)]',
       },
+      {
+        type: 'audio' as const,
+        label: 'Audio Reference',
+        desc: 'Voice or Sound Input',
+        tag: 'Utility',
+        borderColor: 'hover:border-[color:var(--edge-audio, #10b981)]',
+      },
+      {
+        type: 'document' as const,
+        label: 'Document Context',
+        desc: 'PDF/Text Knowledge',
+        tag: 'Utility',
+        borderColor: 'hover:border-[color:var(--edge-document, #f59e0b)]',
+      },
+      {
+        type: 'video' as const,
+        label: 'Video Reference',
+        desc: 'Video File Input',
+        tag: 'Utility',
+        borderColor: 'hover:border-[color:var(--edge-video)]',
+      },
     ],
   },
 ];
@@ -99,6 +121,8 @@ const nodeTypes = {
   extendVideo: ExtendVideoBlock,
   string: StringNode,
   image: ImageNode,
+  audio: AudioNode,
+  document: DocumentNode,
   video: VideoReferenceNode,
 };
 
@@ -112,7 +136,6 @@ function Flow() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, deleteElements } = useReactFlow();
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
-  const { onNodeDrag, onNodeDragStop } = useProximityConnect();
   const { show } = useToast();
 
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
@@ -294,6 +317,12 @@ function Flow() {
         } else if (type === 'image') {
           data = { image: undefined };
           style = { width: 192, height: 192 };
+        } else if (type === 'audio') {
+          data = { audio: undefined };
+          style = { width: 192, height: 100 };
+        } else if (type === 'document') {
+          data = { documents: [] };
+          style = { width: 200, height: 200 };
         } else if (type === 'video') {
           data = { video: undefined };
           style = { width: 192, height: 192 };
@@ -331,17 +360,34 @@ function Flow() {
       }
 
       const assetNodeType = resolved.nodeType;
-      const assetData =
-        assetNodeType === 'image'
-          ? { image: resolved.dataUrl, fileName: resolved.fileName }
-          : { video: resolved.dataUrl, fileName: resolved.fileName };
+      
+      let assetData = {};
+      let style = { width: 192, height: 192 };
+
+      if (assetNodeType === 'image') {
+        assetData = { image: resolved.dataUrl, fileName: resolved.fileName };
+      } else if (assetNodeType === 'video') {
+        assetData = { video: resolved.dataUrl, fileName: resolved.fileName };
+      } else if (assetNodeType === 'audio') {
+        assetData = { audio: resolved.dataUrl, fileName: resolved.fileName };
+        style = { width: 192, height: 100 };
+      } else if (assetNodeType === 'document') {
+        assetData = { 
+            documents: [{ 
+                name: resolved.fileName || 'Document', 
+                content: resolved.dataUrl, 
+                type: resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt' 
+            }] 
+        };
+        style = { width: 200, height: 200 };
+      }
 
       const newNode = {
         id: uuidv4(),
         type: assetNodeType,
         position,
         data: assetData,
-        style: { width: 192, height: 192 },
+        style,
       };
 
       setNodes(nodes.concat(newNode as any));
@@ -349,128 +395,9 @@ function Flow() {
     [screenToFlowPosition, nodes, setNodes, takeSnapshot, show],
   );
 
-  const isValidConnection = useCallback((connection: Connection | Edge) => {
-    const sourceNode = getNodeById(connection.source);
-    const targetHandle = connection.targetHandle ?? '';
-
-    if (!sourceNode) return false;
-
-    // Allow text connections to known text handles without requiring targetNode lookup
-    if (sourceNode.type === 'string' && ['prompt', 'prompt-in', 'negative'].includes(targetHandle)) {
-      return !hasExistingTargetConnection(edges, connection.target!, targetHandle);
-    }
-
-    const targetNode = getNodeById(connection.target);
-
-    if (!targetNode) return false;
-
-    const sourceHandle = connection.sourceHandle ?? '';
-
-    const normalizedConnection = connection;
-
-    // Check handle compatibility
-    if (targetNode.type === 'extendVideo') {
-        const handle = targetHandle || '';
-        if (handle === 'video') {
-          if (!(sourceNode.type === 'video' || sourceNode.type === 'veoDirector' || sourceNode.type === 'veoFast')) return false;
-        } else if (handle === 'prompt') {
-          if (sourceNode.type !== 'string') return false;
-        } else {
-          return false;
-        }
-    } else if (sourceNode.type === 'string') {
-        if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle || '')) return false;
-    } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
-        // Image sources can only connect to generation nodes, not to other reference nodes
-        const handle = targetHandle || '';
-        if (targetNode.type === 'veoDirector') {
-          const referenceModeFromHandle = ['first-frame', 'last-frame'].includes(handle) ? 'frames' : undefined;
-          const referenceMode =
-            referenceModeFromHandle ??
-            ((targetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
-          if (referenceMode === 'frames') {
-            if (!['first-frame', 'last-frame'].includes(handle)) return false;
-          } else {
-            if (!['ref-image', 'ref-images'].includes(handle)) return false;
-          }
-        } else if (targetNode.type === 'veoFast') {
-           if (!['first-frame', 'last-frame'].includes(handle)) return false;
-        } else if (!['ref-image'].includes(handle)) {
-          return false;
-        }
-        if (targetNode.type === 'image' || targetNode.type === 'video') return false;
-    } else if (sourceNode.type === 'video' || sourceNode.type === 'veoDirector' || sourceNode.type === 'veoFast') {
-        return false;
-    }
-
-    // Special case: video nodes can accept ref-images connections
-    if (targetNode.type === 'veoDirector' && targetHandle === 'ref-images') {
-        const referenceMode =
-          ((targetNode.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
-        if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
-        if (referenceMode !== 'images') return false;
-    }
-
-    if (!canAcceptSingleTextInput(edges, connection.target, targetHandle)) {
-      return false;
-    }
-
-    // Check connection limits based on target node type and handle
-    if (targetNode.type === 'nanoGen' && targetHandle === 'ref-image') {
-      // Nano Banana supports up to 14 reference images
-      const existingRefImageConnections = edges.filter(
-        edge => edge.target === connection.target && edge.targetHandle === 'ref-image'
-      ).length;
-      if (existingRefImageConnections >= 14) return false;
-    }
-
-    if (targetNode.type === 'veoDirector') {
-      if (targetHandle === 'first-frame') {
-        // First frame: max 1 connection
-        const existingConnections = edges.filter(
-          edge => edge.target === connection.target && edge.targetHandle === 'first-frame'
-        ).length;
-        if (existingConnections >= 1) return false;
-      } else if (targetHandle === 'last-frame') {
-        // Last frame: max 1 connection
-        const existingConnections = edges.filter(
-          edge => edge.target === connection.target && edge.targetHandle === 'last-frame'
-        ).length;
-        if (existingConnections >= 1) return false;
-      } else if (targetHandle === 'ref-images') {
-        // Reference images: max 3 connections
-        const existingConnections = edges.filter(
-          edge => edge.target === connection.target && edge.targetHandle === 'ref-images'
-        ).length;
-        if (existingConnections >= 3) return false;
-      }
-    }
-
-    if (targetNode.type === 'veoFast') {
-        if (targetHandle === 'first-frame') {
-          const existingConnections = edges.filter(
-            edge => edge.target === connection.target && edge.targetHandle === 'first-frame'
-          ).length;
-          if (existingConnections >= 1) return false;
-        } else if (targetHandle === 'last-frame') {
-          const existingConnections = edges.filter(
-            edge => edge.target === connection.target && edge.targetHandle === 'last-frame'
-          ).length;
-          if (existingConnections >= 1) return false;
-        } else {
-            return false;
-        }
-    }
-
-    if (targetNode.type === 'extendVideo' && targetHandle === 'video') {
-      const existingConnections = edges.filter(
-        edge => edge.target === connection.target && edge.targetHandle === 'video'
-      ).length;
-      if (existingConnections >= 1) return false;
-    }
-
-    return true;
-  }, [getNodeById, edges]);
+  const isValidConnectionCallback = useCallback((connection: Connection | Edge) => {
+    return isValidConnection(connection, edges, nodes);
+  }, [edges, nodes]);
 
   return (
     <div className="w-full h-full" ref={reactFlowWrapper}>
@@ -487,9 +414,7 @@ function Flow() {
         onNodeDragStart={onNodeDragStart}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd as any}
-        onNodeDrag={onNodeDrag as any}
-        onNodeDragStop={onNodeDragStop as any}
-        isValidConnection={isValidConnection}
+        isValidConnection={isValidConnectionCallback}
         connectionLineComponent={CustomConnectionLine}
         onPaneContextMenu={onPaneContextMenu}
         fitView

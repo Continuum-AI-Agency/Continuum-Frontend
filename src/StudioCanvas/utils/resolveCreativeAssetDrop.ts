@@ -1,6 +1,8 @@
 import {
   IMAGE_REFERENCE_MAX_BYTES,
   VIDEO_REFERENCE_MAX_BYTES,
+  AUDIO_REFERENCE_MAX_BYTES,
+  DOCUMENT_REFERENCE_MAX_BYTES,
   estimateBase64DecodedBytes,
   formatMiB,
   parseReferenceDropPayload,
@@ -11,7 +13,7 @@ import { buildDataUrl } from "./dataUrl";
 
 export type CreativeAssetDropSuccess = {
   status: "success";
-  nodeType: "image" | "video";
+  nodeType: "image" | "video" | "audio" | "document";
   dataUrl: string;
   mimeType: string;
   fileName?: string;
@@ -57,19 +59,30 @@ export async function resolveCreativeAssetDrop(
   const mimeType = resolveReferenceMimeType(parsed);
   const isImage = /^image\//i.test(mimeType);
   const isVideo = /^video\//i.test(mimeType);
+  const isAudio = /^audio\//i.test(mimeType);
+  const isPDF = mimeType === "application/pdf";
+  const isText = mimeType === "text/plain";
 
-  if (!isImage && !isVideo) {
+  if (!isImage && !isVideo && !isAudio && !isPDF && !isText) {
     return {
       status: "error",
       title: "Unsupported asset",
-      description: "Only image or video assets are supported.",
+      description: "Only image, video, audio, or text/PDF assets are supported.",
       variant: "warning",
     };
   }
 
-  const nodeType = isVideo ? "video" : "image";
-  const maxBytes = isVideo ? VIDEO_REFERENCE_MAX_BYTES : IMAGE_REFERENCE_MAX_BYTES;
-  const label = isVideo ? "Video" : "Image";
+  const nodeType = isVideo ? "video" : isAudio ? "audio" : (isPDF || isText) ? "document" : "image";
+  
+  const maxBytes = isVideo 
+    ? VIDEO_REFERENCE_MAX_BYTES 
+    : isAudio 
+      ? AUDIO_REFERENCE_MAX_BYTES 
+      : (isPDF || isText) 
+        ? DOCUMENT_REFERENCE_MAX_BYTES 
+        : IMAGE_REFERENCE_MAX_BYTES;
+
+  const label = isVideo ? "Video" : isAudio ? "Audio" : (isPDF || isText) ? "Document" : "Image";
 
   if (parsed.kind === "data-url") {
     const estimatedBytes = estimateBase64DecodedBytes(parsed.base64);

@@ -34,6 +34,17 @@ export type DependencyGraph = {
   executionOrder: string[];
 }
 
+export interface EnrichPromptPayload {
+  prompt: string;
+  brandId?: string;
+  context: {
+    images?: Array<{ type: 'base64'; data: string; mimeType: string }>;
+    audio?: { type: 'base64'; data: string; mimeType: string };
+    video?: { type: 'base64'; data: string; mimeType: string };
+    documents?: Array<{ name: string; content: string }>;
+  };
+}
+
 export interface GenerationPayload {
   brandId: string;
   model: string;
@@ -42,6 +53,7 @@ export interface GenerationPayload {
   negativePrompt?: string;
   aspectRatio?: string;
   resolution?: string;
+  imageSize?: '1K' | '2K' | '4K';
   durationSeconds?: number;
   referenceImages?: Array<{
     data: string;

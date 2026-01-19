@@ -52,6 +52,8 @@ describe('executeWorkflow', () => {
 
     await executeWorkflow(controls as any);
 
+    await new Promise(resolve => setTimeout(resolve, 0));
+
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     expect(executeGeneration.mock.calls[0][0]).toBe('2');
     expect(executeGeneration.mock.calls[0][1]).toEqual(expect.objectContaining({
@@ -97,7 +99,7 @@ describe('executeWorkflow', () => {
 
     const edges: Edge[] = [
       { id: 'e1', source: '1', target: '2', targetHandle: 'prompt' },
-      { id: 'e2', source: '2', target: '3', sourceHandle: 'image', targetHandle: 'ref-image' },
+      { id: 'e2', source: '2', target: '3', sourceHandle: 'image', targetHandle: 'ref-images' },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -116,6 +118,8 @@ describe('executeWorkflow', () => {
     const controls = buildControls(executeGeneration);
 
     await executeWorkflow(controls as any);
+
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(executeGeneration).toHaveBeenCalledWith('2', expect.anything());
     
@@ -172,7 +176,7 @@ describe('executeWorkflow', () => {
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-images' },
+      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
     ];
 
     useStudioStore.getState().setNodes(nodes);
@@ -191,7 +195,7 @@ describe('executeWorkflow', () => {
 
     expect(executeGeneration).toHaveBeenCalledTimes(0);
     const node = useStudioStore.getState().nodes.find(n => n.id === 'nano');
-    expect(node?.data.error).toBe('Missing connected input for ref-images');
+    expect(node?.data.error).toBe('Missing connected input for ref-image');
   });
 
   it('should respect concurrency limit', async () => {
@@ -266,6 +270,8 @@ describe('executeWorkflow', () => {
     const controls = buildControls(executeGeneration, executeVideoExtension);
 
     await executeWorkflow(controls as any);
+
+    await new Promise(resolve => setTimeout(resolve, 0));
 
     expect(executeVideoExtension).toHaveBeenCalledTimes(1);
     const payload = executeVideoExtension.mock.calls[0][1];

@@ -38,10 +38,13 @@ describe('resolveCreativeAssetDrop', () => {
     }
   });
 
-  it('returns error for unsupported mime types', async () => {
+  it('returns document type for PDF', async () => {
     const payload = 'data:application/pdf;base64,abcd';
     const result = await resolveCreativeAssetDrop(payload, resolver);
 
-    expect(result.status).toBe('error');
+    expect(result.status).toBe('success');
+    if (result.status === 'success') {
+      expect(result.nodeType).toBe('document');
+    }
   });
 });

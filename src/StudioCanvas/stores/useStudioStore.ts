@@ -13,7 +13,8 @@ import {
   EdgeChange,
 } from '@xyflow/react';
 import { StudioNode, VideoGenNodeData } from '../types';
-import { canAcceptSingleTextInput, textInputHandles } from '../utils/connectionValidation';
+import { isValidConnection, getAllowedTargetHandles, getAllowedSourceHandles } from '../utils/isValidConnection';
+import { resolveCollisions } from '../utils/nodeCollisions';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 
@@ -78,110 +79,12 @@ const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): 
   return connection;
 };
 
-const isValidConnection = (connection: Connection, edges: Edge[], nodes: StudioNode[]) => {
-  const { sourceHandle, targetHandle } = connection;
-  const targetNode = nodes.find((node) => node.id === connection.target);
-  const referenceMode = targetNode?.type === 'veoDirector'
-    ? ((targetNode.data as VideoGenNodeData | undefined)?.referenceMode ?? 'images')
-    : null;
-  
-  const targetEdgeCount = edges.filter(
-    (e) => e.target === connection.target && e.targetHandle === targetHandle
-  ).length;
-
-  const connectionLimits: Record<string, number> = {
-    'prompt': 1,
-    'prompt-in': 1,
-    'trigger': 1,
-    'negative': 1,
-    'input': 1,
-    'video': 1,
-    'first-frame': 1,
-    'last-frame': 1,
-    'ref-image': 14,
-    'ref-images': 3,
-  };
-
-  if (!canAcceptSingleTextInput(edges, connection.target!, targetHandle)) {
-    console.warn(`Text input handle already connected: ${targetHandle ?? 'unknown'}`);
-    return false;
-  }
-
-  if (targetHandle && connectionLimits[targetHandle] !== undefined) {
-    if (targetEdgeCount >= connectionLimits[targetHandle]) {
-      console.warn(`Connection limit reached for handle: ${targetHandle}`);
-      return false;
-    }
-  }
-
-
-  if (sourceHandle === 'text') {
-    const existingConnectionToTarget = edges.find(e => 
-      e.source === connection.source && 
-      e.target === connection.target
-    );
-    
-    if (existingConnectionToTarget) {
-        console.warn('This text node is already connected to this target block.');
-        return false;
-    }
-  }
-  
-  if (referenceMode && targetHandle) {
-    if (['ref-image', 'ref-images'].includes(targetHandle) && referenceMode !== 'images') return false;
-    // Frame handles are only visible in frame mode, so allow regardless of stored mode.
-  }
-
-  if (sourceHandle === 'text' && (targetHandle === 'prompt' || targetHandle === 'prompt-in' || targetHandle === 'negative')) return true;
-  
-  if (sourceHandle === 'image' && (targetHandle === 'first-frame' || targetHandle === 'last-frame' || targetHandle === 'ref-image' || targetHandle === 'ref-images')) return true;
-
-  if (sourceHandle === 'video' && targetHandle === 'video') return true;
-
-  return false;
-};
-
 const getEdgeStyle = (sourceHandle: string | null, _edgeType: EdgeType) => {
   const dataType = getDataTypeFromHandle(sourceHandle);
 
   return {
     ['--edge-color' as keyof CSSProperties]: `var(--edge-${dataType})`,
   };
-};
-
-const getAllowedTargetHandles = (node: StudioNode): string[] => {
-  switch (node.type) {
-    case 'nanoGen':
-      return ['prompt', 'ref-image', 'ref-images', 'trigger'];
-    case 'veoDirector':
-      return ['prompt-in', 'prompt', 'negative', 'ref-images', 'ref-image', 'first-frame', 'last-frame'];
-    case 'extendVideo':
-      return ['prompt', 'video'];
-    case 'string':
-    case 'image':
-    case 'video':
-    default:
-      return [];
-  }
-};
-
-const getAllowedSourceHandles = (node: StudioNode): string[] => {
-  switch (node.type) {
-    case 'string':
-      return ['text'];
-    case 'image':
-      return ['image'];
-    case 'video':
-      return ['video'];
-    case 'nanoGen':
-      return ['image'];
-    case 'veoDirector':
-      return ['video'];
-    case 'extendVideo':
-      return ['video'];
-    default:
-      return [];
-  }
 };
 
 const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
@@ -239,8 +142,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   defaultEdgeType: 'bezier',
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
-    set({
-      nodes: applyNodeChanges(changes, get().nodes),
+    set((state) => {
+        const newNodes = applyNodeChanges(changes, state.nodes);
+        const hasDimensions = newNodes.some(n => n.measured?.width || n.width);
+        
+        return {
+            nodes: hasDimensions ? resolveCollisions(newNodes) : newNodes,
+        };
     });
   },
 
@@ -280,17 +188,19 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   setNodes: (nodes: StudioNode[]) => {
-    const normalizedEdges = normalizeEdges(get().edges, nodes);
-    set({ nodes, edges: normalizedEdges });
+    set((state) => {
+      const normalizedEdges = normalizeEdges(state.edges, nodes);
+      return { nodes, edges: normalizedEdges };
+    });
   },
   
   setEdges: (edges: Edge[]) => {
-    set({ edges: normalizeEdges(edges, get().nodes) });
+    set((state) => ({ edges: normalizeEdges(edges, state.nodes) }));
   },
 
   updateNodeData: (id: string, data: Partial<StudioNode['data']>) => {
-    set({
-      nodes: get().nodes.map((node) => {
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
         if (node.id === id) {
           return {
             ...node,
@@ -302,7 +212,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         }
         return node;
       }) as StudioNode[],
-    });
+    }));
   },
 
   getNodeById: (id: string) => {

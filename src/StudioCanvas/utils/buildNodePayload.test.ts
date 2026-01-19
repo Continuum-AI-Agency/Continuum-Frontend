@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload } from './buildNodePayload';
+import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload } from './buildNodePayload';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 import { NodeOutput } from '../types/execution';
@@ -215,6 +215,52 @@ describe('buildNodePayload', () => {
 
       const payload = buildExtendVideoPayload(node, new Map(), [], []);
       expect(payload).toBeNull();
+    });
+  });
+
+  describe('buildEnrichPayload', () => {
+    it('should build payload with text, image, audio, and document inputs', () => {
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'Enrich this' },
+      };
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'img1', target: 'string', sourceHandle: 'image', targetHandle: 'image' },
+        { id: 'e2', source: 'aud1', target: 'string', sourceHandle: 'audio', targetHandle: 'audio' },
+        { id: 'e3', source: 'doc1', target: 'string', sourceHandle: 'document', targetHandle: 'document' },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('img1', { type: 'image', base64: 'img_base64', mimeType: 'image/png' });
+      
+      const allNodes: StudioNode[] = [
+        node,
+        { id: 'img1', type: 'image', position: { x: 0, y: 0 }, data: { image: 'data:image/png;base64,img_base64' } },
+        { id: 'aud1', type: 'audio', position: { x: 0, y: 0 }, data: { audio: 'data:audio/mp3;base64,aud_base64' } },
+        { id: 'doc1', type: 'document', position: { x: 0, y: 0 }, data: { documents: [{ content: 'doc content', name: 'doc.txt', type: 'txt' }] } },
+      ];
+
+      const payload = buildEnrichPayload(node, resolvedData, allNodes, edges);
+      
+      expect(payload).not.toBeNull();
+      expect(payload?.prompt).toBe('Enrich this');
+      expect(payload?.images?.[0].base64).toBe('img_base64');
+      expect(payload?.audio?.base64).toBe('aud_base64');
+      expect(payload?.documents?.[0].text).toBe('doc content');
+    });
+
+    it('should return null if no prompt and no inputs', () => {
+        const node: StudioNode = {
+            id: 'string',
+            type: 'string',
+            position: { x: 0, y: 0 },
+            data: { value: '' },
+        };
+        const payload = buildEnrichPayload(node, new Map(), [], []);
+        expect(payload).toBeNull();
     });
   });
 });

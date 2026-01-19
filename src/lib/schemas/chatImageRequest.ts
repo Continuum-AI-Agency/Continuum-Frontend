@@ -67,23 +67,27 @@ export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, c
     });
   }
 
-  // Veo 3.1 does not support 9:16 when references are attached
-  if ((value.model === "veo-3-1" || value.model === "veo-3-1-fast") && value.aspectRatio === "9:16") {
-    const hasReferences = !!(value.refs?.length || value.firstFrame || value.lastFrame || value.referenceVideo);
-    if (hasReferences) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["aspectRatio"],
-        message: "9:16 aspect ratio is not supported when references are attached to Veo 3.1 generations. Please use 16:9 or remove references.",
-      });
-    }
-  }
-
   if (medium === "video" && value.refs && value.refs.length > 3) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["refs"],
       message: "Veo/Sora currently support up to 3 reference images.",
+    });
+  }
+
+  if (value.model === "veo-3-1-fast" && value.refs && value.refs.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["refs"],
+      message: "Veo Fast only supports Image-to-Video (First/Last frame), not reference images.",
+    });
+  }
+
+  if (value.model === "veo-3-1" && (value.firstFrame || value.lastFrame)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["firstFrame"],
+      message: "Veo Standard does not support Image-to-Video (First/Last frame). Use Veo Fast.",
     });
   }
 
@@ -150,16 +154,12 @@ export function getMediumForModel(model: SupportedModel): "image" | "video" {
 export function getAspectsForModel(model: SupportedModel, hasReferences: boolean = false): readonly string[] {
   const medium = modelMedium[model];
 
-  // When references are attached to Veo 3.1, only 16:9 is supported
-  if ((model === "veo-3-1" || model === "veo-3-1-fast") && hasReferences) {
-    return ["16:9"] as const;
+  if (model === "veo-3-1" || model === "veo-3-1-fast") {
+    return ["16:9", "9:16"] as const;
   }
 
   if (model === "gemini-3-pro-image-preview") {
     return ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"] as const;
-  }
-  if (model === "veo-3-1-fast") {
-    return providerAspectRatioOptions["veo-3-1"]?.[medium] ?? ["16:9", "9:16"];
   }
   return providerAspectRatioOptions[model]?.[medium] ?? [];
 }

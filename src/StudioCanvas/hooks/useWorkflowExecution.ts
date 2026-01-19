@@ -65,7 +65,8 @@ export function useWorkflowExecution() {
       nodeId: string,
       payload: unknown,
       initUrl: string,
-      expectedMedium: "image" | "video",
+      expectedMedium: "image" | "video" | "text",
+      onPartialUpdate?: (data: any) => void
     ): Promise<ExecutionResult> => {
       if (isCancelledRef.current) {
         return { success: false, error: "Execution cancelled" };
@@ -120,11 +121,12 @@ export function useWorkflowExecution() {
               }
             }
             if (!dataLines.length) continue;
-            const jsonStr = dataLines.join("\n");
+            const jsonStr = dataLines.join("");
 
             try {
               type StreamPayload = {
                 jobId?: string;
+                phase?: string;
                 pct?: number;
                 etaMs?: number;
                 base64?: string;
@@ -136,6 +138,9 @@ export function useWorkflowExecution() {
                 poster_base64?: string;
                 storage?: { signed_url?: string };
                 message?: string;
+                text?: string;
+                delta?: string;
+                progress?: number;
               };
 
               const parsed = JSON.parse(jsonStr) as StreamPayload;
@@ -145,7 +150,7 @@ export function useWorkflowExecution() {
                 setStreamState((prev) => ({
                   ...prev,
                   status: "streaming",
-                  progressPct: parsed.pct ?? prev.progressPct ?? 0,
+                  progressPct: parsed.pct ?? parsed.progress ?? prev.progressPct ?? 0,
                   etaMs: parsed.etaMs,
                 }));
               }
@@ -175,6 +180,18 @@ export function useWorkflowExecution() {
                     mimeType: imageMimeType,
                   };
                 }
+              }
+
+              if (eventName === "text" || eventName === "message") {
+                  const delta = parsed.delta ?? parsed.text;
+                  if (delta && onPartialUpdate) {
+                      onPartialUpdate({ delta });
+                  }
+                  if (expectedMedium === "text" && delta) {
+                      // Accumulate for final output if needed, though usually stream is sufficient
+                      if (!finalOutput) finalOutput = { type: 'text', value: '' };
+                      (finalOutput as any).value += delta;
+                  }
               }
 
               const videoMime = parsed.mime_type ?? "video/mp4";
@@ -242,7 +259,7 @@ export function useWorkflowExecution() {
                 }));
               }
             } catch (err) {
-              console.error("Failed to parse SSE message", err);
+              console.error("Failed to parse SSE message", err, jsonStr.slice(0, 200));
             }
           }
         };
@@ -331,5 +348,17 @@ export function useWorkflowExecution() {
     [resolveInitUrl, executeStreamRequest]
   );
 
-  return { streamState, executeGeneration, executeVideoExtension, cancel, reset };
+  const executeEnrichment = useCallback(
+    async (
+      nodeId: string,
+      payload: any,
+      onPartialUpdate?: (data: any) => void
+    ): Promise<ExecutionResult> => {
+      const initUrl = resolveInitUrl("/ai-studio/enrich");
+      return executeStreamRequest(nodeId, payload, initUrl, "text", onPartialUpdate);
+    },
+    [resolveInitUrl, executeStreamRequest]
+  );
+
+  return { streamState, executeGeneration, executeVideoExtension, executeEnrichment, cancel, reset };
 }

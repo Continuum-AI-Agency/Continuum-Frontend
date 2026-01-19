@@ -2,6 +2,8 @@ export const MEBIBYTE_BYTES = 1024 * 1024;
 
 export const IMAGE_REFERENCE_MAX_BYTES = 5 * MEBIBYTE_BYTES;
 export const VIDEO_REFERENCE_MAX_BYTES = 50 * MEBIBYTE_BYTES;
+export const AUDIO_REFERENCE_MAX_BYTES = 10 * MEBIBYTE_BYTES;
+export const DOCUMENT_REFERENCE_MAX_BYTES = 10 * MEBIBYTE_BYTES;
 
 export type ParsedReferenceDropPayload =
   | { kind: "data-url"; mimeType: string; base64: string }
@@ -62,6 +64,11 @@ export function inferMimeTypeFromPath(value: string): string | null {
   if (lower.endsWith(".mp4")) return "video/mp4";
   if (lower.endsWith(".webm")) return "video/webm";
   if (lower.endsWith(".mov")) return "video/quicktime";
+  if (lower.endsWith(".mp3")) return "audio/mpeg";
+  if (lower.endsWith(".wav")) return "audio/wav";
+  if (lower.endsWith(".m4a")) return "audio/mp4";
+  if (lower.endsWith(".pdf")) return "application/pdf";
+  if (lower.endsWith(".txt")) return "text/plain";
   return null;
 }
 

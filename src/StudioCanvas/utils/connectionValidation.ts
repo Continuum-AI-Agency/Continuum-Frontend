@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react';
 
-const TEXT_INPUT_HANDLES = new Set(['prompt', 'prompt-in', 'trigger', 'negative', 'input']);
+const TEXT_INPUT_HANDLES = new Set(['prompt', 'prompt-in', 'trigger', 'negative', 'input', 'audio', 'video']);
 
 export function isTextInputHandle(handleId?: string | null): boolean {
   if (!handleId) return false;

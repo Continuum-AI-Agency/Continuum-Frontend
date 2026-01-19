@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { useStudioStore } from './useStudioStore';
 import { StudioNode } from '../types';
-import { Edge, Connection } from '@xyflow/react';
+import { Connection } from '@xyflow/react';
 
 describe('useStudioStore', () => {
   beforeEach(() => {
@@ -167,7 +167,7 @@ describe('useStudioStore', () => {
       source: 'image1',
       sourceHandle: 'image',
       target: 'nano',
-      targetHandle: 'ref-images',
+      targetHandle: 'ref-image',
     });
 
     expect(useStudioStore.getState().edges).toHaveLength(1);
@@ -217,7 +217,7 @@ describe('useStudioStore', () => {
         source: `img${i}`,
         sourceHandle: 'image',
         target: targetId,
-        targetHandle: 'ref-images',
+        targetHandle: 'ref-image',
       });
     }
     expect(useStudioStore.getState().edges).toHaveLength(14);
@@ -227,7 +227,7 @@ describe('useStudioStore', () => {
       source: 'img14',
       sourceHandle: 'image',
       target: targetId,
-      targetHandle: 'ref-images',
+      targetHandle: 'ref-image',
     });
     expect(useStudioStore.getState().edges).toHaveLength(14);
   });

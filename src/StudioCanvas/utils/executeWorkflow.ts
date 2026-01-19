@@ -4,7 +4,7 @@ import type { Edge } from '@xyflow/react';
 import { StudioNode } from "../types";
 import { NodeOutput } from "../types/execution";
 import { useStudioStore } from "../stores/useStudioStore";
-import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, toBackendExtendVideoPayload, toBackendPayload } from "./buildNodePayload";
+import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload, toBackendExtendVideoPayload, toBackendPayload } from "./buildNodePayload";
 import type { ExtendVideoPayload } from "../types/execution";
 import { buildDataUrl, parseDataUrl } from "./dataUrl";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
@@ -94,7 +94,7 @@ const getPromptValue = (
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>
 ): { value?: string; fromEdge: boolean } => {
-  const promptHandles = node.type === 'veoDirector' ? ['prompt-in', 'prompt'] : ['prompt'];
+  const promptHandles = (node.type === 'veoDirector' || node.type === 'veoFast') ? ['prompt-in', 'prompt'] : ['prompt'];
   const promptEdges = incomingEdges.filter((edge) => promptHandles.includes(edge.targetHandle ?? ""));
 
   if (promptEdges.length > 0) {
@@ -130,7 +130,7 @@ const findMissingOptionalInput = (
     return undefined;
   }
 
-  if (node.type === 'veoDirector') {
+  if (node.type === 'veoDirector' || node.type === 'veoFast') {
     const referenceMode = ((node.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
     for (const edge of incomingEdges) {
       const handle = edge.targetHandle ?? "";
@@ -139,11 +139,11 @@ const findMissingOptionalInput = (
           return handle;
         }
       } else if (handle === 'ref-image' || handle === 'ref-images') {
-        if (referenceMode === 'images' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+        if (node.type === 'veoDirector' && referenceMode === 'images' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
       } else if (handle === 'first-frame' || handle === 'last-frame' || handle.startsWith('frame-')) {
-        if (referenceMode === 'frames' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+        if ((node.type === 'veoFast' || referenceMode === 'frames') && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
       }
@@ -265,8 +265,8 @@ export async function executeWorkflow(
   controls: ExecutorControls,
   options: ExecuteWorkflowOptions = {}
 ) {
-  const { nodes, edges, updateNodeData } = useStudioStore.getState();
-  const { executeGeneration } = controls;
+  const { nodes, edges } = useStudioStore.getState();
+  const { executeGeneration, executeEnrichment } = controls;
   console.info("[studio] executeWorkflow start", {
     targetNodeId: options.targetNodeId,
     nodeCount: nodes.length,
@@ -278,7 +278,7 @@ export async function executeWorkflow(
     : new Set(nodes.map((node) => node.id));
 
   const executableNodes = nodes.filter(
-    (n) => (n.type === 'nanoGen' || n.type === 'veoDirector' || n.type === 'extendVideo') && executionScope.has(n.id)
+    (n) => (n.type === 'nanoGen' || n.type === 'veoDirector' || n.type === 'veoFast' || n.type === 'extendVideo' || n.type === 'string') && executionScope.has(n.id)
   );
   const executableNodeIds = executableNodes.map((n) => n.id);
 
@@ -292,16 +292,27 @@ export async function executeWorkflow(
   });
 
   const clearDownstream = options.clearDownstream ?? true;
-  const downstreamScope = clearDownstream
-    ? buildDownstreamScope(nodes, edges, new Set(executableNodeIds))
-    : new Set(executableNodeIds);
+  
+  let nodesToReset = new Set<string>();
+  if (options.targetNodeId) {
+    if (clearDownstream) {
+      nodesToReset = buildDownstreamScope(nodes, edges, new Set([options.targetNodeId]));
+    } else {
+      nodesToReset = new Set([options.targetNodeId]);
+    }
+  } else {
+    // Global run - reset everything in executable scope
+    nodesToReset = clearDownstream
+      ? buildDownstreamScope(nodes, edges, new Set(executableNodeIds))
+      : new Set(executableNodeIds);
+  }
 
   const resetNodeIds = nodes
-    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector' || node.type === 'extendVideo') && downstreamScope.has(node.id))
+    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector' || node.type === 'veoFast' || node.type === 'extendVideo' || node.type === 'string') && nodesToReset.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
-    updateNodeData(nodeId, {
+    useStudioStore.getState().updateNodeData(nodeId, {
       isExecuting: false,
       isComplete: false,
       error: undefined,
@@ -335,10 +346,34 @@ export async function executeWorkflow(
         resolvedOutputs.set(node.id, { type: 'video', url: (node.data as any).video });
       }
     }
+
+    // Pre-populate completed generator outputs if they were not reset
+    if (!resetNodeIds.includes(node.id) && (node.data as any).isComplete && !(node.data as any).error) {
+      if (node.type === 'nanoGen') {
+         const genImage = (node.data as any).generatedImage as string;
+         if (genImage) {
+            const parsed = parseDataUrl(genImage);
+            if (parsed?.base64) {
+                resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+            }
+         }
+      } else if (node.type === 'veoDirector' || node.type === 'veoFast' || node.type === 'extendVideo') {
+         const genVideo = (node.data as any).generatedVideo as string;
+         if (genVideo) {
+             resolvedOutputs.set(node.id, { type: 'video', url: genVideo });
+         }
+      } else if (node.type === 'string') {
+         // Already handled above, but just in case logic changes
+         const val = (node.data as any).value;
+         if (val && !resolvedOutputs.has(node.id)) {
+            resolvedOutputs.set(node.id, { type: 'text', value: val });
+         }
+      }
+    }
   }
 
   const updateNodeStatus = (nodeId: string, status: 'running' | 'completed' | 'failed', error?: string) => {
-    updateNodeData(nodeId, {
+    useStudioStore.getState().updateNodeData(nodeId, {
       isExecuting: status === 'running',
       isComplete: status === 'completed',
       error: error,
@@ -357,7 +392,7 @@ export async function executeWorkflow(
         mimeType,
         base64Length: base64.length,
       });
-      updateNodeData(nodeId, { generatedImage: dataUrl });
+      useStudioStore.getState().updateNodeData(nodeId, { generatedImage: dataUrl });
       const updatedNode = useStudioStore.getState().nodes.find((node) => node.id === nodeId);
       console.info("[studio] generatedImage set", {
         nodeId,
@@ -367,9 +402,11 @@ export async function executeWorkflow(
           : undefined,
       });
     } else if (output.type === 'video') {
-      updateNodeData(nodeId, {
+      useStudioStore.getState().updateNodeData(nodeId, {
         generatedVideo: output.url,
       });
+    } else if (output.type === 'text') {
+      useStudioStore.getState().updateNodeData(nodeId, { value: output.value });
     }
   };
 
@@ -380,6 +417,52 @@ export async function executeWorkflow(
     updateNodeStatus(nodeId, 'running');
 
     try {
+      if (node.type === 'string') {
+        const payload = buildEnrichPayload(node, resolvedOutputs, nodes, edges);
+        
+        const hasExternalInputs = (payload?.context?.images?.length ?? 0) > 0 || !!payload?.context?.audio || (payload?.context?.documents?.length ?? 0) > 0 || !!payload?.context?.video;
+
+        if (!hasExternalInputs && payload?.prompt) {
+             setNodeOutput(nodeId, { type: 'text', value: payload.prompt });
+             updateNodeStatus(nodeId, 'completed');
+             return true;
+        }
+        
+        if (!payload) {
+            updateNodeStatus(nodeId, 'completed');
+            return true;
+        }
+
+        if (typeof executeEnrichment !== 'function') {
+             updateNodeStatus(nodeId, 'failed', "Enrichment execution unavailable");
+             return false;
+        }
+
+        useStudioStore.getState().updateNodeData(nodeId, { value: "" });
+
+        const onPartialUpdate = (data: { delta: string }) => {
+             const currentNodes = useStudioStore.getState().nodes;
+             const node = currentNodes.find(n => n.id === nodeId);
+             const currentVal = (node?.data as any).value || "";
+             useStudioStore.getState().updateNodeData(nodeId, { value: currentVal + data.delta });
+        };
+
+        const result = await executeEnrichment(nodeId, payload, onPartialUpdate);
+        
+        if (!result.success) {
+             console.error("Enrichment error", result.error);
+             updateNodeStatus(nodeId, 'failed', result.error || "Enrichment failed");
+             return false;
+        }
+        
+        if (result.output?.type === 'text') {
+             setNodeOutput(nodeId, { type: 'text', value: result.output.value });
+             useStudioStore.getState().updateNodeData(nodeId, { value: result.output.value });
+             updateNodeStatus(nodeId, 'completed');
+             return true;
+        }
+      }
+
       if (node.type === 'extendVideo') {
         const payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges);
 
@@ -420,7 +503,7 @@ export async function executeWorkflow(
 
       if (node.type === 'nanoGen') {
         payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges);
-      } else if (node.type === 'veoDirector') {
+      } else if (node.type === 'veoDirector' || node.type === 'veoFast') {
         payload = buildVeoPayload(node, resolvedOutputs, nodes, edges);
       }
 
@@ -458,7 +541,9 @@ export async function executeWorkflow(
     }
   }
 
-  const pendingNodes = new Set(executableNodeIds);
+  const pendingNodes = new Set(
+    executableNodeIds.filter(id => !resolvedOutputs.has(id))
+  );
   const runningNodes = new Map<string, Promise<{ id: string; success: boolean }>>();
 
   while (pendingNodes.size > 0 || runningNodes.size > 0) {

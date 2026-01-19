@@ -5,7 +5,7 @@ import { Badge, Button, Card, Flex, IconButton, ScrollArea, Text } from "@radix-
 import Image from "next/image";
 import { ImageIcon, Pencil2Icon, ReloadIcon, TrashIcon, UploadIcon } from "@radix-ui/react-icons";
 import { useDropzone, type FileRejection, type FileError } from "react-dropzone";
-import type { RefImage } from "@/lib/types/chatImage";
+import type { RefImage, SupportedModel } from "@/lib/types/chatImage";
 
 import { Dropzone, DropzoneEmptyState } from "@/components/dropzone";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -24,6 +24,7 @@ import { resolveDroppedBase64 } from "@/lib/ai-studio/referenceDropClient";
 
 type ReferenceDockProps = {
   mode: "image" | "video";
+  model?: SupportedModel;
   maxRefs: number;
   refs: RefImage[];
   firstFrame?: RefImage;
@@ -129,6 +130,7 @@ const useLocalDropzone = (
 
 export function ReferenceDock({
   mode,
+  model,
   maxRefs,
   refs,
   firstFrame,
@@ -141,6 +143,11 @@ export function ReferenceDock({
 }: ReferenceDockProps) {
   const { show } = useToast();
   const [isDragging, setIsDragging] = React.useState(false);
+
+  const supportsRefImages = mode === "image" || model === "veo-3-1";
+  const supportsFrames = model === "veo-3-1-fast";
+  const supportsRefVideo = mode === "video";
+
   const [markupState, setMarkupState] = React.useState<{
     target: "ref" | "first" | "last";
     refId?: string;
@@ -438,76 +445,84 @@ export function ReferenceDock({
           <Badge variant="soft" color="gray" size="2">{refs.length}</Badge>
         </Flex>
 
-        <div>
-          <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden">
-            <ScrollArea type="always" scrollbars="both" className="mb-3 max-h-44 pr-2">
-              <Flex gap="2" wrap="wrap">
-                {refs.map((ref) => (
-                  <RefChip
-                    key={ref.id}
-                    refImage={ref}
-                    allowReferenceType={mode === "video"}
-                    onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
-                  onEdit={() => openMarkup({ target: "ref", ref })}
-                  onRevert={
-                    ref.originalBase64
-                      ? () =>
-                          onChangeRefs(
-                            refs.map((r) =>
-                              r.id === ref.id
-                                ? revertRefToOriginal(r)
-                                : r
+        {supportsRefImages ? (
+          <div>
+            <Dropzone {...refsDropzone} className="mb-3 w-full rounded-lg border border-dashed border-white/20 bg-white/5 p-3 text-white max-h-56 overflow-hidden">
+              <ScrollArea type="always" scrollbars="both" className="mb-3 max-h-44 pr-2">
+                <Flex gap="2" wrap="wrap">
+                  {refs.map((ref) => (
+                    <RefChip
+                      key={ref.id}
+                      refImage={ref}
+                      allowReferenceType={mode === "video"}
+                      onTypeChange={(type) => onChangeRefs(refs.map((r) => (r.id === ref.id ? { ...r, referenceType: type } : r)))}
+                    onEdit={() => openMarkup({ target: "ref", ref })}
+                    onRevert={
+                      ref.originalBase64
+                        ? () =>
+                            onChangeRefs(
+                              refs.map((r) =>
+                                r.id === ref.id
+                                  ? revertRefToOriginal(r)
+                                  : r
+                              )
                             )
-                          )
-                      : undefined
-                  }
-                  onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
-                />
-              ))}
-                {refs.length === 0 ? <Text size="1" color="gray">Drop or upload images.</Text> : null}
-              </Flex>
-            </ScrollArea>
-            <DropzoneEmptyState />
-          </Dropzone>
-        </div>
+                        : undefined
+                    }
+                    onRemove={() => onChangeRefs(refs.filter((r) => r.id !== ref.id))}
+                  />
+                ))}
+                  {refs.length === 0 ? <Text size="1" color="gray">Drop or upload images.</Text> : null}
+                </Flex>
+              </ScrollArea>
+              <DropzoneEmptyState />
+            </Dropzone>
+          </div>
+        ) : null}
 
         {mode === "video" ? (
           <div className="grid grid-cols-3 gap-3">
-            <FrameTile
-              label="First frame"
-              refImage={firstFrame}
-              dropzoneProps={firstDropzone}
-              onClear={() => onChangeFirstFrame?.()}
-              onRevert={
-                firstFrame?.originalBase64
-                  ? () =>
-                      onChangeFirstFrame?.(revertRefToOriginal(firstFrame))
-                  : undefined
-              }
-              onEdit={() => openMarkup({ target: "first", ref: firstFrame })}
-              dropSlot="first"
-            />
-            <FrameTile
-              label="Last frame"
-              refImage={lastFrame}
-              dropzoneProps={lastDropzone}
-              onClear={() => onChangeLastFrame?.()}
-              onRevert={
-                lastFrame?.originalBase64
-                  ? () =>
-                      onChangeLastFrame?.(revertRefToOriginal(lastFrame))
-                  : undefined
-              }
-              onEdit={() => openMarkup({ target: "last", ref: lastFrame })}
-              dropSlot="last"
-            />
-            <VideoTile
-              label="Reference video"
-              refVideo={referenceVideo}
-              dropzoneProps={videoDropzone}
-              onClear={() => onChangeReferenceVideo?.()}
-              dropSlot="video"
-            />
+            {supportsFrames ? (
+              <>
+                <FrameTile
+                  label="First frame"
+                  refImage={firstFrame}
+                  dropzoneProps={firstDropzone}
+                  onClear={() => onChangeFirstFrame?.()}
+                  onRevert={
+                    firstFrame?.originalBase64
+                      ? () =>
+                          onChangeFirstFrame?.(revertRefToOriginal(firstFrame))
+                      : undefined
+                  }
+                  onEdit={() => openMarkup({ target: "first", ref: firstFrame })}
+                  dropSlot="first"
+                />
+                <FrameTile
+                  label="Last frame"
+                  refImage={lastFrame}
+                  dropzoneProps={lastDropzone}
+                  onClear={() => onChangeLastFrame?.()}
+                  onRevert={
+                    lastFrame?.originalBase64
+                      ? () =>
+                          onChangeLastFrame?.(revertRefToOriginal(lastFrame))
+                      : undefined
+                  }
+                  onEdit={() => openMarkup({ target: "last", ref: lastFrame })}
+                  dropSlot="last"
+                />
+              </>
+            ) : null}
+            {supportsRefVideo ? (
+              <VideoTile
+                label="Reference video"
+                refVideo={referenceVideo}
+                dropzoneProps={videoDropzone}
+                onClear={() => onChangeReferenceVideo?.()}
+                dropSlot="video"
+              />
+            ) : null}
           </div>
         ) : null}
 

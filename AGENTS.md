@@ -127,3 +127,10 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 * **Tests are Critical** Tests are critical to effective codebases, functions, and behavior. Always write the full test, covering 100% of functionality.
 * **You can Iterate on them yourself** Running `bun test path/to/function` runs that singular test. `bun tests` runs all tests in the codebase. You may run them iteratively within your context in order to confirm your work.
 * **Logging in Edge Functions** Putting logs into Edge Functions is critical for tracing and debugging.
+
+## Plan Mode
+
+- Make the plan extremely concise. Sacrifice grammar for the sake of concision.
+- At the end of each plan, give me a list of unresolved questions to answer, if any.
+
+Do NOT write comments every line. Write comments at the top of the file if necessary. Do NOT use emojis to write comments.

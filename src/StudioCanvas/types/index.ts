@@ -2,7 +2,7 @@ import { type Node, type Edge, type OnConnect, type OnNodesChange, type OnEdgesC
 
 export type { Node, Edge, OnConnect, OnNodesChange, OnEdgesChange, NodeChange, EdgeChange, Connection };
 
-export type DataType = 'string' | 'image' | 'video' | 'trigger';
+export type DataType = 'string' | 'image' | 'video' | 'audio' | 'document' | 'trigger';
 
 export interface ConnectorData {
   type: DataType;
@@ -32,6 +32,7 @@ export interface NanoGenNodeData extends BaseNodeData {
   model: 'nano-banana' | 'nano-banana-pro';
   positivePrompt: string;
   aspectRatio: string;
+  imageSize?: '1K' | '2K' | '4K';
   stylePreset?: ImageStylePreset;
   seed?: number;
   steps?: number;
@@ -48,14 +49,30 @@ export interface StringNodeData extends BaseNodeData {
   isSplitting?: boolean;
 }
 
+export type ImageReferenceType = 'default' | 'product' | 'color' | 'person';
+
 export interface ImageNodeData extends BaseNodeData {
   image?: string;
   fileName?: string;
+  referenceType?: ImageReferenceType;
 }
 
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
   fileName?: string;
+}
+
+export interface AudioNodeData extends BaseNodeData {
+  audio?: string;
+  fileName?: string;
+}
+
+export interface DocumentNodeData extends BaseNodeData {
+  documents?: Array<{
+    name: string;
+    content: string;
+    type: 'pdf' | 'txt';
+  }>;
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
@@ -64,6 +81,8 @@ export interface VideoGenNodeData extends BaseNodeData {
   negativePrompt?: string;
   enhancePrompt: boolean;
   aspectRatio?: '16:9' | '9:16';
+  resolution?: '720p' | '1080p';
+  durationSeconds?: 4 | 6 | 8;
   referenceMode?: 'images' | 'frames';
   frameList?: FrameSlot[];
   generatedVideo?: string | Blob;
@@ -73,7 +92,7 @@ export interface ExtendVideoNodeData extends BaseNodeData {
   prompt?: string;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | ImageNodeData | VideoNodeData;
+export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed';

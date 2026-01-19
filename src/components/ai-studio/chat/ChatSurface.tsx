@@ -347,6 +347,7 @@ export function ChatSurface({
           />
           <ReferenceDock
             mode={getMediumForModel(activeModel)}
+            model={activeModel}
             maxRefs={getMediumForModel(activeModel) === "video" ? 3 : 14}
             refs={refs}
             firstFrame={firstFrame}

@@ -82,29 +82,6 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
     updateNodeData(id, { aspectRatio: value as '16:9' | '9:16' });
   }, [id, updateNodeData]);
 
-  const referenceMode = data.referenceMode ?? 'images';
-  const referenceSwitchId = `veo-reference-${id}`;
-
-  const handleReferenceModeChange = useCallback((checked: boolean) => {
-    const nextMode = checked ? 'frames' : 'images';
-    updateNodeData(id, { referenceMode: nextMode });
-
-    const nextEdges = storeEdges.filter((edge) => {
-      if (edge.target !== id) return true;
-      const handle = edge.targetHandle ?? '';
-
-      if (handle === 'ref-video') return false;
-
-      if (nextMode === 'frames') {
-        return !['ref-image', 'ref-images'].includes(handle);
-      }
-
-      return !(handle === 'first-frame' || handle === 'last-frame' || handle.startsWith('frame-'));
-    });
-
-    setEdges(nextEdges);
-  }, [id, setEdges, storeEdges, updateNodeData]);
-
   const handleRun = useCallback(async () => {
     console.info("[studio] run video node", { nodeId: id });
     await executeWorkflow(executionControls, { targetNodeId: id });
@@ -150,7 +127,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
               <SelectValue placeholder="Model" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="veo-3.1">Veo 3.1 (Cinematic)</SelectItem>
+              <SelectItem value="veo-3.1">Standard</SelectItem>
             </SelectContent>
           </Select>
           <Select value={data.aspectRatio ?? '16:9'} onValueChange={handleAspectRatioChange}>
@@ -162,16 +139,18 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
               <SelectItem value="9:16">9:16</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex items-center gap-2 border-l border-subtle pl-2">
-            <Label htmlFor={referenceSwitchId} className="text-[10px] font-bold text-secondary uppercase tracking-wider">
-              Frame Anchors
-            </Label>
-            <Switch
-              id={referenceSwitchId}
-              checked={referenceMode === 'frames'}
-              onCheckedChange={handleReferenceModeChange}
-            />
-          </div>
+          <Select 
+            value={(data as any).resolution ?? '720p'} 
+            onValueChange={(val) => updateNodeData(id, { resolution: val })}
+          >
+            <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
+              <SelectValue placeholder="Res" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="720p">720p</SelectItem>
+              <SelectItem value="1080p">1080p</SelectItem>
+            </SelectContent>
+          </Select>
       </NodeToolbar>
 
       <BlockToolbar 
@@ -288,92 +267,36 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
           </TooltipContent>
         </Tooltip>
 
-        {referenceMode === 'images' ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                className="relative pointer-events-auto group/handle"
-                style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-              >
-                <LimitedHandle
-                  type="target"
-                  position={Position.Left}
-                  id="ref-images"
-                  maxConnections={3}
-                  className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                />
-                <span className={cn(
-                  "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-                  (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-                )}>
-                  Ref Images (Max 3)
-                </span>
-                {refImageCount > 0 && (
-                  <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-[9px] px-1 rounded-full font-bold shadow-sm pointer-events-none">
-                    {refImageCount}
-                  </div>
-                )}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Reference Images: {refImageCount}/3</p>
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="relative pointer-events-auto group/handle"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                >
-                  <LimitedHandle
-                    type="target"
-                    position={Position.Left}
-                    id="first-frame"
-                    maxConnections={1}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                  />
-                  <span className={cn(
-                    "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-                    (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-                  )}>
-                    First Frame
-                  </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="relative pointer-events-auto group/handle"
+              style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
+            >
+              <LimitedHandle
+                type="target"
+                position={Position.Left}
+                id="ref-images"
+                maxConnections={3}
+                className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
+              />
+              <span className={cn(
+                "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
+                (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
+              )}>
+                Ref Images (Max 3)
+              </span>
+              {refImageCount > 0 && (
+                <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 studio-handle-pill text-[9px] px-1 rounded-full font-bold shadow-sm pointer-events-none">
+                  {refImageCount}
                 </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>First Frame: {firstFrameConnections}/1</p>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className="relative pointer-events-auto group/handle"
-                  style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
-                >
-                  <LimitedHandle
-                    type="target"
-                    position={Position.Left}
-                    id="last-frame"
-                    maxConnections={1}
-                    className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
-                  />
-                  <span className={cn(
-                    "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-                    (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-                  )}>
-                    Last Frame
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Last Frame: {lastFrameConnections}/1</p>
-              </TooltipContent>
-            </Tooltip>
-          </>
-        )}
+              )}
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reference Images: {refImageCount}/3</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
      </div>
     </TooltipProvider>
