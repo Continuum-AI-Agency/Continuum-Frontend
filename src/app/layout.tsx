@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -24,6 +24,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Continuum AI",
   description: "Continuum AI – Build, orchestrate, and ship Marketing experiences fast.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 function NoFlashScript() {

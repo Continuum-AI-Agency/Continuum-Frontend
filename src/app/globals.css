@@ -103,8 +103,9 @@
 
 /* Fluid typography baseline with sensible bounds
    Ensures the perceived UI scale stays consistent across screens */
+/* Fluid typography: 10px min, ~11px at 1440p, ~12px at 1920p, exactly 16px at 4K (3840p) */
 html {
-  font-size: clamp(15px, 1vw + 8px, 16px);
+  font-size: clamp(10px, 0.21vw + 8px, 16px);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
