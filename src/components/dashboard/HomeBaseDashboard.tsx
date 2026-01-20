@@ -44,39 +44,39 @@ export function HomeBaseDashboard({
         </Text>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden bg-muted/20">
-        
-        <div className="shrink-0 h-[40%] min-h-[320px] max-h-[500px] p-4 border-b bg-background">
-          <div className="h-full w-full">
-            {activeView === "paid" ? (
-              <PaidMediaReportingWidget brandId={brandId} />
-            ) : (
-              <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
-            )}
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden bg-muted/20">
+        <div className="grid h-full min-h-0 grid-rows-[35%_65%]">
+          <div className="min-h-0 border-b bg-background">
+            <div className="h-full min-h-0 p-4 overflow-hidden">
+              {activeView === "paid" ? (
+                <PaidMediaReportingWidget brandId={brandId} />
+              ) : (
+                <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex-1 min-h-0 p-4 overflow-hidden">
-           {activeView === "paid" ? (
-             <DCOActionsWidget 
-               brandId={brandId} 
-               className="h-full flex flex-col"
-             />
-           ) : (
+          <div className="min-h-0 p-4 overflow-hidden">
+            {activeView === "paid" ? (
+              <DCOActionsWidget
+                brandId={brandId}
+                className="h-full min-h-0 flex flex-col overflow-hidden"
+              />
+            ) : (
               <BrandTrendsPanel
                 trends={trendsAndEvents.trends}
                 events={trendsAndEvents.events}
                 questionsByNiche={questionsByNiche}
-                className="h-full overflow-y-auto"
+                className="h-full min-h-0 overflow-y-auto"
                 brandId={brandId}
                 country={trendsAndEvents.country}
                 generatedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
                 status={trendsAndEvents.status ?? insightsStatus}
                 actionSlot={<BrandInsightsGenerateButton brandId={brandId} />}
               />
-           )}
+            )}
+          </div>
         </div>
-
       </div>
     </div>
   );

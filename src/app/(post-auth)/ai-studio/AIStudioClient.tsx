@@ -140,7 +140,7 @@ export default function AIStudioClient({
           </div>
         ) : (
           <div className="flex-1 min-h-0 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-            <StudioCanvas embedded />
+            <StudioCanvas embedded brandProfileId={brandProfileId} />
           </div>
         )}
       </main>

@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/select";
 
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
+import { DEFAULT_DATE_RANGE_DAYS, type DateRangeDays, getDateRangeFromDays } from "@/lib/dco/dateRange";
 import type { ActionLog, ActionType, ActionStatus } from "@/lib/types/dco";
 
 function formatTimestamp(isoString: string): string {
@@ -329,6 +330,32 @@ function SortSelector({
   );
 }
 
+function DateRangeSelector({ 
+  value, 
+  onChange,
+}: {
+  value: DateRangeDays;
+  onChange: (value: DateRangeDays) => void;
+}) {
+  return (
+    <Flex align="center" gap="2">
+      <Text size="1" color="gray">Range:</Text>
+      <Select 
+        value={value.toString()} 
+        onValueChange={(val) => onChange(Number(val) as DateRangeDays)}
+      >
+        <SelectTrigger className="w-[110px]">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="7">Last 7d</SelectItem>
+          <SelectItem value="30">Last 30d</SelectItem>
+        </SelectContent>
+      </Select>
+    </Flex>
+  );
+}
+
 interface FilterControlsProps {
   filters: {
     status?: string;
@@ -458,6 +485,7 @@ export function DCOActionsWidget({
     metaAccountId: filters.metaAccountId,
   });
 
+  const [dateRangeDays, setDateRangeDays] = React.useState<DateRangeDays>(DEFAULT_DATE_RANGE_DAYS);
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
 
   const toggleRow = (id: string) => {
@@ -479,6 +507,12 @@ export function DCOActionsWidget({
     setSort({ sortBy: newSortBy, sortOrder: "desc" });
   }, [setSort]);
 
+  const handleDateRangeChange = React.useCallback((days: DateRangeDays) => {
+    setDateRangeDays(days);
+    const { dateFrom, dateTo } = getDateRangeFromDays(days);
+    setFilters({ dateFrom, dateTo });
+  }, [setFilters]);
+
   return (
     <TooltipProvider>
       <Box className={className}>
@@ -490,7 +524,7 @@ export function DCOActionsWidget({
             <Box>
               <Heading size="4">DCO Actions</Heading>
               <Text color="gray" size="2">
-                Automated actions from the last 7 days
+                Automated actions from the last {dateRangeDays} days
               </Text>
             </Box>
           </Flex>
@@ -528,6 +562,10 @@ export function DCOActionsWidget({
             <SortSelector 
               value={sort.sortBy}
               onChange={handleSortChange}
+            />
+            <DateRangeSelector 
+              value={dateRangeDays}
+              onChange={handleDateRangeChange}
             />
             <Text color="gray" size="2">
               {pagination.totalCount} actions

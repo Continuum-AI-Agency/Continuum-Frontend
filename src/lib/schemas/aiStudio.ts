@@ -140,10 +140,23 @@ const workflowBaseSchema = z.object({
 
 export const aiStudioWorkflowSchema = workflowBaseSchema;
 
+export const aiStudioWorkflowRowSchema = z.object({
+  id: z.string().min(1, "Workflow id is required"),
+  brand_profile_id: z.string().min(1, "brand_profile_id is required"),
+  name: z.string().min(1, "Workflow name is required"),
+  description: z.string().nullish(),
+  nodes: z.array(z.unknown()).nullish(),
+  edges: z.array(z.unknown()).nullish(),
+  metadata: z.record(z.unknown()).nullish(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema.nullish(),
+});
+
 export const aiStudioWorkflowsResponseSchema = z.object({
   workflows: z.array(aiStudioWorkflowSchema),
 });
 
+export type AiStudioWorkflowRow = z.infer<typeof aiStudioWorkflowRowSchema>;
 export type AiStudioWorkflow = z.infer<typeof aiStudioWorkflowSchema>;
 export type AiStudioWorkflowsResponse = z.infer<typeof aiStudioWorkflowsResponseSchema>;
 
@@ -159,3 +172,18 @@ export type AiStudioGenerationResponse = z.infer<typeof aiStudioGenerationRespon
 export type AiStudioJobsResponse = z.infer<typeof aiStudioJobsResponseSchema>;
 export type AiStudioTemplatesResponse = z.infer<typeof aiStudioTemplatesResponseSchema>;
 
+export function mapAiStudioWorkflowRow(row: AiStudioWorkflowRow): AiStudioWorkflow {
+  const mapped = {
+    id: row.id,
+    brandProfileId: row.brand_profile_id,
+    name: row.name,
+    description: row.description ?? undefined,
+    nodes: row.nodes ?? [],
+    edges: row.edges ?? [],
+    metadata: row.metadata ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+  };
+
+  return aiStudioWorkflowSchema.parse(mapped);
+}

@@ -12,6 +12,8 @@ import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { Toolbar } from './Toolbar';
+import { SaveWorkflowDialog } from './SaveWorkflowDialog';
+import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { Badge } from '@/components/ui/badge';
 import { v4 as uuidv4 } from 'uuid';
 import { ButtonEdge, DataTypeEdge } from '../edges';
@@ -440,9 +442,10 @@ function Flow() {
 
 interface StudioCanvasProps {
   embedded?: boolean;
+  brandProfileId?: string;
 }
 
-export function StudioCanvas({ embedded = false }: StudioCanvasProps) {
+export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasProps) {
   return (
     <ReactFlowProvider>
       <div className="flex h-full flex-col bg-background">
@@ -457,9 +460,19 @@ export function StudioCanvas({ embedded = false }: StudioCanvasProps) {
         )}
         <div className="flex-1 flex overflow-hidden">
             <aside className="w-64 border-r border-subtle bg-default p-4 flex flex-col gap-3 overflow-y-auto z-10">
-                <div className="font-medium text-sm text-secondary flex justify-between items-center">
-                    Library
-                    {embedded && <div className="scale-75 origin-right"><Toolbar /></div>}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-sm text-secondary">Library</div>
+                    <div className="flex items-center gap-2">
+                      <LoadWorkflowDialog brandProfileId={brandProfileId} />
+                      <SaveWorkflowDialog brandProfileId={brandProfileId} />
+                    </div>
+                  </div>
+                  {embedded && (
+                    <div className="scale-90 origin-right">
+                      <Toolbar />
+                    </div>
+                  )}
                 </div>
                 <AccordionPrimitive.Root
                   type="multiple"

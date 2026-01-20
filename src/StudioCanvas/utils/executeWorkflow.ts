@@ -487,6 +487,7 @@ export async function executeWorkflow(
             }
 
             const decoder = new TextDecoder();
+            let accumulatedValue = "";
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -496,18 +497,20 @@ export async function executeWorkflow(
                     if (line.startsWith('data: ')) {
                         try {
                             const data = JSON.parse(line.slice(6));
-                            if (data.delta) onPartialUpdate({ delta: data.delta });
+                            if (data.delta) {
+                                accumulatedValue += data.delta;
+                                onPartialUpdate({ delta: data.delta });
+                            }
                         } catch (e) {
-                            // BDD: Given a potentially malformed line from the stream, when parsing fails, then it should be ignored to prevent execution failure.
+                            // ignore malformed lines
                         }
                     }
                 }
             }
             
-            const finalNode = useStudioStore.getState().nodes.find(n => n.id === nodeId);
-            const finalVal = (finalNode?.data as any).value || "";
-            setNodeOutput(nodeId, { type: 'text', value: finalVal });
+            setNodeOutput(nodeId, { type: 'text', value: accumulatedValue });
             updateNodeStatus(nodeId, 'completed');
+            console.info("[studio] fast enrichment complete", { nodeId, length: accumulatedValue.length });
             return true;
         } else {
             if (!payload) {
@@ -525,6 +528,12 @@ export async function executeWorkflow(
         
         if (result?.output?.type === 'text') {
              setNodeOutput(nodeId, result.output);
+             updateNodeStatus(nodeId, 'completed');
+             console.info("[studio] standard enrichment complete", { nodeId });
+             return true;
+        }
+        
+        if (result?.success) {
              updateNodeStatus(nodeId, 'completed');
              return true;
         }

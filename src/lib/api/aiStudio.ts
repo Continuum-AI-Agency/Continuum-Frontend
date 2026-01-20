@@ -6,9 +6,6 @@ import {
   aiStudioJobSchema,
   aiStudioJobsResponseSchema,
   aiStudioTemplatesResponseSchema,
-  aiStudioWorkflowsResponseSchema,
-  aiStudioWorkflowSchema,
-  type AiStudioWorkflow,
   type AiStudioGenerationRequest,
   type AiStudioJob,
   type AiStudioMedium,
@@ -204,49 +201,4 @@ export async function listAiStudioTemplates(
     init
   );
   return templates;
-}
-
-export async function listAiStudioWorkflows(
-  brandProfileId: string,
-  init?: RequestInit
-): Promise<AiStudioWorkflow[]> {
-  const search = new URLSearchParams({ brandProfileId });
-  const { workflows } = await getInternal(
-    `/api/ai-studio/workflows?${search.toString()}`,
-    aiStudioWorkflowsResponseSchema,
-    init
-  );
-  // Ensure nodes and edges are always arrays (schema defaults may not be reflected in type)
-  return workflows.map(w => ({
-    ...w,
-    nodes: w.nodes ?? [],
-    edges: w.edges ?? [],
-  }));
-}
-
-export async function createAiStudioWorkflow(
-  workflow: Omit<AiStudioWorkflow, "id" | "createdAt" | "updatedAt">
-): Promise<AiStudioWorkflow> {
-  const result = await postInternal("/api/ai-studio/workflows", workflow, aiStudioWorkflowSchema);
-  return {
-    ...result,
-    nodes: result.nodes ?? [],
-    edges: result.edges ?? [],
-  };
-}
-
-export async function updateAiStudioWorkflow(
-  id: string,
-  workflow: Partial<AiStudioWorkflow>
-): Promise<AiStudioWorkflow> {
-  const result = await patchInternal(`/api/ai-studio/workflows/${id}`, workflow, aiStudioWorkflowSchema);
-  return {
-    ...result,
-    nodes: result.nodes ?? [],
-    edges: result.edges ?? [],
-  };
-}
-
-export async function deleteAiStudioWorkflow(id: string): Promise<void> {
-  return deleteInternal(`/api/ai-studio/workflows/${id}`);
 }

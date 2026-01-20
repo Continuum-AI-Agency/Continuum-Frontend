@@ -19,6 +19,8 @@ serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const brandId = url.searchParams.get("brandId");
+    const dateFrom = url.searchParams.get("dateFrom");
+    const dateTo = url.searchParams.get("dateTo");
 
     if (!brandId) {
       return new Response(JSON.stringify({ error: "brandId required" }), {
@@ -42,12 +44,17 @@ serve(async (req: Request) => {
       });
     }
 
-    const { data: logs, error: queryError } = await supabase
+    let query = supabase
       .schema("DCO_Campaigns")
       .from("rule_action_logs")
       .select("meta_account_id")
       .eq("brand_id", brandId)
       .not("meta_account_id", "is", null);
+
+    if (dateFrom) query = query.gte("occurred_at", dateFrom);
+    if (dateTo) query = query.lte("occurred_at", dateTo);
+
+    const { data: logs, error: queryError } = await query;
 
     if (queryError) {
       log("query logs failed", { queryError });

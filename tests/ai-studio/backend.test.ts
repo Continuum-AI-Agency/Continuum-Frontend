@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { mapBackendGenerationResponse, mapBackendTemplatesResponse } from "../../src/lib/ai-studio/backend";
 import {
   aiStudioGenerationRequestSchema,
+  aiStudioWorkflowRowSchema,
+  mapAiStudioWorkflowRow,
   type AiStudioGenerationRequest,
 } from "../../src/lib/schemas/aiStudio";
 
@@ -112,4 +114,25 @@ test("aiStudioGenerationRequestSchema rejects missing prompt", () => {
   );
 });
 
+test("mapAiStudioWorkflowRow maps workflow rows to camelCase", () => {
+  const now = new Date().toISOString();
+  const row = aiStudioWorkflowRowSchema.parse({
+    id: "workflow-1",
+    brand_profile_id: "brand-123",
+    name: "Launch workflow",
+    description: null,
+    nodes: [{ id: "node-1" }],
+    edges: [{ id: "edge-1" }],
+    metadata: { version: 1 },
+    created_at: now,
+    updated_at: now,
+  });
+
+  const workflow = mapAiStudioWorkflowRow(row);
+  assert.equal(workflow.brandProfileId, "brand-123");
+  assert.equal(workflow.name, "Launch workflow");
+  assert.equal(workflow.nodes.length, 1);
+  assert.equal(workflow.edges.length, 1);
+  assert.equal(workflow.createdAt, now);
+});
 

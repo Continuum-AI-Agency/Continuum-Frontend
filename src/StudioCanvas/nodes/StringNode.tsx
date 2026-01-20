@@ -65,21 +65,22 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
   }, [id, executionControls, data.isExecuting]);
 
   return (
-    <div className="relative min-w-[280px] min-h-[180px] h-full">
+    <div className="relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px]">
       <NodeResizer
         minWidth={280}
         minHeight={180}
+        maxWidth={600}
         isVisible={selected}
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
       
       <div className={cn(
-          "border shadow-md bg-surface rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col", 
+          "border shadow-md bg-surface rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col min-h-[inherit]", 
           context.border,
           hasInputs && "ring-1 ring-brand-primary/30"
       )}>
-          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center justify-between min-h-[32px]">
+          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center justify-between min-h-[32px] shrink-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-secondary">{context.icon}</span>
                 <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">{context.label}</span>
@@ -95,16 +96,16 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
               )}
           </div>
           
-          <div className="relative flex-1 min-h-0 flex flex-col">
+          <div className="relative flex-1 flex flex-col min-h-0 overflow-hidden">
               <Textarea 
                 value={data.value} 
                 onChange={handleChange} 
                 onKeyDown={(event) => event.stopPropagation()}
-                className="nodrag text-xs text-primary placeholder:text-secondary/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
+                className="nodrag text-xs text-primary placeholder:text-secondary/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]" 
                 placeholder={hasInputs ? "Enter instructions for prompt enrichment..." : "Enter prompt..."} 
               />
               
-              <div className="p-2 border-t border-subtle bg-background/50 flex justify-end relative z-20">
+              <div className="p-2 border-t border-subtle bg-background/50 flex justify-end relative z-20 shrink-0">
                   <Button 
                     size="sm" 
                     variant="default" 

@@ -164,4 +164,3 @@ export function mapBackendGenerationResponse(payload: unknown): AiStudioGenerati
   const job = mapJob(parsed.job);
   return aiStudioGenerationResponseSchema.parse({ job });
 }
-

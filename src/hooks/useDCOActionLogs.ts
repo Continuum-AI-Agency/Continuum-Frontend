@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { DEFAULT_DATE_RANGE_DAYS, getDateRangeFromDays } from "@/lib/dco/dateRange";
 import type { ActionLog, ActionLogResponse, ActionLogFilters, ActionLogSort, CampaignOption, AdAccountOption } from "@/lib/types/dco";
 
 interface UseDCOActionLogsOptions {
   brandId: string;
   metaAccountId?: string;
   initialPageSize?: number;
-  initialDateRangeHours?: number;
+  initialDateRangeDays?: number;
 }
 
 interface UseDCOActionLogsReturn {
@@ -36,13 +37,11 @@ interface UseDCOActionLogsReturn {
 }
 
 const DEFAULT_PAGE_SIZE = 20;
-const DEFAULT_DATE_RANGE_HOURS = 168; // 7 days
-
 export function useDCOActionLogs({
   brandId,
   metaAccountId: initialMetaAccountId,
   initialPageSize = DEFAULT_PAGE_SIZE,
-  initialDateRangeHours = DEFAULT_DATE_RANGE_HOURS,
+  initialDateRangeDays = DEFAULT_DATE_RANGE_DAYS,
 }: UseDCOActionLogsOptions): UseDCOActionLogsReturn {
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,16 +71,13 @@ export function useDCOActionLogs({
   const [isLoadingAdAccounts, setIsLoadingAdAccounts] = useState(false);
 
   const getDefaultDateRange = useCallback(() => {
-    const now = new Date();
-    const from = new Date(now.getTime() - initialDateRangeHours * 60 * 60 * 1000);
-    return {
-      dateFrom: from.toISOString(),
-      dateTo: now.toISOString(),
-    };
-  }, [initialDateRangeHours]);
+    return getDateRangeFromDays(initialDateRangeDays);
+  }, [initialDateRangeDays]);
 
   const fetchCampaigns = useCallback(async () => {
-    if (!brandId || !initialMetaAccountId) {
+    const dateRange = getDefaultDateRange();
+    const selectedMetaAccountId = filters.metaAccountId;
+    if (!brandId || !selectedMetaAccountId) {
       setCampaigns([]);
       return;
     }
@@ -93,8 +89,15 @@ export function useDCOActionLogs({
       
       if (!session?.access_token) return;
 
+      const params = new URLSearchParams({
+        brandId,
+        metaAccountId: selectedMetaAccountId,
+        dateFrom: filters.dateFrom ?? dateRange.dateFrom,
+        dateTo: filters.dateTo ?? dateRange.dateTo,
+      });
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-campaigns-for-selector?brandId=${brandId}&metaAccountId=${initialMetaAccountId}`,
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-campaigns-for-selector?${params}`,
         {
           headers: { Authorization: `Bearer ${session.access_token}` },
         }
@@ -109,7 +112,7 @@ export function useDCOActionLogs({
     } finally {
       setIsLoadingCampaigns(false);
     }
-  }, [brandId, initialMetaAccountId]);
+  }, [brandId, filters.dateFrom, filters.dateTo, filters.metaAccountId, getDefaultDateRange]);
 
   const fetchAdAccounts = useCallback(async () => {
     if (!brandId) {
@@ -117,6 +120,7 @@ export function useDCOActionLogs({
       return;
     }
 
+    const dateRange = getDefaultDateRange();
     setIsLoadingAdAccounts(true);
     try {
       const supabase = createSupabaseBrowserClient();
@@ -124,8 +128,14 @@ export function useDCOActionLogs({
       
       if (!session?.access_token) return;
 
+      const params = new URLSearchParams({
+        brandId,
+        dateFrom: filters.dateFrom ?? dateRange.dateFrom,
+        dateTo: filters.dateTo ?? dateRange.dateTo,
+      });
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-ad-accounts-for-selector?brandId=${brandId}`,
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-ad-accounts-for-selector?${params}`,
         {
           headers: { Authorization: `Bearer ${session.access_token}` },
         }
@@ -140,7 +150,7 @@ export function useDCOActionLogs({
     } finally {
       setIsLoadingAdAccounts(false);
     }
-  }, [brandId]);
+  }, [brandId, filters.dateFrom, filters.dateTo, getDefaultDateRange]);
 
   useEffect(() => {
     fetchCampaigns();

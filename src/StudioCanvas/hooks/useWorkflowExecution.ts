@@ -30,7 +30,11 @@ export function useWorkflowExecution() {
       (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL);
 
     if (hasClientApiBase) {
-      return getApiUrl(path);
+      const fullUrl = getApiUrl(path);
+      if (!fullUrl.includes('/api/')) {
+        return fullUrl.replace(/(https?:\/\/[^\/]+)/, '$1/api');
+      }
+      return fullUrl;
     }
 
     if (typeof window !== "undefined") {

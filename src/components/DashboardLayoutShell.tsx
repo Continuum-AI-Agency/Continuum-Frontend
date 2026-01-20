@@ -43,8 +43,8 @@ export default function DashboardLayoutShell({
           <AppSidebar />
           <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
              <DashboardHeader />
-             <main className="flex-1 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
-               <div className="w-full">{children}</div>
+             <main className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
+               <div className="w-full h-full min-h-0">{children}</div>
              </main>
           </SidebarInset>
         </SidebarProvider>

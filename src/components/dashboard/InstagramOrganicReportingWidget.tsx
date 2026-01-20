@@ -396,8 +396,8 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
   }, [brandId, selectedAccountId, viewMode, platform]);
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface">
-      <Box p="4">
+    <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
+      <Box p="4" className="flex-1 min-h-0 flex flex-col">
         <Flex align="center" justify="between" gap="3" wrap="wrap">
           <Flex align="center" gap="2">
             <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
@@ -470,7 +470,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
           </Flex>
         </Flex>
 
-        <Box pt="4">
+        <Box pt="4" className="flex-1 min-h-0 overflow-y-auto">
           {platform !== "instagram" ? (
              <Box py="8">
                 <Flex direction="column" align="center" justify="center" gap="3">
@@ -561,10 +561,10 @@ function MetricsPanel({
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="4" className="h-full">
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4" className="h-full">
+    <Flex direction="column" gap="4" className="h-full min-h-0">
+      <Grid columns={{ initial: "1", lg: "2" }} gap="4" className="h-full min-h-0">
         <Box className="w-full">
-          <Grid columns="4" gap="1">
+          <Grid columns="4" gap="2">
             {metricCards.map((item) => {
               const delta = comparison?.[item.key]?.percentageChange;
               const formattedDelta = formatPercent(delta ?? undefined);
@@ -576,24 +576,24 @@ function MetricsPanel({
                   key={item.key}
                   type="button"
                   onClick={() => onMetricSelect(item.key)}
-                  className="text-left w-full h-full"
+                  className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   aria-pressed={isActive}
                 >
                   <Card
                     variant="surface"
                     className={cn(
-                      "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[54px] overflow-hidden",
+                      "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden",
                       isActive && "ring-1 ring-primary bg-accent/10"
                     )}
                   >
-                    <Box p="1" className="w-full">
+                    <Box p="2" className="w-full">
                       <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                        <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: '9px' }}>
+                        <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "10px" }}>
                           {item.label}
                         </Text>
-                        <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: '11px' }}>{formatNumber(item.value)}</Heading>
+                        <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "12px" }}>{formatNumber(item.value)}</Heading>
                         {formattedDelta ? (
-                          <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: '9px' }}>
+                          <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "10px" }}>
                             {formattedDelta}
                           </Text>
                         ) : (
@@ -608,7 +608,7 @@ function MetricsPanel({
           </Grid>
         </Box>
 
-        <Box className="w-full h-full min-h-[300px]">
+        <Box className="w-full h-full min-h-[220px] lg:min-h-[240px]">
           <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
             <Box p="3" className="flex-1 flex flex-col">
               <Flex align="center" justify="between" gap="2" mb="2">
@@ -620,9 +620,9 @@ function MetricsPanel({
                 </Box>
               </Flex>
 
-              <Box className="flex-1 min-h-0">
-                <ChartContainer config={chartConfig} className="h-full w-full">
-                  <BarChart accessibilityLayer data={chartData} margin={{ left: -10, right: 10 }}>
+              <Box className="flex-1 min-h-0 overflow-hidden">
+                <ChartContainer config={chartConfig} className="h-full w-full min-h-0 aspect-auto overflow-hidden">
+                  <BarChart accessibilityLayer data={chartData} margin={{ left: 0, right: 8 }}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="name" tickLine={false} axisLine={false} />
                     <ChartTooltip content={<ChartTooltipContent />} />
