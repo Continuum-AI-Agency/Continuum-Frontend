@@ -193,7 +193,7 @@ const runSearch = async (force = false, overrideUsername?: string) => {
   };
 
   return (
-    <Box className="space-y-4">
+    <Box className="flex flex-col h-full space-y-4">
       <Flex align="center" gap="3" wrap="wrap">
         <TextField.Root
           value={username}
@@ -371,20 +371,26 @@ const runSearch = async (force = false, overrideUsername?: string) => {
             </Select.Root>
           </Flex>
 
-          {sortedPosts.length === 0 ? (
-            <Callout.Root color="gray" variant="surface">
-              <Callout.Icon>
-                <MagnifyingGlassIcon />
-              </Callout.Icon>
-              <Callout.Text>No posts available for this profile.</Callout.Text>
-            </Callout.Root>
-          ) : (
-            <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
-              {sortedPosts.map((post) => (
-                <CompetitorPostCard key={post.id} post={post} />
-              ))}
-            </Grid>
-          )}
+           {sortedPosts.length === 0 ? (
+             <Box className="flex-1 flex items-center justify-center">
+               <Callout.Root color="gray" variant="surface">
+                 <Callout.Icon>
+                   <MagnifyingGlassIcon />
+                 </Callout.Icon>
+                 <Callout.Text>No posts available for this profile.</Callout.Text>
+               </Callout.Root>
+             </Box>
+           ) : (
+             <Box className="flex-1 min-h-0 overflow-hidden">
+               <Box className="h-full overflow-auto">
+                 <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
+                   {sortedPosts.map((post) => (
+                     <CompetitorPostCard key={post.id} post={post} />
+                   ))}
+                 </Grid>
+               </Box>
+             </Box>
+           )}
         </Box>
       )}
 

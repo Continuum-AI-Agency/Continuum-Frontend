@@ -41,6 +41,27 @@ async function fetchBase64(
   return { base64: arrayBufferToBase64(buffer), byteLength };
 }
 
+export function getVideoDuration(source: File | string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      resolve(video.duration);
+      URL.revokeObjectURL(video.src);
+    };
+    video.onerror = () => {
+      reject(new Error("Failed to load video metadata"));
+      URL.revokeObjectURL(video.src);
+    };
+    if (typeof source === "string") {
+      // Handle base64 or URL
+      video.src = source.startsWith("data:") ? source : `data:video/mp4;base64,${source}`;
+    } else {
+      video.src = URL.createObjectURL(source);
+    }
+  });
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   const chunkSize = 0x8000;

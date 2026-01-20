@@ -6,20 +6,17 @@ import Image from "next/image";
 
 import { useToast } from "@/components/ui/ToastProvider";
 import { useImageSseStream } from "@/hooks/useImageSseStream";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { chatImageRequestSchema, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
 import {
   IMAGE_REFERENCE_MAX_BYTES,
-  VIDEO_REFERENCE_MAX_BYTES,
-  VIDEO_REFERENCE_MAX_DURATION_SECONDS,
   estimateBase64DecodedBytes,
   formatMiB,
 } from "@/lib/ai-studio/referenceDrop";
-import { getVideoDuration } from "@/lib/ai-studio/referenceDropClient";
 import type {
   ChatImageHistoryItem,
   ChatImageRequestPayload,
   RefImage,
-  RefVideo,
   SupportedModel,
   SupportedBackendModel,
   BackendChatImageRequestPayload,
@@ -72,12 +69,12 @@ export function ChatSurface({
 }: ChatSurfaceProps) {
   const { show } = useToast();
   const { state: streamState, start, cancel, reset } = useImageSseStream();
+  const supabase = createSupabaseBrowserClient();
 
   const [activeModel, setActiveModel] = React.useState<SupportedModel>("nano-banana");
   const [refs, setRefs] = React.useState<RefImage[]>([]);
   const [firstFrame, setFirstFrame] = React.useState<RefImage | undefined>(undefined);
   const [lastFrame, setLastFrame] = React.useState<RefImage | undefined>(undefined);
-  const [referenceVideo, setReferenceVideo] = React.useState<RefVideo | undefined>(undefined);
   const [history, setHistory] = React.useState<ChatImageHistoryItem[]>(initialHistory ?? []);
   const [continueFrom, setContinueFrom] = React.useState<{ data: string; mime_type: string }[]>([]);
   const [resetNext, setResetNext] = React.useState(false);
@@ -92,11 +89,17 @@ export function ChatSurface({
     setEnrichedPrompt("");
 
     try {
+      // Get the user's session token for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("No authentication session found");
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ prompt: currentPrompt }),
       });
@@ -131,6 +134,8 @@ export function ChatSurface({
           }
         }
       }
+      // Show success toast when enrichment completes
+      show({ title: "Prompt enriched", description: "Your prompt has been enhanced!", variant: "success" });
     } catch (err) {
       show({ title: "Enrichment failed", description: String(err), variant: "error" });
     } finally {
@@ -140,18 +145,18 @@ export function ChatSurface({
 
   // Compute if any references are attached
   const hasAnyReferences = React.useMemo(() => {
-    return refs.length > 0 || firstFrame !== undefined || lastFrame !== undefined || referenceVideo !== undefined;
-  }, [refs, firstFrame, lastFrame, referenceVideo]);
+    return refs.length > 0 || firstFrame !== undefined || lastFrame !== undefined;
+  }, [refs, firstFrame, lastFrame]);
 
   const handleSubmit = React.useCallback(
     async (form: ChatFormValues) => {
       setActiveModel(form.model);
       const medium = getMediumForModel(form.model);
       const isNano = form.model === "nano-banana";
-      if (isNano && (firstFrame || lastFrame || referenceVideo)) {
+      if (isNano && (firstFrame || lastFrame)) {
         show({
           title: "Video inputs not supported",
-          description: "Nano Banana only generates images. Remove first/last frame or reference video, or pick a video model.",
+          description: "Nano Banana only generates images. Remove first/last frame, or pick a video model.",
           variant: "error",
         });
         return;
@@ -174,7 +179,6 @@ export function ChatSurface({
         refs: refs.length ? refs : undefined,
         firstFrame: medium === "video" ? firstFrame : undefined,
         lastFrame: medium === "video" ? lastFrame : undefined,
-        referenceVideo: medium === "video" ? referenceVideo : undefined,
       };
 
       const apiModel: SupportedBackendModel =
@@ -221,16 +225,6 @@ export function ChatSurface({
           payload.medium === "video" && payload.lastFrame
             ? { data: payload.lastFrame.base64, mime_type: payload.lastFrame.mime, filename: payload.lastFrame.name }
             : undefined,
-        reference_video:
-          payload.medium === "video" && payload.referenceVideo
-            ? {
-                data: payload.referenceVideo.base64,
-                mime_type: payload.referenceVideo.mime,
-                filename: payload.referenceVideo.filename ?? payload.referenceVideo.name,
-                start_time: payload.referenceVideo.startTime,
-                end_time: payload.referenceVideo.endTime,
-              }
-            : undefined,
         negative_prompt: payload.negativePrompt || undefined,
         seed: payload.seed,
         cfg_scale: payload.cfgScale,
@@ -257,20 +251,6 @@ export function ChatSurface({
       if (payload.medium === "video") {
         checkBase64("First frame", payload.firstFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
         checkBase64("Last frame", payload.lastFrame?.base64, IMAGE_REFERENCE_MAX_BYTES);
-        checkBase64("Reference video", payload.referenceVideo?.base64, VIDEO_REFERENCE_MAX_BYTES);
-
-        if (payload.referenceVideo?.base64) {
-          try {
-            const duration = await getVideoDuration(payload.referenceVideo.base64);
-            if (duration > VIDEO_REFERENCE_MAX_DURATION_SECONDS) {
-              attachmentIssues.push(
-                `Reference video duration: ${duration.toFixed(1)}s (max ${VIDEO_REFERENCE_MAX_DURATION_SECONDS}s)`
-              );
-            }
-          } catch (e) {
-            console.error("Failed final duration check", e);
-          }
-        }
       }
 
       if (attachmentIssues.length > 0) {
@@ -323,7 +303,7 @@ export function ChatSurface({
         setConversationTurns(nextConversationTurns);
       }
     },
-    [brandProfileId, refs, firstFrame, lastFrame, referenceVideo, show, start, continueFrom, streamState.posterBase64, resetNext, reset, conversationTurns]
+    [brandProfileId, refs, firstFrame, lastFrame, show, start, continueFrom, streamState.posterBase64, resetNext, reset, conversationTurns]
   );
 
   const handleSelectHistory = React.useCallback((item: ChatImageHistoryItem) => {
@@ -431,11 +411,9 @@ export function ChatSurface({
             refs={refs}
             firstFrame={firstFrame}
             lastFrame={lastFrame}
-            referenceVideo={referenceVideo}
             onChangeRefs={setRefs}
             onChangeFirstFrame={setFirstFrame}
             onChangeLastFrame={setLastFrame}
-            onChangeReferenceVideo={setReferenceVideo}
           />
         </Card>
 

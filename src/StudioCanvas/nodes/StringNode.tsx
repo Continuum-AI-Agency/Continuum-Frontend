@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Handle, Position, NodeProps, Node, NodeResizer, useEdges } from '@xyflow/react';
 import { Textarea } from '@/components/ui/textarea';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -7,10 +7,13 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { MagicWandIcon } from '@radix-ui/react-icons';
 import { Badge } from '@/components/ui/badge';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { executeWorkflow } from '../utils/executeWorkflow';
 
 export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const edges = useEdges();
+  const executionControls = useWorkflowExecution();
   
   const connectedEdge = edges.find(e => e.source === id);
   const incomingEdges = edges.filter(e => e.target === id);
@@ -42,25 +45,89 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
     updateNodeData(id, { value: e.target.value });
   }, [id, updateNodeData]);
 
-  const handleEnrich = useCallback(async () => {
-    console.log("Trigger enrich for node", id);
-    updateNodeData(id, { isExecuting: true });
+  const handleEnrich = useCallback(async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
-    setTimeout(() => {
-        updateNodeData(id, { isExecuting: false });
-    }, 1000);
-  }, [id, updateNodeData]);
+    if (data.isExecuting) return;
+    
+    console.log("Triggering enrichment for node", id);
+    try {
+      await executeWorkflow(executionControls, { 
+        targetNodeId: id,
+        clearDownstream: false
+      });
+    } catch (err) {
+      console.error("Enrichment trigger failed", err);
+    }
+  }, [id, executionControls, data.isExecuting]);
 
   return (
-    <div className="relative w-full h-full min-w-[240px] min-h-[140px]">
+    <div className="relative min-w-[280px] min-h-[180px] h-full">
       <NodeResizer
-        minWidth={240}
-        minHeight={160}
+        minWidth={280}
+        minHeight={180}
         isVisible={selected}
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
       
+      <div className={cn(
+          "border shadow-md bg-surface rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col", 
+          context.border,
+          hasInputs && "ring-1 ring-brand-primary/30"
+      )}>
+          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center justify-between min-h-[32px]">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-secondary">{context.icon}</span>
+                <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">{context.label}</span>
+              </div>
+              
+              {hasInputs && (
+                  <div className="flex items-center gap-1">
+                      {inputCounts.image > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-indigo-100 text-indigo-700 hover:bg-indigo-100">{inputCounts.image} img</Badge>}
+                      {inputCounts.audio > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{inputCounts.audio} aud</Badge>}
+                      {inputCounts.video > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-purple-100 text-purple-700 hover:bg-purple-100">{inputCounts.video} vid</Badge>}
+                      {inputCounts.document > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">{inputCounts.document} doc</Badge>}
+                  </div>
+              )}
+          </div>
+          
+          <div className="relative flex-1 min-h-0 flex flex-col">
+              <Textarea 
+                value={data.value} 
+                onChange={handleChange} 
+                onKeyDown={(event) => event.stopPropagation()}
+                className="nodrag text-xs text-primary placeholder:text-secondary/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
+                placeholder={hasInputs ? "Enter instructions for prompt enrichment..." : "Enter prompt..."} 
+              />
+              
+              <div className="p-2 border-t border-subtle bg-background/50 flex justify-end relative z-20">
+                  <Button 
+                    size="sm" 
+                    variant="default" 
+                    className="h-6 px-3 text-[10px] bg-brand-primary text-white hover:bg-brand-primary/90 shadow-sm nodrag cursor-pointer"
+                    onClick={handleEnrich}
+                    disabled={data.isExecuting}
+                  >
+                    {data.isExecuting ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="animate-spin h-3 w-3 border-2 border-white/30 border-t-white rounded-full" />
+                          <span>Enriching...</span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1.5">
+                            <MagicWandIcon className="w-3.5 h-3.5 fill-white" />
+                            <span className="font-semibold tracking-wide">Enrich Prompt</span>
+                        </div>
+                    )}
+                  </Button>
+              </div>
+          </div>
+      </div>
+
       <div className="absolute -left-2 top-8 flex flex-col gap-3 z-10">
         <div className="relative group/handle">
             <Handle 
@@ -110,59 +177,6 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
                 DOC
             </span>
         </div>
-      </div>
-
-      <div className={cn(
-          "border shadow-md bg-surface rounded-lg overflow-hidden transition-all duration-300 h-full w-full flex flex-col", 
-          context.border,
-          hasInputs && "ring-1 ring-brand-primary/30"
-      )}>
-          <div className="bg-default/70 px-3 py-1 border-b border-subtle flex items-center justify-between min-h-[32px]">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-secondary">{context.icon}</span>
-                <span className="text-[9px] font-bold text-secondary uppercase tracking-widest">{context.label}</span>
-              </div>
-              
-              {hasInputs && (
-                  <div className="flex items-center gap-1">
-                      {inputCounts.image > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-indigo-100 text-indigo-700 hover:bg-indigo-100">{inputCounts.image} img</Badge>}
-                      {inputCounts.audio > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-emerald-100 text-emerald-700 hover:bg-emerald-100">{inputCounts.audio} aud</Badge>}
-                      {inputCounts.video > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-purple-100 text-purple-700 hover:bg-purple-100">{inputCounts.video} vid</Badge>}
-                      {inputCounts.document > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px] bg-amber-100 text-amber-700 hover:bg-amber-100">{inputCounts.document} doc</Badge>}
-                  </div>
-              )}
-          </div>
-          
-          <div className="relative flex-1 min-h-0 flex flex-col">
-              <Textarea 
-                value={data.value} 
-                onChange={handleChange} 
-                onKeyDown={(event) => event.stopPropagation()}
-                className="nodrag text-xs text-primary placeholder:text-secondary/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8" 
-                placeholder={hasInputs ? "Enter instructions for prompt enrichment..." : "Enter prompt..."} 
-              />
-              
-              {hasInputs && (
-                  <div className="p-2 border-t border-subtle bg-background/50 flex justify-end">
-                      <Button 
-                        size="sm" 
-                        variant="default" 
-                        className="h-6 text-[10px] bg-brand-primary hover:bg-brand-primary/90"
-                        onClick={handleEnrich}
-                        disabled={data.isExecuting}
-                      >
-                        {data.isExecuting ? (
-                            <>Enriching...</>
-                        ) : (
-                            <>
-                                <MagicWandIcon className="w-3 h-3 mr-1" />
-                                Enrich Prompt
-                            </>
-                        )}
-                      </Button>
-                  </div>
-              )}
-          </div>
       </div>
 
       <div

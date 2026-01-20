@@ -158,8 +158,13 @@ const getNodeReadiness = (
   edges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
-  failedNodes: Set<string>
+  failedNodes: Set<string>,
+  targetNodeId?: string
 ): NodeReadiness => {
+  if (node.type === 'string' && targetNodeId === node.id) {
+    return { ready: true };
+  }
+
   const incomingEdges = getIncomingEdges(edges, node.id);
 
   const failedEdge = incomingEdges.find((edge) => failedNodes.has(edge.source));
@@ -392,7 +397,11 @@ export async function executeWorkflow(
         mimeType,
         base64Length: base64.length,
       });
-      useStudioStore.getState().updateNodeData(nodeId, { generatedImage: dataUrl });
+      useStudioStore.getState().updateNodeData(nodeId, { 
+        generatedImage: dataUrl,
+        isComplete: true,
+        isExecuting: false
+      });
       const updatedNode = useStudioStore.getState().nodes.find((node) => node.id === nodeId);
       console.info("[studio] generatedImage set", {
         nodeId,
@@ -404,9 +413,15 @@ export async function executeWorkflow(
     } else if (output.type === 'video') {
       useStudioStore.getState().updateNodeData(nodeId, {
         generatedVideo: output.url,
+        isComplete: true,
+        isExecuting: false
       });
     } else if (output.type === 'text') {
-      useStudioStore.getState().updateNodeData(nodeId, { value: output.value });
+      useStudioStore.getState().updateNodeData(nodeId, { 
+        value: output.value,
+        isComplete: true,
+        isExecuting: false
+      });
     }
   };
 
@@ -422,16 +437,7 @@ export async function executeWorkflow(
         
         const hasExternalInputs = (payload?.context?.images?.length ?? 0) > 0 || !!payload?.context?.audio || (payload?.context?.documents?.length ?? 0) > 0 || !!payload?.context?.video;
 
-        if (!hasExternalInputs && payload?.prompt) {
-             setNodeOutput(nodeId, { type: 'text', value: payload.prompt });
-             updateNodeStatus(nodeId, 'completed');
-             return true;
-        }
-        
-        if (!payload) {
-            updateNodeStatus(nodeId, 'completed');
-            return true;
-        }
+        console.info("[studio] executeNode string", { nodeId, hasExternalInputs, promptLength: payload?.prompt?.length });
 
         if (typeof executeEnrichment !== 'function') {
              updateNodeStatus(nodeId, 'failed', "Enrichment execution unavailable");
@@ -441,23 +447,84 @@ export async function executeWorkflow(
         useStudioStore.getState().updateNodeData(nodeId, { value: "" });
 
         const onPartialUpdate = (data: { delta: string }) => {
+             if (!data.delta) return;
              const currentNodes = useStudioStore.getState().nodes;
              const node = currentNodes.find(n => n.id === nodeId);
              const currentVal = (node?.data as any).value || "";
              useStudioStore.getState().updateNodeData(nodeId, { value: currentVal + data.delta });
         };
 
-        const result = await executeEnrichment(nodeId, payload, onPartialUpdate);
+        let result;
+        if (!hasExternalInputs && payload?.prompt && payload.prompt.trim()) {
+            console.info("[studio] triggering fast enrichment for node", nodeId);
+            const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+            const supabase = createSupabaseBrowserClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+            console.info("[studio] using token for fast enrichment", token ? "present" : "missing");
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ prompt: payload.prompt }),
+            });
+
+            if (!response.ok) {
+                const err = await response.text();
+                console.error("[studio] Fast enrichment HTTP error", response.status, err);
+                updateNodeStatus(nodeId, 'failed', err || "Fast enrichment failed");
+                return false;
+            }
+
+            const reader = response.body?.getReader();
+            if (!reader) {
+                updateNodeStatus(nodeId, 'failed', "No response body");
+                return false;
+            }
+
+            const decoder = new TextDecoder();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            if (data.delta) onPartialUpdate({ delta: data.delta });
+                        } catch (e) {
+                            // BDD: Given a potentially malformed line from the stream, when parsing fails, then it should be ignored to prevent execution failure.
+                        }
+                    }
+                }
+            }
+            
+            const finalNode = useStudioStore.getState().nodes.find(n => n.id === nodeId);
+            const finalVal = (finalNode?.data as any).value || "";
+            setNodeOutput(nodeId, { type: 'text', value: finalVal });
+            updateNodeStatus(nodeId, 'completed');
+            return true;
+        } else {
+            if (!payload) {
+                setNodeOutput(nodeId, { type: 'text', value: (node.data as any).value || "" });
+                return true;
+            }
+            result = await executeEnrichment(nodeId, payload, onPartialUpdate);
+        }
         
-        if (!result.success) {
+        if (result && !result.success) {
              console.error("Enrichment error", result.error);
              updateNodeStatus(nodeId, 'failed', result.error || "Enrichment failed");
              return false;
         }
         
-        if (result.output?.type === 'text') {
-             setNodeOutput(nodeId, { type: 'text', value: result.output.value });
-             useStudioStore.getState().updateNodeData(nodeId, { value: result.output.value });
+        if (result?.output?.type === 'text') {
+             setNodeOutput(nodeId, result.output);
              updateNodeStatus(nodeId, 'completed');
              return true;
         }
@@ -542,15 +609,25 @@ export async function executeWorkflow(
   }
 
   const pendingNodes = new Set(
-    executableNodeIds.filter(id => !resolvedOutputs.has(id))
+    executableNodeIds.filter(id => {
+      const node = nodeById.get(id);
+      if (node?.type === 'string' && options.targetNodeId === id) {
+        console.info("[studio] forcing string node into pending", id);
+        return true;
+      }
+      return !resolvedOutputs.has(id);
+    })
   );
+  console.info("[studio] pendingNodes initialized", Array.from(pendingNodes));
   const runningNodes = new Map<string, Promise<{ id: string; success: boolean }>>();
 
   while (pendingNodes.size > 0 || runningNodes.size > 0) {
     const readyNodes = Array.from(pendingNodes).filter((nodeId) => {
       const node = nodeById.get(nodeId);
       if (!node) return false;
-      return getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes).ready;
+      const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, options.targetNodeId);
+      console.info("[studio] checking readiness", { nodeId, type: node.type, ready: readiness.ready, reason: readiness.reason });
+      return readiness.ready;
     });
 
     while (readyNodes.length > 0 && runningNodes.size < MAX_CONCURRENT_EXECUTIONS) {
@@ -564,7 +641,7 @@ export async function executeWorkflow(
       for (const nodeId of pendingNodes) {
         const node = nodeById.get(nodeId);
         if (!node) continue;
-        const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes);
+        const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, options.targetNodeId);
         updateNodeStatus(nodeId, 'failed', readiness.reason ?? 'Missing required inputs or prompt');
         failedNodes.add(nodeId);
       }

@@ -82,7 +82,15 @@ export function isValidConnection(
       return false;
   }
 
-  // Check handle compatibility for Extend Video Targets
+  if (targetNode.type === 'nanoGen') {
+      const handle = targetHandle || '';
+      if (handle === 'ref-image' || handle === 'ref-images') {
+        if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
+      } else if (handle === 'prompt') {
+        if (sourceNode.type !== 'string') return false;
+      }
+  }
+
   if (targetNode.type === 'extendVideo') {
       const handle = targetHandle || '';
       if (handle === 'video') {

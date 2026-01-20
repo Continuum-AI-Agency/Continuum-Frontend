@@ -187,16 +187,20 @@ export function buildEnrichPayload(
   const documents = resolveDocumentInput(node.id, 'document', resolvedData, allNodes, allEdges);
 
   if (!prompt && !images.length && !audio && !documents?.length && !video) {
-    return null;
+    if (node.type === 'string') {
+       // BDD: Given a string node, when all input handles are empty, then return an empty payload to trigger fast enrichment.
+    } else {
+       return null;
+    }
   }
 
   return {
     prompt,
     brandId: BRAND_PROFILE_ID,
     context: {
-      images: images.length > 0 ? images.map(img => ({ type: 'base64', data: img!.base64, mimeType: img!.mimeType })) : undefined,
-      audio: audio ? { type: 'base64', data: audio.base64, mimeType: audio.mimeType } : undefined,
-      video: video ? { type: 'base64', data: video.data, mimeType: video.mimeType } : undefined,
+      images: images.length > 0 ? images.map(img => ({ type: 'base64' as const, data: img!.base64, mimeType: img!.mimeType })) : undefined,
+      audio: audio ? { type: 'base64' as const, data: audio.base64, mimeType: audio.mimeType } : undefined,
+      video: video ? { type: 'base64' as const, data: video.data, mimeType: video.mimeType } : undefined,
       documents: documents,
     }
   };

@@ -199,20 +199,23 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   updateNodeData: (id: string, data: Partial<StudioNode['data']>) => {
-    set((state) => ({
-      nodes: state.nodes.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              ...data,
-            },
-          };
-        }
-        return node;
-      }) as StudioNode[],
-    }));
+    set((state) => {
+      const nodeIndex = state.nodes.findIndex(n => n.id === id);
+      if (nodeIndex === -1) return state;
+
+      const updatedNode = {
+        ...state.nodes[nodeIndex],
+        data: {
+          ...state.nodes[nodeIndex].data,
+          ...data,
+        },
+      };
+
+      const newNodes = [...state.nodes];
+      newNodes[nodeIndex] = updatedNode as StudioNode;
+
+      return { nodes: newNodes };
+    });
   },
 
   getNodeById: (id: string) => {

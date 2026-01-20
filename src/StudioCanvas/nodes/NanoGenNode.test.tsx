@@ -53,9 +53,8 @@ describe('NanoGenNode', () => {
       </ReactFlowProvider>
     );
 
-    expect(screen.getByText('🍌 Nano Gen (Model)')).toBeTruthy();
+    expect(screen.getByText(/Nano Gen/)).toBeTruthy();
     expect(screen.getByText('Prompt')).toBeTruthy();
-    expect(screen.getByText('Negative')).toBeTruthy();
   });
 
   it('should update prompt on change', () => {

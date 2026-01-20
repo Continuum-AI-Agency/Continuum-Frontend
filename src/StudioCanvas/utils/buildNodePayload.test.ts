@@ -247,9 +247,9 @@ describe('buildNodePayload', () => {
       
       expect(payload).not.toBeNull();
       expect(payload?.prompt).toBe('Enrich this');
-      expect(payload?.images?.[0].base64).toBe('img_base64');
-      expect(payload?.audio?.base64).toBe('aud_base64');
-      expect(payload?.documents?.[0].text).toBe('doc content');
+      expect(payload?.context?.images?.[0].data).toBe('img_base64');
+      expect(payload?.context?.audio?.data).toBe('aud_base64');
+      expect(payload?.context?.documents?.[0].content).toBe('doc content');
     });
 
     it('should return null if no prompt and no inputs', () => {

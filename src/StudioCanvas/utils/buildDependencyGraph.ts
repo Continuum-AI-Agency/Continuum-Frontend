@@ -2,14 +2,19 @@ import type { Edge } from '@xyflow/react';
 import { StudioNode } from '../types';
 import { DependencyGraph } from '../types/execution';
 
-function isExecutableNode(node: StudioNode): boolean {
-  return ['nanoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(node.type || '');
+function isExecutableNode(node: StudioNode, edges: Edge[]): boolean {
+  if (['nanoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(node.type || '')) {
+    return true;
+  }
+
+  return false;
 }
 
 function topologicalSort(
   nodes: StudioNode[],
   dependencies: Map<string, string[]>,
-  dependents: Map<string, string[]>
+  dependents: Map<string, string[]>,
+  edges: Edge[]
 ): string[] {
   const inDegree = new Map<string, number>();
   const queue: string[] = [];
@@ -79,12 +84,12 @@ export function buildDependencyGraph(
 
   const entryPoints: string[] = [];
   for (const node of nodes) {
-    if (!isExecutableNode(node)) continue;
+    if (!isExecutableNode(node, edges)) continue;
 
     const nodeDeps = dependencies.get(node.id) || [];
     const hasExecutableDep = nodeDeps.some((depId) => {
       const depNode = nodes.find((n) => n.id === depId);
-      return depNode && isExecutableNode(depNode);
+      return depNode && isExecutableNode(depNode, edges);
     });
 
     if (!hasExecutableDep) {
@@ -92,7 +97,7 @@ export function buildDependencyGraph(
     }
   }
 
-  const executionOrder = topologicalSort(nodes, dependencies, dependents);
+  const executionOrder = topologicalSort(nodes, dependencies, dependents, edges);
 
   return {
     dependents,

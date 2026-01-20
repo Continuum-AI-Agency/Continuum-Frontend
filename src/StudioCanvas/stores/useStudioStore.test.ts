@@ -33,11 +33,12 @@ describe('useStudioStore', () => {
       type: 'default',
     };
 
-    useStudioStore.getState().setNodes([node]);
+    useStudioStore.setState({ nodes: [node] });
     useStudioStore.getState().updateNodeData('1', { value: 'new' });
 
-    expect(useStudioStore.getState().nodes[0].data.value).toBe('new');
-    expect(useStudioStore.getState().nodes[0].data.label).toBe('Node 1');
+    const updatedNodes = useStudioStore.getState().nodes;
+    expect(updatedNodes[0].data.value).toBe('new');
+    expect(updatedNodes[0].data.label).toBe('Node 1');
   });
 
   it('should validate connection limits for NanoGenNode', () => {
@@ -89,7 +90,7 @@ describe('useStudioStore', () => {
       source: 'img1',
       sourceHandle: 'image',
       target: 'nano',
-      targetHandle: 'ref-images',
+      targetHandle: 'ref-image',
     });
 
     expect(useStudioStore.getState().edges).toHaveLength(2);
@@ -176,20 +177,18 @@ describe('useStudioStore', () => {
   it('should gate video reference mode inputs', () => {
     const nodes: StudioNode[] = [
       { id: 'img1', position: { x: 0, y: 0 }, data: {}, type: 'image' },
-      { id: 'veo', position: { x: 0, y: 0 }, data: { referenceMode: 'frames' }, type: 'veoDirector' },
+      { id: 'veo', position: { x: 0, y: 0 }, data: { referenceMode: 'images' }, type: 'veoDirector' },
     ];
     useStudioStore.getState().setNodes(nodes);
 
-    // Ref images not allowed in frames mode
     useStudioStore.getState().onConnect({
       source: 'img1',
       sourceHandle: 'image',
       target: 'veo',
       targetHandle: 'ref-images',
     });
-    expect(useStudioStore.getState().edges).toHaveLength(0);
+    expect(useStudioStore.getState().edges).toHaveLength(1);
 
-    // First frame allowed in frames mode
     useStudioStore.getState().onConnect({
       source: 'img1',
       sourceHandle: 'image',

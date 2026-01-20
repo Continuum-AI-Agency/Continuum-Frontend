@@ -1,39 +1,48 @@
 "use client";
 
 import React from "react";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField } from "@radix-ui/themes";
-import { ExclamationTriangleIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
-import { useForm } from "react-hook-form";
+import { ExclamationTriangleIcon, MagicWandIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
+import { getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
+import type { SupportedModel } from "@/lib/types/chatImage";
+import type { PromptTemplate, PromptTemplateCreateInput, PromptTemplateUpdateInput } from "@/lib/schemas/promptTemplates";
+import { PromptTemplatePicker } from "./PromptTemplatePicker";
 import { z } from "zod";
 
-import { chatImageRequestBase, getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
-import type {
-  PromptTemplate,
-  PromptTemplateCreateInput,
-  PromptTemplateUpdateInput,
-} from "@/lib/schemas/promptTemplates";
-import type { SupportedModel } from "@/lib/types/chatImage";
-import { PromptTemplatePicker } from "./PromptTemplatePicker";
+type FormValues = {
+  model: SupportedModel;
+  prompt: string;
+  aspectRatio?: string;
+  durationSeconds?: number;
+  resolution?: string;
+  imageSize?: "1K" | "2K" | "4K";
+  negativePrompt?: string;
+  seed?: number;
+  cfgScale?: number;
+  steps?: number;
+};
 
-const chatPanelFormSchema = chatImageRequestBase.pick({
-  model: true,
-  prompt: true,
-  aspectRatio: true,
-  resolution: true,
-  imageSize: true,
-  negativePrompt: true,
-  seed: true,
-  cfgScale: true,
-  steps: true,
-  durationSeconds: true,
+const chatPanelFormSchema = z.object({
+  model: z.enum(["nano-banana", "gemini-3-pro-image-preview", "veo-3-1", "veo-3-1-fast", "sora-2"]),
+  prompt: z.string().min(1, "Prompt is required"),
+  aspectRatio: z.string().optional(),
+  durationSeconds: z.number().optional(),
+  resolution: z.string().optional(),
+  imageSize: z.enum(["1K", "2K", "4K"]).optional(),
+  negativePrompt: z.string().optional(),
+  seed: z.number().optional(),
+  cfgScale: z.number().optional(),
+  steps: z.number().optional(),
 });
-
-type FormValues = z.infer<typeof chatPanelFormSchema>;
 
 type ChatPanelProps = {
   disabled?: boolean;
   isStreaming?: boolean;
+  isEnriching?: boolean;
+  onEnrich?: (currentPrompt: string) => Promise<void>;
+  enrichedValue?: string | null;
   onSubmit: (values: FormValues) => void;
   onCancel: () => void;
   onModelChange?: (model: SupportedModel) => void;
@@ -74,6 +83,9 @@ const NANO_RES_OPTIONS = [
 export function ChatPanel({
   disabled,
   isStreaming,
+  isEnriching,
+  onEnrich,
+  enrichedValue,
   onSubmit,
   onCancel,
   onModelChange,
@@ -125,10 +137,16 @@ export function ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, aspectOptions, medium]);
 
+  React.useEffect(() => {
+    if (enrichedValue) {
+      form.setValue("prompt", enrichedValue);
+    }
+  }, [enrichedValue, form]);
+
   const handleSubmit = form.handleSubmit(
     (values) => onSubmit(values),
     (errors) => {
-      const firstError = Object.values(errors)[0];
+      const firstError = Object.values(errors).find(err => err?.message);
       if (firstError?.message) {
         form.setError("prompt", { message: firstError.message });
       }
@@ -186,10 +204,30 @@ export function ChatPanel({
               placeholder="Describe what you want to see"
               rows={6}
               className="min-h-[300px] pr-10"
-              disabled={disabled || isStreaming}
+              disabled={disabled || isStreaming || isEnriching}
             />
-            {promptTemplates ? (
-              <div className="absolute right-2 top-2">
+            <div className="absolute right-2 top-2 flex flex-col gap-2">
+              {onEnrich && (
+                <Button
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  type="button"
+                  disabled={disabled || isStreaming || isEnriching || !form.watch("prompt")}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onEnrich(form.getValues("prompt"));
+                  }}
+                  className="hover:text-brand-primary"
+                >
+                  {isEnriching ? (
+                    <div className="animate-spin">◌</div>
+                  ) : (
+                    <MagicWandIcon />
+                  )}
+                </Button>
+              )}
+              {promptTemplates ? (
                 <PromptTemplatePicker
                   templates={promptTemplates.templates}
                   isLoading={promptTemplates.isLoading}
@@ -199,8 +237,8 @@ export function ChatPanel({
                   onUpdate={promptTemplates.onUpdate}
                   onDelete={promptTemplates.onDelete}
                 />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
           {form.formState.errors.prompt ? (
             <Text size="1" color="red" className="block">

@@ -55,7 +55,12 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <GlassPanel className={cn("p-6 space-y-4", className)}>
+    <Box 
+      className={cn("p-6 space-y-4 bg-background border", className)}
+      style={{
+        color: "var(--foreground)",
+      }}
+    >
       <Flex justify="between" align="start" wrap="wrap" gap="3">
         <Box className="space-y-1">
           <Flex align="center" gap="2">
@@ -108,6 +113,6 @@ export function BrandTrendsPanel({
          questionsByNiche={questionsByNiche}
          brandId={brandId}
        />
-    </GlassPanel>
+    </Box>
   );
 }
