@@ -1,6 +1,8 @@
 import React from 'react';
 import { DownloadIcon, ReloadIcon } from '@radix-ui/react-icons';
 import { useReactFlow } from '@xyflow/react';
+import type { Edge } from '@xyflow/react';
+import type { StudioNode } from '../types';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -75,7 +77,7 @@ export function LoadWorkflowDialog({ brandProfileId }: LoadWorkflowDialogProps) 
   const applyWorkflow = React.useCallback(
     (workflow: AiStudioWorkflow) => {
       const snapshot = normalizeWorkflowSnapshot(
-        { nodes: workflow.nodes ?? [], edges: workflow.edges ?? [] },
+        { nodes: (workflow.nodes ?? []) as unknown as StudioNode[], edges: (workflow.edges ?? []) as unknown as Edge[] },
         defaultEdgeType
       );
 

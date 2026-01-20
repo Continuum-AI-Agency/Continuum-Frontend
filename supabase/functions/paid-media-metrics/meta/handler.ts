@@ -6,13 +6,36 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const CACHE_TTL_MS = 60 * 60 * 1000;
+
+function buildCacheKey(params: {
+  provider: string;
+  scopeType: string;
+  accountId: string;
+  scopeId: string;
+  rangePreset: string;
+  rangeSince?: string;
+  rangeUntil?: string;
+}) {
+  const { provider, scopeType, accountId, scopeId, rangePreset, rangeSince, rangeUntil } = params;
+  return [
+    provider,
+    scopeType,
+    accountId,
+    scopeId,
+    rangePreset,
+    rangeSince ?? "",
+    rangeUntil ?? "",
+  ].join(":");
+}
+
 export async function handleMetaMetrics(params: any, req: Request) {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
     console.log(`[paid-media-metrics:meta] ${requestId} ${msg}`, extra ?? "");
 
   try {
-    const { brandId, accountId: adAccountId, campaignId, range } = params;
+    const { brandId, accountId: adAccountId, campaignId, range, forceRefresh } = params;
 
     if (!brandId || !adAccountId || !campaignId) {
       return new Response(
@@ -41,28 +64,6 @@ export async function handleMetaMetrics(params: any, req: Request) {
       });
     }
 
-    // Get Meta access token
-    const { data: accountData, error: accountError } = await supabase
-      .from("integrations.meta_ad_accounts")
-      .select(`
-        ad_account_id,
-        integrations.meta_ad_account_access!inner(
-          integrations.meta_ads!inner(access_token_secret)
-        )
-      `)
-      .eq("ad_account_id_prefixed", adAccountId)
-      .single();
-
-    if (accountError || !accountData?.meta_ad_account_access?.[0]?.meta_ads?.access_token_secret) {
-      log("No access token found for ad account", { adAccountId, error: accountError });
-      return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const accessToken = accountData.meta_ad_account_access[0].meta_ads.access_token_secret;
-
     // Parse date range
     const now = new Date();
     let since: Date, until: Date;
@@ -89,8 +90,63 @@ export async function handleMetaMetrics(params: any, req: Request) {
         until = now;
     }
 
-    const sinceStr = since.toISOString().split('T')[0];
-    const untilStr = until.toISOString().split('T')[0];
+    const sinceStr = since.toISOString().split("T")[0];
+    const untilStr = until.toISOString().split("T")[0];
+
+    const cacheKey = buildCacheKey({
+      provider: "meta",
+      scopeType: "paid_campaign",
+      accountId: adAccountId,
+      scopeId: campaignId,
+      rangePreset: range?.preset || "last_7d",
+      rangeSince: sinceStr,
+      rangeUntil: untilStr,
+    });
+
+    if (!forceRefresh) {
+      const nowIso = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("reporting_cache")
+        .select("payload, expires_at")
+        .eq("cache_key", cacheKey)
+        .gt("expires_at", nowIso)
+        .order("fetched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        log("Cache read error", error);
+      } else if (data?.payload && data.expires_at) {
+        const expiresAt = new Date(data.expires_at);
+        if (expiresAt.getTime() > Date.now()) {
+          return new Response(JSON.stringify(data.payload), {
+            headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+          });
+        }
+      }
+    }
+
+    // Get Meta access token
+    const { data: accountData, error: accountError } = await supabase
+      .from("integrations.meta_ad_accounts")
+      .select(`
+        ad_account_id,
+        integrations.meta_ad_account_access!inner(
+          integrations.meta_ads!inner(access_token_secret)
+        )
+      `)
+      .eq("ad_account_id_prefixed", adAccountId)
+      .single();
+
+    if (accountError || !accountData?.meta_ad_account_access?.[0]?.meta_ads?.access_token_secret) {
+      log("No access token found for ad account", { adAccountId, error: accountError });
+      return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const accessToken = accountData.meta_ad_account_access[0].meta_ads.access_token_secret;
 
     log(`Fetching insights for campaign ${campaignId} from ${sinceStr} to ${untilStr}`);
 
@@ -177,9 +233,30 @@ export async function handleMetaMetrics(params: any, req: Request) {
       }
     };
 
+    try {
+      const nowTime = new Date();
+      const expiresAt = new Date(nowTime.getTime() + CACHE_TTL_MS);
+      await supabase.from("reporting_cache").insert({
+        cache_key: cacheKey,
+        provider: "meta",
+        scope_type: "paid_campaign",
+        account_id: adAccountId,
+        scope_id: campaignId,
+        range_preset: range?.preset || "last_7d",
+        range_since: sinceStr,
+        range_until: untilStr,
+        payload: response,
+        fetched_at: nowTime.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        updated_at: nowTime.toISOString(),
+      });
+    } catch (cacheError) {
+      log("Cache write failed", cacheError);
+    }
+
     log("Meta metrics processed successfully", { campaignId, dataPoints: trends.length });
     return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });
 
   } catch (error) {

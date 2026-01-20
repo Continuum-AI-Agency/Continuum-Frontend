@@ -78,4 +78,5 @@ export interface RequestParams {
     from: string;
     to: string;
   };
+  forceRefresh?: boolean;
 }
