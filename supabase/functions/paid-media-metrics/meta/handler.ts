@@ -106,6 +106,7 @@ export async function handleMetaMetrics(params: any, req: Request) {
     if (!forceRefresh) {
       const nowIso = new Date().toISOString();
       const { data, error } = await supabase
+        .schema("brand_profiles")
         .from("reporting_cache")
         .select("payload, expires_at")
         .eq("cache_key", cacheKey)
@@ -236,7 +237,10 @@ export async function handleMetaMetrics(params: any, req: Request) {
     try {
       const nowTime = new Date();
       const expiresAt = new Date(nowTime.getTime() + CACHE_TTL_MS);
-      await supabase.from("reporting_cache").insert({
+      await supabase
+        .schema("brand_profiles")
+        .from("reporting_cache")
+        .insert({
         cache_key: cacheKey,
         provider: "meta",
         scope_type: "paid_campaign",

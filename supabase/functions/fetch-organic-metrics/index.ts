@@ -9,7 +9,7 @@ import { fetchFacebookMetrics } from "./facebook-metrics.ts";
 import { fetchInstagramMetrics } from "./instagram-metrics.ts";
 import { PlatformType, RequestParams } from "./types.ts";
 
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 type CachePayload = Record<string, unknown>;
 
@@ -90,6 +90,7 @@ serve(async (req) => {
         const supabase = createSupabaseAdminClient();
         const nowIso = new Date().toISOString();
         const { data, error } = await supabase
+          .schema("brand_profiles")
           .from("reporting_cache")
           .select("payload, expires_at")
           .eq("cache_key", cacheKey)
@@ -135,7 +136,10 @@ serve(async (req) => {
         const supabase = createSupabaseAdminClient();
         const now = new Date();
         const expiresAt = new Date(now.getTime() + CACHE_TTL_MS);
-        await supabase.from("reporting_cache").insert({
+        await supabase
+          .schema("brand_profiles")
+          .from("reporting_cache")
+          .insert({
           cache_key: cacheKey,
           provider: "meta",
           scope_type: scopeType,
@@ -171,7 +175,10 @@ serve(async (req) => {
         const supabase = createSupabaseAdminClient();
         const now = new Date();
         const expiresAt = new Date(now.getTime() + CACHE_TTL_MS);
-        await supabase.from("reporting_cache").insert({
+        await supabase
+          .schema("brand_profiles")
+          .from("reporting_cache")
+          .insert({
           cache_key: cacheKey,
           provider: "meta",
           scope_type: scopeType,
