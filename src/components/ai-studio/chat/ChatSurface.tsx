@@ -264,7 +264,7 @@ export function ChatSurface({
 
       const parsed = chatImageRequestSchema.safeParse({ ...payload });
       if (!parsed.success) {
-        const message = parsed.error.errors[0]?.message ?? "Invalid input";
+        const message = parsed.error.message ?? "Invalid input";
         show({ title: "Fix form issues", description: message, variant: "error" });
         return;
       }

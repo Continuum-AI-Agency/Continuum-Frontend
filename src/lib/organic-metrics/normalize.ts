@@ -133,11 +133,11 @@ const looseInstagramOrganicMetricsResponseSchema = z
     fetchedAt: z.string().optional(),
     fetched_at: z.string().optional(),
     warnings: z.array(z.unknown()).optional(),
-    interactionBreakdowns: z.record(z.unknown()).optional(),
+    interactionBreakdowns: z.record(z.string(), z.unknown()).optional(),
     insights: z.array(z.unknown()).optional(),
     range: z.unknown(),
     metrics: z.unknown(),
-    comparison: z.record(z.unknown()).nullable().optional(),
+    comparison: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .passthrough();
 

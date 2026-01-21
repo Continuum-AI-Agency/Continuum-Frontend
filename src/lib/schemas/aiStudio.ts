@@ -131,11 +131,11 @@ const workflowBaseSchema = z.object({
   brandProfileId: z.string().min(1, "brandProfileId is required"),
   name: z.string().min(1, "Workflow name is required"),
   description: z.string().optional(),
-  nodes: z.array(z.record(z.unknown())).optional().default([]),
-  edges: z.array(z.record(z.unknown())).optional().default([]),
+  nodes: z.array(z.unknown()).optional().default([]),
+  edges: z.array(z.unknown()).optional().default([]),
   metadata: z.record(z.unknown()).optional(),
-  createdAt: z.string().datetime({ message: "Workflow createdAt must be an ISO timestamp" }),
-  updatedAt: z.string().datetime({ message: "Workflow updatedAt must be an ISO timestamp" }).optional(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema.optional(),
 });
 
 export const aiStudioWorkflowSchema = workflowBaseSchema;
