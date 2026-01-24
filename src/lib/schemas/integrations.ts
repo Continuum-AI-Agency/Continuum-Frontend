@@ -61,23 +61,21 @@ const metaSelectableHierarchyIntegrationSchema = z.object({
 });
 
 const metaSelectableHierarchySchema = z.object({
-  integrations: z.array(metaSelectableHierarchyIntegrationSchema),
+  integrations: z.array(metaSelectableHierarchyIntegrationSchema).optional(),
 });
 
-const selectableAssetsHierarchySchema = z.preprocess(
-  value => {
-    if (!value || typeof value !== "object") return value;
-    const maybeRecord = value as Record<string, unknown>;
-    if ("meta" in maybeRecord) return value;
-    if ("integrations" in maybeRecord) return { meta: value };
-    return value;
-  },
-  z
-    .object({
-      meta: metaSelectableHierarchySchema.optional(),
-    })
-    .catchall(z.unknown())
-);
+const googleSelectableHierarchyIntegrationSchema = z.object({
+  integration_id: z.string().uuid(),
+  ad_accounts: z.array(selectableAssetSchema).optional().default([]),
+  youtube_channels: z.array(selectableAssetSchema).optional().default([]),
+  dv360_advertisers: z.array(selectableAssetSchema).optional().default([]),
+});
+
+const googleSelectableHierarchySchema = z.object({
+  integrations: z.array(googleSelectableHierarchyIntegrationSchema).optional().default([]),
+});
+
+const selectableAssetsHierarchySchema = z.record(z.string(), z.any()).optional();
 
 const providerSelectableAssetsSchema = z
   .object({
@@ -91,7 +89,7 @@ export const selectableAssetsResponseSchema = z.object({
   synced_at: z.union([isoDateString, z.null()]).default(null),
   stale: z.boolean(),
   assets: z.array(selectableAssetSchema).optional().default([]),
-  providers: z.record(providerSelectableAssetsSchema).default({}),
+  providers: z.record(z.string(), providerSelectableAssetsSchema).default({}),
 });
 
 export type SelectableAsset = z.infer<typeof selectableAssetSchema>;

@@ -44,7 +44,7 @@ export function BrandSwitcher() {
   // In a real app we might have logos stored, here we fallback
   const brands = brandSummaries.map(brand => ({
     name: getBrandMenuItemLabel(brand),
-    logo: Layers,
+    logo: brand.logoUrl ? brand.logoUrl : Layers,
     plan: "Enterprise", // Placeholder
     id: brand.id
   }))
@@ -55,6 +55,8 @@ export function BrandSwitcher() {
     return null
   }
 
+  const TeamLogo = activeTeam.logo;
+
   return (
     <SidebarMenu className="group-data-[collapsible=icon]:items-center">
       <SidebarMenuItem>
@@ -64,8 +66,15 @@ export function BrandSwitcher() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <activeTeam.logo className="size-4" />
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
+                {typeof TeamLogo === "string" ? (
+                  <Avatar className="size-8 rounded-lg">
+                    <AvatarImage src={TeamLogo} alt={activeTeam.name} className="object-cover" />
+                    <AvatarFallback className="rounded-lg">{activeTeam.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <TeamLogo className="size-4" />
+                )}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-semibold">{activeTeam.name}</span>
@@ -90,8 +99,15 @@ export function BrandSwitcher() {
                   onClick={() => selectBrand(brand.id)}
                   className="gap-2 p-2"
                 >
-                  <div className="flex size-6 items-center justify-center rounded-sm border">
-                    <brand.logo className="size-4 shrink-0" />
+                  <div className="flex size-6 items-center justify-center rounded-sm border overflow-hidden">
+                    {typeof brand.logo === "string" ? (
+                      <Avatar className="size-6 rounded-sm">
+                        <AvatarImage src={brand.logo} alt={brand.name} className="object-cover" />
+                        <AvatarFallback className="text-[10px]">{brand.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <brand.logo className="size-4 shrink-0" />
+                    )}
                   </div>
                   {brand.name}
                   <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>

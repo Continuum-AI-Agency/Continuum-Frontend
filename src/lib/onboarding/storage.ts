@@ -81,7 +81,7 @@ async function ensureBrandProfileRecord(
   const { data, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
-    .select("id, brand_name")
+    .select("id, brand_name, logo_path")
     .eq("id", brandId)
     .maybeSingle();
 
@@ -90,6 +90,7 @@ async function ensureBrandProfileRecord(
   }
 
   const brandName = resolveBrandProfileName(state);
+  const logoPath = state?.brand?.logoPath ?? null;
 
   if (!data) {
     const { error: insertError } = await supabase
@@ -98,6 +99,7 @@ async function ensureBrandProfileRecord(
       .insert({
         id: brandId,
         brand_name: brandName,
+        logo_path: logoPath,
         created_by: owner.id,
       });
 
@@ -107,12 +109,13 @@ async function ensureBrandProfileRecord(
     return;
   }
 
-  if (data.brand_name !== brandName) {
+  if (data.brand_name !== brandName || data.logo_path !== logoPath) {
     const { error: updateError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
       .update({
         brand_name: brandName,
+        logo_path: logoPath,
         updated_at: new Date().toISOString(),
       })
       .eq("id", brandId);

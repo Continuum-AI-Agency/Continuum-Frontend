@@ -39,6 +39,7 @@ const platformAccountSchema = z.object({
   name: z.string(),
   status: z.enum(["active", "pending", "error"]),
   selected: z.boolean().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 const connectionStateSchema = z.object({
@@ -67,7 +68,7 @@ const connectionPatchShape = PLATFORM_KEYS.reduce(
   {} as Record<PlatformKey, typeof connectionPatchSchema>
 );
 
-const brandSchema = z.object({
+export const brandSchema = z.object({
   name: z.string(),
   industry: z.string(),
   brandVoice: z.union([z.string(), z.null()]),

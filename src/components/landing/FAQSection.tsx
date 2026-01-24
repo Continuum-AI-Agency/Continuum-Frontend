@@ -1,7 +1,12 @@
 "use client";
 
 import { Box, Container, Heading, Text } from "@radix-ui/themes";
-import { Accordion } from "../ui/Accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const faqItems = [
   {
@@ -44,8 +49,17 @@ export function FAQSection() {
         <Text size="3" color="gray" className="mt-2 max-w-2xl">
           Honest, transparent answers so you can move quickly.
         </Text>
-        <Box className="mt-6 rounded-xl border border-white/40 bg-white/70 p-2 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-900/70">
-          <Accordion items={faqItems} />
+        <Box className="mt-6 rounded-xl border border-white/40 bg-white/70 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-900/70">
+          <Accordion type="single" collapsible className="w-full">
+            {faqItems.map((item) => (
+              <AccordionItem key={item.value} value={item.value}>
+                <AccordionTrigger className="text-left">{item.header}</AccordionTrigger>
+                <AccordionContent>
+                  {item.content}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </Box>
       </Container>
     </Box>

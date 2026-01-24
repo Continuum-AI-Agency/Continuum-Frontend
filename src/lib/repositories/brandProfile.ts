@@ -16,6 +16,8 @@ export type BrandSummary = {
   id: string;
   name: string;
   completed: boolean;
+  logoPath?: string | null;
+  logoUrl?: string | null;
 };
 
 export type BrandSettingsData = {

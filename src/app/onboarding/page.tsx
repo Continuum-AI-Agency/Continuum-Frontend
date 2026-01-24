@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Container, Flex, Heading, Text } from "@radix-ui/themes";
-import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
+import OnboardingContainer from "@/components/onboarding/OnboardingContainer";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { isOnboardingComplete } from "@/lib/onboarding/state";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
@@ -80,7 +80,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               <Heading size="7">Get started</Heading>
               <Text color="gray">Connect your accounts and create your first Brand Profile.</Text>
             </div>
-            <OnboardingFlow brandId={brandId} initialState={state} />
+            <OnboardingContainer brandId={brandId} initialState={state} />
           </Flex>
         </Container>
       </ActiveBrandProvider>

@@ -120,24 +120,34 @@ function XIcon(props: IconProps) {
   );
 }
 
-export function PlatformIcon({ platform, size = 18, className }: IconProps & { platform: PlatformKey }) {
+import Image from "next/image";
+
+export function PlatformIcon({ platform, size = 18, className }: IconProps & { platform: PlatformKey | "google" | "meta" }) {
   switch (platform) {
+    case "google":
+    case "googleAds":
     case "youtube":
-      return <YouTubeIcon size={size} className={className} />;
-    case "instagram":
-      return <InstagramIcon size={size} className={className} />;
+    case "dv360":
+      return (
+        <Image 
+          src={platform === "youtube" ? "/logos/youtube.svg" : "/logos/google.svg"} 
+          alt={platform} 
+          width={size} 
+          height={size} 
+          className={className}
+        />
+      );
+    case "meta":
     case "facebook":
-      return <FacebookIcon size={size} className={className} />;
+      return <Image src={platform === "facebook" ? "/logos/facebook-icon.svg" : "/logos/meta.svg"} alt="Meta" width={size} height={size} className={className} />;
+    case "instagram":
+      return <Image src="/logos/instagram-icon.svg" alt="Instagram" width={size} height={size} className={className} />;
     case "threads":
-      return <ThreadsIcon size={size} className={className} />;
+      return <Image src="/logos/threads.svg" alt="Threads" width={size} height={size} className={className} />;
     case "tiktok":
-      return <TikTokIcon size={size} className={className} />;
+      return <Image src="/logos/tiktok-icon-light.svg" alt="TikTok" width={size} height={size} className={className} />;
     case "linkedin":
       return <LinkedInIcon size={size} className={className} />;
-    case "googleAds":
-      return <GoogleAdsIcon size={size} className={className} />;
-    case "dv360":
-      return <DV360Icon size={size} className={className} />;
     case "amazonAds":
       return <AmazonAdsIcon size={size} className={className} />;
     default:

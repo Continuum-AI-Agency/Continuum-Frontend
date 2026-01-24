@@ -26,6 +26,8 @@ export async function request<TResponse = unknown>(options: RequestOptions<TResp
     ...headers,
   };
 
+  console.log(`[http] ${method} ${url}`);
+
   const response = await fetch(url, {
     method,
     headers: finalHeaders,

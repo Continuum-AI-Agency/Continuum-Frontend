@@ -42,27 +42,58 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     (id): id is string => Boolean(id)
   );
 
-  let brandNameMap = new Map<string, string>();
+  let brandMap = new Map<string, { name: string; logoPath: string | null }>();
   if (brandIds.length > 0) {
     const { data: brands, error: brandsError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
-      .select("id, brand_name")
+      .select("id, brand_name, logo_path")
       .in("id", brandIds);
     if (brandsError) {
       console.error("[activeBrand] brand_profiles lookup failed", brandsError);
     } else {
-      brandNameMap = new Map(
-        (brands ?? []).map((brand) => [brand.id, brand.brand_name ?? "Untitled brand"])
+      brandMap = new Map(
+        (brands ?? []).map((brand) => [
+          brand.id,
+          {
+            name: brand.brand_name ?? "Untitled brand",
+            logoPath: (brand as any).logo_path ?? null,
+          },
+        ])
       );
     }
   }
 
-  const brandSummaries: BrandSummary[] = brandIds.map((id) => ({
-    id,
-    name: brandNameMap.get(id) ?? "Untitled brand",
-    completed: true,
-  }));
+  const brandSummaries: BrandSummary[] = await Promise.all(
+    brandIds.map(async (id) => {
+      const brandData = brandMap.get(id);
+      const name = brandData?.name ?? "Untitled brand";
+      const logoPath = brandData?.logoPath ?? null;
+      let logoUrl = null;
+
+      if (logoPath) {
+        try {
+          const { data, error: urlError } = await supabase.storage
+            .from("brand-profile-assets")
+            .createSignedUrl(logoPath, 604800);
+
+          if (!urlError && data?.signedUrl) {
+            logoUrl = data.signedUrl;
+          }
+        } catch (e) {
+          console.error(`[activeBrand] Failed to sign URL for ${logoPath}`, e);
+        }
+      }
+
+      return {
+        id,
+        name,
+        completed: true,
+        logoPath,
+        logoUrl,
+      };
+    })
+  );
 
   if (brandIds.length === 0) {
     return { activeBrandId: null, brandSummaries, permissions: perms ?? [] };

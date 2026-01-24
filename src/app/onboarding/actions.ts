@@ -18,6 +18,7 @@ import type {
 } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getApiBaseUrl } from "@/lib/api/config";
 
 const MOCK_ACCOUNT_NAMES = [
   "Primary Brand Account",
@@ -168,7 +169,6 @@ export async function enqueueDocumentEmbedAction(
   return appendDocument(brandId, document);
 }
 
-// ---- New: Sync integration accounts via edge function ----
 type IntegrationGroup = "google" | "meta";
 
 type EdgeAccount = {
@@ -192,7 +192,6 @@ export async function syncIntegrationAccountsAction(
   groups: IntegrationGroup[]
 ): Promise<OnboardingState> {
   const supabase = await createSupabaseServerClient();
-  // Ensure the user's JWT is forwarded to the Edge Function for RLS
   let authHeader: Record<string, string> | undefined;
   try {
     const {
@@ -202,7 +201,7 @@ export async function syncIntegrationAccountsAction(
       authHeader = { Authorization: `Bearer ${session.access_token}` };
     }
   } catch {
-    // ignore; we'll call without explicit header
+    
   }
   const { data, error } = await supabase.functions.invoke("integration_accounts", {
     body: { groups },
@@ -228,7 +227,6 @@ export async function syncIntegrationAccountsAction(
       groups,
       authHeaderProvided: Boolean(authHeader?.Authorization),
     });
-    // Fall back to current state if invoke fails
     return fetchOnboardingState(brandId);
   }
   const payload = data as AccountsByPlatformResponse;
@@ -299,7 +297,6 @@ export async function syncIntegrationAccountsAction(
   }
 
   if (Object.keys(connectionsPatch).length === 0) {
-    // Nothing to update; return current state
     return fetchOnboardingState(brandId);
   }
 
@@ -308,7 +305,6 @@ export async function syncIntegrationAccountsAction(
   });
 }
 
-// ---- New: Associate selected accounts to brand profile ----
 export async function associateIntegrationAccountsAction(
   brandId: string,
   integrationAccountIds: string[],
@@ -334,35 +330,29 @@ export async function associateIntegrationAccountsAction(
     throw new Error("Unauthorized");
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  if (!supabaseUrl) {
-    throw new Error("Missing Supabase URL");
-  }
-
-  const edgeResponse = await fetch(
-    `${supabaseUrl}/functions/v1/update_integration_account_assets`,
+  const apiBaseUrl = getApiBaseUrl(); 
+  
+  const response = await fetch(
+    `${apiBaseUrl}/brand-profiles/${encodeURIComponent(brandId)}/integration-accounts`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
-        apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
       },
       body: JSON.stringify({
-        assetIds: idsToUpdate,
-        selectedAssetIds: integrationAccountIds,
+        integration_account_ids: integrationAccountIds,
       }),
       cache: "no-store",
     }
   );
 
-  if (!edgeResponse.ok) {
-    const message = await edgeResponse.text().catch(() => null);
-    const errorBody = message ? `Edge function failed: ${message}` : "Edge function failed";
+  if (!response.ok) {
+    const message = await response.text().catch(() => null);
+    const errorBody = message ? `Backend failed: ${message}` : "Backend failed";
     throw new Error(errorBody);
   }
 
-  // Persist selection flags into onboarding state so reloads stay in sync
   const selectionSet = new Set(integrationAccountIds);
   const state = await fetchOnboardingState(brandId);
   const connectionsPatch: Partial<OnboardingPatch["connections"]> = {};
