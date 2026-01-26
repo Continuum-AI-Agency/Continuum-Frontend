@@ -22,6 +22,8 @@ export type OrganicCalendarDraft = {
   tags: string[]
   location?: string
   mediaCount: number
+  seedTrendId?: string
+  targetAccountId?: string
 }
 
 export type OrganicCalendarDay = {

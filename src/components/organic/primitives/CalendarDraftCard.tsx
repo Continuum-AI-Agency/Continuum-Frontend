@@ -32,14 +32,14 @@ const statusStyles: Record<OrganicCalendarDraft["status"], string> = {
   draft: "border-muted bg-muted/60 text-muted-foreground",
   scheduled: "border-emerald-500/30 bg-emerald-500/15 text-emerald-100",
   streaming: "border-amber-500/30 bg-amber-500/15 text-amber-100",
-  placeholder: "border-indigo-500/30 bg-indigo-500/15 text-indigo-100",
+  placeholder: "border-brand-primary/30 bg-brand-primary/10 text-brand-primary",
 }
 
 const statusLabels: Record<OrganicCalendarDraft["status"], string> = {
   draft: "Draft",
   scheduled: "Scheduled",
   streaming: "Streaming",
-  placeholder: "Queued",
+  placeholder: "Seeded",
 }
 
 export function PlatformBadge({ platform }: { platform: OrganicPlatformTag }) {
@@ -55,7 +55,14 @@ export function PlatformBadge({ platform }: { platform: OrganicPlatformTag }) {
   )
 }
 
-export function StatusBadge({ status }: { status: OrganicCalendarDraft["status"] }) {
+export function StatusBadge({ status, format }: { status: OrganicCalendarDraft["status"], format?: string }) {
+  if (format === "Newsletter") {
+    return (
+      <span className="inline-flex items-center rounded-full border border-orange-500/30 bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-100">
+        Newsletter
+      </span>
+    )
+  }
   return (
     <span
       className={cn(
@@ -189,7 +196,7 @@ export function CalendarDraftCard({
                       <LightningBoltIcon className="h-3 w-3" />
                     </span>
                   )}
-                  <StatusBadge status={draft.status} />
+                  <StatusBadge status={draft.status} format={draft.format} />
                 </div>
               </div>
               <p className="mt-1 text-sm font-semibold text-primary line-clamp-2">

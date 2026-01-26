@@ -31,22 +31,27 @@ import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions"
 import { getBrandMenuItemLabel } from "@/lib/brands/brand-switcher-utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
+import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext"
+import { isOnboardingComplete } from "@/lib/onboarding/state"
+
 export function BrandSwitcher() {
   const { isMobile } = useSidebar()
   const { activeBrandId, brandSummaries, selectBrand } = useActiveBrandContext()
   const { setTheme, theme } = useTheme()
   const router = useRouter()
   const [isCreating, startCreate] = React.useTransition()
+  
+  let onboarding: any = null;
+  try { onboarding = useOnboarding(); } catch (e) {}
 
   const activeBrand = brandSummaries.find(b => b.id === activeBrandId) || brandSummaries[0]
 
-  // Map brands to teams structure for consistency with the design pattern
-  // In a real app we might have logos stored, here we fallback
   const brands = brandSummaries.map(brand => ({
     name: getBrandMenuItemLabel(brand),
     logo: brand.logoUrl ? brand.logoUrl : Layers,
-    plan: "Enterprise", // Placeholder
-    id: brand.id
+    plan: "Enterprise", 
+    id: brand.id,
+    completed: brand.completed 
   }))
 
   const activeTeam = brands.find(b => b.id === activeBrandId) || brands[0]
@@ -54,6 +59,16 @@ export function BrandSwitcher() {
   if (!activeTeam) {
     return null
   }
+
+  const handleBrandSelect = async (brandId: string) => {
+    await selectBrand(brandId);
+    
+    const targetBrand = brandSummaries.find(b => b.id === brandId);
+    
+    if (targetBrand?.completed && typeof window !== 'undefined' && window.location.pathname.startsWith('/onboarding')) {
+      router.push('/dashboard');
+    }
+  };
 
   const TeamLogo = activeTeam.logo;
 
@@ -96,7 +111,7 @@ export function BrandSwitcher() {
               {brands.map((brand, index) => (
                 <DropdownMenuItem
                   key={brand.id}
-                  onClick={() => selectBrand(brand.id)}
+                  onClick={() => handleBrandSelect(brand.id)}
                   className="gap-2 p-2"
                 >
                   <div className="flex size-6 items-center justify-center rounded-sm border overflow-hidden">

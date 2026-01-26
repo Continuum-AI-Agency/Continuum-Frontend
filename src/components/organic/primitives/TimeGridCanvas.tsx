@@ -5,11 +5,10 @@ import { cn } from "@/lib/utils";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { Button } from "@/components/ui/button";
 import { RocketIcon } from "@radix-ui/react-icons";
-import { TimeSlot } from "./TimeSlot";
 import { DraggableDraftCard } from "./DraggableDraftCard";
 import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "./types";
-
+import { useDroppable } from "@dnd-kit/core";
 import { parseTimeLabelToHour } from "./calendar-utils";
 
 function TimeGridDayColumn({
@@ -20,6 +19,7 @@ function TimeGridDayColumn({
   onSelectDraft,
   onToggleSelection,
   onRegenerate,
+  onNativeDrop,
 }: {
   day: OrganicCalendarDay;
   drafts: OrganicCalendarDraft[];
@@ -28,49 +28,83 @@ function TimeGridDayColumn({
   onSelectDraft: (id: string) => void;
   onToggleSelection: (id: string) => void;
   onRegenerate: (draftId: string) => void;
+  onNativeDrop?: (date: string, time: string, data: any) => void;
 }) {
-  const HOURS = Array.from({ length: 24 }, (_, i) => i);
+  const { setNodeRef, isOver } = useDroppable({
+    id: day.id,
+    data: { type: "day-column", dayId: day.id },
+  });
+
+  const ghosts = useCalendarStore((s) => s.ghosts[day.id] || 0);
+
+  const sortedDrafts = React.useMemo(() => {
+    return [...drafts].sort((a, b) => {
+      const timeA = parseTimeLabelToHour(a.timeLabel) ?? 0;
+      const timeB = parseTimeLabelToHour(b.timeLabel) ?? 0;
+      return timeA - timeB;
+    });
+  }, [drafts]);
+
+  const handleNativeDrop = (e: React.DragEvent) => {
+    const rawData = e.dataTransfer.getData("application/json");
+    if (rawData && onNativeDrop) {
+      try {
+        const data = JSON.parse(rawData);
+        onNativeDrop(day.id, "09:00", data);
+      } catch (err) {
+        console.error("Failed to parse dropped data", err);
+      }
+    }
+  };
 
   return (
-    <div className="flex-1 min-w-[140px] border-r border-subtle last:border-r-0">
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex-1 min-w-[200px] border-r border-subtle last:border-r-0 flex flex-col transition-colors",
+        isOver && "bg-brand-primary/5"
+      )}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/json")) {
+          e.preventDefault();
+        }
+      }}
+      onDrop={handleNativeDrop}
+    >
       <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-subtle p-3 text-center">
         <div className="text-sm font-semibold text-primary">{day.label}</div>
         <div className="text-xs text-secondary">{day.dateLabel}</div>
       </div>
-      <div className="relative">
-        {HOURS.map((hour) => {
-          const timeLabel = `${hour.toString().padStart(2, "0")}:00`;
-          const draftsInHour = drafts.filter(d => {
-             const h = parseTimeLabelToHour(d.timeLabel);
-             return h === hour;
-          });
-
-          return (
-            <TimeSlot 
-              key={timeLabel} 
-              date={day.id} 
-              time={timeLabel}
-              className="h-32 border-b border-subtle/30 p-1"
-            >
-              <span className="absolute top-1 left-1 text-[10px] text-secondary/50 select-none">
-                {hour === 0 ? "12 AM" : hour < 12 ? `${hour} AM` : hour === 12 ? "12 PM" : `${hour - 12} PM`}
-              </span>
-              <div className="ml-8 flex flex-col gap-1 h-full">
-                {draftsInHour.map(draft => (
-                  <DraggableDraftCard
-                    key={draft.id}
-                    draft={draft}
-                    isSelected={draft.id === selectedDraftId}
-                    isMultiSelected={selectedDraftIds.includes(draft.id)}
-                    onSelect={onSelectDraft}
-                    onToggleSelection={onToggleSelection}
-                    onRegenerate={onRegenerate}
-                  />
-                ))}
-              </div>
-            </TimeSlot>
-          );
-        })}
+      
+      <div className="flex-1 p-2 space-y-3 overflow-y-auto">
+        {sortedDrafts.map((draft) => (
+          <DraggableDraftCard
+            key={draft.id}
+            draft={draft}
+            isSelected={draft.id === selectedDraftId}
+            isMultiSelected={selectedDraftIds.includes(draft.id)}
+            onSelect={onSelectDraft}
+            onToggleSelection={onToggleSelection}
+            onRegenerate={onRegenerate}
+          />
+        ))}
+        
+        {Array.from({ length: ghosts }).map((_, i) => (
+          <div key={`ghost-${i}`} className="w-full rounded-lg border border-dashed border-subtle bg-default/20 px-3 py-4 animate-pulse h-24">
+            <div className="flex justify-between mb-2">
+               <div className="h-3 w-1/4 bg-subtle rounded" />
+               <div className="h-3 w-1/6 bg-subtle rounded" />
+            </div>
+            <div className="h-4 w-3/4 bg-subtle rounded mb-2" />
+            <div className="h-3 w-1/2 bg-subtle rounded" />
+          </div>
+        ))}
+        
+        {drafts.length === 0 && ghosts === 0 && (
+          <div className="h-24 flex items-center justify-center border border-dashed border-subtle rounded-lg opacity-40">
+            <span className="text-xs text-secondary">Drop items here</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -84,6 +118,7 @@ export function TimeGridCanvas({
   onToggleSelection,
   onRegenerate,
   onBuild,
+  onNativeDrop,
 }: {
   days: OrganicCalendarDay[];
   selectedDraftId: string | null;
@@ -92,37 +127,28 @@ export function TimeGridCanvas({
   onToggleSelection: (id: string) => void;
   onRegenerate: (draftId: string) => void;
   onBuild: () => void;
+  onNativeDrop?: (date: string, time: string, data: any) => void;
 }) {
   const hasDrafts = days.some((day) => day.slots.length > 0);
 
   return (
     <GlassPanel className="flex h-full flex-col p-0 overflow-hidden bg-default/20">
       {hasDrafts ? (
-        <div className="flex-1 overflow-y-auto">
-          <div className="flex min-h-full">
-            <div className="w-16 flex-none border-r border-subtle bg-surface/50 pt-[61px]">
-              {Array.from({ length: 24 }, (_, i) => (
-                <div key={i} className="h-32 border-b border-subtle/30 relative">
-                  <span className="absolute -top-2 right-2 text-xs text-secondary/70">
-                    {i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-1">
-              {days.map((day) => (
-                <TimeGridDayColumn
-                  key={day.id}
-                  day={day}
-                  drafts={day.slots}
-                  selectedDraftId={selectedDraftId}
-                  selectedDraftIds={selectedDraftIds}
-                  onSelectDraft={onSelectDraft}
-                  onToggleSelection={onToggleSelection}
-                  onRegenerate={onRegenerate}
-                />
-              ))}
-            </div>
+        <div className="flex-1 overflow-x-auto">
+          <div className="flex min-h-full min-w-max">
+            {days.map((day) => (
+              <TimeGridDayColumn
+                key={day.id}
+                day={day}
+                drafts={day.slots}
+                selectedDraftId={selectedDraftId}
+                selectedDraftIds={selectedDraftIds}
+                onSelectDraft={onSelectDraft}
+                onToggleSelection={onToggleSelection}
+                onRegenerate={onRegenerate}
+                onNativeDrop={onNativeDrop}
+              />
+            ))}
           </div>
         </div>
       ) : (

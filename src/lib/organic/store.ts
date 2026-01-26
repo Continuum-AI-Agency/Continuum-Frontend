@@ -173,12 +173,26 @@ export const useCalendarStore = create<CalendarState>()(
       addDraft: (dayId, draft) =>
         set((state) => {
           if (dayId === "unscheduled") {
+            const exists = state.unscheduledDrafts.findIndex((d) => d.id === draft.id);
+            if (exists !== -1) {
+              const next = [...state.unscheduledDrafts];
+              next[exists] = draft;
+              return { unscheduledDrafts: next };
+            }
             return { unscheduledDrafts: [...state.unscheduledDrafts, draft] };
           }
+          
           return {
-            days: state.days.map((day) =>
-              day.id === dayId ? { ...day, slots: [...day.slots, draft] } : day
-            ),
+            days: state.days.map((day) => {
+              if (day.id !== dayId) return day;
+              const exists = day.slots.findIndex((s) => s.id === draft.id);
+              if (exists !== -1) {
+                const slots = [...day.slots];
+                slots[exists] = draft;
+                return { ...day, slots };
+              }
+              return { ...day, slots: [...day.slots, draft] };
+            }),
           };
         }),
 

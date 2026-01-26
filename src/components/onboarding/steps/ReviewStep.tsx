@@ -27,6 +27,7 @@ import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type ReportSection = {
   id: string;
@@ -35,6 +36,35 @@ type ReportSection = {
   content: string;
   isStreaming: boolean;
   source?: "brand_profile" | "voice" | "audience" | "website" | "business";
+};
+
+const formatJsonToMarkdown = (jsonStr: string) => {
+  try {
+    const data = JSON.parse(jsonStr);
+    let md = "";
+    
+    const formatEntry = (key: string, value: any, level: number = 0) => {
+      const indent = "  ".repeat(level);
+      const title = key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      
+      if (Array.isArray(value)) {
+        md += `\n${indent}**${title}**\n`;
+        value.forEach(item => {
+          md += `${indent}* ${item}\n`;
+        });
+      } else if (typeof value === "object" && value !== null) {
+        md += `\n${indent}**${title}**\n`;
+        Object.entries(value).forEach(([k, v]) => formatEntry(k, v, level + 1));
+      } else {
+        md += `${indent}**${title}:** ${value}\n\n`;
+      }
+    };
+
+    Object.entries(data).forEach(([k, v]) => formatEntry(k, v));
+    return md.trim();
+  } catch {
+    return jsonStr; 
+  }
 };
 
 export function ReviewStep() {
@@ -47,6 +77,7 @@ export function ReviewStep() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string>("current-user");
 
   const [sections, setSections] = useState<ReportSection[]>([
     { id: "voice", title: "Brand Voice & Tone", icon: <MessageSquare className="w-4 h-4" />, content: state.brand.brandVoice || "", isStreaming: false, source: "voice" },
@@ -56,6 +87,13 @@ export function ReviewStep() {
   ]);
 
   useEffect(() => {
+    const fetchUser = async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    };
+    fetchUser();
+
     if (state.brand.logoPath) {
       createSignedAssetUrl(state.brand.logoPath, 3600).then(setLogoUrl).catch(() => setLogoUrl(null));
     }
@@ -69,31 +107,59 @@ export function ReviewStep() {
       ["market", "competitive"].includes(s.id) ? { ...s, content: "", isStreaming: true } : s
     ));
 
+    const integrationAccountIds = Object.values(state.connections)
+      .flatMap(c => c.accounts || [])
+      .filter(a => a.selected)
+      .map(a => a.id);
+
+    const integratedPlatforms = Object.entries(state.connections)
+      .filter(([_, conn]) => conn.connected && conn.accounts.some(a => a.selected))
+      .map(([key]) => {
+        if (key === "googleAds") return "google-ads";
+        if (key === "facebook" || key === "instagram") return "meta";
+        return key;
+      })
+      .filter((v, i, a) => a.indexOf(v) === i) as ("canva" | "figma" | "google-drive" | "sharepoint" | "youtube" | "tiktok" | "linkedin" | "google-ads" | "meta")[];
+
+    const selectedAccountsMetadata = Object.values(state.connections)
+      .flatMap(c => c.accounts || [])
+      .filter(a => a.selected)
+      .map(a => ({
+        id: a.id,
+        name: a.name,
+        type: a.metadata?.type,
+        businessId: a.metadata?.businessId,
+        externalId: a.metadata?.externalId,
+        parentId: a.metadata?.parentId
+      }));
+
     try {
       await runOnboardingPreview({
         payload: {
           brandProfile: {
             id: brandId,
             brand_name: state.brand.name || "",
-            description: userGuidance,
+            description: JSON.stringify({
+              userGuidance,
+              selectedAssets: selectedAccountsMetadata,
+              documentCount: state.documents.length
+            }),
             brand_voice: { tone: state.brand.brandVoice || "" },
             target_audience: { summary: state.brand.targetAudience || "" },
             website_url: state.brand.website || undefined,
           },
           runContext: {
-            user_id: "current-user", 
+            user_id: userId, 
+            brand_id: brandId,
             brand_name: state.brand.name || "",
             created_at: new Date().toISOString(),
-            platform_urls: [],
-            integrated_platforms: [],
-            brand_voice_tags: [],
-            integration_account_ids: Object.values(state.connections)
-              .flatMap(c => c.accounts || [])
-              .filter(a => a.selected)
-              .map(a => a.id),
+            platform_urls: state.brand.website ? [state.brand.website] : [],
+            integrated_platforms: integratedPlatforms as ("canva" | "figma" | "google-drive" | "sharepoint" | "youtube" | "tiktok" | "linkedin" | "google-ads" | "meta")[],
+            brand_voice_tags: (state.brand.brandVoiceTags || []) as string[],
+            integration_account_ids: integrationAccountIds,
           }
         },
-          onEvent: (event) => {
+        onEvent: (event) => {
             if (event.type === "stream") {
               setSections(prev => prev.map(s => {
                 if (s.source === event.section) {
@@ -203,8 +269,12 @@ export function ReviewStep() {
               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold">Grounding Input</Badge>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <SafeMarkdown content={section.content || "No input provided."} mode="static" className="text-xs leading-relaxed text-foreground/80" />
+              <div className="prose prose-sm dark:prose-invert max-w-none max-h-[250px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2">
+                <SafeMarkdown 
+                  content={section.content ? formatJsonToMarkdown(section.content) : "No input provided."} 
+                  mode="static" 
+                  className="text-xs leading-relaxed text-foreground/80" 
+                />
               </div>
             </CardContent>
           </Card>
@@ -215,7 +285,7 @@ export function ReviewStep() {
         {sections.filter(s => ["market", "competitive"].includes(s.id)).map((section) => {
           const shouldShowSkeleton = section.isStreaming && !section.content;
           return (
-            <Card key={section.id} className="overflow-hidden border-muted-foreground/10 flex flex-col">
+            <Card key={section.id} className="overflow-hidden border-muted-foreground/10 flex flex-col h-[400px]">
               <CardHeader className="bg-muted/10 py-3 px-6 flex flex-row items-center justify-between space-y-0 border-b border-muted-foreground/5">
                 <div className="flex items-center gap-3">
                   <div className="p-1.5 rounded-md bg-primary/10 text-primary">
@@ -225,7 +295,7 @@ export function ReviewStep() {
                   {section.isStreaming && <Sparkles className="w-4 h-4 text-primary animate-pulse" />}
                 </div>
               </CardHeader>
-              <CardContent className="p-6 flex-1">
+              <CardContent className="p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20">
                 {shouldShowSkeleton ? (
                   <div className="space-y-3">
                     <Skeleton className="h-4 w-full" />
@@ -235,7 +305,7 @@ export function ReviewStep() {
                 ) : (
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <SafeMarkdown 
-                      content={section.content || "Waiting for agent analysis…"} 
+                      content={section.content ? formatJsonToMarkdown(section.content) : "Waiting for agent analysis…"} 
                       mode={section.isStreaming ? "streaming" : "static"} 
                       className="text-sm leading-relaxed text-foreground/90" 
                     />

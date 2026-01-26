@@ -14,7 +14,7 @@ import type { Trend } from "@/lib/organic/trends";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { redirect } from "next/navigation";
 import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
-import type { OrganicTrendType } from "@/components/organic/primitives/types";
+import type { OrganicTrendGroup, OrganicTrendType } from "@/components/organic/primitives/types";
 
 export default async function OrganicPage() {
   const { activeBrandId } = await getActiveBrandContext();
@@ -63,28 +63,55 @@ export default async function OrganicPage() {
       tags: trend.source ? [trend.source] : [],
     }));
 
+    const nicheMap = insights.data.questionsByNiche.questionsByNiche || {};
+    
+    const allQuestions = Object.entries(nicheMap).flatMap(([niche, data]) => {
+      const nicheData = data as { questions: Array<{ id: string; question: string; socialPlatform?: string; contentTypeSuggestion?: string; whyRelevant?: string }> };
+      return nicheData.questions.map((q) => ({ ...q, niche }));
+    });
+
+    const mappedQuestions = allQuestions.map((q) => {
+      const platformKey = q.socialPlatform?.toLowerCase().includes("linkedin") ? "linkedin" : "instagram";
+      return {
+        id: q.id,
+        title: q.question,
+        summary: q.whyRelevant ?? q.contentTypeSuggestion ?? "Audience question",
+        momentum: "stable" as const,
+        platforms: [platformKey] as OrganicPlatformKey[],
+        tags: ["question", q.niche],
+      };
+    });
+
+    // Combine trends and questions
+    selectorTrends = [...selectorTrends, ...mappedQuestions];
+
     const momentumGroups = ["rising", "stable", "cooling"] as const;
-    const groups = momentumGroups
-      .map((momentum) => ({
-        id: momentum,
-        title: momentum === "rising" ? "Rising now" : momentum === "stable" ? "Stable interest" : "Cooling down",
-        trends: selectorTrends
-          .filter((trend) => trend.momentum === momentum)
-          .map((trend) => ({
-            id: trend.id,
-            title: trend.title,
-            summary: trend.summary,
-            momentum,
-            tags: trend.tags,
-          })),
-      }))
+    const initialGroups: OrganicTrendGroup[] = momentumGroups
+      .map((momentum) => {
+        const items = selectorTrends.filter((t) => t.momentum === momentum && !t.tags.includes("question"));
+        return {
+          id: momentum,
+          title: momentum === "rising" ? "Rising now" : momentum === "stable" ? "Stable interest" : "Cooling down",
+          trends: items,
+        };
+      })
       .filter((group) => group.trends.length > 0);
+
+    const groups: OrganicTrendGroup[] = [...initialGroups];
+
+    if (mappedQuestions.length > 0) {
+        groups.push({
+            id: "questions",
+            title: "Audience Questions",
+            trends: mappedQuestions,
+        });
+    }
 
     trendTypes = groups.length
       ? [
           {
             id: "momentum",
-            label: "Momentum",
+            label: "Insights",
             groups,
           },
         ]

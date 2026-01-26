@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Container, Flex, Heading, Text } from "@radix-ui/themes";
+import { Container, Flex, Heading, Text, Box } from "@radix-ui/themes";
 import OnboardingContainer from "@/components/onboarding/OnboardingContainer";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { isOnboardingComplete } from "@/lib/onboarding/state";
@@ -7,6 +7,8 @@ import OnboardingGate from "@/components/onboarding/OnboardingGate";
 import { ActiveBrandProvider } from "@/components/providers/ActiveBrandProvider";
 import type { BrandSummary } from "@/lib/repositories/brandProfile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { BrandSwitcher } from "@/components/navigation/BrandSwitcher";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 export const metadata = {
   title: "Onboarding | Continuum AI",
@@ -74,15 +76,22 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   return (
     <OnboardingGate>
       <ActiveBrandProvider activeBrandId={brandId} brandSummaries={brandSummaries}>
-        <Container size="3" className="py-10">
-          <Flex direction="column" gap="5">
-            <div>
-              <Heading size="7">Get started</Heading>
-              <Text color="gray">Connect your accounts and create your first Brand Profile.</Text>
-            </div>
-            <OnboardingContainer brandId={brandId} initialState={state} />
-          </Flex>
-        </Container>
+        <SidebarProvider defaultOpen={false}>
+          <Container size="3" className="py-10">
+            <Flex direction="column" gap="5">
+              <Flex align="center" justify="between">
+                <Box>
+                  <Heading size="7">Get started</Heading>
+                  <Text color="gray">Connect your accounts and create your first Brand Profile.</Text>
+                </Box>
+                <Box className="w-64">
+                  <BrandSwitcher />
+                </Box>
+              </Flex>
+              <OnboardingContainer brandId={brandId} initialState={state} />
+            </Flex>
+          </Container>
+        </SidebarProvider>
       </ActiveBrandProvider>
     </OnboardingGate>
   );
