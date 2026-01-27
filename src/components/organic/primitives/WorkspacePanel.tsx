@@ -7,6 +7,7 @@ import { RocketIcon, LightningBoltIcon } from "@radix-ui/react-icons";
 import { TrendSelector } from "@/components/organic/TrendSelector";
 import type { Trend } from "@/lib/organic/trends";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import type { OrganicTrendType } from "./types";
 
 export function WorkspacePanel({
   trends,
@@ -18,6 +19,8 @@ export function WorkspacePanel({
   viewMode,
   onViewModeChange,
   onAutoSort,
+  trendTypes = [],
+  seedCount = 0,
 }: {
   trends: Trend[];
   selectedTrendIds: string[];
@@ -28,6 +31,8 @@ export function WorkspacePanel({
   viewMode: "day" | "week" | "month";
   onViewModeChange: (mode: "day" | "week" | "month") => void;
   onAutoSort: () => void;
+  trendTypes?: OrganicTrendType[];
+  seedCount?: number;
 }) {
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -49,9 +54,10 @@ export function WorkspacePanel({
         </div>
       </GlassPanel>
       
-      <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-subtle bg-surface/30">
+      <div className="flex-1 min-h-0 overflow-y-auto rounded border border-subtle bg-surface/30">
         <div className="p-4">
           <TrendSelector
+            trendTypes={trendTypes}
             trends={trends}
             selectedTrendIds={selectedTrendIds}
             activePlatforms={activePlatforms}
@@ -69,13 +75,13 @@ export function WorkspacePanel({
           className="w-full h-14 text-base font-semibold shadow-lg shadow-brand-primary/20" 
           size="lg"
           onClick={onGenerate}
-          disabled={selectedTrendIds.length === 0}
+          disabled={seedCount === 0}
         >
           <RocketIcon className="mr-2 w-5 h-5" /> 
           Generate Drafts
         </Button>
         <p className="text-xs text-secondary mt-2 text-center">
-          {selectedTrendIds.length}/{maxTrendSelections || 5} trends selected
+          {seedCount} seeded slots ready
         </p>
       </GlassPanel>
     </div>

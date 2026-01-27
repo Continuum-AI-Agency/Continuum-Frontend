@@ -128,12 +128,13 @@ export function IntegrationsStep() {
       }
 
       const googleIntegrations = (data.providers?.google?.hierarchy as any)?.google?.integrations || (data.providers?.google?.hierarchy as any)?.integrations || [];
-      const googleAccounts: OnboardingConnectionAccount[] = [];
+      const googleAdsAccounts: OnboardingConnectionAccount[] = [];
+      const youtubeAccounts: OnboardingConnectionAccount[] = [];
 
       googleIntegrations.forEach((int: any) => {
         if (int.ad_accounts) {
           int.ad_accounts.forEach((ad: any) => {
-            googleAccounts.push({
+            googleAdsAccounts.push({
               id: ad.integration_account_id || ad.asset_pk,
               name: ad.name,
               status: "active",
@@ -147,7 +148,7 @@ export function IntegrationsStep() {
         }
         if (int.youtube_channels) {
           int.youtube_channels.forEach((yt: any) => {
-            googleAccounts.push({
+            youtubeAccounts.push({
               id: yt.integration_account_id || yt.asset_pk,
               name: yt.name,
               status: "active",
@@ -161,11 +162,20 @@ export function IntegrationsStep() {
         }
       });
 
-      if (googleAccounts.length > 0) {
+      if (googleAdsAccounts.length > 0) {
         connectionsPatch["googleAds"] = {
           connected: true,
           accountId: null,
-          accounts: googleAccounts,
+          accounts: googleAdsAccounts,
+          lastSyncedAt: new Date().toISOString(),
+        };
+      }
+
+      if (youtubeAccounts.length > 0) {
+        connectionsPatch["youtube"] = {
+          connected: true,
+          accountId: null,
+          accounts: youtubeAccounts,
           lastSyncedAt: new Date().toISOString(),
         };
       }
@@ -176,7 +186,7 @@ export function IntegrationsStep() {
         
         const newExpanded = new Set<string>();
         if (metaAccounts.length > 0) newExpanded.add("meta");
-        if (googleAccounts.length > 0) newExpanded.add("google");
+        if (googleAdsAccounts.length > 0 || youtubeAccounts.length > 0) newExpanded.add("google");
         setExpandedPlatforms(newExpanded);
       }
     } catch (e) {
@@ -266,23 +276,6 @@ export function IntegrationsStep() {
   };
 
   const onContinue = async () => {
-    const selectedIds: string[] = [];
-    Object.entries(state.connections).forEach(([, conn]) => {
-      conn.accounts.forEach(acc => {
-        if (acc.selected) selectedIds.push(acc.id);
-      });
-    });
-
-    if (selectedIds.length > 0) {
-      try {
-        await associateIntegrationAccountsAction(brandId, selectedIds);
-      } catch (e) {
-        console.error("Failed to associate accounts", e);
-        show({ title: "Save Failed", description: "Could not link accounts.", variant: "error" });
-        return; 
-      }
-    }
-
     await updateState({ step: 2 });
   };
 

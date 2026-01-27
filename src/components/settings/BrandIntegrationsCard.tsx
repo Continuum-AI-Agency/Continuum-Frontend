@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   Badge,
   Box,
@@ -13,18 +13,31 @@ import {
   Grid,
   Heading,
   IconButton,
-  Separator,
   Text,
 } from "@radix-ui/themes";
 import { ChevronDownIcon, ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
+import { Sparkles, RefreshCw } from "lucide-react";
 import * as Accordion from "@radix-ui/react-accordion";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets } from "@/lib/api/integrations";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-import { getMetaSelectableAdAccountBundles, getSelectableAssetsFlatList } from "@/lib/integrations/selectableAssets";
+import {
+  getMetaSelectableAdAccountBundles,
+  getSelectableAssetsFlatList,
+  getSelectableAssetLabel,
+} from "@/lib/integrations/selectableAssets";
 import { useToast } from "@/components/ui/ToastProvider";
+import { 
+  Table as ShadcnTable, 
+  TableBody as ShadcnTableBody, 
+  TableCell as ShadcnTableCell, 
+  TableHead as ShadcnTableHead, 
+  TableHeader as ShadcnTableHeader, 
+  TableRow as ShadcnTableRow 
+} from "@/components/ui/table";
+import React from "react";
 
 type Props = {
   brandProfileId?: string;
@@ -73,39 +86,38 @@ function extractAssignedIntegrationAccountIds(
   return Array.from(set);
 }
 
-function groupSelectableAssets(
-  assets: SelectableAsset[]
-): Record<PlatformKey, SelectableAsset[]> {
-  const grouped = PLATFORMS.reduce((acc, { key }) => {
-    acc[key] = [];
-    return acc;
-  }, {} as Record<PlatformKey, SelectableAsset[]>);
+const ScrollIndicator = ({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) => {
+  const [show, setShow] = useState(false);
 
-  assets.forEach(asset => {
-    const platformKey = mapIntegrationTypeToPlatformKey(asset.type);
-    if (!platformKey) return;
-    grouped[platformKey].push(asset);
-  });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-  (Object.keys(grouped) as PlatformKey[]).forEach(key => {
-    grouped[key] = grouped[key].sort((a, b) => {
-      const typeCompare = a.type.localeCompare(b.type);
-      if (typeCompare !== 0) return typeCompare;
-      return resolveSelectableAssetLabel(a).localeCompare(resolveSelectableAssetLabel(b));
-    });
-  });
+    const check = () => {
+      const isScrollable = el.scrollHeight > el.clientHeight;
+      const isAtBottom = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 15;
+      setShow(isScrollable && !isAtBottom);
+    };
 
-  return grouped;
-}
+    check();
+    el.addEventListener("scroll", check);
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
 
-function resolveSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
-  return asset.name?.trim() || asset.external_id;
-}
+    return () => {
+      el.removeEventListener("scroll", check);
+      observer.disconnect();
+    };
+  }, [containerRef]);
 
-function formatAssetLabelWithBusiness(asset: SelectableAsset): string {
-  if (!asset.business_id) return resolveSelectableAssetLabel(asset);
-  return `${resolveSelectableAssetLabel(asset)} · ${asset.business_id}`;
-}
+  if (!show) return null;
+
+  return (
+    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none animate-bounce flex flex-col items-center">
+      <ChevronDownIcon className="w-4 h-4 text-slate-500/40" />
+    </div>
+  );
+};
 
 type AssignmentsDialogProps = {
   open: boolean;
@@ -130,10 +142,7 @@ function AssignmentsDialog({
     () => (selectableAssetsQuery.data ? getSelectableAssetsFlatList(selectableAssetsQuery.data) : []),
     [selectableAssetsQuery.data]
   );
-  const groupedAssets = useMemo(
-    () => groupSelectableAssets(selectableAssets),
-    [selectableAssets]
-  );
+  
   const metaBundles = useMemo(
     () => (selectableAssetsQuery.data ? getMetaSelectableAdAccountBundles(selectableAssetsQuery.data) : null),
     [selectableAssetsQuery.data]
@@ -147,79 +156,47 @@ function AssignmentsDialog({
     if (!open) return;
     const assignedSet = new Set(assignedIds);
     const defaults: Record<string, boolean> = {};
-    selectableAssets.forEach(asset => {
-      if (!asset.integration_account_id) return;
-      defaults[asset.integration_account_id] = assignedSet.has(
-        asset.integration_account_id
-      );
+    selectableAssets.forEach((asset: SelectableAsset) => {
+      const id = asset.integration_account_id || asset.asset_pk;
+      defaults[id] = assignedSet.has(id);
     });
-    setSelectedById(prev => {
-      const prevKeys = Object.keys(prev);
-      const nextKeys = Object.keys(defaults);
-      if (prevKeys.length !== nextKeys.length) return defaults;
-      for (const key of nextKeys) {
-        if (prev[key] !== defaults[key]) return defaults;
-      }
-      return prev;
-    });
-  }, [
-    open,
-    useMemo(() => [...assignedIds].sort().join("|"), [assignedIds]),
-    useMemo(
-      () =>
-        selectableAssets
-          .map(asset => asset.integration_account_id)
-          .filter((value): value is string => Boolean(value))
-          .sort()
-          .join("|"),
-      [selectableAssets]
-    ),
-  ]);
+    setSelectedById(defaults);
+  }, [open, assignedIds, selectableAssets]);
 
-  const desiredIntegrationAccountIds = useMemo(
+  const desiredAssetIds = useMemo(
     () =>
       Object.entries(selectedById)
         .filter(([, selected]) => selected)
-        .map(([integrationAccountId]) => integrationAccountId),
+        .map(([id]) => id),
     [selectedById]
   );
 
   const hasChanges = useMemo(() => {
     const assignedSet = new Set(assignedIds);
-    if (desiredIntegrationAccountIds.length !== assignedSet.size) return true;
-    return desiredIntegrationAccountIds.some(
-      integrationAccountId => !assignedSet.has(integrationAccountId)
-    );
-  }, [assignedIds, desiredIntegrationAccountIds]);
+    if (desiredAssetIds.length !== assignedSet.size) return true;
+    return desiredAssetIds.some(id => !assignedSet.has(id));
+  }, [assignedIds, desiredAssetIds]);
 
-  const handleToggle = (integrationAccountId: string, checked: boolean) => {
-    setSelectedById(prev => ({ ...prev, [integrationAccountId]: checked }));
+  const handleToggle = (id: string, checked: boolean) => {
+    setSelectedById(prev => ({ ...prev, [id]: checked }));
   };
 
   const handleToggleSelectableAssets = (assets: SelectableAsset[], checked: boolean) => {
     setSelectedById(prev => {
       const next = { ...prev };
-      assets.forEach(asset => {
-        if (!asset.integration_account_id) return;
-        next[asset.integration_account_id] = checked;
+      assets.forEach((asset: SelectableAsset) => {
+        const id = asset.integration_account_id || asset.asset_pk;
+        next[id] = checked;
       });
       return next;
     });
   };
 
   const handleSave = async () => {
-    if (desiredIntegrationAccountIds.length === 0) {
-      show({
-        title: "Select an ad account",
-        description: "Choose at least one ad account before saving assignments.",
-        variant: "error",
-      });
-      return;
-    }
     try {
       const result = await applyAssignments.mutateAsync({
         brandId: brandProfileId,
-        integrationAccountIds: desiredIntegrationAccountIds,
+        assetPks: desiredAssetIds,
       });
       onOpenChange(false);
       await onSaved?.();
@@ -243,283 +220,218 @@ function AssignmentsDialog({
   const isSaving = applyAssignments.isPending;
   const stale = selectableAssetsQuery.data?.stale;
   const syncedAt = selectableAssetsQuery.data?.synced_at;
-  const unassignableCount = useMemo(
-    () =>
-      selectableAssets.filter(asset => !asset.integration_account_id).length,
-    [selectableAssets]
-  );
 
-  const filteredGroupedAssets = useMemo(() => {
-    if (!metaBundles) return groupedAssets;
-    const copy: Record<PlatformKey, SelectableAsset[]> = { ...groupedAssets };
-    (["facebook", "instagram", "threads"] as PlatformKey[]).forEach(key => {
-      if (key === "facebook") {
-        copy[key] = [];
-        return;
+  const groupedAssets = useMemo(() => {
+    const grouped = PLATFORMS.reduce((acc, { key }) => {
+      acc[key] = [];
+      return acc;
+    }, {} as Record<PlatformKey, SelectableAsset[]>);
+
+    selectableAssets.forEach((asset: SelectableAsset) => {
+      const platformKey = mapIntegrationTypeToPlatformKey(asset.type);
+      if (!platformKey) return;
+      
+      if (metaBundles && (platformKey === "facebook" || platformKey === "instagram" || platformKey === "threads")) {
+        if (asset.ad_account_id) return;
       }
-      copy[key] = (copy[key] ?? []).filter(asset => !asset.ad_account_id);
+      
+      grouped[platformKey].push(asset);
     });
-    return copy;
-  }, [groupedAssets, metaBundles]);
+
+    return grouped;
+  }, [selectableAssets, metaBundles]);
 
   const orderedPlatforms = PLATFORMS.filter(
-    ({ key }) => filteredGroupedAssets[key]?.length
+    ({ key }) => (groupedAssets[key]?.length ?? 0) > 0
   );
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="520px">
+      <Dialog.Content maxWidth="640px">
         <Dialog.Title>Edit brand assignments</Dialog.Title>
         <Dialog.Description>
-          Choose which of your connected provider accounts are shared with this
-          brand profile.
+          Choose which connected provider accounts are shared with this brand profile.
         </Dialog.Description>
 
         {stale ? (
           <Callout.Root color="amber" className="mt-3">
+            <Callout.Icon><ExclamationTriangleIcon /></Callout.Icon>
             <Callout.Text>
-              Your integrations are marked stale. Refresh your provider sync in
-              Settings → Your integrations if you don’t see recent accounts.
-            </Callout.Text>
-          </Callout.Root>
-        ) : null}
-
-        {unassignableCount > 0 ? (
-          <Callout.Root color="amber" className="mt-3">
-            <Callout.Text>
-              {unassignableCount} connected account(s) cannot be assigned yet.
-              Sync again if they should be available.
+              Integrations are stale. Refresh sync in Settings → You to see recent accounts.
             </Callout.Text>
           </Callout.Root>
         ) : null}
 
         {syncedAt ? (
-          <Text size="1" color="gray" className="mt-2">
+          <Text size="1" color="gray" className="mt-2 block">
             Last synced {new Date(syncedAt).toLocaleString()}
           </Text>
         ) : null}
 
         <div className="mt-4 flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-1">
           {isLoading ? (
-            <Text color="gray" size="2">
-              Loading your accounts...
-            </Text>
+            <Flex align="center" justify="center" p="8">
+              <Text color="gray" size="2">Loading your accounts...</Text>
+            </Flex>
           ) : (orderedPlatforms.length === 0 && !metaBundles) ? (
-            <Text color="gray" size="2">
-              No connected accounts available yet. Connect providers from your
-              personal integrations first.
-            </Text>
+            <Flex align="center" justify="center" p="8">
+              <Text color="gray" size="2" align="center">
+                No connected accounts available. Connect providers from your personal integrations first.
+              </Text>
+            </Flex>
           ) : (
-            <>
-              {metaBundles ? (
-                <div className="flex flex-col gap-2">
-                  <Heading size="3">Meta</Heading>
-                  <Accordion.Root type="multiple">
-                    {metaBundles.ad_accounts.map(bundle => {
+            <div className="space-y-6">
+              {metaBundles && metaBundles.ad_accounts.length > 0 && (
+                <div className="space-y-3">
+                  <Heading size="3" className="flex items-center gap-2">
+                    <Box className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                    Meta Assets
+                  </Heading>
+                  <Accordion.Root type="multiple" className="space-y-2">
+                    {metaBundles.ad_accounts.map((bundle: any) => {
                       const adAccountLabel = bundle.ad_account
-                        ? resolveSelectableAssetLabel(bundle.ad_account)
+                        ? getSelectableAssetLabel(bundle.ad_account)
                         : bundle.ad_account_id;
                       const adAccountId = bundle.ad_account_id;
                       const selectionAssets = (bundle.ad_account ? [bundle.ad_account, ...bundle.assets] : bundle.assets)
-                        .filter(asset => Boolean(asset.integration_account_id));
-                      const uniqueIds = new Set<string>();
-                      selectionAssets.forEach(asset => {
-                        if (!asset.integration_account_id) return;
-                        uniqueIds.add(asset.integration_account_id);
-                      });
-                      const selectedCount = Array.from(uniqueIds).reduce(
-                        (count, id) => (selectedById[id] ? count + 1 : count),
+                        .filter((asset: SelectableAsset) => Boolean(asset.integration_account_id));
+                      
+                      const selectedCount = selectionAssets.reduce(
+                        (count: number, asset: SelectableAsset) => (asset.integration_account_id && selectedById[asset.integration_account_id] ? count + 1 : count),
                         0
                       );
-                      const totalSelectable = uniqueIds.size;
+                      const totalSelectable = selectionAssets.length;
                       const allSelected = totalSelectable > 0 && selectedCount === totalSelectable;
                       const partiallySelected = selectedCount > 0 && selectedCount < totalSelectable;
-                      const selectionBadge = totalSelectable === 0
-                        ? { color: "gray" as const, label: "Unavailable" }
-                        : allSelected
-                          ? { color: "green" as const, label: `Selected ${selectedCount}/${totalSelectable}` }
-                          : partiallySelected
-                            ? { color: "amber" as const, label: `Selected ${selectedCount}/${totalSelectable}` }
-                            : { color: "gray" as const, label: `Selected ${selectedCount}/${totalSelectable}` };
 
                       return (
-                        <Accordion.Item key={adAccountId} value={adAccountId} className="mb-2 last:mb-0">
-                          <Card className="border border-white/10 bg-slate-950/40">
-                            <Accordion.Header>
-                              <Flex justify="between" align="center" gap="2" p="3">
-                                <Text as="label" size="2" className="min-w-0">
-                                  <Flex as="span" align="center" gap="2" className="min-w-0">
-                                    <Checkbox
-                                      checked={partiallySelected ? "indeterminate" : allSelected}
-                                      disabled={isSaving || totalSelectable === 0}
-                                      onCheckedChange={(value) => {
-                                        handleToggleSelectableAssets(selectionAssets, value === true);
-                                      }}
-                                    />
-                                    <Flex direction="column" className="min-w-0">
-                                      <Text size="2" weight="medium" className="truncate">
-                                        {adAccountLabel}
-                                      </Text>
-                                      <Text size="1" color="gray" className="truncate">
-                                        Ad account ID {adAccountId}
-                                      </Text>
-                                    </Flex>
-                                  </Flex>
-                                </Text>
-                                <Flex align="center" gap="2">
-                                  <Badge color={selectionBadge.color} variant="soft">
-                                    {selectionBadge.label}
-                                  </Badge>
-                                  <Accordion.Trigger asChild>
-                                    <IconButton
-                                      variant="ghost"
-                                      color="gray"
-                                      size="1"
-                                      aria-label={`Toggle ${adAccountLabel} assets`}
-                                      className="group"
-                                    >
-                                      <ChevronDownIcon className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                    </IconButton>
-                                  </Accordion.Trigger>
-                                </Flex>
+                        <Accordion.Item key={adAccountId} value={adAccountId} className="border rounded-lg overflow-hidden border-white/10 bg-muted/20">
+                          <Accordion.Header>
+                            <Flex justify="between" align="center" p="3">
+                              <Flex align="center" gap="3" className="min-w-0">
+                                <Checkbox
+                                  checked={partiallySelected ? "indeterminate" : allSelected}
+                                  disabled={isSaving || totalSelectable === 0}
+                                  onCheckedChange={(value) => {
+                                    handleToggleSelectableAssets(selectionAssets, value === true);
+                                  }}
+                                />
+                                <Box className="min-w-0">
+                                  <Text size="2" weight="bold" className="text-black truncate block">{adAccountLabel}</Text>
+                                  <Text size="1" color="gray" className="truncate block opacity-60">ID: {adAccountId}</Text>
+                                </Box>
                               </Flex>
-                            </Accordion.Header>
-                            <Accordion.Content className="overflow-hidden">
-                              <Box px="3" pb="3">
-                                <Separator size="4" my="2" />
-                                {bundle.assets.length > 0 ? (
-                                  <Flex direction="column" gap="2">
-                                    {bundle.assets.map(asset => (
-                                      <Flex key={asset.asset_pk} justify="between" align="center" gap="2">
-                                        <Flex align="center" gap="2" className="min-w-0">
-                                          <Text size="2" className="truncate">
-                                            {formatAssetLabelWithBusiness(asset)}
-                                          </Text>
-                                          <Badge color="gray" variant="soft">
-                                            {asset.type}
+                              <Flex align="center" gap="3">
+                                <Badge color={selectedCount > 0 ? "indigo" : "gray"} variant="soft">
+                                  {selectedCount}/{totalSelectable}
+                                </Badge>
+                                <Accordion.Trigger asChild>
+                                  <IconButton variant="ghost" color="gray" size="1" className="group">
+                                    <ChevronDownIcon className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                                  </IconButton>
+                                </Accordion.Trigger>
+                              </Flex>
+                            </Flex>
+                          </Accordion.Header>
+                          <Accordion.Content>
+                            <div className="px-3 pb-3 pt-1 border-t border-white/5">
+                              <ShadcnTable>
+                                <ShadcnTableBody>
+                                  {bundle.assets.map((asset: SelectableAsset) => {
+                                    const id = asset.integration_account_id || asset.asset_pk;
+                                    return (
+                                      <ShadcnTableRow key={asset.asset_pk} className="border-none hover:bg-muted/50">
+                                        <ShadcnTableCell className="py-2 pl-8">
+                                          <Flex align="center" gap="3">
+                                            <Checkbox
+                                              checked={!!id && selectedById[id]}
+                                              disabled={isSaving || !id}
+                                              onCheckedChange={(v) => id && handleToggle(id, v === true)}
+                                            />
+                                            <Box className="min-w-0">
+                                              <Text size="2" className="text-black font-bold">{getSelectableAssetLabel(asset)}</Text>
+                                              <Text size="1" color="gray" className="block opacity-50 font-mono" style={{ fontSize: '10px' }}>
+                                                ID: {asset.external_id || asset.asset_pk}
+                                              </Text>
+                                            </Box>
+                                          </Flex>
+                                        </ShadcnTableCell>
+                                        <ShadcnTableCell className="py-2 text-right">
+                                          <Badge color="gray" variant="outline" size="1" className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700">
+                                            {asset.type.replace('meta_', '')}
                                           </Badge>
-                                        </Flex>
-                                      </Flex>
-                                    ))}
-                                  </Flex>
-                                ) : (
-                                  <Text size="1" color="gray">
-                                    No assets for this ad account.
-                                  </Text>
-                                )}
-                              </Box>
-                            </Accordion.Content>
-                          </Card>
+                                        </ShadcnTableCell>
+                                      </ShadcnTableRow>
+                                    );
+                                  })}
+                                </ShadcnTableBody>
+                              </ShadcnTable>
+                            </div>
+                          </Accordion.Content>
                         </Accordion.Item>
                       );
                     })}
                   </Accordion.Root>
-
-                  {metaBundles.assets_without_ad_account.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      <Text size="1" color="gray">
-                        Other
-                      </Text>
-                      <div className="flex flex-col gap-2">
-                        {metaBundles.assets_without_ad_account.map(asset => {
-                          const integrationAccountId = asset.integration_account_id;
-                          const checked = integrationAccountId
-                            ? selectedById[integrationAccountId] ?? false
-                            : false;
-                          const disabled = isSaving || !integrationAccountId;
-                          return (
-                            <label
-                              key={asset.asset_pk}
-                              className="flex items-center justify-between gap-3 rounded border border-white/10 bg-slate-950/40 px-3 py-2"
-                            >
-                              <div className="flex flex-col">
-                                <Text size="2" weight="medium" className="truncate">
-                                  {formatAssetLabelWithBusiness(asset)}
-                                </Text>
-                                {!integrationAccountId ? (
-                                  <Text size="1" color="gray">
-                                    Not ready for assignment
-                                  </Text>
-                                ) : null}
-                              </div>
-                              <Checkbox
-                                checked={checked}
-                                disabled={disabled}
-                                onCheckedChange={(value) => {
-                                  if (!integrationAccountId) return;
-                                  handleToggle(integrationAccountId, value === true);
-                                }}
-                              />
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
-              ) : null}
+              )}
 
               {orderedPlatforms.map(({ key, label }) => {
-                const assets = filteredGroupedAssets[key] ?? [];
-                if (!assets.length) return null;
+                const assets = groupedAssets[key] ?? [];
                 return (
-                  <div key={key} className="flex flex-col gap-2">
-                    <Heading size="3">{label}</Heading>
-                    <div className="flex flex-col gap-2">
-                      {assets.map(asset => {
-                        const integrationAccountId =
-                          asset.integration_account_id;
-                        const checked = integrationAccountId
-                          ? selectedById[integrationAccountId] ?? false
-                          : false;
-                        const disabled = isSaving || !integrationAccountId;
-                        return (
-                          <label
-                            key={asset.asset_pk}
-                            className="flex items-center justify-between gap-3 rounded border border-white/10 bg-slate-950/40 px-3 py-2"
-                          >
-                            <div className="flex flex-col">
-                              <Text size="2" weight="medium" className="truncate">
-                                {formatAssetLabelWithBusiness(asset)}
-                              </Text>
-                              {!integrationAccountId ? (
-                                <Text size="1" color="gray">
-                                  Not ready for assignment
-                                </Text>
-                              ) : null}
-                            </div>
-                            <Checkbox
-                              checked={checked}
-                              disabled={disabled}
-                              onCheckedChange={(value) => {
-                                if (!integrationAccountId) return;
-                                handleToggle(integrationAccountId, value === true);
-                              }}
-                            />
-                          </label>
-                        );
-                      })}
+                  <div key={key} className="space-y-3">
+                    <Heading size="3" className="flex items-center gap-2">
+                      <Box className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                      {label}
+                    </Heading>
+                    <div className="border rounded-lg overflow-hidden border-white/10 bg-slate-950/20">
+                      <ShadcnTable>
+                        <ShadcnTableBody>
+                          {assets.map((asset: SelectableAsset) => {
+                            const id = asset.integration_account_id || asset.asset_pk;
+                            return (
+                              <ShadcnTableRow key={asset.asset_pk} className="hover:bg-white/5">
+                                <ShadcnTableCell className="py-3">
+                                  <Flex align="center" gap="3">
+                                    <Checkbox
+                                      checked={!!id && selectedById[id]}
+                                      disabled={isSaving || !id}
+                                      onCheckedChange={(v) => id && handleToggle(id, v === true)}
+                                    />
+                                    <Box className="min-w-0">
+                                      <Text size="2" weight="medium" className="text-black font-bold">{getSelectableAssetLabel(asset)}</Text>
+                                      <Flex direction="column" gap="0">
+                                        {asset.business_id && (
+                                          <Text size="1" color="gray" className="block opacity-60">Business: {asset.business_id}</Text>
+                                        )}
+                                        <Text size="1" color="gray" className="block opacity-50 font-mono" style={{ fontSize: '10px' }}>
+                                          ID: {asset.external_id || asset.asset_pk}
+                                        </Text>
+                                      </Flex>
+                                    </Box>
+                                  </Flex>
+                                </ShadcnTableCell>
+                                <ShadcnTableCell className="py-3 text-right">
+                                  <Badge color="gray" variant="outline" size="1" className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700">
+                                    {asset.type.replace(`${key}_`, '').replace('ad_account', 'Account')}
+                                  </Badge>
+                                </ShadcnTableCell>
+                              </ShadcnTableRow>
+                            );
+                          })}
+                        </ShadcnTableBody>
+                      </ShadcnTable>
                     </div>
                   </div>
                 );
               })}
-            </>
+            </div>
           )}
         </div>
 
-        <Flex justify="end" gap="3" className="mt-5">
-          <Button
-            variant="soft"
-            onClick={() => onOpenChange(false)}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isSaving || !hasChanges}
-          >
-            {isSaving ? "Saving..." : "Save"}
+        <Flex justify="end" gap="3" className="mt-6 pt-4 border-t border-white/10">
+          <Button variant="soft" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
+            {isSaving ? "Saving..." : "Save Assignments"}
           </Button>
         </Flex>
       </Dialog.Content>
@@ -536,50 +448,69 @@ export function BrandIntegrationsCard({
 }: Props) {
   const resolvedSummary = summary ?? ({} as BrandIntegrationSummary);
   const [editOpen, setEditOpen] = useState(false);
+  const [expandedViewPlatforms, setExpandedViewPlatforms] = useState<Set<string>>(new Set());
 
   const assignedIds = useMemo(
     () => extractAssignedIntegrationAccountIds(resolvedSummary),
     [resolvedSummary]
   );
 
+  const platformStats = useMemo(() => {
+    return PLATFORMS.map(platform => {
+      const accounts = resolvedSummary[platform.key]?.accounts ?? [];
+      const connected = accounts.length > 0;
+      return {
+        ...platform,
+        accounts,
+        connected,
+        count: accounts.length
+      };
+    });
+  }, [resolvedSummary]);
+
+  const toggleViewPlatform = (key: string) => {
+    const next = new Set(expandedViewPlatforms);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setExpandedViewPlatforms(next);
+  };
+
   return (
     <Flex direction="column" gap="5">
-      {showHeader ? (
-        <>
-          <Heading size="6" className="text-white">
-            Integrations
-          </Heading>
-          <Flex align="center" justify="between" wrap="wrap" gap="3">
-            <Text color="gray">
-              Review which social and ads accounts are linked to this brand
-              profile. Assignments reflect the accounts currently shared with
-              this brand.
+      {showHeader && (
+        <Flex justify="between" align="start">
+          <Box>
+            <Heading size="6" className="text-white">
+              Integrations
+            </Heading>
+            <Text color="gray" size="2">
+              Manage accounts linked to this brand profile.
             </Text>
-            <Flex gap="2" wrap="wrap">
-              {brandProfileId ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => setEditOpen(true)}
-                  disabled={isLoading}
-                >
-                  Edit assignments
-                </Button>
-              ) : null}
-              {onRefresh ? (
-                <Button
-                  variant="ghost"
-                  onClick={() => onRefresh()}
-                  disabled={isLoading}
-                >
-                  Refresh
-                </Button>
-              ) : null}
-            </Flex>
+          </Box>
+          <Flex gap="2">
+            {brandProfileId && (
+              <Button
+                variant="ghost"
+                onClick={() => setEditOpen(true)}
+                disabled={isLoading}
+              >
+                Edit assignments
+              </Button>
+            )}
+            {onRefresh && (
+              <IconButton
+                variant="ghost"
+                onClick={() => onRefresh()}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </IconButton>
+            )}
           </Flex>
-        </>
-      ) : null}
+        </Flex>
+      )}
 
-      {brandProfileId ? (
+      {brandProfileId && (
         <AssignmentsDialog
           open={editOpen}
           onOpenChange={setEditOpen}
@@ -587,74 +518,94 @@ export function BrandIntegrationsCard({
           assignedIds={assignedIds}
           onSaved={onRefresh}
         />
-      ) : null}
+      )}
 
-      <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3">
-        {PLATFORMS.map(({ key, label }) => {
-          const accounts = resolvedSummary[key]?.accounts ?? [];
-          const badge = formatConnectionBadge(accounts.length);
+      <div className="rounded-lg border bg-card border-white/10 overflow-hidden shadow-lg backdrop-blur-md">
+        <ShadcnTable>
+          <ShadcnTableHeader>
+            <ShadcnTableRow className="bg-white/5 hover:bg-white/5 border-white/10">
+              <ShadcnTableHead className="w-[40px]"></ShadcnTableHead>
+              <ShadcnTableHead className="text-black font-bold">Platform</ShadcnTableHead>
+              <ShadcnTableHead className="text-black font-bold">Status</ShadcnTableHead>
+              <ShadcnTableHead className="text-right text-black font-bold pr-6">Assigned Assets</ShadcnTableHead>
+            </ShadcnTableRow>
+          </ShadcnTableHeader>
+          <ShadcnTableBody>
+            {platformStats.map((platform) => {
+              const isExpanded = expandedViewPlatforms.has(platform.key);
+              const statusColor = platform.connected ? "green" : "gray";
+              
+              return (
+                <React.Fragment key={platform.key}>
+                  <ShadcnTableRow 
+                    className={`cursor-pointer border-white/5 transition-colors ${platform.count > 0 ? 'hover:bg-white/5' : 'opacity-60'}`}
+                    onClick={() => platform.count > 0 && toggleViewPlatform(platform.key)}
+                  >
+                    <ShadcnTableCell className="py-4">
+                      {platform.count > 0 && (
+                        <ChevronDownIcon className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                      )}
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="py-4">
+                      <Flex align="center" gap="3">
+                        <Text weight="bold" className="text-black">{platform.label}</Text>
+                      </Flex>
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="py-4">
+                      <Badge color={statusColor as any} variant="soft" className="font-bold text-[10px]">
+                        {platform.connected ? "ACTIVE" : "NONE"}
+                      </Badge>
+                    </ShadcnTableCell>
+                    <ShadcnTableCell className="py-4 text-right pr-6">
+                      {platform.count > 0 ? (
+                        <Badge variant="outline" className="bg-indigo-500/5 text-indigo-400 border-indigo-500/20 font-bold tabular-nums">
+                          {platform.count} accounts
+                        </Badge>
+                      ) : (
+                        <Text size="1" color="gray">None</Text>
+                      )}
+                    </ShadcnTableCell>
+                  </ShadcnTableRow>
+                  
+                  {isExpanded && platform.accounts.length > 0 && (
+                    <ShadcnTableRow className="bg-muted/30 border-none hover:bg-muted/30">
+                      <ShadcnTableCell colSpan={4} className="p-0 border-b border-white/5">
+                        <Box p="4" className="bg-muted/20">
+                                  <div className="space-y-2 pl-8">
+                            {platform.accounts.map(account => {
+                              const sColor = resolveStatusColor(account.status);
+                              return (
+                                <Flex key={account.integrationAccountId} justify="between" align="center" className="py-1">
+                                    <Box className="min-w-0">
+                                      <Text size="2" className="text-black block truncate font-bold">{account.name}</Text>
+                                      <Text size="1" color="gray" className="block font-mono opacity-60" style={{ fontSize: '10px' }}>
+                                        ID: {account.externalAccountId || account.integrationAccountId}
+                                      </Text>
+                                    </Box>
+                                  <Badge color={sColor as any} variant="soft" size="1" className="text-[9px] uppercase tracking-wider opacity-80">
+                                    {account.status || 'Active'}
+                                  </Badge>
+                                </Flex>
+                              );
+                            })}
+                          </div>
+                        </Box>
+                      </ShadcnTableCell>
+                    </ShadcnTableRow>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </ShadcnTableBody>
+        </ShadcnTable>
+      </div>
 
-          return (
-            <Card
-              key={key}
-              className="bg-slate-950/60 backdrop-blur-xl border border-white/10"
-            >
-              <Flex direction="column" gap="3" p="4">
-                <Flex align="center" justify="between">
-                  <Flex align="center" gap="2">
-                    <Link2Icon />
-                    <Text weight="medium">{label}</Text>
-                  </Flex>
-                  <Badge color={badge.color}>{badge.label}</Badge>
-                </Flex>
-                {isLoading ? (
-                  <Text color="gray" size="2">
-                    Loading connections...
-                  </Text>
-                ) : accounts.length > 0 ? (
-                  <Flex direction="column" gap="1">
-                    {accounts.map(account => {
-                      const statusColor = resolveStatusColor(account.status);
-                      return (
-                        <Flex
-                          key={account.integrationAccountId}
-                          justify="between"
-                          align="center"
-                        >
-                          <Text color="gray" size="2" className="truncate">
-                            {account.name}
-                          </Text>
-                          {account.status ? (
-                            <Badge
-                              color={statusColor}
-                              size="1"
-                              variant="soft"
-                            >
-                              {account.status}
-                            </Badge>
-                          ) : null}
-                        </Flex>
-                      );
-                    })}
-                  </Flex>
-                ) : (
-                  <Text color="gray" size="2">
-                    No accounts assigned yet.
-                  </Text>
-                )}
-              </Flex>
-            </Card>
-          );
-        })}
-      </Grid>
-
-      <Callout.Root color="amber">
+      <Callout.Root color="amber" className="bg-amber-500/5 border-amber-500/20">
         <Callout.Icon>
           <ExclamationTriangleIcon />
         </Callout.Icon>
-        <Callout.Text>
-          Connect providers from your personal integrations, then use “Edit
-          assignments” to share accounts with this brand.
+        <Callout.Text size="1">
+          Connect providers in your personal settings, then use “Edit assignments” to share them here.
         </Callout.Text>
       </Callout.Root>
     </Flex>

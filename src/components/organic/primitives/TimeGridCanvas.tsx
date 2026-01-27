@@ -3,11 +3,13 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { GlassPanel } from "@/components/ui/GlassPanel";
-import { Button } from "@/components/ui/button";
-import { RocketIcon } from "@radix-ui/react-icons";
 import { DraggableDraftCard } from "./DraggableDraftCard";
 import { useCalendarStore } from "@/lib/organic/store";
-import type { OrganicCalendarDay, OrganicCalendarDraft } from "./types";
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicSeedDragPayload,
+} from "./types";
 import { useDroppable } from "@dnd-kit/core";
 import { parseTimeLabelToHour } from "./calendar-utils";
 
@@ -28,7 +30,7 @@ function TimeGridDayColumn({
   onSelectDraft: (id: string) => void;
   onToggleSelection: (id: string) => void;
   onRegenerate: (draftId: string) => void;
-  onNativeDrop?: (date: string, time: string, data: any) => void;
+  onNativeDrop?: (date: string, time: string, data: OrganicSeedDragPayload) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: day.id,
@@ -49,7 +51,7 @@ function TimeGridDayColumn({
     const rawData = e.dataTransfer.getData("application/json");
     if (rawData && onNativeDrop) {
       try {
-        const data = JSON.parse(rawData);
+        const data = JSON.parse(rawData) as OrganicSeedDragPayload;
         onNativeDrop(day.id, "09:00", data);
       } catch (err) {
         console.error("Failed to parse dropped data", err);
@@ -90,7 +92,7 @@ function TimeGridDayColumn({
         ))}
         
         {Array.from({ length: ghosts }).map((_, i) => (
-          <div key={`ghost-${i}`} className="w-full rounded-lg border border-dashed border-subtle bg-default/20 px-3 py-4 animate-pulse h-24">
+          <div key={`ghost-${i}`} className="w-full rounded border border-dashed border-subtle bg-default/20 px-3 py-4 animate-pulse h-24">
             <div className="flex justify-between mb-2">
                <div className="h-3 w-1/4 bg-subtle rounded" />
                <div className="h-3 w-1/6 bg-subtle rounded" />
@@ -101,7 +103,7 @@ function TimeGridDayColumn({
         ))}
         
         {drafts.length === 0 && ghosts === 0 && (
-          <div className="h-24 flex items-center justify-center border border-dashed border-subtle rounded-lg opacity-40">
+          <div className="h-24 flex items-center justify-center border border-dashed border-subtle rounded opacity-40">
             <span className="text-xs text-secondary">Drop items here</span>
           </div>
         )}
@@ -117,7 +119,6 @@ export function TimeGridCanvas({
   onSelectDraft,
   onToggleSelection,
   onRegenerate,
-  onBuild,
   onNativeDrop,
 }: {
   days: OrganicCalendarDay[];
@@ -126,42 +127,29 @@ export function TimeGridCanvas({
   onSelectDraft: (id: string) => void;
   onToggleSelection: (id: string) => void;
   onRegenerate: (draftId: string) => void;
-  onBuild: () => void;
-  onNativeDrop?: (date: string, time: string, data: any) => void;
+  onNativeDrop?: (date: string, time: string, data: OrganicSeedDragPayload) => void;
 }) {
   const hasDrafts = days.some((day) => day.slots.length > 0);
 
   return (
     <GlassPanel className="flex h-full flex-col p-0 overflow-hidden bg-default/20">
-      {hasDrafts ? (
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex min-h-full min-w-max">
-            {days.map((day) => (
-              <TimeGridDayColumn
-                key={day.id}
-                day={day}
-                drafts={day.slots}
-                selectedDraftId={selectedDraftId}
-                selectedDraftIds={selectedDraftIds}
-                onSelectDraft={onSelectDraft}
-                onToggleSelection={onToggleSelection}
-                onRegenerate={onRegenerate}
-                onNativeDrop={onNativeDrop}
-              />
-            ))}
-          </div>
+      <div className="flex-1 overflow-x-auto">
+        <div className="flex min-h-full min-w-max">
+          {days.map((day) => (
+            <TimeGridDayColumn
+              key={day.id}
+              day={day}
+              drafts={day.slots}
+              selectedDraftId={selectedDraftId}
+              selectedDraftIds={selectedDraftIds}
+              onSelectDraft={onSelectDraft}
+              onToggleSelection={onToggleSelection}
+              onRegenerate={onRegenerate}
+              onNativeDrop={onNativeDrop}
+            />
+          ))}
         </div>
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-subtle bg-default/30 text-center m-4">
-          <p className="text-sm font-semibold text-primary">No drafts scheduled yet</p>
-          <p className="mt-2 text-xs text-secondary">
-            Build a workflow to generate the first batch of drafts.
-          </p>
-          <Button className="mt-4" onClick={onBuild}>
-            <RocketIcon /> Build
-          </Button>
-        </div>
-      )}
+      </div>
     </GlassPanel>
   );
 }

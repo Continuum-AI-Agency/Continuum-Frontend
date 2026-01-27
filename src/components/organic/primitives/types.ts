@@ -1,4 +1,6 @@
-export type OrganicPlatformTag = "instagram" | "linkedin"
+import type { OrganicPlatformKey } from "@/lib/organic/platforms"
+
+export type OrganicPlatformTag = OrganicPlatformKey
 
 export type OrganicDraftStatus =
   | "draft"
@@ -49,6 +51,7 @@ export type OrganicTrend = {
   summary: string
   momentum: "rising" | "stable" | "cooling"
   tags: string[]
+  platforms: OrganicPlatformTag[]
 }
 
 export type OrganicTrendGroup = {
@@ -85,4 +88,10 @@ export type OrganicEditorSlide = {
   id: string
   label: string
   gradient: string
+}
+
+export type OrganicSeedDragPayload = {
+  type: "trend" | "question" | "event"
+  trendId: string
+  title?: string
 }

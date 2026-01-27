@@ -19,6 +19,14 @@ import type {
 import { createBrandId } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiBaseUrl } from "@/lib/api/config";
+import { mapOnboardingStateToAgentPayload } from "@/lib/onboarding/mapping";
+import { approveOnboardingBrandProfile } from "@/lib/onboarding/agentClient";
+import { revalidatePath } from "next/cache";
+
+
+const getIntegrationServer = async () => {
+  return import("@/lib/api/integrations/server");
+};
 
 const MOCK_ACCOUNT_NAMES = [
   "Primary Brand Account",
@@ -92,11 +100,47 @@ export async function clearPlatformConnectionAction(
   });
 }
 
+
 export async function completeOnboardingAction(brandId: string): Promise<OnboardingState> {
-  return applyOnboardingPatch(brandId, {
+  const state = await applyOnboardingPatch(brandId, {
     completedAt: new Date().toISOString(),
     step: 2,
   });
+  
+  revalidatePath("/", "layout");
+  return state;
+}
+
+export async function approveAndLaunchOnboardingAction(brandId: string): Promise<OnboardingState> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id;
+
+  if (!userId) {
+    throw new Error("User session not found");
+  }
+
+  const state = await fetchOnboardingState(brandId);
+  const payload = mapOnboardingStateToAgentPayload(brandId, userId, state);
+
+  await approveOnboardingBrandProfile({ payload });
+
+  if (payload.runContext.integration_account_ids.length > 0) {
+    const { applyBrandProfileIntegrationAccountsServer } = await getIntegrationServer();
+    await applyBrandProfileIntegrationAccountsServer({
+      brandId,
+      integrationAccountIds: payload.runContext.integration_account_ids,
+    });
+  }
+
+  getIntegrationServer().then(async () => {
+    const { runStrategicAnalysisServer } = await import("@/lib/api/strategicAnalyses.server");
+    runStrategicAnalysisServer(brandId).catch(err => {
+      console.error("[approveAndLaunchOnboardingAction] Background analysis trigger failed", err);
+    });
+  });
+
+  return completeOnboardingAction(brandId);
 }
 
 export async function registerDocumentMetadataAction(
@@ -317,43 +361,13 @@ export async function associateIntegrationAccountsAction(
   if (!idsToUpdate?.length) {
     return fetchOnboardingState(brandId);
   }
-  const supabase = await createSupabaseServerClient();
 
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError || !userData?.user) {
-    throw new Error("Unauthorized");
-  }
+  const { applyBrandProfileIntegrationAccountsServer } = await getIntegrationServer();
+  await applyBrandProfileIntegrationAccountsServer({
+    brandId,
+    assetPks: integrationAccountIds,
+  });
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData?.session?.access_token;
-  if (!accessToken) {
-    throw new Error("Unauthorized");
-  }
-
-  const apiBaseUrl = getApiBaseUrl(); 
-  
-  const response = await fetch(
-    `${apiBaseUrl}/brand-profiles/${encodeURIComponent(brandId)}/integration-accounts`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        integration_account_ids: integrationAccountIds,
-      }),
-      cache: "no-store",
-    }
-  );
-
-  if (!response.ok) {
-    const message = await response.text().catch(() => null);
-    const errorBody = message ? `Backend failed: ${message}` : "Backend failed";
-    throw new Error(errorBody);
-  }
-
-  const selectionSet = new Set(integrationAccountIds);
   const state = await fetchOnboardingState(brandId);
   const connectionsPatch: Partial<OnboardingPatch["connections"]> = {};
 
@@ -362,7 +376,7 @@ export async function associateIntegrationAccountsAction(
     if (!connection) return;
     const accounts = (connection.accounts ?? []).map(account => {
       const explicitlyKnown = allIntegrationAccountIds?.includes(account.id) ?? false;
-      const selected = selectionSet.has(account.id)
+      const selected = integrationAccountIds.includes(account.id)
         ? true
         : explicitlyKnown
           ? false

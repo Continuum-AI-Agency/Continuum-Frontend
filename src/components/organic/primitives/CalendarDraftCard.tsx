@@ -26,6 +26,9 @@ import type { OrganicCalendarDraft, OrganicPlatformTag } from "./types"
 const platformStyles: Record<OrganicPlatformTag, string> = {
   instagram: "border-fuchsia-500/30 bg-fuchsia-500/15 text-fuchsia-100",
   linkedin: "border-sky-500/30 bg-sky-500/15 text-sky-100",
+  facebook: "border-blue-600/30 bg-blue-600/15 text-blue-100",
+  tiktok: "border-zinc-500/30 bg-zinc-500/15 text-zinc-100",
+  youtube: "border-red-500/30 bg-red-500/15 text-red-100",
 }
 
 const statusStyles: Record<OrganicCalendarDraft["status"], string> = {
@@ -157,7 +160,7 @@ export function CalendarDraftCard({
               onMouseLeave={onMouseLeave}
               aria-selected={isSelected}
               className={cn(
-                "group relative w-full rounded-lg border px-3 py-2 text-left transition",
+                "group relative w-full rounded border px-3 py-2 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]",
                 isSelected
                   ? "border-2 border-brand-primary bg-brand-primary/15 shadow-brand-glow"

@@ -5,81 +5,37 @@ import {
   DragEndEvent,
   DragStartEvent,
 } from "@dnd-kit/core"
-import { useCalendarStore, type GridSlot } from "@/lib/organic/store"
-import { ORGANIC_PLATFORM_KEYS, type OrganicPlatformKey } from "@/lib/organic/platforms"
+import { useCalendarStore } from "@/lib/organic/store"
+import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import type {
   OrganicCalendarDay,
   OrganicCalendarDraft,
   OrganicCreationStep,
   OrganicEditorSlide,
   OrganicPlatformTag,
+  OrganicSeedDragPayload,
   OrganicTrendType,
 } from "./types"
 import type { Trend } from "@/lib/organic/trends"
+import type { CalendarPlacement } from "@/lib/organic/calendar-generation"
 import { CalendarDndContext } from "./CalendarDndContext"
 import { TimeGridCanvas } from "./TimeGridCanvas"
 import { WorkspacePanel } from "./WorkspacePanel"
 import { CalendarDraftCard } from "./CalendarDraftCard"
-
-type DetailedPostTemplate = {
-  slotId: string
-  schedule: GridSlot["schedule"]
-  platform: GridSlot["platform"]
-  strategy: GridSlot["strategy"]
-  contentPlan: GridSlot["contentPlan"]
-  creative?: {
-    creativeIdea?: string | null
-    narrative?: {
-      hook?: string | null
-      interrupt?: string | null
-      context?: string | null
-      openLoop?: string | null
-      explanation?: string | null
-      value?: string | null
-      cta?: string | null
-      slideBySlideBreakdown?: string[] | null
-    } | null
-  } | null
-  copy?: {
-    caption?: string | null
-    hashtags?: {
-      high?: string[] | null
-      medium?: string[] | null
-      low?: string[] | null
-    } | null
-  } | null
-  localization?: {
-    language?: string | null
-  } | null
-}
-
-const DEFAULT_PROMPT = {
-  id: "organic-default",
-  name: "Organic default",
-  description: "Continuum organic planning prompt.",
-  content: "Generate a week of organic social drafts for the connected platforms.",
-  source: "default",
-} as const
-
-function parseJsonSafely<T>(value: string): T | null {
-  try {
-    return JSON.parse(value) as T
-  } catch {
-    return null
-  }
-}
-
-function mapTimeOfDay(timeLabel: string): "morning" | "afternoon" | "evening" {
-  const trimmed = timeLabel.toLowerCase()
-  const match = trimmed.match(/(\d+)(?::(\d+))?\s*(am|pm)/)
-  if (!match) return "morning"
-  const hour = Number(match[1] ?? 9)
-  const isPm = match[3] === "pm"
-  const normalizedHour = isPm && hour < 12 ? hour + 12 : hour % 24
-  if (normalizedHour >= 17) return "evening"
-  if (normalizedHour >= 12) return "afternoon"
-  return "morning"
-}
+import {
+  buildScheduledAt,
+  buildWeekDays,
+  formatDayId,
+  formatWeekRange,
+  parseTimeLabelToHour,
+  startOfWeek,
+} from "./calendar-utils"
+import {
+  ORGANIC_BETA_LAUNCH_SCHEDULE,
+  ORGANIC_NEWSLETTER_DEFAULT,
+} from "./organic-calendar-config"
+import { streamCalendarGeneration } from "./organic-calendar-api"
+import { WeekPicker } from "./WeekPicker"
 
 function resolveTimeLabel(
   timeOfDay: string | null | undefined,
@@ -94,38 +50,19 @@ function resolveTimeLabel(
   return mapping[timeOfDay] ?? fallbackTimes[0] ?? "9:00 AM"
 }
 
-function mapPlatformTag(name: string): OrganicPlatformTag {
-  return name === "linkedin" ? "linkedin" : "instagram"
+function formatTimeLabel(isoTime: string) {
+  const [h, m] = isoTime.split(":").map(Number)
+  const ampm = h >= 12 ? "PM" : "AM"
+  const hour = h % 12 || 12
+  return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`
 }
 
-async function streamNdjson<T>(
-  response: Response,
-  onItem: (item: T) => void
-): Promise<void> {
-  const reader = response.body?.getReader()
-  if (!reader) return
-  const decoder = new TextDecoder()
-  let buffer = ""
-
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split("\n")
-    buffer = lines.pop() ?? ""
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      const parsed = parseJsonSafely<T>(trimmed)
-      if (parsed) onItem(parsed)
-    }
-  }
-
-  const tail = buffer.trim()
-  if (tail.length > 0) {
-    const parsed = parseJsonSafely<T>(tail)
-    if (parsed) onItem(parsed)
-  }
+function formatTimeLabelFromIso(isoString: string): string | null {
+  const parsed = new Date(isoString)
+  if (Number.isNaN(parsed.getTime())) return null
+  const hours = parsed.getHours()
+  const minutes = parsed.getMinutes()
+  return formatTimeLabel(`${hours}:${minutes.toString().padStart(2, "0")}`)
 }
 
 type OrganicCalendarWorkspaceClientProps = {
@@ -140,6 +77,7 @@ type OrganicCalendarWorkspaceClientProps = {
   brandProfileId?: string
   userId?: string
   instagramAccountId?: string
+  initialWeekStart?: string | null
   initialSelectedDraftId?: string | null
 }
 
@@ -153,9 +91,7 @@ export function OrganicCalendarWorkspaceClient({
   platformAccountIds = {},
   maxTrendSelections,
   brandProfileId,
-  userId,
-  instagramAccountId,
-  initialSelectedDraftId,
+  initialWeekStart,
 }: OrganicCalendarWorkspaceClientProps) {
   const {
     days: calendarDays,
@@ -165,275 +101,301 @@ export function OrganicCalendarWorkspaceClient({
     setSelectedDraftId,
     selectedDraftIds,
     toggleDraftSelection,
+    clearDraftSelection,
     selectedTrendIds,
     toggleTrend,
-    gridStatus,
     setGridStatus,
     setGridProgress,
     setGridError,
-    setGridJobId,
     addDraft,
     moveDraft,
     setGhosts,
     updateDraft: updateDraftById,
   } = useCalendarStore()
 
-
-
   const [activeDragDraft, setActiveDragDraft] = React.useState<OrganicCalendarDraft | null>(null)
+  const resolvedInitialWeekStart = React.useMemo(() => {
+    if (initialWeekStart) {
+      const parsed = new Date(initialWeekStart)
+      if (!Number.isNaN(parsed.getTime())) {
+        return startOfWeek(parsed)
+      }
+    }
+    return startOfWeek(new Date())
+  }, [initialWeekStart])
+  const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart)
+  const weekStartId = formatDayId(weekStart)
+  const weekCacheRef = React.useRef<Record<string, OrganicCalendarDay[]>>({})
 
   React.useEffect(() => {
     if (calendarDays.length === 0) {
       setCalendarDays(initialDays)
+      weekCacheRef.current[weekStartId] = initialDays
     }
-  }, [initialDays, calendarDays.length, setCalendarDays])
+  }, [initialDays, calendarDays.length, setCalendarDays, weekStartId])
+
+  React.useEffect(() => {
+    if (calendarDays.length > 0) {
+      weekCacheRef.current[weekStartId] = calendarDays
+    }
+  }, [calendarDays, weekStartId])
+
+  const handleWeekChange = React.useCallback(
+    (date: Date) => {
+      const nextWeekStart = startOfWeek(date)
+      const nextWeekId = formatDayId(nextWeekStart)
+      if (nextWeekId === weekStartId) return
+      weekCacheRef.current[weekStartId] = calendarDays
+      const nextDays = weekCacheRef.current[nextWeekId] ?? buildWeekDays(nextWeekStart)
+      setCalendarDays(nextDays)
+      setSelectedDraftId(null)
+      clearDraftSelection()
+      setWeekStart(nextWeekStart)
+    },
+    [
+      calendarDays,
+      clearDraftSelection,
+      setCalendarDays,
+      setSelectedDraftId,
+      weekStartId,
+    ]
+  )
+
+  const handlePreviousWeek = React.useCallback(() => {
+    const previous = new Date(weekStart)
+    previous.setDate(weekStart.getDate() - 7)
+    handleWeekChange(previous)
+  }, [handleWeekChange, weekStart])
+
+  const handleNextWeek = React.useCallback(() => {
+    const next = new Date(weekStart)
+    next.setDate(weekStart.getDate() + 7)
+    handleWeekChange(next)
+  }, [handleWeekChange, weekStart])
 
   const drafts = React.useMemo(
     () => [...calendarDays.flatMap((day) => day.slots), ...unscheduledDrafts],
     [calendarDays, unscheduledDrafts]
   )
 
-  const resolveDayMeta = React.useCallback(
+  const seededDraftCount = React.useMemo(
+    () =>
+      calendarDays.reduce(
+        (count, day) =>
+          count + day.slots.filter((slot) => slot.status === "placeholder").length,
+        0
+      ),
+    [calendarDays]
+  )
 
+  const resolveDayMeta = React.useCallback(
     (dayId: string) => calendarDays.find((day) => day.id === dayId) ?? null,
     [calendarDays]
   )
 
-  const buildDraftFromSlot = React.useCallback(
-    (slot: GridSlot): OrganicCalendarDraft => {
-      const day = resolveDayMeta(slot.schedule.dayId)
-      const timeLabel = resolveTimeLabel(slot.schedule.timeOfDay ?? null, day?.suggestedTimes ?? [])
-      const title = slot.contentPlan.titleTopic ?? slot.contentPlan.type ?? "Planned draft"
-      const summary = slot.strategy.objective ?? slot.contentPlan.type ?? "Planned draft"
-      const dateLabel = day ? `${day.label}, ${day.dateLabel}` : slot.schedule.dayId
+  const mapPlacementToDraft = React.useCallback(
+    (placement: CalendarPlacement, existing?: OrganicCalendarDraft | null): OrganicCalendarDraft => {
+      const day = resolveDayMeta(placement.schedule.dayId)
+      const timeLabel =
+        formatTimeLabelFromIso(placement.schedule.scheduledAt) ??
+        resolveTimeLabel(placement.schedule.timeOfDay ?? null, day?.suggestedTimes ?? [])
+      const content = placement.content ?? {}
+      const seedTrendId = placement.seed?.trendId ?? null
+      const tags = seedTrendId ? [seedTrendId] : existing?.tags ?? []
+      const title = content.titleTopic ?? existing?.title ?? "Planned draft"
+      const summary = placement.creative?.creativeIdea ?? content.objective ?? existing?.summary ?? "Planned draft"
+      const caption = placement.copy?.caption ?? existing?.captionPreview ?? "Details incoming."
 
       return {
-        id: slot.slotId,
+        id: placement.placementId,
         title,
         summary,
         timeLabel,
-        dateLabel,
+        dateLabel: day ? `${day.label}, ${day.dateLabel}` : placement.schedule.dayId,
         status: "draft",
-        platforms: [mapPlatformTag(slot.platform.name)],
-        format: slot.contentPlan.format ?? slot.contentPlan.type ?? "Draft",
-        objective: slot.strategy.objective ?? "Draft",
-        captionPreview: "Details incoming.",
-        tags: slot.tags?.trendIds ?? [],
-        mediaCount: slot.contentPlan.numSlides ?? 1,
-      }
-    },
-    [resolveDayMeta]
-  )
-
-  const applyTemplateToDraft = React.useCallback(
-    (draft: OrganicCalendarDraft, template: DetailedPostTemplate): OrganicCalendarDraft => {
-      const day = resolveDayMeta(template.schedule.dayId)
-      return {
-        ...draft,
-        title: template.contentPlan.titleTopic ?? draft.title,
-        summary: template.creative?.creativeIdea ?? draft.summary,
-        timeLabel: resolveTimeLabel(template.schedule.timeOfDay ?? null, day?.suggestedTimes ?? []),
-        dateLabel: day ? `${day.label}, ${day.dateLabel}` : draft.dateLabel,
-        status: "draft",
-        format: template.contentPlan.format ?? draft.format,
-        objective: template.strategy.objective ?? draft.objective,
-        captionPreview: template.copy?.caption ?? draft.captionPreview,
-        tags: template.copy?.hashtags?.high ?? draft.tags,
-        mediaCount: template.contentPlan.numSlides ?? draft.mediaCount,
+        platforms: [placement.platform.name],
+        format: content.format ?? content.type ?? existing?.format ?? "Post",
+        objective: content.objective ?? existing?.objective ?? "Draft",
+        captionPreview: caption,
+        tags,
+        mediaCount: content.numSlides ?? existing?.mediaCount ?? 1,
       }
     },
     [resolveDayMeta]
   )
 
   const handleAutoSort = React.useCallback(async () => {
-    const schedule = {
-      "Mon": "instagram",
-      "Tue": "linkedin",
-      "Wed": "instagram",
-      "Thu": "linkedin",
-      "Fri": "instagram",
-      "Sat": "linkedin"
-    } as const;
+    let trendIndex = 0
+    const itemsToSchedule = [...selectedTrendIds]
 
-    let trendIndex = 0;
-    const itemsToSchedule = [...selectedTrendIds];
-    
     if (itemsToSchedule.length === 0 && trends.length > 0) {
-       itemsToSchedule.push(...trends.slice(0, 6).map(t => t.id));
+      itemsToSchedule.push(...trends.slice(0, 6).map((trend) => trend.id))
     }
 
-    if (itemsToSchedule.length === 0) return;
-
-    setGridStatus("running");
-    setGridProgress({ percent: 0, message: "Auto-sorting schedule..." });
+    if (itemsToSchedule.length === 0) return
 
     for (const day of calendarDays) {
-      if (day.label === "Sun") {
-          const newsletterId = `newsletter-${day.id}`;
-          const alreadyExists = day.slots.some(s => s.id === newsletterId);
-          if (!alreadyExists) {
-            addDraft(day.id, {
-                id: newsletterId,
-                title: "Weekly Newsletter",
-                summary: "Distill the week's top insights into an email.",
-                timeLabel: "10:00 AM",
-                dateLabel: `${day.label}, ${day.dateLabel}`,
-                status: "draft",
-                platforms: ["instagram"],
-                format: "Newsletter",
-                objective: "Retention",
-                captionPreview: "Drafting your weekly recap...",
-                tags: ["newsletter"],
-                mediaCount: 1,
-            });
-          }
-          continue;
+      if (day.label === ORGANIC_NEWSLETTER_DEFAULT.dayLabel) {
+        const newsletterId = `newsletter-${day.id}`
+        const alreadyExists = day.slots.some((slot) => slot.id === newsletterId)
+        if (!alreadyExists) {
+          addDraft(day.id, {
+            id: newsletterId,
+            title: "Weekly Newsletter",
+            summary: "Distill the week's top insights into an email.",
+            timeLabel: ORGANIC_NEWSLETTER_DEFAULT.timeLabel,
+            dateLabel: `${day.label}, ${day.dateLabel}`,
+            status: "draft",
+            platforms: ["instagram"],
+            format: ORGANIC_NEWSLETTER_DEFAULT.format,
+            objective: "Retention",
+            captionPreview: "Drafting your weekly recap...",
+            tags: ["newsletter"],
+            mediaCount: 1,
+          })
+        }
+        continue
       }
 
-      const dayName = day.label as keyof typeof schedule;
-      const platform = schedule[dayName];
-      
-      if (platform && itemsToSchedule[trendIndex]) {
-        const trendId = itemsToSchedule[trendIndex];
-        const accountId = platformAccountIds[platform];
-        
-        if (accountId) {
-           setGhosts(day.id, (useCalendarStore.getState().ghosts[day.id] || 0) + 1);
-           
-           const singlePlatformIds = { [platform]: accountId };
-           const payload = {
-              platformAccountIds: singlePlatformIds,
-              dayId: day.id,
-              timeOfDay: "morning",
-              language: "English",
-              selectedTrendIds: [trendId],
-           };
+      const platform = ORGANIC_BETA_LAUNCH_SCHEDULE[day.label as keyof typeof ORGANIC_BETA_LAUNCH_SCHEDULE]
+      const trendId = itemsToSchedule[trendIndex]
 
-           fetch("/api/organic/generate-slot", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-           }).then(async (response) => {
-              if (response.ok) {
-                 await streamNdjson<DetailedPostTemplate>(response, (template) => {
-                    const draft = buildDraftFromSlot({
-                      slotId: template.slotId,
-                      schedule: template.schedule,
-                      platform: template.platform,
-                      strategy: template.strategy,
-                      contentPlan: template.contentPlan,
-                      tags: { trendIds: [trendId] }
-                    });
-                    const finalDraft = applyTemplateToDraft(draft, template);
-                    addDraft(day.id, finalDraft);
-                 });
-              }
-           }).finally(() => {
-              setGhosts(day.id, Math.max(0, (useCalendarStore.getState().ghosts[day.id] || 0) - 1));
-           });
-
-           trendIndex = (trendIndex + 1) % itemsToSchedule.length;
+      if (platform && trendId) {
+        const accountId = platformAccountIds[platform]
+        const trend = trends.find((item) => item.id === trendId)
+        const tags = trend?.tags?.includes("question")
+          ? [trendId, "question"]
+          : trend?.tags?.includes("event")
+          ? [trendId, "event"]
+          : [trendId]
+        const seedId = `seed-${day.id}-${trendId}`
+        const alreadyExists = day.slots.some((slot) => slot.id === seedId)
+        if (!alreadyExists) {
+          addDraft(day.id, {
+            id: seedId,
+            title: "Seeded topic",
+            summary: "Ready to generate once you press build.",
+            timeLabel: day.suggestedTimes[0] ?? "9:00 AM",
+            dateLabel: `${day.label}, ${day.dateLabel}`,
+            status: "placeholder",
+            platforms: [platform],
+            format: "Post",
+            objective: "Generation Seed",
+            captionPreview: "Click Generate to construct this post.",
+            tags,
+            mediaCount: 1,
+            seedTrendId: trendId,
+            targetAccountId: accountId,
+          })
         }
+
+        trendIndex = (trendIndex + 1) % itemsToSchedule.length
       }
     }
-    
-    setGridStatus("complete");
-  }, [calendarDays, platformAccountIds, selectedTrendIds, trends, addDraft, buildDraftFromSlot, setGhosts, applyTemplateToDraft]);
+  }, [calendarDays, selectedTrendIds, trends, addDraft, platformAccountIds])
 
   const handleGenerateDrafts = async () => {
     setGridStatus("running")
-    setGridProgress({ percent: 0, message: "Initializing agent..." })
+    setGridProgress({ percent: 0, message: "Preparing calendar seeds..." })
     setGridError(null)
 
-    // Check for seeded placeholders
-    const seededPlaceholders = drafts.filter(d => d.status === "placeholder" && d.seedTrendId);
-
-    if (seededPlaceholders.length > 0) {
-      setGridProgress({ percent: 0, message: `Generating ${seededPlaceholders.length} seeded slots...` });
-      
-      let completed = 0;
-      for (const placeholder of seededPlaceholders) {
-        const dayId = calendarDays.find(day => day.slots.some(s => s.id === placeholder.id))?.id;
-        if (!dayId) continue;
-
-        const payload = {
-          platformAccountIds: { [placeholder.platforms[0]]: placeholder.targetAccountId },
-          dayId,
-          timeOfDay: mapTimeOfDay(placeholder.timeLabel),
-          language: "English",
-          selectedTrendIds: [placeholder.seedTrendId!],
-        };
-
-        try {
-          const response = await fetch("/api/organic/generate-slot", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
-          if (response.ok) {
-            await streamNdjson<DetailedPostTemplate>(response, (template) => {
-              updateDraftById(placeholder.id, (d) => applyTemplateToDraft(d, template));
-            });
-          }
-        } catch (e) {
-          console.error(`Failed to generate seeded slot ${placeholder.id}`, e);
-        }
-        
-        completed++;
-        setGridProgress({ 
-          percent: Math.round((completed / seededPlaceholders.length) * 100), 
-          message: `Generated ${completed}/${seededPlaceholders.length} slots` 
-        });
-      }
-      
-      setGridStatus("complete");
-      return;
+    if (!brandProfileId) {
+      setGridStatus("error")
+      setGridError("Missing brand context. Please reconnect your brand profile.")
+      return
     }
 
-    // Default full grid generation
-    try {
-      const response = await fetch("/api/organic/generate-grid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          platformAccountIds,
-          language: "English",
-          intent: "brand_quality",
-          selectedTrendIds,
-          prompt: DEFAULT_PROMPT,
-        }),
-      })
+    const seeds = calendarDays.flatMap((day) =>
+      day.slots
+        .filter((draft) => draft.status === "placeholder" && (draft.seedTrendId || draft.tags.length > 0))
+        .map((draft) => {
+          const trendId = draft.seedTrendId ?? draft.tags[0]
+          if (!trendId) return null
+          const seedSource = draft.tags.includes("question")
+            ? "question"
+            : draft.tags.includes("event")
+            ? "event"
+            : "trend"
+          return {
+            placementId: draft.id,
+            trendId,
+            dayId: day.id,
+            scheduledAt: buildScheduledAt(day.id, draft.timeLabel) ?? day.id,
+            timeLabel: draft.timeLabel,
+            platform: draft.platforms[0] ?? "instagram",
+            accountId: draft.targetAccountId ?? platformAccountIds[draft.platforms[0]],
+            seedSource,
+            desiredFormat: draft.format,
+          }
+        })
+        .filter(Boolean)
+    )
 
-      if (!response.ok) throw new Error("Failed to start generation")
-
-      await streamNdjson<{
-        type: string
-        slot?: GridSlot
-        progress?: number
-        total?: number
-        dayId?: string
-        draft?: Partial<OrganicCalendarDraft>
-      }>(response, (event) => {
-        if (event.type === "progress") {
-          setGridProgress({
-            percent: Math.round(((event.progress ?? 0) / (event.total ?? 1)) * 100),
-            message: `Generating slot ${event.progress}/${event.total}`,
-          })
-        } else if (event.type === "ghost" && event.dayId) {
-          setGhosts(event.dayId, 1)
-        } else if (event.type === "slot" && event.slot) {
-          const draft = buildDraftFromSlot(event.slot)
-          addDraft(event.slot.schedule.dayId, draft)
-          setGhosts(event.slot.schedule.dayId, 0)
-        } else if (event.type === "complete") {
-          setGridStatus("complete")
-        }
-      })
-    } catch (error) {
-      console.error(error)
-      setGridError("Generation failed. Please try again.")
+    if (seeds.length === 0) {
       setGridStatus("error")
+      setGridError("Seed the calendar with trends or questions before generating.")
+      return
+    }
+
+    seeds.forEach((seed) => {
+      if (!seed) return
+      updateDraftById(seed.placementId, (draft) => ({
+        ...draft,
+        status: "streaming",
+      }))
+    })
+
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+    try {
+      await streamCalendarGeneration(
+        {
+          brandProfileId,
+          weekStart: weekStartId,
+          timezone,
+          placements: seeds as NonNullable<(typeof seeds)[number]>[],
+          platformAccountIds,
+          options: {
+            schedulePreset: "beta-launch",
+            includeNewsletter: true,
+            guidancePrompt: undefined,
+            preferredPlatforms: activePlatforms.length > 0 ? activePlatforms : undefined,
+          },
+        },
+        (event) => {
+          if (event.type === "progress") {
+            setGridProgress({
+              percent: Math.round((event.completed / event.total) * 100),
+              message: event.message ?? "Generating content...",
+            })
+            return
+          }
+
+          if (event.type === "placement") {
+            const placement = event.placement
+            const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null
+            const nextDraft = mapPlacementToDraft(placement, existing)
+            addDraft(placement.schedule.dayId, nextDraft)
+            setGhosts(placement.schedule.dayId, 0)
+            return
+          }
+
+          if (event.type === "error") {
+            setGridError(event.message)
+            setGridStatus("error")
+            return
+          }
+
+          if (event.type === "complete") {
+            setGridStatus("complete")
+          }
+        }
+      )
+    } catch (error) {
+      setGridStatus("error")
+      setGridError(
+        error instanceof Error ? error.message : "Generation failed. Please try again."
+      )
     }
   }
 
@@ -457,44 +419,83 @@ export function OrganicCalendarWorkspaceClient({
     }
   }
 
-  const formatTimeLabel = (isoTime: string) => {
-    const [h, m] = isoTime.split(":").map(Number);
-    const ampm = h >= 12 ? "PM" : "AM";
-    const hour = h % 12 || 12;
-    return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`;
-  }
 
-  const handleRegenerate = React.useCallback(async (draftId: string) => {
-    const draft = drafts.find(d => d.id === draftId)
-    if (!draft) return
+  const handleRegenerate = React.useCallback(
+    async (draftId: string) => {
+      const draft = drafts.find((item) => item.id === draftId)
+      if (!draft) return
 
-    updateDraftById(draftId, (d) => ({ ...d, status: "streaming" }))
-    const dayId = calendarDays.find(d => d.slots.some(s => s.id === draftId))?.id
-    if (!dayId) return
-
-    try {
-      const response = await fetch("/api/organic/generate-slot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          platformAccountIds,
-          dayId,
-          timeOfDay: mapTimeOfDay(draft.timeLabel),
-          language: "English",
-          selectedTrendIds: draft.tags,
-        }),
-      })
-      if (response.ok) {
-        await streamNdjson<DetailedPostTemplate>(response, (template) => {
-          updateDraftById(draftId, (d) => applyTemplateToDraft(d, template))
-        })
+      if (!brandProfileId) {
+        setGridError("Missing brand context. Please reconnect your brand profile.")
+        return
       }
-    } catch (e) {
-      updateDraftById(draftId, (d) => ({ ...d, status: "draft" }))
-    }
-  }, [drafts, calendarDays, platformAccountIds, updateDraftById, applyTemplateToDraft])
 
-  const handleNativeDrop = React.useCallback(async (dayId: string, time: string, data: any) => {
+      const dayId = calendarDays.find((day) => day.slots.some((slot) => slot.id === draftId))?.id
+      if (!dayId) return
+
+      const trendId = draft.seedTrendId ?? draft.tags[0]
+      if (!trendId) return
+      const seedSource = draft.tags.includes("question")
+        ? "question"
+        : draft.tags.includes("event")
+        ? "event"
+        : "trend"
+
+      updateDraftById(draftId, (current) => ({ ...current, status: "streaming" }))
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+      try {
+        await streamCalendarGeneration(
+          {
+            brandProfileId,
+            weekStart: weekStartId,
+            timezone,
+            placements: [
+              {
+                placementId: draft.id,
+                trendId,
+                dayId,
+                scheduledAt: buildScheduledAt(dayId, draft.timeLabel) ?? dayId,
+                timeLabel: draft.timeLabel,
+                platform: draft.platforms[0] ?? "instagram",
+                accountId: draft.targetAccountId ?? platformAccountIds[draft.platforms[0]],
+                seedSource,
+                desiredFormat: draft.format,
+              },
+            ],
+            platformAccountIds,
+          },
+          (event) => {
+            if (event.type === "placement") {
+              const next = mapPlacementToDraft(event.placement, draft)
+              addDraft(dayId, next)
+              return
+            }
+            if (event.type === "error") {
+              setGridError(event.message)
+            }
+          }
+        )
+      } catch (e) {
+        updateDraftById(draftId, (current) => ({ ...current, status: "draft" }))
+      }
+    },
+    [
+      addDraft,
+      brandProfileId,
+      buildScheduledAt,
+      calendarDays,
+      drafts,
+      mapPlacementToDraft,
+      platformAccountIds,
+      setGridError,
+      updateDraftById,
+      weekStartId,
+    ]
+  )
+
+  const handleNativeDrop = React.useCallback(async (dayId: string, time: string, data: OrganicSeedDragPayload) => {
     if (data.type === "trend" || data.type === "question") {
       const trendId = data.trendId;
       const trendTitle = data.title || "Selected topic";
@@ -504,32 +505,47 @@ export function OrganicCalendarWorkspaceClient({
       if (!targetDay) return;
 
       // Determine platform based on Beta Launch schedule
-      const scheduleMap: Record<string, OrganicPlatformKey> = {
-        "Mon": "instagram",
-        "Tue": "linkedin",
-        "Wed": "instagram",
-        "Thu": "linkedin",
-        "Fri": "instagram",
-        "Sat": "linkedin",
-        "Sun": "instagram", // Sunday is Newsletter/Recap, use IG as default for now
-      };
-
       const dayName = targetDay.label;
-      const platform = (scheduleMap[dayName] || "instagram") as OrganicPlatformTag;
+      const platform =
+        (ORGANIC_BETA_LAUNCH_SCHEDULE[dayName as keyof typeof ORGANIC_BETA_LAUNCH_SCHEDULE] ??
+          "instagram") as OrganicPlatformTag;
       const accountId = platformAccountIds[platform as OrganicPlatformKey];
+
+      // Calculate contextual time
+      let finalTime = time;
+      if (targetDay.slots.length > 0) {
+        const sortedSlots = [...targetDay.slots].sort((a, b) => {
+          const hA = parseTimeLabelToHour(a.timeLabel) ?? 0;
+          const hB = parseTimeLabelToHour(b.timeLabel) ?? 0;
+          return hA - hB;
+        });
+        
+        const lastSlot = sortedSlots[sortedSlots.length - 1];
+
+        if (lastSlot) {
+          const lastHour = parseTimeLabelToHour(lastSlot.timeLabel) ?? 9;
+          const nextHour = (lastHour + 2) % 24;
+          finalTime = `${nextHour.toString().padStart(2, "0")}:00`;
+        }
+      }
 
       const seededDraft: OrganicCalendarDraft = {
         id: `seeded-${Date.now()}`,
         title: trendTitle,
         summary: `Queued for generation from "${trendTitle}".`,
-        timeLabel: formatTimeLabel(time),
+        timeLabel: formatTimeLabel(finalTime),
         dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
         status: "placeholder",
         platforms: [platform],
-        format: "Draft",
+        format: "Post",
         objective: "Generation Seed",
         captionPreview: "Click Generate to construct this post.",
-        tags: [trendId],
+        tags:
+          data.type === "question"
+            ? [trendId, "question"]
+            : data.type === "event"
+            ? [trendId, "event"]
+            : [trendId],
         mediaCount: 1,
         seedTrendId: trendId,
         targetAccountId: accountId,
@@ -560,6 +576,23 @@ export function OrganicCalendarWorkspaceClient({
       >
         <div className="grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-6 h-full p-2">
           <div className="min-w-0 h-full overflow-hidden">
+            <div className="flex items-center justify-between gap-4 px-1 pb-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">
+                  Week planning
+                </p>
+                <p className="text-xs text-secondary">
+                  Mon/Wed/Fri Instagram · Tue/Thu/Sat LinkedIn
+                </p>
+              </div>
+              <WeekPicker
+                value={weekStart}
+                rangeLabel={formatWeekRange(weekStart)}
+                onChange={handleWeekChange}
+                onPreviousWeek={handlePreviousWeek}
+                onNextWeek={handleNextWeek}
+              />
+            </div>
             <TimeGridCanvas
               days={calendarDays}
               selectedDraftId={selectedDraftId}
@@ -567,12 +600,12 @@ export function OrganicCalendarWorkspaceClient({
               onSelectDraft={setSelectedDraftId}
               onToggleSelection={toggleDraftSelection}
               onRegenerate={handleRegenerate}
-              onBuild={handleGenerateDrafts}
               onNativeDrop={handleNativeDrop}
             />
           </div>
           <div className="h-full min-w-0 overflow-hidden">
             <WorkspacePanel
+              trendTypes={trendTypes}
               trends={trends}
               selectedTrendIds={selectedTrendIds}
               activePlatforms={activePlatforms}
@@ -582,6 +615,7 @@ export function OrganicCalendarWorkspaceClient({
               viewMode="week"
               onViewModeChange={() => {}}
               onAutoSort={handleAutoSort}
+              seedCount={seededDraftCount}
             />
           </div>
         </div>

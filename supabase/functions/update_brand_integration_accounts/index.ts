@@ -1,21 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-// Edge function: update_brand_integration_accounts
-// Sets the integration account assignments for a brand profile.
-//
-// Input (JSON):
-//   {
-//     brandProfileId: string (uuid),
-//     assetPks: string[] (uuid[]) // integration_accounts_assets IDs to assign
-//   }
-//
-// Output:
-//   { linked: number, unlinked: number }
-//
-// Notes:
-// - Uses caller JWT (Authorization header) for RLS; no service role key.
-// - Performs minimal diff: inserts missing, deletes removed.
-//
-
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -24,23 +6,13 @@ const InputSchema = z.object({
   assetPks: z.array(z.string().uuid()),
 });
 
-function createSupabaseForRequest(req: Request) {
-  const url = Deno.env.get("SUPABASE_URL");
-  const anon = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!url || !anon) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
-  }
-  const authHeader = req.headers.get("Authorization") ?? "";
-  return createClient(url, anon, {
-    global: { headers: { Authorization: authHeader } },
-  });
-}
-
 function json(body: Record<string, unknown>, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
     },
     ...init,
   });
@@ -52,7 +24,7 @@ function corsNoContent() {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey",
     },
   });
 }
@@ -78,7 +50,12 @@ async function handler(req: Request): Promise<Response> {
   }
 
   const { brandProfileId, assetPks } = input;
-  const supabase = createSupabaseForRequest(req);
+  
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } }
+  );
 
   const { data: existing, error: existingError } = await supabase
     .schema("brand_profiles")
@@ -87,25 +64,10 @@ async function handler(req: Request): Promise<Response> {
     .eq("brand_profile_id", brandProfileId);
 
   if (existingError) {
-    console.error("[update_brand_integration_accounts] existing query failed", {
-      message: existingError.message,
-      code: existingError.code,
-      details: existingError.details,
-      hint: existingError.hint,
-      brandProfileId,
-    });
-    return json(
-      { error: `Assignments query failed: ${existingError.message}` },
-      { status: 500 }
-    );
+    return json({ error: `Assignments query failed: ${existingError.message}` }, { status: 500 });
   }
 
-  type ExistingRow = {
-    id: string;
-    integration_account_id: string;
-  };
-
-  const existingRows = (existing ?? []) as ExistingRow[];
+  const existingRows = (existing ?? []) as any[];
   const existingIds = new Set(existingRows.map(r => r.integration_account_id));
   const desiredIds = new Set(assetPks);
 
@@ -119,24 +81,14 @@ async function handler(req: Request): Promise<Response> {
       .schema("brand_profiles")
       .from("brand_profile_integration_accounts")
       .insert(
-        toInsert.map(integrationAccountId => ({
+        toInsert.map(id => ({
           brand_profile_id: brandProfileId,
-          integration_account_id: integrationAccountId,
+          integration_account_id: id,
         }))
       );
+      
     if (insertError) {
-      console.error("[update_brand_integration_accounts] insert failed", {
-        message: insertError.message,
-        code: insertError.code,
-        details: insertError.details,
-        hint: insertError.hint,
-        brandProfileId,
-        count: toInsert.length,
-      });
-      return json(
-        { error: `Insert failed: ${insertError.message}` },
-        { status: 500 }
-      );
+      return json({ error: `Insert failed: ${insertError.message}` }, { status: 500 });
     }
   }
 
@@ -146,19 +98,9 @@ async function handler(req: Request): Promise<Response> {
       .from("brand_profile_integration_accounts")
       .delete()
       .in("id", toDeleteIds);
+      
     if (deleteError) {
-      console.error("[update_brand_integration_accounts] delete failed", {
-        message: deleteError.message,
-        code: deleteError.code,
-        details: deleteError.details,
-        hint: deleteError.hint,
-        brandProfileId,
-        count: toDeleteIds.length,
-      });
-      return json(
-        { error: `Delete failed: ${deleteError.message}` },
-        { status: 500 }
-      );
+      return json({ error: `Delete failed: ${deleteError.message}` }, { status: 500 });
     }
   }
 
@@ -169,4 +111,3 @@ async function handler(req: Request): Promise<Response> {
 }
 
 Deno.serve((req: Request) => handler(req));
-

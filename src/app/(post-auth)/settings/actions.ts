@@ -19,9 +19,18 @@ export async function renameBrandProfileAction(brandId: string, name: string): P
   await repo.renameBrand(brandId, name.trim());
 }
 
+export async function updateBrandLogoAction(brandId: string, logoPath: string | null): Promise<void> {
+  const repo = createBrandProfileRepository();
+  await repo.updateLogo(brandId, logoPath);
+  revalidatePath("/", "layout");
+}
+
+import { revalidatePath } from "next/cache";
+
 export async function createBrandProfileAction(name?: string): Promise<void> {
   const repo = createBrandProfileRepository();
   const result = await repo.createBrand(name?.trim());
+  revalidatePath("/", "layout");
   redirect(`/onboarding?brand=${result.brandId}`);
 }
 

@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { completeOnboardingAction } from "@/app/onboarding/actions";
+import { approveAndLaunchOnboardingAction } from "@/app/onboarding/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/ToastProvider";
 import { 
   ArrowLeft, 
@@ -19,15 +18,15 @@ import {
   MessageSquare,
   Target,
   BarChart3,
-  Search
+  Search,
+  ChevronDown
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { runOnboardingPreview } from "@/lib/onboarding/agentClient";
-import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Textarea } from "@/components/ui/textarea";
 
 type ReportSection = {
   id: string;
@@ -67,17 +66,64 @@ const formatJsonToMarkdown = (jsonStr: string) => {
   }
 };
 
+const ScrollIndicator = ({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) => {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const check = () => {
+      const isScrollable = el.scrollHeight > el.clientHeight;
+      const isAtBottom = Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop) < 15;
+      setShow(isScrollable && !isAtBottom);
+    };
+
+    check();
+    el.addEventListener("scroll", check);
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+
+    return () => {
+      el.removeEventListener("scroll", check);
+      observer.disconnect();
+    };
+  }, [containerRef]);
+
+  if (!show) return null;
+
+  return (
+    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none animate-bounce flex flex-col items-center">
+      <ChevronDown className="w-4 h-4 text-muted-foreground/40" />
+    </div>
+  );
+};
+
 export function ReviewStep() {
-  const { state, updateState, brandId } = useOnboarding();
+  const { state, updateState, brandId, userId } = useOnboarding();
   const { show } = useToast();
   const router = useRouter();
   
+  const voiceRef = React.useRef<HTMLDivElement>(null);
+  const audienceRef = React.useRef<HTMLDivElement>(null);
+  const marketRef = React.useRef<HTMLDivElement>(null);
+  const competitiveRef = React.useRef<HTMLDivElement>(null);
+
+  const getRef = (id: string) => {
+    switch (id) {
+      case "voice": return voiceRef;
+      case "audience": return audienceRef;
+      case "market": return marketRef;
+      case "competitive": return competitiveRef;
+      default: return { current: null };
+    }
+  };
+
   const [guidance, setGuidance] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [hasGeneratedReport, setHasGeneratedReport] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string>("current-user");
 
   const [sections, setSections] = useState<ReportSection[]>([
     { id: "voice", title: "Brand Voice & Tone", icon: <MessageSquare className="w-4 h-4" />, content: state.brand.brandVoice || "", isStreaming: false, source: "voice" },
@@ -87,19 +133,23 @@ export function ReviewStep() {
   ]);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) setUserId(user.id);
-    };
-    fetchUser();
-
     if (state.brand.logoPath) {
       createSignedAssetUrl(state.brand.logoPath, 3600).then(setLogoUrl).catch(() => setLogoUrl(null));
     }
   }, [state.brand.logoPath]);
 
+  useEffect(() => {
+    if (sections.some(s => ["market", "competitive"].includes(s.id) && s.content.length > 0)) {
+      setHasGeneratedReport(true);
+    }
+  }, []);
+
   const triggerReportAgent = async (userGuidance?: string) => {
+    if (!userId) {
+      show({ title: "Identity Error", description: "Waiting for user authentication…", variant: "error" });
+      return;
+    }
+
     setIsRegenerating(true);
     setHasGeneratedReport(false);
     
@@ -119,7 +169,7 @@ export function ReviewStep() {
         if (key === "facebook" || key === "instagram") return "meta";
         return key;
       })
-      .filter((v, i, a) => a.indexOf(v) === i) as ("canva" | "figma" | "google-drive" | "sharepoint" | "youtube" | "tiktok" | "linkedin" | "google-ads" | "meta")[];
+      .filter((v, i, a) => a.indexOf(v) === i) as any[];
 
     const selectedAccountsMetadata = Object.values(state.connections)
       .flatMap(c => c.accounts || [])
@@ -154,7 +204,7 @@ export function ReviewStep() {
             brand_name: state.brand.name || "",
             created_at: new Date().toISOString(),
             platform_urls: state.brand.website ? [state.brand.website] : [],
-            integrated_platforms: integratedPlatforms as ("canva" | "figma" | "google-drive" | "sharepoint" | "youtube" | "tiktok" | "linkedin" | "google-ads" | "meta")[],
+            integrated_platforms: integratedPlatforms,
             brand_voice_tags: (state.brand.brandVoiceTags || []) as string[],
             integration_account_ids: integrationAccountIds,
           }
@@ -190,20 +240,13 @@ export function ReviewStep() {
   const handleLaunch = async () => {
     setIsSubmitting(true);
     try {
-      await updateState({
-        brand: {
-          brandVoice: sections.find(s => s.id === "voice")?.content || state.brand.brandVoice,
-          targetAudience: sections.find(s => s.id === "audience")?.content || state.brand.targetAudience,
-        }
-      });
-
-      await completeOnboardingAction(brandId);
-      await runStrategicAnalysis(brandId);
+      await approveAndLaunchOnboardingAction(brandId);
       
       show({ title: "Strategy Launched", description: "Your analysis is processing.", variant: "success" });
       router.push("/dashboard");
     } catch (error) {
-      show({ title: "Launch Failed", description: "Check your connections and try again.", variant: "error" });
+      console.error("Launch failed", error);
+      show({ title: "Launch Failed", description: "Could not finalize strategy.", variant: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -212,6 +255,13 @@ export function ReviewStep() {
   const selectedAccountsCount = Object.values(state.connections)
     .flatMap(c => c.accounts || [])
     .filter(a => a.selected).length;
+
+  const isReadyToGenerate = selectedAccountsCount > 0 || state.documents.length > 0 || !!state.brand.website;
+
+  const canLaunch = hasGeneratedReport || (
+    sections.find(s => s.id === "market")?.content.length! > 0 ||
+    sections.find(s => s.id === "competitive")?.content.length! > 0
+  );
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-32 animate-in fade-in duration-500">
@@ -268,14 +318,18 @@ export function ReviewStep() {
               </div>
               <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold">Grounding Input</Badge>
             </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <div className="prose prose-sm dark:prose-invert max-w-none max-h-[250px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2">
+            <CardContent className="px-4 pb-4 relative h-[250px] flex flex-col">
+              <div 
+                ref={getRef(section.id)}
+                className="prose prose-sm dark:prose-invert max-w-none flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2"
+              >
                 <SafeMarkdown 
                   content={section.content ? formatJsonToMarkdown(section.content) : "No input provided."} 
                   mode="static" 
-                  className="text-xs leading-relaxed text-foreground/80" 
+                  className="text-xs leading-relaxed text-black font-medium" 
                 />
               </div>
+              <ScrollIndicator containerRef={getRef(section.id)} />
             </CardContent>
           </Card>
         ))}
@@ -295,21 +349,27 @@ export function ReviewStep() {
                   {section.isStreaming && <Sparkles className="w-4 h-4 text-primary animate-pulse" />}
                 </div>
               </CardHeader>
-              <CardContent className="p-6 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20">
+              <CardContent className="p-6 flex-1 relative flex flex-col overflow-hidden">
                 {shouldShowSkeleton ? (
                   <div className="space-y-3">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-[92%]" />
-                    <Skeleton className="h-4 w-[85%]" />
+                    <Skeleton className="h-4 w-full opacity-50" />
+                    <Skeleton className="h-4 w-[92%] opacity-50" />
+                    <Skeleton className="h-4 w-[85%] opacity-50" />
                   </div>
                 ) : (
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <SafeMarkdown 
-                      content={section.content ? formatJsonToMarkdown(section.content) : "Waiting for agent analysis…"} 
-                      mode={section.isStreaming ? "streaming" : "static"} 
-                      className="text-sm leading-relaxed text-foreground/90" 
-                    />
-                  </div>
+                  <>
+                    <div 
+                      ref={getRef(section.id)}
+                      className="prose prose-sm dark:prose-invert max-w-none flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2"
+                    >
+                      <SafeMarkdown 
+                        content={section.content ? formatJsonToMarkdown(section.content) : "Waiting for agent analysis…"} 
+                        mode={section.isStreaming ? "streaming" : "static"} 
+                        className="text-sm leading-relaxed text-black font-medium" 
+                      />
+                    </div>
+                    <ScrollIndicator containerRef={getRef(section.id)} />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -334,6 +394,7 @@ export function ReviewStep() {
               <Button 
                 className="absolute right-1 top-1 h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
                 onClick={() => triggerReportAgent(guidance)}
+                disabled={!isReadyToGenerate}
               >
                 Go
               </Button>
@@ -357,12 +418,12 @@ export function ReviewStep() {
 
           <Button 
             className={`min-w-[200px] h-11 font-bold shadow-xl transition-all duration-300 ${
-              hasGeneratedReport 
+              canLaunch 
                 ? "bg-indigo-600 hover:bg-indigo-700 text-white" 
                 : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
             }`}
             onClick={handleLaunch}
-            disabled={isSubmitting || isRegenerating || !hasGeneratedReport}
+            disabled={isSubmitting || isRegenerating || !canLaunch}
           >
             {isSubmitting ? "Launching…" : (
               <>Approve & Launch <Rocket className="w-4 h-4 ml-2" /></>

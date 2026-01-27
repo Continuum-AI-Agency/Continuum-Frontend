@@ -765,6 +765,17 @@ export async function renameBrandProfile(
   );
 }
 
+export async function updateBrandLogo(
+  brandId: string,
+  logoPath: string | null
+): Promise<OnboardingState> {
+  return updateBrandState(brandId, state =>
+    mergeOnboardingState(state, {
+      brand: { logoPath },
+    })
+  );
+}
+
 export async function removeMemberFromBrand(
   brandId: string,
   email: string

@@ -27,10 +27,12 @@ import {
 } from "@/app/(post-auth)/settings/actions";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import { SettingsLogoUploader } from "./SettingsLogoUploader";
 
 type BrandSettingsPanelProps = {
   data: {
     brandName: string;
+    logoPath?: string | null;
     members: BrandMember[];
     invites: BrandInvite[];
     profile?: {
@@ -197,24 +199,33 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
     <Flex direction="column" gap="6">
       <form onSubmit={handleRenameBrand}>
         <CardSection title="Brand profile" description="Rename your brand profile and update workspace identity.">
-          <Flex align="center" gap="3" wrap="wrap">
-            <TextField.Root
-              value={brandName}
-              onChange={event => setBrandName(event.target.value)}
-              placeholder="Brand name"
-              className="min-w-[260px]"
+          <Flex align="start" gap="6" wrap="wrap">
+            <SettingsLogoUploader 
+              brandId={activeBrandId} 
+              brandName={brandName} 
+              initialLogoPath={data.logoPath} 
             />
-            <Button type="submit" disabled={isPending}>
-              Save name
-            </Button>
+            <Flex direction="column" gap="3" className="flex-1">
+              <Flex align="center" gap="3" wrap="wrap">
+                <TextField.Root
+                  value={brandName}
+                  onChange={event => setBrandName(event.target.value)}
+                  placeholder="Brand name"
+                  className="min-w-[260px]"
+                />
+                <Button type="submit" disabled={isPending}>
+                  Save name
+                </Button>
+              </Flex>
+              {data.profile && (
+                <Grid columns={{ initial: "1", sm: "2" }} gap="3">
+                  <Detail label="Brand ID" value={data.profile.id} monospace />
+                  <Detail label="Created" value={formattedProfileDates?.createdAt ?? "—"} />
+                  <Detail label="Last updated" value={formattedProfileDates?.updatedAt ?? "—"} />
+                </Grid>
+              )}
+            </Flex>
           </Flex>
-          {data.profile && (
-            <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-              <Detail label="Brand ID" value={data.profile.id} monospace />
-              <Detail label="Created" value={formattedProfileDates?.createdAt ?? "—"} />
-              <Detail label="Last updated" value={formattedProfileDates?.updatedAt ?? "—"} />
-            </Grid>
-          )}
           {canDelete && (
             <Box className="border border-red-6/60 bg-red-3/40 dark:bg-red-3/10 rounded-md p-4">
               <Flex align="center" justify="between" gap="4" wrap="wrap">

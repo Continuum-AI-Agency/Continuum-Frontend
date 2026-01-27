@@ -86,36 +86,58 @@ export default async function OrganicPage() {
     selectorTrends = [...selectorTrends, ...mappedQuestions];
 
     const momentumGroups = ["rising", "stable", "cooling"] as const;
-    const initialGroups: OrganicTrendGroup[] = momentumGroups
+    const trendGroups: OrganicTrendGroup[] = momentumGroups
       .map((momentum) => {
         const items = selectorTrends.filter((t) => t.momentum === momentum && !t.tags.includes("question"));
         return {
           id: momentum,
-          title: momentum === "rising" ? "Rising now" : momentum === "stable" ? "Stable interest" : "Cooling down",
+          title: momentum === "rising" ? "Rising Now" : momentum === "stable" ? "Stable Interest" : "Cooling Down",
           trends: items,
         };
       })
       .filter((group) => group.trends.length > 0);
 
-    const groups: OrganicTrendGroup[] = [...initialGroups];
+    const mappedEvents = insights.data.trendsAndEvents.events.map((e) => ({
+      id: e.id,
+      title: e.title,
+      summary: e.description ?? e.opportunity ?? "Seasonal event or holiday",
+      momentum: "rising" as const,
+      platforms: fallbackPlatforms,
+      tags: ["event", e.date ?? ""],
+    }));
 
-    if (mappedQuestions.length > 0) {
-        groups.push({
+    trendTypes = [
+      ...(trendGroups.length > 0 
+        ? [{
+            id: "trends",
+            label: "Market Trends",
+            groups: trendGroups,
+          }] 
+        : []),
+      ...(mappedEvents.length > 0
+        ? [{
+            id: "events",
+            label: "Key Events",
+            groups: [{
+              id: "all-events",
+              title: "Upcoming Events",
+              trends: mappedEvents,
+            }],
+          }]
+        : []),
+      ...(mappedQuestions.length > 0
+        ? [{
             id: "questions",
-            title: "Audience Questions",
-            trends: mappedQuestions,
-        });
-    }
+            label: "Audience Questions",
+            groups: [{
+              id: "all-questions",
+              title: "Questions by Niche",
+              trends: mappedQuestions,
+            }],
+          }]
+        : [])
+    ];
 
-    trendTypes = groups.length
-      ? [
-          {
-            id: "momentum",
-            label: "Insights",
-            groups,
-          },
-        ]
-      : [];
   } catch (error) {
     insightsError =
       error instanceof Error ? error.message : "Unable to load brand insights for this brand.";

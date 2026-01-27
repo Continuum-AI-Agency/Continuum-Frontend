@@ -64,19 +64,22 @@ const backendQuestionSchema = z.object({
   times_used: z.number().int().nonnegative().nullish(),
 });
 
-const backendNicheQuestionsSchema = z.object({
-  questions: z.array(backendQuestionSchema).default([]),
-  total_generated: z.number().int().nonnegative().nullish(),
-  stats: z
-    .object({
-      count: z.number().int().nonnegative().nullish(),
-    })
-    .nullish(),
-});
+const backendNicheQuestionsSchema = z.union([
+  z.object({
+    questions: z.array(backendQuestionSchema).default([]),
+    total_generated: z.number().int().nonnegative().nullish(),
+    stats: z
+      .object({
+        count: z.number().int().nonnegative().nullish(),
+      })
+      .nullish(),
+  }),
+  z.string().transform(() => ({ questions: [], total_generated: 0 })),
+]);
 
 const backendQuestionsByNicheSchema = z.object({
   status: z.string().nullish(),
-  questions_by_niche: z.record(backendNicheQuestionsSchema).default({}),
+  questions_by_niche: z.record(z.string(), backendNicheQuestionsSchema).default({}),
   summary: z
     .object({
       total_niches: z.number().int().nonnegative().nullish(),
@@ -286,8 +289,17 @@ function mapQuestionsByNiche(payload: z.infer<typeof backendQuestionsByNicheSche
   let totalQuestions = 0;
 
   Object.entries(payload.questions_by_niche ?? {}).forEach(([niche, value]) => {
+    if (typeof value === "string") {
+      questionsByNiche[niche] = {
+        questions: [],
+        totalGenerated: 0,
+      };
+      return;
+    }
+
     const parsed = backendNicheQuestionsSchema.parse(value);
-    const totalGenerated = parsed.total_generated ?? parsed.stats?.count ?? undefined;
+    const stats = "stats" in parsed ? parsed.stats : undefined;
+    const totalGenerated = parsed.total_generated ?? stats?.count ?? undefined;
     const questions = parsed.questions.map(mapQuestion);
     totalQuestions += totalGenerated ?? questions.length;
     questionsByNiche[niche] = {

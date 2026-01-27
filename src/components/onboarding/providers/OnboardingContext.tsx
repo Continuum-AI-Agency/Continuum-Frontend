@@ -6,9 +6,12 @@ import { mutateOnboardingStateAction, resetOnboardingStateAction } from "@/app/o
 import { mergeOnboardingState } from "@/lib/onboarding/state";
 import { useToast } from "@/components/ui/ToastProvider";
 
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+
 type OnboardingContextValue = {
   brandId: string;
   state: OnboardingState;
+  userId: string | null;
   isPending: boolean;
   updateState: (patch: OnboardingPatch) => Promise<void>;
   resetState: () => Promise<void>;
@@ -25,8 +28,18 @@ type OnboardingProviderProps = {
 
 export function OnboardingProvider({ brandId, initialState, children }: OnboardingProviderProps) {
   const [state, setState] = React.useState<OnboardingState>(initialState);
+  const [userId, setUserId] = React.useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { show } = useToast();
+
+  React.useEffect(() => {
+    const fetchUser = async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    };
+    fetchUser();
+  }, []);
 
   const updateState = useCallback(async (patch: OnboardingPatch) => {
     startTransition(async () => {
@@ -60,7 +73,7 @@ export function OnboardingProvider({ brandId, initialState, children }: Onboardi
   }, []);
 
   return (
-    <OnboardingContext.Provider value={{ brandId, state, isPending, updateState, resetState, reloadState }}>
+    <OnboardingContext.Provider value={{ brandId, state, userId, isPending, updateState, resetState, reloadState }}>
       {children}
     </OnboardingContext.Provider>
   );

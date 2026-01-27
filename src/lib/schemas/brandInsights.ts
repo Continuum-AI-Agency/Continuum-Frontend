@@ -49,14 +49,18 @@ export const brandInsightsQuestionSchema = z.object({
   timesUsed: z.number().int().nonnegative().default(0),
 });
 
-export const brandInsightsNicheQuestionsSchema = z.object({
-  questions: z.array(brandInsightsQuestionSchema).default([]),
-  totalGenerated: z.number().int().nonnegative().optional(),
-});
+export const brandInsightsNicheQuestionsSchema = z.union([
+  z.object({
+    questions: z.array(brandInsightsQuestionSchema).default([]),
+    totalGenerated: z.number().int().nonnegative().optional(),
+  }),
+  // Handle cases where the backend might return a string (error/empty marker)
+  z.string().transform(() => ({ questions: [], totalGenerated: 0 })),
+]);
 
 export const brandInsightsQuestionsByNicheSchema = z.object({
   status: z.string().optional(),
-  questionsByNiche: z.record(brandInsightsNicheQuestionsSchema).default({}),
+  questionsByNiche: z.record(z.string(), brandInsightsNicheQuestionsSchema).default({}),
   summary: z
     .object({
       totalNiches: z.number().int().nonnegative().optional(),

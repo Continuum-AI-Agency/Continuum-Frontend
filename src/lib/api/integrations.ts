@@ -194,10 +194,11 @@ export async function applyBrandProfileIntegrationAccounts(
   params: ApplyBrandProfileIntegrationAccountsParams
 ): Promise<LinkIntegrationAccountsResponse> {
   const { brandId } = params;
-  const body = "assetPks" in params
-    ? { asset_pks: params.assetPks }
-    : { integration_account_ids: params.integrationAccountIds };
+  const assetPks = "assetPks" in params
+    ? params.assetPks
+    : params.integrationAccountIds;
 
+  const body = { asset_pks: assetPks };
   const parsedBody = applyBrandProfileIntegrationAccountsRequestSchema.parse(body);
 
   return http.request({

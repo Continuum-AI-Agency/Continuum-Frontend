@@ -144,13 +144,13 @@ export function DocumentUploader() {
                     <div className="flex flex-col min-w-0">
                       <span className="font-medium truncate">{doc.name}</span>
                       <span className="text-[10px] text-muted-foreground capitalize">
-                        {doc.status === "processing" ? "Analyzing..." : "Ready"}
+                        {isUploading && doc.status === "processing" ? "Analyzing..." : "Ready"}
                       </span>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    {doc.status === "processing" && (
+                    {isUploading && doc.status === "processing" && (
                       <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                     )}
                     {doc.status === "ready" && (

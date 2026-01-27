@@ -57,6 +57,7 @@ export default async function SettingsPage() {
                 <BrandSettingsPanel
                   data={{
                     brandName: activeState.brand.name,
+                    logoPath: activeState.brand.logoPath,
                     members: activeState.members,
                     invites: activeState.invites as OnboardingState["invites"],
                     profile: brandProfile ?? undefined,
