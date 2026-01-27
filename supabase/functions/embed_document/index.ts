@@ -37,7 +37,7 @@ const InputSchema = z
       "website",
     ]),
     storagePath: z.string().optional(),
-    externalUrl: z.string().url().optional(),
+    externalUrl: z.string().min(1).optional(),
     mimeType: z.string().optional(),
     fileName: z.string().optional(),
   })

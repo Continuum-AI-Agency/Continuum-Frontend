@@ -19,7 +19,7 @@ const InputSchema = z.discriminatedUnion("action", [
     brandId: z.string().uuid(),
     email: z.string().email(),
     role: z.enum(["owner", "admin", "operator", "viewer"]),
-    siteUrl: z.string().url().optional(),
+    siteUrl: z.string().min(1).optional(),
   }),
   z.object({
     action: z.literal("accept"),
@@ -96,8 +96,9 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
       brand_profile_id: input.brandId,
       email: input.email.toLowerCase(),
       role: input.role,
-      token,
+      token_hash: token,
       created_by: inviterId,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     })
     .select("id")
     .single();
@@ -129,7 +130,7 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
     .schema("brand_profiles")
     .from("invites")
     .select("*")
-    .eq("token", input.token)
+    .eq("token_hash", input.token)
     .eq("brand_profile_id", input.brandId)
     .is("revoked_at", null)
     .is("accepted_at", null)

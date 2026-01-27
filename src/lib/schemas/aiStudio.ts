@@ -52,8 +52,8 @@ const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
 
 export const aiStudioArtifactSchema = z.object({
   id: z.string().min(1, "Artifact id is required"),
-  uri: z.string().url(),
-  previewUri: z.string().url().optional(),
+  uri: z.string().min(1, "Artifact uri is required"),
+  previewUri: z.string().min(1).optional(),
   mimeType: z.string().optional(),
   medium: aiStudioMediumSchema,
   fileName: z.string().optional(),

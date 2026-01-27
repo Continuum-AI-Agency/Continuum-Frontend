@@ -99,7 +99,7 @@ const platformAgentResultSchema = z.object({ provider: z.string().optional() }).
 
 const websiteSummarySchema = z
   .object({
-    website_url: z.union([z.string().url(), z.null()]).optional(),
+    website_url: z.union([z.string().min(1), z.null()]).optional(),
     hero_statement: z.union([z.string(), z.null()]).optional(),
   })
   .passthrough();
@@ -138,7 +138,7 @@ export const agentBrandProfileSchema = z.object({
   description: z.string().optional(),
   brand_voice: brandVoiceSchema.optional(),
   target_audience: targetAudienceSchema.optional(),
-  website_url: z.string().url().optional(),
+  website_url: z.string().min(1).optional(),
 });
 
 export type AgentBrandProfile = z.infer<typeof agentBrandProfileSchema>;
@@ -151,7 +151,7 @@ export const agentRunContextSchema = z.object({
     .string()
     .datetime()
     .default(() => new Date().toISOString()),
-  platform_urls: z.array(z.string().url()).default([]),
+  platform_urls: z.array(z.string().min(1)).default([]),
   integrated_platforms: z.array(integrationProviderSchema).default([]),
   brand_voice_tags: z.array(z.string().min(1)).default([]),
   integration_account_ids: z.array(z.string().uuid()).default([]),

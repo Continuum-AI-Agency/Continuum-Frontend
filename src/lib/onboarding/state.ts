@@ -75,7 +75,7 @@ export const brandSchema = z.object({
   brandVoiceTags: z.array(brandVoiceTagSchema),
   targetAudience: z.union([z.string(), z.null()]),
   timezone: z.string(),
-  website: z.union([z.string().url(), z.null()]).default(null),
+  website: z.union([z.string().min(1), z.null()]).default(null),
   logoPath: z.union([z.string(), z.null()]).default(null),
 });
 
@@ -96,7 +96,7 @@ const onboardingDocumentSchema = z.object({
   createdAt: isoDateString,
   status: z.enum(["processing", "ready", "error"]).default("ready"),
   size: z.number().nonnegative().optional(),
-  externalUrl: z.string().url().optional(),
+  externalUrl: z.string().min(1).optional(),
   storagePath: z.string().optional(),
   jobId: z.string().optional(),
   errorMessage: z.string().optional(),

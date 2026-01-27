@@ -97,7 +97,7 @@ export function createGatewayBrandProfileRepository(): BrandProfileRepository {
       await httpServer.request({ path: `/brands/${brandId}/members`, method: "DELETE", body: { email } });
     },
     async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }> {
-      const schema = z.object({ link: z.string().url() });
+      const schema = z.object({ link: z.string().min(1) });
       return await httpServer.request({ path: `/brands/${brandId}/invites`, method: "POST", body: { email, role, siteUrl }, schema });
     },
     async revokeInvite(brandId: string, inviteId: string): Promise<void> {

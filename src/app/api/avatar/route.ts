@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const querySchema = z.object({
-  src: z.string().url().max(2048),
+  src: z.string().min(1).max(2048),
 });
 
 function isAllowedAvatarHost(hostname: string): boolean {

@@ -21,8 +21,8 @@ const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
 
 const backendArtifactSchema = z.object({
   id: z.string(),
-  uri: z.string().url(),
-  preview_uri: z.string().url().nullish(),
+  uri: z.string().min(1),
+  preview_uri: z.string().min(1).nullish(),
   mime_type: z.string().nullish(),
   medium: aiStudioMediumSchema,
   file_name: z.string().nullish(),

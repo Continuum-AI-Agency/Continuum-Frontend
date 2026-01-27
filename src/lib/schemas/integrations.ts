@@ -11,7 +11,7 @@ const isoDateString = z.string().transform((value, ctx) => {
 });
 
 const integrationSyncResponseBase = z.object({
-  url: z.string().url(),
+  url: z.string().min(1),
 });
 
 export const metaSyncResponseSchema = integrationSyncResponseBase;
