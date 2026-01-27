@@ -24,7 +24,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { fetchOrganicMetrics, type InsightsRequest, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
-import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform } from "@/lib/schemas/organicMetrics";
+import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison } from "@/lib/schemas/organicMetrics";
 import { cn } from "@/lib/utils";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
@@ -521,7 +521,9 @@ function MetricsPanel({
   expandedMetric: MetricKey | null;
   onMetricSelect: (key: MetricKey | null) => void;
 }) {
-  const { metrics, comparison, range, interactionBreakdowns } = data;
+  const { metrics, comparison: rawComparison, range, interactionBreakdowns: rawBreakdowns } = data;
+  const comparison = rawComparison as Record<string, MetricComparison> | null | undefined;
+  const interactionBreakdowns = rawBreakdowns as Record<string, Record<string, number>> | undefined;
 
   const metricCards: MetricCard[] = [];
   

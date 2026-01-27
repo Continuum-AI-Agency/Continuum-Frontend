@@ -42,7 +42,7 @@ export const aiStudioTemplateSchema = z.object({
   aspectRatio: aiStudioAspectRatioSchema.optional(),
   defaultPrompt: z.string().optional(),
   defaultNegativePrompt: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   tags: z.array(z.string()).optional(),
 });
 
@@ -58,7 +58,7 @@ export const aiStudioArtifactSchema = z.object({
   medium: aiStudioMediumSchema,
   fileName: z.string().optional(),
   sizeBytes: z.number().int().nonnegative().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   createdAt: timestampSchema,
 });
 
@@ -67,7 +67,7 @@ export const aiStudioJobFailureSchema = z
     code: z.string().optional(),
     message: z.string().min(1, "Failure message is required"),
     retryable: z.boolean().optional(),
-    details: z.record(z.unknown()).optional(),
+    details: z.record(z.string(), z.unknown()).optional(),
   })
   .optional();
 
@@ -86,7 +86,7 @@ export const aiStudioJobSchema = z.object({
   updatedAt: timestampSchema.optional(),
   artifacts: z.array(aiStudioArtifactSchema).default([]),
   failure: aiStudioJobFailureSchema,
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const aiStudioJobsResponseSchema = z.object({
@@ -108,7 +108,7 @@ export const aiStudioGenerationRequestSchema = z.object({
   durationSeconds: z.number().int().positive().max(120).optional(),
   guidanceScale: z.number().min(0).max(20).optional(),
   seed: z.number().int().nonnegative().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 }).superRefine((value, ctx) => {
   if (!value.aspectRatio) return;
   const providerOptions = providerAspectRatioOptions[value.provider]?.[value.medium];
@@ -133,7 +133,7 @@ const workflowBaseSchema = z.object({
   description: z.string().optional(),
   nodes: z.array(z.unknown()).optional().default([]),
   edges: z.array(z.unknown()).optional().default([]),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema.optional(),
 });
@@ -147,7 +147,7 @@ export const aiStudioWorkflowRowSchema = z.object({
   description: z.string().nullish(),
   nodes: z.array(z.unknown()).nullish(),
   edges: z.array(z.unknown()).nullish(),
-  metadata: z.record(z.unknown()).nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
   created_at: timestampSchema,
   updated_at: timestampSchema.nullish(),
 });

@@ -857,6 +857,23 @@ function GenerationForm({
     }
   }, [getValues, prompts, setValue]);
 
+  const trendTypes = useMemo(
+    () => [
+      {
+        id: "trends",
+        label: "Trends",
+        groups: [
+          {
+            id: "general",
+            title: "General",
+            trends: trends,
+          },
+        ],
+      },
+    ],
+    [trends]
+  );
+
   return (
     <Card>
       <Box p="4">
@@ -961,30 +978,31 @@ function GenerationForm({
                   platformAccounts={platformAccounts}
                 />
               </Box>
-              <Controller
-                name="selectedTrendIds"
-                control={control}
-                render={({ field }) => (
-                  <TrendSelector
-                    trends={trends}
-                    selectedTrendIds={field.value ?? []}
-                    activePlatforms={activePlatforms}
-                    maxSelections={maxTrendSelections}
-                    onToggleTrend={(trendId) => {
-                      const set = new Set(field.value ?? []);
-                      if (set.has(trendId)) {
-                        set.delete(trendId);
-                      } else {
-                        if (typeof maxTrendSelections === "number" && set.size >= maxTrendSelections) {
-                          return;
+                <Controller
+                  name="selectedTrendIds"
+                  control={control}
+                  render={({ field }) => (
+                    <TrendSelector
+                      trendTypes={trendTypes}
+                      trends={trends}
+                      selectedTrendIds={field.value ?? []}
+                      activePlatforms={activePlatforms}
+                      maxSelections={maxTrendSelections}
+                      onToggleTrend={(trendId) => {
+                        const set = new Set(field.value ?? []);
+                        if (set.has(trendId)) {
+                          set.delete(trendId);
+                        } else {
+                          if (typeof maxTrendSelections === "number" && set.size >= maxTrendSelections) {
+                            return;
+                          }
+                          set.add(trendId);
                         }
-                        set.add(trendId);
-                      }
-                      field.onChange(Array.from(set));
-                    }}
-                  />
-                )}
-              />
+                        field.onChange(Array.from(set));
+                      }}
+                    />
+                  )}
+                />
             </Flex>
           </Grid>
 

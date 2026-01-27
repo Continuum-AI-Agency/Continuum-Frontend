@@ -22,7 +22,7 @@ const createSchema = z.object({
   description: z.string().optional(),
   nodes: z.array(z.unknown()).optional().default([]),
   edges: z.array(z.unknown()).optional().default([]),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 type WorkflowAction =

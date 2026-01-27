@@ -34,7 +34,7 @@ export const organicRangeSchema = z.object({
 
 export type OrganicRange = z.infer<typeof organicRangeSchema>;
 
-export const interactionBreakdownsSchema = z.record(z.record(z.number()));
+export const interactionBreakdownsSchema = z.record(z.string(), z.record(z.string(), z.number()));
 
 export const insightsRequestSchema = z.object({
   metrics: z.array(z.string()),
@@ -109,7 +109,7 @@ export const instagramOrganicMetricsResponseSchema = z.object({
   warnings: z.array(z.string()).optional(),
   metrics: organicMetricsSchema,
   interactionBreakdowns: interactionBreakdownsSchema.optional(),
-  comparison: z.record(metricComparisonSchema).nullable().optional(),
+  comparison: z.record(z.string(), metricComparisonSchema).nullable().optional(),
   insights: z.array(insightsResponseSchema).optional(),
 });
 

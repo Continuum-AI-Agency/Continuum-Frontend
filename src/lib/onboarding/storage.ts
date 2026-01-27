@@ -78,12 +78,14 @@ async function ensureBrandProfileRecord(
   owner: BrandMember,
   state?: OnboardingState
 ): Promise<void> {
-  const { data, error } = await supabase
+  const { data: rawData, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
     .select("id, brand_name, logo_path")
     .eq("id", brandId)
     .maybeSingle();
+
+  const data = rawData as { id: string; brand_name: string | null; logo_path: string | null } | null;
 
   if (error && error.code !== "PGRST116") {
     throw error;

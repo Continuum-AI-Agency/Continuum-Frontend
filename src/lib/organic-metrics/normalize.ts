@@ -33,7 +33,7 @@ const backendPctChangeInstagramOrganicMetricsResponseSchema = z.object({
     nonFollowerReach: z.number(),
     followerReach: z.number(),
   }),
-  comparison: z.record(backendMetricComparisonPctSchema).nullable().optional(),
+  comparison: z.record(z.string(), backendMetricComparisonPctSchema).nullable().optional(),
 });
 
 const snakeMetricComparisonSchema = z.object({
@@ -76,7 +76,7 @@ const snakeInstagramOrganicMetricsResponseSchema = z.object({
       .optional(),
   }),
   metrics: snakeInstagramOrganicMetricsSchema,
-  comparison: z.record(snakeMetricComparisonSchema).nullable().optional(),
+  comparison: z.record(z.string(), snakeMetricComparisonSchema).nullable().optional(),
 });
 
 const looseInstagramMetricsSchema = z
@@ -238,7 +238,7 @@ function normalizeComparison(comparison: unknown) {
   if (comparison === null) return null;
   if (comparison === undefined) return undefined;
 
-  const parsed = z.record(looseComparisonValueSchema).parse(comparison);
+  const parsed = z.record(z.string(), looseComparisonValueSchema).parse(comparison);
 
   return Object.fromEntries(
     Object.entries(parsed).map(([key, value]) => [

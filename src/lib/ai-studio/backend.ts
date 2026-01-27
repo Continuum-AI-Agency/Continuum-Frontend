@@ -27,7 +27,7 @@ const backendArtifactSchema = z.object({
   medium: aiStudioMediumSchema,
   file_name: z.string().nullish(),
   size_bytes: z.number().int().nonnegative().nullish(),
-  metadata: z.record(z.unknown()).nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
   created_at: timestampSchema,
 });
 
@@ -50,10 +50,10 @@ const backendJobSchema = z.object({
       code: z.string().nullish(),
       message: z.string(),
       retryable: z.boolean().nullish(),
-      details: z.record(z.unknown()).nullish(),
+      details: z.record(z.string(), z.unknown()).nullish(),
     })
     .nullish(),
-  metadata: z.record(z.unknown()).nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
 });
 
 const backendJobsResponseSchema = z.object({
@@ -69,7 +69,7 @@ const backendTemplateSchema = z.object({
   aspect_ratio: z.string().nullish(),
   default_prompt: z.string().nullish(),
   default_negative_prompt: z.string().nullish(),
-  metadata: z.record(z.unknown()).nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
   tags: z.array(z.string().nullish()).nullish(),
 });
 

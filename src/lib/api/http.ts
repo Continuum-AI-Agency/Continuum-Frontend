@@ -42,7 +42,7 @@ export async function request<TResponse = unknown>(options: RequestOptions<TResp
   }
   const json = (await response.json()) as unknown;
   if (schema) {
-    return schema.parse(json);
+    return schema.parse(json) as TResponse;
   }
   return json as TResponse;
 }

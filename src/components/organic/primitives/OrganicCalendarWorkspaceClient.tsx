@@ -17,7 +17,10 @@ import type {
   OrganicTrendType,
 } from "./types"
 import type { Trend } from "@/lib/organic/trends"
-import type { CalendarPlacement } from "@/lib/organic/calendar-generation"
+import type {
+  CalendarPlacement,
+  CalendarPlacementSeed,
+} from "@/lib/organic/calendar-generation"
 import { CalendarDndContext } from "./CalendarDndContext"
 import { TimeGridCanvas } from "./TimeGridCanvas"
 import { WorkspacePanel } from "./WorkspacePanel"
@@ -353,8 +356,8 @@ export function OrganicCalendarWorkspaceClient({
           brandProfileId,
           weekStart: weekStartId,
           timezone,
-          placements: seeds as NonNullable<(typeof seeds)[number]>[],
-          platformAccountIds,
+          placements: seeds as CalendarPlacementSeed[],
+          platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
           options: {
             schedulePreset: "beta-launch",
             includeNewsletter: true,
@@ -464,7 +467,7 @@ export function OrganicCalendarWorkspaceClient({
                 desiredFormat: draft.format,
               },
             ],
-            platformAccountIds,
+            platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
           },
           (event) => {
             if (event.type === "placement") {
@@ -540,12 +543,12 @@ export function OrganicCalendarWorkspaceClient({
         format: "Post",
         objective: "Generation Seed",
         captionPreview: "Click Generate to construct this post.",
-        tags:
-          data.type === "question"
-            ? [trendId, "question"]
-            : data.type === "event"
-            ? [trendId, "event"]
-            : [trendId],
+          tags:
+            data.type === "question"
+              ? [trendId, "question"]
+              : (data.type as string) === "event"
+              ? [trendId, "event"]
+              : [trendId],
         mediaCount: 1,
         seedTrendId: trendId,
         targetAccountId: accountId,

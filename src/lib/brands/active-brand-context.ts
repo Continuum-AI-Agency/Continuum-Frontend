@@ -53,7 +53,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       console.error("[activeBrand] brand_profiles lookup failed", brandsError);
     } else {
       brandMap = new Map(
-        (brands ?? []).map((brand) => [
+        ((brands as any[]) ?? []).map((brand) => [
           brand.id,
           {
             name: brand.brand_name ?? "Untitled brand",

@@ -112,7 +112,7 @@ export function mergeSelectableAssetsConnections({
   const accountsByPlatform = buildAccountsByPlatform(selectableAssets);
   const metaIntegrationIds =
     selectableAssetsData.providers?.meta?.hierarchy?.meta?.integrations
-      ?.map(integration => integration.integration_id)
+      ?.map((integration: { integration_id: string }) => integration.integration_id)
       .filter(Boolean) ?? [];
   const integrationIdsByPlatform = new Map<PlatformKey, string[]>();
   if (metaIntegrationIds.length > 0) {
