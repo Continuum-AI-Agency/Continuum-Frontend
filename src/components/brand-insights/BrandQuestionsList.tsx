@@ -49,14 +49,16 @@ export function BrandQuestionsList({
   }
 
   return (
-    <Box className="p-4 bg-surface/30 rounded border border-subtle">
-      <TrendsDataTable
-        data={mappedData}
-        selectedTrendIds={[]}
-        onToggleTrend={() => {}}
-        activePlatforms={["instagram", "linkedin"]}
-        showMomentumFilter={false}
-      />
+    <Box className="flex flex-col h-full min-h-0">
+      <Box className="flex-1 min-h-0 p-2 md:p-4 bg-surface/30 rounded border border-subtle overflow-hidden">
+        <TrendsDataTable
+          data={mappedData}
+          selectedTrendIds={[]}
+          onToggleTrend={() => {}}
+          activePlatforms={["instagram", "linkedin"]}
+          showMomentumFilter={false}
+        />
+      </Box>
     </Box>
   );
 }

@@ -22,20 +22,20 @@ export function BrandEventsList({ events }: BrandEventsListProps) {
   })), [events]);
 
   return (
-    <Box className="flex flex-col h-full">
+    <Box className="flex flex-col h-full min-h-0">
       {events.length === 0 ? (
-        <Box className="flex-1 flex items-center justify-center">
+        <Box className="flex-1 flex items-center justify-center p-8">
           <Callout.Root color="gray" variant="surface">
             <Callout.Icon>
               <LightningBoltIcon />
             </Callout.Icon>
-            <Callout.Text>
+            <Callout.Text size="2">
               We do not have any dated events for this generation yet. Regenerate insights or adjust your window.
             </Callout.Text>
           </Callout.Root>
         </Box>
       ) : (
-        <Box className="p-4 bg-surface/30 rounded border border-subtle">
+        <Box className="flex-1 min-h-0 p-2 md:p-4 bg-surface/30 rounded border border-subtle overflow-hidden">
           <TrendsDataTable
             data={mappedData}
             selectedTrendIds={[]}

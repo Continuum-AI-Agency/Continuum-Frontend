@@ -1,18 +1,7 @@
 import { getApiBaseUrl } from "@/lib/api/config";
 import { assertOk } from "@/lib/api/errors";
 import type { RequestOptions } from "@/lib/api/http.types";
-
-async function getBrowserAccessToken(): Promise<string | undefined> {
-  if (typeof window === "undefined") return undefined;
-  try {
-    const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
-    const supabase = createSupabaseBrowserClient();
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
+import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 
 export async function request<TResponse = unknown>(options: RequestOptions<TResponse>): Promise<TResponse> {
   const { path, method = "GET", body, headers = {}, schema, cache, next } = options;

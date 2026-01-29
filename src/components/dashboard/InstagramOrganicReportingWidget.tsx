@@ -141,6 +141,12 @@ function TrendsPanel({ data }: { data: OrganicMetricsResponse }) {
     },
   } satisfies ChartConfig;
 
+  const trendChartConfig = {
+    ...chartConfig,
+    reach: { ...chartConfig.reach, color: "var(--color-reach)" },
+    views: { ...chartConfig.views, color: "var(--color-views)" },
+  };
+
   return (
     <Box pt="4">
       <Flex align="center" justify="between" mb="3">
@@ -164,7 +170,7 @@ function TrendsPanel({ data }: { data: OrganicMetricsResponse }) {
         <Card variant="surface" className="border border-subtle bg-surface">
           <Box p="3">
             <Text size="2" color="gray" mb="2">Reach & Views Trend</Text>
-            <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
+            <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trendData}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -210,7 +216,11 @@ function TrendsPanel({ data }: { data: OrganicMetricsResponse }) {
           <Card variant="surface" className="border border-subtle bg-surface">
             <Box p="3">
               <Text size="2" color="gray" mb="2">Engagement Trend</Text>
-              <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
+              <ChartContainer config={{
+                likes: { label: "Likes", color: "var(--color-likes)" },
+                comments: { label: "Comments", color: "var(--color-comments)" },
+                shares: { label: "Shares", color: "var(--color-shares)" },
+              }} className="aspect-auto h-[200px] w-full">
                 <LineChart data={trendData}>
                   <CartesianGrid vertical={false} />
                   <XAxis
@@ -531,10 +541,6 @@ function MetricsPanel({
   if (metrics.reach !== undefined) metricCards.push({ key: "reach", label: METRIC_LABELS.reach, value: metrics.reach });
   if (metrics.newFollowers !== undefined) metricCards.push({ key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers });
   if (metrics.accountsEngaged !== undefined) metricCards.push({ key: "accountsEngaged", label: METRIC_LABELS.accountsEngaged, value: metrics.accountsEngaged });
-  if (metrics.totalInteractions !== undefined) metricCards.push({ key: "totalInteractions", label: METRIC_LABELS.totalInteractions, value: metrics.totalInteractions });
-  if (metrics.likes !== undefined) metricCards.push({ key: "likes", label: METRIC_LABELS.likes, value: metrics.likes });
-  if (metrics.comments !== undefined) metricCards.push({ key: "comments", label: METRIC_LABELS.comments, value: metrics.comments });
-  if (metrics.shares !== undefined) metricCards.push({ key: "shares", label: METRIC_LABELS.shares, value: metrics.shares });
   if (metrics.reelsViews !== undefined) metricCards.push({ key: "reelsViews", label: METRIC_LABELS.reelsViews, value: metrics.reelsViews });
   if (metrics.postViews !== undefined) metricCards.push({ key: "postViews", label: METRIC_LABELS.postViews, value: metrics.postViews });
 
@@ -564,9 +570,9 @@ function MetricsPanel({
 
   return (
     <Flex direction="column" gap="4" className="h-full min-h-0">
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4" className="h-full min-h-0">
+      <Grid columns={{ initial: "1", lg: "1" }} gap="4" className="h-full min-h-0">
         <Box className="w-full">
-          <Grid columns="4" gap="2">
+          <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
             {metricCards.map((item) => {
               const delta = comparison?.[item.key]?.percentageChange;
               const formattedDelta = formatPercent(delta ?? undefined);
@@ -590,12 +596,12 @@ function MetricsPanel({
                   >
                     <Box p="2" className="w-full">
                       <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                        <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "10px" }}>
+                        <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
                           {item.label}
                         </Text>
-                        <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "12px" }}>{formatNumber(item.value)}</Heading>
+                        <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "clamp(10px, 1vw, 12px)" }}>{formatNumber(item.value)}</Heading>
                         {formattedDelta ? (
-                          <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "10px" }}>
+                          <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
                             {formattedDelta}
                           </Text>
                         ) : (
@@ -610,9 +616,9 @@ function MetricsPanel({
           </Grid>
         </Box>
 
-        <Box className="w-full h-full min-h-[220px] lg:min-h-[240px]">
+        <Box className="w-full h-full min-h-[300px] mt-4">
           <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
-            <Box p="3" className="flex-1 flex flex-col">
+            <Box p="3" className="flex-1 flex flex-col min-h-0">
               <Flex align="center" justify="between" gap="2" mb="2">
                 <Box>
                   <Heading size="3">{expandedLabel}</Heading>

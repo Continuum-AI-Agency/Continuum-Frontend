@@ -62,6 +62,28 @@ const TOAST_PALETTE: Record<ToastVariant, ToastVisual> = {
   },
 };
 
+export class ToastError extends Error {
+  readonly options: ToastOptions;
+
+  constructor(options: ToastOptions, cause?: unknown) {
+    super(options.description ?? options.title);
+    this.name = "ToastError";
+    this.options = options;
+    if (cause !== undefined) {
+      (this as { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
+export function throwToastError(options: ToastOptions, cause?: unknown): never {
+  throw new ToastError(options, cause);
+}
+
+export function coerceToastOptions(error: unknown, fallback: ToastOptions): ToastOptions {
+  if (error instanceof ToastError) return error.options;
+  return fallback;
+}
+
 type ToastContextValue = {
   show: (options: ToastOptions) => void;
 };

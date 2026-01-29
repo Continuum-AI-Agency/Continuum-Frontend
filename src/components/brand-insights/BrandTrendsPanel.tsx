@@ -56,23 +56,23 @@ export function BrandTrendsPanel({
 
   return (
     <Box 
-      className={cn("p-6 space-y-4 bg-background border", className)}
+      className={cn("p-4 md:p-6 space-y-4 bg-background border flex flex-col h-full min-h-0", className)}
       style={{
         color: "var(--foreground)",
       }}
     >
-      <Flex justify="between" align="start" wrap="wrap" gap="3">
+      <Flex justify="between" align="start" wrap="wrap" gap="3" className="shrink-0">
         <Box className="space-y-1">
           <Flex align="center" gap="2">
-            <ReaderIcon className="h-4 w-4 text-[var(--accent-11)]" />
-            <Text size="1" color="gray">
+            <ReaderIcon className="h-3.5 w-3.5 md:h-4 md:w-4 text-[var(--accent-11)]" />
+            <Text size="1" color="gray" className="uppercase tracking-widest font-medium opacity-70">
               Brand Insights · Trends
             </Text>
           </Flex>
-          <Heading size="5" className="text-white">
+          <Heading size={{ initial: "4", md: "5" }} className="text-white tracking-tight">
             Current trend signals
           </Heading>
-          <Text size="2" color="gray">
+          <Text size={{ initial: "1", md: "2" }} color="gray" className="max-w-md">
             High-signal topics synthesized from the latest generation window.
           </Text>
         </Box>
@@ -80,39 +80,42 @@ export function BrandTrendsPanel({
         <Flex align="center" wrap="wrap" gap="2" justify="end">
           {actionSlot}
           {country && (
-            <Badge color="gray" variant="surface">
+            <Badge color="gray" variant="surface" size={{ initial: "1", md: "2" }}>
               <GlobeIcon className="mr-1 h-3.5 w-3.5" />
               {country}
             </Badge>
           )}
           {weekLabel && (
-            <Badge color="indigo" variant="surface">
+            <Badge color="indigo" variant="surface" size={{ initial: "1", md: "2" }}>
               <CalendarIcon className="mr-1 h-3.5 w-3.5" />
-              Week of {weekLabel}
+              {weekLabel}
             </Badge>
           )}
           {generatedLabel && (
-            <Badge color="green" variant="surface">
+            <Badge color="green" variant="surface" size={{ initial: "1", md: "2" }}>
               <ClockIcon className="mr-1 h-3.5 w-3.5" />
-              Updated {generatedLabel}
+              {generatedLabel}
             </Badge>
           )}
           {status && (
-            <Badge color="amber" variant="surface">
+            <Badge color="amber" variant="surface" size={{ initial: "1", md: "2" }}>
               {status}
             </Badge>
           )}
         </Flex>
       </Flex>
 
-      <Separator size="4" />
+      <Separator size="4" className="shrink-0" />
 
-       <BrandTrendsTabs
-         trends={trends}
-         events={events}
-         questionsByNiche={questionsByNiche}
-         brandId={brandId}
-       />
+        <Box className="flex-1 min-h-0">
+          <BrandTrendsTabs
+            trends={trends}
+            events={events}
+            questionsByNiche={questionsByNiche}
+            brandId={brandId}
+          />
+        </Box>
+
     </Box>
   );
 }

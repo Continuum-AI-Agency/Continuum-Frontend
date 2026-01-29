@@ -1,122 +1,85 @@
 "use client";
 
-import { Badge, Box, Flex, Heading, Separator, Text, Switch, TextField } from "@radix-ui/themes";
-import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon, MagnifyingGlassIcon } from "@radix-ui/react-icons";
+import { Box, Flex, Separator } from "@radix-ui/themes";
 import * as Accordion from "@radix-ui/react-accordion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 
 /**
- * TrendCardSkeleton
- * Matches the exact layout of accordion items from BrandTrendsGrid.
- * Shows: title, badges (Selected, Used x times), chevron, and content area.
+ * TrendRowSkeleton
+ * Matches the refactored TrendsDataTable row structure with expandable area.
  */
-function TrendCardSkeleton({ expanded = false }: { expanded?: boolean }) {
+function TrendRowSkeleton() {
   return (
-    <Accordion.Item
-      value="skeleton"
-      className="rounded-xl border border-subtle bg-surface shadow-lg overflow-hidden"
-    >
-      <Accordion.Header>
-        <Accordion.Trigger className="flex w-full items-start justify-between gap-3 rounded-xl px-4 py-3 text-left">
-          <div className="min-w-0 space-y-1">
-            <Skeleton className="h-5 w-[280px] rounded" />
-          </div>
+    <div className="flex items-center px-2 min-h-[2.5rem] border-b border-subtle/30">
+      <div className="w-8 px-2 shrink-0">
+        <Skeleton className="h-4 w-4 rounded" />
+      </div>
+      <div className="flex-1 px-2">
+        <Skeleton className="h-4 w-[140px] rounded" />
+      </div>
+      <div className="flex-1 px-2 hidden md:block">
+        <Skeleton className="h-3 w-[60px] rounded-full" />
+      </div>
+      <div className="flex-1 px-2">
+        <Skeleton className="h-3 w-[80px] rounded" />
+      </div>
+      <div className="w-8 px-2 shrink-0">
+        <Skeleton className="h-4 w-4 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * BrandTrendsAccordionSkeleton
+ * Matches the top-level vertical accordion navigation.
+ */
+function BrandTrendsAccordionSkeleton() {
+  return (
+    <Box className="flex flex-col h-full min-h-0 space-y-3">
+      {/* Active Section (Trends) */}
+      <div className="flex flex-col border rounded-lg bg-surface/20 border-subtle overflow-hidden flex-1">
+        <div className="flex w-full items-center justify-between px-4 py-3 bg-surface/40 border-b border-subtle/30">
           <Flex align="center" gap="2">
-            {expanded && (
-              <Badge color="violet" variant="solid">
-                <Skeleton className="h-3 w-[60px] rounded" />
-              </Badge>
-            )}
-            <Skeleton className="h-4 w-4 rounded-full" />
+            <Skeleton className="h-4 w-20 rounded" />
+            <Skeleton className="h-4 w-6 rounded-full" />
           </Flex>
-        </Accordion.Trigger>
-      </Accordion.Header>
-      <Accordion.Content className="overflow-hidden">
-        <Box className="space-y-3 px-4 pb-4 pt-1">
-          <Skeleton className="h-4 w-full rounded" />
-          <Skeleton className="h-4 w-[90%] rounded" />
-          <Skeleton className="h-4 w-[75%] rounded" />
-          <Box className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3">
-            <Skeleton className="h-3 w-[80px] rounded mb-2" />
-            <Skeleton className="h-4 w-full rounded" />
-            <Skeleton className="h-4 w-[85%] rounded" />
-          </Box>
-          <Skeleton className="h-3 w-[200px] rounded" />
-        </Box>
-      </Accordion.Content>
-    </Accordion.Item>
-  );
-}
-
-/**
- * SearchBarSkeleton
- * Matches the search field and switch from BrandTrendsGrid header.
- */
-function SearchBarSkeleton() {
-  return (
-    <Flex align="center" justify="between" wrap="wrap" gap="3">
-      <Skeleton className="h-10 min-w-[260px] rounded-md" />
-      <Flex align="center" gap="3" wrap="wrap" justify="end">
-        <Flex align="center" gap="2">
-          <Skeleton className="h-6 w-10 rounded-full" />
-          <Skeleton className="h-4 w-[120px] rounded" />
-        </Flex>
-      </Flex>
-    </Flex>
-  );
-}
-
-/**
- * BrandTrendsGridSkeleton
- * Displays search bar skeleton and multiple trend card skeletons.
- * Shows 5 cards (1 expanded, 4 collapsed) for realistic loading state.
- */
-function BrandTrendsGridSkeleton() {
-  return (
-    <Box className="space-y-4">
-      <SearchBarSkeleton />
-      <Accordion.Root type="single" collapsible className="space-y-3">
-        <TrendCardSkeleton expanded={true} />
-        {Array.from({ length: 4 }).map((_, index) => (
-          <TrendCardSkeleton key={index} />
-        ))}
-      </Accordion.Root>
-    </Box>
-  );
-}
-
-/**
- * BrandTrendsTabsSkeleton
- * Matches the tabs structure from BrandTrendsTabs component.
- */
-function BrandTrendsTabsSkeleton() {
-  return (
-    <div>
-      <div className="flex border-b border-border">
-        <div className="px-4 py-2 border-b-2 border-primary">
-          <Skeleton className="h-5 w-[50px] rounded" />
+          <Skeleton className="h-4 w-4 rounded" />
         </div>
-        <div className="px-4 py-2">
-          <Skeleton className="h-5 w-[90px] rounded" />
+        <div className="flex-1 overflow-hidden p-2 md:p-3">
+          <div className="space-y-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <TrendRowSkeleton key={i} />
+            ))}
+          </div>
         </div>
       </div>
-      <Box className="pt-4">
-        <BrandTrendsGridSkeleton />
-      </Box>
-    </div>
+
+      {/* Collapsed Sections */}
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className="border rounded-lg bg-surface/20 border-subtle overflow-hidden">
+          <div className="flex w-full items-center justify-between px-4 py-3">
+            <Flex align="center" gap="2">
+              <Skeleton className="h-4 w-20 rounded" />
+              <Skeleton className="h-4 w-6 rounded-full" />
+            </Flex>
+            <Skeleton className="h-4 w-4 rounded" />
+          </div>
+        </div>
+      ))}
+    </Box>
   );
 }
 
 /**
  * BrandTrendsPanelSkeleton
  * Complete loading skeleton for the entire BrandTrendsPanel.
- * Includes: header with badges, separator, and tabs skeleton.
  */
 export function BrandTrendsPanelSkeleton() {
   return (
-    <GlassPanel className="p-6 space-y-4">
-      <Flex justify="between" align="start" wrap="wrap" gap="3">
+    <Box className="p-4 md:p-6 space-y-4 bg-background border flex flex-col h-full min-h-0">
+      <Flex justify="between" align="start" wrap="wrap" gap="3" className="shrink-0">
         <Box className="space-y-1">
           <Flex align="center" gap="2">
             <Skeleton className="h-4 w-4 rounded-full" />
@@ -127,18 +90,33 @@ export function BrandTrendsPanelSkeleton() {
         </Box>
 
         <Flex align="center" wrap="wrap" gap="2" justify="end">
+          <Skeleton className="h-8 w-24 rounded" />
           <Skeleton className="h-6 w-[100px] rounded-full" />
           <Skeleton className="h-6 w-[120px] rounded-full" />
-          <Skeleton className="h-6 w-[140px] rounded-full" />
-          <Skeleton className="h-6 w-[80px] rounded-full" />
         </Flex>
       </Flex>
 
-      <Separator size="4" />
+      <Separator size="4" className="shrink-0" />
 
-      <BrandTrendsTabsSkeleton />
-    </GlassPanel>
+      <Box className="flex-1 min-h-0">
+        <BrandTrendsAccordionSkeleton />
+      </Box>
+    </Box>
   );
 }
 
-export { TrendCardSkeleton, SearchBarSkeleton, BrandTrendsGridSkeleton, BrandTrendsTabsSkeleton };
+/**
+ * BrandTrendsGridSkeleton
+ * Displays multiple trend row skeletons.
+ */
+function BrandTrendsGridSkeleton() {
+  return (
+    <div className="space-y-1">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <TrendRowSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+export { BrandTrendsAccordionSkeleton as BrandTrendsTabsSkeleton, BrandTrendsGridSkeleton };

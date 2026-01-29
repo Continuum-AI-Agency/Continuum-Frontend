@@ -66,4 +66,41 @@ describe('workflowSerialization', () => {
     expect(snapshot.edges).toHaveLength(1);
     expect(snapshot.edges[0].data).toEqual(expect.objectContaining({ pathType: 'smoothstep' }));
   });
+
+  it('strips base64 payloads from saved node data', () => {
+    const dataUrl = 'data:image/png;base64,abc123';
+    const snapshot = serializeWorkflowSnapshot(
+      [
+        buildNode({ id: 'img', type: 'image', data: { image: dataUrl, fileName: 'img.png' } as any }),
+        buildNode({
+          id: 'doc',
+          type: 'document',
+          data: { documents: [{ name: 'doc.pdf', content: 'data:application/pdf;base64,abc', type: 'pdf' }] } as any,
+        }),
+        buildNode({
+          id: 'string',
+          data: { value: 'hello', inputs: [{ type: 'image', src: dataUrl }, { type: 'text', src: 'Keep me' }] } as any,
+        }),
+        buildNode({
+          id: 'video-gen',
+          type: 'video-gen',
+          data: { model: 'veo-3.1', prompt: '', enhancePrompt: false, frameList: [{ id: 'f1', src: dataUrl, type: 'image' }] } as any,
+        }),
+      ],
+      [],
+      'bezier'
+    );
+
+    const imageNode = snapshot.nodes.find((node) => node.id === 'img');
+    expect((imageNode?.data as any)?.image).toBeUndefined();
+
+    const documentNode = snapshot.nodes.find((node) => node.id === 'doc');
+    expect((documentNode?.data as any)?.documents?.[0]?.content).toBe('');
+
+    const stringNode = snapshot.nodes.find((node) => node.id === 'string');
+    expect((stringNode?.data as any)?.inputs).toEqual([{ type: 'text', src: 'Keep me' }]);
+
+    const videoNode = snapshot.nodes.find((node) => node.id === 'video-gen');
+    expect((videoNode?.data as any)?.frameList?.[0]?.src).toBeUndefined();
+  });
 });

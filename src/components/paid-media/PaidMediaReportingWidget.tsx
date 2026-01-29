@@ -102,6 +102,12 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
     roas: { label: "ROAS", color: "var(--color-secondary)" },
   } satisfies ChartConfig;
 
+  const trendChartConfig = {
+    ...chartConfig,
+    spend: { ...chartConfig.spend, color: "var(--color-spend)" },
+    roas: { ...chartConfig.roas, color: "var(--color-roas)" },
+  };
+
   return (
     <Box pt="4">
       <Flex align="center" justify="between" mb="3">
@@ -117,7 +123,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
         <Card variant="surface" className="border border-subtle bg-surface">
           <Box p="3">
             <Text size="2" color="gray" mb="2">Daily Spend</Text>
-            <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
+            <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trends}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -148,7 +154,7 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
         <Card variant="surface" className="border border-subtle bg-surface">
           <Box p="3">
             <Text size="2" color="gray" mb="2">Return on Ad Spend (ROAS)</Text>
-            <ChartContainer config={chartConfig} className="aspect-auto h-[200px] w-full">
+            <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
               <LineChart data={trends}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -549,12 +555,19 @@ function MetricsPanel({
   const chartConfig = {
     current: { label: "Current", color: "var(--color-primary)" },
     previous: { label: "Previous", color: "var(--color-muted)" },
+    spend: { label: "Spend", color: "var(--color-spend)" },
+    roas: { label: "ROAS", color: "var(--color-roas)" },
   } satisfies ChartConfig;
 
+  const mainChartConfig = {
+    ...chartConfig,
+    current: { ...chartConfig.current, color: `var(--color-${expandedKey})` },
+  };
+
   return (
-    <Grid columns={{ initial: "1", lg: "2" }} gap="4" className="h-full min-h-0">
+    <Grid columns={{ initial: "1" }} gap="4" className="h-full min-h-0">
       <Box className="w-full">
-        <Grid columns="4" gap="2">
+        <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
           {metricCards.map((item) => {
             const delta = comparison?.[item.key]?.percentageChange;
             const formattedDelta = formatPercent(delta);
@@ -578,10 +591,10 @@ function MetricsPanel({
                 >
                   <Box p="2" className="w-full">
                     <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                      <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "10px" }}>{item.label}</Text>
-                      <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "12px" }}>{formatValue(item.value, item.format)}</Heading>
+                      <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>{item.label}</Text>
+                      <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "clamp(10px, 1vw, 12px)" }}>{formatValue(item.value, item.format)}</Heading>
                       {formattedDelta ? (
-                        <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "10px" }}>
+                        <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
                           {formattedDelta}
                         </Text>
                       ) : (
@@ -596,9 +609,9 @@ function MetricsPanel({
         </Grid>
       </Box>
 
-      <Box className="w-full h-full min-h-[220px] lg:min-h-[240px]">
+      <Box className="w-full h-full min-h-[300px] mt-2">
         <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
-          <Box p="3" className="flex-1 flex flex-col">
+          <Box p="3" className="flex-1 flex flex-col min-h-0">
             <Flex align="center" justify="between" gap="2" mb="2">
               <Box>
                 <Heading size="3">{expandedLabel}</Heading>
@@ -607,7 +620,7 @@ function MetricsPanel({
             </Flex>
 
             <Box className="flex-1 min-h-0 overflow-hidden">
-              <ChartContainer config={chartConfig} className="h-full w-full min-h-0 aspect-auto overflow-hidden">
+              <ChartContainer config={mainChartConfig} className="h-full w-full min-h-0 aspect-auto overflow-hidden">
                 <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 0, right: 8 }}>
                   <CartesianGrid horizontal={false} />
                   <YAxis dataKey="name" type="category" hide />

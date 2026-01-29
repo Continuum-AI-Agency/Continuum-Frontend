@@ -17,10 +17,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/components/ui/ToastProvider';
+import { coerceToastOptions, throwToastError, useToast } from '@/components/ui/ToastProvider';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
+import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { useStudioStore } from '../stores/useStudioStore';
 import { serializeWorkflowSnapshot } from '../utils/workflowSerialization';
+
+const WORKFLOW_PAYLOAD_MAX_BYTES = 1024 * 1024;
 
 const saveWorkflowSchema = z.object({
   name: z.string().min(1, 'Workflow name is required'),
@@ -59,6 +62,14 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
     setError(null);
     try {
       const snapshot = serializeWorkflowSnapshot(nodes, edges, defaultEdgeType);
+      const payloadBytes = new TextEncoder().encode(JSON.stringify(snapshot)).length;
+      if (payloadBytes > WORKFLOW_PAYLOAD_MAX_BYTES) {
+        throwToastError({
+          title: 'Workflow too large to save',
+          description: `${formatMiB(payloadBytes)} (max ${formatMiB(WORKFLOW_PAYLOAD_MAX_BYTES)}). Remove large media inputs.`,
+          variant: 'error',
+        });
+      }
       await createAiStudioWorkflowAction({
         brandProfileId,
         name: values.name.trim(),
@@ -71,8 +82,13 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
       setOpen(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to save workflow';
-      setError(message);
-      show({ title: 'Save failed', description: message, variant: 'error' });
+      const toastOptions = coerceToastOptions(err, {
+        title: 'Save failed',
+        description: message,
+        variant: 'error',
+      });
+      setError(toastOptions.description ?? toastOptions.title);
+      show(toastOptions);
     } finally {
       setIsSaving(false);
     }

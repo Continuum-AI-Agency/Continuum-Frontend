@@ -10,6 +10,7 @@ import GalaxyBackground from "../components/ui/GalaxyBackground";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";
 import { VersionBanner } from "@/components/version-banner";
+import { MixpanelInit } from "@/components/analytics/MixpanelInit";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -84,6 +85,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider initialAppearance={initialAppearance}>
+          <MixpanelInit />
           <ReactQueryProvider>
             <ToastProvider>
               <GalaxyBackground intensity={1} speed="glacial" />

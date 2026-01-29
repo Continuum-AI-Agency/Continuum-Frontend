@@ -41,7 +41,7 @@ export function BrandTrendsGrid({ trends, isLoading = false }: BrandTrendsGridPr
   }
 
   return (
-    <Box className="p-4 bg-surface/30 rounded border border-subtle">
+    <Box className="h-full p-2 md:p-4 bg-surface/30 rounded border border-subtle overflow-hidden">
       <TrendsDataTable
         data={mappedData}
         selectedTrendIds={[]} 

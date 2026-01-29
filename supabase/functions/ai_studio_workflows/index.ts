@@ -9,6 +9,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { workflowActionSchema, type WorkflowAction } from "./validators.ts";
 import type { WorkflowRow } from "./types.ts";
+import { sanitizeWorkflowNodes } from "./sanitize.ts";
+
+const DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024;
+const MAX_PAYLOAD_BYTES = Number(Deno.env.get("AI_STUDIO_WORKFLOWS_MAX_BYTES")) || DEFAULT_MAX_PAYLOAD_BYTES;
+const decoder = new TextDecoder();
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -49,6 +54,7 @@ async function handleList(req: Request, input: Extract<WorkflowAction, { action:
 async function handleCreate(req: Request, input: Extract<WorkflowAction, { action: "create" }>) {
   const supabase = createSupabaseForRequest(req);
   await requireUser(supabase);
+  const sanitizedNodes = sanitizeWorkflowNodes(input.nodes ?? []);
 
   const { data, error } = await supabase
     .schema("brand_profiles")
@@ -57,7 +63,7 @@ async function handleCreate(req: Request, input: Extract<WorkflowAction, { actio
       brand_profile_id: input.brandProfileId,
       name: input.name,
       description: input.description ?? null,
-      nodes: input.nodes ?? [],
+      nodes: sanitizedNodes,
       edges: input.edges ?? [],
       metadata: input.metadata ?? null,
       updated_at: new Date().toISOString(),
@@ -70,22 +76,48 @@ async function handleCreate(req: Request, input: Extract<WorkflowAction, { actio
 }
 
 async function handler(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*" } });
-  }
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-
-  let parsed: WorkflowAction;
   try {
-    parsed = workflowActionSchema.parse(await req.json());
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*" } });
+    }
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+    let parsed: WorkflowAction;
+    let payloadBytes = 0;
+    try {
+      const buffer = await req.arrayBuffer();
+      payloadBytes = buffer.byteLength;
+      if (payloadBytes === 0) return json({ error: "Missing request body" }, 400);
+      if (payloadBytes > MAX_PAYLOAD_BYTES) {
+        return json({ error: "Payload too large", maxBytes: MAX_PAYLOAD_BYTES }, 413);
+      }
+      parsed = workflowActionSchema.parse(JSON.parse(decoder.decode(buffer)));
+    } catch (err) {
+      return json({ error: "Invalid request", details: (err as Error).message }, 400);
+    }
+
+    if (parsed.action === "list") {
+      console.info("[ai_studio_workflows] list request", {
+        brandProfileId: parsed.brandProfileId,
+        payloadBytes,
+      });
+      return await handleList(req, parsed);
+    }
+    if (parsed.action === "create") {
+      console.info("[ai_studio_workflows] create request", {
+        brandProfileId: parsed.brandProfileId,
+        nodes: parsed.nodes?.length ?? 0,
+        edges: parsed.edges?.length ?? 0,
+        payloadBytes,
+      });
+      return await handleCreate(req, parsed);
+    }
+
+    return json({ error: "Unsupported action" }, 400);
   } catch (err) {
-    return json({ error: "Invalid request", details: (err as Error).message }, 400);
+    console.error("[ai_studio_workflows] unhandled error", err);
+    return json({ error: "Unexpected error", details: (err as Error).message }, 500);
   }
-
-  if (parsed.action === "list") return await handleList(req, parsed);
-  if (parsed.action === "create") return await handleCreate(req, parsed);
-
-  return json({ error: "Unsupported action" }, 400);
 }
 
 Deno.serve(handler);

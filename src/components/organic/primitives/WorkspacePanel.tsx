@@ -65,6 +65,9 @@ export function WorkspacePanel({
             onToggleTrend={onToggleTrend}
             withContainer={false}
             showHeader={true}
+            allowDrag={true}
+            allowSelect={true}
+            allowActions={true}
             className="space-y-3"
           />
         </div>

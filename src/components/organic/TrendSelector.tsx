@@ -18,6 +18,9 @@ type TrendSelectorProps = {
   maxSelections?: number;
   withContainer?: boolean;
   showHeader?: boolean;
+  allowDrag?: boolean;
+  allowSelect?: boolean;
+  allowActions?: boolean;
   className?: string;
 };
 
@@ -29,6 +32,9 @@ export function TrendSelector({
   maxSelections,
   withContainer = true,
   showHeader = true,
+  allowDrag = false,
+  allowSelect = true,
+  allowActions = true,
   className,
 }: TrendSelectorProps) {
   const hasLimit = typeof maxSelections === "number" && Number.isFinite(maxSelections);
@@ -77,6 +83,9 @@ export function TrendSelector({
                       onToggleTrend={onToggleTrend}
                       activePlatforms={activePlatforms}
                       showMomentumFilter={type.id === "trends"}
+                      allowDrag={allowDrag}
+                      allowSelect={allowSelect}
+                      allowActions={allowActions}
                     />
                   </div>
                 ))}

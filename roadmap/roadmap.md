@@ -8,7 +8,7 @@ spec: |
 
 ### Feature 1: Extend Node Ecosystem
 Description: Add new node types beyond current basic ones (Prompt, Negative, Model, Attachment, Generator, Preview) to support Weavy's multi-modal capabilities
-- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.) (note: Completed LLMNode implementation via StringNode upgrade with inputs and Enrich execution)
+- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.) (note: Completed LLMNode implementation via StringNode upgrade with inputs and Enrich execution) (note: Relaxed Zod URL validation across 9 files to allow bare domains like 'aws.amazon.com'. Verified with build.)
 - [ ] 1.02 Create VideoNode for video-specific processing and generation
 - [ ] 1.03 Add ImageProcessingNode for consistency controls and transformations
 - [ ] 1.04 Implement SubjectConsistencyNode for maintaining character/object consistency across generations
@@ -55,3 +55,9 @@ Description: Improve the interface to match Weavy's professional, scalable desig
 - [ ] 7.02 Implement better node grouping and organization
 - [ ] 7.03 Add visual feedback for data flow and processing states
 - [ ] 7.04 Create custom node templates for common workflows
+
+### Feature 8: Brand Insights UI Refactor
+Description: Refactor the Brand Insights panel for better responsiveness, navigation, and detail expansion.
+- [x] 8.01 Refactor BrandTrendsPanel to use vertical single-open accordion navigation. [pending] (note: Refactored BrandTrendsPanel to use vertical single-open accordion navigation via the new BrandTrendsAccordion component. Removed Competitors section. Verified with TDD.)
+- [x] 8.02 Implement expandable rows (secondary accordion) in TrendsDataTable to show summary and momentum. [pending] (note: Implemented expandable rows (secondary accordion) in TrendsDataTable to reveal summary and momentum. Integrated sticky headers and internal scroll stabilization. Verified with TDD.)
+- [x] 8.03 Apply responsive scaling and height stabilization for dashboard integration. [pending] (note: Applied responsive Tailwind 4 scaling for typography and spacing across all Brand Insights components. Stabilized container height and ensured fluid internal scrolling within the 65% dashboard slot. Updated skeletons.)

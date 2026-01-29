@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 
+import PaidMediaClientPage from "./PaidMediaClient";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export const dynamic = "force-dynamic";
 
 export default async function PaidMediaPage() {
-  const { activeBrandId, permissions } = await getActiveBrandContext();
+  const { activeBrandId, permissions, brandSummaries } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
@@ -19,6 +20,8 @@ export default async function PaidMediaPage() {
     redirect(`/dashboard?error=${msg}`);
   }
 
-  // For now, redirect to the client component route (which shows placeholder UI)
-  redirect("/paid-media/client");
+  const brandName =
+    brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? "Untitled brand";
+
+  return <PaidMediaClientPage brandProfileId={activeBrandId} brandName={brandName} />;
 }
