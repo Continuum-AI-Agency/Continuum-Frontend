@@ -103,4 +103,14 @@ describe('workflowSerialization', () => {
     const videoNode = snapshot.nodes.find((node) => node.id === 'video-gen');
     expect((videoNode?.data as any)?.frameList?.[0]?.src).toBeUndefined();
   });
+
+  it('strips complex data URLs with extra parameters', () => {
+    const complexDataUrl = 'data:image/png;name=test.png;base64,abc123';
+    const snapshot = serializeWorkflowSnapshot(
+      [buildNode({ id: 'img', type: 'image', data: { image: complexDataUrl } as any })],
+      [],
+      'bezier'
+    );
+    expect((snapshot.nodes[0].data as any).image).toBeUndefined();
+  });
 });

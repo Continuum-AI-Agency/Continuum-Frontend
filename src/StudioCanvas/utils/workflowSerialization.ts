@@ -17,9 +17,9 @@ const runtimeNodeKeys = [
   'generatedVideo',
 ] as const;
 
-const dataUrlPattern = /^data:[^;]+;base64,/i;
+const dataUrlPattern = /^data:([a-z]+\/[a-z0-9-+.]+)(;[a-z0-9=[\]!#$%&'*+.^_`{|}~-]+)*;base64,/i;
 const base64LikePattern = /^[a-z0-9+/=]+$/i;
-const minBase64Length = 256;
+const minBase64Length = 128;
 
 function isEncodedPayload(value: string): boolean {
   const trimmed = value.trim();
@@ -36,17 +36,23 @@ function stripEncodedString(value: unknown): string | undefined {
 
 function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
   const next = { ...data } as Record<string, unknown>;
+  
   runtimeNodeKeys.forEach((key) => {
     delete next[key];
   });
-  const image = stripEncodedString(next.image);
-  if (image === undefined && typeof next.image === 'string') delete next.image;
-  const video = stripEncodedString(next.video);
-  if (video === undefined && typeof next.video === 'string') delete next.video;
-  const audio = stripEncodedString(next.audio);
-  if (audio === undefined && typeof next.audio === 'string') delete next.audio;
+
+  const mediaKeys = ['image', 'video', 'audio', 'generatedImage', 'generatedVideo'];
+  mediaKeys.forEach(key => {
+    const val = next[key];
+    if (typeof val === 'string' && isEncodedPayload(val)) {
+      delete next[key];
+    } else if (val && typeof val === 'object' && !Array.isArray(val)) {
+      delete next[key];
+    }
+  });
+
   if (Array.isArray(next.inputs)) {
-    const sanitizedInputs = next.inputs
+    next.inputs = next.inputs
       .map((input) => {
         if (!input || typeof input !== 'object') return null;
         const record = input as Record<string, unknown>;
@@ -54,11 +60,11 @@ function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
         if (sanitizedSrc === undefined && typeof record.src === 'string') return null;
         return { ...record, src: sanitizedSrc ?? record.src };
       })
-      .filter((input): input is Record<string, unknown> => Boolean(input));
-    next.inputs = sanitizedInputs;
+      .filter((input): input is NonNullable<typeof input> => input !== null);
   }
+
   if (Array.isArray(next.frameList)) {
-    const sanitizedFrames = next.frameList
+    next.frameList = next.frameList
       .map((frame) => {
         if (!frame || typeof frame !== 'object') return null;
         const record = frame as Record<string, unknown>;
@@ -71,11 +77,11 @@ function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
         }
         return nextFrame;
       })
-      .filter((frame): frame is Record<string, unknown> => Boolean(frame));
-    next.frameList = sanitizedFrames;
+      .filter((frame): frame is NonNullable<typeof frame> => frame !== null);
   }
+
   if (Array.isArray(next.documents)) {
-    const sanitizedDocuments = next.documents
+    next.documents = next.documents
       .map((doc) => {
         if (!doc || typeof doc !== 'object') return null;
         const record = doc as Record<string, unknown>;
@@ -85,9 +91,9 @@ function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
           content: sanitizedContent ?? (typeof record.content === 'string' ? '' : ''),
         };
       })
-      .filter((doc): doc is Record<string, unknown> => Boolean(doc));
-    next.documents = sanitizedDocuments;
+      .filter((doc): doc is NonNullable<typeof doc> => doc !== null);
   }
+
   return next as StudioNodeData;
 }
 

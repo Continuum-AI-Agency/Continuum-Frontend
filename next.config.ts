@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+  serverActions: {
+    bodySizeLimit: '3mb',
+  },
+},
   turbopack: {
     root: __dirname,
   },
@@ -15,11 +20,6 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
     ];
-  },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '3mb',
-    },
   },
 };
 
