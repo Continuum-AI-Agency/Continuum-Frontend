@@ -12,10 +12,12 @@ import { CustomHandle } from '../components/CustomHandle';
 import { Link2Icon } from '@radix-ui/react-icons';
 import { NodeStatus, NodeExecutionStatus } from '../components/NodeStatus';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useNodeSelection } from '../contexts/PresenceContext';
 
-export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
+export function NanoGenNode({ id, data, selected }: NodeProps<Node<NanoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   // Count active connections
   const connectedEdges = getConnectedEdges(id, 'target');
@@ -49,7 +51,15 @@ export function NanoGenNode({ id, data }: NodeProps<Node<NanoGenNodeData>>) {
 
   return (
     <TooltipProvider>
-      <Card className="w-80 border-2 border-indigo-500/20 bg-background/95 backdrop-blur shadow-xl relative">
+      <Card 
+        className={cn(
+          "w-80 border-2 border-indigo-500/20 bg-background/95 backdrop-blur shadow-xl relative transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
+      >
       <NodeStatus status={status} errorMessage={data.error} />
       <CardHeader className="py-3 bg-indigo-500/10 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2 whitespace-nowrap">

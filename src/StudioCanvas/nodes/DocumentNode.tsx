@@ -22,6 +22,7 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
+import { useNodeSelection } from '../contexts/PresenceContext';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -30,6 +31,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const edges = useEdges();
   const { show } = useToast();
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   
   const documents = data.documents || [];
 
@@ -157,7 +159,17 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
 
   return (
     <TooltipProvider>
-      <div className="relative group w-full h-full min-w-[200px] min-h-[200px]" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <div 
+        className={cn(
+          "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
+        onDragOver={handleDragOver} 
+        onDrop={handleDrop}
+      >
       <NodeResizer
         minWidth={180}
         minHeight={180}

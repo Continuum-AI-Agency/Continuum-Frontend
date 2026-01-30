@@ -4,7 +4,6 @@ import { Flex } from "@radix-ui/themes";
 import React from "react";
 import { useSession } from "@/hooks/useSession";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
-import { ActiveUsersStack } from "./presence/ActiveUsersStack";
 import { usePathname } from "next/navigation";
 import { useToastContext } from "@/components/ui/ToastProvider";
 import {
@@ -55,7 +54,6 @@ export function DashboardHeader() {
       </div>
       
       <div className="ml-auto flex items-center gap-3">
-         <ActiveUsersStack />
          <BrandSwitcherMenu triggerId="dashboard-brand-menu-trigger" />
       </div>
     </header>

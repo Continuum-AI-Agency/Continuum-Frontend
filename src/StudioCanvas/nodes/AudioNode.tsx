@@ -22,6 +22,7 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
+import { useNodeSelection } from '../contexts/PresenceContext';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -33,6 +34,7 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
   const { show } = useToast();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   const audioConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'audio').length;
 
@@ -145,7 +147,17 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
 
   return (
     <TooltipProvider>
-      <div className="relative group w-full h-full min-w-[180px] min-h-[100px]" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <div 
+        className={cn(
+          "relative group w-full h-full min-w-[180px] min-h-[100px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
+        onDragOver={handleDragOver} 
+        onDrop={handleDrop}
+      >
       <NodeResizer
         minWidth={160}
         minHeight={100}

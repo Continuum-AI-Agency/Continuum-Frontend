@@ -43,7 +43,16 @@ export async function createMagicLinkAction(
   brandId: string,
   email: string,
   role: BrandRole
-): Promise<{ link: string }> {
+): Promise<{
+  link: string;
+  inviteId: string | null;
+  emailSent: boolean;
+  warning?: string;
+  info?: string;
+  code?: string;
+  existingUser?: boolean;
+  resent?: boolean;
+}> {
   if (!email.trim()) {
     throw new Error("Email is required");
   }
@@ -57,7 +66,13 @@ export async function createMagicLinkAction(
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const { data, error } = await supabase.functions.invoke<{
     link: string;
-    inviteId: string;
+    inviteId: string | null;
+    emailSent: boolean;
+    warning?: string;
+    info?: string;
+    code?: string;
+    existingUser?: boolean;
+    resent?: boolean;
   }>("brand_invite", {
     body: {
       action: "create",
@@ -65,6 +80,7 @@ export async function createMagicLinkAction(
       email: email.trim(),
       role,
       siteUrl,
+      forceResend: true,
     },
     headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
   });
@@ -73,7 +89,7 @@ export async function createMagicLinkAction(
     throw new Error(error?.message ?? "Unable to create invite");
   }
 
-  return { link: data.link };
+  return data;
 }
 
 export async function revokeInviteAction(brandId: string, inviteId: string): Promise<void> {

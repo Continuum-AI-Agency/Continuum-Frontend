@@ -156,8 +156,8 @@ export function JainaChatSurface({
             <Heading size="4">Jaina Analyst</Heading>
             {campaignId && <Badge variant="soft" color="blue">Campaign Context</Badge>}
           </Flex>
-          <Text size="2" color="gray">
-            Streaming performance intelligence for <span className="text-primary">{brandName}</span>
+          <Text size="2" className="text-secondary">
+            Streaming performance intelligence for <span className="text-primary font-medium">{brandName}</span>
           </Text>
         </div>
 
@@ -186,7 +186,7 @@ export function JainaChatSurface({
                  <RocketIcon className="h-8 w-8 text-purple-400" />
               </div>
               <Heading size="5" className="text-white">How can Jaina help today?</Heading>
-              <Text size="2" color="gray" className="max-w-sm">
+              <Text size="2" className="text-gray-400 max-w-sm">
                 Ask about campaign performance, creative ROAS, or budget optimizations.
               </Text>
               <Flex gap="2" mt="4" wrap="wrap" justify="center">
@@ -214,7 +214,7 @@ export function JainaChatSurface({
                   <Text size="2">{message.content}</Text>
                 ) : (
                   <>
-                    <SafeMarkdown content={message.content} className="text-[15px] text-gray-200" mode="static" />
+                    <SafeMarkdown content={message.content} className="text-[15px] text-white" mode="static" />
                     
                     {message.id === activeResponseId && (
                       <div className="mt-4 space-y-3">
@@ -226,7 +226,7 @@ export function JainaChatSurface({
                                 {state.progress.map((entry, index) => (
                                   <Flex key={`${entry.stage}-${index}`} align="center" gap="2">
                                     <Badge color="blue" variant="soft" size="1">{entry.stage}</Badge>
-                                    <Text size="1" color="gray">{entry.detail ?? "Working…"}</Text>
+                                    <Text size="1" className="text-gray-400">{entry.detail ?? "Working…"}</Text>
                                   </Flex>
                                 ))}
                               </Flex>

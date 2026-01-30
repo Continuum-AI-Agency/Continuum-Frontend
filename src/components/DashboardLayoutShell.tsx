@@ -4,7 +4,6 @@ import React from "react";
 import { DashboardHeader } from "./dashboard-header";
 import { AppSidebar } from "./navigation/AppSidebar";
 import { ActiveBrandProvider } from "./providers/ActiveBrandProvider";
-import { BrandPresenceProvider } from "./presence/BrandPresenceProvider";
 import { StrategicAnalysisRealtimeListener } from "./strategic-analyses/StrategicAnalysisRealtimeListener";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
@@ -29,31 +28,29 @@ export default function DashboardLayoutShell({
 }: DashboardLayoutShellProps) {
   return (
     <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries}>
-      <BrandPresenceProvider brandProfileId={activeBrandId}>
-        <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
-        <div className="relative">
-          <div className="particle-layer top" aria-hidden="true" />
-          <div className="particle-layer bottom" aria-hidden="true" />
+      <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
+      <div className="relative">
+        <div className="particle-layer top" aria-hidden="true" />
+        <div className="particle-layer bottom" aria-hidden="true" />
   
-          <SidebarProvider 
-             defaultOpen={false}
-             style={
-               {
-                 "--sidebar-width": "16rem",
-                 "--sidebar-width-icon": "5.5rem",
-               } as React.CSSProperties
-             }
-          >
-            <AppSidebar />
-            <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
-               <DashboardHeader />
-               <main className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
-                 <div className="w-full h-full min-h-0">{children}</div>
-               </main>
-            </SidebarInset>
-          </SidebarProvider>
-        </div>
-      </BrandPresenceProvider>
+        <SidebarProvider 
+           defaultOpen={false}
+           style={
+             {
+               "--sidebar-width": "16rem",
+               "--sidebar-width-icon": "5.5rem",
+             } as React.CSSProperties
+           }
+        >
+          <AppSidebar />
+          <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
+             <DashboardHeader />
+             <main className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
+               <div className="w-full h-full min-h-0">{children}</div>
+             </main>
+          </SidebarInset>
+        </SidebarProvider>
+      </div>
     </ActiveBrandProvider>
   );
 }

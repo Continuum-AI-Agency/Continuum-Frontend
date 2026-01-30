@@ -27,6 +27,8 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
 import { AspectRatio } from "@/components/ui/aspect-ratio"
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { cn } from '@/lib/utils';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -37,6 +39,7 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
   const { show } = useToast();
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   const handleRefTypeChange = useCallback((value: string) => {
     setRefType(value);
@@ -132,7 +135,17 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
 
   return (
     <TooltipProvider>
-      <div className="relative group w-full h-full min-w-[200px] min-h-[200px]" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <div 
+        className={cn(
+          "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
+        onDragOver={handleDragOver} 
+        onDrop={handleDrop}
+      >
       <NodeResizer
         minWidth={200}
         minHeight={200}

@@ -223,6 +223,22 @@ body {
   background-color: var(--surface-default);
   background-image: none;
   background-size: cover;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="rgba(139, 92, 246, 0.2)" /><circle cx="16" cy="16" r="8" fill="rgba(139, 92, 246, 0.4)" /><circle cx="16" cy="16" r="4" fill="rgb(139, 92, 246)" /></svg>') 16 16, auto;
+}
+
+/* Glow for nodes selected by other users */
+.react-flow__node.selected-by-other {
+  box-shadow: 0 0 0 2px var(--other-user-color, #a855f7), 0 0 16px var(--other-user-color, #a855f7);
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 2px var(--other-user-color, #a855f7), 0 0 16px var(--other-user-color, #a855f7);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--other-user-color, #a855f7), 0 0 24px var(--other-user-color, #a855f7);
+  }
 }
 
 .react-flow__edge.studio-edge .react-flow__edge-path {
@@ -311,6 +327,19 @@ body {
     animation: none;
     stroke-dasharray: none;
   }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
 .particle-layer {

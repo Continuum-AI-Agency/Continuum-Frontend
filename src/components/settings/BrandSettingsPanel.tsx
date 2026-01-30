@@ -144,14 +144,28 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
     }
     startTransition(async () => {
       try {
-        const { link } = await createMagicLinkAction(activeBrandId, inviteEmail.trim(), inviteRole);
-        setGeneratedLink(link);
+        const result = await createMagicLinkAction(activeBrandId, inviteEmail.trim(), inviteRole);
+        setGeneratedLink(result.link);
         setInviteEmail("");
-        show({
-          title: "Magic link sent",
-          description: `Invite emailed to ${inviteEmail.trim()}.`,
-          variant: "success",
-        });
+        if (result.warning) {
+          show({
+            title: "Invite ready",
+            description: result.warning,
+            variant: "warning",
+          });
+        } else if (result.emailSent) {
+          show({
+            title: result.resent ? "Magic link resent" : "Magic link sent",
+            description: `Invite emailed to ${inviteEmail.trim()}.`,
+            variant: "success",
+          });
+        } else {
+          show({
+            title: "Invite ready",
+            description: "Invite link created. Share it manually.",
+            variant: "warning",
+          });
+        }
         router.refresh();
       } catch (error) {
         show({

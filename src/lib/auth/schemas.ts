@@ -27,10 +27,10 @@ export const recoverySchema = z.object({
 
 export const magicLinkSchema = z.object({
   email: z.string().email("Invalid email address"),
+  redirectTo: z.string().min(1).optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 export type RecoveryInput = z.infer<typeof recoverySchema>;
 export type MagicLinkInput = z.infer<typeof magicLinkSchema>;
-

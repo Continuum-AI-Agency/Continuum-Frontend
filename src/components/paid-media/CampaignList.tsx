@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Callout, Text, Badge } from "@radix-ui/themes";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getApiUrl } from "@/lib/api/config";
 
 type Campaign = {
   id: string;

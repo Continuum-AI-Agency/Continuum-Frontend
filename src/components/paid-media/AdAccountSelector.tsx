@@ -2,9 +2,9 @@
 "use client";
 
 import * as React from "react";
-import { Select, Callout } from "@radix-ui/themes";
+import { Select, Callout, Text, Flex } from "@radix-ui/themes";
 import { useToast } from "@/components/ui/ToastProvider";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 
 type AdAccount = {
   id: string;
@@ -22,76 +22,25 @@ export function AdAccountSelector({
   selectedAccountId,
   onSelect,
 }: AdAccountSelectorProps) {
-  const { show } = useToast();
-  const supabase = createSupabaseBrowserClient();
+  const { integrations, isLoading, isError } = useBrandIntegrations(brandId);
 
-  const [adAccounts, setAdAccounts] = React.useState<AdAccount[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const adAccounts = React.useMemo(() => {
+    if (!integrations) return [];
+    const facebookAccounts = integrations.facebook?.accounts ?? [];
+    return facebookAccounts.map((acc) => ({
+      id: acc.externalAccountId ?? acc.integrationAccountId,
+      name: acc.name,
+    }));
+  }, [integrations]);
 
+  // Auto-select first account if none selected
   React.useEffect(() => {
-    let mounted = true;
-
-    async function loadAccounts() {
-      setLoading(true);
-      setError(null);
-      try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) {
-          throw new Error("No authentication token available");
-        }
-
-        const response = await fetch(
-          `/api/ad-accounts?brandId=${encodeURIComponent(brandId)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to load ad accounts.");
-        }
-
-        const payload = (await response.json()) as { accounts?: AdAccount[] };
-        const accounts = payload.accounts ?? [];
-        
-        if (mounted) {
-          setAdAccounts(accounts);
-          // Auto-select first account if none selected
-          if (!selectedAccountId && accounts.length > 0) {
-            onSelect(accounts[0].id);
-          }
-        }
-      } catch (err) {
-        if (mounted) {
-          const message = err instanceof Error ? err.message : "Unable to load ad accounts.";
-          setError(message);
-          show({
-            title: "Error",
-            description: message,
-            variant: "error",
-          });
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
+    if (!selectedAccountId && adAccounts.length > 0) {
+      onSelect(adAccounts[0].id);
     }
+  }, [selectedAccountId, adAccounts, onSelect]);
 
-    void loadAccounts();
-
-    return () => {
-      mounted = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, selectedAccountId]);
-
-  if (error) {
+  if (isError) {
     return (
       <Callout.Root color="red" variant="surface" size="1">
         <Callout.Text>Error loading accounts</Callout.Text>
@@ -103,10 +52,10 @@ export function AdAccountSelector({
     <Select.Root
       value={selectedAccountId ?? ""}
       onValueChange={onSelect}
-      disabled={loading || adAccounts.length === 0}
+      disabled={isLoading || adAccounts.length === 0}
     >
       <Select.Trigger variant="surface" radius="large" className="min-w-[220px]">
-        {loading
+        {isLoading
           ? "Loading ad accounts…"
           : selectedAccountId
           ? adAccounts.find((a) => a.id === selectedAccountId)?.name ?? "Ad account"

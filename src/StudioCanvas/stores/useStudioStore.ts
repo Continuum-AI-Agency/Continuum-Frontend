@@ -17,11 +17,13 @@ import { isValidConnection, getAllowedTargetHandles, getAllowedSourceHandles } f
 import { resolveCollisions } from '../utils/nodeCollisions';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
+export type InteractionMode = 'pan' | 'select';
 
 interface StudioState {
   nodes: StudioNode[];
   edges: Edge[];
   defaultEdgeType: EdgeType;
+  interactionMode: InteractionMode;
   onNodesChange: OnNodesChange<StudioNode>;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -31,6 +33,7 @@ interface StudioState {
   getNodeById: (id: string) => StudioNode | undefined;
   getConnectedEdges: (nodeId: string, handleType?: 'source' | 'target') => Edge[];
   setDefaultEdgeType: (type: EdgeType) => void;
+  setInteractionMode: (mode: InteractionMode) => void;
   duplicateNode: (id: string) => void;
   deleteNode: (id: string) => void;
   
@@ -140,6 +143,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   nodes: [],
   edges: [],
   defaultEdgeType: 'bezier',
+  interactionMode: 'pan',
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
     set((state) => {
@@ -241,6 +245,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   setDefaultEdgeType: (type: EdgeType) => {
     set({ defaultEdgeType: type });
+  },
+
+  setInteractionMode: (mode: InteractionMode) => {
+    set({ interactionMode: mode });
   },
 
   duplicateNode: (id: string) => {

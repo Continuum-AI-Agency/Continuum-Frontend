@@ -38,7 +38,7 @@ export function PromptInput({ onSubmit, disabled, placeholder }: PromptInputProp
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          className="min-h-[56px] w-full resize-none rounded-2xl pr-12 pt-3 pb-3 focus:ring-2 focus:ring-purple-500/20"
+          className="min-h-[56px] w-full resize-none rounded-2xl pr-12 pt-3 pb-3 text-white focus:ring-2 focus:ring-purple-500/20"
         />
         <Box className="absolute bottom-2 right-2">
           <Button

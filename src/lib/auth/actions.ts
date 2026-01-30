@@ -283,12 +283,20 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
   }
 
   const supabase = await createSupabaseServerClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const requestedRedirect = validation.data.redirectTo;
+  const emailRedirectTo =
+    requestedRedirect && (requestedRedirect.startsWith("/") || requestedRedirect.startsWith(siteUrl))
+      ? requestedRedirect.startsWith("http")
+        ? requestedRedirect
+        : `${siteUrl}${requestedRedirect}`
+      : `${siteUrl}/callback`;
 
   try {
     const { error } = await supabase.auth.signInWithOtp({
       email: validation.data.email,
       options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
+        emailRedirectTo,
         shouldCreateUser: true,
       },
     });
@@ -311,4 +319,3 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
     };
   }
 }
-

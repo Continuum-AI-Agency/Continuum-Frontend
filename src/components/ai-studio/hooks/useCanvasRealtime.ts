@@ -6,6 +6,26 @@ import { useStudioStore } from "@/StudioCanvas/stores/useStudioStore";
 import { useSession } from "@/hooks/useSession";
 import type { StudioNode } from "@/StudioCanvas/types";
 import type { Edge } from "@xyflow/react";
+import { stringToColor } from "@/lib/utils/color";
+
+type CanvasSession = {
+  brand_profile_id: string;
+  nodes: any[];
+  edges: any[];
+  updated_at: string;
+};
+
+type PresenceUser = {
+  user_id: string;
+  full_name: string;
+  avatar_url: string;
+  online_at: string;
+  email?: string;
+  selected_node_ids?: string[];
+  color: string;
+};
+
+type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
 
 export function useCanvasRealtime(brandProfileId: string) {
   const supabase = createSupabaseBrowserClient();
@@ -15,33 +35,38 @@ export function useCanvasRealtime(brandProfileId: string) {
     Record<string, { x: number; y: number; name: string; color: string }>
   >({});
   const [isLoading, setIsLoading] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
+  const [status, setStatus] = useState<RealtimeStatus>("INITIALIZING");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
 
   const lastUpdateRef = useRef<string | null>(null);
   const isRemoteChangeRef = useRef<boolean>(false);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const channelRef = useRef<any>(null);
   const isInitialLoadRef = useRef<boolean>(true);
 
   useEffect(() => {
     if (!brandProfileId) return;
 
     const loadInitialState = async () => {
-      const { data, error } = await (supabase
-        .from("canvas_sessions" as any) as any)
+      const { data, error } = await supabase
+        .schema("brand_profiles")
+        .from("canvas_sessions" as any)
         .select("*")
         .eq("brand_profile_id", brandProfileId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") {
+      if (error) {
         console.error("Error loading canvas session:", error);
         setIsLoading(false);
         return;
       }
 
       if (data) {
+        const session = data as unknown as CanvasSession;
         isRemoteChangeRef.current = true;
-        setNodes(data.nodes as StudioNode[]);
-        setEdges(data.edges as Edge[]);
-        lastUpdateRef.current = data.updated_at;
+        setNodes(session.nodes as StudioNode[]);
+        setEdges(session.edges as Edge[]);
+        lastUpdateRef.current = session.updated_at;
         setTimeout(() => {
           isRemoteChangeRef.current = false;
           isInitialLoadRef.current = false;
@@ -59,8 +84,9 @@ export function useCanvasRealtime(brandProfileId: string) {
   useEffect(() => {
     if (!brandProfileId) return;
 
-    const channel = supabase
-      .channel(`canvas_session:${brandProfileId}`)
+    const channel = supabase.channel(`canvas_session:${brandProfileId}`);
+
+    channel
       .on(
         "postgres_changes" as any,
         {
@@ -93,7 +119,41 @@ export function useCanvasRealtime(brandProfileId: string) {
           },
         }));
       })
-      .subscribe();
+      .on("presence" as any, { event: "sync" }, () => {
+        const state = channel.presenceState();
+        const users: PresenceUser[] = [];
+        
+        Object.values(state).forEach((presenceEntries: any[]) => {
+          presenceEntries.forEach((entry: any) => {
+            users.push(entry as PresenceUser);
+          });
+        });
+        
+        setOnlineUsers(users);
+      })
+      .on("presence" as any, { event: "leave" }, ({ leftPresences }: any) => {
+        setRemoteCursors((prev) => {
+          const next = { ...prev };
+          leftPresences.forEach((presence: any) => {
+            delete next[presence.user_id];
+          });
+          return next;
+        });
+      })
+      .subscribe(async (subStatus) => {
+        setStatus(subStatus as RealtimeStatus);
+        if (subStatus === "SUBSCRIBED" && user) {
+          await channel.track({
+            user_id: user.id,
+            full_name: user.user_metadata?.full_name || user.email || "Anonymous",
+            avatar_url: user.user_metadata?.avatar_url || "",
+            email: user.email || "",
+            selected_node_ids: [],
+            color: stringToColor(user.id),
+            online_at: new Date().toISOString(),
+          });
+        }
+      });
 
     channelRef.current = channel;
 
@@ -101,37 +161,17 @@ export function useCanvasRealtime(brandProfileId: string) {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [brandProfileId, supabase, user?.id, setNodes, setEdges]);
+  }, [brandProfileId, supabase, user, setNodes, setEdges]);
 
-  useEffect(() => {
-    if (isRemoteChangeRef.current || isInitialLoadRef.current || !brandProfileId) return;
-
-    const timer = setTimeout(async () => {
-      const { data, error } = await (supabase
-        .from("canvas_sessions" as any) as any)
-        .upsert(
-          {
-            brand_profile_id: brandProfileId,
-            nodes: nodes as any,
-            edges: edges as any,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "brand_profile_id" }
-        )
-        .select("updated_at")
-        .single();
-
-      if (!error && data) {
-        lastUpdateRef.current = data.updated_at;
-      }
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [nodes, edges, brandProfileId, supabase]);
-
+  const lastCursorSendRef = useRef<number>(0);
   const updateCursor = useCallback(
     (x: number, y: number) => {
       if (!user || !channelRef.current) return;
+      
+      const now = Date.now();
+      if (now - lastCursorSendRef.current < 50) return;
+      lastCursorSendRef.current = now;
+
       channelRef.current.send({
         type: "broadcast",
         event: "cursor",
@@ -147,18 +187,56 @@ export function useCanvasRealtime(brandProfileId: string) {
     [user]
   );
 
-  return { remoteCursors, updateCursor, isLoading };
-}
+  const updatePresence = useCallback(
+    (nodeIds: string[]) => {
+      if (!user || !channelRef.current) return;
+      
+      // Only track if selection actually changed
+      const sortedNew = [...nodeIds].sort().join(',');
+      const sortedCurrent = [...selectedNodeIds].sort().join(',');
+      if (sortedNew === sortedCurrent) return;
 
-function stringToColor(str: string) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  let color = "#";
-  for (let i = 0; i < 3; i++) {
-    const value = (hash >> (i * 8)) & 0xff;
-    color += ("00" + value.toString(16)).slice(-2);
-  }
-  return color;
+      setSelectedNodeIds(nodeIds);
+      
+      channelRef.current.track({
+        user_id: user.id,
+        full_name: user.user_metadata?.full_name || user.email || "Anonymous",
+        avatar_url: user.user_metadata?.avatar_url || "",
+        email: user.email || "",
+        selected_node_ids: nodeIds,
+        color: stringToColor(user.id),
+        online_at: new Date().toISOString(),
+      });
+    },
+    [user, selectedNodeIds]
+  );
+
+  useEffect(() => {
+    if (isRemoteChangeRef.current || isInitialLoadRef.current || !brandProfileId) return;
+
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase
+        .schema("brand_profiles")
+        .from("canvas_sessions" as any)
+        .upsert(
+          {
+            brand_profile_id: brandProfileId,
+            nodes: nodes as any,
+            edges: edges as any,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "brand_profile_id" }
+        )
+        .select("updated_at")
+        .single();
+
+      if (!error && data) {
+        lastUpdateRef.current = (data as any).updated_at;
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [nodes, edges, brandProfileId, supabase]);
+
+  return { remoteCursors, updateCursor, updatePresence, isLoading, onlineUsers, status };
 }

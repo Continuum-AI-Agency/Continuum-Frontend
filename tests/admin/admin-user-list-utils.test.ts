@@ -27,7 +27,7 @@ test("groupPermissionsByUserId groups permissions and preserves order per user",
     {
       user_id: "user-1",
       brand_profile_id: "brand-3",
-      role: "editor",
+      role: "operator",
       tier: 3,
       brand_name: "Brand 3",
     },

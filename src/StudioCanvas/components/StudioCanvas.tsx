@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
-import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Connection, Edge, SelectionMode } from '@xyflow/react';
+import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Connection, Edge, SelectionMode, Panel } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useStudioStore } from '../stores/useStudioStore';
 import { StringNode } from '../nodes/StringNode';
@@ -12,6 +12,7 @@ import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
 import { Toolbar } from './Toolbar';
+import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,10 @@ import { isValidConnection } from '../utils/isValidConnection';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
 import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
+import { useSession } from '@/hooks/useSession';
+import { Cursor } from '@/components/realtime/cursor';
+import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
+import { PresenceProvider, usePresence } from '../contexts/PresenceContext';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -135,8 +140,8 @@ const edgeTypes = {
 };
 
 function Flow({ brandProfileId }: { brandProfileId?: string }) {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById } = useStudioStore();
-  const { remoteCursors, updateCursor, isLoading } = useCanvasRealtime(brandProfileId || '');
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode } = useStudioStore();
+  const { remoteCursors, updateCursor, updatePresence, isLoading } = usePresence();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, deleteElements } = useReactFlow();
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
@@ -149,19 +154,6 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
     const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     updateCursor(x, y);
   }, [screenToFlowPosition, updateCursor]);
-
-  if (isLoading) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <div className="text-slate-500 text-sm font-medium animate-pulse">
-            Syncing session...
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const onPaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
     event.preventDefault();
@@ -198,6 +190,15 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
       if ((event.metaKey || event.ctrlKey) && event.key === 'y') {
         redo();
         event.preventDefault();
+        return;
+      }
+
+      if (event.key.toLowerCase() === 'h') {
+        setInteractionMode('pan');
+        return;
+      }
+      if (event.key.toLowerCase() === 'v') {
+        setInteractionMode('select');
         return;
       }
 
@@ -422,63 +423,74 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
     return isValidConnection(connection, edges, nodes);
   }, [edges, nodes]);
 
+  const onSelectionChange = useCallback((params: { nodes: StudioNode[]; edges: Edge[] }) => {
+    const selectedNodeIds = params.nodes.map(node => node.id);
+    updatePresence(selectedNodeIds);
+  }, [updatePresence]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="text-slate-500 text-sm font-medium animate-pulse">
+            Syncing session...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full h-full" ref={reactFlowWrapper}>
-      <ReactFlow
-        nodes={nodes}
-        edges={styledEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        onMouseMove={onMouseMove}
-        onNodeDragStart={onNodeDragStart}
-        onConnectStart={onConnectStart}
-        onConnectEnd={onConnectEnd as any}
-        isValidConnection={isValidConnectionCallback}
-        connectionLineComponent={CustomConnectionLine}
-        onPaneContextMenu={onPaneContextMenu}
-        fitView
-        panOnDrag={true}
-        panOnScroll={true}
-        selectionOnDrag={true}
-        selectionMode={SelectionMode.Partial}
-        className="studio-canvas"
-        defaultEdgeOptions={{
-          type: 'dataType',
-          animated: false,
-          className: 'studio-edge',
-        }}
-      >
-        <Background color="var(--studio-grid-dot)" gap={16} />
-        {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
-        <Controls />
-        <MiniMap />
-        {Object.entries(remoteCursors).map(([userId, cursor]) => (
-          <div
-            key={userId}
-            className="absolute pointer-events-none z-[9999] flex flex-col items-start"
-            style={{
-              left: cursor.x,
-              top: cursor.y,
-            }}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill={cursor.color}>
-              <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500001 16.8829L0.500001 0.705841L11.7841 11.2741L6.65692 11.2741L6.48069 11.2741L6.34731 11.3891L5.65376 12.3673Z" stroke="white" strokeWidth="1"/>
-            </svg>
-            <div
-              className="px-1 py-0.5 rounded text-[8px] text-white font-bold whitespace-nowrap shadow-lg -mt-1 ml-1"
-              style={{ backgroundColor: cursor.color }}
-            >
-              {cursor.name}
-            </div>
-          </div>
-        ))}
-      </ReactFlow>
-    </div>
+        <ReactFlow
+          nodes={nodes}
+          edges={styledEdges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onSelectionChange={onSelectionChange}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          onMouseMove={onMouseMove}
+          onNodeDragStart={onNodeDragStart}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd as any}
+          isValidConnection={isValidConnectionCallback}
+          connectionLineComponent={CustomConnectionLine}
+          onPaneContextMenu={onPaneContextMenu}
+          fitView
+          panOnDrag={interactionMode === 'pan'}
+          panOnScroll={true}
+          selectionOnDrag={interactionMode === 'select'}
+          selectionMode={SelectionMode.Partial}
+          className="studio-canvas"
+          defaultEdgeOptions={{
+            type: 'dataType',
+            animated: false,
+            className: 'studio-edge',
+          }}
+        >
+          <Panel position="top-left">
+            <InteractionModeToggle />
+          </Panel>
+          <Background color="var(--studio-grid-dot)" gap={16} />
+          {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
+          <Controls />
+          <MiniMap />
+          {Object.entries(remoteCursors).map(([userId, cursor]) => (
+            <Cursor
+              key={userId}
+              x={cursor.x}
+              y={cursor.y}
+              color={cursor.color}
+              name={cursor.name}
+            />
+          ))}
+        </ReactFlow>
+      </div>
   );
 }
 
@@ -488,88 +500,109 @@ interface StudioCanvasProps {
 }
 
 export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasProps) {
+  const realtime = useCanvasRealtime(brandProfileId || '');
+  const { user } = useSession();
+  
   return (
     <ReactFlowProvider>
-      <div className="flex h-full flex-col bg-background">
-        {!embedded && (
-            <header className="h-14 border-b px-4 flex items-center justify-between bg-background z-10">
-                <div className="font-bold text-lg flex items-center gap-2">
-                <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">Continuum</span>
-                <span className="text-muted-foreground font-normal">Studio</span>
-                </div>
-                <Toolbar />
-            </header>
-        )}
-        <div className="flex-1 flex overflow-hidden">
-            <aside className="w-64 border-r border-subtle bg-default p-4 flex flex-col gap-3 overflow-y-auto z-10">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium text-sm text-secondary">Library</div>
-                    <div className="flex items-center gap-2">
-                      <LoadWorkflowDialog brandProfileId={brandProfileId} />
-                      <SaveWorkflowDialog brandProfileId={brandProfileId} />
+      <PresenceProvider
+        onlineUsers={realtime.onlineUsers}
+        currentUserId={user?.id}
+        remoteCursors={realtime.remoteCursors}
+        updateCursor={realtime.updateCursor}
+        updatePresence={realtime.updatePresence}
+        status={realtime.status}
+        isLoading={realtime.isLoading}
+      >
+        <div className="flex h-full flex-col bg-background">
+          {!embedded && (
+              <div className="h-14 border-b px-4 flex items-center justify-between bg-background z-[100] relative shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="font-bold text-lg flex items-center gap-2">
+                      <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">Continuum</span>
+                      <span className="text-muted-foreground font-normal">Studio</span>
+                    </div>
+                    <div className="h-4 w-px bg-border hidden sm:block opacity-20" />
+                    <div className="flex items-center h-10 px-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                      <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as any} />
                     </div>
                   </div>
-                  {embedded && (
-                    <div className="scale-90 origin-right">
-                      <Toolbar />
+                  <div className="flex items-center gap-2">
+                    <Toolbar />
+                  </div>
+              </div>
+          )}
+          <div className="flex-1 flex overflow-hidden">
+              <aside className="w-64 border-r border-subtle bg-default p-4 flex flex-col gap-3 overflow-y-auto z-10">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-sm text-secondary">Library</div>
+                      <div className="flex items-center gap-2">
+                        <LoadWorkflowDialog brandProfileId={brandProfileId} />
+                        <SaveWorkflowDialog brandProfileId={brandProfileId} />
+                      </div>
                     </div>
-                  )}
-                </div>
-                <AccordionPrimitive.Root
-                  type="multiple"
-                  defaultValue={DEFAULT_OPEN_LIBRARY_SECTIONS}
-                  className="flex flex-col gap-2"
-                >
-                  {LIBRARY_SECTIONS.map((section) => (
-                    <AccordionPrimitive.Item
-                      key={section.value}
-                      value={section.value}
-                      className="rounded-lg border border-subtle bg-surface"
-                    >
-                      <AccordionPrimitive.Header>
-                        <AccordionPrimitive.Trigger className="group flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
-                          {section.label}
-                          <ChevronDownIcon className="h-4 w-4 text-secondary transition-transform group-data-[state=open]:rotate-180" />
-                        </AccordionPrimitive.Trigger>
-                      </AccordionPrimitive.Header>
-                      <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                        <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
-                          {section.items.map((item) => {
-                            const isDisabled = Boolean((item as { disabled?: boolean }).disabled);
-                            return (
-                            <div
-                              key={item.type}
-                              className={`p-3 border border-subtle rounded-md bg-surface transition-colors shadow-sm ${
-                                isDisabled ? 'cursor-not-allowed opacity-60' : `cursor-grab ${item.borderColor}`
-                              }`}
-                              draggable={!isDisabled}
-                              onDragStart={(event) => {
-                                if (isDisabled) return;
-                                event.dataTransfer.setData('application/reactflow', item.type);
-                              }}
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <div className="font-medium text-sm text-primary">{item.label}</div>
-                                <Badge variant="secondary" className="text-xs">
-                                  {item.tag}
-                                </Badge>
+                    {embedded && (
+                      <div className="scale-90 origin-right">
+                        <Toolbar />
+                      </div>
+                    )}
+                  </div>
+                  <AccordionPrimitive.Root
+                    type="multiple"
+                    defaultValue={DEFAULT_OPEN_LIBRARY_SECTIONS}
+                    className="flex flex-col gap-2"
+                  >
+                    {LIBRARY_SECTIONS.map((section) => (
+                      <AccordionPrimitive.Item
+                        key={section.value}
+                        value={section.value}
+                        className="rounded-lg border border-subtle bg-surface"
+                      >
+                        <AccordionPrimitive.Header>
+                          <AccordionPrimitive.Trigger className="group flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
+                            {section.label}
+                            <ChevronDownIcon className="h-4 w-4 text-secondary transition-transform group-data-[state=open]:rotate-180" />
+                          </AccordionPrimitive.Trigger>
+                        </AccordionPrimitive.Header>
+                        <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                          <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
+                            {section.items.map((item) => {
+                              const isDisabled = Boolean((item as { disabled?: boolean }).disabled);
+                              return (
+                              <div
+                                key={item.type}
+                                className={`p-3 border border-subtle rounded-md bg-surface transition-colors shadow-sm ${
+                                  isDisabled ? 'cursor-not-allowed opacity-60' : `cursor-grab ${item.borderColor}`
+                                }`}
+                                draggable={!isDisabled}
+                                onDragStart={(event) => {
+                                  if (isDisabled) return;
+                                  event.dataTransfer.setData('application/reactflow', item.type);
+                                }}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="font-medium text-sm text-primary">{item.label}</div>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {item.tag}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-secondary">{item.desc}</div>
                               </div>
-                              <div className="text-xs text-secondary">{item.desc}</div>
-                            </div>
-                          );
-                          })}
-                        </div>
-                      </AccordionPrimitive.Content>
-                    </AccordionPrimitive.Item>
-                  ))}
-                </AccordionPrimitive.Root>
-            </aside>
-            <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
-                <Flow brandProfileId={brandProfileId} />
-            </main>
+                            );
+                            })}
+                          </div>
+                        </AccordionPrimitive.Content>
+                      </AccordionPrimitive.Item>
+                    ))}
+                  </AccordionPrimitive.Root>
+              </aside>
+              <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
+                  <Flow brandProfileId={brandProfileId} />
+              </main>
+          </div>
         </div>
-      </div>
+      </PresenceProvider>
     </ReactFlowProvider>
   );
 }

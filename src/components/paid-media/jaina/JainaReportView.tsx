@@ -57,7 +57,7 @@ export function JainaReportView({ report, status, error }: JainaReportViewProps)
             <Heading size="4">Executive Summary</Heading>
             <Badge color="blue" variant="soft">{report.language}</Badge>
           </Flex>
-          <SafeMarkdown content={report.executive_summary} className="text-sm text-primary" mode="static" />
+          <SafeMarkdown content={report.executive_summary} className="text-sm text-white" mode="static" />
         </Box>
       </Card>
 
@@ -99,7 +99,7 @@ export function JainaReportView({ report, status, error }: JainaReportViewProps)
                 <Badge color="purple" variant="soft">Confidence: {section.confidence}</Badge>
               ) : null}
             </Flex>
-            <SafeMarkdown content={section.summary} className="text-sm text-primary" mode="static" />
+            <SafeMarkdown content={section.summary} className="text-sm text-white" mode="static" />
 
             {section.highlights.length ? (
               <Box>
@@ -139,7 +139,7 @@ export function JainaReportView({ report, status, error }: JainaReportViewProps)
                           <Text weight="medium">{action.title}</Text>
                           <Badge color="amber" variant="soft">{action.priority}</Badge>
                         </Flex>
-                        <Text size="2" color="gray">{action.rationale}</Text>
+                        <Text size="2" className="text-gray-400">{action.rationale}</Text>
                         {action.expected_impact ? (
                           <Text size="2">Expected impact: {action.expected_impact}</Text>
                         ) : null}
@@ -164,7 +164,7 @@ export function JainaReportView({ report, status, error }: JainaReportViewProps)
                     <Text weight="medium">{item.title}</Text>
                     <Badge color="indigo" variant="soft">{item.priority}</Badge>
                   </Flex>
-                  <Text size="2" color="gray">{item.rationale}</Text>
+                  <Text size="2" className="text-gray-400">{item.rationale}</Text>
                   {item.expected_impact ? (
                     <Text size="2">Expected impact: {item.expected_impact}</Text>
                   ) : null}
@@ -238,7 +238,7 @@ function TableSection({ section }: TableSectionProps) {
       </Flex>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
-          <thead className="text-xs uppercase text-secondary">
+          <thead className="text-xs uppercase text-gray-400">
             <tr>
               <th className="py-2 pr-3">Metric</th>
               <th className="py-2 pr-3">Value</th>

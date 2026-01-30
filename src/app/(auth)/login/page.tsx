@@ -42,6 +42,12 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const [emailSent, setEmailSent] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState("");
+  const inviteToken = searchParams.get("token");
+  const inviteBrand = searchParams.get("brand");
+  const inviteRedirect =
+    inviteToken && inviteBrand
+      ? `/invite?token=${encodeURIComponent(inviteToken)}&brand=${encodeURIComponent(inviteBrand)}`
+      : undefined;
 
   const {
     register,
@@ -60,7 +66,10 @@ export default function LoginPage() {
 
   const onSubmit = async (data: MagicLinkInput) => {
     clearError();
-    const success = await sendMagicLink(data);
+    const success = await sendMagicLink({
+      ...data,
+      redirectTo: inviteRedirect,
+    });
     if (success) {
       setSubmittedEmail(data.email);
       setEmailSent(true);
@@ -69,7 +78,7 @@ export default function LoginPage() {
 
   const handleResend = async () => {
     if (submittedEmail) {
-      await sendMagicLink({ email: submittedEmail });
+      await sendMagicLink({ email: submittedEmail, redirectTo: inviteRedirect });
     }
   };
 

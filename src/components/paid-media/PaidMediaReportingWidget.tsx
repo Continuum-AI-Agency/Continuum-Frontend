@@ -27,6 +27,7 @@ import {
 import type { PaidMetricsResponse } from "@/lib/schemas/paidMetrics";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 
 type Props = {
   brandId: string;
@@ -195,44 +196,26 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
   // Ad account and campaign selection state
   const [selectedAdAccount, setSelectedAdAccount] = useState<string | null>(accountId || null);
   const [selectedCampaign, setSelectedCampaign] = useState<string | null>(null);
-  const [adAccounts, setAdAccounts] = useState<AdAccount[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
-  // Fetch ad accounts
-  const fetchAdAccounts = useCallback(async () => {
-    if (!brandId) return;
+  // Fetch ad accounts using the stable brand-integrations method
+  const { integrations, isLoading: isLoadingAccounts } = useBrandIntegrations(brandId);
 
-    setState({ status: "loading-ad-accounts" });
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
+  const adAccounts = React.useMemo(() => {
+    if (!integrations) return [];
+    const facebookAccounts = integrations.facebook?.accounts ?? [];
+    return facebookAccounts.map((acc) => ({
+      id: acc.externalAccountId ?? acc.integrationAccountId,
+      name: acc.name,
+    }));
+  }, [integrations]);
 
-      if (!session?.access_token) {
-        throw new Error("No authentication token available");
-      }
-
-      const response = await fetch(`/api/ad-accounts?brandId=${encodeURIComponent(brandId)}`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch ad accounts");
-      }
-      const data = await response.json();
-      setAdAccounts(data.accounts || []);
-
-      // Auto-select first account if none selected
-      if (!selectedAdAccount && data.accounts?.length > 0) {
-        setSelectedAdAccount(data.accounts[0].id);
-      }
-    } catch (error) {
-      console.error("Error fetching ad accounts:", error);
-      setState({ status: "error", message: error instanceof Error ? error.message : "Failed to load ad accounts" });
+  // Auto-select first account if none selected
+  React.useEffect(() => {
+    if (!selectedAdAccount && adAccounts.length > 0) {
+      setSelectedAdAccount(adAccounts[0].id);
     }
-  }, [brandId, selectedAdAccount]);
+  }, [selectedAdAccount, adAccounts]);
 
   // Fetch campaigns for selected ad account
   const fetchCampaigns = useCallback(async (adAccountId: string) => {
@@ -336,13 +319,6 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
       setState({ status: "error", message: error instanceof Error ? error.message : "Failed to load metrics" });
     }
   }, [brandId, platform, selectedAdAccount]);
-
-  // Initial load effect
-  React.useEffect(() => {
-    if (brandId) {
-      fetchAdAccounts();
-    }
-  }, [brandId, fetchAdAccounts]);
 
   // Load campaigns when ad account changes
   React.useEffect(() => {
@@ -470,14 +446,14 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
             <Callout.Root color="red" variant="surface">
               <Callout.Text>{state.message}</Callout.Text>
             </Callout.Root>
-          ) : (state.status === "loading-ad-accounts" ||
+          ) : (isLoadingAccounts ||
                state.status === "loading-campaigns" ||
                state.status === "loading-metrics") ? (
              <Flex direction="column" gap="3">
                  <Skeleton className="h-24 w-full" />
                  <Skeleton className="h-24 w-full" />
                  <Text size="2" color="gray" align="center">
-                   {state.status === "loading-ad-accounts" && "Loading ad accounts..."}
+                   {isLoadingAccounts && "Loading ad accounts..."}
                    {state.status === "loading-campaigns" && "Loading campaigns..."}
                    {state.status === "loading-metrics" && "Loading metrics..."}
                  </Text>

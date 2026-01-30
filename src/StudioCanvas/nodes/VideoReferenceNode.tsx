@@ -10,6 +10,8 @@ import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useNodeSelection } from '../contexts/PresenceContext';
+import { cn } from '@/lib/utils';
 
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
@@ -33,6 +35,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
   const { show } = useToast();
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   // Calculate connection counts for tooltips
   const videoConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'video').length;
@@ -124,7 +127,17 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
 
   return (
     <TooltipProvider>
-      <div className="relative group w-full h-full min-w-[180px] min-h-[180px]" onDragOver={handleDragOver} onDrop={handleDrop}>
+      <div 
+        className={cn(
+          "relative group w-full h-full min-w-[180px] min-h-[180px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
+        onDragOver={handleDragOver} 
+        onDrop={handleDrop}
+      >
       <NodeResizer
         minWidth={160}
         minHeight={160}

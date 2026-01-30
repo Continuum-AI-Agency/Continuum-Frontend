@@ -24,6 +24,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { useNodeSelection } from '../contexts/PresenceContext';
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
   
@@ -64,6 +65,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
   const { show } = useToast();
   const storeEdges = useStudioStore((state) => state.edges);
   const setEdges = useStudioStore((state) => state.setEdges);
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   const [isHovered, setIsHovered] = useState(false);
 
@@ -108,7 +110,13 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
   return (
     <TooltipProvider>
       <div
-        className="relative group h-full w-full min-w-[300px] min-h-[170px]"
+        className={cn(
+          "relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >

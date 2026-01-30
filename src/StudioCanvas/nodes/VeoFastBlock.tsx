@@ -22,6 +22,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { useNodeSelection } from '../contexts/PresenceContext';
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
   
@@ -60,6 +61,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
   const flowEdges = useEdges();
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   const [isHovered, setIsHovered] = useState(false);
 
@@ -99,7 +101,13 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
   return (
     <TooltipProvider>
       <div
-        className="relative group h-full w-full min-w-[300px] min-h-[170px]"
+        className={cn(
+          "relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >

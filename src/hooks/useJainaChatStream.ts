@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import { jainaChatRequestSchema, type JainaChatRequest } from "@/lib/jaina/schemas";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
+import { getApiUrl } from "@/lib/api/config";
 import {
   createInitialJainaStreamState,
   parseJainaStreamEvent,
@@ -58,7 +59,7 @@ export function useJainaChatStream() {
     async (adAccountId: string) => {
       const token = await getAccessToken();
       const response = await fetch(
-        `/api/agents/jaina/chat/memory?ad_account_id=${encodeURIComponent(adAccountId)}`,
+        getApiUrl(`/api/agents/jaina/chat/memory?ad_account_id=${encodeURIComponent(adAccountId)}`),
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -99,7 +100,7 @@ export function useJainaChatStream() {
 
       try {
         const token = await getAccessToken();
-        const response = await fetch("/api/agents/jaina/chat/stream", {
+        const response = await fetch(getApiUrl("/api/agents/jaina/chat/stream"), {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

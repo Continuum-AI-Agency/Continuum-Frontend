@@ -37,7 +37,7 @@ Continuum unifies creative intelligence (Picnic templates), rules (Antonidas log
   - Autosave: ≥ 99.9% success; offline queue guarantees eventual sync
   - Version history: every edit is recoverable via patches and checkpoints
 - Security & Compliance
-  - RBAC: `viewer | editor | publisher | admin`
+  - RBAC: `viewer | operator | publisher | admin`
   - Audit logging: actor_id, IP, user_agent recorded for all mutating ops
   - PII minimization: audience identifiers stored as hashed keys
 - Accessibility

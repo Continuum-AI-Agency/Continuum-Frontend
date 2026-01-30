@@ -28,6 +28,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import { useNodeSelection } from '../contexts/PresenceContext';
 
 const resolveAspectRatioValue = (value?: string) => {
   switch (value) {
@@ -80,6 +81,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   
   const [isHovered, setIsHovered] = useState(false);
 
@@ -120,7 +122,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
 
   return (
     <div 
-      className="relative group h-full w-full min-w-[200px] min-h-[200px]" 
+      className={cn(
+        "relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
+        isSelectedByOther && "selected-by-other"
+      )}
+      style={{ 
+        ['--other-user-color' as any]: selectingUser?.color 
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

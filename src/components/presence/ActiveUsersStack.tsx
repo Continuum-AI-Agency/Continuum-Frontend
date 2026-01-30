@@ -1,36 +1,60 @@
 "use client";
 
 import React from "react";
-import { useBrandPresence } from "./BrandPresenceProvider";
-import { Avatar, Tooltip } from "@radix-ui/themes";
+import { AvatarStack } from "@/components/realtime/avatar-stack";
+import { useSession } from "@/hooks/useSession";
 
-export function ActiveUsersStack() {
-  const { onlineUsers } = useBrandPresence();
+type PresenceUser = {
+  user_id: string;
+  full_name: string;
+  avatar_url: string;
+  online_at: string;
+  email?: string;
+  color?: string;
+};
 
-  const uniqueUsers = Array.from(
-    new Map(onlineUsers.map((user) => [user.user_id, user])).values()
-  );
+type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
 
-  if (uniqueUsers.length === 0) return null;
+interface ActiveUsersStackProps {
+  onlineUsers: PresenceUser[];
+  status: RealtimeStatus;
+}
+
+export function ActiveUsersStack({ onlineUsers, status }: ActiveUsersStackProps) {
+  const { user: currentUser } = useSession();
+
+  const userMap = new Map(onlineUsers.map((u) => [u.user_id, u]));
+  
+  if (currentUser && !userMap.has(currentUser.id)) {
+    userMap.set(currentUser.id, {
+      user_id: currentUser.id,
+      full_name: currentUser.user_metadata?.full_name || currentUser.email || "Anonymous",
+      avatar_url: currentUser.user_metadata?.avatar_url || "",
+      email: currentUser.email || "",
+      online_at: new Date().toISOString(),
+    });
+  }
+
+  const uniqueUsers = Array.from(userMap.values());
+
+  const sortedUsers = uniqueUsers.sort((a, b) => {
+    if (a.user_id === currentUser?.id) return -1;
+    if (b.user_id === currentUser?.id) return 1;
+    return new Date(b.online_at).getTime() - new Date(a.online_at).getTime();
+  });
+
+  const avatars = sortedUsers.map((user) => ({
+    name: user.user_id === currentUser?.id ? `${user.full_name} (You)` : user.full_name,
+    image: user.avatar_url,
+    email: user.email,
+  }));
 
   return (
-    <div className="flex -space-x-2 overflow-hidden items-center p-1">
-      {uniqueUsers.slice(0, 5).map((user) => (
-        <Tooltip key={user.user_id} content={user.full_name}>
-          <Avatar
-            size="2"
-            radius="full"
-            src={user.avatar_url}
-            fallback={user.full_name.slice(0, 2).toUpperCase()}
-            className="border-2 border-slate-950 ring-1 ring-white/10"
-          />
-        </Tooltip>
-      ))}
-      {uniqueUsers.length > 5 && (
-        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-950 text-[10px] font-bold text-white ring-1 ring-white/10">
-          +{uniqueUsers.length - 5}
-        </div>
+    <div className="flex items-center gap-2">
+      {status !== "SUBSCRIBED" && (
+        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Connecting to realtime..." />
       )}
+      {avatars.length > 0 && <AvatarStack avatars={avatars} />}
     </div>
   );
 }

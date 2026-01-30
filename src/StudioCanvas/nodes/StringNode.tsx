@@ -9,11 +9,13 @@ import { MagicWandIcon } from '@radix-ui/react-icons';
 import { Badge } from '@/components/ui/badge';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { useNodeSelection } from '../contexts/PresenceContext';
 
 export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   
   const connectedEdge = edges.find(e => e.source === id);
   const incomingEdges = edges.filter(e => e.target === id);
@@ -53,7 +55,6 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
     
     if (data.isExecuting) return;
     
-    console.log("Triggering enrichment for node", id);
     try {
       await executeWorkflow(executionControls, { 
         targetNodeId: id,
@@ -65,7 +66,15 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
   }, [id, executionControls, data.isExecuting]);
 
   return (
-    <div className="relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px]">
+    <div 
+      className={cn(
+        "relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px] rounded-lg transition-shadow",
+        isSelectedByOther && "selected-by-other"
+      )}
+      style={{ 
+        ['--other-user-color' as any]: selectingUser?.color 
+      }}
+    >
       <NodeResizer
         minWidth={280}
         minHeight={180}

@@ -5,14 +5,22 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ExtendVideoNodeData } from '../types';
+import { useNodeSelection } from '../contexts/PresenceContext';
 
-export function ExtendVideoBlock({ selected }: NodeProps<Node<ExtendVideoNodeData>>) {
+export function ExtendVideoBlock({ id, selected }: NodeProps<Node<ExtendVideoNodeData>>) {
   const [isHovered, setIsHovered] = useState(false);
+  const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   return (
     <TooltipProvider>
       <div
-        className="relative group h-full w-full min-w-[260px] min-h-[160px]"
+        className={cn(
+          "relative group h-full w-full min-w-[260px] min-h-[160px] rounded-xl transition-shadow",
+          isSelectedByOther && "selected-by-other"
+        )}
+        style={{ 
+          ['--other-user-color' as any]: selectingUser?.color 
+        }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
