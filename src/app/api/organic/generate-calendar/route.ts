@@ -13,29 +13,30 @@ export const dynamic = "force-dynamic";
 
 function toBackendPayload(payload: CalendarGenerationRequest) {
   return {
-    brand_profile_id: payload.brandProfileId,
-    week_start: payload.weekStart,
+    brandProfileId: payload.brandProfileId,
+    weekStart: payload.weekStart,
     timezone: payload.timezone,
-    platform_account_ids: payload.platformAccountIds ?? {},
+    platformAccountIds: payload.platformAccountIds ?? {},
     placements: payload.placements.map((placement) => ({
-      placement_id: placement.placementId,
-      trend_id: placement.trendId,
-      day_id: placement.dayId,
-      scheduled_at: placement.scheduledAt,
-      time_label: placement.timeLabel ?? null,
+      placementId: placement.placementId,
+      trendId: placement.trendId,
+      dayId: placement.dayId,
+      scheduledAt: placement.scheduledAt,
+      timeLabel: placement.timeLabel ?? null,
       platform: placement.platform,
-      account_id: placement.accountId ?? null,
-      seed_source: placement.seedSource ?? null,
-      desired_format: placement.desiredFormat ?? null,
+      accountId: placement.accountId ?? null,
+      seedSource: placement.seedSource ?? null,
+      desiredFormat: placement.desiredFormat ?? null,
       metadata: placement.metadata ?? null,
     })),
     options: payload.options
       ? {
-          schedule_preset: payload.options.schedulePreset ?? null,
-          include_newsletter: payload.options.includeNewsletter ?? null,
-          newsletter_day_id: payload.options.newsletterDayId ?? null,
-          guidance_prompt: payload.options.guidancePrompt ?? null,
-          preferred_platforms: payload.options.preferredPlatforms ?? null,
+          schedulePreset: payload.options.schedulePreset ?? null,
+          includeNewsletter: payload.options.includeNewsletter ?? null,
+          newsletterDayId: payload.options.newsletterDayId ?? null,
+          guidancePrompt: payload.options.guidancePrompt ?? null,
+          language: payload.options.language ?? null,
+          preferredPlatforms: payload.options.preferredPlatforms ?? null,
         }
       : null,
   };

@@ -2,6 +2,7 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { motion } from "framer-motion";
 import { CalendarDraftCard } from "./CalendarDraftCard";
 import type { OrganicCalendarDraft } from "./types";
 
@@ -37,7 +38,21 @@ export function DraggableDraftCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+    <motion.div
+      ref={setNodeRef}
+      layout
+      layoutId={draft.id}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ 
+        layout: { type: "spring", stiffness: 300, damping: 30 },
+        opacity: { duration: 0.2 }
+      }}
+      style={style}
+      {...listeners}
+      {...attributes}
+    >
       <CalendarDraftCard
         draft={draft}
         isSelected={isSelected}
@@ -48,6 +63,6 @@ export function DraggableDraftCard({
         onMouseEnter={() => onPreview?.(draft)}
         onMouseLeave={() => onPreview?.(null)}
       />
-    </div>
+    </motion.div>
   );
 }

@@ -3,7 +3,8 @@
 import * as React from "react";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { Button } from "@/components/ui/button";
-import { RocketIcon, LightningBoltIcon } from "@radix-ui/react-icons";
+import { RocketIcon, LightningBoltIcon, MagicWandIcon, ListBulletIcon } from "@radix-ui/react-icons";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendSelector } from "@/components/organic/TrendSelector";
 import type { Trend } from "@/lib/organic/trends";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
@@ -16,8 +17,6 @@ export function WorkspacePanel({
   maxTrendSelections,
   onToggleTrend,
   onGenerate,
-  viewMode,
-  onViewModeChange,
   onAutoSort,
   trendTypes = [],
   seedCount = 0,
@@ -54,24 +53,50 @@ export function WorkspacePanel({
         </div>
       </GlassPanel>
       
-      <div className="flex-1 min-h-0 overflow-y-auto rounded border border-subtle bg-surface/30">
-        <div className="p-4">
-          <TrendSelector
-            trendTypes={trendTypes}
-            trends={trends}
-            selectedTrendIds={selectedTrendIds}
-            activePlatforms={activePlatforms}
-            maxSelections={maxTrendSelections}
-            onToggleTrend={onToggleTrend}
-            withContainer={false}
-            showHeader={true}
-            allowDrag={true}
-            allowSelect={true}
-            allowActions={true}
-            className="space-y-3"
-          />
+      <Tabs defaultValue="trends" className="flex-1 flex flex-col min-h-0">
+        <div className="px-1">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="trends" className="gap-2">
+              <MagicWandIcon className="w-4 h-4" />
+              Trends
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="gap-2">
+              <ListBulletIcon className="w-4 h-4" />
+              Templates
+            </TabsTrigger>
+          </TabsList>
         </div>
-      </div>
+
+        <TabsContent value="trends" className="flex-1 min-h-0 mt-2">
+          <div className="h-full overflow-y-auto rounded border border-subtle bg-surface/30">
+            <div className="p-4">
+              <TrendSelector
+                trendTypes={trendTypes}
+                trends={trends}
+                selectedTrendIds={selectedTrendIds}
+                activePlatforms={activePlatforms}
+                maxSelections={maxTrendSelections}
+                onToggleTrend={onToggleTrend}
+                withContainer={false}
+                showHeader={true}
+                allowDrag={true}
+                allowSelect={true}
+                allowActions={true}
+                className="space-y-3"
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="templates" className="flex-1 min-h-0 mt-2">
+          <div className="h-full flex flex-col items-center justify-center rounded border border-dashed border-subtle bg-surface/30 text-center p-8">
+            <ListBulletIcon className="w-8 h-8 text-secondary mb-3 opacity-20" />
+            <p className="text-sm text-secondary">
+              Daily templates integration in progress.
+            </p>
+          </div>
+        </TabsContent>
+      </Tabs>
       
       <GlassPanel className="p-4">
         <Button 

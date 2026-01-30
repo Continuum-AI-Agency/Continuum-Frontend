@@ -26,6 +26,7 @@ export type OrganicCalendarDraft = {
   mediaCount: number
   seedTrendId?: string
   targetAccountId?: string
+  adjusted?: boolean
 }
 
 export type OrganicCalendarDay = {

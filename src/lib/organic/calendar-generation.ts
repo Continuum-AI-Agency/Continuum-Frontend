@@ -25,6 +25,7 @@ const calendarGenerationOptionsSchema = z
     includeNewsletter: z.boolean().optional(),
     newsletterDayId: z.string().optional(),
     guidancePrompt: z.string().min(1).optional(),
+    language: z.string().optional(),
     preferredPlatforms: z.array(platformKeySchema).optional(),
   })
   .optional();
@@ -52,6 +53,7 @@ const placementScheduleSchema = z.object({
   dayId: z.string().min(1),
   scheduledAt: z.string().min(1),
   timeOfDay: z.string().optional().nullable(),
+  adjusted: z.boolean().optional(),
 });
 
 const placementPlatformSchema = z.object({
@@ -81,7 +83,14 @@ const placementCreativeSchema = z
   .object({
     creativeIdea: z.string().optional().nullable(),
     assetIds: z.array(z.string()).optional(),
-    assetHints: z.array(z.string()).optional(),
+    assetHints: z
+      .array(
+        z.object({
+          role: z.string(),
+          suggestion: z.string(),
+        })
+      )
+      .optional(),
   })
   .optional();
 
@@ -108,6 +117,7 @@ const progressEventSchema = z.object({
   type: z.literal("progress"),
   completed: z.number().nonnegative(),
   total: z.number().positive(),
+  stage: z.enum(["analyzing", "drafting", "matching", "optimizing", "finalizing"]).optional(),
   message: z.string().optional(),
 });
 
@@ -118,6 +128,7 @@ const placementEventSchema = z.object({
 
 const errorEventSchema = z.object({
   type: z.literal("error"),
+  code: z.string().optional(),
   message: z.string().min(1),
   placementId: z.string().optional(),
 });

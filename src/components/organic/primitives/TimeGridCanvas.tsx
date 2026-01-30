@@ -11,6 +11,7 @@ import type {
   OrganicSeedDragPayload,
 } from "./types";
 import { useDroppable } from "@dnd-kit/core";
+import { AnimatePresence } from "framer-motion";
 import { parseTimeLabelToHour } from "./calendar-utils";
 
 function TimeGridDayColumn({
@@ -79,17 +80,19 @@ function TimeGridDayColumn({
       </div>
       
       <div className="flex-1 p-2 space-y-3 overflow-y-auto">
-        {sortedDrafts.map((draft) => (
-          <DraggableDraftCard
-            key={draft.id}
-            draft={draft}
-            isSelected={draft.id === selectedDraftId}
-            isMultiSelected={selectedDraftIds.includes(draft.id)}
-            onSelect={onSelectDraft}
-            onToggleSelection={onToggleSelection}
-            onRegenerate={onRegenerate}
-          />
-        ))}
+        <AnimatePresence mode="popLayout" initial={false}>
+          {sortedDrafts.map((draft) => (
+            <DraggableDraftCard
+              key={draft.id}
+              draft={draft}
+              isSelected={draft.id === selectedDraftId}
+              isMultiSelected={selectedDraftIds.includes(draft.id)}
+              onSelect={onSelectDraft}
+              onToggleSelection={onToggleSelection}
+              onRegenerate={onRegenerate}
+            />
+          ))}
+        </AnimatePresence>
         
         {Array.from({ length: ghosts }).map((_, i) => (
           <div key={`ghost-${i}`} className="w-full rounded border border-dashed border-subtle bg-default/20 px-3 py-4 animate-pulse h-24">

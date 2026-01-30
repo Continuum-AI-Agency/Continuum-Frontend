@@ -27,6 +27,7 @@ import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { isValidConnection } from '../utils/isValidConnection';
 import * as AccordionPrimitive from '@radix-ui/react-accordion';
 import { ChevronDownIcon } from '@radix-ui/react-icons';
+import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -133,14 +134,34 @@ const edgeTypes = {
   dataType: DataTypeEdge,
 };
 
-function Flow() {
+function Flow({ brandProfileId }: { brandProfileId?: string }) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById } = useStudioStore();
+  const { remoteCursors, updateCursor, isLoading } = useCanvasRealtime(brandProfileId || '');
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, deleteElements } = useReactFlow();
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
 
   const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+
+  const onMouseMove = useCallback((event: React.MouseEvent) => {
+    if (!reactFlowWrapper.current) return;
+    const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    updateCursor(x, y);
+  }, [screenToFlowPosition, updateCursor]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="text-slate-500 text-sm font-medium animate-pulse">
+            Syncing session...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const onPaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
     event.preventDefault();
@@ -413,6 +434,7 @@ function Flow() {
         edgeTypes={edgeTypes}
         onDragOver={onDragOver}
         onDrop={onDrop}
+        onMouseMove={onMouseMove}
         onNodeDragStart={onNodeDragStart}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd as any}
@@ -435,6 +457,26 @@ function Flow() {
         {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
         <Controls />
         <MiniMap />
+        {Object.entries(remoteCursors).map(([userId, cursor]) => (
+          <div
+            key={userId}
+            className="absolute pointer-events-none z-[9999] flex flex-col items-start"
+            style={{
+              left: cursor.x,
+              top: cursor.y,
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill={cursor.color}>
+              <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500001 16.8829L0.500001 0.705841L11.7841 11.2741L6.65692 11.2741L6.48069 11.2741L6.34731 11.3891L5.65376 12.3673Z" stroke="white" strokeWidth="1"/>
+            </svg>
+            <div
+              className="px-1 py-0.5 rounded text-[8px] text-white font-bold whitespace-nowrap shadow-lg -mt-1 ml-1"
+              style={{ backgroundColor: cursor.color }}
+            >
+              {cursor.name}
+            </div>
+          </div>
+        ))}
       </ReactFlow>
     </div>
   );
@@ -524,7 +566,7 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
                 </AccordionPrimitive.Root>
             </aside>
             <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
-                <Flow />
+                <Flow brandProfileId={brandProfileId} />
             </main>
         </div>
       </div>

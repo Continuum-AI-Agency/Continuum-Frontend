@@ -1,4 +1,4 @@
-# Organic Calendar Generation API
+# Organic Calendar Generation API (Refined)
 
 ## Goal
 Stream placement-ready organic content for a specific week using a calendar seed map. Each seed contains a trend/question ID plus a timestamp (day + time), platform, and optional guidance. The backend responds with NDJSON events that fill the calendar with generated copy, hashtags, and post-type metadata.
@@ -35,6 +35,7 @@ Upstream target (service): `POST {ORGANIC_SERVICE_BASE_URL}/generate-calendar`
 - `includeNewsletter` (boolean, optional)
 - `newsletterDayId` (string, optional)
 - `guidancePrompt` (string, optional)
+- `language` (string, optional) — Preferred language for generation (e.g., `en-US`, `es`)
 - `preferredPlatforms` (array of platforms, optional)
 
 ### Example request (JSON)
@@ -63,6 +64,7 @@ Upstream target (service): `POST {ORGANIC_SERVICE_BASE_URL}/generate-calendar`
   "options": {
     "schedulePreset": "beta-launch",
     "includeNewsletter": true,
+    "language": "en-US",
     "guidancePrompt": "Highlight the sustainability angle this week.",
     "preferredPlatforms": ["instagram", "linkedin"]
   }
@@ -78,19 +80,32 @@ Each line is a JSON object with a `type` field.
 - `error`
 - `complete`
 
-### Placement payload
+### Event: progress
+- `completed` (number)
+- `total` (number)
+- `stage` (`analyzing` | `drafting` | `matching` | `optimizing` | `finalizing`, optional)
+- `message` (string, optional)
+
+### Event: placement
 - `placementId` (string)
-- `schedule`: `{ dayId, scheduledAt, timeOfDay }`
+- `schedule`: `{ dayId, scheduledAt, timeOfDay, adjusted }`
+  - `adjusted` (boolean, optional): Set to `true` if the backend shifted the time to avoid conflicts.
 - `platform`: `{ name, accountId }`
 - `seed`: `{ trendId, source }`
 - `content`: `{ type, format, titleTopic, objective, target, tone, cta, numSlides }`
 - `creative`: `{ creativeIdea, assetIds, assetHints }`
+  - `assetHints` (array of objects, optional): `[{ "role": "string", "suggestion": "string" }]`
 - `copy`: `{ caption, hashtags: { high, medium, low } }`
+
+### Event: error
+- `code` (string, optional): Structured error code (e.g., `ACCOUNT_DISCONNECTED`, `AUTH_FAILED`).
+- `message` (string): Human-readable error.
+- `placementId` (string, optional): The specific slot that failed.
 
 ### Example NDJSON
 ```json
-{"type":"progress","completed":1,"total":6,"message":"Generating slot 1/6"}
-{"type":"placement","placement":{"placementId":"seed-2026-01-26-trend-101","schedule":{"dayId":"2026-01-26","scheduledAt":"2026-01-26T17:00:00.000Z","timeOfDay":"morning"},"platform":{"name":"instagram","accountId":"ig_123"},"seed":{"trendId":"trend-101","source":"trend"},"content":{"type":"reel","format":"Reel","titleTopic":"Sustainable swaps","objective":"Educate","numSlides":1},"creative":{"creativeIdea":"Quick before/after montage","assetIds":["asset_991"]},"copy":{"caption":"3 easy swaps to cut waste this week…","hashtags":{"high":["#sustainable"],"medium":["#eco"],"low":["#brandname"]}}}}
+{"type":"progress","completed":1,"total":6,"stage":"drafting","message":"Generating slot 1/6"}
+{"type":"placement","placement":{"placementId":"seed-2026-01-26-trend-101","schedule":{"dayId":"2026-01-26","scheduledAt":"2026-01-26T17:00:00.000Z","timeOfDay":"morning","adjusted":false},"platform":{"name":"instagram","accountId":"ig_123"},"seed":{"trendId":"trend-101","source":"trend"},"content":{"type":"reel","format":"Reel","titleTopic":"Sustainable swaps","objective":"Educate","numSlides":1},"creative":{"creativeIdea":"Quick before/after montage","assetIds":["asset_991"],"assetHints":[{"role":"visual","suggestion":"Use green overlays"}]},"copy":{"caption":"3 easy swaps to cut waste this week…","hashtags":{"high":["#sustainable"],"medium":["#eco"],"low":["#brandname"]}}}}
 {"type":"complete"}
 ```
 
@@ -99,31 +114,23 @@ Each line is a JSON object with a `type` field.
 - Enforce max placements per request and rate limits.
 - Respect `schedulePreset` for auto-fill and cadence rules.
 - Use `placementId` as the stable merge key for updates/regenerations.
-- If a placement conflicts (time overlap), return a placement with adjusted `scheduledAt` and a clarifying message in `creative.assetHints` or `content.tone`.
+- **Conflict Handling**: If a placement conflicts (time overlap), return a placement with adjusted `scheduledAt` and set `schedule.adjusted: true`.
 - Populate `creative.assetIds` with IDs from the creative library when a match exists.
+- **Progress Reporting**: Emit `progress` events with meaningful `stage` values.
 
 ## Client-side edge cases to handle BEFORE calling backend
 1. No placements seeded (dragged or auto-sorted).
 2. Missing `brandProfileId` or missing platform account IDs.
 3. Placements outside the selected week or with invalid dates.
 4. Duplicate `placementId` values (should be de-duped).
-5. Unsupported platform in a seed (e.g. legacy platform not enabled).
+5. Unsupported platform in a seed.
 6. Empty or invalid `trendId`.
-7. Users drag the same trend onto the same day multiple times.
-8. Seeded slots with missing `timeLabel` or invalid time format.
-9. Newsletter included without a day assignment.
-10. Regeneration of a slot without a seed trend.
+7. Newsletter included without a day assignment.
 
 ## Backend-side edge cases to handle
-- Seeds with no `accountId`: return `error` events per placement.
-- Trend IDs not found: return `error` events per placement.
+- Seeds with no `accountId`: return `error` events per placement with code `MISSING_ACCOUNT`.
+- Trend IDs not found: return `error` events per placement with code `TREND_NOT_FOUND`.
 - Accounts not linked to brand: reject request with 403.
 - Partial successes: stream `placement` for successes and `error` for failures.
-- Conflicting placements: auto-adjust time and signal the adjustment.
-- Missing creative assets: return `assetHints` instead of hard errors.
+- Conflicting placements: auto-adjust time and set `adjusted: true`.
 - Long-running jobs: emit periodic `progress` heartbeats.
-
-## MVP cadence (Beta Launch)
-- Monday/Wednesday/Friday → Instagram
-- Tuesday/Thursday/Saturday → LinkedIn
-- Newsletter scheduled once per week (default Sunday)

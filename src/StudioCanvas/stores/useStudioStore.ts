@@ -144,6 +144,14 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
     set((state) => {
         const newNodes = applyNodeChanges(changes, state.nodes);
+        
+        const isDragging = changes.some(c => c.type === 'position' && (c as any).dragging);
+        const multipleMoving = changes.filter(c => c.type === 'position').length > 1;
+
+        if (isDragging || multipleMoving) {
+            return { nodes: newNodes };
+        }
+
         const hasDimensions = newNodes.some(n => n.measured?.width || n.width);
         
         return {

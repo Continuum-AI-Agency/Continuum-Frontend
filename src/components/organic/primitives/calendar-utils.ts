@@ -127,3 +127,31 @@ export function buildScheduledAt(dayId: string, timeLabel: string): string | nul
   const date = new Date(year, month - 1, day, timeParts.hour, timeParts.minute, 0, 0)
   return date.toISOString()
 }
+
+export function resolveTimeLabel(
+  timeOfDay: string | null | undefined,
+  fallbackTimes: string[]
+): string {
+  if (!timeOfDay) return fallbackTimes[0] ?? "9:00 AM"
+  const mapping: Record<string, string> = {
+    morning: "9:00 AM",
+    afternoon: "1:00 PM",
+    evening: "6:00 PM",
+  }
+  return mapping[timeOfDay] ?? fallbackTimes[0] ?? "9:00 AM"
+}
+
+export function formatTimeLabel(isoTime: string) {
+  const [h, m] = isoTime.split(":").map(Number)
+  const ampm = h >= 12 ? "PM" : "AM"
+  const hour = h % 12 || 12
+  return `${hour}:${m.toString().padStart(2, "0")} ${ampm}`
+}
+
+export function formatTimeLabelFromIso(isoString: string): string | null {
+  const parsed = new Date(isoString)
+  if (Number.isNaN(parsed.getTime())) return null
+  const hours = parsed.getHours()
+  const minutes = parsed.getMinutes()
+  return formatTimeLabel(`${hours}:${minutes.toString().padStart(2, "0")}`)
+}

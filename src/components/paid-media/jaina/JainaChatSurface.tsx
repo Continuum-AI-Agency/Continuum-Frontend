@@ -2,100 +2,57 @@
 
 import React from "react";
 import {
-  Badge,
   Box,
   Button,
-  Callout,
-  Card,
   Flex,
   Heading,
-  ScrollArea,
-  Select,
   Text,
+  Badge,
 } from "@radix-ui/themes";
 import { Cross2Icon, ResetIcon, RocketIcon } from "@radix-ui/react-icons";
 
 import { useToast } from "@/components/ui/ToastProvider";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useJainaChatStream } from "@/hooks/useJainaChatStream";
-import { JainaChatComposer } from "./JainaChatComposer";
-import { JainaMessageList } from "./JainaMessageList";
+import { Conversation } from "@/components/ai-elements/conversation";
+import { Message } from "@/components/ai-elements/message";
+import { PromptInput } from "@/components/ai-elements/prompt-input";
+import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
+import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { JainaReportView } from "./JainaReportView";
-import { JainaTracePanel } from "./JainaTracePanel";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 import type { JainaChatMessage } from "./types";
-import type { JainaChatInputValues } from "@/lib/jaina/schemas";
 import { cn } from "@/lib/utils";
-
-type AdAccount = {
-  id: string;
-  name: string;
-};
 
 type JainaChatSurfaceProps = {
   brandProfileId: string;
   brandName: string;
+  adAccountId: string | null;
+  campaignId?: string | null;
 };
 
-export function JainaChatSurface({ brandProfileId, brandName }: JainaChatSurfaceProps) {
+export function JainaChatSurface({ 
+  brandProfileId, 
+  brandName,
+  adAccountId,
+  campaignId 
+}: JainaChatSurfaceProps) {
   const { show } = useToast();
   const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
-  const supabase = createSupabaseBrowserClient();
 
   const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(null);
-  const [adAccounts, setAdAccounts] = React.useState<AdAccount[]>([]);
-  const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(null);
-  const [accountsLoading, setAccountsLoading] = React.useState(false);
-  const [accountsError, setAccountsError] = React.useState<string | null>(null);
-
-  const progressLabel = React.useMemo(() => {
-    if (!state.progress.length) return null;
-    const last = state.progress[state.progress.length - 1];
-    return last.detail ?? last.stage;
-  }, [state.progress]);
 
   const updateMessage = React.useCallback((id: string, update: Partial<JainaChatMessage>) => {
     setMessages((prev) => prev.map((msg) => (msg.id === id ? { ...msg, ...update } : msg)));
   }, []);
 
-  const loadAdAccounts = React.useCallback(async () => {
-    setAccountsLoading(true);
-    setAccountsError(null);
-    try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) {
-        throw new Error("No authentication token available");
-      }
-
-      const response = await fetch(`/api/ad-accounts?brandId=${encodeURIComponent(brandProfileId)}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to load ad accounts.");
-      }
-
-      const payload = (await response.json()) as { accounts?: AdAccount[] };
-      const accounts = payload.accounts ?? [];
-      setAdAccounts(accounts);
-      if (!selectedAdAccount && accounts.length > 0) {
-        setSelectedAdAccount(accounts[0].id);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load ad accounts.";
-      setAccountsError(message);
-    } finally {
-      setAccountsLoading(false);
-    }
-  }, [brandProfileId, selectedAdAccount, supabase]);
-
   React.useEffect(() => {
-    void loadAdAccounts();
-  }, [loadAdAccounts]);
+    if (adAccountId) {
+      reset();
+      setMessages([]);
+      setActiveResponseId(null);
+    }
+  }, [adAccountId, reset]);
 
   React.useEffect(() => {
     if (!activeResponseId) return;
@@ -117,8 +74,8 @@ export function JainaChatSurface({ brandProfileId, brandName }: JainaChatSurface
   }, [activeResponseId, state.status, state.report, state.error, updateMessage]);
 
   const handleSubmit = React.useCallback(
-    async (values: JainaChatInputValues) => {
-      if (!selectedAdAccount) {
+    async (query: string) => {
+      if (!adAccountId) {
         show({ title: "Select an ad account", description: "Jaina needs an ad account context.", variant: "warning" });
         return;
       }
@@ -127,7 +84,7 @@ export function JainaChatSurface({ brandProfileId, brandName }: JainaChatSurface
       const userMessage: JainaChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
-        content: values.query,
+        content: query,
         createdAt: now,
       };
       const assistantMessage: JainaChatMessage = {
@@ -143,8 +100,8 @@ export function JainaChatSurface({ brandProfileId, brandName }: JainaChatSurface
       setActiveResponseId(assistantMessage.id);
 
       const result = await start({
-        query: values.query,
-        adAccountId: selectedAdAccount,
+        query: query,
+        adAccountId: adAccountId,
         brandId: brandProfileId,
       });
 
@@ -152,7 +109,7 @@ export function JainaChatSurface({ brandProfileId, brandName }: JainaChatSurface
         show({ title: "Stream failed", description: result.error, variant: "error" });
       }
     },
-    [brandProfileId, selectedAdAccount, show, start]
+    [brandProfileId, adAccountId, show, start]
   );
 
   const handleClearConversation = React.useCallback(() => {
@@ -162,135 +119,161 @@ export function JainaChatSurface({ brandProfileId, brandName }: JainaChatSurface
   }, [reset]);
 
   const handleClearMemory = React.useCallback(async () => {
-    if (!selectedAdAccount) {
+    if (!adAccountId) {
       show({ title: "Select an ad account", description: "Choose an ad account before clearing memory.", variant: "warning" });
       return;
     }
     try {
-      await clearMemory(selectedAdAccount);
+      await clearMemory(adAccountId);
       show({ title: "Memory cleared", description: "Jaina will start fresh for this ad account.", variant: "success" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to clear memory.";
       show({ title: "Clear failed", description: message, variant: "error" });
     }
-  }, [clearMemory, selectedAdAccount, show]);
+  }, [clearMemory, adAccountId, show]);
 
-  return (
-    <div className="relative h-full min-h-0 w-full">
-      <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_top,rgba(88,80,236,0.12),transparent_55%),radial-gradient(circle_at_20%_80%,rgba(14,116,144,0.16),transparent_50%)]" />
-
-      <div className="relative z-[1] flex h-full min-h-0 flex-col gap-5">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <Flex align="center" gap="2">
-              <Badge color="purple" variant="soft">
-                <RocketIcon />
-              </Badge>
-              <Heading size="6">Paid Media · Jaina</Heading>
-            </Flex>
-            <Text color="gray">
-              Streaming performance intelligence for <span className="text-primary">{brandName}</span>
-            </Text>
-          </div>
-
-          <Flex align="center" gap="2" wrap="wrap">
-            <Select.Root
-              value={selectedAdAccount ?? ""}
-              onValueChange={setSelectedAdAccount}
-              disabled={accountsLoading || adAccounts.length === 0}
-            >
-              <Select.Trigger variant="surface" radius="large" className="min-w-[220px]">
-                {accountsLoading
-                  ? "Loading ad accounts…"
-                  : selectedAdAccount
-                    ? adAccounts.find((account) => account.id === selectedAdAccount)?.name ?? "Ad account"
-                    : "Select ad account"}
-              </Select.Trigger>
-              <Select.Content>
-                {adAccounts.length === 0 ? (
-                  <Select.Item value="none" disabled>
-                    No ad accounts
-                  </Select.Item>
-                ) : (
-                  adAccounts.map((account) => (
-                    <Select.Item key={account.id} value={account.id}>
-                      {account.name}
-                    </Select.Item>
-                  ))
-                )}
-              </Select.Content>
-            </Select.Root>
-
-            <Button variant="soft" color="gray" onClick={handleClearMemory}>
-              <ResetIcon />
-              Reset Memory
-            </Button>
-            <Button variant="soft" color="gray" onClick={handleClearConversation}>
-              <Cross2Icon />
-              Clear Chat
-            </Button>
-            <Button
-              variant={state.status === "streaming" ? "solid" : "soft"}
-              color={state.status === "streaming" ? "red" : "gray"}
-              onClick={state.status === "streaming" ? cancel : handleClearConversation}
-            >
-              {state.status === "streaming" ? "Stop" : "Idle"}
-            </Button>
-          </Flex>
-        </header>
-
-        {accountsError ? (
-          <Callout.Root color="red" variant="surface">
-            <Callout.Text>{accountsError}</Callout.Text>
-          </Callout.Root>
-        ) : null}
-
-        <div className="grid h-full min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
-          <div className="flex min-h-0 flex-col gap-4">
-            <div className="flex-1 min-h-0">
-              <JainaMessageList
-                messages={messages}
-                isStreaming={state.status === "streaming"}
-                progressLabel={progressLabel}
-              />
-            </div>
-
-            <Card className={cn("border border-subtle bg-surface", state.status === "streaming" && "shadow-brand-glow")}>
-              <Box p="4">
-                <JainaChatComposer
-                  onSubmit={handleSubmit}
-                  isStreaming={state.status === "streaming"}
-                  disabled={!selectedAdAccount}
-                  suggestions={[
-                    "Which creatives improved ROAS week-over-week?",
-                    "Summarize spend shifts and recommend budget moves.",
-                    "What audiences are declining and need new tests?",
-                  ]}
-                />
-              </Box>
-            </Card>
-          </div>
-
-          <div className="flex min-h-0 flex-col gap-4">
-            <Card className="flex-1 min-h-0 border border-subtle bg-surface">
-              <ScrollArea type="always" scrollbars="vertical" className="h-full min-h-0">
-                <Box p="4">
-                  <JainaReportView report={state.report} status={state.status} error={state.error} />
-                </Box>
-              </ScrollArea>
-            </Card>
-
-            <div className="min-h-[260px]">
-              <JainaTracePanel
-                progress={state.progress}
-                toolCalls={state.toolCalls}
-                toolResults={state.toolResults}
-                stateDeltas={state.stateDeltas}
-              />
-            </div>
-          </div>
+  if (!adAccountId) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+        <div className="rounded-full bg-indigo-50 p-4 dark:bg-indigo-950/30">
+          <RocketIcon className="h-8 w-8 text-indigo-500" />
+        </div>
+        <div className="space-y-1">
+          <Heading size="4">Select an Ad Account</Heading>
+          <Text color="gray">Choose an ad account above to start analyzing with Jaina.</Text>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-full min-h-0 w-full flex-col">
+      <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_top,rgba(88,80,236,0.12),transparent_55%),radial-gradient(circle_at_20%_80%,rgba(14,116,144,0.16),transparent_50%)]" />
+
+      <header className="relative z-10 flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="space-y-1">
+          <Flex align="center" gap="2">
+            <Heading size="4">Jaina Analyst</Heading>
+            {campaignId && <Badge variant="soft" color="blue">Campaign Context</Badge>}
+          </Flex>
+          <Text size="2" color="gray">
+            Streaming performance intelligence for <span className="text-primary">{brandName}</span>
+          </Text>
+        </div>
+
+        <Flex align="center" gap="2">
+          <Button variant="soft" color="gray" size="1" onClick={handleClearMemory}>
+            <ResetIcon />
+            Reset Memory
+          </Button>
+          <Button variant="soft" color="gray" size="1" onClick={handleClearConversation}>
+            <Cross2Icon />
+            Clear
+          </Button>
+          {state.status === "streaming" && (
+            <Button variant="solid" color="red" size="1" onClick={cancel}>
+              Stop
+            </Button>
+          )}
+        </Flex>
+      </header>
+
+      <div className="relative z-0 flex-1 min-h-0">
+        <Conversation>
+          {messages.length === 0 && (
+            <Flex direction="column" gap="2" className="mt-20 items-center justify-center text-center">
+              <div className="rounded-full bg-purple-500/10 p-4 mb-2">
+                 <RocketIcon className="h-8 w-8 text-purple-400" />
+              </div>
+              <Heading size="5" className="text-white">How can Jaina help today?</Heading>
+              <Text size="2" color="gray" className="max-w-sm">
+                Ask about campaign performance, creative ROAS, or budget optimizations.
+              </Text>
+              <Flex gap="2" mt="4" wrap="wrap" justify="center">
+                {[
+                    "Which creatives improved ROAS week-over-week?",
+                    "Summarize spend shifts and recommend budget moves.",
+                    "What audiences are declining?"
+                ].map(s => (
+                    <button 
+                        key={s}
+                        onClick={() => handleSubmit(s)}
+                        className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-secondary hover:bg-white/10 transition-colors"
+                    >
+                        {s}
+                    </button>
+                ))}
+              </Flex>
+            </Flex>
+          )}
+          
+          {messages.map((message) => (
+            <Message key={message.id} role={message.role}>
+              <div className="space-y-4">
+                {message.role === "user" ? (
+                  <Text size="2">{message.content}</Text>
+                ) : (
+                  <>
+                    <SafeMarkdown content={message.content} className="text-[15px] text-gray-200" mode="static" />
+                    
+                    {message.id === activeResponseId && (
+                      <div className="mt-4 space-y-3">
+                        {state.progress.length > 0 && (
+                          <Reasoning defaultOpen isStreaming={state.status === "streaming"}>
+                            <ReasoningTrigger>Jaina thoughts</ReasoningTrigger>
+                            <ReasoningContent>
+                              <Flex direction="column" gap="2">
+                                {state.progress.map((entry, index) => (
+                                  <Flex key={`${entry.stage}-${index}`} align="center" gap="2">
+                                    <Badge color="blue" variant="soft" size="1">{entry.stage}</Badge>
+                                    <Text size="1" color="gray">{entry.detail ?? "Working…"}</Text>
+                                  </Flex>
+                                ))}
+                              </Flex>
+                            </ReasoningContent>
+                          </Reasoning>
+                        )}
+
+                        {state.toolCalls.length > 0 && (
+                          <div className="space-y-2">
+                             {state.toolCalls.map((call) => {
+                                const result = state.toolResults.find(r => r.id === call.id);
+                                const toolState = result ? (result.ok ? "output-available" : "error") : "running";
+                                return (
+                                  <Tool key={call.id} type={call.name} state={toolState as any}>
+                                    <ToolHeader title={call.name.replace(/_/g, " ")} />
+                                    <ToolContent>
+                                      <ToolInput value={call.args} />
+                                      {result && <ToolOutput value={result.output ?? result.error} />}
+                                    </ToolContent>
+                                  </Tool>
+                                );
+                             })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {state.status === "complete" && state.report && message.id === activeResponseId && (
+                      <div className="mt-6 border-t border-white/10 pt-6">
+                        <JainaReportView report={state.report} status={state.status} />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </Message>
+          ))}
+        </Conversation>
+      </div>
+
+      <Box p="4" className="relative z-10">
+        <PromptInput 
+          onSubmit={handleSubmit}
+          disabled={state.status === "streaming"}
+          placeholder="Analyze performance..."
+        />
+      </Box>
     </div>
   );
 }

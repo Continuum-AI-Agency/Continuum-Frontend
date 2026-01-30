@@ -82,7 +82,9 @@ interface CalendarState {
   setUnscheduledDrafts: (drafts: OrganicCalendarDraft[]) => void;
   updateDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
   moveDraft: (draftId: string, targetDayId: string | "unscheduled") => void;
+  bulkMoveDrafts: (draftIds: string[], targetDayId: string | "unscheduled") => void;
   addDraft: (dayId: string | "unscheduled", draft: OrganicCalendarDraft) => void;
+  bulkDeleteDrafts: (draftIds: string[]) => void;
   setSelectedDraftId: (id: string | null) => void;
   toggleDraftSelection: (id: string) => void;
   clearDraftSelection: () => void;
@@ -170,6 +172,50 @@ export const useCalendarStore = create<CalendarState>()(
           };
         }),
 
+      bulkMoveDrafts: (draftIds, targetDayId) =>
+        set((state) => {
+          const movedDrafts: OrganicCalendarDraft[] = [];
+          const draftIdSet = new Set(draftIds);
+
+          const nextDays = state.days.map((day) => {
+            const remainingSlots = day.slots.filter((slot) => {
+              if (draftIdSet.has(slot.id)) {
+                movedDrafts.push(slot);
+                return false;
+              }
+              return true;
+            });
+            return { ...day, slots: remainingSlots };
+          });
+
+          const nextUnscheduled = state.unscheduledDrafts.filter((slot) => {
+            if (draftIdSet.has(slot.id)) {
+              movedDrafts.push(slot);
+              return false;
+            }
+            return true;
+          });
+
+          if (movedDrafts.length === 0) return { days: nextDays, unscheduledDrafts: nextUnscheduled };
+
+          if (targetDayId === "unscheduled") {
+            return {
+              days: nextDays,
+              unscheduledDrafts: [...nextUnscheduled, ...movedDrafts],
+            };
+          }
+
+          return {
+            days: nextDays.map((day) => {
+              if (day.id === targetDayId) {
+                return { ...day, slots: [...day.slots, ...movedDrafts] };
+              }
+              return day;
+            }),
+            unscheduledDrafts: nextUnscheduled,
+          };
+        }),
+
       addDraft: (dayId, draft) =>
         set((state) => {
           if (dayId === "unscheduled") {
@@ -193,6 +239,18 @@ export const useCalendarStore = create<CalendarState>()(
               }
               return { ...day, slots: [...day.slots, draft] };
             }),
+          };
+        }),
+
+      bulkDeleteDrafts: (draftIds) =>
+        set((state) => {
+          const draftIdSet = new Set(draftIds);
+          return {
+            days: state.days.map((day) => ({
+              ...day,
+              slots: day.slots.filter((slot) => !draftIdSet.has(slot.id)),
+            })),
+            unscheduledDrafts: state.unscheduledDrafts.filter((slot) => !draftIdSet.has(slot.id)),
           };
         }),
 
