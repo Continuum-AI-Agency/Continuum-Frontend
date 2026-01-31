@@ -114,12 +114,12 @@ export function useCanvasRealtime(brandProfileId: string) {
           }
 
           const mergedNodes = mergeNodes(
-            nodes,
+            useStudioStore.getState().nodes,
             (payload.new.nodes || []) as StudioNode[],
             (payload.new.deleted_node_ids || []) as string[]
           );
           const mergedEdges = mergeEdges(
-            edges,
+            useStudioStore.getState().edges,
             (payload.new.edges || []) as Edge[],
             (payload.new.deleted_edge_ids || []) as string[]
           );
@@ -210,12 +210,12 @@ export function useCanvasRealtime(brandProfileId: string) {
         },
       });
     },
-    [user]
+    [user, status]
   );
 
   const updatePresence = useCallback(
     (nodeIds: string[]) => {
-      if (!user || !channelRef.current) return;
+      if (!user || !channelRef.current || status !== "SUBSCRIBED") return;
       
       // Only track if selection actually changed
       const sortedNew = [...nodeIds].sort().join(',');
@@ -234,7 +234,7 @@ export function useCanvasRealtime(brandProfileId: string) {
         online_at: new Date().toISOString(),
       });
     },
-    [user, selectedNodeIds]
+    [user, selectedNodeIds, status]
   );
 
   const saveCanvasToDatabase = useCallback(async () => {
@@ -243,8 +243,11 @@ export function useCanvasRealtime(brandProfileId: string) {
     }
 
     try {
-      const deletedNodeIds = useStudioStore.getState().getDeletedNodeIds();
-      const deletedEdgeIds = useStudioStore.getState().getDeletedEdgeIds();
+      const state = useStudioStore.getState();
+      const currentNodes = state.nodes;
+      const currentEdges = state.edges;
+      const deletedNodeIds = state.getDeletedNodeIds();
+      const deletedEdgeIds = state.getDeletedEdgeIds();
 
       const { data, error } = await supabase
         .schema("brand_profiles")
@@ -252,8 +255,8 @@ export function useCanvasRealtime(brandProfileId: string) {
         .upsert(
           {
             brand_profile_id: brandProfileId,
-            nodes: nodes as any,
-            edges: edges as any,
+            nodes: currentNodes as any,
+            edges: currentEdges as any,
             deleted_node_ids: deletedNodeIds,
             deleted_edge_ids: deletedEdgeIds,
             updated_at: new Date().toISOString(),
@@ -267,13 +270,13 @@ export function useCanvasRealtime(brandProfileId: string) {
         console.error("[Canvas Sync] Save failed:", error);
       } else if (data) {
         lastUpdateRef.current = (data as any).updated_at;
-        console.log("[Canvas Sync] Saved:", { nodes: nodes.length, edges: edges.length });
+        console.log("[Canvas Sync] Saved:", { nodes: currentNodes.length, edges: currentEdges.length });
         useStudioStore.getState().clearDeletedIds();
       }
     } catch (err) {
       console.error("[Canvas Sync] Save error:", err);
     }
-  }, [brandProfileId, supabase, nodes, edges]);
+  }, [brandProfileId, supabase]);
 
   return { remoteCursors, updateCursor, updatePresence, isLoading, onlineUsers, status, saveCanvasToDatabase };
 }
