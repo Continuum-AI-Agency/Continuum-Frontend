@@ -9,7 +9,7 @@ let hasInitialized = false;
 
 export function MixpanelInit() {
   useEffect(() => {
-    if (hasInitialized) return;
+    if (hasInitialized || process.env.NODE_ENV === "development") return;
     mixpanel.init(MIXPANEL_TOKEN, {
       autocapture: true,
       record_sessions_percent: 100,
