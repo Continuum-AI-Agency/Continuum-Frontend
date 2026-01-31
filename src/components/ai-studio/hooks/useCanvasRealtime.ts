@@ -192,7 +192,7 @@ export function useCanvasRealtime(brandProfileId: string) {
   const lastCursorSendRef = useRef<number>(0);
   const updateCursor = useCallback(
     (x: number, y: number) => {
-      if (!user || !channelRef.current) return;
+      if (!user || !channelRef.current || status !== "SUBSCRIBED") return;
       
       const now = Date.now();
       if (now - lastCursorSendRef.current < 50) return;
