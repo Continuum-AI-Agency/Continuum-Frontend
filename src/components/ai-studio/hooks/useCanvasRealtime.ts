@@ -44,6 +44,8 @@ export function useCanvasRealtime(brandProfileId: string) {
   const isRemoteChangeRef = useRef<boolean>(false);
   const channelRef = useRef<any>(null);
   const hasLoadedInitialDataRef = useRef<boolean>(false);
+  const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
+  const lastRemoteEdgeIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!brandProfileId) return;
@@ -75,12 +77,17 @@ export function useCanvasRealtime(brandProfileId: string) {
         store.setEdges((session.edges || []) as Edge[]);
         lastUpdateRef.current = session.updated_at;
         
+        lastRemoteNodeIdsRef.current = new Set(session.nodes?.map((n: any) => n.id) || []);
+        lastRemoteEdgeIdsRef.current = new Set(session.edges?.map((e: any) => e.id) || []);
+
         setTimeout(() => {
           isRemoteChangeRef.current = false;
           setIsLoading(false);
         }, 100);
       } else {
         console.log("[Canvas Sync] No existing session found");
+        lastRemoteNodeIdsRef.current = new Set();
+        lastRemoteEdgeIdsRef.current = new Set();
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
       }
@@ -120,23 +127,29 @@ export function useCanvasRealtime(brandProfileId: string) {
     const mergedNodes = mergeNodes(
       store.nodes,
       (payload.nodes || []) as StudioNode[],
-      (payload.deleted_node_ids || []) as string[]
+      (payload.deleted_node_ids || []) as string[],
+      lastRemoteNodeIdsRef.current
     );
     const mergedEdges = mergeEdges(
       store.edges,
       (payload.edges || []) as Edge[],
-      (payload.deleted_edge_ids || []) as string[]
+      (payload.deleted_edge_ids || []) as string[],
+      lastRemoteEdgeIdsRef.current
     );
 
     console.log("[Canvas Sync] Applying merge result", {
       remoteNodes: payload.nodes?.length,
-      mergedNodes: mergedNodes.length
+      mergedNodes: mergedNodes.length,
+      prevRemoteNodes: lastRemoteNodeIdsRef.current.size
     });
 
     isRemoteChangeRef.current = true;
     store.setNodes(mergedNodes);
     store.setEdges(mergedEdges);
     lastUpdateRef.current = remoteTimestamp;
+    
+    lastRemoteNodeIdsRef.current = new Set(payload.nodes?.map((n: any) => n.id) || []);
+    lastRemoteEdgeIdsRef.current = new Set(payload.edges?.map((e: any) => e.id) || []);
     
     setTimeout(() => {
       isRemoteChangeRef.current = false;
@@ -272,6 +285,9 @@ export function useCanvasRealtime(brandProfileId: string) {
         lastUpdateRef.current = (data as any).updated_at;
         console.log("[Canvas Sync] Save successful, broadcasting update", lastUpdateRef.current);
         
+        lastRemoteNodeIdsRef.current = new Set(serialized.nodes.map((n: any) => n.id));
+        lastRemoteEdgeIdsRef.current = new Set(serialized.edges.map((e: any) => e.id));
+
         if (channelRef.current && status === "SUBSCRIBED") {
           channelRef.current.send({
             type: "broadcast",
@@ -284,14 +300,9 @@ export function useCanvasRealtime(brandProfileId: string) {
               updated_at: lastUpdateRef.current
             }
           });
-        } else {
-          console.log("[Canvas Sync] Broadcast skipped: channel not ready", { 
-            hasChannel: !!channelRef.current, 
-            status 
-          });
         }
         
-        state.clearDeletedIds();
+        state.clearDeletedIds(deletedNodeIds, deletedEdgeIds);
       }
     } catch (err) {
       console.error("[Canvas Sync] Save exception:", err);

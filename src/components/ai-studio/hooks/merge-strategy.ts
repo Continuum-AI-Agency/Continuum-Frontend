@@ -4,39 +4,28 @@ import type { Edge } from '@xyflow/react';
 export function mergeNodes(
   local: StudioNode[],
   remote: StudioNode[],
-  deletedIds: string[]
+  remoteDeletedIds: string[],
+  prevRemoteIds: Set<string> = new Set()
 ): StudioNode[] {
-  const localFiltered = local.filter((n) => !deletedIds.includes(n.id));
+  const localFiltered = local.filter((n) => !remoteDeletedIds.includes(n.id));
   
   const remoteMap = new Map(remote.map((n) => [n.id, n]));
   const localMap = new Map(localFiltered.map((n) => [n.id, n]));
   
   const merged = new Map<string, StudioNode>();
   
+  // 1. All remote nodes are authoritative
   for (const remoteNode of remote) {
     const localNode = localMap.get(remoteNode.id);
     
-    // Preserve local-only runtime state
-    const mergedData = {
-      ...remoteNode.data,
-    };
-
+    const mergedData = { ...remoteNode.data };
     if (localNode) {
-      // Keys to preserve from local state if they exist
       const runtimeKeys = [
-        'isExecuting',
-        'isComplete',
-        'error',
-        'executionTime',
-        'isToolbarVisible',
-        'generatedImage',
-        'generatedVideo'
+        'isExecuting', 'isComplete', 'error', 'executionTime',
+        'isToolbarVisible', 'generatedImage', 'generatedVideo'
       ] as const;
-
       runtimeKeys.forEach(key => {
-        if (localNode.data[key] !== undefined) {
-          (mergedData as any)[key] = localNode.data[key];
-        }
+        if (localNode.data[key] !== undefined) (mergedData as any)[key] = localNode.data[key];
       });
     }
 
@@ -48,8 +37,16 @@ export function mergeNodes(
     } as StudioNode);
   }
   
+  // 2. Handle local nodes that are not in the remote update
   for (const localNode of localFiltered) {
     if (!remoteMap.has(localNode.id)) {
+      // If the node WAS in the previous remote state but is now missing,
+      // it means it was deleted remotely. Don't resurrect it.
+      if (prevRemoteIds.has(localNode.id)) {
+        continue;
+      }
+      
+      // Otherwise, it's a new local-only addition. Keep it.
       merged.set(localNode.id, localNode);
     }
   }
@@ -60,9 +57,10 @@ export function mergeNodes(
 export function mergeEdges(
   local: Edge[],
   remote: Edge[],
-  deletedIds: string[]
+  remoteDeletedIds: string[],
+  prevRemoteIds: Set<string> = new Set()
 ): Edge[] {
-  const localFiltered = local.filter((e) => !deletedIds.includes(e.id));
+  const localFiltered = local.filter((e) => !remoteDeletedIds.includes(e.id));
   
   const remoteMap = new Map(remote.map((e) => [e.id, e]));
   const localMap = new Map(localFiltered.map((e) => [e.id, e]));
@@ -71,7 +69,6 @@ export function mergeEdges(
   
   for (const remoteEdge of remote) {
     const localEdge = localMap.get(remoteEdge.id);
-    
     merged.set(remoteEdge.id, {
       ...remoteEdge,
       selected: localEdge?.selected,
@@ -80,6 +77,9 @@ export function mergeEdges(
   
   for (const localEdge of localFiltered) {
     if (!remoteMap.has(localEdge.id)) {
+      if (prevRemoteIds.has(localEdge.id)) {
+        continue;
+      }
       merged.set(localEdge.id, localEdge);
     }
   }
