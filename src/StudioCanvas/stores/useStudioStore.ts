@@ -159,6 +159,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   saveTrigger: 0,
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
+    const deletedNodes = changes
+      .filter((c) => c.type === 'remove')
+      .map((c) => (c as { id: string }).id);
+
     set((state) => {
         const newNodes = applyNodeChanges(changes, state.nodes);
         
@@ -173,6 +177,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         
         return {
             nodes: hasDimensions ? resolveCollisions(newNodes) : newNodes,
+            deletedNodeIds: deletedNodes.length > 0 ? [...state.deletedNodeIds, ...deletedNodes] : state.deletedNodeIds,
+            saveTrigger: deletedNodes.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
         };
     });
   },
@@ -186,6 +192,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set((state) => ({
       edges: normalizeEdges(nextEdges, state.nodes),
       deletedEdgeIds: [...state.deletedEdgeIds, ...deletedEdges],
+      saveTrigger: deletedEdges.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
     }));
   },
 
@@ -212,9 +219,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       },
     };
 
-    set({
-      edges: addEdge(newEdge as Edge, get().edges),
-    });
+    set((state) => ({
+      edges: addEdge(newEdge as Edge, state.edges),
+      saveTrigger: state.saveTrigger + 1,
+    }));
   },
 
   setNodes: (nodes: StudioNode[]) => {
@@ -285,7 +293,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       selected: false,
     };
 
-    set({ nodes: [...state.nodes, newNode] });
+    set({ 
+      nodes: [...state.nodes, newNode],
+      saveTrigger: state.saveTrigger + 1
+    });
   },
 
   deleteNode: (id: string) => {
@@ -299,6 +310,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
           .filter((e) => e.source === id || e.target === id)
           .map((e) => e.id),
       ],
+      saveTrigger: state.saveTrigger + 1,
     }));
   },
 
