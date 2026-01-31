@@ -383,6 +383,9 @@ export async function executeWorkflow(
       isComplete: status === 'completed',
       error: error,
     });
+    if (status !== 'running') {
+      useStudioStore.getState().triggerSave();
+    }
   };
 
   const setNodeOutput = (nodeId: string, output: NodeOutput) => {
@@ -402,6 +405,7 @@ export async function executeWorkflow(
         isComplete: true,
         isExecuting: false
       });
+      useStudioStore.getState().triggerSave();
       const updatedNode = useStudioStore.getState().nodes.find((node) => node.id === nodeId);
       console.info("[studio] generatedImage set", {
         nodeId,
@@ -416,12 +420,14 @@ export async function executeWorkflow(
         isComplete: true,
         isExecuting: false
       });
+      useStudioStore.getState().triggerSave();
     } else if (output.type === 'text') {
       useStudioStore.getState().updateNodeData(nodeId, { 
         value: output.value,
         isComplete: true,
         isExecuting: false
       });
+      useStudioStore.getState().triggerSave();
     }
   };
 

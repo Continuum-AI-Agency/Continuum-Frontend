@@ -41,6 +41,8 @@ interface StudioState {
   getDeletedNodeIds: () => string[];
   getDeletedEdgeIds: () => string[];
   clearDeletedIds: () => void;
+  saveTrigger: number;
+  triggerSave: () => void;
   
   history: {
     past: Array<{ nodes: StudioNode[]; edges: Edge[] }>;
@@ -154,6 +156,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   interactionMode: 'pan',
   deletedNodeIds: [],
   deletedEdgeIds: [],
+  saveTrigger: 0,
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
     set((state) => {
@@ -366,5 +369,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
   clearDeletedIds: () => {
     set({ deletedNodeIds: [], deletedEdgeIds: [] });
+  },
+
+  triggerSave: () => {
+    set((state) => ({ saveTrigger: state.saveTrigger + 1 }));
   },
 }));

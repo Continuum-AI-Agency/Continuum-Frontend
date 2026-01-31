@@ -16,10 +16,35 @@ export function mergeNodes(
   for (const remoteNode of remote) {
     const localNode = localMap.get(remoteNode.id);
     
+    // Preserve local-only runtime state
+    const mergedData = {
+      ...remoteNode.data,
+    };
+
+    if (localNode) {
+      // Keys to preserve from local state if they exist
+      const runtimeKeys = [
+        'isExecuting',
+        'isComplete',
+        'error',
+        'executionTime',
+        'isToolbarVisible',
+        'generatedImage',
+        'generatedVideo'
+      ] as const;
+
+      runtimeKeys.forEach(key => {
+        if (localNode.data[key] !== undefined) {
+          (mergedData as any)[key] = localNode.data[key];
+        }
+      });
+    }
+
     merged.set(remoteNode.id, {
       ...remoteNode,
       selected: localNode?.selected,
       dragging: localNode?.dragging,
+      data: mergedData,
     } as StudioNode);
   }
   
