@@ -24,6 +24,8 @@ interface StudioState {
   edges: Edge[];
   defaultEdgeType: EdgeType;
   interactionMode: InteractionMode;
+  deletedNodeIds: string[];
+  deletedEdgeIds: string[];
   onNodesChange: OnNodesChange<StudioNode>;
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
@@ -36,6 +38,9 @@ interface StudioState {
   setInteractionMode: (mode: InteractionMode) => void;
   duplicateNode: (id: string) => void;
   deleteNode: (id: string) => void;
+  getDeletedNodeIds: () => string[];
+  getDeletedEdgeIds: () => string[];
+  clearDeletedIds: () => void;
   
   history: {
     past: Array<{ nodes: StudioNode[]; edges: Edge[] }>;
@@ -91,6 +96,9 @@ const getEdgeStyle = (sourceHandle: string | null, _edgeType: EdgeType) => {
 };
 
 const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
+  if (!nodes || !Array.isArray(nodes)) return edges || [];
+  if (!edges || !Array.isArray(edges)) return [];
+  
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
   return edges.flatMap((edge) => {
@@ -144,6 +152,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   edges: [],
   defaultEdgeType: 'bezier',
   interactionMode: 'pan',
+  deletedNodeIds: [],
+  deletedEdgeIds: [],
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
     set((state) => {
@@ -165,10 +175,15 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
+    const deletedEdges = changes
+      .filter((c) => c.type === 'remove')
+      .map((c) => (c as { id: string }).id);
+    
     const nextEdges = applyEdgeChanges(changes, get().edges);
-    set({
-      edges: normalizeEdges(nextEdges, get().nodes),
-    });
+    set((state) => ({
+      edges: normalizeEdges(nextEdges, state.nodes),
+      deletedEdgeIds: [...state.deletedEdgeIds, ...deletedEdges],
+    }));
   },
 
   onConnect: (connection: Connection) => {
@@ -274,6 +289,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set((state) => ({
       nodes: state.nodes.filter((n) => n.id !== id),
       edges: state.edges.filter((e) => e.source !== id && e.target !== id),
+      deletedNodeIds: [...state.deletedNodeIds, id],
+      deletedEdgeIds: [
+        ...state.deletedEdgeIds,
+        ...state.edges
+          .filter((e) => e.source === id || e.target === id)
+          .map((e) => e.id),
+      ],
     }));
   },
 
@@ -332,5 +354,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         },
       };
     });
+  },
+
+  getDeletedNodeIds: () => {
+    return get().deletedNodeIds;
+  },
+
+  getDeletedEdgeIds: () => {
+    return get().deletedEdgeIds;
+  },
+
+  clearDeletedIds: () => {
+    set({ deletedNodeIds: [], deletedEdgeIds: [] });
   },
 }));
