@@ -5,6 +5,7 @@ import { useSession } from "@/hooks/useSession";
 import type { StudioNode } from "@/StudioCanvas/types";
 import type { Edge } from "@xyflow/react";
 import { stringToColor } from "@/lib/utils/color";
+import { mergeNodes, mergeEdges } from "./merge-strategy";
 
 type CanvasSession = {
   brand_profile_id: string;
@@ -112,9 +113,20 @@ export function useCanvasRealtime(brandProfileId: string) {
             return;
           }
 
+          const mergedNodes = mergeNodes(
+            nodes,
+            (payload.new.nodes || []) as StudioNode[],
+            (payload.new.deleted_node_ids || []) as string[]
+          );
+          const mergedEdges = mergeEdges(
+            edges,
+            (payload.new.edges || []) as Edge[],
+            (payload.new.deleted_edge_ids || []) as string[]
+          );
+
           isRemoteChangeRef.current = true;
-          setNodes((payload.new.nodes || []) as StudioNode[]);
-          setEdges((payload.new.edges || []) as Edge[]);
+          setNodes(mergedNodes);
+          setEdges(mergedEdges);
           lastUpdateRef.current = payload.new.updated_at;
           setTimeout(() => {
             isRemoteChangeRef.current = false;
