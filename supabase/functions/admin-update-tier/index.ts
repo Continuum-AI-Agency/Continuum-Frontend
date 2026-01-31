@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 type RequestBody = {
-  userId?: string;
   brandProfileId?: string;
   tier?: number | null;
 };
@@ -42,54 +41,34 @@ serve(async (req) => {
   if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
   const body = (await req.json().catch(() => ({}))) as RequestBody;
-  const { userId, brandProfileId, tier } = body;
-  if (!userId || !brandProfileId || typeof brandProfileId !== "string") {
-    return json({ error: "userId and brandProfileId required" }, 400);
+  const { brandProfileId, tier } = body;
+  if (!brandProfileId || typeof brandProfileId !== "string") {
+    return json({ error: "brandProfileId required" }, 400);
   }
 
-  const tierValue =
-    tier === null || tier === undefined || tier === ""
-      ? null
-      : Number.isFinite(tier)
-        ? tier
-        : Number.isFinite(Number(tier))
-          ? Number(tier)
-          : null;
+  let tierValue = 0;
+  if (tier !== null && tier !== undefined && tier !== "") {
+    const numeric = typeof tier === "number" ? tier : Number(tier);
+    if (!Number.isFinite(numeric)) {
+      return json({ error: "tier must be a number" }, 400);
+    }
+    tierValue = numeric;
+  }
 
-  const { data: existingPermission, error: existingPermissionError } = await adminClient
+  const { error: updateError } = await adminClient
     .schema("brand_profiles")
-    .from("permissions")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("brand_profile_id", brandProfileId)
-    .maybeSingle();
+    .from("brand_profiles")
+    .update({
+      tier: tierValue,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", brandProfileId);
 
-  if (existingPermissionError && existingPermissionError.code !== "PGRST116") {
-    log("permissions lookup failed", { existingPermissionError, userId, brandProfileId });
-    return json({ error: existingPermissionError.message }, 500);
+  if (updateError) {
+    log("brand_profiles update failed", { updateError, brandProfileId, tier: tierValue });
+    return json({ error: updateError.message }, 500);
   }
 
-  const role = existingPermission?.role ?? "viewer";
-
-  const { error: upsertError } = await adminClient
-    .schema("brand_profiles")
-    .from("permissions")
-    .upsert(
-      {
-        user_id: userId,
-        brand_profile_id: brandProfileId,
-        role,
-        tier: tierValue,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,brand_profile_id" }
-    );
-
-  if (upsertError) {
-    log("upsert failed", { upsertError, userId, brandProfileId, tier: tierValue });
-    return json({ error: upsertError.message }, 500);
-  }
-
-  log("success", { userId, brandProfileId, tier: tierValue });
+  log("success", { brandProfileId, tier: tierValue });
   return json({ ok: true });
 });

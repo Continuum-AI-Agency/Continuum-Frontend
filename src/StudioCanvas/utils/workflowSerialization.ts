@@ -13,8 +13,6 @@ const runtimeNodeKeys = [
   'error',
   'executionTime',
   'isToolbarVisible',
-  'generatedImage',
-  'generatedVideo',
 ] as const;
 
 const dataUrlPattern = /^data:([a-z]+\/[a-z0-9-+.]+)(;[a-z0-9=[\]!#$%&'*+.^_`{|}~-]+)*;base64,/i;

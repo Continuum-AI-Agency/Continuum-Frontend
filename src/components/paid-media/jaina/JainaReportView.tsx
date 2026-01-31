@@ -3,6 +3,7 @@
 import {
   Badge,
   Box,
+  Button,
   Callout,
   Card,
   Flex,
@@ -10,6 +11,10 @@ import {
   Heading,
   Text,
 } from "@radix-ui/themes";
+import {
+  DownloadIcon,
+  EnvelopeClosedIcon,
+} from "@radix-ui/react-icons";
 import {
   Area,
   AreaChart,
@@ -21,6 +26,7 @@ import {
   LineChart,
   Pie,
   PieChart,
+  ResponsiveContainer,
   XAxis,
   YAxis,
 } from "recharts";
@@ -49,8 +55,34 @@ export function JainaReportView({ report, status, error }: JainaReportViewProps)
     return <EmptyReport status={status} />;
   }
 
+  const handleDownloadJSON = () => {
+    if (!report) return;
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `jaina-report-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSendEmail = () => {
+    alert("This feature is coming soon! It will allow you to send this report directly to your inbox.");
+  };
+
   return (
     <Flex direction="column" gap="4">
+      <Flex justify="end" gap="2" className="mb-2">
+        <Button variant="soft" color="gray" size="1" onClick={handleSendEmail}>
+          <EnvelopeClosedIcon />
+          Send Email
+        </Button>
+        <Button variant="soft" color="gray" size="1" onClick={handleDownloadJSON}>
+          <DownloadIcon />
+          Download JSON
+        </Button>
+      </Flex>
+
       <Card className="border border-subtle bg-surface">
         <Box p="4" className="space-y-2">
           <Flex align="center" justify="between">
@@ -353,59 +385,63 @@ function GraphChart({ graph }: { graph: SoTReport["graphs"][number] }) {
       value: firstSeries?.values[index] ?? 0,
     }));
     return (
-      <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
-        <PieChart>
-          <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} stroke="transparent">
-            {pieData.map((_, index) => (
-              <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
-            ))}
-          </Pie>
-          <ChartTooltip content={<ChartTooltipContent />} />
-        </PieChart>
-      </ChartContainer>
+      <div className="h-[240px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} stroke="transparent">
+              {pieData.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={palette[index % palette.length]} />
+              ))}
+            </Pie>
+            <ChartTooltip content={<ChartTooltipContent />} />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
     );
   }
 
   return (
-    <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
-      {graph.graph_type === "line" ? (
-        <LineChart data={data}>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} />
-          <YAxis tickLine={false} axisLine={false} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          {seriesKeys.map((entry) => (
-            <Line key={entry.key} type="monotone" dataKey={entry.key} stroke={`var(--color-${entry.key})`} strokeWidth={2} dot={false} />
-          ))}
-        </LineChart>
-      ) : graph.graph_type === "area" ? (
-        <AreaChart data={data}>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} />
-          <YAxis tickLine={false} axisLine={false} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          {seriesKeys.map((entry) => (
-            <Area key={entry.key} type="monotone" dataKey={entry.key} stroke={`var(--color-${entry.key})`} fill={`var(--color-${entry.key})`} fillOpacity={0.2} />
-          ))}
-        </AreaChart>
-      ) : (
-        <BarChart data={data}>
-          <CartesianGrid vertical={false} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} />
-          <YAxis tickLine={false} axisLine={false} />
-          <ChartTooltip content={<ChartTooltipContent />} />
-          {seriesKeys.map((entry) => (
-            <Bar
-              key={entry.key}
-              dataKey={entry.key}
-              stackId={graph.graph_type === "stacked_bar" ? "stack" : undefined}
-              fill={`var(--color-${entry.key})`}
-              radius={4}
-            />
-          ))}
-        </BarChart>
-      )}
-    </ChartContainer>
+    <div className="h-[240px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        {graph.graph_type === "line" ? (
+          <LineChart data={data}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            {seriesKeys.map((entry) => (
+              <Line key={entry.key} type="monotone" dataKey={entry.key} stroke={entry.color} strokeWidth={2} dot={false} />
+            ))}
+          </LineChart>
+        ) : graph.graph_type === "area" ? (
+          <AreaChart data={data}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            {seriesKeys.map((entry) => (
+              <Area key={entry.key} type="monotone" dataKey={entry.key} stroke={entry.color} fill={entry.color} fillOpacity={0.2} />
+            ))}
+          </AreaChart>
+        ) : (
+          <BarChart data={data}>
+            <CartesianGrid vertical={false} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} />
+            <YAxis tickLine={false} axisLine={false} />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            {seriesKeys.map((entry) => (
+              <Bar
+                key={entry.key}
+                dataKey={entry.key}
+                stackId={graph.graph_type === "stacked_bar" ? "stack" : undefined}
+                fill={entry.color}
+                radius={4}
+              />
+            ))}
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+    </div>
   );
 }
 

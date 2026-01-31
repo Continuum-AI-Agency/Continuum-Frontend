@@ -145,27 +145,36 @@ export type Database = {
       }
       brand_profiles: {
         Row: {
+          active: boolean
           brand_name: string
           context: Json
           created_at: string
           created_by: string
           id: string
+          logo_path: string | null
+          tier: number
           updated_at: string
         }
         Insert: {
+          active?: boolean
           brand_name: string
           context?: Json
           created_at?: string
           created_by: string
           id?: string
+          logo_path?: string | null
+          tier?: number
           updated_at?: string
         }
         Update: {
+          active?: boolean
           brand_name?: string
           context?: Json
           created_at?: string
           created_by?: string
           id?: string
+          logo_path?: string | null
+          tier?: number
           updated_at?: string
         }
         Relationships: []
@@ -268,6 +277,41 @@ export type Database = {
             referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          id: string
+          brand_profile_id: string
+          user_id: string
+          room_id: string
+          content: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          brand_profile_id: string
+          user_id: string
+          room_id?: string
+          content: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          brand_profile_id?: string
+          user_id?: string
+          room_id?: string
+          content?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          }
         ]
       }
       integration_accounts_assets: {

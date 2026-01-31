@@ -35,6 +35,7 @@ const TEXT_MIME = 'text/plain';
 
 export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
@@ -44,7 +45,8 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
   const handleRefTypeChange = useCallback((value: string) => {
     setRefType(value);
     updateNodeData(id, { referenceType: value as any });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const imageConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'image').length;
 
@@ -56,6 +58,7 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
         const result = reader.result as string;
         setPreview(result);
         updateNodeData(id, { image: result, fileName: file.name });
+        triggerSave();
       };
       reader.readAsDataURL(file);
     }
@@ -92,6 +95,7 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
         const result = await fileToDataUrl(file);
         setPreview(result);
         updateNodeData(id, { image: result, fileName: file.name });
+        triggerSave();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -131,7 +135,8 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
 
     setPreview(resolved.dataUrl);
     updateNodeData(id, { image: resolved.dataUrl, fileName: resolved.fileName });
-  }, [fileToDataUrl, id, updateNodeData, show]);
+    triggerSave();
+  }, [fileToDataUrl, id, updateNodeData, show, triggerSave]);
 
   return (
     <TooltipProvider>

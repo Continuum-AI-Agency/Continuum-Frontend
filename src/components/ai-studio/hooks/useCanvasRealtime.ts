@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useStudioStore } from "@/StudioCanvas/stores/useStudioStore";
 import { useSession } from "@/hooks/useSession";
@@ -38,15 +38,19 @@ export function useCanvasRealtime(brandProfileId: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
   const [status, setStatus] = useState<RealtimeStatus>("INITIALIZING");
+  const [dbStatus, setDbStatus] = useState<RealtimeStatus>("INITIALIZING");
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
 
   const lastUpdateRef = useRef<string | null>(null);
   const isRemoteChangeRef = useRef<boolean>(false);
-  const channelRef = useRef<any>(null);
+  const broadcastChannelRef = useRef<any>(null);
+  const dbChannelRef = useRef<any>(null);
   const hasLoadedInitialDataRef = useRef<boolean>(false);
   const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
   const lastRemoteEdgeIdsRef = useRef<Set<string>>(new Set());
 
+  // Stable reference for the update handler to prevent binding mismatches
   const handleRemoteUpdate = useCallback((payload: { 
     nodes: any[], 
     edges: any[], 
@@ -57,21 +61,14 @@ export function useCanvasRealtime(brandProfileId: string) {
     const remoteTimestamp = payload.updated_at;
     const localTimestamp = lastUpdateRef.current;
 
-    console.log("[Canvas Sync] Processing update", {
-      remoteTs: remoteTimestamp,
-      localTs: localTimestamp,
-      isExactMatch: remoteTimestamp === localTimestamp
-    });
-
+    // Exact timestamp match means it is our own change returning via Postgres
     if (remoteTimestamp && localTimestamp && remoteTimestamp === localTimestamp) {
       return;
     }
 
+    // Protect against out-of-order delivery
     const isRemoteNewer = !localTimestamp || new Date(remoteTimestamp) >= new Date(localTimestamp);
-    if (!isRemoteNewer) {
-      console.log("[Canvas Sync] Skipping older update");
-      return;
-    }
+    if (!isRemoteNewer) return;
 
     const store = useStudioStore.getState();
     
@@ -88,10 +85,9 @@ export function useCanvasRealtime(brandProfileId: string) {
       lastRemoteEdgeIdsRef.current
     );
 
-    console.log("[Canvas Sync] Applying merge result", {
-      remoteNodes: payload.nodes?.length,
-      mergedNodes: mergedNodes.length,
-      prevRemoteCount: lastRemoteNodeIdsRef.current.size
+    console.log("[Canvas Sync] State merged", {
+      nodes: mergedNodes.length,
+      timestamp: remoteTimestamp
     });
 
     isRemoteChangeRef.current = true;
@@ -107,11 +103,11 @@ export function useCanvasRealtime(brandProfileId: string) {
     }, 100);
   }, []);
 
+  // 1. Initial Data Fetch
   useEffect(() => {
     if (!brandProfileId) return;
 
     const loadInitialState = async () => {
-      console.log("[Canvas Sync] Loading initial state...");
       const { data, error } = await supabase
         .schema("brand_profiles")
         .from("canvas_sessions" as any)
@@ -120,15 +116,13 @@ export function useCanvasRealtime(brandProfileId: string) {
         .maybeSingle();
 
       if (error) {
-        console.error("[Canvas Sync] Error loading initial state:", error);
+        console.error("[Canvas Sync] Load failed", error);
         setIsLoading(false);
         return;
       }
 
       if (data) {
         const session = data as unknown as CanvasSession;
-        console.log("[Canvas Sync] Initial state loaded:", { nodeCount: session.nodes?.length });
-        
         isRemoteChangeRef.current = true;
         hasLoadedInitialDataRef.current = true;
         
@@ -145,7 +139,6 @@ export function useCanvasRealtime(brandProfileId: string) {
           setIsLoading(false);
         }, 100);
       } else {
-        console.log("[Canvas Sync] No existing session found");
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
       }
@@ -154,43 +147,23 @@ export function useCanvasRealtime(brandProfileId: string) {
     loadInitialState();
   }, [brandProfileId, supabase]);
 
+  // 2. Realtime Channel (Broadcast & Presence)
   useEffect(() => {
     if (!brandProfileId) return;
 
-    console.log("[Canvas Sync] Initializing channel...");
+    const channelTopic = `canvas:broadcast:${brandProfileId}`;
+    console.log("[Canvas Sync] Creating broadcast channel:", channelTopic);
     
-    const channel = supabase.channel(`canvas_session:${brandProfileId}`, {
-      config: {
-        broadcast: { self: false },
-      },
+    const channel = supabase.channel(channelTopic, {
+      config: { broadcast: { self: false } },
     });
 
     channel
-      .on(
-        "postgres_changes" as any,
-        {
-          event: "UPDATE",
-          schema: "brand_profiles",
-          table: "canvas_sessions",
-          filter: `brand_profile_id=eq.${brandProfileId}`,
-        },
-        (payload: any) => {
-          console.log("[Canvas Sync] DB Update Received");
-          handleRemoteUpdate({
-            nodes: payload.new.nodes,
-            edges: payload.new.edges,
-            deleted_node_ids: payload.new.deleted_node_ids,
-            deleted_edge_ids: payload.new.deleted_edge_ids,
-            updated_at: payload.new.updated_at
-          });
-        }
-      )
       .on("broadcast" as any, { event: "canvas_updated" }, ({ payload }: any) => {
-        console.log("[Canvas Sync] Broadcast Event Received");
+        console.log("[Canvas Sync] Broadcast update received");
         handleRemoteUpdate(payload);
       })
       .on("broadcast" as any, { event: "cursor" }, ({ payload }: any) => {
-        if (payload.userId === user?.id) return;
         setRemoteCursors((prev) => ({
           ...prev,
           [payload.userId]: {
@@ -216,36 +189,96 @@ export function useCanvasRealtime(brandProfileId: string) {
           return next;
         });
       })
-      .subscribe(async (subStatus, err) => {
-        console.log("[Canvas Sync] Subscription Status:", subStatus);
-        if (err) console.error("[Canvas Sync] Subscription Error:", err);
-        
+      .subscribe((subStatus, err) => {
+        console.log("[Canvas Sync] Broadcast channel status:", subStatus);
+        if (err) console.error("[Canvas Sync] Broadcast error:", err);
         setStatus(subStatus as RealtimeStatus);
-        if (subStatus === "SUBSCRIBED" && user) {
-          await channel.track({
-            user_id: user.id,
-            full_name: user.user_metadata?.full_name || user.email || "Anonymous",
-            avatar_url: user.user_metadata?.avatar_url || "",
-            email: user.email || "",
-            selected_node_ids: [],
-            color: stringToColor(user.id),
-            online_at: new Date().toISOString(),
-          });
-        }
       });
 
-    channelRef.current = channel;
+    broadcastChannelRef.current = channel;
 
     return () => {
-      console.log("[Canvas Sync] Cleaning up channel...");
+      console.log("[Canvas Sync] Tearing down broadcast channel");
       supabase.removeChannel(channel);
-      channelRef.current = null;
+      broadcastChannelRef.current = null;
     };
-  }, [brandProfileId, supabase, user, handleRemoteUpdate]);
+  }, [brandProfileId, supabase, handleRemoteUpdate]);
 
+  // 3. Realtime Channel (Postgres Changes)
+  useEffect(() => {
+    if (!brandProfileId) return;
+
+    const channelTopic = `canvas:db:${brandProfileId}`;
+    console.log("[Canvas Sync] Creating DB channel:", channelTopic);
+
+    const channel = supabase.channel(channelTopic, {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on(
+        "postgres_changes" as any,
+        {
+          event: "*", 
+          schema: "brand_profiles",
+          table: "canvas_sessions"
+        },
+        (payload: any) => {
+          // Manually filter by ID to ensure binding is simple and reliable
+          const record = payload.new || payload.old;
+          if (record?.brand_profile_id !== brandProfileId) return;
+
+          console.log("[Canvas Sync] Postgres Change:", payload.eventType);
+          
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            handleRemoteUpdate({
+              nodes: payload.new.nodes,
+              edges: payload.new.edges,
+              deleted_node_ids: payload.new.deleted_node_ids,
+              deleted_edge_ids: payload.new.deleted_edge_ids,
+              updated_at: payload.new.updated_at
+            });
+          } else if (payload.eventType === "DELETE") {
+            // Handle full row deletion if necessary
+            window.location.reload();
+          }
+        }
+      )
+      .subscribe((subStatus, err) => {
+        console.log("[Canvas Sync] DB channel status:", subStatus);
+        if (err) console.error("[Canvas Sync] DB Realtime error:", err);
+        setDbStatus(subStatus as RealtimeStatus);
+      });
+
+    dbChannelRef.current = channel;
+
+    return () => {
+      console.log("[Canvas Sync] Tearing down DB channel");
+      supabase.removeChannel(channel);
+      dbChannelRef.current = null;
+    };
+  }, [brandProfileId, supabase, handleRemoteUpdate]);
+
+  // 4. Presence Tracking
+  useEffect(() => {
+    if (status === "SUBSCRIBED" && user && broadcastChannelRef.current) {
+      broadcastChannelRef.current.track({
+        user_id: user.id,
+        full_name: user.user_metadata?.full_name || user.email || "Anonymous",
+        avatar_url: user.user_metadata?.avatar_url || "",
+        email: user.email || "",
+        selected_node_ids: [],
+        color: stringToColor(user.id),
+        online_at: new Date().toISOString(),
+      });
+    }
+  }, [status, user]);
+
+  // 5. Save/Broadcast state
   const saveCanvasToDatabase = useCallback(async () => {
     if (!brandProfileId || !hasLoadedInitialDataRef.current) return;
 
+    setIsSaving(true);
     try {
       const state = useStudioStore.getState();
       const currentNodes = state.nodes;
@@ -255,8 +288,6 @@ export function useCanvasRealtime(brandProfileId: string) {
       const deletedEdgeIds = state.getDeletedEdgeIds();
 
       const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
-
-      console.log("[Canvas Sync] Saving to DB...");
 
       const { data, error } = await supabase
         .schema("brand_profiles")
@@ -276,16 +307,15 @@ export function useCanvasRealtime(brandProfileId: string) {
         .single();
 
       if (error) {
-        console.error("[Canvas Sync] DB Save Failed:", error);
+        console.error("[Canvas Sync] Save failed", error);
       } else if (data) {
         lastUpdateRef.current = (data as any).updated_at;
-        console.log("[Canvas Sync] DB Save Success, Broadcasting...");
         
         lastRemoteNodeIdsRef.current = new Set(serialized.nodes.map((n: any) => n.id));
         lastRemoteEdgeIdsRef.current = new Set(serialized.edges.map((e: any) => e.id));
 
-        if (channelRef.current && status === "SUBSCRIBED") {
-          channelRef.current.send({
+        if (broadcastChannelRef.current && status === "SUBSCRIBED") {
+          broadcastChannelRef.current.send({
             type: "broadcast",
             event: "canvas_updated",
             payload: {
@@ -301,11 +331,12 @@ export function useCanvasRealtime(brandProfileId: string) {
         state.clearDeletedIds(deletedNodeIds, deletedEdgeIds);
       }
     } catch (err) {
-      console.error("[Canvas Sync] Critical Save Error:", err);
+      console.error("[Canvas Sync] Save error", err);
+    } finally {
+      setIsSaving(false);
     }
   }, [brandProfileId, supabase, status]);
 
-  // 4. Setup Save Trigger
   const saveTrigger = useStudioStore((state) => state.saveTrigger);
   useEffect(() => {
     if (saveTrigger > 0) {
@@ -313,15 +344,15 @@ export function useCanvasRealtime(brandProfileId: string) {
     }
   }, [saveTrigger, saveCanvasToDatabase]);
 
-  // 5. Define Cursors/Presence Helpers
+  // 6. Ephemeral Cursors
   const lastCursorSendRef = useRef<number>(0);
   const updateCursor = useCallback((x: number, y: number) => {
-    if (!user || !channelRef.current || status !== "SUBSCRIBED") return;
+    if (!user || !broadcastChannelRef.current || status !== "SUBSCRIBED") return;
     const now = Date.now();
     if (now - lastCursorSendRef.current < 50) return;
     lastCursorSendRef.current = now;
 
-    channelRef.current.send({
+    broadcastChannelRef.current.send({
       type: "broadcast",
       event: "cursor",
       payload: {
@@ -334,13 +365,13 @@ export function useCanvasRealtime(brandProfileId: string) {
   }, [user, status]);
 
   const updatePresence = useCallback((nodeIds: string[]) => {
-    if (!user || !channelRef.current || status !== "SUBSCRIBED") return;
+    if (!user || !broadcastChannelRef.current || status !== "SUBSCRIBED") return;
     const sortedNew = [...nodeIds].sort().join(',');
     const sortedCurrent = [...selectedNodeIds].sort().join(',');
     if (sortedNew === sortedCurrent) return;
 
     setSelectedNodeIds(nodeIds);
-    channelRef.current.track({
+    broadcastChannelRef.current.track({
       user_id: user.id,
       full_name: user.user_metadata?.full_name || user.email || "Anonymous",
       avatar_url: user.user_metadata?.avatar_url || "",
@@ -357,7 +388,9 @@ export function useCanvasRealtime(brandProfileId: string) {
     updatePresence, 
     isLoading, 
     onlineUsers, 
-    status, 
+    status,
+    dbStatus,
+    isSaving,
     saveCanvasToDatabase 
   };
 }

@@ -20,10 +20,8 @@ type PermissionRow = {
   user_id: string;
   brand_profile_id: string;
   role: string | null;
-  tier: number | null;
+  brand_tier: number;
   brand_name: string | null;
-  brand_created_at?: string | null;
-  brand_created_by?: string | null;
 };
 
 type AdminPagination = {
@@ -57,6 +55,12 @@ function parsePositiveInt(value: unknown, fallback: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function parseTierValue(value: unknown): number {
+  if (value === null || value === undefined || value === "") return 0;
+  const numeric = typeof value === "string" ? Number(value) : value;
+  return Number.isFinite(numeric) ? (numeric as number) : 0;
 }
 
 type AuthUser = {
@@ -228,7 +232,7 @@ serve(async (req) => {
     const { data: permsData, error: permsError } = await adminClient
       .schema("brand_profiles")
       .from("permissions")
-      .select("user_id, brand_profile_id, role, tier")
+      .select("user_id, brand_profile_id, role")
       .in("user_id", userIds);
 
     if (permsError) {
@@ -242,38 +246,7 @@ serve(async (req) => {
       user_id: string;
       brand_profile_id: string;
       role: string | null;
-      tier: number | string | null;
     }>;
-
-    const brandIds = Array.from(new Set(permissionRows.map((p) => p.brand_profile_id))).filter(Boolean);
-    let brandNameMap = new Map<string, string | null>();
-    if (brandIds.length > 0) {
-      const { data: brandRows, error: brandError } = await adminClient
-        .schema("brand_profiles")
-        .from("brand_profiles")
-        .select("id, brand_name")
-        .in("id", brandIds);
-      if (brandError) {
-        log("brand_profiles lookup failed", { brandError });
-      } else {
-        const rows = (brandRows ?? []) as Array<{ id: string; brand_name: string | null }>;
-        brandNameMap = new Map(rows.map((row) => [row.id, row.brand_name ?? null]));
-      }
-    }
-
-    const permissions: PermissionRow[] =
-      permissionRows.map((row) => ({
-        user_id: row.user_id,
-        brand_profile_id: row.brand_profile_id,
-        role: row.role ?? null,
-        tier: (() => {
-          const tierValue = row.tier;
-          if (tierValue === null || tierValue === undefined || tierValue === "") return null;
-          const n = typeof tierValue === "string" ? Number(tierValue) : tierValue;
-          return Number.isFinite(n) ? n : null;
-        })(),
-        brand_name: brandNameMap.get(row.brand_profile_id) ?? null,
-      })) ?? [];
 
     // Fallback memberships from onboarding state (state.members)
     const { data: onboardingRows, error: onboardingError } = await adminClient
@@ -285,8 +258,58 @@ serve(async (req) => {
 
     if (onboardingError) {
       log("user_onboarding_states lookup failed", { onboardingError });
-    } else {
-      const brandIdSet = new Set(brandIds);
+    }
+
+    const brandIdSet = new Set<string>();
+    for (const row of permissionRows) {
+      if (row.brand_profile_id) {
+        brandIdSet.add(row.brand_profile_id);
+      }
+    }
+    for (const row of onboardingRows ?? []) {
+      const brandId = row.brand_id as string;
+      if (brandId) {
+        brandIdSet.add(brandId);
+      }
+    }
+
+    let brandMap = new Map<string, { name: string | null; tier: number }>();
+    const brandIds = Array.from(brandIdSet);
+    if (brandIds.length > 0) {
+      const { data: brandRows, error: brandError } = await adminClient
+        .schema("brand_profiles")
+        .from("brand_profiles")
+        .select("id, brand_name, tier")
+        .in("id", brandIds);
+      if (brandError) {
+        log("brand_profiles lookup failed", { brandError });
+      } else {
+        const rows = (brandRows ?? []) as Array<{ id: string; brand_name: string | null; tier: number | string | null }>;
+        brandMap = new Map(
+          rows.map((row) => [
+            row.id,
+            {
+              name: row.brand_name ?? null,
+              tier: parseTierValue(row.tier),
+            },
+          ])
+        );
+      }
+    }
+
+    const permissions: PermissionRow[] =
+      permissionRows.map((row) => {
+        const brandInfo = brandMap.get(row.brand_profile_id);
+        return {
+          user_id: row.user_id,
+          brand_profile_id: row.brand_profile_id,
+          role: row.role ?? null,
+          brand_tier: brandInfo?.tier ?? 0,
+          brand_name: brandInfo?.name ?? null,
+        };
+      }) ?? [];
+
+    if (!onboardingError) {
       for (const row of onboardingRows ?? []) {
         const brandId = row.brand_id as string;
         if (!brandId) continue;
@@ -299,10 +322,13 @@ serve(async (req) => {
               m.email.toLowerCase() === (users.find((u) => u.id === row.user_id)?.email ?? "").toLowerCase())
         );
         const role = matching?.role ?? null;
-        const brandName = brandNameMap.get(brandId) ?? (typeof state?.brand?.name === "string" ? state.brand.name : null);
+        const brandInfo = brandMap.get(brandId);
+        const brandName = brandInfo?.name ?? (typeof state?.brand?.name === "string" ? state.brand.name : null);
+        const brandTier = brandInfo?.tier ?? 0;
         const already = permissions.find((p) => p.user_id === row.user_id && p.brand_profile_id === brandId);
         if (already) {
           if (!already.brand_name && brandName) already.brand_name = brandName;
+          already.brand_tier = brandTier;
           if (!already.role && role) already.role = role;
           continue;
         }
@@ -310,10 +336,9 @@ serve(async (req) => {
           user_id: row.user_id as string,
           brand_profile_id: brandId,
           role,
-          tier: null,
+          brand_tier: brandTier,
           brand_name: brandName ?? null,
         });
-        brandIdSet.add(brandId);
       }
     }
 

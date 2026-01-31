@@ -58,6 +58,7 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
 
 export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const flowEdges = useEdges();
@@ -78,11 +79,13 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
 
   const handleModelChange = useCallback((value: string) => {
     updateNodeData(id, { model: value as any });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const handleAspectRatioChange = useCallback((value: string) => {
     updateNodeData(id, { aspectRatio: value as '16:9' | '9:16' });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run video node", { nodeId: id });
@@ -149,7 +152,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<Node<VideoGenNod
           </Select>
           <Select 
             value={(data as any).resolution ?? '720p'} 
-            onValueChange={(val) => updateNodeData(id, { resolution: val })}
+            onValueChange={(val) => {
+              updateNodeData(id, { resolution: val });
+              triggerSave();
+            }}
           >
             <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
               <SelectValue placeholder="Res" />

@@ -131,6 +131,30 @@ describe('mergeNodes', () => {
     expect(result[0].dragging).toBe(true);
   });
 
+  it('preserves isExecuting state from local node during merge', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'old', isExecuting: true },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 50, y: 50 },
+        data: { value: 'new' },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect(result[0].data.value).toBe('new');
+    expect((result[0].data as any).isExecuting).toBe(true);
+  });
+
   it('updates existing node from remote (LWW)', () => {
     const local: StudioNode[] = [
       {

@@ -146,7 +146,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                 <TableRow>
                   <TableHead>Users</TableHead>
                   <TableHead>Brands</TableHead>
-                  <TableHead>Tier</TableHead>
+                  <TableHead>Brand tier</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -165,11 +165,9 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                     const isExpanded = expandedUserId === user.id;
                     const detailId = `admin-user-${user.id}-brands`;
                     const tierLabel =
-                      memberships
-                        .map((m) => m.tier)
-                        .filter((t) => t !== null && t !== undefined)
-                        .map((t) => String(t))
-                        .join(", ") || "None";
+                      memberships.length > 0
+                        ? memberships.map((m) => String(m.brand_tier)).join(", ")
+                        : "None";
                     const brandNames = memberships.map((m) => m.brand_name ?? m.brand_profile_id).filter(Boolean);
                     const primaryBrands = brandNames.slice(0, 2);
                     const remainingBrandCount = Math.max(0, brandNames.length - primaryBrands.length);
@@ -309,10 +307,7 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                               <div id={detailId} className="rounded-lg border border-subtle bg-default/60 p-4">
                                 <div className="flex flex-col gap-3">
                                   {memberships.map((membership) => {
-                                    const tierValue =
-                                      membership.tier === null || membership.tier === undefined
-                                        ? "none"
-                                        : String(membership.tier);
+                                    const tierValue = String(membership.brand_tier);
 
                                     return (
                                       <div
@@ -329,29 +324,28 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <Text size="1" color="gray">
-                                            Tier
+                                            Brand tier
                                           </Text>
                                           <Select
                                             defaultValue={tierValue}
                                             onValueChange={(value) =>
                                               startActionTransition(async () => {
-                                                const nextTier = value === "none" ? null : Number(value);
-                                                if (value !== "none" && !Number.isFinite(nextTier)) return;
+                                                const nextTier = Number(value);
+                                                if (!Number.isFinite(nextTier)) return;
                                                 try {
                                                   const { error } = await supabase.functions.invoke("admin-update-tier", {
                                                     method: "POST",
                                                     body: {
-                                                      userId: membership.user_id,
                                                       brandProfileId: membership.brand_profile_id,
                                                       tier: nextTier,
                                                     },
                                                   });
                                                   if (error) throw new Error(error.message);
-                                                  show({ title: "Tier updated", variant: "success" });
+                                                  show({ title: "Brand tier updated", variant: "success" });
                                                 } catch (error) {
                                                   show({
-                                                    title: "Failed to update tier",
-                                                    description: error instanceof Error ? error.message : "Unable to save tier.",
+                                        title: "Failed to update brand tier",
+                                        description: error instanceof Error ? error.message : "Unable to save brand tier.",
                                                     variant: "error",
                                                   });
                                                 }
@@ -359,15 +353,15 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
                                             }
                                             disabled={isActionPending}
                                           >
-                                            <SelectTrigger size="sm" className="min-w-[160px]">
-                                              <SelectValue placeholder="None" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="none">None</SelectItem>
+                                          <SelectTrigger size="sm" className="min-w-[160px]">
+                                              <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                              <SelectItem value="0">0 — Restricted</SelectItem>
                                               <SelectItem value="1">1 — Studio+</SelectItem>
                                               <SelectItem value="2">2 — Social+</SelectItem>
                                               <SelectItem value="3">3 — Creative+</SelectItem>
-                                            </SelectContent>
+                                          </SelectContent>
                                           </Select>
                                         </div>
                                       </div>

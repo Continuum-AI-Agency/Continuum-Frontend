@@ -13,8 +13,8 @@ export type ActiveBrandContext = {
   permissions: Array<{
     brand_profile_id: string;
     role: string | null;
-    tier: number | null;
   }>;
+  activeBrandTier: number;
 };
 
 export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
@@ -31,7 +31,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   const { data: perms, error: permsError } = await supabase
     .schema("brand_profiles")
     .from("permissions")
-    .select("brand_profile_id, role, tier")
+    .select("brand_profile_id, role")
     .eq("user_id", user.id);
 
   if (permsError) {
@@ -42,22 +42,23 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     (id): id is string => Boolean(id)
   );
 
-  let brandMap = new Map<string, { name: string; logoPath: string | null }>();
+  let brandMap = new Map<string, { name: string; logoPath: string | null; tier: number }>();
   if (brandIds.length > 0) {
     const { data: brands, error: brandsError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
-      .select("id, brand_name, logo_path")
+      .select("id, brand_name, logo_path, tier")
       .in("id", brandIds);
     if (brandsError) {
       console.error("[activeBrand] brand_profiles lookup failed", brandsError);
     } else {
       brandMap = new Map(
-        ((brands as any[]) ?? []).map((brand) => [
+        (brands ?? []).map((brand) => [
           brand.id,
           {
             name: brand.brand_name ?? "Untitled brand",
-            logoPath: (brand as any).logo_path ?? null,
+            logoPath: brand.logo_path ?? null,
+            tier: brand.tier,
           },
         ])
       );
@@ -96,7 +97,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   );
 
   if (brandIds.length === 0) {
-    return { activeBrandId: null, brandSummaries, permissions: perms ?? [] };
+    return { activeBrandId: null, brandSummaries, permissions: perms ?? [], activeBrandTier: 0 };
   }
 
   const { data: activeBrandData, error: activeBrandError } = await supabase
@@ -116,5 +117,6 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     await setActiveBrand(activeBrandId);
   }
 
-  return { activeBrandId, brandSummaries, permissions: perms ?? [] };
+  const activeBrandTier = activeBrandId ? brandMap.get(activeBrandId)?.tier ?? 0 : 0;
+  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier };
 });

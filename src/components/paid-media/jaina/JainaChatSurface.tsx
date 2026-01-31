@@ -21,7 +21,6 @@ import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/componen
 import { JainaReportView } from "./JainaReportView";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 import type { JainaChatMessage } from "./types";
-import { cn } from "@/lib/utils";
 
 type JainaChatSurfaceProps = {
   brandProfileId: string;
@@ -60,6 +59,10 @@ export function JainaChatSurface({
       updateMessage(activeResponseId, {
         status: "done",
         content: state.report.executive_summary,
+        report: state.report,
+        reasoning: state.progress,
+        toolCalls: state.toolCalls,
+        toolResults: state.toolResults,
       });
       setActiveResponseId(null);
     }
@@ -71,7 +74,7 @@ export function JainaChatSurface({
       });
       setActiveResponseId(null);
     }
-  }, [activeResponseId, state.status, state.report, state.error, updateMessage]);
+  }, [activeResponseId, state.status, state.report, state.error, updateMessage, state.progress, state.toolCalls, state.toolResults]);
 
   const handleSubmit = React.useCallback(
     async (query: string) => {
@@ -207,26 +210,38 @@ export function JainaChatSurface({
             </Flex>
           )}
           
-          {messages.map((message) => (
-            <Message key={message.id} role={message.role}>
-              <div className="space-y-4">
-                {message.role === "user" ? (
-                  <Text size="2">{message.content}</Text>
-                ) : (
-                  <>
-                    <SafeMarkdown content={message.content} className="text-[15px] text-white" mode="static" />
-                    
-                    {message.id === activeResponseId && (
+          {messages.map((message) => {
+            const isStreaming = message.id === activeResponseId;
+            const reasoning = isStreaming ? state.progress : message.reasoning;
+            const toolCalls = isStreaming ? state.toolCalls : message.toolCalls;
+            const toolResults = isStreaming ? state.toolResults : message.toolResults;
+            const report = isStreaming ? state.report : message.report;
+
+            return (
+              <Message key={message.id} role={message.role}>
+                <div className="space-y-4">
+                  {message.role === "user" ? (
+                    <Text size="2" className="font-medium">
+                      {message.content}
+                    </Text>
+                  ) : (
+                    <>
+                      <SafeMarkdown content={message.content} className="text-[15px] text-white" mode="static" />
+
                       <div className="mt-4 space-y-3">
-                        {state.progress.length > 0 && (
-                          <Reasoning defaultOpen isStreaming={state.status === "streaming"}>
+                        {reasoning && reasoning.length > 0 && (
+                          <Reasoning defaultOpen={isStreaming} isStreaming={isStreaming}>
                             <ReasoningTrigger>Jaina thoughts</ReasoningTrigger>
                             <ReasoningContent>
                               <Flex direction="column" gap="2">
-                                {state.progress.map((entry, index) => (
+                                {reasoning.map((entry, index) => (
                                   <Flex key={`${entry.stage}-${index}`} align="center" gap="2">
-                                    <Badge color="blue" variant="soft" size="1">{entry.stage}</Badge>
-                                    <Text size="1" className="text-gray-400">{entry.detail ?? "Working…"}</Text>
+                                    <Badge color="blue" variant="soft" size="1">
+                                      {entry.stage}
+                                    </Badge>
+                                    <Text size="1" className="text-gray-400">
+                                      {entry.detail ?? "Working…"}
+                                    </Text>
                                   </Flex>
                                 ))}
                               </Flex>
@@ -234,36 +249,36 @@ export function JainaChatSurface({
                           </Reasoning>
                         )}
 
-                        {state.toolCalls.length > 0 && (
+                        {toolCalls && toolCalls.length > 0 && (
                           <div className="space-y-2">
-                             {state.toolCalls.map((call) => {
-                                const result = state.toolResults.find(r => r.id === call.id);
-                                const toolState = result ? (result.ok ? "output-available" : "error") : "running";
-                                return (
-                                  <Tool key={call.id} type={call.name} state={toolState as any}>
-                                    <ToolHeader title={call.name.replace(/_/g, " ")} />
-                                    <ToolContent>
-                                      <ToolInput value={call.args} />
-                                      {result && <ToolOutput value={result.output ?? result.error} />}
-                                    </ToolContent>
-                                  </Tool>
-                                );
-                             })}
+                            {toolCalls.map((call) => {
+                              const result = toolResults?.find((r) => r.id === call.id);
+                              const toolState = result ? (result.ok ? "output-available" : "error") : "running";
+                              return (
+                                <Tool key={call.id} type={call.name} state={toolState as any}>
+                                  <ToolHeader title={call.name.replace(/_/g, " ")} />
+                                  <ToolContent>
+                                    <ToolInput value={call.args} />
+                                    {result && <ToolOutput value={result.output ?? result.error} />}
+                                  </ToolContent>
+                                </Tool>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
-                    )}
 
-                    {state.status === "complete" && state.report && message.id === activeResponseId && (
-                      <div className="mt-6 border-t border-white/10 pt-6">
-                        <JainaReportView report={state.report} status={state.status} />
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </Message>
-          ))}
+                      {report && (
+                        <div className="mt-6 border-t border-white/10 pt-6">
+                          <JainaReportView report={report} status={isStreaming ? state.status : "complete"} />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </Message>
+            );
+          })}
         </Conversation>
       </div>
 

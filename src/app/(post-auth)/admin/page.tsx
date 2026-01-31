@@ -118,7 +118,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       <Flex direction="column" gap="6">
         <div>
           <Heading size="8">Admin</Heading>
-          <Text color="gray" size="3">Manage users, impersonate, and adjust tiers.</Text>
+          <Text color="gray" size="3">Manage users, impersonate, and adjust brand tiers.</Text>
         </div>
         <GlassPanel className="p-6 lg:p-8">
           {loadError ? (

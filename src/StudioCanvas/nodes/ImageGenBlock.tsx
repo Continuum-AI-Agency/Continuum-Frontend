@@ -77,6 +77,7 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
 
 export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
   const executionControls = useWorkflowExecution();
@@ -87,11 +88,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
 
   const handleModelChange = useCallback((value: string) => {
     updateNodeData(id, { model: value as any });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const handleAspectRatioChange = useCallback((value: string) => {
     updateNodeData(id, { aspectRatio: value });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run image node", { nodeId: id });

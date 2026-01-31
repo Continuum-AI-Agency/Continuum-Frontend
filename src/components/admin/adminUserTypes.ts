@@ -10,7 +10,7 @@ export type PermissionRow = {
   user_id: string;
   brand_profile_id: string;
   role: string | null;
-  tier: number | null;
+  brand_tier: number;
   brand_name: string | null;
 };
 

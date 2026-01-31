@@ -2,7 +2,7 @@ import { beforeEach, expect, test, vi } from "bun:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { AdminPagination, AdminUser } from "@/components/admin/adminUserTypes";
+import type { AdminPagination, AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
 
 let routerPushSpy = vi.fn<(path: string) => void>();
 let searchParams = new URLSearchParams();
@@ -32,12 +32,18 @@ vi.mock("@/lib/supabase/client", () => ({
 
 async function renderAdminUserList(props: {
   users: AdminUser[];
+  permissions?: PermissionRow[];
   pagination: AdminPagination;
   searchQuery: string;
 }) {
   const { AdminUserList } = await import("@/components/admin/AdminUserList");
   return renderToStaticMarkup(
-    <AdminUserList users={props.users} permissions={[]} pagination={props.pagination} searchQuery={props.searchQuery} />
+    <AdminUserList
+      users={props.users}
+      permissions={props.permissions ?? []}
+      pagination={props.pagination}
+      searchQuery={props.searchQuery}
+    />
   );
 }
 
@@ -66,4 +72,33 @@ test("keeps query param when paging search results", async () => {
 
   expect(html).toContain("matches");
   expect(html).toContain("?query=duane&amp;page=3&amp;pageSize=50");
+});
+
+test("renders brand tier values from permissions", async () => {
+  const users: AdminUser[] = [
+    { id: "user-1", email: "duane@example.com", name: "Duane", isAdmin: false, createdAt: null },
+  ];
+  const permissions: PermissionRow[] = [
+    {
+      user_id: "user-1",
+      brand_profile_id: "brand-1",
+      role: "owner",
+      brand_tier: 2,
+      brand_name: "Brand One",
+    },
+  ];
+  const pagination: AdminPagination = {
+    page: 1,
+    pageSize: 50,
+    totalCount: 1,
+    totalPages: 1,
+    nextPage: null,
+    lastPage: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  };
+
+  const html = await renderAdminUserList({ users, permissions, pagination, searchQuery: "" });
+
+  expect(html).toContain(">2<");
 });

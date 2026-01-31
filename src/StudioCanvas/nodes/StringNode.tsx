@@ -10,12 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useDebouncedSave } from '../hooks/useDebouncedSave';
 
 export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
+  const debouncedSave = useDebouncedSave();
   
   const connectedEdge = edges.find(e => e.source === id);
   const incomingEdges = edges.filter(e => e.target === id);
@@ -45,7 +47,8 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     updateNodeData(id, { value: e.target.value });
-  }, [id, updateNodeData]);
+    debouncedSave();
+  }, [id, updateNodeData, debouncedSave]);
 
   const handleEnrich = useCallback(async (e?: React.MouseEvent) => {
     if (e) {

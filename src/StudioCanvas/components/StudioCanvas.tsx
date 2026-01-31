@@ -31,8 +31,9 @@ import { ChevronDownIcon } from '@radix-ui/react-icons';
 import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
 import { useSession } from '@/hooks/useSession';
 import { Cursor } from '@/components/realtime/cursor';
+import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
-import { PresenceProvider, usePresence } from '../contexts/PresenceContext';
+import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -139,9 +140,9 @@ const edgeTypes = {
   dataType: DataTypeEdge,
 };
 
-function Flow({ brandProfileId }: { brandProfileId?: string }) {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode } = useStudioStore();
-  const { remoteCursors, updateCursor, updatePresence, isLoading } = usePresence();
+function Flow({ brandProfileId, realtime }: { brandProfileId?: string; realtime: ReturnType<typeof useCanvasRealtime> }) {
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode, triggerSave } = useStudioStore();
+  const { remoteCursors, updateCursor, isLoading, saveCanvasToDatabase } = realtime;
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, deleteElements } = useReactFlow();
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
@@ -308,6 +309,10 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
     takeSnapshot();
   }, [takeSnapshot]);
 
+  const onNodeDragStop = useCallback(() => {
+    triggerSave();
+  }, [triggerSave]);
+
   const onDrop = useCallback(
     async (event: React.DragEvent) => {
       event.preventDefault();
@@ -361,6 +366,7 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
         };
 
         setNodes(nodes.concat(newNode as any));
+        triggerSave();
         return;
       }
 
@@ -415,8 +421,9 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
       };
 
       setNodes(nodes.concat(newNode as any));
+      triggerSave();
     },
-    [screenToFlowPosition, nodes, setNodes, takeSnapshot, show],
+    [screenToFlowPosition, nodes, setNodes, takeSnapshot, show, triggerSave],
   );
 
   const isValidConnectionCallback = useCallback((connection: Connection | Edge) => {
@@ -424,9 +431,7 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
   }, [edges, nodes]);
 
   const onSelectionChange = useCallback((params: { nodes: StudioNode[]; edges: Edge[] }) => {
-    const selectedNodeIds = params.nodes.map(node => node.id);
-    updatePresence(selectedNodeIds);
-  }, [updatePresence]);
+  }, []);
 
   if (isLoading) {
     return (
@@ -456,6 +461,7 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
           onDrop={onDrop}
           onMouseMove={onMouseMove}
           onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
           onConnectStart={onConnectStart}
           onConnectEnd={onConnectEnd as any}
           isValidConnection={isValidConnectionCallback}
@@ -489,6 +495,10 @@ function Flow({ brandProfileId }: { brandProfileId?: string }) {
               name={cursor.name}
             />
           ))}
+          
+          <Panel position="bottom-right" className="mb-4 mr-4">
+            <AIStudioChat brandProfileId={brandProfileId || ''} />
+          </Panel>
         </ReactFlow>
       </div>
   );
@@ -501,20 +511,10 @@ interface StudioCanvasProps {
 
 export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasProps) {
   const realtime = useCanvasRealtime(brandProfileId || '');
-  const { user } = useSession();
   
   return (
     <ReactFlowProvider>
-      <PresenceProvider
-        onlineUsers={realtime.onlineUsers}
-        currentUserId={user?.id}
-        remoteCursors={realtime.remoteCursors}
-        updateCursor={realtime.updateCursor}
-        updatePresence={realtime.updatePresence}
-        status={realtime.status}
-        isLoading={realtime.isLoading}
-      >
-        <div className="flex h-full flex-col bg-background">
+      <div className="flex h-full flex-col bg-background">
           {!embedded && (
               <div className="h-14 border-b px-4 flex items-center justify-between bg-background z-[100] relative shrink-0">
                   <div className="flex items-center gap-4">
@@ -524,6 +524,12 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
                     </div>
                     <div className="h-4 w-px bg-border hidden sm:block opacity-20" />
                     <div className="flex items-center h-10 px-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                      <CanvasSyncStatus 
+                        status={realtime.status} 
+                        dbStatus={realtime.dbStatus} 
+                        isSaving={realtime.isSaving} 
+                      />
+                      <div className="w-px h-4 bg-indigo-500/20 mx-1" />
                       <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as any} />
                     </div>
                   </div>
@@ -597,12 +603,11 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
                     ))}
                   </AccordionPrimitive.Root>
               </aside>
-              <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
-                  <Flow brandProfileId={brandProfileId} />
-              </main>
+               <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
+                   <Flow brandProfileId={brandProfileId} realtime={realtime} />
+               </main>
           </div>
         </div>
-      </PresenceProvider>
-    </ReactFlowProvider>
+      </ReactFlowProvider>
   );
 }

@@ -9,15 +9,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export default async function AIStudioPage() {
-  const { activeBrandId, brandSummaries, permissions } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, activeBrandTier } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
   // Permission gate: allow only tiers 1,2,3; tier 0 (or missing) is blocked.
-  const tier = permissions.find((perm) => perm.brand_profile_id === activeBrandId)?.tier ?? 0;
-  if (tier === 0) {
+  if (activeBrandTier === 0) {
     // Redirect back to dashboard with a clear message.
     const msg = encodeURIComponent("Access Restricted: AI Studio is a paid feature. Please contact an Administrator.");
     redirect(`/dashboard?error=${msg}`);

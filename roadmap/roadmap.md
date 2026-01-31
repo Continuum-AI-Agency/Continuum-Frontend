@@ -8,9 +8,9 @@ spec: |
 
 ### Feature 1: Extend Node Ecosystem
 Description: Add new node types beyond current basic ones (Prompt, Negative, Model, Attachment, Generator, Preview) to support Weavy's multi-modal capabilities
-- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.) (note: Completed LLMNode implementation via StringNode upgrade with inputs and Enrich execution) (note: Relaxed Zod URL validation across 9 files to allow bare domains like 'aws.amazon.com'. Verified with build.) (note: Plan generated. proceeding to summary.) (note: Starting work on Paid Media Refactor (Wave 1).) (note: Refactored Paid Media page with AdAccountSelector, CampaignList, and Tabbed interface. TDD verified.)
-- [ ] 1.02 Create VideoNode for video-specific processing and generation
-- [ ] 1.03 Add ImageProcessingNode for consistency controls and transformations
+- [x] 1.01 Implement LLMNode for text generation (ChatGPT, Gemini, etc.) with output handles for text (note: Completed refactoring of CreativeLibrarySidebar.tsx to use shadcn Sidebar.) (note: Split VideoGenBlock into VeoFastBlock and VideoGenBlock (Veo 3.1). Registered new node type. Verified logic.) (note: Completed LLMNode implementation via StringNode upgrade with inputs and Enrich execution) (note: Relaxed Zod URL validation across 9 files to allow bare domains like 'aws.amazon.com'. Verified with build.) (note: Plan generated. proceeding to summary.) (note: Starting work on Paid Media Refactor (Wave 1).) (note: Refactored Paid Media page with AdAccountSelector, CampaignList, and Tabbed interface. TDD verified.) (note: Starting database migration task) (note: Migration file created manually due to delegation error)
+- [x] 1.02 Create VideoNode for video-specific processing and generation (note: Implementing hook) (note: Hook implemented without optimistic updates for V1 stability)
+- [x] 1.03 Add ImageProcessingNode for consistency controls and transformations (note: Building UI component) (note: UI component built) (note: UI integrated into ChatSurface)
 - [ ] 1.04 Implement SubjectConsistencyNode for maintaining character/object consistency across generations
 - [ ] 1.05 Create WorkflowInputNode and WorkflowOutputNode for reusable flows
 

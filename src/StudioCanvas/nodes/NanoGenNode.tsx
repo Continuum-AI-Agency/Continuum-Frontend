@@ -13,11 +13,14 @@ import { Link2Icon } from '@radix-ui/react-icons';
 import { NodeStatus, NodeExecutionStatus } from '../components/NodeStatus';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useDebouncedSave } from '../hooks/useDebouncedSave';
 
 export function NanoGenNode({ id, data, selected }: NodeProps<Node<NanoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const getConnectedEdges = useStudioStore((state) => state.getConnectedEdges);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
+  const debouncedSave = useDebouncedSave();
 
   // Count active connections
   const connectedEdges = getConnectedEdges(id, 'target');
@@ -33,21 +36,25 @@ export function NanoGenNode({ id, data, selected }: NodeProps<Node<NanoGenNodeDa
 
   const handleModelChange = useCallback((value: string) => {
     updateNodeData(id, { model: value as any });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     updateNodeData(id, { positivePrompt: e.target.value });
-  }, [id, updateNodeData]);
+    debouncedSave();
+  }, [id, updateNodeData, debouncedSave]);
 
 
 
   const handleAspectRatioChange = useCallback((value: string) => {
     updateNodeData(id, { aspectRatio: value });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   const handleImageSizeChange = useCallback((value: string) => {
     updateNodeData(id, { imageSize: value as '1K' | '2K' | '4K' });
-  }, [id, updateNodeData]);
+    triggerSave();
+  }, [id, updateNodeData, triggerSave]);
 
   return (
     <TooltipProvider>
