@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-SERVER_URL="${SERVER_URL:-http://localhost:3000}"
+SERVER_URL="${SERVER_URL:-http://localhost:4000}"
 API_ENDPOINT="/api/organic/generate-calendar"
 FULL_URL="${SERVER_URL}${API_ENDPOINT}"
 
