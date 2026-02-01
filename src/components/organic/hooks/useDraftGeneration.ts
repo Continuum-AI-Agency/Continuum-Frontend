@@ -20,7 +20,8 @@ import type { Trend } from "@/lib/organic/trends";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 import type { 
   CalendarPlacement, 
-  CalendarPlacementSeed 
+  CalendarPlacementSeed,
+  CalendarGenerationRequest,
 } from "@/lib/organic/calendar-generation";
 
 export function useDraftGeneration({
@@ -42,7 +43,9 @@ export function useDraftGeneration({
   activePlatforms: OrganicPlatformKey[];
   weekStartId: string;
 }) {
+  console.log("[DEBUG] useDraftGeneration: Hook initialized for brand", brandProfileId);
   const {
+    gridStatus,
     setGridStatus,
     setGridProgress,
     setGridError,
@@ -168,12 +171,14 @@ export function useDraftGeneration({
     }
   }, [calendarDays, selectedTrendIds, trends, addDraft, platformAccountIds]);
 
-  const handleGenerateDrafts = async () => {
+  const handleGenerateDrafts = React.useCallback(async () => {
+    console.log("[DEBUG] useDraftGeneration: handleGenerateDrafts triggered");
     setGridStatus("running");
     setGridProgress({ percent: 0, message: "Preparing calendar seeds..." });
     setGridError(null);
 
     if (!brandProfileId) {
+      console.error("[DEBUG] useDraftGeneration: Missing brandProfileId");
       setGridStatus("error");
       setGridError("Missing brand context. Please reconnect your brand profile.");
       return;
@@ -190,6 +195,7 @@ export function useDraftGeneration({
             : draft.tags.includes("event")
             ? "event"
             : "trend";
+
           return {
             placementId: draft.id,
             trendId,
@@ -205,76 +211,123 @@ export function useDraftGeneration({
         .filter(Boolean)
     );
 
-    if (seeds.length === 0) {
-      setGridStatus("error");
-      setGridError("Seed the calendar with trends or questions before generating.");
-      return;
+    console.log("[DEBUG] useDraftGeneration: Seeds identified", seeds);
+
+    let resolvedTz = "UTC";
+    try {
+      resolvedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch (e) {
+      console.error("[DEBUG] useDraftGeneration: timezone detection failed", e);
     }
 
-    seeds.forEach((seed) => {
-      if (!seed) return;
-      updateDraftById(seed.placementId, (draft) => ({
-        ...draft,
-        status: "streaming",
-      }));
-    });
-
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log("[DEBUG] useDraftGeneration: Preparing payload with brand", brandProfileId);
 
     try {
-      await streamCalendarGeneration(
-        {
-          brandProfileId,
-          weekStart: weekStartId,
-          timezone,
-          placements: seeds as CalendarPlacementSeed[],
-          platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
-          options: {
-            schedulePreset: "beta-launch",
-            includeNewsletter: true,
-            guidancePrompt: undefined,
-            preferredPlatforms: activePlatforms.length > 0 ? activePlatforms : undefined,
-          },
+      seeds.forEach((seed) => {
+        if (!seed) return;
+        console.log("[DEBUG] useDraftGeneration: Updating seed to streaming", seed.placementId);
+        updateDraftById(seed.placementId, (draft) => ({
+          ...draft,
+          status: "streaming",
+        }));
+      });
+
+      const payload: CalendarGenerationRequest = {
+        brandProfileId,
+        weekStart: weekStartId,
+        timezone: resolvedTz,
+        placements: seeds as CalendarPlacementSeed[],
+        platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
+        options: {
+          schedulePreset: "beta-launch" as const,
+          includeNewsletter: true,
+          guidancePrompt: undefined,
+          preferredPlatforms: activePlatforms.length > 0 ? activePlatforms : undefined,
         },
-        (event) => {
-          if (event.type === "progress") {
-            const message = event.stage 
-              ? `[${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
-              : event.message ?? "Generating content...";
-            setGridProgress({
-              percent: Math.round((event.completed / event.total) * 100),
-              message,
-            });
-            return;
-          }
+      };
 
-          if (event.type === "placement") {
-            const placement = event.placement;
-            const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
-            const nextDraft = mapPlacementToDraft(placement, existing);
-            addDraft(placement.schedule.dayId, nextDraft);
-            setGhosts(placement.schedule.dayId, 0);
-            return;
-          }
+      console.log("[DEBUG] useDraftGeneration: Sending fetch request to /api/organic/generate-calendar");
+      
+      const response = await fetch("/api/organic/generate-calendar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson",
+        },
+        body: JSON.stringify(payload),
+      });
 
-          if (event.type === "error") {
-            setGridError(event.message);
-            setGridStatus("error");
-            return;
-          }
+      console.log("[DEBUG] useDraftGeneration: Fetch complete, status:", response.status);
 
-          if (event.type === "complete") {
-            setGridStatus("complete");
+      if (!response.ok || !response.body) {
+        throw new Error("Failed to start calendar generation.");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            const event = JSON.parse(trimmed);
+            console.log("[DEBUG] useDraftGeneration: Event parsed", event);
+            
+            if (event.type === "progress") {
+              const message = event.stage 
+                ? `[${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
+                : event.message ?? "Generating content...";
+              setGridProgress({
+                percent: Math.round((event.completed / event.total) * 100),
+                message,
+              });
+            } else if (event.type === "placement") {
+              const placement = event.placement;
+              const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
+              const nextDraft = mapPlacementToDraft(placement, existing);
+              addDraft(placement.schedule.dayId, nextDraft);
+              setGhosts(placement.schedule.dayId, 0);
+            } else if (event.type === "error") {
+              setGridError(event.message);
+              setGridStatus("error");
+            } else if (event.type === "complete") {
+              setGridStatus("complete");
+            }
+          } catch (e) {
+            console.error("[DEBUG] useDraftGeneration: Failed to parse line", trimmed, e);
           }
         }
-      );
+      }
     } catch (error) {
+      console.error("[DEBUG] useDraftGeneration: Execution error", error);
       setGridStatus("error");
       setGridError(
         error instanceof Error ? error.message : "Generation failed. Please try again."
       );
     }
-  };
+  }, [
+    activePlatforms,
+    addDraft,
+    brandProfileId,
+    calendarDays,
+    drafts,
+    mapPlacementToDraft,
+    platformAccountIds,
+    setGhosts,
+    setGridError,
+    setGridProgress,
+    setGridStatus,
+    updateDraftById,
+    weekStartId,
+  ]);
 
   const handleRegenerate = React.useCallback(
     async (draftId: string) => {
@@ -350,8 +403,18 @@ export function useDraftGeneration({
     ]
   );
 
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as any).forceGenerate = () => {
+        console.log("[DEBUG] Global forceGenerate called");
+        handleGenerateDrafts();
+      };
+    }
+  }, [handleGenerateDrafts]);
+
   return {
     seededDraftCount,
+    gridStatus,
     handleAutoSort,
     handleGenerateDrafts,
     handleRegenerate,
