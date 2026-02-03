@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   brandGuidelineApprovalSchema,
   brandGuidelineDraftSchema,
+  brandGuidelineStatusSchema,
   brandGuidelineTagSectionSchema,
   type BrandGuidelineStatus,
   type BrandGuidelineDetail,
@@ -129,7 +130,7 @@ export async function listBrandGuidelines(brandId: string): Promise<BrandGuideli
   return (data ?? []).map((row) => ({
     id: row.id,
     purpose: row.purpose,
-    status: row.status,
+    status: brandGuidelineStatusSchema.parse(row.status),
     version: row.version,
     updatedAt: row.updated_at,
   }));
