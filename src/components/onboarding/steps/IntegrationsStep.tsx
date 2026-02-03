@@ -201,14 +201,14 @@ export function IntegrationsStep() {
     refreshAccounts();
   }, []);
 
-  const handleConnect = async (group: "google" | "facebook") => {
+  const handleConnect = async (group: "google" | "facebook" | "meta") => {
     setIsSyncing(true);
     try {
       const context = brandId; 
       const callbackUrl = buildCallbackUrl(group, context);
       
       let popupUrl: string | null = null;
-      if (group === "facebook") {
+      if (group === "facebook" || group === "meta") {
         const res = await startMetaSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
       } else {
@@ -231,8 +231,8 @@ export function IntegrationsStep() {
     }
   };
 
-  const handleDisconnect = async (group: "google" | "facebook") => {
-    const keys = group === "facebook" ? FACEBOOK_OAUTH_KEYS : GOOGLE_OAUTH_KEYS;
+  const handleDisconnect = async (group: "google" | "facebook" | "meta") => {
+    const keys = (group === "facebook" || group === "meta") ? FACEBOOK_OAUTH_KEYS : GOOGLE_OAUTH_KEYS;
     const patch: any = {};
     keys.forEach(key => {
       patch[key] = { connected: false, accounts: [], accountId: null };
@@ -552,11 +552,11 @@ export function IntegrationsStep() {
   );
 }
 
-function buildCallbackUrl(group: "google" | "facebook", context: string): string {
+function buildCallbackUrl(group: "google" | "facebook" | "meta", context: string): string {
   if (typeof window === "undefined") return "";
   const origin = window.location.origin;
   const url = new URL("/integrations/callback", origin);
-  const provider = group === "facebook" ? "meta" : "google";
+  const provider = (group === "facebook" || group === "meta") ? "meta" : "google";
   url.searchParams.set("provider", provider);
   url.searchParams.set("context", context);
   return url.toString();
