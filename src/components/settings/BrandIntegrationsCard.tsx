@@ -20,7 +20,7 @@ import { Sparkles, RefreshCw } from "lucide-react";
 import * as Accordion from "@radix-ui/react-accordion";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets } from "@/lib/api/integrations";
+import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets, useStartMetaSync, useStartGoogleSync } from "@/lib/api/integrations";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import {
@@ -29,6 +29,7 @@ import {
   getSelectableAssetLabel,
 } from "@/lib/integrations/selectableAssets";
 import { useToast } from "@/components/ui/ToastProvider";
+import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
 import { 
   Table as ShadcnTable, 
   TableBody as ShadcnTableBody, 
@@ -118,6 +119,16 @@ const ScrollIndicator = ({ containerRef }: { containerRef: React.RefObject<HTMLD
     </div>
   );
 };
+
+function buildCallbackUrl(group: "google" | "facebook" | "meta", context: string): string {
+  if (typeof window === "undefined") return "";
+  const origin = window.location.origin;
+  const url = new URL("/integrations/callback", origin);
+  const provider = (group === "facebook" || group === "meta") ? "meta" : "google";
+  url.searchParams.set("provider", provider);
+  url.searchParams.set("context", context);
+  return url.toString();
+}
 
 type AssignmentsDialogProps = {
   open: boolean;
@@ -449,6 +460,40 @@ export function BrandIntegrationsCard({
   const resolvedSummary = summary ?? ({} as BrandIntegrationSummary);
   const [editOpen, setEditOpen] = useState(false);
   const [expandedViewPlatforms, setExpandedViewPlatforms] = useState<Set<string>>(new Set());
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { show } = useToast();
+  const startMetaSync = useStartMetaSync();
+  const startGoogleSync = useStartGoogleSync();
+
+  const handleConnect = async (group: "google" | "facebook" | "meta") => {
+    setIsSyncing(true);
+    try {
+      const context = brandProfileId ?? "settings"; 
+      const callbackUrl = buildCallbackUrl(group, context);
+      
+      let popupUrl: string | null = null;
+      if (group === "facebook" || group === "meta") {
+        const res = await startMetaSync.mutateAsync(callbackUrl);
+        popupUrl = res.url;
+      } else {
+        const res = await startGoogleSync.mutateAsync(callbackUrl);
+        popupUrl = res.url;
+      }
+
+      if (popupUrl) {
+        const popup = openCenteredPopup(popupUrl, `Connect ${group}`, 600, 700);
+        if (popup) {
+          await waitForPopupClosed(popup);
+          if (onRefresh) await onRefresh();
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      show({ title: "Connection failed", description: "Could not start OAuth flow.", variant: "error" });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const assignedIds = useMemo(
     () => extractAssignedIntegrationAccountIds(resolvedSummary),
@@ -527,7 +572,8 @@ export function BrandIntegrationsCard({
               <ShadcnTableHead className="w-[40px]"></ShadcnTableHead>
               <ShadcnTableHead className="text-black font-bold">Platform</ShadcnTableHead>
               <ShadcnTableHead className="text-black font-bold">Status</ShadcnTableHead>
-              <ShadcnTableHead className="text-right text-black font-bold pr-6">Assigned Assets</ShadcnTableHead>
+              <ShadcnTableHead className="text-right text-black font-bold">Assigned Assets</ShadcnTableHead>
+              <ShadcnTableHead className="w-[140px]"></ShadcnTableHead>
             </ShadcnTableRow>
           </ShadcnTableHeader>
           <ShadcnTableBody>
@@ -556,7 +602,7 @@ export function BrandIntegrationsCard({
                         {platform.connected ? "ACTIVE" : "NONE"}
                       </Badge>
                     </ShadcnTableCell>
-                    <ShadcnTableCell className="py-4 text-right pr-6">
+                    <ShadcnTableCell className="py-4 text-right">
                       {platform.count > 0 ? (
                         <Badge variant="outline" className="bg-indigo-500/5 text-indigo-400 border-indigo-500/20 font-bold tabular-nums">
                           {platform.count} accounts
@@ -565,11 +611,22 @@ export function BrandIntegrationsCard({
                         <Text size="1" color="gray">None</Text>
                       )}
                     </ShadcnTableCell>
+                    <ShadcnTableCell className="py-4 text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                      <Button 
+                        size="1" 
+                        variant={platform.connected ? "ghost" : "surface"}
+                        onClick={() => handleConnect(platform.key === "youtube" ? "google" : platform.key as any)}
+                        disabled={isSyncing || isLoading}
+                        className="h-6 text-[10px] font-bold uppercase tracking-wider px-2"
+                      >
+                        {isSyncing ? "Syncing..." : platform.connected ? "Re-sync" : "Sync"}
+                      </Button>
+                    </ShadcnTableCell>
                   </ShadcnTableRow>
                   
                   {isExpanded && platform.accounts.length > 0 && (
                     <ShadcnTableRow className="bg-muted/30 border-none hover:bg-muted/30">
-                      <ShadcnTableCell colSpan={4} className="p-0 border-b border-white/5">
+                      <ShadcnTableCell colSpan={5} className="p-0 border-b border-white/5">
                         <Box p="4" className="bg-muted/20">
                                   <div className="space-y-2 pl-8">
                             {platform.accounts.map(account => {
