@@ -19,6 +19,11 @@ export default function PaidMediaClientPage({
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState("jaina");
 
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Reset campaign selection when ad account changes
   React.useEffect(() => {
     setSelectedCampaign(null);
@@ -29,6 +34,17 @@ export default function PaidMediaClientPage({
     // Switch to Jaina tab to analyze the selected campaign
     setActiveTab("jaina");
   };
+
+  if (!mounted) {
+    return (
+      <div className="flex h-full min-h-0 w-full max-w-none flex-col gap-4 px-3 py-6 sm:px-4 lg:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="h-10 w-48 animate-pulse rounded-md bg-white/5" />
+        </div>
+        <div className="flex-1 animate-pulse rounded-xl bg-white/5" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full max-w-none flex-col gap-4 px-3 py-6 sm:px-4 lg:px-6">

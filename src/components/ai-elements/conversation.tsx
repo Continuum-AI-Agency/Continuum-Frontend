@@ -26,7 +26,7 @@ export function Conversation({ children }: ConversationProps) {
       scrollbars="vertical"
       className="h-full w-full"
     >
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 p-4 md:px-6 lg:px-8">
         {children}
       </div>
     </ScrollArea>

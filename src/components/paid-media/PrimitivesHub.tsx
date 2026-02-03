@@ -10,8 +10,9 @@ import {
 } from "@radix-ui/react-icons";
 
 import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import type { BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
 import { AudienceBuilderPrimitive } from "./primitives/AudienceBuilderPrimitive";
-import { BrandGuidelinesPrimitive } from "./primitives/BrandGuidelinesPrimitive";
+import { BrandGuidelinesPrimitive } from "./primitives/Brand-Guidelines/BrandGuidelinesPrimitive";
 import { BrandPersonasPrimitive } from "./primitives/BrandPersonasPrimitive";
 
 type PrimitiveId = "audience" | "guidelines" | "personas";
@@ -37,8 +38,8 @@ const primitiveCards: PrimitiveCardConfig[] = [
   {
     id: "guidelines",
     title: "Brand Guidelines",
-    status: "coming-soon",
-    summary: "A compact hub for voice, visuals, dos/don’ts, and approvals your teams can reuse.",
+    status: "under-construction",
+    summary: "Purpose-driven brand books with approvals, tags, and reusable context.",
     icon: <FileTextIcon />,
     accent: "linear-gradient(135deg, rgba(34,197,94,0.32), rgba(59,130,246,0.28))",
   },
@@ -108,6 +109,8 @@ function GlassCardButton({
 }
 
 type PrimitivesHubProps = {
+  brandId: string;
+  initialGuidelines?: BrandGuidelineSummary[];
   questionsByNiche?: BrandInsightsQuestionsByNiche;
   questionsError?: string | null;
 };
@@ -119,7 +122,7 @@ const EMPTY_QUESTIONS_BY_NICHE: BrandInsightsQuestionsByNiche = {
   generatedAt: undefined,
 };
 
-export function PrimitivesHub({ questionsByNiche, questionsError }: PrimitivesHubProps) {
+export function PrimitivesHub({ brandId, initialGuidelines, questionsByNiche, questionsError }: PrimitivesHubProps) {
   const safeQuestionsByNiche = questionsByNiche ?? EMPTY_QUESTIONS_BY_NICHE;
   const [active, setActive] = useState<PrimitiveId | null>(null);
   const activeCard = primitiveCards.find((card) => card.id === active);
@@ -169,7 +172,7 @@ export function PrimitivesHub({ questionsByNiche, questionsError }: PrimitivesHu
               questionsError={questionsError}
             />
           ) : active === "guidelines" ? (
-            <BrandGuidelinesPrimitive />
+            <BrandGuidelinesPrimitive brandId={brandId} initialGuidelines={initialGuidelines} />
           ) : (
             <BrandPersonasPrimitive />
           )}

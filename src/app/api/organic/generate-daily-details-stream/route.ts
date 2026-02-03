@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getOrganicServiceBaseUrl } from "@/lib/organic/config";
+import { getApiUrl } from "@/lib/api/config";
 import { dailyDetailsRequestSchema } from "@/lib/organic/types";
 
 export const runtime = "nodejs";
@@ -33,23 +33,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const upstreamResponse = await fetch(
-    `${getOrganicServiceBaseUrl()}/generate-daily-details-stream`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/x-ndjson",
-        Authorization: `Bearer ${data.session.access_token}`,
-      },
-      body: JSON.stringify({
-        platform_account_ids: parsed.data.platformAccountIds,
-        weekly_grid: parsed.data.weeklyGrid,
-        language: parsed.data.language,
-        selected_trend_ids: parsed.data.selectedTrendIds ?? [],
-      }),
-    }
-  );
+  const upstreamResponse = await fetch(getApiUrl("/api/organic/generate-daily-details-stream"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/x-ndjson",
+      Authorization: `Bearer ${data.session.access_token}`,
+    },
+    body: JSON.stringify({
+      platform_account_ids: parsed.data.platformAccountIds,
+      weekly_grid: parsed.data.weeklyGrid,
+      language: parsed.data.language,
+      selected_trend_ids: parsed.data.selectedTrendIds ?? [],
+    }),
+  });
 
   if (!upstreamResponse.ok || !upstreamResponse.body) {
     let detail: unknown = null;

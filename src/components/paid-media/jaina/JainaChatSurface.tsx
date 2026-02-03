@@ -20,6 +20,9 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-e
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { JainaReportView } from "./JainaReportView";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { Attachments, type Attachment } from "@/components/ai-elements/attachments";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Spinner } from "@/components/ui/Loading";
 import type { JainaChatMessage } from "./types";
 
 type JainaChatSurfaceProps = {
@@ -71,13 +74,16 @@ export function JainaChatSurface({
         status: "error",
         content: state.error,
         title: "Jaina error",
+        reasoning: state.progress,
+        toolCalls: state.toolCalls,
+        toolResults: state.toolResults,
       });
       setActiveResponseId(null);
     }
   }, [activeResponseId, state.status, state.report, state.error, updateMessage, state.progress, state.toolCalls, state.toolResults]);
 
   const handleSubmit = React.useCallback(
-    async (query: string) => {
+    async (query: string, attachments: Attachment[]) => {
       if (!adAccountId) {
         show({ title: "Select an ad account", description: "Jaina needs an ad account context.", variant: "warning" });
         return;
@@ -90,6 +96,7 @@ export function JainaChatSurface({
         content: query,
         createdAt: now,
       };
+      
       const assistantMessage: JainaChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
@@ -200,7 +207,7 @@ export function JainaChatSurface({
                 ].map(s => (
                     <button 
                         key={s}
-                        onClick={() => handleSubmit(s)}
+                        onClick={() => handleSubmit(s, [])}
                         className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-secondary hover:bg-white/10 transition-colors"
                     >
                         {s}
@@ -250,21 +257,33 @@ export function JainaChatSurface({
                         )}
 
                         {toolCalls && toolCalls.length > 0 && (
-                          <div className="space-y-2">
-                            {toolCalls.map((call) => {
-                              const result = toolResults?.find((r) => r.id === call.id);
-                              const toolState = result ? (result.ok ? "output-available" : "error") : "running";
-                              return (
-                                <Tool key={call.id} type={call.name} state={toolState as any}>
-                                  <ToolHeader title={call.name.replace(/_/g, " ")} />
-                                  <ToolContent>
-                                    <ToolInput value={call.args} />
-                                    {result && <ToolOutput value={result.output ?? result.error} />}
-                                  </ToolContent>
-                                </Tool>
-                              );
-                            })}
-                          </div>
+                          <Accordion type="single" collapsible defaultValue={isStreaming ? "tool-calls" : undefined} className="w-full">
+                            <AccordionItem value="tool-calls" className="border-none">
+                              <AccordionTrigger className="hover:no-underline py-2 px-0 text-gray-400 font-medium text-xs uppercase tracking-wider">
+                                <Flex align="center" gap="2">
+                                  <span>Tool Calls ({toolCalls.length})</span>
+                                  {isStreaming && <Spinner size={12} />}
+                                </Flex>
+                              </AccordionTrigger>
+                              <AccordionContent className="pb-0">
+                                <div className="space-y-2 pt-2">
+                                  {toolCalls.map((call) => {
+                                    const result = toolResults?.find((r) => r.id === call.id);
+                                    const toolState = result ? (result.ok ? "output-available" : "error") : "running";
+                                    return (
+                                      <Tool key={call.id} type={call.name} state={toolState as any}>
+                                        <ToolHeader title={call.name.replace(/_/g, " ")} />
+                                        <ToolContent>
+                                          <ToolInput value={call.args} />
+                                          {result && <ToolOutput value={result.output ?? result.error} />}
+                                        </ToolContent>
+                                      </Tool>
+                                    );
+                                  })}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
                         )}
                       </div>
 

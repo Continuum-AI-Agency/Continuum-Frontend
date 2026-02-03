@@ -59,6 +59,7 @@ export function OrganicCalendarWorkspaceClient({
     toggleTrend,
     bulkMoveDrafts,
     bulkDeleteDrafts,
+    clearCalendar,
     selectedTrendIds,
   } = useCalendarStore()
 
@@ -68,7 +69,7 @@ export function OrganicCalendarWorkspaceClient({
     handleSelect,
     clearAll,
     handleKeyDown,
-  } = useCalendarSelection(calendarDays)
+  } = useCalendarSelection(calendarDays, unscheduledDrafts)
 
   const resolvedInitialWeekStart = React.useMemo(() => {
     if (initialWeekStart) {
@@ -137,6 +138,7 @@ export function OrganicCalendarWorkspaceClient({
 
   const {
     seededDraftCount,
+    gridStatus,
     handleAutoSort,
     handleGenerateDrafts,
     handleRegenerate,
@@ -221,11 +223,22 @@ export function OrganicCalendarWorkspaceClient({
               activePlatforms={activePlatforms}
               maxTrendSelections={maxTrendSelections}
               onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-              onGenerate={handleGenerateDrafts}
+              onGenerate={() => {
+                console.log("[DEBUG] OrganicCalendarWorkspaceClient: onGenerate triggered");
+                handleGenerateDrafts();
+              }}
               viewMode="week"
               onViewModeChange={() => {}}
               onAutoSort={handleAutoSort}
+              onClearAll={clearCalendar}
+              onSelectDraft={(id) => handleSelect(id, false)}
+              onToggleSelection={(id) => handleSelect(id, true)}
+              selectedDraftId={selectedId}
+              selectedDraftIds={selectedIds}
+              unscheduledDrafts={unscheduledDrafts}
+              allDrafts={drafts}
               seedCount={seededDraftCount}
+              gridStatus={gridStatus}
             />
           </div>
         </div>

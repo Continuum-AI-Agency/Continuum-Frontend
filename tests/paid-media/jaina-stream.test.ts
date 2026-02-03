@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createInitialJainaStreamState, reduceJainaStreamEvent } from "../../src/lib/jaina/stream";
+import { createInitialJainaStreamState, reduceJainaStreamEvent, parseJainaStreamEvent } from "../../src/lib/jaina/stream";
 import type { SoTReport } from "../../src/lib/jaina/schemas";
 
 const sampleReport: SoTReport = {
@@ -95,6 +95,16 @@ test("records progress details and tool results", () => {
   assert.equal(state.progress[0]?.detail, "Delegating to Jaina_campaign_specialist");
 });
 
+test("records tool progress details", () => {
+  const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "response.progress",
+    data: { stage: "tool_start", tool_name: "get_key_metrics" },
+  });
+
+  assert.equal(state.progress.length, 1);
+  assert.equal(state.progress[0]?.detail, "Running tool: get key metrics");
+});
+
 test("sets error state on error event", () => {
   const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
     type: "error",
@@ -103,4 +113,12 @@ test("sets error state on error event", () => {
 
   assert.equal(state.status, "error");
   assert.equal(state.error, "boom");
+});
+
+test("parseJainaStreamEvent handles invalid JSON and schemas gracefully", () => {
+  assert.equal(parseJainaStreamEvent("invalid"), null);
+  assert.equal(parseJainaStreamEvent(JSON.stringify({ missing: "type" })), null);
+  
+  const valid = JSON.stringify({ type: "test" });
+  assert.equal(parseJainaStreamEvent(valid)?.type, "test");
 });

@@ -41,6 +41,40 @@ export function useCalendarDnD(
 
       const draftId = active.id as string;
       const overId = over.id as string;
+      const activeData = active.data.current as any;
+
+      if (overId === "unscheduled-pool") {
+        if (activeData?.type === "draft") {
+          moveDraft(draftId, "unscheduled");
+        } else if (activeData?.type === "trend" || activeData?.type === "question" || activeData?.type === "event") {
+          const trendId = activeData.trendId;
+          const trendTitle = activeData.title || "Selected topic";
+          if (!trendId) return;
+
+          const platform = "instagram" as OrganicPlatformTag; 
+          const accountId = platformAccountIds[platform as OrganicPlatformKey];
+
+          const seededDraft: OrganicCalendarDraft = {
+            id: `seeded-${Date.now()}`,
+            title: trendTitle,
+            summary: `Queued for generation from "${trendTitle}".`,
+            timeLabel: "9:00 AM",
+            dateLabel: "Unscheduled",
+            status: "placeholder",
+            platforms: [platform],
+            format: "Post",
+            objective: "Generation Seed",
+            captionPreview: "Click Generate to construct this post.",
+            tags: activeData.type === "question" ? [trendId, "question"] : 
+                  activeData.type === "event" ? [trendId, "event"] : [trendId],
+            mediaCount: 1,
+            seedTrendId: trendId,
+            targetAccountId: accountId,
+          };
+          addDraft("unscheduled", seededDraft);
+        }
+        return;
+      }
 
       const targetDay = days.find((d) => d.id === overId);
       if (targetDay) {

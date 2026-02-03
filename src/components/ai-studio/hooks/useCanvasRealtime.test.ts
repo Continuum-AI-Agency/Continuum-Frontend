@@ -14,23 +14,23 @@ const mockChannel = {
   unsubscribe: mock(() => {}),
 };
 
+const createMockQueryBuilder = () => {
+  const queryBuilder: any = {
+    select: mock(() => queryBuilder),
+    eq: mock(() => queryBuilder),
+    order: mock(() => queryBuilder),
+    maybeSingle: mock(() => Promise.resolve({ data: null, error: null })),
+    single: mock(() => Promise.resolve({ data: null, error: null })),
+    upsert: mock(() => queryBuilder),
+  };
+  return queryBuilder;
+};
+
 const mockSupabase: any = {
   channel: mock(() => mockChannel),
   removeChannel: mock(() => {}),
   schema: mock((name: string) => mockSupabase),
-  from: mock((table: string) => ({
-    select: mock(() => ({
-      eq: mock(() => ({
-        maybeSingle: mock(() => Promise.resolve({ data: null, error: null })),
-        single: mock(() => Promise.resolve({ data: null, error: null })),
-      })),
-    })),
-    upsert: mock(() => ({
-      select: mock(() => ({
-        single: mock(() => Promise.resolve({ data: { updated_at: new Date().toISOString() }, error: null })),
-      })),
-    })),
-  })),
+  from: mock((table: string) => createMockQueryBuilder()),
 };
 
 mock.module("@/lib/supabase/client", () => ({
@@ -45,13 +45,17 @@ mock.module("@/hooks/useSession", () => ({
 
 const mockSetNodes = mock(() => {});
 const mockSetEdges = mock(() => {});
+const mockStore = {
+  nodes: [],
+  edges: [],
+  setNodes: mockSetNodes,
+  setEdges: mockSetEdges,
+};
+const useStudioStoreMock: any = () => mockStore;
+useStudioStoreMock.getState = () => mockStore;
+
 mock.module("@/StudioCanvas/stores/useStudioStore", () => ({
-  useStudioStore: () => ({
-    nodes: [],
-    edges: [],
-    setNodes: mockSetNodes,
-    setEdges: mockSetEdges,
-  }),
+  useStudioStore: useStudioStoreMock,
 }));
 
 describe("useCanvasRealtime", () => {
@@ -69,15 +73,14 @@ describe("useCanvasRealtime", () => {
 
   it("should initialize and subscribe to channel", async () => {
     await act(async () => {
-      renderHook(() => useCanvasRealtime("brand-1"));
+      renderHook(() => useCanvasRealtime("brand-1", "room-1"));
     });
     
-    expect(mockSupabase.channel).toHaveBeenCalledWith("canvas_session:brand-1");
-    expect(mockChannel.on).toHaveBeenCalledWith("postgres_changes" as any, expect.any(Object), expect.any(Function));
+    expect(mockSupabase.channel).toHaveBeenCalledWith("canvas:broadcast:brand-1:room-1", expect.any(Object));
   });
 
   it("should throttle cursor updates", async () => {
-    const { result } = renderHook(() => useCanvasRealtime("brand-1"));
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
     
     await act(async () => {
       await new Promise(r => setTimeout(r, 50));
@@ -97,15 +100,15 @@ describe("useCanvasRealtime", () => {
   });
 
   it("should handle remote cursor updates", async () => {
-    const { result } = renderHook(() => useCanvasRealtime("brand-1"));
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
     
     await act(async () => {
       await new Promise(r => setTimeout(r, 50));
     });
 
     const calls = (mockChannel.on as any).mock.calls;
-    const broadcastCall = calls.find((c: any) => c[0] === "broadcast");
-    const broadcastHandler = broadcastCall[2];
+    const cursorCall = calls.find((c: any) => c[0] === "broadcast" && c[1]?.event === "cursor");
+    const broadcastHandler = cursorCall[2];
 
     await act(async () => {
       broadcastHandler({
@@ -128,7 +131,7 @@ describe("useCanvasRealtime", () => {
   });
 
   it("should expose onlineUsers array", async () => {
-    const { result } = renderHook(() => useCanvasRealtime("brand-1"));
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
     
     await act(async () => {
       await new Promise(r => setTimeout(r, 50));
@@ -139,7 +142,7 @@ describe("useCanvasRealtime", () => {
   });
 
   it("should expose status string", async () => {
-    const { result } = renderHook(() => useCanvasRealtime("brand-1"));
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
     
     await act(async () => {
       await new Promise(r => setTimeout(r, 50));

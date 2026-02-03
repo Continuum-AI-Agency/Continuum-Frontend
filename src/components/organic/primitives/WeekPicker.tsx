@@ -26,7 +26,7 @@ export function WeekPicker({
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="icon-sm" onClick={onPreviousWeek}>
+      <Button variant="outline" size="icon-sm" onClick={onPreviousWeek} aria-label="Previous week">
         <ChevronLeft className="h-4 w-4" />
       </Button>
       <Popover open={open} onOpenChange={setOpen}>
@@ -49,7 +49,7 @@ export function WeekPicker({
           />
         </PopoverContent>
       </Popover>
-      <Button variant="outline" size="icon-sm" onClick={onNextWeek}>
+      <Button variant="outline" size="icon-sm" onClick={onNextWeek} aria-label="Next week">
         <ChevronRight className="h-4 w-4" />
       </Button>
     </div>

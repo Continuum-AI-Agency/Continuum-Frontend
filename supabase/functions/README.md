@@ -31,6 +31,6 @@ supabase functions deploy embed_document
 
 ### Notes
 
-- Set `OPENAI_API_KEY` (and optionally `OPENAI_BASE_URL`) in Supabase Edge Function secrets before invoking; the runtime calls OpenAI `text-embedding-3-small`.
+- Set `GEMINI_API_KEY` in Supabase Edge Function secrets before invoking; the runtime calls Gemini `gemini-embedding-001`.
 - Google Drive downloads/exports: <https://developers.google.com/workspace/drive/api/guides/manage-downloads>
-- The vector schema assumes 1,536 dimensions to match `text-embedding-3-small`.
+- The vector schema assumes 1,536 dimensions; Gemini output is truncated to match.

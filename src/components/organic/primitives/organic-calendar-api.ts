@@ -5,6 +5,7 @@ import {
   type CalendarGenerationRequest,
 } from "@/lib/organic/calendar-generation"
 import { ORGANIC_CALENDAR_API } from "./organic-calendar-config"
+import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 
 function parseJsonSafely<T>(value: string): T | null {
   try {
@@ -55,11 +56,17 @@ export async function streamCalendarGeneration(
   onEvent: (event: CalendarGenerationEvent) => void
 ): Promise<void> {
   const parsed = buildCalendarGenerationPayload(payload)
+  
+  const supabase = createSupabaseBrowserClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
+  
   const response = await fetch(ORGANIC_CALENDAR_API.generateCalendar, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/x-ndjson",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(parsed),
   })

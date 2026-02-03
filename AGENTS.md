@@ -134,3 +134,5 @@ Our Linear workspace is the source of truth for delivery planning. Treat every i
 - At the end of each plan, give me a list of unresolved questions to answer, if any.
 
 Do NOT write comments every line. Write comments at the top of the file if necessary. Do NOT use emojis to write comments.
+
+When you learn something, place a note of it here:

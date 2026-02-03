@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { getOrganicServiceBaseUrl } from "@/lib/organic/config";
+import { getApiUrl } from "@/lib/api/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const SSE_HEADERS = {
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const backendUrl = new URL("/generate-grid/events", getOrganicServiceBaseUrl());
+  const backendUrl = new URL(getApiUrl("/api/organic/generate-grid/events"));
   backendUrl.searchParams.set("job_id", jobId);
 
   const upstreamResponse = await fetch(backendUrl, {

@@ -37,6 +37,7 @@ export function BulkActionToolbar({
           <span className="text-sm font-medium text-primary">Selected</span>
           <button
             onClick={onClear}
+            aria-label="Clear selection"
             className="p-1 hover:bg-subtle rounded-full transition-colors"
           >
             <Cross2Icon className="w-4 h-4 text-secondary" />

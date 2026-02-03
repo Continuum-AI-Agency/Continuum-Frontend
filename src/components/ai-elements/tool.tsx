@@ -4,6 +4,7 @@ import { Badge, Box, Flex, IconButton, Text } from "@radix-ui/themes";
 import { ChevronDownIcon, CodeIcon } from "@radix-ui/react-icons";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { Spinner } from "@/components/ui/Loading";
 
 type ToolContextType = {
   type: string;
@@ -42,7 +43,7 @@ export function Tool({ children, type, state, defaultOpen = false }: ToolProps) 
 }
 
 export function ToolHeader({ title }: { title?: string }) {
-  const { type } = useTool();
+  const { type, state } = useTool();
   const displayTitle = title || type.replace("tool-", "").replace(/_/g, " ");
 
   return (
@@ -58,6 +59,7 @@ export function ToolHeader({ title }: { title?: string }) {
           <Text size="2" weight="medium" className="text-secondary">
             {displayTitle}
           </Text>
+          {state === "running" && <Spinner size={12} />}
         </Flex>
         <IconButton variant="ghost" size="1" color="gray">
           <ChevronDownIcon />

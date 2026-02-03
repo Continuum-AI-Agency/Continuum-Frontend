@@ -1,14 +1,18 @@
 import * as React from "react";
 import { useCalendarStore } from "@/lib/organic/store";
-import type { OrganicCalendarDay } from "../primitives/types";
+import type { OrganicCalendarDay, OrganicCalendarDraft } from "../primitives/types";
 
-export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
+export function useCalendarSelection(
+  days: OrganicCalendarDay[] = [],
+  unscheduledDrafts: OrganicCalendarDraft[] = []
+) {
   const {
     selectedDraftId,
     setSelectedDraftId,
     selectedDraftIds,
     toggleDraftSelection,
     clearDraftSelection,
+    bulkDeleteDrafts,
   } = useCalendarStore();
 
   const handleSelect = React.useCallback(
@@ -28,8 +32,22 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
     clearDraftSelection();
   }, [setSelectedDraftId, clearDraftSelection]);
 
+  const handleDelete = React.useCallback(() => {
+    const idsToDelete = selectedDraftId ? [selectedDraftId] : selectedDraftIds;
+    if (idsToDelete.length > 0) {
+      bulkDeleteDrafts(idsToDelete);
+      clearAll();
+    }
+  }, [selectedDraftId, selectedDraftIds, bulkDeleteDrafts, clearAll]);
+
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
+      if (e.key === "Delete" || e.key === "Backspace") {
+        handleDelete();
+        e.preventDefault();
+        return;
+      }
+
       if (!selectedDraftId && selectedDraftIds.length === 0) return;
 
       const currentId = selectedDraftId || selectedDraftIds[selectedDraftIds.length - 1];
@@ -41,6 +59,11 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
           flatSlots.push(slot.id);
           if (slot.id === currentId) currentIndex = flatSlots.length - 1;
         });
+      });
+
+      unscheduledDrafts.forEach((slot) => {
+        flatSlots.push(slot.id);
+        if (slot.id === currentId) currentIndex = flatSlots.length - 1;
       });
 
       if (currentIndex === -1) return;
@@ -61,7 +84,7 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
         clearAll();
       }
     },
-    [days, selectedDraftId, selectedDraftIds, handleSelect, clearAll]
+    [days, unscheduledDrafts, selectedDraftId, selectedDraftIds, handleSelect, clearAll, handleDelete]
   );
 
   return {

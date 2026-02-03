@@ -54,12 +54,18 @@ export function createInitialJainaStreamState(): JainaStreamState {
   };
 }
 
-export function parseJainaStreamEvent(line: string): JainaStreamEvent {
-  const parsed = jainaStreamEventSchema.safeParse(JSON.parse(line));
-  if (!parsed.success) {
-    throw new Error("Invalid Jaina stream event");
+export function parseJainaStreamEvent(line: string): JainaStreamEvent | null {
+  try {
+    const json = JSON.parse(line);
+    const parsed = jainaStreamEventSchema.safeParse(json);
+    if (parsed.success) {
+      return parsed.data;
+    }
+    console.warn("Invalid Jaina stream event schema:", parsed.error, "Line:", line);
+  } catch (error) {
+    console.error("Failed to parse Jaina stream event JSON:", error, "Line:", line);
   }
-  return parsed.data;
+  return null;
 }
 
 export function reduceJainaStreamEvent(
@@ -186,6 +192,12 @@ function buildProgressDetail(data: ProgressEventData): string | undefined {
   }
   if (data.stage === "report_ready") {
     return "Report ready";
+  }
+  if (data.stage === "tool_start") {
+    return `Running tool: ${String(data.tool_name ?? "unknown").replace(/_/g, " ")}`;
+  }
+  if (data.stage === "tool_complete") {
+    return `Finished tool: ${String(data.tool_name ?? "unknown").replace(/_/g, " ")}`;
   }
   return undefined;
 }

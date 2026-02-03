@@ -34,6 +34,8 @@ import { Cursor } from '@/components/realtime/cursor';
 import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
 import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
+import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
+import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -140,7 +142,7 @@ const edgeTypes = {
   dataType: DataTypeEdge,
 };
 
-function Flow({ brandProfileId, realtime }: { brandProfileId?: string; realtime: ReturnType<typeof useCanvasRealtime> }) {
+function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: string; realtime: ReturnType<typeof useCanvasRealtime>, activeRoomId?: string }) {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode, triggerSave } = useStudioStore();
   const { remoteCursors, updateCursor, isLoading, saveCanvasToDatabase } = realtime;
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -497,7 +499,7 @@ function Flow({ brandProfileId, realtime }: { brandProfileId?: string; realtime:
           ))}
           
           <Panel position="bottom-right" className="mb-4 mr-4">
-            <AIStudioChat brandProfileId={brandProfileId || ''} />
+            <AIStudioChat brandProfileId={brandProfileId || ''} roomId={activeRoomId} />
           </Panel>
         </ReactFlow>
       </div>
@@ -510,8 +512,17 @@ interface StudioCanvasProps {
 }
 
 export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasProps) {
-  const realtime = useCanvasRealtime(brandProfileId || '');
-  
+  const { rooms } = useCanvasRooms(brandProfileId || '');
+  const [activeRoomId, setActiveRoomId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    if (!activeRoomId && rooms.length > 0) {
+      setActiveRoomId(rooms[0].id);
+    }
+  }, [rooms, activeRoomId]);
+
+  const realtime = useCanvasRealtime(brandProfileId || '', activeRoomId);
+
   return (
     <ReactFlowProvider>
       <div className="flex h-full flex-col bg-background">
@@ -532,6 +543,12 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
                       <div className="w-px h-4 bg-indigo-500/20 mx-1" />
                       <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as any} />
                     </div>
+                    <div className="h-4 w-px bg-border hidden sm:block opacity-20" />
+                    <CanvasRoomsTabs 
+                      brandProfileId={brandProfileId || ''} 
+                      activeRoomId={activeRoomId} 
+                      onRoomChange={setActiveRoomId} 
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Toolbar />
@@ -604,7 +621,7 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
                   </AccordionPrimitive.Root>
               </aside>
                <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
-                   <Flow brandProfileId={brandProfileId} realtime={realtime} />
+                   <Flow brandProfileId={brandProfileId} realtime={realtime} activeRoomId={activeRoomId} />
                </main>
           </div>
         </div>

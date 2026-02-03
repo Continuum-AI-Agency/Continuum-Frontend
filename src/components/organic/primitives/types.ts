@@ -27,6 +27,20 @@ export type OrganicCalendarDraft = {
   seedTrendId?: string
   targetAccountId?: string
   adjusted?: boolean
+  titleTopic?: string
+  target?: string
+  tone?: string
+  cta?: string
+  creativeIdea?: string
+  assetHints?: Array<{
+    role: string
+    suggestion: string
+  }>
+  hashtags?: {
+    high?: string[]
+    medium?: string[]
+    low?: string[]
+  }
 }
 
 export type OrganicCalendarDay = {

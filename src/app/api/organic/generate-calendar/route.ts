@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getOrganicServiceBaseUrl } from "@/lib/organic/config";
+import { getApiUrl } from "@/lib/api/config";
 import {
   calendarGenerationRequestSchema,
   type CalendarGenerationRequest,
@@ -11,71 +11,94 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function toBackendPayload(payload: CalendarGenerationRequest) {
+function toBackendPayload(payload: any) {
+  const cleanOptions: any = {};
+  if (payload.options) {
+    if (payload.options.schedulePreset) cleanOptions.schedulePreset = payload.options.schedulePreset;
+    if (payload.options.includeNewsletter !== undefined) cleanOptions.includeNewsletter = payload.options.includeNewsletter;
+    if (payload.options.newsletterDayId && payload.options.newsletterDayId.trim() !== "") cleanOptions.newsletterDayId = payload.options.newsletterDayId;
+    if (payload.options.guidancePrompt && payload.options.guidancePrompt.trim() !== "") cleanOptions.guidancePrompt = payload.options.guidancePrompt;
+    if (payload.options.language && payload.options.language.trim() !== "") cleanOptions.language = payload.options.language;
+    if (payload.options.preferredPlatforms) {
+      if (Array.isArray(payload.options.preferredPlatforms)) {
+        cleanOptions.preferredPlatforms = payload.options.preferredPlatforms
+          .filter((p: any) => typeof p === "string" || typeof p === "number")
+          .map((p: any) => String(p));
+      } else if (typeof payload.options.preferredPlatforms === "string") {
+        cleanOptions.preferredPlatforms = [payload.options.preferredPlatforms];
+      }
+    }
+  }
+
   return {
     brandProfileId: payload.brandProfileId,
     weekStart: payload.weekStart,
     timezone: payload.timezone,
     platformAccountIds: payload.platformAccountIds ?? {},
-    placements: payload.placements.map((placement) => ({
-      placementId: placement.placementId,
-      trendId: placement.trendId,
-      dayId: placement.dayId,
-      scheduledAt: placement.scheduledAt,
-      timeLabel: placement.timeLabel ?? null,
-      platform: placement.platform,
-      accountId: placement.accountId ?? null,
-      seedSource: placement.seedSource ?? null,
-      desiredFormat: placement.desiredFormat ?? null,
-      metadata: placement.metadata ?? null,
-    })),
-    options: payload.options
-      ? {
-          schedulePreset: payload.options.schedulePreset ?? null,
-          includeNewsletter: payload.options.includeNewsletter ?? null,
-          newsletterDayId: payload.options.newsletterDayId ?? null,
-          guidancePrompt: payload.options.guidancePrompt ?? null,
-          language: payload.options.language ?? null,
-          preferredPlatforms: payload.options.preferredPlatforms ?? null,
-        }
-      : null,
+    placements: (payload.placements || []).map((placement: any) => {
+      let format = placement.desiredFormat ? String(placement.desiredFormat).toLowerCase() : null;
+      
+      if (format && format.includes("newsletter")) {
+        format = "newsletter";
+      }
+      
+      if (format === "static") {
+        format = "post";
+      }
+
+      return {
+        placementId: placement.placementId,
+        trendId: placement.trendId ?? null,
+        dayId: placement.dayId,
+        scheduledAt: placement.scheduledAt,
+        timeLabel: placement.timeLabel ?? null,
+        platform: placement.platform,
+        accountId: placement.accountId ?? null,
+        seedSource: placement.seedSource ?? null,
+        desiredFormat: format,
+        metadata: placement.metadata ?? null,
+      };
+    }),
+    options: Object.keys(cleanOptions).length > 0 ? cleanOptions : null,
   };
 }
 
 export async function POST(request: NextRequest) {
-  let json: unknown;
+  let json: any;
   try {
     json = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const parsed = calendarGenerationRequestSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid request payload", issues: parsed.error.flatten() },
-      { status: 422 }
-    );
-  }
-
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session?.access_token) {
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  
+  if (sessionError || !session?.access_token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const upstreamResponse = await fetch(
-    `${getOrganicServiceBaseUrl()}/generate-calendar`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/x-ndjson",
-        Authorization: `Bearer ${data.session.access_token}`,
-      },
-      body: JSON.stringify(toBackendPayload(parsed.data)),
-    }
-  );
+  const token = session.access_token.trim();
+  const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+
+  const backendUrl = getApiUrl("/api/organic/generate-calendar");
+  const payload = toBackendPayload(json);
+  
+  const fetchHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Accept": "application/x-ndjson",
+    "Authorization": `Bearer ${token}`,
+    "apikey": anonKey,
+    "x-supabase-auth": token,
+    "x-auth-token": token,
+    "X-Brand-Profile-Id": payload.brandProfileId,
+  };
+
+  const upstreamResponse = await fetch(backendUrl, {
+    method: "POST",
+    headers: fetchHeaders,
+    body: JSON.stringify(payload),
+  });
 
   if (!upstreamResponse.ok || !upstreamResponse.body) {
     let detail: unknown = null;

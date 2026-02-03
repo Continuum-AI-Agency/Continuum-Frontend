@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 // z is not used directly here; schemas are imported from types.
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getOrganicServiceBaseUrl } from "@/lib/organic/config";
+import { getApiUrl } from "@/lib/api/config";
 import {
   generationRequestSchema,
   gridJobResponseSchema,
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const backendUrl = `${getOrganicServiceBaseUrl()}/generate-grid`;
+  const backendUrl = getApiUrl("/api/organic/generate-grid");
   const response = await fetch(backendUrl, {
     method: "POST",
     headers: {

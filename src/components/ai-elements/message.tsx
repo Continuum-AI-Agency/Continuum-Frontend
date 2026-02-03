@@ -28,10 +28,10 @@ export function Message({ role, children }: MessageProps) {
       />
       <Box
         className={cn(
-          "max-w-[85%] rounded-2xl px-4 py-2 text-[15px] leading-relaxed shadow-sm",
+          "rounded-2xl px-4 py-2 text-[15px] leading-relaxed shadow-sm",
           isUser
-            ? "bg-gray-200 text-gray-900 rounded-tr-sm font-medium"
-            : "border border-white/10 bg-white/5 text-white rounded-tl-sm"
+            ? "max-w-[85%] bg-gray-200 text-gray-900 rounded-tr-sm font-medium"
+            : "max-w-full flex-1 border border-white/10 bg-white/5 text-white rounded-tl-sm"
         )}
       >
         {children}

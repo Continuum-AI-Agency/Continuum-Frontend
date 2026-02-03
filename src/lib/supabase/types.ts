@@ -14,6 +14,36 @@ export type Database = {
   }
   brand_profiles: {
     Tables: {
+      agent_sessions: {
+        Row: {
+          app_name: string
+          created_at: string
+          events: Json
+          session_id: string
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_name: string
+          created_at?: string
+          events?: Json
+          session_id: string
+          state?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_name?: string
+          created_at?: string
+          events?: Json
+          session_id?: string
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       brand_document_chunks: {
         Row: {
           chunk_index: number
@@ -105,32 +135,171 @@ export type Database = {
           },
         ]
       }
+      brand_guideline_tags: {
+        Row: {
+          created_at: string
+          description: string
+          embedding: string | null
+          embedding_model: string | null
+          guideline_id: string
+          id: string
+          label: string
+          section: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          embedding?: string | null
+          embedding_model?: string | null
+          guideline_id: string
+          id?: string
+          label: string
+          section: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          guideline_id?: string
+          id?: string
+          label?: string
+          section?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_guideline_tags_guideline_id_fkey"
+            columns: ["guideline_id"]
+            isOneToOne: false
+            referencedRelation: "brand_guidelines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_guidelines: {
+        Row: {
+          approved_at: string | null
+          brand_id: string
+          colors: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          logo: Json
+          notes: string | null
+          purpose: string
+          stationery: Json
+          status: string
+          style_design: Json
+          typography: Json
+          updated_at: string
+          updated_by: string | null
+          verbal_identity: Json
+          version: number
+        }
+        Insert: {
+          approved_at?: string | null
+          brand_id: string
+          colors: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          logo: Json
+          notes?: string | null
+          purpose: string
+          stationery: Json
+          status?: string
+          style_design: Json
+          typography: Json
+          updated_at?: string
+          updated_by?: string | null
+          verbal_identity: Json
+          version?: number
+        }
+        Update: {
+          approved_at?: string | null
+          brand_id?: string
+          colors?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          logo?: Json
+          notes?: string | null
+          purpose?: string
+          stationery?: Json
+          status?: string
+          style_design?: Json
+          typography?: Json
+          updated_at?: string
+          updated_by?: string | null
+          verbal_identity?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_guidelines_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_profile_integration_accounts: {
         Row: {
           alias: string | null
+          asset_pk: string | null
+          asset_table: string | null
           brand_profile_id: string
+          business_id: string | null
           created_at: string
+          external_id: string | null
           id: string
           integration_account_id: string
+          integration_id: string | null
+          linked_at: string | null
+          metadata: Json | null
+          name: string | null
           settings: Json
+          type: string | null
           updated_at: string
         }
         Insert: {
           alias?: string | null
+          asset_pk?: string | null
+          asset_table?: string | null
           brand_profile_id: string
+          business_id?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
           integration_account_id: string
+          integration_id?: string | null
+          linked_at?: string | null
+          metadata?: Json | null
+          name?: string | null
           settings?: Json
+          type?: string | null
           updated_at?: string
         }
         Update: {
           alias?: string | null
+          asset_pk?: string | null
+          asset_table?: string | null
           brand_profile_id?: string
+          business_id?: string | null
           created_at?: string
+          external_id?: string | null
           id?: string
           integration_account_id?: string
+          integration_id?: string | null
+          linked_at?: string | null
+          metadata?: Json | null
+          name?: string | null
           settings?: Json
+          type?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -139,6 +308,45 @@ export type Database = {
             columns: ["integration_account_id"]
             isOneToOne: false
             referencedRelation: "integration_accounts_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_profile_user_integrations: {
+        Row: {
+          brand_profile_id: string
+          created_at: string
+          id: string
+          integration_id: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          created_at?: string
+          id?: string
+          integration_id: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          created_at?: string
+          id?: string
+          integration_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_profiles_user_integrations_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_profiles_user_integrations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "user_integrations"
             referencedColumns: ["id"]
           },
         ]
@@ -228,6 +436,7 @@ export type Database = {
       }
       brand_reports: {
         Row: {
+          active: boolean
           agent_profile_snapshot: Json
           brand_profile_id: string
           embedding: string | null
@@ -242,6 +451,7 @@ export type Database = {
           synced_by: string
         }
         Insert: {
+          active?: boolean
           agent_profile_snapshot: Json
           brand_profile_id: string
           embedding?: string | null
@@ -256,6 +466,7 @@ export type Database = {
           synced_by: string
         }
         Update: {
+          active?: boolean
           agent_profile_snapshot?: Json
           brand_profile_id?: string
           embedding?: string | null
@@ -279,30 +490,160 @@ export type Database = {
           },
         ]
       }
-      chat_messages: {
+      canvas_rooms: {
         Row: {
-          id: string
           brand_profile_id: string
-          user_id: string
-          room_id: string
-          content: string
           created_at: string
+          created_by: string | null
+          id: string
+          name: string
         }
         Insert: {
-          id?: string
           brand_profile_id: string
-          user_id: string
-          room_id?: string
-          content: string
           created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
         }
         Update: {
-          id?: string
           brand_profile_id?: string
-          user_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_rooms_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      canvas_sessions: {
+        Row: {
+          brand_profile_id: string
+          created_at: string
+          deleted_edge_ids: Json | null
+          deleted_node_ids: Json | null
+          edges: Json
+          nodes: Json
+          room_id: string
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          created_at?: string
+          deleted_edge_ids?: Json | null
+          deleted_node_ids?: Json | null
+          edges?: Json
+          nodes?: Json
+          room_id: string
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          created_at?: string
+          deleted_edge_ids?: Json | null
+          deleted_node_ids?: Json | null
+          edges?: Json
+          nodes?: Json
           room_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_sessions_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "canvas_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "canvas_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      canvas_workflows: {
+        Row: {
+          brand_profile_id: string
+          created_at: string
+          description: string | null
+          edges: Json
+          id: string
+          metadata: Json | null
+          name: string
+          nodes: Json
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          metadata?: Json | null
+          name: string
+          nodes?: Json
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          metadata?: Json | null
+          name?: string
+          nodes?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvas_workflows_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          brand_profile_id: string
+          content: string
+          created_at: string
+          id: string
+          room_id: string
+          user_avatar: string | null
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          brand_profile_id: string
+          content: string
+          created_at?: string
+          id?: string
+          room_id?: string
+          user_avatar?: string | null
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          brand_profile_id?: string
           content?: string
           created_at?: string
+          id?: string
+          room_id?: string
+          user_avatar?: string | null
+          user_id?: string
+          user_name?: string | null
         }
         Relationships: [
           {
@@ -311,11 +652,12 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "brand_profiles"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       integration_accounts_assets: {
         Row: {
+          ad_account_id: string | null
           created_at: string
           external_account_id: string
           id: string
@@ -327,6 +669,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ad_account_id?: string | null
           created_at?: string
           external_account_id: string
           id?: string
@@ -338,6 +681,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ad_account_id?: string | null
           created_at?: string
           external_account_id?: string
           id?: string
@@ -399,6 +743,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      organic_calendar_drafts: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: string
+          platform_account_id: string
+          position: Json | null
+          published_at: string | null
+          scheduled_date: string | null
+          slot_data: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: string
+          platform_account_id: string
+          position?: Json | null
+          published_at?: string | null
+          scheduled_date?: string | null
+          slot_data: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: string
+          platform_account_id?: string
+          position?: Json | null
+          published_at?: string | null
+          scheduled_date?: string | null
+          slot_data?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_calendar_drafts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       permissions: {
         Row: {
@@ -471,8 +865,60 @@ export type Database = {
           },
         ]
       }
+      reporting_cache: {
+        Row: {
+          account_id: string
+          cache_key: string
+          created_at: string
+          expires_at: string
+          fetched_at: string
+          id: string
+          payload: Json
+          provider: string
+          range_preset: string
+          range_since: string | null
+          range_until: string | null
+          scope_id: string
+          scope_type: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          cache_key: string
+          created_at?: string
+          expires_at: string
+          fetched_at?: string
+          id?: string
+          payload: Json
+          provider: string
+          range_preset: string
+          range_since?: string | null
+          range_until?: string | null
+          scope_id: string
+          scope_type: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          cache_key?: string
+          created_at?: string
+          expires_at?: string
+          fetched_at?: string
+          id?: string
+          payload?: Json
+          provider?: string
+          range_preset?: string
+          range_since?: string | null
+          range_until?: string | null
+          scope_id?: string
+          scope_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       strategic_analyses: {
         Row: {
+          active: boolean
           analysis_embedding: string | null
           analysis_json: Json
           audience_embedding: string | null
@@ -499,6 +945,7 @@ export type Database = {
           voice_embedding_text: string | null
         }
         Insert: {
+          active?: boolean
           analysis_embedding?: string | null
           analysis_json: Json
           audience_embedding?: string | null
@@ -525,6 +972,7 @@ export type Database = {
           voice_embedding_text?: string | null
         }
         Update: {
+          active?: boolean
           analysis_embedding?: string | null
           analysis_json?: Json
           audience_embedding?: string | null
@@ -749,6 +1197,8 @@ export type Database = {
           embedding_text: string
         }[]
       }
+      cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
+      cleanup_old_chat_messages: { Args: never; Returns: undefined }
       decrypt_token: { Args: { ct: string }; Returns: string }
       encrypt_token: { Args: { token: string }; Returns: string }
       fetch_latest_brand_embedding: {
@@ -762,9 +1212,63 @@ export type Database = {
           updated_at: string
         }[]
       }
-      get_active_brand_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
+      get_active_brand_id: { Args: never; Returns: string }
+      get_brand_timezone: { Args: { brand_id: string }; Returns: string }
+      reporting_cache_get_organic_metrics_cache: {
+        Args: {
+          p_external_account_id: string
+          p_platform: string
+          p_range_since: string
+          p_range_until: string
+          p_request_hash: string
+        }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "organic_metrics_cache"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reporting_cache_get_organic_metrics_cache_range: {
+        Args: {
+          p_external_account_id: string
+          p_platform: string
+          p_range_since: string
+          p_range_until: string
+          p_request_hash: string
+        }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "organic_metrics_cache"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reporting_cache_upsert_organic_metrics_cache: {
+        Args: {
+          p_brand_id: string
+          p_comparison: Json
+          p_external_account_id: string
+          p_fetched_at: string
+          p_integration_account_id: string
+          p_metrics: Json
+          p_platform: string
+          p_range_json: Json
+          p_range_preset: string
+          p_range_since: string
+          p_range_until: string
+          p_raw_response: Json
+          p_request_hash: string
+        }
+        Returns: unknown
+        SetofOptions: {
+          from: "*"
+          to: "organic_metrics_cache"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
@@ -2628,6 +3132,19 @@ export type Database = {
               source: string
             }[]
           }
+      match_brand_documents: {
+        Args: {
+          filter_brand_id: string
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: number
+          similarity: number
+        }[]
+      }
       match_jaina_documents:
         | {
             Args: {

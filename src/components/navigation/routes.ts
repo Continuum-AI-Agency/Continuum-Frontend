@@ -1,16 +1,24 @@
 import type { ComponentType, ComponentProps } from "react";
-import { 
-  BarChartIcon, 
-  Component1Icon, 
-  HomeIcon, 
-  MagicWandIcon, 
-  RocketIcon, 
-  ChatBubbleIcon, 
+import {
+  HomeIcon,
+  ChatBubbleIcon,
   FrameIcon,
   GearIcon,
-  MixerHorizontalIcon,
-  CheckCircledIcon
+  CheckCircledIcon,
+  MixerHorizontalIcon
 } from "@radix-ui/react-icons";
+import {
+  RocketLaunchIcon,
+  SparklesIcon,
+  ChatBubbleLeftRightIcon,
+  ChartBarSquareIcon,
+  CalendarIcon,
+  ClipboardDocumentListIcon,
+  UsersIcon,
+  DocumentTextIcon,
+  UserCircleIcon,
+  ArrowRightStartOnRectangleIcon
+} from "@heroicons/react/24/outline";
 
 export type AppNavigationItem = {
   label: string;
@@ -38,12 +46,12 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
   {
     label: "Creative Studio",
     href: "/ai-studio",
-    icon: MagicWandIcon,
+    icon: SparklesIcon,
     items: [
       {
         label: "Chat",
         href: "/ai-studio?mode=chat",
-        icon: ChatBubbleIcon,
+        icon: ChatBubbleLeftRightIcon,
       },
       {
         label: "Canvas",
@@ -55,26 +63,72 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
   {
     label: "Organic Content",
     href: "/organic",
-    icon: BarChartIcon,
+    icon: ChartBarSquareIcon,
+    items: [
+      {
+        label: "Content Calendar",
+        href: "/organic",
+        icon: CalendarIcon,
+      },
+      {
+        label: "Metrics",
+        href: "/organic?tab=metrics",
+        icon: ClipboardDocumentListIcon,
+      },
+    ],
   },
   {
     label: "Paid Media",
     href: "/paid-media",
-    icon: RocketIcon,
+    icon: RocketLaunchIcon,
     badge: {
       label: "Beta",
       tone: "violet",
     },
+    items: [
+      {
+        label: "Jaina",
+        href: "/paid-media?tab=jaina",
+        icon: ChatBubbleIcon,
+      },
+      {
+        label: "Campaigns",
+        href: "/paid-media?tab=campaigns",
+        icon: ClipboardDocumentListIcon,
+      },
+      {
+        label: "DCO",
+        href: "/paid-media?tab=dco",
+        icon: ChartBarSquareIcon,
+      },
+    ],
   },
   {
     label: "Primitives",
     href: "/primitives",
-    icon: Component1Icon,
+    icon: UsersIcon,
     badge: {
       label: "MVP",
       tone: "blue",
     },
     description: "Shared building blocks for paid media (audiences, guidelines, personas).",
+    items: [
+      {
+        label: "Audiences",
+        href: "/primitives?tab=audiences",
+        icon: UsersIcon,
+      },
+      {
+        label: "Brand Guidelines",
+        href: "/primitives?tab=guidelines",
+        icon: DocumentTextIcon,
+      },
+      {
+        label: "Personas",
+        href: "/primitives?tab=personas",
+        icon: UserCircleIcon,
+      },
+    ],
   },
 ];
 

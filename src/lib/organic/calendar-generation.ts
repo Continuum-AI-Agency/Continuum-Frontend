@@ -34,9 +34,9 @@ export const calendarGenerationRequestSchema = z.object({
   brandProfileId: z.string().min(1),
   weekStart: z.string().min(1),
   timezone: z.string().min(1),
-  placements: z.array(calendarPlacementSeedSchema).min(1),
-  platformAccountIds: z.record(platformKeySchema, z.string().min(1)).optional(),
-  options: calendarGenerationOptionsSchema,
+  placements: z.array(z.any()),
+  platformAccountIds: z.record(z.string(), z.any()).optional(),
+  options: z.any().optional(),
 });
 
 export type CalendarGenerationRequest = z.infer<typeof calendarGenerationRequestSchema>;
@@ -116,8 +116,8 @@ export type CalendarPlacement = z.infer<typeof calendarPlacementSchema>;
 const progressEventSchema = z.object({
   type: z.literal("progress"),
   completed: z.number().nonnegative(),
-  total: z.number().positive(),
-  stage: z.enum(["analyzing", "drafting", "matching", "optimizing", "finalizing"]).optional(),
+  total: z.number().nonnegative(),
+  stage: z.enum(["analyzing", "optimizing", "drafting", "matching", "finalizing"]).optional(),
   message: z.string().optional(),
 });
 

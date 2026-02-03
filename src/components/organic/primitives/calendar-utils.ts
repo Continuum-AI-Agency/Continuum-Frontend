@@ -155,3 +155,9 @@ export function formatTimeLabelFromIso(isoString: string): string | null {
   const minutes = parsed.getMinutes()
   return formatTimeLabel(`${hours}:${minutes.toString().padStart(2, "0")}`)
 }
+
+export function formatDayIdFromIso(isoString: string): string | null {
+  if (!isoString) return null
+  const match = isoString.match(/^(\d{4}-\d{2}-\d{2})/)
+  return match ? match[1] : null
+}

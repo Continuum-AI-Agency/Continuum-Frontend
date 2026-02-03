@@ -6,6 +6,11 @@
 //
 // Notes
 // - This is an extensible, adapter-driven pipeline. Only minimal stubs are provided.
+// - Uses Gemini gemini-embedding-001 via REST API.
+// - Dimensions: 1536 (to match existing schema).
+//
+// Notes
+// - This is an extensible, adapter-driven pipeline. Only minimal stubs are provided.
 // - When wiring real embedding, use your provider of choice and batch inserts into pgvector.
 
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
@@ -53,8 +58,7 @@ function jsonResponse(body: Record<string, JsonValue>, init?: ResponseInit) {
   });
 }
 
-const OPENAI_MODEL = "text-embedding-3-small";
-const OPENAI_BATCH_LIMIT = 64;
+const GEMINI_BATCH_LIMIT = 100;
 
 function createSupabase(authHeader?: string | null) {
   const url = Deno.env.get("SUPABASE_URL");
@@ -73,43 +77,45 @@ function createSupabase(authHeader?: string | null) {
 }
 
 async function createEmbeddings(inputs: string[]): Promise<number[][]> {
-  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) {
-    throw new Error("Missing OPENAI_API_KEY environment variable");
+    throw new Error("Missing GEMINI_API_KEY environment variable");
   }
 
-  const endpoint = Deno.env.get("OPENAI_BASE_URL")?.trim() || "https://api.openai.com/v1/embeddings";
+  const endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents";
   const body = {
-    input: inputs,
-    model: OPENAI_MODEL,
-    encoding_format: "float",
+    requests: inputs.map((text) => ({
+      model: "models/gemini-embedding-001",
+      taskType: "RETRIEVAL_DOCUMENT",
+      content: { parts: [{ text }] },
+      outputDimensionality: 1536,
+    })),
   };
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(`${endpoint}?key=${apiKey}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(`OpenAI embedding failed: ${response.status} ${message}`);
+    throw new Error(`Gemini embedding failed: ${response.status} ${message}`);
   }
 
   const payload = (await response.json()) as {
-    data?: Array<{ embedding: number[] }>;
+    embeddings?: Array<{ values: number[] }>;
     error?: { message?: string };
   };
 
-  if (!payload.data?.length) {
+  if (!payload.embeddings?.length) {
     const errMessage = payload.error?.message ?? "Empty embedding response";
     throw new Error(errMessage);
   }
 
-  return payload.data.map((item) => item.embedding);
+  return payload.embeddings.map((item) => item.values);
 }
 
 async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: string | null) {
@@ -141,13 +147,13 @@ async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: 
   const chunks = chunkText(text, { chunkSize: 2000, overlap: 200 }).map(sanitize);
   const safeFileName = sanitize(fileName ?? "document");
 
-  // Step 4: Embed chunks with OpenAI
+  // Step 4: Embed chunks with Gemini
   let embeddings: number[][] = [];
   if (chunks.length > 0) {
     try {
       const batchResults: number[][] = [];
-      for (let i = 0; i < chunks.length; i += OPENAI_BATCH_LIMIT) {
-        const slice = chunks.slice(i, i + OPENAI_BATCH_LIMIT);
+      for (let i = 0; i < chunks.length; i += GEMINI_BATCH_LIMIT) {
+        const slice = chunks.slice(i, i + GEMINI_BATCH_LIMIT);
         const vectors = await createEmbeddings(slice);
         batchResults.push(...vectors);
       }

@@ -58,13 +58,10 @@ export function useJainaChatStream() {
   const clearMemory = useCallback(
     async (adAccountId: string) => {
       const token = await getAccessToken();
-      const response = await fetch(
-        getApiUrl(`/api/agents/jaina/chat/memory?ad_account_id=${encodeURIComponent(adAccountId)}`),
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await fetch("/api/agents/jaina/chat/memory?ad_account_id=" + encodeURIComponent(adAccountId), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!response.ok) {
         const detail = await response.text().catch(() => "Failed to clear memory.");
@@ -100,7 +97,7 @@ export function useJainaChatStream() {
 
       try {
         const token = await getAccessToken();
-        const response = await fetch(getApiUrl("/api/agents/jaina/chat/stream"), {
+        const response = await fetch("/api/agents/jaina/chat/stream", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -124,7 +121,9 @@ export function useJainaChatStream() {
           reader,
           onLine: (line) => {
             const event = parseJainaStreamEvent(line);
-            setState((prev) => reduceJainaStreamEvent(prev, event));
+            if (event) {
+              setState((prev) => reduceJainaStreamEvent(prev, event));
+            }
           },
         });
 

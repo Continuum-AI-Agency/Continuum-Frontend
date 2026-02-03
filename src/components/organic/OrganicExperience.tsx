@@ -25,7 +25,9 @@ import {
 import { z } from "zod";
 
 import { useToast } from "@/components/ui/ToastProvider";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  ORGANIC_PLATFORMS,
   ORGANIC_PLATFORM_KEYS,
   type OrganicPlatformKey,
 } from "@/lib/organic/platforms";
@@ -1281,9 +1283,16 @@ function useCopyCaption(show: ReturnType<typeof useToast>["show"]) {
 }
 
 async function queueGridJob(payload: GenerationRequestPayload): Promise<string> {
+  const supabase = createSupabaseBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   const response = await fetch("/api/organic/generate-grid", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   });
 
@@ -1309,9 +1318,16 @@ async function requestDailyTemplates(
   signal: AbortSignal,
   onTemplate: (template: DetailedPostTemplate) => void
 ) {
+  const supabase = createSupabaseBrowserClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   const response = await fetch("/api/organic/generate-daily-details-stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     signal,
     body: JSON.stringify(payload),
   });

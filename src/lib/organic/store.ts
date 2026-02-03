@@ -95,6 +95,7 @@ interface CalendarState {
   setGridJobId: (jobId: string | null) => void;
   setGhosts: (dayId: string, count: number) => void;
   clearGhosts: () => void;
+  clearCalendar: () => void;
 
   addScheduledEvent: (date: string, event: Omit<ScheduledEvent, "id">) => void;
   updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
@@ -287,6 +288,17 @@ export const useCalendarStore = create<CalendarState>()(
         })),
         
       clearGhosts: () => set({ ghosts: {} }),
+      
+      clearCalendar: () =>
+        set((state) => ({
+          days: state.days.map((day) => ({ ...day, slots: [] })),
+          unscheduledDrafts: [],
+          selectedDraftId: null,
+          selectedDraftIds: [],
+          gridStatus: "idle",
+          gridProgress: { percent: 0 },
+          gridError: null,
+        })),
 
       addScheduledEvent: (date, event) =>
         set((state) => {

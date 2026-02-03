@@ -4,7 +4,9 @@ import OnboardingLoading from "@/components/loader-animations/OnboardingLoading"
 import { ClientOnly } from "@/components/ui/ClientOnly";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
+import { listBrandGuidelines } from "@/lib/api/brandGuidelines.server";
 import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
+import type { BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { DASHBOARD_LOADER_TOTAL_DURATION_MS, getDashboardLoaderCycleDurationMs } from "@/lib/ui/dashboardLoaderTiming";
 import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
@@ -32,11 +34,27 @@ export default async function PrimitivesPage() {
     summary: undefined,
     generatedAt: undefined,
   };
+  let guidelineSummaries: BrandGuidelineSummary[] = [];
   let questionsError: string | null = null;
 
   try {
-    const insights = await fetchBrandInsights(brandId, { revalidateSeconds: revalidate });
-    questionsByNiche = insights.data.questionsByNiche;
+    const [insightsResult, guidelinesResult] = await Promise.allSettled([
+      fetchBrandInsights(brandId, { revalidateSeconds: revalidate }),
+      listBrandGuidelines(brandId),
+    ]);
+
+    if (insightsResult.status === "fulfilled") {
+      questionsByNiche = insightsResult.value.data.questionsByNiche;
+    } else {
+      questionsError =
+        insightsResult.reason instanceof Error
+          ? insightsResult.reason.message
+          : "Unable to load Brand Insights questions.";
+    }
+
+    if (guidelinesResult.status === "fulfilled") {
+      guidelineSummaries = guidelinesResult.value;
+    }
   } catch (error) {
     questionsError =
       error instanceof Error ? error.message : "Unable to load Brand Insights questions.";
@@ -49,12 +67,17 @@ export default async function PrimitivesPage() {
           Primitives
         </Heading>
         <Text color="gray">
-          Building blocks reused across the app (creative, onboarding, paid). Audience Builder is in progress; Brand
-          Guidelines and Personas are coming soon.
+          Building blocks reused across the app (creative, onboarding, paid). Audience Builder and Brand Guidelines are
+          in progress; Personas are coming soon.
         </Text>
       </Flex>
 
-      <PrimitivesHub questionsByNiche={questionsByNiche} questionsError={questionsError} />
+      <PrimitivesHub
+        brandId={brandId}
+        initialGuidelines={guidelineSummaries}
+        questionsByNiche={questionsByNiche}
+        questionsError={questionsError}
+      />
 
       {showLoaderPreview ? (
         <Card className="overflow-hidden">

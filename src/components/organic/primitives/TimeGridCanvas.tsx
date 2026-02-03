@@ -106,7 +106,7 @@ function TimeGridDayColumn({
         ))}
         
         {drafts.length === 0 && ghosts === 0 && (
-          <div className="h-24 flex items-center justify-center border border-dashed border-subtle rounded opacity-40">
+          <div className="h-24 flex items-center justify-center border border-dashed border-subtle rounded opacity-60">
             <span className="text-xs text-secondary">Drop items here</span>
           </div>
         )}

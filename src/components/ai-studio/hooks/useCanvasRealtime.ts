@@ -12,6 +12,7 @@ import { serializeWorkflowSnapshot } from "@/StudioCanvas/utils/workflowSerializ
 
 type CanvasSession = {
   brand_profile_id: string;
+  room_id: string;
   nodes: any[];
   edges: any[];
   updated_at: string;
@@ -29,7 +30,7 @@ type PresenceUser = {
 
 type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
 
-export function useCanvasRealtime(brandProfileId: string) {
+export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const supabase = createSupabaseBrowserClient();
   const { user } = useSession();
   const [remoteCursors, setRemoteCursors] = useState<
@@ -50,7 +51,6 @@ export function useCanvasRealtime(brandProfileId: string) {
   const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
   const lastRemoteEdgeIdsRef = useRef<Set<string>>(new Set());
 
-  // Stable reference for the update handler to prevent binding mismatches
   const handleRemoteUpdate = useCallback((payload: { 
     nodes: any[], 
     edges: any[], 
@@ -61,12 +61,10 @@ export function useCanvasRealtime(brandProfileId: string) {
     const remoteTimestamp = payload.updated_at;
     const localTimestamp = lastUpdateRef.current;
 
-    // Exact timestamp match means it is our own change returning via Postgres
     if (remoteTimestamp && localTimestamp && remoteTimestamp === localTimestamp) {
       return;
     }
 
-    // Protect against out-of-order delivery
     const isRemoteNewer = !localTimestamp || new Date(remoteTimestamp) >= new Date(localTimestamp);
     if (!isRemoteNewer) return;
 
@@ -103,16 +101,22 @@ export function useCanvasRealtime(brandProfileId: string) {
     }, 100);
   }, []);
 
-  // 1. Initial Data Fetch
   useEffect(() => {
-    if (!brandProfileId) return;
+    if (!brandProfileId || !roomId) {
+      if (!roomId) setIsLoading(false);
+      return;
+    }
 
     const loadInitialState = async () => {
+      setIsLoading(true);
+      hasLoadedInitialDataRef.current = false;
+      
       const { data, error } = await supabase
-        .schema("brand_profiles")
+        .schema("brand_profiles" as any)
         .from("canvas_sessions" as any)
         .select("*")
         .eq("brand_profile_id", brandProfileId)
+        .eq("room_id", roomId)
         .maybeSingle();
 
       if (error) {
@@ -141,17 +145,19 @@ export function useCanvasRealtime(brandProfileId: string) {
       } else {
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
+        const store = useStudioStore.getState();
+        store.setNodes([]);
+        store.setEdges([]);
       }
     };
 
     loadInitialState();
-  }, [brandProfileId, supabase]);
+  }, [brandProfileId, roomId, supabase]);
 
-  // 2. Realtime Channel (Broadcast & Presence)
   useEffect(() => {
-    if (!brandProfileId) return;
+    if (!brandProfileId || !roomId) return;
 
-    const channelTopic = `canvas:broadcast:${brandProfileId}`;
+    const channelTopic = `canvas:broadcast:${brandProfileId}:${roomId}`;
     console.log("[Canvas Sync] Creating broadcast channel:", channelTopic);
     
     const channel = supabase.channel(channelTopic, {
@@ -202,13 +208,12 @@ export function useCanvasRealtime(brandProfileId: string) {
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;
     };
-  }, [brandProfileId, supabase, handleRemoteUpdate]);
+  }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
 
-  // 3. Realtime Channel (Postgres Changes)
   useEffect(() => {
-    if (!brandProfileId) return;
+    if (!brandProfileId || !roomId) return;
 
-    const channelTopic = `canvas:db:${brandProfileId}`;
+    const channelTopic = `canvas:db:${brandProfileId}:${roomId}`;
     console.log("[Canvas Sync] Creating DB channel:", channelTopic);
 
     const channel = supabase.channel(channelTopic, {
@@ -221,10 +226,10 @@ export function useCanvasRealtime(brandProfileId: string) {
         {
           event: "*", 
           schema: "brand_profiles",
-          table: "canvas_sessions"
+          table: "canvas_sessions",
+          filter: `room_id=eq.${roomId}`
         },
         (payload: any) => {
-          // Manually filter by ID to ensure binding is simple and reliable
           const record = payload.new || payload.old;
           if (record?.brand_profile_id !== brandProfileId) return;
 
@@ -239,7 +244,6 @@ export function useCanvasRealtime(brandProfileId: string) {
               updated_at: payload.new.updated_at
             });
           } else if (payload.eventType === "DELETE") {
-            // Handle full row deletion if necessary
             window.location.reload();
           }
         }
@@ -257,9 +261,8 @@ export function useCanvasRealtime(brandProfileId: string) {
       supabase.removeChannel(channel);
       dbChannelRef.current = null;
     };
-  }, [brandProfileId, supabase, handleRemoteUpdate]);
+  }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
 
-  // 4. Presence Tracking
   useEffect(() => {
     if (status === "SUBSCRIBED" && user && broadcastChannelRef.current) {
       broadcastChannelRef.current.track({
@@ -274,9 +277,8 @@ export function useCanvasRealtime(brandProfileId: string) {
     }
   }, [status, user]);
 
-  // 5. Save/Broadcast state
   const saveCanvasToDatabase = useCallback(async () => {
-    if (!brandProfileId || !hasLoadedInitialDataRef.current) return;
+    if (!brandProfileId || !roomId || !hasLoadedInitialDataRef.current) return;
 
     setIsSaving(true);
     try {
@@ -290,18 +292,19 @@ export function useCanvasRealtime(brandProfileId: string) {
       const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
 
       const { data, error } = await supabase
-        .schema("brand_profiles")
+        .schema("brand_profiles" as any)
         .from("canvas_sessions" as any)
         .upsert(
           {
             brand_profile_id: brandProfileId,
+            room_id: roomId,
             nodes: serialized.nodes as any,
             edges: serialized.edges as any,
             deleted_node_ids: deletedNodeIds,
             deleted_edge_ids: deletedEdgeIds,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "brand_profile_id" }
+          { onConflict: "brand_profile_id,room_id" }
         )
         .select("updated_at")
         .single();
@@ -335,7 +338,7 @@ export function useCanvasRealtime(brandProfileId: string) {
     } finally {
       setIsSaving(false);
     }
-  }, [brandProfileId, supabase, status]);
+  }, [brandProfileId, roomId, supabase, status]);
 
   const saveTrigger = useStudioStore((state) => state.saveTrigger);
   useEffect(() => {
@@ -344,7 +347,6 @@ export function useCanvasRealtime(brandProfileId: string) {
     }
   }, [saveTrigger, saveCanvasToDatabase]);
 
-  // 6. Ephemeral Cursors
   const lastCursorSendRef = useRef<number>(0);
   const updateCursor = useCallback((x: number, y: number) => {
     if (!user || !broadcastChannelRef.current || status !== "SUBSCRIBED") return;

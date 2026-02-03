@@ -9,8 +9,8 @@ export type ChatMessage = {
   id: string;
   brand_profile_id: string;
   user_id: string;
-  user_name?: string;
-  user_avatar?: string;
+  user_name?: string | null;
+  user_avatar?: string | null;
   room_id: string;
   content: string;
   created_at: string;
@@ -43,7 +43,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
         console.error("Error loading chat messages:", error);
         toast.error("Failed to load chat history");
       } else if (data) {
-        setMessages([...data].reverse());
+        setMessages([...data].reverse() as ChatMessage[]);
       }
       setIsLoading(false);
     };
