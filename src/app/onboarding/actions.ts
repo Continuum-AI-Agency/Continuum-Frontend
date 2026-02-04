@@ -374,7 +374,7 @@ export async function associateIntegrationAccountsAction(
   PLATFORM_KEYS.forEach(key => {
     const connection = state.connections[key];
     if (!connection) return;
-    const accounts = (connection.accounts ?? []).map(account => {
+    const accounts = (connection.accounts ?? []).map((account: OnboardingConnectionAccount) => {
       const explicitlyKnown = allIntegrationAccountIds?.includes(account.id) ?? false;
       const selected = integrationAccountIds.includes(account.id)
         ? true

@@ -67,6 +67,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
   const code = requestUrl.searchParams.get("code");
   const context = requestUrl.searchParams.get("context");
   const provider = requestUrl.searchParams.get("provider");
+  const next = requestUrl.searchParams.get("next");
   const origin = requestUrl.origin;
   const cookieContext = request.cookies.get("continuum_oauth_context")?.value;
   const cookieProvider = request.cookies.get("continuum_oauth_provider")?.value;
@@ -133,7 +134,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
     success: true,
     context: resolved.context,
     provider: resolved.provider,
-    fallbackRedirect: `${origin}/dashboard`,
+    fallbackRedirect: next ? `${origin}${next}` : `${origin}/dashboard`,
   });
   response.cookies.delete("continuum_oauth_context");
   response.cookies.delete("continuum_oauth_provider");

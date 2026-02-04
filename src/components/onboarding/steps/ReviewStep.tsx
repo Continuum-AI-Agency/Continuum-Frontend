@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
 import { approveAndLaunchOnboardingAction } from "@/app/onboarding/actions";
 import { Button } from "@/components/ui/button";
@@ -144,7 +145,7 @@ export function ReviewStep() {
     }
   }, []);
 
-  const triggerReportAgent = async (userGuidance?: string) => {
+  const triggerReportAgent = useCallback(async (userGuidance?: string) => {
     if (!userId) {
       show({ title: "Identity Error", description: "Waiting for user authentication…", variant: "error" });
       return;
@@ -235,9 +236,9 @@ export function ReviewStep() {
     } finally {
       setIsRegenerating(false);
     }
-  };
+  }, [userId, state, brandId, show]);
 
-  const handleLaunch = async () => {
+  const handleLaunch = useCallback(async () => {
     setIsSubmitting(true);
     try {
       await approveAndLaunchOnboardingAction(brandId);
@@ -250,7 +251,7 @@ export function ReviewStep() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [brandId, router, show]);
 
   const selectedAccountsCount = Object.values(state.connections)
     .flatMap(c => c.accounts || [])
@@ -263,174 +264,180 @@ export function ReviewStep() {
     sections.find(s => s.id === "competitive")?.content.length! > 0
   );
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-8 pb-32 animate-in fade-in duration-500">
-      <Card className="bg-muted/30 border-dashed overflow-hidden">
-        <CardContent className="p-6">
-          <div className="flex flex-wrap gap-8 items-center justify-center">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
-                <AvatarImage src={logoUrl || ""} />
-                <AvatarFallback className="bg-primary/10 text-primary font-bold">
-                  {state.brand.name?.slice(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="text-sm font-semibold leading-none mb-1">{state.brand.name}</p>
-                <p className="text-xs text-muted-foreground">{state.brand.industry}</p>
-              </div>
+  const bottomPanel = (
+    <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t p-4 z-50">
+      <div className="max-w-4xl mx-auto flex gap-4 items-center">
+        <Button variant="ghost" onClick={() => updateState({ step: 1 })} disabled={isSubmitting}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+        </Button>
+        
+        <div className="flex-1 relative">
+          <Textarea 
+            placeholder={hasGeneratedReport ? "Refine report with guidance…" : "Optional guidance before generating…"}
+            className="min-h-[44px] max-h-[44px] py-3 resize-none pr-12 text-sm bg-background border-primary/20 focus-visible:ring-primary/30"
+            value={guidance}
+            onChange={(e) => setGuidance(e.target.value)}
+          />
+          {!hasGeneratedReport && !isRegenerating && (
+            <Button 
+              className="absolute right-1 top-1 h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+              onClick={() => triggerReportAgent(guidance)}
+              disabled={!isReadyToGenerate}
+            >
+              Go
+            </Button>
+          )}
+          {hasGeneratedReport && !isRegenerating && (
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              className="absolute right-1 top-1 h-8 w-8"
+              onClick={() => triggerReportAgent(guidance)}
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          )}
+          {isRegenerating && (
+            <div className="absolute right-3 top-2.5">
+              <RefreshCw className="w-4 h-4 animate-spin text-primary" />
             </div>
-            
-            <div className="h-8 w-px bg-border hidden md:block" />
-
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-md bg-primary/10">
-                <Link2 className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-sm">
-                <span className="font-bold tabular-nums">{selectedAccountsCount}</span>
-                <span className="text-muted-foreground ml-1">Accounts</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-md bg-primary/10">
-                <FileText className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-sm">
-                <span className="font-bold tabular-nums">{state.documents.length}</span>
-                <span className="text-muted-foreground ml-1">Documents</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sections.filter(s => ["voice", "audience"].includes(s.id)).map((section) => (
-          <Card key={section.id} className="border-muted-foreground/10 bg-card/50">
-            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between space-y-0">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-sm bg-muted text-muted-foreground">
-                  {section.icon}
-                </div>
-                <CardTitle className="text-sm font-bold uppercase tracking-wider">{section.title}</CardTitle>
-              </div>
-              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold">Grounding Input</Badge>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 relative h-[250px] flex flex-col">
-              <div 
-                ref={getRef(section.id)}
-                className="prose prose-sm dark:prose-invert max-w-none flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2"
-              >
-                <SafeMarkdown 
-                  content={section.content ? formatJsonToMarkdown(section.content) : "No input provided."} 
-                  mode="static" 
-                  className="text-xs leading-relaxed text-black font-medium" 
-                />
-              </div>
-              <ScrollIndicator containerRef={getRef(section.id)} />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {sections.filter(s => ["market", "competitive"].includes(s.id)).map((section) => {
-          const shouldShowSkeleton = section.isStreaming && !section.content;
-          return (
-            <Card key={section.id} className="overflow-hidden border-muted-foreground/10 flex flex-col h-[400px]">
-              <CardHeader className="bg-muted/10 py-3 px-6 flex flex-row items-center justify-between space-y-0 border-b border-muted-foreground/5">
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 rounded-md bg-primary/10 text-primary">
-                    {section.icon}
-                  </div>
-                  <CardTitle className="text-base font-bold">{section.title}</CardTitle>
-                  {section.isStreaming && <Sparkles className="w-4 h-4 text-primary animate-pulse" />}
-                </div>
-              </CardHeader>
-              <CardContent className="p-6 flex-1 relative flex flex-col overflow-hidden">
-                {shouldShowSkeleton ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-4 w-full opacity-50" />
-                    <Skeleton className="h-4 w-[92%] opacity-50" />
-                    <Skeleton className="h-4 w-[85%] opacity-50" />
-                  </div>
-                ) : (
-                  <>
-                    <div 
-                      ref={getRef(section.id)}
-                      className="prose prose-sm dark:prose-invert max-w-none flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2"
-                    >
-                      <SafeMarkdown 
-                        content={section.content ? formatJsonToMarkdown(section.content) : "Waiting for agent analysis…"} 
-                        mode={section.isStreaming ? "streaming" : "static"} 
-                        className="text-sm leading-relaxed text-black font-medium" 
-                      />
-                    </div>
-                    <ScrollIndicator containerRef={getRef(section.id)} />
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t p-4 z-50">
-        <div className="max-w-4xl mx-auto flex gap-4 items-center">
-          <Button variant="ghost" onClick={() => updateState({ step: 1 })} disabled={isSubmitting}>
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back
-          </Button>
-          
-          <div className="flex-1 relative">
-            <Textarea 
-              placeholder={hasGeneratedReport ? "Refine report with guidance…" : "Optional guidance before generating…"}
-              className="min-h-[44px] max-h-[44px] py-3 resize-none pr-12 text-sm bg-background border-primary/20 focus-visible:ring-primary/30"
-              value={guidance}
-              onChange={(e) => setGuidance(e.target.value)}
-            />
-            {!hasGeneratedReport && !isRegenerating && (
-              <Button 
-                className="absolute right-1 top-1 h-8 px-3 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
-                onClick={() => triggerReportAgent(guidance)}
-                disabled={!isReadyToGenerate}
-              >
-                Go
-              </Button>
-            )}
-            {hasGeneratedReport && !isRegenerating && (
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="absolute right-1 top-1 h-8 w-8"
-                onClick={() => triggerReportAgent(guidance)}
-              >
-                <RefreshCw className="w-4 h-4" />
-              </Button>
-            )}
-            {isRegenerating && (
-              <div className="absolute right-3 top-2.5">
-                <RefreshCw className="w-4 h-4 animate-spin text-primary" />
-              </div>
-            )}
-          </div>
-
-          <Button 
-            className={`min-w-[200px] h-11 font-bold shadow-xl transition-all duration-300 ${
-              canLaunch 
-                ? "bg-indigo-600 hover:bg-indigo-700 text-white" 
-                : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
-            }`}
-            onClick={handleLaunch}
-            disabled={isSubmitting || isRegenerating || !canLaunch}
-          >
-            {isSubmitting ? "Launching…" : (
-              <>Approve & Launch <Rocket className="w-4 h-4 ml-2" /></>
-            )}
-          </Button>
+          )}
         </div>
+
+        <Button 
+          className={`min-w-[200px] h-11 font-bold shadow-xl transition-all duration-300 ${
+            canLaunch 
+              ? "bg-indigo-600 hover:bg-indigo-700 text-white" 
+              : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
+          }`}
+          onClick={handleLaunch}
+          disabled={isSubmitting || isRegenerating || !canLaunch}
+        >
+          {isSubmitting ? "Launching…" : (
+            <>Approve & Launch <Rocket className="w-4 h-4 ml-2" /></>
+          )}
+        </Button>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      <div className="max-w-4xl mx-auto space-y-8 pb-32 animate-in fade-in duration-500">
+        <Card className="bg-muted/30 border-dashed overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex flex-wrap gap-8 items-center justify-center">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+                  <AvatarImage src={logoUrl || ""} />
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                    {state.brand.name?.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-sm font-semibold leading-none mb-1">{state.brand.name}</p>
+                  <p className="text-xs text-muted-foreground">{state.brand.industry}</p>
+                </div>
+              </div>
+              
+              <div className="h-8 w-px bg-border hidden md:block" />
+
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <Link2 className="w-4 h-4 text-primary" />
+                </div>
+                <div className="text-sm">
+                  <span className="font-bold tabular-nums">{selectedAccountsCount}</span>
+                  <span className="text-muted-foreground ml-1">Accounts</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <FileText className="w-4 h-4 text-primary" />
+                </div>
+                <div className="text-sm">
+                  <span className="font-bold tabular-nums">{state.documents.length}</span>
+                  <span className="text-muted-foreground ml-1">Documents</span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sections.filter(s => ["voice", "audience"].includes(s.id)).map((section) => (
+            <Card key={section.id} className="border-muted-foreground/10 bg-card/50">
+              <CardHeader className="py-3 px-4 flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-1 rounded-sm bg-muted text-muted-foreground">
+                    {section.icon}
+                  </div>
+                  <CardTitle className="text-sm font-bold uppercase tracking-wider">{section.title}</CardTitle>
+                </div>
+                <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-bold">Grounding Input</Badge>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 relative h-[250px] flex flex-col">
+                <div 
+                  ref={getRef(section.id)}
+                  className="prose prose-sm dark:prose-invert max-w-none flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2"
+                >
+                  <SafeMarkdown 
+                    content={section.content ? formatJsonToMarkdown(section.content) : "No input provided."} 
+                    mode="static" 
+                    className="text-xs leading-relaxed text-black font-medium" 
+                  />
+                </div>
+                <ScrollIndicator containerRef={getRef(section.id)} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sections.filter(s => ["market", "competitive"].includes(s.id)).map((section) => {
+            const shouldShowSkeleton = section.isStreaming && !section.content;
+            return (
+              <Card key={section.id} className="overflow-hidden border-muted-foreground/10 flex flex-col h-[400px]">
+                <CardHeader className="bg-muted/10 py-3 px-6 flex flex-row items-center justify-between space-y-0 border-b border-muted-foreground/5">
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                      {section.icon}
+                    </div>
+                    <CardTitle className="text-base font-bold">{section.title}</CardTitle>
+                    {section.isStreaming && <Sparkles className="w-4 h-4 text-primary animate-pulse" />}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 flex-1 relative flex flex-col overflow-hidden">
+                  {shouldShowSkeleton ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-4 w-full opacity-50" />
+                      <Skeleton className="h-4 w-[92%] opacity-50" />
+                      <Skeleton className="h-4 w-[85%] opacity-50" />
+                    </div>
+                  ) : (
+                    <>
+                      <div 
+                        ref={getRef(section.id)}
+                        className="prose prose-sm dark:prose-invert max-w-none flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 pr-2"
+                      >
+                        <SafeMarkdown 
+                          content={section.content ? formatJsonToMarkdown(section.content) : "Waiting for agent analysis…"} 
+                          mode={section.isStreaming ? "streaming" : "static"} 
+                          className="text-sm leading-relaxed text-black font-medium" 
+                        />
+                      </div>
+                      <ScrollIndicator containerRef={getRef(section.id)} />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+      </div>
+      {typeof document !== "undefined" && createPortal(bottomPanel, document.body)}
+    </>
   );
 }
