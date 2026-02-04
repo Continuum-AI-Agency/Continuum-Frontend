@@ -11,6 +11,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { UserSettingsPanel } from "@/components/settings/UserSettingsPanel";
 import { createEmptyUserIntegrationSummary, fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
@@ -27,11 +28,23 @@ export default async function SettingsPage() {
     );
   }
 
-  const { state: activeState } = await ensureOnboardingState(activeBrandId);
-  const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
-  const brandProfile = await fetchBrandProfileDetails(activeBrandId);
+  const repo = createBrandProfileRepository();
+  const [
+    { state: activeState },
+    integrationSummary,
+    brandProfile,
+    members,
+    invites
+  ] = await Promise.all([
+    ensureOnboardingState(activeBrandId),
+    fetchBrandIntegrationSummary(activeBrandId),
+    fetchBrandProfileDetails(activeBrandId),
+    repo.fetchMembers(activeBrandId),
+    repo.fetchInvites(activeBrandId)
+  ]);
+  
   const currentUserRole =
-    activeState.members.find(
+    members.find(
       member => member.id === userData?.user?.id || member.email === userData?.user?.email
     )?.role ?? null;
 
@@ -58,8 +71,8 @@ export default async function SettingsPage() {
                   data={{
                     brandName: activeState.brand.name,
                     logoPath: activeState.brand.logoPath,
-                    members: activeState.members,
-                    invites: activeState.invites as OnboardingState["invites"],
+                    members,
+                    invites,
                     profile: brandProfile ?? undefined,
                     currentUserRole,
                   }}

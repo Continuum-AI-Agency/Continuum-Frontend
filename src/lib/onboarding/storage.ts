@@ -108,6 +108,17 @@ async function ensureBrandProfileRecord(
     if (insertError && insertError.code !== "23505") {
       throw insertError;
     }
+    
+    await supabase
+      .schema("brand_profiles")
+      .from("permissions")
+      .upsert({
+        brand_profile_id: brandId,
+        user_id: owner.id,
+        email: owner.email,
+        role: "owner",
+      }, { onConflict: "brand_profile_id,user_id" } as any);
+
     return;
   }
 
@@ -126,6 +137,16 @@ async function ensureBrandProfileRecord(
       throw updateError;
     }
   }
+  
+  await supabase
+    .schema("brand_profiles")
+    .from("permissions")
+    .upsert({
+      brand_profile_id: brandId,
+      user_id: owner.id,
+      email: owner.email,
+      role: "owner",
+    }, { onConflict: "brand_profile_id,user_id" } as any);
 }
 
 const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument["source"]>([
@@ -245,7 +266,6 @@ async function syncBrandDocuments(
 
   const { data, error } = await supabase
     .schema("brand_profiles")
-    // the generated Database types don't include brand_documents yet; cast to bypass
     .from("brand_documents")
     .select(
       "id, name, source, status, size, storage_path, external_url, error_message, created_at, updated_at"
@@ -464,7 +484,6 @@ async function persistMetadata(
   ensureActiveSelection(metadata);
   await upsertMetadataRows(supabase, user.id, metadata);
 
-  // Set the single active brand in a separate step to avoid partial unique index conflicts.
   if (metadata.activeBrandId) {
     await deactivateActiveBrand(supabase, user.id, metadata.activeBrandId);
     const activeState = metadata.brands[metadata.activeBrandId];
@@ -634,7 +653,7 @@ export async function appendDocument(
   document: OnboardingDocument
 ): Promise<OnboardingState> {
   return updateBrandState(brandId, state => {
-    const nextDocuments = [...state.documents.filter(doc => doc.id !== document.id), document];
+    const nextDocuments = [...state.documents.filter((doc: OnboardingDocument) => doc.id !== document.id), document];
     return mergeOnboardingState(state, { documents: nextDocuments });
   });
 }
@@ -644,7 +663,7 @@ export async function removeDocument(
   documentId: string
 ): Promise<OnboardingState> {
   return updateBrandState(brandId, state => {
-    const documents = state.documents.filter(doc => doc.id !== documentId);
+    const documents = state.documents.filter((doc: OnboardingDocument) => doc.id !== documentId);
     return mergeOnboardingState(state, { documents });
   });
 }
@@ -653,7 +672,7 @@ export async function resetOnboardingState(brandId: string): Promise<OnboardingS
   const context = await loadOnboardingContext(brandId);
   const resetState = createDefaultOnboardingState(context.owner);
   resetState.brand.name = "";
-  resetState.members = [...context.state.members];
+  resetState.members = [];
   resetState.invites = [];
   context.metadata.brands[context.brandId] = resetState;
   await persistMetadata(context.supabase, context.user, context.metadata);
@@ -716,6 +735,8 @@ export async function createBrandProfile(
   if (name) {
     state.brand.name = name;
   }
+  state.members = [];
+  state.invites = [];
   metadata.brands[brandId] = state;
   metadata.activeBrandId = brandId;
   await persistMetadata(supabase, user, metadata);
@@ -782,15 +803,17 @@ export async function removeMemberFromBrand(
   brandId: string,
   email: string
 ): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+  
+  await supabase
+    .schema("brand_profiles")
+    .from("permissions")
+    .delete()
+    .eq("brand_profile_id", brandId)
+    .eq("email", email);
+
   return updateBrandState(brandId, state => {
-    const target = state.members.find(member => member.email === email);
-    if (!target) {
-      return state;
-    }
-    if (target.role === "owner") {
-      throw new Error("Owners cannot be removed");
-    }
-    const members = state.members.filter(member => member.email !== email);
+    const members = state.members.filter((member: BrandMember) => member.email !== email);
     return mergeOnboardingState(state, { members });
   });
 }
@@ -805,23 +828,35 @@ export async function createMagicLinkInvite(
     throw new Error("Invalid role");
   }
 
-  let generatedToken = "";
-  const state = await updateBrandState(brandId, current => {
-    const now = new Date().toISOString();
-    generatedToken = `${createBrandId()}${createBrandId()}`;
-    const invite: BrandInvite = {
-      id: createBrandId(),
+  const { supabase, user } = await getAuthContext();
+  const token = `${createBrandId()}${createBrandId()}`;
+  const tokenHash = await (async (t: string) => {
+    const data = new TextEncoder().encode(t);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("");
+  })(token);
+
+  await supabase
+    .schema("brand_profiles")
+    .from("invites")
+    .upsert({
+      brand_profile_id: brandId,
       email,
       role,
-      token: generatedToken,
-      createdAt: now,
-      expiresAt: null,
-    };
-    const invites = [...current.invites.filter(item => item.email !== email), invite];
+      token_hash: tokenHash,
+      created_by: user.id,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    }, { onConflict: "brand_profile_id,email" } as any);
+
+  const link = `${siteUrl.replace(/\/$/, "")}/invite?token=${token}&brand=${brandId}`;
+  
+  const state = await updateBrandState(brandId, current => {
+    const invites = current.invites.filter((item: BrandInvite) => item.email !== email);
     return mergeOnboardingState(current, { invites });
   });
 
-  const link = `${siteUrl.replace(/\/$/, "")}/invite?token=${generatedToken}&brand=${brandId}`;
   return { link, state };
 }
 
@@ -829,8 +864,16 @@ export async function revokeInvite(
   brandId: string,
   inviteId: string
 ): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+  
+  await supabase
+    .schema("brand_profiles")
+    .from("invites")
+    .update({ revoked_at: new Date().toISOString() } as any)
+    .eq("id", inviteId);
+
   return updateBrandState(brandId, state => {
-    const invites = state.invites.filter(invite => invite.id !== inviteId);
+    const invites = state.invites.filter((invite: BrandInvite) => invite.id !== inviteId);
     return mergeOnboardingState(state, { invites });
   });
 }

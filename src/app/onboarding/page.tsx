@@ -5,10 +5,10 @@ import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { isOnboardingComplete } from "@/lib/onboarding/state";
 import OnboardingGate from "@/components/onboarding/OnboardingGate";
 import { ActiveBrandProvider } from "@/components/providers/ActiveBrandProvider";
-import type { BrandSummary } from "@/lib/repositories/brandProfile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { BrandSwitcher } from "@/components/navigation/BrandSwitcher";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export const metadata = {
   title: "Onboarding | Continuum AI",
@@ -34,44 +34,13 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const brandIdParam =
     typeof resolvedSearchParams?.brand === "string" ? resolvedSearchParams.brand : undefined;
-  const [{ brandId, state }, { data: perms }] = await Promise.all([
-    ensureOnboardingState(brandIdParam),
-    supabase
-      .schema("brand_profiles")
-      .from("permissions")
-      .select("brand_profile_id")
-      .eq("user_id", user.id),
-  ]);
+  
+  const { brandSummaries } = await getActiveBrandContext();
+  const { brandId, state } = await ensureOnboardingState(brandIdParam);
 
   if (isOnboardingComplete(state)) {
     redirect("/dashboard");
   }
-
-  const permittedBrandIds = new Set<string>(
-    (perms ?? [])
-      .map(record => record.brand_profile_id)
-      .filter((id): id is string => Boolean(id))
-  );
-  permittedBrandIds.add(brandId);
-
-  const ids = Array.from(permittedBrandIds);
-
-  let brandNameMap = new Map<string, string>();
-  if (ids.length > 0) {
-    const { data: brands } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profiles")
-      .select("id, brand_name")
-      .in("id", ids);
-
-    brandNameMap = new Map((brands ?? []).map(row => [row.id, row.brand_name ?? "Untitled brand"]));
-  }
-
-  const brandSummaries: BrandSummary[] = ids.map(id => ({
-    id,
-    name: brandNameMap.get(id) ?? (id === brandId ? state.brand.name || "Untitled brand" : "Untitled brand"),
-    completed: id === brandId ? isOnboardingComplete(state) : true,
-  }));
 
   return (
     <OnboardingGate>

@@ -19,12 +19,9 @@ export const BRAND_VOICE_TAGS = [
 
 export const BRAND_ROLES = ["owner", "admin", "operator", "viewer"] as const;
 
-// Note: keep schema definition available for future validation usage if needed
-// const platformKeySchema = z.enum(PLATFORM_KEYS);
 const brandVoiceTagSchema = z.enum(BRAND_VOICE_TAGS);
-const brandRoleSchema = z.enum(BRAND_ROLES);
+export const brandRoleSchema = z.enum(BRAND_ROLES);
 
-// Accept Supabase/Postgres timestamps that include offsets (e.g., "+00:00") and normalize to ISO with trailing Z.
 const isoDateString = z.string().transform((value, ctx) => {
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
@@ -134,7 +131,6 @@ const onboardingStateSchema = z.object({
     .default(null),
 });
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const onboardingPatchSchema = z.object({
   step: z.number().int().min(0).max(2).optional(),
   brand: brandSchema.partial().optional(),
@@ -157,7 +153,6 @@ const onboardingMetadataSchema = z.object({
   brands: z.record(z.string(), onboardingStateSchema).default({}),
 });
 
-export type BrandVoiceTag = z.infer<typeof brandVoiceTagSchema>;
 export type BrandRole = z.infer<typeof brandRoleSchema>;
 export type BrandMember = z.infer<typeof brandMemberSchema>;
 export type BrandInvite = z.infer<typeof brandInviteSchema>;
@@ -168,6 +163,7 @@ export type OnboardingDocument = z.infer<typeof onboardingDocumentSchema>;
 export type OnboardingState = z.infer<typeof onboardingStateSchema>;
 export type OnboardingPatch = z.infer<typeof onboardingPatchSchema>;
 export type OnboardingMetadata = z.infer<typeof onboardingMetadataSchema>;
+export type BrandVoiceTag = z.infer<typeof brandVoiceTagSchema>;
 
 export function normalizeOnboardingState(raw: unknown): OnboardingState {
   return onboardingStateSchema.parse(raw);
