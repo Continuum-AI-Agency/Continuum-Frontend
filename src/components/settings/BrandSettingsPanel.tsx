@@ -17,7 +17,7 @@ import {
   TextArea,
   TextField,
 } from "@radix-ui/themes";
-import type { BrandInvite, BrandMember, BrandRole } from "@/lib/onboarding/state";
+import type { BrandInvite, BrandRole } from "@/lib/onboarding/state";
 import {
   createMagicLinkAction,
   deleteBrandProfileAction,
@@ -28,6 +28,12 @@ import {
 import { useToast } from "@/components/ui/ToastProvider";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { SettingsLogoUploader } from "./SettingsLogoUploader";
+
+type BrandMember = {
+  id: string;
+  email: string;
+  role: string;
+};
 
 type BrandSettingsPanelProps = {
   data: {
@@ -41,7 +47,7 @@ type BrandSettingsPanelProps = {
       updatedAt: string;
       createdBy: string;
     };
-    currentUserRole?: BrandRole | null;
+    currentUserRole?: string | null;
   };
 };
 

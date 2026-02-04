@@ -13,6 +13,7 @@ export type BrandSummary = {
   completed: boolean;
   logoPath?: string | null;
   logoUrl?: string | null;
+  isPending?: boolean;
 };
 
 type DashboardLayoutShellProps = {

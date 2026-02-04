@@ -124,7 +124,12 @@ export function BrandSwitcher() {
                       <brand.logo className="size-4 shrink-0" />
                     )}
                   </div>
-                  {brand.name}
+                  <span className="flex-1 truncate">{brand.name}</span>
+                  {brandSummaries.find(b => b.id === brand.id)?.isPending && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                      Pending
+                    </span>
+                  )}
                   <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
                 </DropdownMenuItem>
               ))}

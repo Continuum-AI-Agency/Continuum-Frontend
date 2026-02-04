@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { httpServer } from "@/lib/api/http.server";
 import { invokeDeleteBrandProfile, fetchBrandProfileDetails, type BrandProfileDetails } from "@/lib/brands/profile";
+import { fetchBrandMembers, fetchBrandInvites } from "@/lib/brands/members";
 
 export type BrandSummary = {
   id: string;
@@ -19,6 +20,7 @@ export type BrandSummary = {
   completed: boolean;
   logoPath?: string | null;
   logoUrl?: string | null;
+  isPending?: boolean;
 };
 
 export type BrandSettingsData = {
@@ -39,9 +41,10 @@ export interface BrandProfileRepository {
   revokeInvite(brandId: string, inviteId: string): Promise<void>;
   deleteBrand(brandId: string): Promise<string | null>;
   fetchProfile(brandId: string): Promise<BrandProfileDetails | null>;
+  fetchMembers(brandId: string): Promise<BrandMember[]>;
+  fetchInvites(brandId: string): Promise<BrandInvite[]>;
 }
 
-// Default implementation leveraging existing Supabase-backed onboarding storage.
 export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
   return {
     async switchActiveBrand(brandId: string) {
@@ -74,6 +77,12 @@ export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
     },
     async fetchProfile(brandId: string): Promise<BrandProfileDetails | null> {
       return fetchBrandProfileDetails(brandId);
+    },
+    async fetchMembers(brandId: string): Promise<BrandMember[]> {
+      return fetchBrandMembers(brandId);
+    },
+    async fetchInvites(brandId: string): Promise<BrandInvite[]> {
+      return fetchBrandInvites(brandId);
     },
   };
 }
@@ -117,11 +126,17 @@ export function createGatewayBrandProfileRepository(): BrandProfileRepository {
       });
       return await httpServer.request({ path: `/brands/${brandId}`, method: "GET", schema });
     },
+    async fetchMembers(brandId: string): Promise<BrandMember[]> {
+      const schema = z.array(z.object({ id: z.string(), email: z.string(), role: z.string() }));
+      return (await httpServer.request({ path: `/brands/${brandId}/members`, method: "GET", schema })) as BrandMember[];
+    },
+    async fetchInvites(brandId: string): Promise<BrandInvite[]> {
+      const schema = z.array(z.object({ id: z.string(), email: z.string(), role: z.string(), createdAt: z.string(), expiresAt: z.string().nullable() }));
+      return (await httpServer.request({ path: `/brands/${brandId}/invites`, method: "GET", schema })) as BrandInvite[];
+    },
   };
 }
 
 export function createBrandProfileRepository(): BrandProfileRepository {
-  // Today we use Supabase metadata as source of truth. Swap to gateway by switching the return below.
   return createSupabaseBrandProfileRepository();
-  // return createGatewayBrandProfileRepository();
 }

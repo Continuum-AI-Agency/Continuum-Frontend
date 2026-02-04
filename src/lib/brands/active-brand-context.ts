@@ -28,27 +28,43 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     redirect("/login");
   }
 
-  const { data: perms, error: permsError } = await supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .select("brand_profile_id, role")
-    .eq("user_id", user.id);
+  const [{ data: perms, error: permsError }, { data: invites, error: invitesError }] = await Promise.all([
+    supabase
+      .schema("brand_profiles")
+      .from("permissions")
+      .select("brand_profile_id, role")
+      .eq("user_id", user.id),
+    supabase
+      .schema("brand_profiles")
+      .from("invites")
+      .select("brand_profile_id, role")
+      .eq("email", user.email ?? "")
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString()),
+  ]);
 
   if (permsError) {
     console.error("[activeBrand] permissions query failed", permsError);
   }
+  if (invitesError) {
+    console.error("[activeBrand] invites query failed", invitesError);
+  }
 
-  const brandIds = Array.from(new Set((perms ?? []).map((p) => p.brand_profile_id))).filter(
+  const permittedIds = (perms ?? []).map((p) => p.brand_profile_id);
+  const invitedIds = (invites ?? []).map((i) => i.brand_profile_id);
+  
+  const allBrandIds = Array.from(new Set([...permittedIds, ...invitedIds])).filter(
     (id): id is string => Boolean(id)
   );
 
   let brandMap = new Map<string, { name: string; logoPath: string | null; tier: number }>();
-  if (brandIds.length > 0) {
+  if (allBrandIds.length > 0) {
     const { data: brands, error: brandsError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
       .select("id, brand_name, logo_path, tier")
-      .in("id", brandIds);
+      .in("id", allBrandIds);
     if (brandsError) {
       console.error("[activeBrand] brand_profiles lookup failed", brandsError);
     } else {
@@ -66,7 +82,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   }
 
   const brandSummaries: BrandSummary[] = await Promise.all(
-    brandIds.map(async (id) => {
+    allBrandIds.map(async (id) => {
       const brandData = brandMap.get(id);
       const name = brandData?.name ?? "Untitled brand";
       const logoPath = brandData?.logoPath ?? null;
@@ -86,18 +102,26 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
         }
       }
 
+      const isPending = !permittedIds.includes(id);
+
       return {
         id,
         name,
         completed: true,
         logoPath,
         logoUrl,
+        isPending,
       };
     })
   );
 
-  if (brandIds.length === 0) {
-    return { activeBrandId: null, brandSummaries, permissions: perms ?? [], activeBrandTier: 0 };
+  if (permittedIds.length === 0) {
+    return { 
+      activeBrandId: null, 
+      brandSummaries, 
+      permissions: perms ?? [], 
+      activeBrandTier: 0 
+    };
   }
 
   const { data: activeBrandData, error: activeBrandError } = await supabase
@@ -110,7 +134,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
   const { activeBrandId, shouldPersist } = resolveActiveBrandId({
     candidateBrandId: typeof activeBrandData === "string" ? activeBrandData : null,
-    permittedBrandIds: brandIds,
+    permittedBrandIds: permittedIds,
   });
 
   if (activeBrandId && shouldPersist) {
