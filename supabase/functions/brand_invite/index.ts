@@ -20,18 +20,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const PLATFORM_KEYS = [
-  "youtube",
-  "instagram",
-  "facebook",
-  "tiktok",
-  "linkedin",
-  "googleAds",
-  "amazonAds",
-  "dv360",
-  "threads",
-] as const;
-
 const InputSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("create"),
@@ -110,59 +98,6 @@ async function hashToken(token: string) {
     .join("");
 }
 
-function buildDefaultConnections() {
-  return PLATFORM_KEYS.reduce((acc, key) => {
-    acc[key] = {
-      connected: false,
-      accountId: null,
-      accounts: [],
-      integrationIds: [],
-      lastSyncedAt: null,
-    };
-    return acc;
-  }, {} as Record<(typeof PLATFORM_KEYS)[number], {
-    connected: boolean;
-    accountId: string | null;
-    accounts: unknown[];
-    integrationIds: string[];
-    lastSyncedAt: string | null;
-  }>);
-}
-
-function buildDefaultOnboardingState(options: {
-  userId: string;
-  email: string;
-  role: string;
-  brandName?: string | null;
-}) {
-  const nameSeed = options.email.split("@")[0] ?? "Brand";
-  return {
-    step: 0,
-    brand: {
-      name: options.brandName ?? `${nameSeed}'s Brand`,
-      industry: "",
-      brandVoice: null,
-      brandVoiceTags: [],
-      targetAudience: null,
-      timezone: "UTC",
-      website: null,
-      logoPath: null,
-    },
-    documents: [],
-    connections: buildDefaultConnections(),
-    members: [
-      {
-        id: options.userId,
-        email: options.email,
-        role: options.role,
-      },
-    ],
-    invites: [],
-    completedAt: null,
-    preview: null,
-  };
-}
-
 type GeneratedLinkData = {
   properties?: {
     action_link?: string;
@@ -237,64 +172,13 @@ async function sendResendEmail(options: {
   return { ok: true, id: data.id ?? null };
 }
 
-async function ensureActiveBrandForUser(options: {
+async function updateActiveBrandMetadata(options: {
   service: ReturnType<typeof createServiceClient>;
   userId: string;
-  email: string;
-  role: string;
   brandId: string;
-  brandName: string | null;
   existingMetadata: Record<string, unknown>;
 }) {
-  const { service, userId, brandId, role, email, brandName, existingMetadata } = options;
-  const now = new Date().toISOString();
-
-  const { data: existingState, error: stateError } = await service
-    .schema("brand_profiles")
-    .from("user_onboarding_states")
-    .select("state")
-    .eq("user_id", userId)
-    .eq("brand_id", brandId)
-    .maybeSingle();
-
-  if (stateError) {
-    throw stateError;
-  }
-
-  const state = existingState?.state ?? buildDefaultOnboardingState({
-    userId,
-    email,
-    role,
-    brandName,
-  });
-
-  const { error: deactivateError } = await service
-    .schema("brand_profiles")
-    .from("user_onboarding_states")
-    .update({ is_active: false, updated_at: now })
-    .eq("user_id", userId)
-    .eq("is_active", true)
-    .neq("brand_id", brandId);
-  if (deactivateError && deactivateError.code !== "PGRST116") {
-    throw deactivateError;
-  }
-
-  const { error: upsertError } = await service
-    .schema("brand_profiles")
-    .from("user_onboarding_states")
-    .upsert(
-      {
-        user_id: userId,
-        brand_id: brandId,
-        state,
-        is_active: true,
-        updated_at: now,
-      },
-      { onConflict: "user_id,brand_id" }
-    );
-  if (upsertError) {
-    throw upsertError;
-  }
+  const { service, userId, brandId, existingMetadata } = options;
 
   const nextMetadata = {
     ...existingMetadata,
@@ -416,6 +300,7 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
         {
           user_id: linkUserId,
           brand_profile_id: input.brandId,
+          email,
           role: input.role,
         },
         { onConflict: "user_id,brand_profile_id" }
@@ -508,7 +393,6 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
     return json({ error: "Invite email mismatch" }, 403);
   }
 
-  // Upsert permissions
   const { error: permError } = await service
     .schema("brand_profiles")
     .from("permissions")
@@ -516,6 +400,7 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
       {
         user_id: user.id,
         brand_profile_id: invite.brand_profile_id,
+        email: user.email ?? invite.email,
         role: invite.role,
       },
       { onConflict: "user_id,brand_profile_id" }
@@ -525,33 +410,17 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
     return json({ error: permError.message }, 500);
   }
 
-  const { data: brandRow, error: brandError } = await service
-    .schema("brand_profiles")
-    .from("brand_profiles")
-    .select("brand_name")
-    .eq("id", invite.brand_profile_id)
-    .maybeSingle();
-  if (brandError) {
-    console.error("Brand lookup failed", brandError);
-    return json({ error: "Unable to resolve brand details" }, 500);
-  }
-
   try {
-    await ensureActiveBrandForUser({
+    await updateActiveBrandMetadata({
       service,
       userId: user.id,
-      email: user.email ?? invite.email ?? "",
-      role: invite.role,
       brandId: invite.brand_profile_id,
-      brandName: brandRow?.brand_name ?? null,
       existingMetadata: (user.user_metadata ?? {}) as Record<string, unknown>,
     });
   } catch (error) {
-    console.error("Active brand update failed", error);
-    return json({ error: "Failed to set active brand" }, 500);
+    console.error("Active brand metadata update failed", error);
   }
 
-  // Mark invite accepted
   const { error: acceptError } = await service
     .schema("brand_profiles")
     .from("invites")
