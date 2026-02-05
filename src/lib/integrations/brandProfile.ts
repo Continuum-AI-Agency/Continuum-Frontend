@@ -59,6 +59,16 @@ export async function fetchBrandIntegrationSummary(
         )
       : await createSupabaseServerClient();
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      console.warn("[fetchBrandIntegrationSummary] No authenticated user found and Service Role not available.");
+      return createEmptySummary();
+    }
+  }
+
   const { data, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profile_integration_accounts")

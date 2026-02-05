@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { getServerUser } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
+  const user = await getServerUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const brandProfileId = searchParams.get("brand");
 

@@ -673,6 +673,15 @@ export async function removeDocument(
   brandId: string,
   documentId: string
 ): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+
+  await supabase
+    .schema("brand_profiles")
+    .from("brand_documents")
+    .delete()
+    .eq("id", documentId)
+    .eq("brand_id", brandId);
+
   return updateBrandState(brandId, state => {
     const documents = state.documents.filter((doc: OnboardingDocument) => doc.id !== documentId);
     return mergeOnboardingState(state, { documents });

@@ -118,8 +118,8 @@ async function createEmbeddings(inputs: string[]): Promise<number[][]> {
   return payload.embeddings.map((item) => item.values);
 }
 
-async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: string | null) {
-  const supabase = createSupabase(authHeader);
+async function processDocument(input: z.infer<typeof InputSchema>) {
+  const supabase = createSupabase();
 
   // Step 1: Acquire bytes
   const bytes = await fetchBytes({
@@ -258,8 +258,10 @@ Deno.serve(async (req) => {
     req.headers.get("sb-function-request-authorization");
 
   Promise.resolve()
-    .then(() => processDocument(payload, authHeader))
+    .then(() => processDocument(payload))
     .catch((err) => console.error("embed_document job failed", err));
+
+
 
   return jsonResponse({ ok: true, jobId, documentId: payload.documentId }, { status: 202 });
 });

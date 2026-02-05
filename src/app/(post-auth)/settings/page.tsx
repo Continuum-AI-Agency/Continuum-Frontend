@@ -17,6 +17,7 @@ import {
   SettingsTabsTrigger, 
   SettingsTabsContent 
 } from "@/components/settings/SettingsTabs";
+import { BrandDocumentsSection } from "@/components/settings/BrandDocumentsSection";
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
@@ -67,6 +68,7 @@ export default async function SettingsPage() {
         <SettingsTabs>
           <SettingsTabsList>
             <SettingsTabsTrigger value="brand">Brand</SettingsTabsTrigger>
+            <SettingsTabsTrigger value="knowledge">Knowledge</SettingsTabsTrigger>
             <SettingsTabsTrigger value="you">You</SettingsTabsTrigger>
           </SettingsTabsList>
           <SettingsTabsContent value="brand" className="mt-3">
@@ -90,6 +92,14 @@ export default async function SettingsPage() {
                 <RunStrategicAnalysisButton brandProfileId={activeBrandId} />
               </GlassPanel>
             </Grid>
+          </SettingsTabsContent>
+          <SettingsTabsContent value="knowledge" className="mt-3">
+            <GlassPanel className="p-6">
+              <BrandDocumentsSection 
+                brandId={activeBrandId} 
+                documents={activeState.documents} 
+              />
+            </GlassPanel>
           </SettingsTabsContent>
           <SettingsTabsContent value="you" className="mt-3">
             <GlassPanel className="p-6">
