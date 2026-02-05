@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export type FetchInput = {
   source:
@@ -14,7 +14,7 @@ export type FetchInput = {
   externalUrl?: string;
 };
 
-function createSupabase() {
+function createDefaultSupabase() {
   const url = Deno.env.get("SUPABASE_URL");
   const key =
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY");
@@ -22,18 +22,20 @@ function createSupabase() {
   return createClient(url, key);
 }
 
-async function fetchFromStorage(path?: string): Promise<Uint8Array> {
-  if (!path) throw new Error("storagePath required");
-  const supabase = createSupabase();
+async function fetchFromStorage(path: string, client?: SupabaseClient): Promise<Uint8Array> {
+  const supabase = client ?? createDefaultSupabase();
   const bucket = "brand-docs";
-  const { data, error } = await supabase.storage.from(bucket).download(path);
-  if (error) throw error;
+  const cleanPath = path.replace(/^\/+/, "");
+  const { data, error } = await supabase.storage.from(bucket).download(cleanPath);
+  if (error) {
+    console.error(`Storage download failed for path "${cleanPath}" in bucket "${bucket}":`, error);
+    throw error;
+  }
   const buf = new Uint8Array(await data.arrayBuffer());
   return buf;
 }
 
-async function fetchFromGoogleDrive(url?: string): Promise<Uint8Array> {
-  if (!url) throw new Error("externalUrl required");
+async function fetchFromGoogleDrive(url: string): Promise<Uint8Array> {
   // Expect alt=media for blob files, or export links for Docs/Sheets
   // Ref: https://developers.google.com/workspace/drive/api/guides/manage-downloads
   const res = await fetch(url);
@@ -42,19 +44,19 @@ async function fetchFromGoogleDrive(url?: string): Promise<Uint8Array> {
   return buf;
 }
 
-export async function fetchBytes(input: FetchInput): Promise<Uint8Array> {
+export async function fetchBytes(input: FetchInput, client?: SupabaseClient): Promise<Uint8Array> {
   if (input.source === "upload") {
-    return fetchFromStorage(input.storagePath);
+    if (!input.storagePath) throw new Error("storagePath required for upload source");
+    return fetchFromStorage(input.storagePath, client);
   }
   if (input.source === "google-drive") {
-    // For parity, we can optionally persist to Storage first in the pipeline layer
+    if (!input.externalUrl) throw new Error("externalUrl required for google-drive source");
     return fetchFromGoogleDrive(input.externalUrl);
   }
   // Stubs for future providers
   if (input.source === "website") {
+    if (!input.externalUrl) throw new Error("externalUrl required for website source");
     return fetchFromGoogleDrive(input.externalUrl); // plain fetch; same signature
   }
   throw new Error(`Source adapter not implemented: ${input.source}`);
 }
-
-

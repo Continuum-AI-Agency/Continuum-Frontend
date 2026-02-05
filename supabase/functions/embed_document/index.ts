@@ -118,15 +118,15 @@ async function createEmbeddings(inputs: string[]): Promise<number[][]> {
   return payload.embeddings.map((item) => item.values);
 }
 
-async function processDocument(input: z.infer<typeof InputSchema>) {
-  const supabase = createSupabase();
+async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: string | null) {
+  const supabase = createSupabase(authHeader);
 
   // Step 1: Acquire bytes
   const bytes = await fetchBytes({
     source: input.source,
     storagePath: input.storagePath,
     externalUrl: input.externalUrl,
-  });
+  }, supabase);
 
   // Step 2: Extract text
   const { text, mimeType, fileName } = await extractText(bytes, {
@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
     req.headers.get("sb-function-request-authorization");
 
   Promise.resolve()
-    .then(() => processDocument(payload))
+    .then(() => processDocument(payload, authHeader))
     .catch((err) => console.error("embed_document job failed", err));
 
 
