@@ -1,5 +1,7 @@
 import * as React from "react";
 import { useCalendarStore } from "@/lib/organic/store";
+import type { StreamEvent } from "@/components/organic/primitives/types";
+import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation";
 import type { 
   OrganicCalendarDay, 
   OrganicCalendarDraft, 
@@ -53,6 +55,7 @@ export function useDraftGeneration({
     addDraft,
     updateDraft: updateDraftById,
     setGhosts,
+    addEvent,
   } = useCalendarStore();
 
   const seededDraftCount = React.useMemo(
@@ -280,6 +283,13 @@ export function useDraftGeneration({
       await streamCalendarGeneration(
         payload,
         (event) => {
+          addEvent({
+            id: crypto.randomUUID(),
+            type: event.type,
+            timestamp: new Date().toISOString(),
+            data: event,
+          });
+
           if (event.type === "progress") {
             const message = event.stage 
               ? `[${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
@@ -378,6 +388,12 @@ export function useDraftGeneration({
             platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
           },
           (event) => {
+            addEvent({
+              id: crypto.randomUUID(),
+              type: event.type,
+              timestamp: new Date().toISOString(),
+              data: event,
+            });
             if (event.type === "placement") {
               const next = mapPlacementToDraft(event.placement, draft);
               addDraft(dayId, next);
