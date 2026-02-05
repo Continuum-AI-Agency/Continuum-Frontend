@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useTransition, useState } from "react";
+import { useMemo, useRef, useTransition, useState, useEffect } from "react";
 import { Badge, Box, Button, Card, Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, Link2Icon } from "@radix-ui/react-icons";
 import {
@@ -41,6 +41,16 @@ export function UserSettingsPanel({ user, integrations }: Props) {
   const supabase = createSupabaseBrowserClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { user: supabaseUser, avatarUrl, initials, refresh } = useCurrentUserAvatar();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const formatDate = (dateString?: string | null) => {
+    if (!mounted || !dateString) return "—";
+    return new Date(dateString).toLocaleString();
+  };
 
   const personalIntegrations = useMemo(() => integrations, [integrations]);
 
@@ -261,7 +271,7 @@ export function UserSettingsPanel({ user, integrations }: Props) {
         <Grid columns={{ initial: "1", sm: "2" }} gap="3" className="mt-4">
           <Detail label="Email" value={user.email} />
           <Detail label="Name" value={user.name ?? initials ?? "—"} />
-          <Detail label="Last sign in" value={user.lastSignIn ? new Date(user.lastSignIn).toLocaleString() : "—"} />
+          <Detail label="Last sign in" value={formatDate(user.lastSignIn)} />
         </Grid>
       </Box>
 

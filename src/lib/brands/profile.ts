@@ -32,6 +32,7 @@ export type BrandProfileDetails = {
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+  completedAt: string | null;
 };
 
 export async function fetchBrandProfileDetails(brandId: string): Promise<BrandProfileDetails | null> {
@@ -39,7 +40,7 @@ export async function fetchBrandProfileDetails(brandId: string): Promise<BrandPr
   const { data, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
-    .select("id, brand_name, created_at, updated_at, created_by")
+    .select("id, brand_name, created_at, updated_at, created_by, completed_at")
     .eq("id", brandId)
     .maybeSingle();
 
@@ -57,6 +58,7 @@ export async function fetchBrandProfileDetails(brandId: string): Promise<BrandPr
     createdAt: data.created_at,
     updatedAt: data.updated_at,
     createdBy: data.created_by,
+    completedAt: data.completed_at,
   };
 }
 

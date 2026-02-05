@@ -7,6 +7,8 @@ import { ActiveBrandProvider } from "./providers/ActiveBrandProvider";
 import { StrategicAnalysisRealtimeListener } from "./strategic-analyses/StrategicAnalysisRealtimeListener";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
+import { User } from "@supabase/supabase-js";
+
 export type BrandSummary = {
   id: string;
   name: string;
@@ -20,15 +22,17 @@ type DashboardLayoutShellProps = {
   children: React.ReactNode;
   activeBrandId: string;
   brandSummaries: BrandSummary[];
+  user: User | null;
 };
 
 export default function DashboardLayoutShell({
   children,
   activeBrandId,
   brandSummaries,
+  user,
 }: DashboardLayoutShellProps) {
   return (
-    <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries}>
+    <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries} user={user}>
       <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
       <div className="relative">
         <div className="particle-layer top" aria-hidden="true" />

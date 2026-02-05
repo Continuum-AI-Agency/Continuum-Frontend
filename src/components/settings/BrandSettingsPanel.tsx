@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import React, { useMemo, useState, useTransition } from "react";
+import React, { useEffect, useMemo, useState, useTransition } from "react";
 import {
   Badge,
   Box,
@@ -70,15 +70,27 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
     [data.members]
   );
 
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const formatDate = (dateString: string) => {
+    if (!mounted) return "—";
+    return new Date(dateString).toLocaleString();
+  };
+
   const formattedProfileDates = useMemo(() => {
-    if (!data.profile) return null;
+    if (!data.profile || !mounted) return null;
     return {
-      createdAt: new Date(data.profile.createdAt).toLocaleString(),
-      updatedAt: new Date(data.profile.updatedAt).toLocaleString(),
+      createdAt: formatDate(data.profile.createdAt),
+      updatedAt: formatDate(data.profile.updatedAt),
     };
-  }, [data.profile]);
+  }, [data.profile, mounted]);
 
   const canDelete = data.currentUserRole === "owner" || data.currentUserRole === "admin";
+  const canEdit = data.currentUserRole === "owner" || data.currentUserRole === "admin";
 
   function handleRenameBrand(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -224,22 +236,28 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
               brandId={activeBrandId} 
               brandName={brandName} 
               initialLogoPath={data.logoPath} 
+              disabled={!canEdit}
             />
             <Flex direction="column" gap="3" className="flex-1">
               <Flex align="center" gap="3" wrap="wrap">
-                <TextField.Root
-                  value={brandName}
-                  onChange={event => setBrandName(event.target.value)}
-                  placeholder="Brand name"
-                  className="min-w-[260px]"
-                />
-                <Button type="submit" disabled={isPending}>
-                  Save name
-                </Button>
+                <div className="space-y-1">
+                  <Text size="1" color="gray" weight="medium">BRAND ID: {activeBrandId}</Text>
+                  <Flex align="center" gap="3">
+                    <TextField.Root
+                      value={brandName}
+                      onChange={event => setBrandName(event.target.value)}
+                      placeholder="Brand name"
+                      className="min-w-[260px]"
+                      disabled={!canEdit}
+                    />
+                    <Button type="submit" disabled={isPending || !canEdit}>
+                      Save name
+                    </Button>
+                  </Flex>
+                </div>
               </Flex>
               {data.profile && (
                 <Grid columns={{ initial: "1", sm: "2" }} gap="3">
-                  <Detail label="Brand ID" value={data.profile.id} monospace />
                   <Detail label="Created" value={formattedProfileDates?.createdAt ?? "—"} />
                   <Detail label="Last updated" value={formattedProfileDates?.updatedAt ?? "—"} />
                 </Grid>
@@ -289,98 +307,100 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
               </Flex>
             </Box>
           )}
-          {!canDelete && (
+          {!canEdit && (
             <Callout.Root color="amber">
               <Callout.Text>
-                Only brand owners or admins can delete this brand profile. Ask an owner to perform this action.
+                Only brand owners or admins can edit or delete this brand profile. Ask an owner to perform these actions.
               </Callout.Text>
             </Callout.Root>
           )}
         </CardSection>
       </form>
 
-      <form onSubmit={handleCreateMagicLink}>
-        <CardSection
-          title="Team invitations"
-          description="Generate shareable magic links to invite teammates to this brand profile."
-        >
-          <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3" align="end">
-            <Flex direction="column" gap="1">
-              <Text size="1" color="gray">
-                Email
-              </Text>
-              <TextField.Root
-                placeholder="teammate@example.com"
-                value={inviteEmail}
-                onChange={event => setInviteEmail(event.target.value)}
-              />
-            </Flex>
-            <Flex direction="column" gap="1">
-              <Text size="1" color="gray">
-                Role
-              </Text>
-              <Select.Root value={inviteRole} onValueChange={value => setInviteRole(value as BrandRole)}>
-                <Select.Trigger placeholder="Role" />
-                <Select.Content>
-                  {INVITE_ROLES.map(role => (
-                    <Select.Item key={role} value={role}>
-                      {role.charAt(0).toUpperCase() + role.slice(1)}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
-            </Flex>
-            <Button type="submit" disabled={isPending}>
-              Generate magic link
-            </Button>
-          </Grid>
-          {generatedLink && (
-            <Flex direction="column" gap="2">
-              <Callout.Root color="green">
-                <Callout.Text>Invite link generated. Share it directly with your teammate.</Callout.Text>
-              </Callout.Root>
-              <TextArea readOnly value={generatedLink} className="font-mono text-sm" />
-            </Flex>
-          )}
-          <Box>
-            <Heading size="3">Pending invites</Heading>
-            {data.invites.length === 0 ? (
-              <Text color="gray">No pending invitations.</Text>
-            ) : (
-              <Table.Root>
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {data.invites.map(invite => (
-                    <Table.Row key={invite.id}>
-                      <Table.Cell>{invite.email}</Table.Cell>
-                      <Table.Cell>{invite.role}</Table.Cell>
-                      <Table.Cell>{new Date(invite.createdAt).toLocaleString()}</Table.Cell>
-                      <Table.Cell className="text-right">
-                        <Button
-                          size="1"
-                          variant="ghost"
-                          color="red"
-                          onClick={() => handleRevokeInvite(invite.id)}
-                          disabled={isPending}
-                        >
-                          Revoke
-                        </Button>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
+      {canEdit && (
+        <form onSubmit={handleCreateMagicLink}>
+          <CardSection
+            title="Team invitations"
+            description="Generate shareable magic links to invite teammates to this brand profile."
+          >
+            <Grid columns={{ initial: "1", sm: "2", md: "3" }} gap="3" align="end">
+              <Flex direction="column" gap="1">
+                <Text size="1" color="gray">
+                  Email
+                </Text>
+                <TextField.Root
+                  placeholder="teammate@example.com"
+                  value={inviteEmail}
+                  onChange={event => setInviteEmail(event.target.value)}
+                />
+              </Flex>
+              <Flex direction="column" gap="1">
+                <Text size="1" color="gray">
+                  Role
+                </Text>
+                <Select.Root value={inviteRole} onValueChange={value => setInviteRole(value as BrandRole)}>
+                  <Select.Trigger placeholder="Role" />
+                  <Select.Content>
+                    {INVITE_ROLES.map(role => (
+                      <Select.Item key={role} value={role}>
+                        {role.charAt(0).toUpperCase() + role.slice(1)}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              </Flex>
+              <Button type="submit" disabled={isPending}>
+                Generate magic link
+              </Button>
+            </Grid>
+            {generatedLink && (
+              <Flex direction="column" gap="2">
+                <Callout.Root color="green">
+                  <Callout.Text>Invite link generated. Share it directly with your teammate.</Callout.Text>
+                </Callout.Root>
+                <TextArea readOnly value={generatedLink} className="font-mono text-sm" />
+              </Flex>
             )}
-          </Box>
-        </CardSection>
-      </form>
+            <Box>
+              <Heading size="3">Pending invites</Heading>
+              {data.invites.length === 0 ? (
+                <Text color="gray">No pending invitations.</Text>
+              ) : (
+                <Table.Root>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell />
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {data.invites.map(invite => (
+                        <Table.Row key={invite.id}>
+                          <Table.Cell>{invite.email}</Table.Cell>
+                          <Table.Cell>{invite.role}</Table.Cell>
+                          <Table.Cell>{formatDate(invite.createdAt)}</Table.Cell>
+                          <Table.Cell className="text-right">
+                          <Button
+                            size="1"
+                            variant="ghost"
+                            color="red"
+                            onClick={() => handleRevokeInvite(invite.id)}
+                            disabled={isPending}
+                          >
+                            Revoke
+                          </Button>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Root>
+              )}
+            </Box>
+          </CardSection>
+        </form>
+      )}
 
       <CardSection
         title="Team members"
@@ -402,15 +422,17 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
                   <Badge>{member.role}</Badge>
                 </Table.Cell>
                 <Table.Cell className="text-right">
-                  <Button
-                    size="1"
-                    variant="ghost"
-                    color="red"
-                    disabled={member.role === "owner" || isPending}
-                    onClick={() => handleRemoveMember(member.email)}
-                  >
-                    Remove
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      size="1"
+                      variant="ghost"
+                      color="red"
+                      disabled={member.role === "owner" || isPending}
+                      onClick={() => handleRemoveMember(member.email)}
+                    >
+                      Remove
+                    </Button>
+                  )}
                 </Table.Cell>
               </Table.Row>
             ))}

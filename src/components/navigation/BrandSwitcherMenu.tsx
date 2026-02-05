@@ -14,7 +14,6 @@ import {
 } from "@radix-ui/react-icons";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { useSession } from "@/hooks/useSession";
 import { useTheme } from "@/components/theme-provider";
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
@@ -31,8 +30,7 @@ type BrandSwitcherMenuProps = {
 export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const router = useRouter();
   const { logout, isPending } = useAuth();
-  const { user } = useSession();
-  const { activeBrandId, brandSummaries, isSwitching, selectBrand } = useActiveBrandContext();
+  const { activeBrandId, brandSummaries, isSwitching, selectBrand, user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
@@ -63,6 +61,7 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         >
           <Avatar
             size="2"
+            src={brandSummaries.find(b => b.id === activeBrandId)?.logoUrl ?? undefined}
             fallback={<LayersIcon />}
             radius="full"
             className="mr-2"
@@ -119,7 +118,12 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                 className="flex items-center justify-between gap-2"
               >
                 <div className="flex items-center gap-2">
-                  <LayersIcon />
+                  <Avatar
+                    size="1"
+                    src={brand.logoUrl ?? undefined}
+                    fallback={<LayersIcon />}
+                    radius="full"
+                  />
                   <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
                     {getBrandMenuItemLabel(brand)}
                   </Text>

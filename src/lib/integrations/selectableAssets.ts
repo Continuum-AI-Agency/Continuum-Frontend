@@ -25,6 +25,7 @@ export function getSelectableAssetsFlatList(response: SelectableAssetsResponse):
       }
       
       const processIntegration = (integration: any) => {
+        // Handle Meta structure (with businesses)
         integration.businesses?.forEach((business: any) => {
           business.ad_accounts?.forEach((adAccount: any) => {
             if (adAccount.ad_account) assets.push(adAccount.ad_account);
@@ -36,6 +37,11 @@ export function getSelectableAssetsFlatList(response: SelectableAssetsResponse):
           if (business.instagram_accounts_without_ad_account) assets.push(...business.instagram_accounts_without_ad_account);
           if (business.threads_accounts_without_ad_account) assets.push(...business.threads_accounts_without_ad_account);
         });
+
+        // Handle Google structure (directly under integration)
+        if (integration.ad_accounts) assets.push(...integration.ad_accounts);
+        if (integration.youtube_channels) assets.push(...integration.youtube_channels);
+        if (integration.dv360_advertisers) assets.push(...integration.dv360_advertisers);
       };
 
       if (provider.hierarchy?.meta?.integrations) {

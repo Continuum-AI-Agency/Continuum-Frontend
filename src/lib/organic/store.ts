@@ -3,7 +3,9 @@ import { persist } from "zustand/middleware";
 import type { 
   OrganicCalendarDay, 
   OrganicCalendarDraft, 
-  OrganicDraftStatus 
+  OrganicDraftStatus,
+  StreamEvent,
+  EventHistory
 } from "@/components/organic/primitives/types";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 
@@ -77,6 +79,7 @@ interface CalendarState {
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
   viewMode: "day" | "week" | "month";
+  eventHistory: EventHistory;
   
   setDays: (days: OrganicCalendarDay[]) => void;
   setUnscheduledDrafts: (drafts: OrganicCalendarDraft[]) => void;
@@ -94,6 +97,8 @@ interface CalendarState {
   setGridError: (error: string | null) => void;
   setGridJobId: (jobId: string | null) => void;
   setGhosts: (dayId: string, count: number) => void;
+  addEvent: (event: StreamEvent) => void;
+  clearEventHistory: () => void;
   clearGhosts: () => void;
   clearCalendar: () => void;
 
@@ -118,6 +123,7 @@ export const useCalendarStore = create<CalendarState>()(
       gridJobId: null,
       scheduledEvents: {},
       viewMode: "week",
+      eventHistory: [],
 
       setDays: (days) => set({ days }),
       setUnscheduledDrafts: (drafts) => set({ unscheduledDrafts: drafts }),
@@ -277,10 +283,20 @@ export const useCalendarStore = create<CalendarState>()(
           return { selectedTrendIds: Array.from(next) };
         }),
 
-      setGridStatus: (status) => set({ gridStatus: status }),
+      setGridStatus: (status) =>
+        set((state) => ({
+          gridStatus: status,
+          eventHistory:
+            status === "running" ? [] : state.eventHistory,
+        })),
       setGridProgress: (progress) => set({ gridProgress: progress }),
       setGridError: (error) => set({ gridError: error }),
       setGridJobId: (jobId) => set({ gridJobId: jobId }),
+      addEvent: (event) =>
+        set((state) => ({
+          eventHistory: [...state.eventHistory, event].slice(-50),
+        })),
+      clearEventHistory: () => set({ eventHistory: [] }),
       
       setGhosts: (dayId, count) => 
         set((state) => ({
@@ -298,6 +314,7 @@ export const useCalendarStore = create<CalendarState>()(
           gridStatus: "idle",
           gridProgress: { percent: 0 },
           gridError: null,
+          eventHistory: [],
         })),
 
       addScheduledEvent: (date, event) =>

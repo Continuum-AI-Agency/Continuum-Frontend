@@ -1,6 +1,5 @@
-import { Container, Flex, Grid, Heading, Tabs, Text } from "@radix-ui/themes";
+import { Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
-import { type OnboardingState } from "@/lib/onboarding/state";
 import BrandSettingsPanel from "@/components/settings/BrandSettingsPanel";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
@@ -12,6 +11,12 @@ import { UserSettingsPanel } from "@/components/settings/UserSettingsPanel";
 import { createEmptyUserIntegrationSummary, fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
+import { 
+  SettingsTabs, 
+  SettingsTabsList, 
+  SettingsTabsTrigger, 
+  SettingsTabsContent 
+} from "@/components/settings/SettingsTabs";
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
@@ -59,12 +64,12 @@ export default async function SettingsPage() {
           <Heading size="7" className="text-white">Settings</Heading>
           <Text color="gray">Invite teammates, manage brand profiles, and update your own integrations.</Text>
         </div>
-        <Tabs.Root defaultValue="brand" className="space-y-4">
-          <Tabs.List>
-            <Tabs.Trigger value="brand">Brand</Tabs.Trigger>
-            <Tabs.Trigger value="you">You</Tabs.Trigger>
-          </Tabs.List>
-          <Tabs.Content value="brand" className="mt-3">
+        <SettingsTabs>
+          <SettingsTabsList>
+            <SettingsTabsTrigger value="brand">Brand</SettingsTabsTrigger>
+            <SettingsTabsTrigger value="you">You</SettingsTabsTrigger>
+          </SettingsTabsList>
+          <SettingsTabsContent value="brand" className="mt-3">
             <Grid columns={{ initial: "1", lg: "12" }} gap="6" align="start">
               <GlassPanel className="p-6 h-full lg:col-span-7 xl:col-span-8">
                 <BrandSettingsPanel
@@ -85,8 +90,8 @@ export default async function SettingsPage() {
                 <RunStrategicAnalysisButton brandProfileId={activeBrandId} />
               </GlassPanel>
             </Grid>
-          </Tabs.Content>
-          <Tabs.Content value="you" className="mt-3">
+          </SettingsTabsContent>
+          <SettingsTabsContent value="you" className="mt-3">
             <GlassPanel className="p-6">
               <UserSettingsPanel
                 user={{
@@ -97,8 +102,8 @@ export default async function SettingsPage() {
                 integrations={userIntegrationSummary}
               />
             </GlassPanel>
-          </Tabs.Content>
-        </Tabs.Root>
+          </SettingsTabsContent>
+        </SettingsTabs>
       </Flex>
     </div>
   );

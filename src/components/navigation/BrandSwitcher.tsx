@@ -1,7 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { ChevronsUpDown, Plus, Layers, Moon, Sun, Monitor, Settings, CreditCard, LogOut } from "lucide-react"
+import { 
+  ChevronsUpDown, 
+  Plus, 
+  Layers, 
+  Moon, 
+  Sun, 
+  Monitor, 
+  Settings, 
+  CreditCard, 
+  LogOut,
+  Search
+} from "lucide-react"
 
 import {
   DropdownMenu,
@@ -11,13 +22,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command"
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -32,7 +46,6 @@ import { getBrandMenuItemLabel } from "@/lib/brands/brand-switcher-utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext"
-import { isOnboardingComplete } from "@/lib/onboarding/state"
 
 export function BrandSwitcher() {
   const { isMobile } = useSidebar()
@@ -40,6 +53,7 @@ export function BrandSwitcher() {
   const { setTheme, theme } = useTheme()
   const router = useRouter()
   const [isCreating, startCreate] = React.useTransition()
+  const [menuOpen, setMenuOpen] = React.useState(false)
   
   let onboarding: any = null;
   try { onboarding = useOnboarding(); } catch (e) {}
@@ -51,7 +65,8 @@ export function BrandSwitcher() {
     logo: brand.logoUrl ? brand.logoUrl : Layers,
     plan: "Enterprise", 
     id: brand.id,
-    completed: brand.completed 
+    completed: brand.completed,
+    isPending: brand.isPending
   }))
 
   const activeTeam = brands.find(b => b.id === activeBrandId) || brands[0]
@@ -62,6 +77,7 @@ export function BrandSwitcher() {
 
   const handleBrandSelect = async (brandId: string) => {
     await selectBrand(brandId);
+    setMenuOpen(false);
     
     const targetBrand = brandSummaries.find(b => b.id === brandId);
     
@@ -75,7 +91,7 @@ export function BrandSwitcher() {
   return (
     <SidebarMenu className="group-data-[collapsible=icon]:items-center">
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
@@ -99,56 +115,61 @@ export function BrandSwitcher() {
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 p-0 rounded-lg overflow-hidden"
             align="start"
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Brands
-            </DropdownMenuLabel>
-            <div className="max-h-[200px] overflow-y-auto">
-              {brands.map((brand, index) => (
-                <DropdownMenuItem
-                  key={brand.id}
-                  onClick={() => handleBrandSelect(brand.id)}
-                  className="gap-2 p-2"
-                >
-                  <div className="flex size-6 items-center justify-center rounded-sm border overflow-hidden">
-                    {typeof brand.logo === "string" ? (
-                      <Avatar className="size-6 rounded-sm">
-                        <AvatarImage src={brand.logo} alt={brand.name} className="object-cover" />
-                        <AvatarFallback className="text-[10px]">{brand.name.slice(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <brand.logo className="size-4 shrink-0" />
-                    )}
-                  </div>
-                  <span className="flex-1 truncate">{brand.name}</span>
-                  {brandSummaries.find(b => b.id === brand.id)?.isPending && (
-                    <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
-                      Pending
-                    </span>
-                  )}
-                  <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              ))}
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-               className="gap-2 p-2"
-               disabled={isCreating}
-               onClick={() => {
-                  startCreate(async () => {
-                     await createBrandProfileAction();
-                  })
-               }}
-            >
-              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
-                <Plus className="size-4" />
-              </div>
-              <div className="font-medium text-muted-foreground">Add brand</div>
-            </DropdownMenuItem>
+            <Command className="bg-transparent">
+              <CommandInput placeholder="Search brands..." className="h-9" />
+              <CommandList>
+                <CommandEmpty>No brands found.</CommandEmpty>
+                <CommandGroup heading="Brands">
+                  {brands.map((brand, index) => (
+                    <CommandItem
+                      key={brand.id}
+                      onSelect={() => handleBrandSelect(brand.id)}
+                      className="gap-2 p-2"
+                    >
+                      <div className="flex size-6 items-center justify-center rounded-sm border overflow-hidden">
+                        {typeof brand.logo === "string" ? (
+                          <Avatar className="size-6 rounded-sm">
+                            <AvatarImage src={brand.logo} alt={brand.name} className="object-cover" />
+                            <AvatarFallback className="text-[10px]">{brand.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <brand.logo className="size-4 shrink-0" />
+                        )}
+                      </div>
+                      <span className="flex-1 truncate">{brand.name}</span>
+                      {brand.isPending && (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
+                          Pending
+                        </span>
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                <CommandSeparator />
+                <CommandGroup>
+                  <CommandItem
+                    disabled={isCreating}
+                    onSelect={() => {
+                      startCreate(async () => {
+                        await createBrandProfileAction();
+                        setMenuOpen(false);
+                      });
+                    }}
+                    className="gap-2 p-2"
+                  >
+                    <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                      <Plus className="size-4" />
+                    </div>
+                    <div className="font-medium text-muted-foreground">Add brand</div>
+                  </CommandItem>
+                </CommandGroup>
+              </CommandList>
+            </Command>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

@@ -45,56 +45,11 @@ serve(async (req: Request) => {
 
     log("Looking for access token for ad account:", adAccountId);
 
-    // Get Meta access token - try brand integrations first, then fallback to integrations
-    log("Looking for access token for ad account:", adAccountId);
+    const { data: accessToken, error: tokenError } = await supabase
+      .rpc("get_meta_access_token", { p_ad_account_id: adAccountId });
 
-    let accessToken = null;
-
-    // Try brand integrations first
-    try {
-      const { data: brandAdAccount } = await supabase
-        .from("brand_integrations.meta_ad_accounts")
-        .select("brand_integration_id")
-        .eq("ad_account_id_prefixed", adAccountId)
-        .single();
-
-      if (brandAdAccount?.brand_integration_id) {
-        const { data: integration } = await supabase
-          .from("brand_profiles.user_integrations")
-          .select("access_token_encrypted")
-          .eq("id", brandAdAccount.brand_integration_id)
-          .single();
-
-        if (integration?.access_token_encrypted) {
-          // Decrypt the token (assuming it's stored as bytea)
-          accessToken = Buffer.from(integration.access_token_encrypted).toString();
-          log("Found token in brand integrations");
-        }
-      }
-    } catch (brandError) {
-      log("Brand integrations query failed:", brandError);
-    }
-
-    // Fallback to integrations schema if not found
-    if (!accessToken) {
-      try {
-        const { data: accountData } = await supabase
-          .from("integrations.meta_ad_accounts")
-          .select(`
-            meta_ad_account_access!inner(
-              meta_ads!inner(access_token_secret)
-            )
-          `)
-          .eq("ad_account_id_prefixed", adAccountId)
-          .single();
-
-        if (accountData?.meta_ad_account_access?.[0]?.meta_ads?.access_token_secret) {
-          accessToken = accountData.meta_ad_account_access[0].meta_ads.access_token_secret;
-          log("Found token in integrations fallback");
-        }
-      } catch (integrationError) {
-        log("Integrations fallback query failed:", integrationError);
-      }
+    if (tokenError) {
+      log("Error fetching access token via RPC:", tokenError);
     }
 
     if (!accessToken) {
@@ -109,7 +64,7 @@ serve(async (req: Request) => {
     const metaApiUrl = `https://graph.facebook.com/v18.0/${adAccountId}/campaigns`;
     const params = new URLSearchParams({
       fields: "id,name,status,objective,daily_budget,lifetime_budget",
-      filtering: JSON.stringify([{ field: "status", operator: "EQUAL", value: "ACTIVE" }]),
+      filtering: JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]),
       limit: "100",
       access_token: accessToken,
     });

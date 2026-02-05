@@ -127,27 +127,16 @@ export async function handleMetaMetrics(params: any, req: Request) {
       }
     }
 
-    // Get Meta access token
-    const { data: accountData, error: accountError } = await supabase
-      .from("integrations.meta_ad_accounts")
-      .select(`
-        ad_account_id,
-        integrations.meta_ad_account_access!inner(
-          integrations.meta_ads!inner(access_token_secret)
-        )
-      `)
-      .eq("ad_account_id_prefixed", adAccountId)
-      .single();
+    const { data: accessToken, error: tokenError } = await supabase
+      .rpc("get_meta_access_token", { p_ad_account_id: adAccountId });
 
-    if (accountError || !accountData?.meta_ad_account_access?.[0]?.meta_ads?.access_token_secret) {
-      log("No access token found for ad account", { adAccountId, error: accountError });
+    if (tokenError || !accessToken) {
+      log("No access token found for ad account", { adAccountId, error: tokenError });
       return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const accessToken = accountData.meta_ad_account_access[0].meta_ads.access_token_secret;
 
     log(`Fetching insights for campaign ${campaignId} from ${sinceStr} to ${untilStr}`);
 

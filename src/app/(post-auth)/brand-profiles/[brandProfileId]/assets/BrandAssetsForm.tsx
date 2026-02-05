@@ -1,22 +1,22 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-	import { z } from "zod";
-	import { zodResolver } from "@hookform/resolvers/zod";
-	import { Badge, Box, Checkbox, Flex, Text } from "@radix-ui/themes";
-	import { applyBrandProfileIntegrationAccounts } from "@/lib/api/integrations";
-	import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
-	import {
-		getSelectableAssetLabel,
-		getSelectableAssetsFlatList,
-		getSelectableAssetsFlatListForProvider,
-	} from "@/lib/integrations/selectableAssets";
-	import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
-	import { useToast } from "@/components/ui/ToastProvider";
-	import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
-	import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
-	import { MetaSelectableAssetsTree } from "@/components/integrations/MetaSelectableAssetsTree";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Badge, Box, Checkbox, Flex, Text } from "@radix-ui/themes";
+import { applyBrandProfileIntegrationAccounts } from "@/lib/api/integrations";
+import type { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
+import {
+	getSelectableAssetLabel,
+	getSelectableAssetsFlatList,
+	getSelectableAssetsFlatListForProvider,
+} from "@/lib/integrations/selectableAssets";
+import { runStrategicAnalysis } from "@/lib/api/strategicAnalyses.client";
+import { useToast } from "@/components/ui/ToastProvider";
+import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
+import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
+import { MetaSelectableAssetsTree } from "@/components/integrations/MetaSelectableAssetsTree";
 
 type Props = {
 	brandProfileId: string;
@@ -171,6 +171,15 @@ export function BrandAssetsForm({
 	selectableAssetsResponse,
 	assignedIntegrationAccountIds,
 }: Props) {
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => {
+		setMounted(true);
+	}, []);
+	const formatDate = (dateString: string) => {
+		if (!mounted) return "—";
+		return new Date(dateString).toLocaleString();
+	};
+
 	const selectableAssets = useMemo(() => {
 		return getSelectableAssetsFlatList(selectableAssetsResponse);
 	}, [selectableAssetsResponse]);
@@ -280,7 +289,7 @@ export function BrandAssetsForm({
 					</p>
 				) : null}
 				{selectableAssetsResponse.synced_at ? (
-					<p>Last synced {new Date(selectableAssetsResponse.synced_at).toLocaleString()}</p>
+					<p>Last synced {formatDate(selectableAssetsResponse.synced_at)}</p>
 				) : null}
 			</div>
 			{serverError ? (

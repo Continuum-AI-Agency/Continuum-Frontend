@@ -26,7 +26,6 @@ import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useSession } from "@/hooks/useSession";
 import { isAdminUser } from "@/lib/brands/brand-switcher-utils";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -100,12 +99,14 @@ function AnimatedIcon({ icon: Icon, isHovered, active }: AnimatedIconProps) {
   );
 }
 
+import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+
 export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { isMobile, state, toggleSidebar } = useSidebar();
-  const { user } = useSession();
   const { logout, isPending } = useAuth();
+  const { user } = useActiveBrandContext();
   const isAdmin = isAdminUser(user);
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
 

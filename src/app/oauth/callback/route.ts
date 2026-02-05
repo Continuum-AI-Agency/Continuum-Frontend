@@ -20,7 +20,8 @@ function renderPopupResult(
   payload: PopupPayload,
   fallbackRedirect: string,
   status = 200,
-  postMessageOrigin?: string
+  postMessageOrigin?: string,
+  isPopup?: boolean
 ): NextResponse {
   const safePayload = JSON.stringify(payload);
   const targetOrigin = postMessageOrigin ?? new URL(fallbackRedirect).origin;
@@ -30,13 +31,14 @@ function renderPopupResult(
   <body style="font-family: sans-serif; display: grid; min-height: 100vh; place-items: center;">
     <div>
       <p>${payload.type === "oauth:success" ? "Authentication complete." : "Authentication failed."}</p>
-      <p>You can close this window.</p>
+      ${isPopup ? "<p>You can close this window.</p>" : "<p>Redirecting...</p>"}
     </div>
     <script>
       (function () {
+        const isPopup = ${!!isPopup};
         try {
           const payload = ${safePayload};
-          if (window.opener) {
+          if (isPopup && window.opener) {
             window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
             try { window.close(); } catch (_) {}
             return;
@@ -65,6 +67,7 @@ export async function GET(request: Request) {
   const provider = url.searchParams.get("provider");
   const context = url.searchParams.get("context") ?? "onboarding";
   const code = url.searchParams.get("code");
+  const isPopup = url.searchParams.get("popup") === "true";
   const errorDescription = url.searchParams.get("error_description");
   const targetOrigin = resolveRequestOrigin(request, url, url.searchParams.get("origin"));
 
@@ -78,7 +81,8 @@ export async function GET(request: Request) {
       },
       `${targetOrigin}/login?error=auth_callback_failed`,
       400,
-      targetOrigin
+      targetOrigin,
+      isPopup
     );
   }
 
@@ -92,7 +96,8 @@ export async function GET(request: Request) {
       },
       `${targetOrigin}/login?error=auth_callback_failed`,
       400,
-      targetOrigin
+      targetOrigin,
+      isPopup
     );
   }
 
@@ -109,7 +114,8 @@ export async function GET(request: Request) {
       },
       `${targetOrigin}/login?error=auth_callback_failed`,
       400,
-      targetOrigin
+      targetOrigin,
+      isPopup
     );
   }
 
@@ -122,6 +128,7 @@ export async function GET(request: Request) {
     },
     `${targetOrigin}/dashboard`,
     200,
-    targetOrigin
+    targetOrigin,
+    isPopup
   );
 }

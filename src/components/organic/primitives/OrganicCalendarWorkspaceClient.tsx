@@ -25,6 +25,8 @@ import { useCalendarSelection } from "../hooks/useCalendarSelection"
 import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
 import { BulkActionToolbar } from "./BulkActionToolbar"
+import { GenerationProgressPanel } from "./GenerationProgressPanel"
+import { EventStreamPanel } from "./EventStreamPanel"
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[]
@@ -61,6 +63,10 @@ export function OrganicCalendarWorkspaceClient({
     bulkDeleteDrafts,
     clearCalendar,
     selectedTrendIds,
+    gridProgress,
+    gridError,
+    eventHistory,
+    clearEventHistory,
   } = useCalendarStore()
 
   const {
@@ -243,6 +249,23 @@ export function OrganicCalendarWorkspaceClient({
           </div>
         </div>
       </CalendarDndContext>
+
+      <div className="px-2 pb-6 space-y-4">
+        <GenerationProgressPanel
+          status={gridStatus}
+          percent={gridProgress.percent}
+          message={gridProgress.message}
+          error={gridError}
+        />
+
+        {eventHistory.length > 0 && (
+          <EventStreamPanel
+            events={eventHistory}
+            onClear={clearEventHistory}
+            onPlacementSelect={(id) => handleSelect(id, false)}
+          />
+        )}
+      </div>
 
       <BulkActionToolbar
         selectedCount={selectedIds.length}

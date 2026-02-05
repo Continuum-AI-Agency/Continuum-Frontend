@@ -13,7 +13,7 @@ export default async function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, user } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
   }
@@ -29,6 +29,7 @@ export default async function DashboardLayout({
       <DashboardLayoutShell
         activeBrandId={activeBrandId}
         brandSummaries={brandSummaries}
+        user={user}
       >
         {children}
       </DashboardLayoutShell>

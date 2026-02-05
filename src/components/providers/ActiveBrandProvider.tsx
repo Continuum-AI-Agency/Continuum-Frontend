@@ -6,6 +6,8 @@ import { switchActiveBrandAction } from "@/app/(post-auth)/settings/actions";
 import { switchBrand } from "@/lib/brands/switch-brand";
 import { useToastContext, type ToastOptions } from "@/components/ui/ToastProvider";
 import { useSession } from "@/hooks/useSession";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 
 type ActiveBrandContextValue = {
   activeBrandId: string;
@@ -13,6 +15,7 @@ type ActiveBrandContextValue = {
   isSwitching: boolean;
   selectBrand: (brandId: string) => Promise<void>;
   updateBrandName: (brandId: string, name: string) => void;
+  user: User | null;
 };
 
 const ActiveBrandContext = createContext<ActiveBrandContextValue | null>(null);
@@ -20,19 +23,24 @@ const ActiveBrandContext = createContext<ActiveBrandContextValue | null>(null);
 type ActiveBrandProviderProps = {
   activeBrandId: string;
   brandSummaries: BrandSummary[];
+  user: User | null;
   children: React.ReactNode;
 };
 
 export function ActiveBrandProvider({
   activeBrandId,
   brandSummaries,
+  user: initialUser,
   children,
 }: ActiveBrandProviderProps) {
   const [selectedBrandId, setSelectedBrandId] = useState(activeBrandId);
   const [summaries, setSummaries] = useState<BrandSummary[]>(brandSummaries);
   const [isSwitching, startTransition] = useTransition();
   const toast = useToastContext();
-  const { user } = useSession();
+  const { user: sessionUser } = useSession();
+  const router = useRouter();
+
+  const user = sessionUser || initialUser;
 
   const showToast = React.useCallback(
     (options: ToastOptions) => {
@@ -48,7 +56,6 @@ export function ActiveBrandProvider({
     [toast]
   );
 
-  // Keep local selection in sync with auth metadata updates (e.g., other tab).
   useEffect(() => {
     const metadata = user?.user_metadata as { onboarding?: { activeBrandId?: string } } | undefined;
     const metadataId = metadata?.onboarding?.activeBrandId;
@@ -57,7 +64,6 @@ export function ActiveBrandProvider({
     }
   }, [user, selectedBrandId]);
 
-  // Sync when server-provided brand changes (e.g., navigation).
   useEffect(() => {
     setSelectedBrandId(activeBrandId);
     setSummaries(brandSummaries);
@@ -74,12 +80,13 @@ export function ActiveBrandProvider({
       new Promise<void>(resolve => {
         startTransition(async () => {
           const previous = selectedBrandId;
-          setSelectedBrandId(brandId); // optimistic label change
+          setSelectedBrandId(brandId); 
           try {
             const switched = await switchBrand({
               targetBrandId: brandId,
               activeBrandId: activeBrandId,
               switchAction: switchActiveBrandAction,
+              refresh: () => router.refresh(),
             });
             if (!switched) {
               setSelectedBrandId(previous);
@@ -106,8 +113,9 @@ export function ActiveBrandProvider({
       isSwitching,
       selectBrand,
       updateBrandName,
+      user,
     }),
-    [isSwitching, selectBrand, selectedBrandId, summaries, updateBrandName]
+    [isSwitching, selectBrand, selectedBrandId, summaries, updateBrandName, user]
   );
 
   return <ActiveBrandContext.Provider value={value}>{children}</ActiveBrandContext.Provider>;

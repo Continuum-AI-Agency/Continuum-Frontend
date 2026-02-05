@@ -1,4 +1,7 @@
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
+import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation"
+
+export type { CalendarGenerationEvent }
 
 export type OrganicPlatformTag = OrganicPlatformKey
 
@@ -110,3 +113,12 @@ export type OrganicSeedDragPayload = {
   trendId: string
   title?: string
 }
+
+export type StreamEvent = {
+  id: string
+  type: "progress" | "placement" | "error" | "complete"
+  timestamp: string
+  data: CalendarGenerationEvent
+}
+
+export type EventHistory = StreamEvent[]

@@ -10,8 +10,9 @@ function renderPopupAwareResult(options: {
   provider: string | null;
   message?: string;
   fallbackRedirect: string;
+  isPopup?: boolean;
 }) {
-  const { success, message, fallbackRedirect, context, provider } = options;
+  const { success, message, fallbackRedirect, context, provider, isPopup } = options;
   const payload = success
     ? {
         type: "oauth:success",
@@ -32,13 +33,14 @@ function renderPopupAwareResult(options: {
   <body style="font-family: sans-serif; display: grid; min-height: 100vh; place-items: center;">
     <div>
       <p>${success ? "Authentication complete." : "Authentication failed."}</p>
-      <p>You can close this window.</p>
+      ${isPopup ? "<p>You can close this window.</p>" : "<p>Redirecting...</p>"}
     </div>
     <script>
       (function () {
+        const isPopup = ${!!isPopup};
         try {
           var payload = ${JSON.stringify(payload)};
-          if (window.opener) {
+          if (isPopup && window.opener) {
             window.opener.postMessage(payload, window.location.origin);
             try { window.close(); } catch (_) {}
             return;
@@ -68,6 +70,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
   const context = requestUrl.searchParams.get("context");
   const provider = requestUrl.searchParams.get("provider");
   const next = requestUrl.searchParams.get("next");
+  const isPopup = requestUrl.searchParams.get("popup") === "true";
   const origin = requestUrl.origin;
   const cookieContext = request.cookies.get("continuum_oauth_context")?.value;
   const cookieProvider = request.cookies.get("continuum_oauth_provider")?.value;
@@ -87,6 +90,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
       provider: resolved.provider,
       message: "Missing authorization code.",
       fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
+      isPopup,
     });
     response.cookies.delete("continuum_oauth_context");
     response.cookies.delete("continuum_oauth_provider");
@@ -108,6 +112,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
         provider: resolved.provider,
         message: error.message,
         fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
+        isPopup,
       });
       response.cookies.delete("continuum_oauth_context");
       response.cookies.delete("continuum_oauth_provider");
@@ -124,6 +129,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
       provider: resolved.provider,
       message: "Unexpected error",
       fallbackRedirect: `${origin}/login?error=unexpected_error`,
+      isPopup,
     });
     response.cookies.delete("continuum_oauth_context");
     response.cookies.delete("continuum_oauth_provider");
@@ -135,6 +141,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
     context: resolved.context,
     provider: resolved.provider,
     fallbackRedirect: next ? `${origin}${next}` : `${origin}/dashboard`,
+    isPopup,
   });
   response.cookies.delete("continuum_oauth_context");
   response.cookies.delete("continuum_oauth_provider");

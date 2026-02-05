@@ -13,9 +13,10 @@ type SettingsLogoUploaderProps = {
   brandId: string;
   brandName: string;
   initialLogoPath?: string | null;
+  disabled?: boolean;
 };
 
-export function SettingsLogoUploader({ brandId, brandName, initialLogoPath }: SettingsLogoUploaderProps) {
+export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disabled }: SettingsLogoUploaderProps) {
   const { show } = useToast();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,12 +97,12 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath }: Se
         className="hidden"
         accept="image/png,image/jpeg,image/svg+xml"
         onChange={handleFileChange}
-        disabled={isUploading}
+        disabled={isUploading || disabled}
       />
       
       <Avatar 
-        className="w-24 h-24 cursor-pointer border-4 border-muted-foreground/10 hover:border-primary/50 transition-all shadow-sm" 
-        onClick={() => !isUploading && inputRef.current?.click()}
+        className={`w-24 h-24 border-4 border-muted-foreground/10 transition-all shadow-sm ${disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer hover:border-primary/50'}`} 
+        onClick={() => !isUploading && !disabled && inputRef.current?.click()}
       >
         <AvatarImage src={previewUrl ?? undefined} alt="Brand Logo" className="object-cover" />
         <AvatarFallback className="text-2xl font-semibold bg-muted text-muted-foreground">
@@ -109,11 +110,13 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath }: Se
         </AvatarFallback>
       </Avatar>
 
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full cursor-pointer pointer-events-none">
-        <Upload className="w-6 h-6 text-white" />
-      </div>
+      {!disabled && (
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-full cursor-pointer pointer-events-none">
+          <Upload className="w-6 h-6 text-white" />
+        </div>
+      )}
 
-      {logoPath && !isUploading && (
+      {logoPath && !isUploading && !disabled && (
         <Button
           variant="destructive"
           size="icon"

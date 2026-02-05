@@ -6,6 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveActiveBrandId } from "@/lib/brands/resolve-active-brand";
 import { setActiveBrand } from "@/lib/onboarding/storage";
 import type { BrandSummary } from "@/lib/repositories/brandProfile";
+import type { User } from "@supabase/supabase-js";
 
 export type ActiveBrandContext = {
   activeBrandId: string | null;
@@ -15,6 +16,7 @@ export type ActiveBrandContext = {
     role: string | null;
   }>;
   activeBrandTier: number;
+  user: User | null;
 };
 
 export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
@@ -58,12 +60,12 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     (id): id is string => Boolean(id)
   );
 
-  let brandMap = new Map<string, { name: string; logoPath: string | null; tier: number }>();
+  let brandMap = new Map<string, { name: string; logoPath: string | null; tier: number; completedAt: string | null }>();
   if (allBrandIds.length > 0) {
     const { data: brands, error: brandsError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
-      .select("id, brand_name, logo_path, tier")
+      .select("id, brand_name, logo_path, tier, completed_at")
       .in("id", allBrandIds);
     if (brandsError) {
       console.error("[activeBrand] brand_profiles lookup failed", brandsError);
@@ -75,17 +77,23 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
             name: brand.brand_name ?? "Untitled brand",
             logoPath: brand.logo_path ?? null,
             tier: brand.tier,
+            completedAt: brand.completed_at ?? null,
           },
         ])
       );
     }
   }
 
-  const brandSummaries: BrandSummary[] = await Promise.all(
+  const brandSummaries: BrandSummary[] = (await Promise.all(
     allBrandIds.map(async (id) => {
       const brandData = brandMap.get(id);
-      const name = brandData?.name ?? "Untitled brand";
-      const logoPath = brandData?.logoPath ?? null;
+      
+      if (!brandData?.completedAt) {
+        return null;
+      }
+
+      const name = brandData.name;
+      const logoPath = brandData.logoPath;
       let logoUrl = null;
 
       if (logoPath) {
@@ -104,7 +112,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
       const isPending = !permittedIds.includes(id);
 
-      return {
+      const summary: BrandSummary = {
         id,
         name,
         completed: true,
@@ -112,15 +120,18 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
         logoUrl,
         isPending,
       };
+
+      return summary;
     })
-  );
+  )).filter((b): b is BrandSummary => b !== null);
 
   if (permittedIds.length === 0) {
     return { 
       activeBrandId: null, 
       brandSummaries, 
       permissions: perms ?? [], 
-      activeBrandTier: 0 
+      activeBrandTier: 0,
+      user
     };
   }
 
@@ -138,9 +149,13 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   });
 
   if (activeBrandId && shouldPersist) {
-    await setActiveBrand(activeBrandId);
+    try {
+      await setActiveBrand(activeBrandId);
+    } catch (e) {
+      console.error("[activeBrand] Failed to persist active brand preference", e);
+    }
   }
 
   const activeBrandTier = activeBrandId ? brandMap.get(activeBrandId)?.tier ?? 0 : 0;
-  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier };
+  return { activeBrandId, brandSummaries, permissions: perms ?? [], activeBrandTier, user };
 });

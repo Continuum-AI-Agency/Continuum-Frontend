@@ -9,6 +9,7 @@ export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
   const repo = createBrandProfileRepository();
   await repo.switchActiveBrand(brandId);
+  revalidatePath("/", "layout");
 }
 
 export async function renameBrandProfileAction(brandId: string, name: string): Promise<void> {

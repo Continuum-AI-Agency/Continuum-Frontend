@@ -81,11 +81,11 @@ async function ensureBrandProfileRecord(
   const { data: rawData, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
-    .select("id, brand_name, logo_path")
+    .select("id, brand_name, logo_path, completed_at")
     .eq("id", brandId)
     .maybeSingle();
 
-  const data = rawData as { id: string; brand_name: string | null; logo_path: string | null } | null;
+  const data = rawData as { id: string; brand_name: string | null; logo_path: string | null; completed_at: string | null } | null;
 
   if (error && error.code !== "PGRST116") {
     throw error;
@@ -93,6 +93,7 @@ async function ensureBrandProfileRecord(
 
   const brandName = resolveBrandProfileName(state);
   const logoPath = state?.brand?.logoPath ?? null;
+  const completedAt = state?.completedAt ?? null;
 
   if (!data) {
     const { error: insertError } = await supabase
@@ -103,6 +104,7 @@ async function ensureBrandProfileRecord(
         brand_name: brandName,
         logo_path: logoPath,
         created_by: owner.id,
+        completed_at: completedAt,
       });
 
     if (insertError && insertError.code !== "23505") {
@@ -122,31 +124,40 @@ async function ensureBrandProfileRecord(
     return;
   }
 
-  if (data.brand_name !== brandName || data.logo_path !== logoPath) {
+  if (data.brand_name !== brandName || data.logo_path !== logoPath || data.completed_at !== completedAt) {
     const { error: updateError } = await supabase
       .schema("brand_profiles")
       .from("brand_profiles")
       .update({
         brand_name: brandName,
         logo_path: logoPath,
+        completed_at: completedAt,
         updated_at: new Date().toISOString(),
       })
       .eq("id", brandId);
 
     if (updateError) {
-      throw updateError;
+      if (updateError.code === "42501") {
+        console.warn(`[ensureBrandExists] User ${owner.id} lacks permission to update brand ${brandId}`, updateError);
+      } else {
+        throw updateError;
+      }
     }
   }
-  
-  await supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .upsert({
-      brand_profile_id: brandId,
-      user_id: owner.id,
-      email: owner.email,
-      role: "owner",
-    }, { onConflict: "brand_profile_id,user_id" } as any);
+
+  try {
+    await supabase
+      .schema("brand_profiles")
+      .from("permissions")
+      .upsert({
+        brand_profile_id: brandId,
+        user_id: owner.id,
+        email: owner.email,
+        role: "owner",
+      }, { onConflict: "brand_profile_id,user_id" } as any);
+  } catch (e) {
+    console.warn(`[ensureBrandExists] Failed to upsert permission for ${brandId}`, e);
+  }
 }
 
 const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument["source"]>([

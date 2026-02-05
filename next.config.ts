@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable fetch cache in development to prevent infinite cache growth
+  ...(process.env.NODE_ENV === 'development' && {
+    cacheHandler: require.resolve('./cache-handler.js'),
+  }),
   experimental: {
   serverActions: {
     bodySizeLimit: '3mb',

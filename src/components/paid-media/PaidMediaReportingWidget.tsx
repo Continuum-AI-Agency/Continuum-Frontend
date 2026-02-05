@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, PieChartIcon } from "@radix-ui/react-icons";
+import { ArrowDownIcon, ArrowUpIcon, PieChartIcon, ReloadIcon } from "@radix-ui/react-icons";
 import {
   Badge,
   Box,
@@ -105,8 +105,8 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
 
   const trendChartConfig = {
     ...chartConfig,
-    spend: { ...chartConfig.spend, color: "var(--color-spend)" },
-    roas: { ...chartConfig.roas, color: "var(--color-roas)" },
+    spend: { ...chartConfig.spend, color: "var(--chart-1)" },
+    roas: { ...chartConfig.roas, color: "var(--chart-2)" },
   };
 
   return (
@@ -334,6 +334,14 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
     }
   }, [selectedCampaign, fetchMetrics]);
 
+  const handleRefresh = useCallback(() => {
+    if (selectedCampaign) {
+      fetchMetrics(selectedCampaign);
+    } else if (selectedAdAccount) {
+      fetchCampaigns(selectedAdAccount);
+    }
+  }, [selectedCampaign, selectedAdAccount, fetchMetrics, fetchCampaigns]);
+
   return (
     <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
       <Box p="4" className="flex-1 flex flex-col min-h-0">
@@ -379,6 +387,16 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
                   <Select.Item value="trends">Trends</Select.Item>
                 </Select.Content>
               </Select.Root>
+
+              <IconButton
+                variant="surface"
+                radius="large"
+                onClick={handleRefresh}
+                disabled={state.status.startsWith("loading") || (!selectedAdAccount && !selectedCampaign)}
+                title="Refresh data"
+              >
+                <ReloadIcon className={state.status.startsWith("loading") ? "animate-spin" : ""} />
+              </IconButton>
             </Flex>
           </Flex>
 
@@ -531,18 +549,24 @@ function MetricsPanel({
   const chartConfig = {
     current: { label: "Current", color: "var(--color-primary)" },
     previous: { label: "Previous", color: "var(--color-muted)" },
-    spend: { label: "Spend", color: "var(--color-spend)" },
-    roas: { label: "ROAS", color: "var(--color-roas)" },
+    spend: { label: "Spend", color: "var(--chart-1)" },
+    roas: { label: "ROAS", color: "var(--chart-2)" },
+    impressions: { label: "Impressions", color: "var(--chart-3)" },
+    clicks: { label: "Clicks", color: "var(--chart-4)" },
+    ctr: { label: "CTR", color: "var(--chart-5)" },
+    cpc: { label: "CPC", color: "var(--chart-1)" },
   } satisfies ChartConfig;
+
+  const activeColor = chartConfig[expandedKey as keyof typeof chartConfig]?.color ?? "var(--color-primary)";
 
   const mainChartConfig = {
     ...chartConfig,
-    current: { ...chartConfig.current, color: `var(--color-${expandedKey})` },
+    current: { ...chartConfig.current, color: activeColor },
   };
 
   return (
-    <Grid columns={{ initial: "1" }} gap="4" className="h-full min-h-0">
-      <Box className="w-full">
+    <Flex direction="column" gap="4" className="h-full min-h-0">
+      <Box className="w-full shrink-0">
         <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
           {metricCards.map((item) => {
             const delta = comparison?.[item.key]?.percentageChange;
@@ -585,7 +609,7 @@ function MetricsPanel({
         </Grid>
       </Box>
 
-      <Box className="w-full h-full min-h-[300px] mt-2">
+      <Box className="w-full h-full min-h-[200px] mt-2">
         <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
           <Box p="3" className="flex-1 flex flex-col min-h-0">
             <Flex align="center" justify="between" gap="2" mb="2">
@@ -621,6 +645,6 @@ function MetricsPanel({
           </Box>
         </Card>
       </Box>
-    </Grid>
+    </Flex>
   );
 }

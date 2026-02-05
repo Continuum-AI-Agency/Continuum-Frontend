@@ -44,7 +44,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
   return (
     <OnboardingGate>
-      <ActiveBrandProvider activeBrandId={brandId} brandSummaries={brandSummaries}>
+      <ActiveBrandProvider activeBrandId={brandId} brandSummaries={brandSummaries} user={user}>
         <SidebarProvider defaultOpen={false}>
           <Container size="3" className="py-10">
             <Flex direction="column" gap="5">
