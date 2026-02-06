@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
-import { Flex, Heading, Text } from "@radix-ui/themes";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { GlassPanel } from "@/components/ui/GlassPanel";
+import { isAdminUser } from "@/lib/brands/brand-switcher-utils";
 import { AdminUserList } from "@/components/admin/AdminUserList";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import type { AdminListResponse, AdminPagination, AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
 
 type AdminData = { users: AdminUser[]; permissions: PermissionRow[]; pagination: AdminPagination; loadError?: string };
@@ -37,8 +39,7 @@ async function fetchAdminUsers(params: { page: number; pageSize: number; query?:
     redirect("/login");
   }
 
-  const isAdmin = Boolean((userData.user.app_metadata as Record<string, unknown> | undefined)?.is_admin);
-  if (!isAdmin) {
+  if (!isAdminUser(userData.user)) {
     redirect("/"); // guard
   }
 
@@ -114,21 +115,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const { users, permissions, pagination, loadError } = await fetchAdminUsers({ page, pageSize, query });
 
   return (
-    <div className="py-10 w-full max-w-none px-3 sm:px-4 lg:px-6">
-      <Flex direction="column" gap="6">
-        <div>
-          <Heading size="8">Admin</Heading>
-          <Text color="gray" size="3">Manage users, impersonate, and adjust brand tiers.</Text>
+    <div className="w-full max-w-none px-3 py-10 sm:px-4 lg:px-6">
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold text-primary">Admin</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage users, impersonate, and adjust brand tiers.
+          </p>
         </div>
-        <GlassPanel className="p-6 lg:p-8">
-          {loadError ? (
-            <Text color="red" className="mb-3">
-              {loadError}
-            </Text>
-          ) : null}
-          <AdminUserList users={users} permissions={permissions} pagination={pagination} searchQuery={query} />
-        </GlassPanel>
-      </Flex>
+        <Card className="glass-panel border-subtle shadow-brand-glow py-0">
+          <CardContent className="p-6 lg:p-8">
+            {loadError ? (
+              <Alert variant="destructive" className="mb-4">
+                <AlertTitle>Unable to load admin data</AlertTitle>
+                <AlertDescription>{loadError}</AlertDescription>
+              </Alert>
+            ) : null}
+            <AdminUserList users={users} permissions={permissions} pagination={pagination} searchQuery={query} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
