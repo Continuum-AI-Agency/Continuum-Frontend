@@ -15,10 +15,24 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("@radix-ui/react-icons", () => ({
-  MagnifyingGlassIcon: () => React.createElement("span", { "data-icon": "search" }),
-  ChevronDownIcon: () => React.createElement("span", { "data-icon": "chevron-down" }),
-}));
+vi.mock("lucide-react", () => {
+  const icon = (name: string) => (props: Record<string, unknown>) =>
+    React.createElement("span", { "data-icon": name, ...props });
+
+  return {
+    Search: icon("search"),
+    ChevronDown: icon("chevron-down"),
+    ShieldAlert: icon("shield-alert"),
+    Loader2: icon("loader"),
+    ChevronLeft: icon("chevron-left"),
+    ChevronRight: icon("chevron-right"),
+    MoreHorizontal: icon("more-horizontal"),
+    CheckIcon: icon("check"),
+    ChevronDownIcon: icon("chevron-down"),
+    ChevronUpIcon: icon("chevron-up"),
+    XIcon: icon("x"),
+  };
+});
 
 vi.mock("@/components/ui/ToastProvider", () => ({
   useToast: () => ({ show: vi.fn() }),
@@ -101,4 +115,24 @@ test("renders brand tier values from permissions", async () => {
   const html = await renderAdminUserList({ users, permissions, pagination, searchQuery: "" });
 
   expect(html).toContain(">2<");
+});
+
+test("renders an accessible search label", async () => {
+  const users: AdminUser[] = [
+    { id: "user-1", email: "duane@example.com", name: "Duane", isAdmin: false, createdAt: null },
+  ];
+  const pagination: AdminPagination = {
+    page: 1,
+    pageSize: 50,
+    totalCount: 1,
+    totalPages: 1,
+    nextPage: null,
+    lastPage: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  };
+
+  const html = await renderAdminUserList({ users, pagination, searchQuery: "" });
+
+  expect(html).toContain("for=\"admin-user-search\"");
 });
