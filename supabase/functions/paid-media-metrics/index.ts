@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { handleMetaMetrics } from "./meta/handler.ts";
 import { handleMockMetrics } from "./mock/handler.ts";
+import { handleGoogleMetrics } from "./google/handler.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,8 @@ serve(async (req) => {
     switch (platform) {
       case "meta":
         return await handleMetaMetrics(params, req);
+      case "google-ads":
+        return await handleGoogleMetrics(params, req);
       case "mock":
         return await handleMockMetrics(params);
       default:

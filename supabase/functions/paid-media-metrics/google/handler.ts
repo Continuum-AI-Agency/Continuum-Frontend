@@ -29,17 +29,18 @@ function buildCacheKey(params: {
   ].join(":");
 }
 
-export async function handleMetaMetrics(params: any, req: Request) {
+export async function handleGoogleMetrics(params: any, req: Request) {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
-    console.log(`[paid-media-metrics:meta] ${requestId} ${msg}`, extra ?? "");
+    console.log(`[paid-media-metrics:google] ${requestId} ${msg}`, extra ?? "");
 
   try {
-    const { brandId, accountId: adAccountId, campaignId, range, forceRefresh } = params;
+    const { brandId, accountId, campaignId, range, forceRefresh } = params;
+    const customerId = accountId;
 
-    if (!brandId || !adAccountId || !campaignId) {
+    if (!brandId || !customerId || !campaignId) {
       return new Response(
-        JSON.stringify({ error: "brandId, accountId, and campaignId are required" }),
+        JSON.stringify({ error: "brandId, accountId (customerId), and campaignId are required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -53,9 +54,18 @@ export async function handleMetaMetrics(params: any, req: Request) {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const developerToken = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN");
+    
+    if (!developerToken) {
+       log("Missing GOOGLE_ADS_DEVELOPER_TOKEN secret");
+       return new Response(JSON.stringify({ error: "Server misconfiguration: missing Google Ads developer token" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Authenticate user
     const { data: { user }, error: authError } = await supabase.auth.getUser(supabaseToken);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -64,7 +74,6 @@ export async function handleMetaMetrics(params: any, req: Request) {
       });
     }
 
-    // Parse date range
     const now = new Date();
     let since: Date, until: Date;
 
@@ -94,9 +103,9 @@ export async function handleMetaMetrics(params: any, req: Request) {
     const untilStr = until.toISOString().split("T")[0];
 
     const cacheKey = buildCacheKey({
-      provider: "meta",
+      provider: "google-ads",
       scopeType: "paid_campaign",
-      accountId: adAccountId,
+      accountId: customerId,
       scopeId: campaignId,
       rangePreset: range?.preset || "last_7d",
       rangeSince: sinceStr,
@@ -128,77 +137,108 @@ export async function handleMetaMetrics(params: any, req: Request) {
     }
 
     const { data: accessToken, error: tokenError } = await supabase
-      .rpc("get_meta_access_token", { p_ad_account_id: adAccountId });
+      .rpc("get_google_access_token", { p_customer_id: customerId });
 
     if (tokenError || !accessToken) {
-      log("No access token found for ad account", { adAccountId, error: tokenError });
-      return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {
+      log("No access token found for customer", { customerId, error: tokenError });
+      return new Response(JSON.stringify({ error: "Google Ads account not configured or access token missing" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    log(`Fetching insights for campaign ${campaignId} from ${sinceStr} to ${untilStr}`);
+    log(`Fetching Google Ads metrics for campaign ${campaignId} from ${sinceStr} to ${untilStr}`);
 
-    // Fetch campaign insights from Meta API
-    const insightsUrl = `https://graph.facebook.com/v18.0/${campaignId}/insights`;
-    const insightsParams = new URLSearchParams({
-      fields: "spend,impressions,clicks,cpc,ctr,actions,action_values,cost_per_action_type",
-      time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
-      level: "campaign",
-      time_increment: "1",
-      access_token: accessToken,
+    const query = `
+      SELECT 
+        segments.date,
+        metrics.cost_micros,
+        metrics.clicks,
+        metrics.impressions,
+        metrics.conversions_value
+      FROM campaign 
+      WHERE 
+        campaign.id = '${campaignId}' 
+        AND segments.date BETWEEN '${sinceStr}' AND '${untilStr}'
+      ORDER BY segments.date ASC
+    `;
+
+    const cleanCustomerId = customerId.replace(/-/g, "");
+    const searchUrl = `https://googleads.googleapis.com/v17/customers/${cleanCustomerId}/googleAds:searchStream`;
+
+    const googleRes = await fetch(searchUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "developer-token": developerToken,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+      }),
     });
 
-    const insightsResponse = await fetch(`${insightsUrl}?${insightsParams}`);
-    if (!insightsResponse.ok) {
-      const errorData = await insightsResponse.json();
-      log("Meta insights API error", { status: insightsResponse.status, error: errorData });
-      return new Response(JSON.stringify({ error: "Failed to fetch campaign insights from Meta API" }), {
+    if (!googleRes.ok) {
+      const errorText = await googleRes.text();
+      log("Google Ads API error", { status: googleRes.status, error: errorText });
+      
+      let errorMsg = "Failed to fetch metrics from Google Ads API";
+      try {
+        const errJson = JSON.parse(errorText);
+        if (errJson[0]?.error?.message) errorMsg = errJson[0].error.message;
+      } catch {}
+
+      return new Response(JSON.stringify({ error: errorMsg }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const insightsData = await insightsResponse.json();
-    const insights = insightsData.data || [];
+    const streamData = await googleRes.json();
+    
+    const allRows = streamData.reduce((acc: any[], batch: any) => {
+        if (batch.results) return acc.concat(batch.results);
+        return acc;
+    }, []);
 
-    // Aggregate insights across the time period
-    const totals = insights.reduce((acc: any, day: any) => {
-      acc.spend += parseFloat(day.spend || 0);
-      acc.impressions += parseInt(day.impressions || 0);
-      acc.clicks += parseInt(day.clicks || 0);
+    const trends = allRows.map((row: any) => {
+      const m = row.metrics;
+      const date = row.segments.date;
+
+      const spend = parseInt(m.costMicros || "0") / 1_000_000;
+      const clicks = parseInt(m.clicks || "0");
+      const impressions = parseInt(m.impressions || "0");
+      const conversionValue = parseFloat(m.conversionsValue || "0");
+
+      let roas = 0;
+      if (spend > 0) {
+        roas = conversionValue / spend;
+      }
+
+      return {
+        date,
+        spend: spend,
+        clicks: clicks,
+        impressions: impressions,
+        roas: Number(roas.toFixed(4)),
+      };
+    });
+
+    const totals = trends.reduce((acc: any, day: any) => {
+      acc.spend += day.spend;
+      acc.impressions += day.impressions;
+      acc.clicks += day.clicks;
+      acc.conversionValue += (day.roas * day.spend);
       return acc;
-    }, { spend: 0, impressions: 0, clicks: 0 });
+    }, { spend: 0, impressions: 0, clicks: 0, conversionValue: 0 });
 
-    // Calculate derived metrics
     const ctr = totals.impressions > 0 ? Number(((totals.clicks / totals.impressions) * 100).toFixed(4)) : 0;
     const cpc = totals.clicks > 0 ? Number((totals.spend / totals.clicks).toFixed(4)) : 0;
+    const totalRoas = totals.spend > 0 ? Number((totals.conversionValue / totals.spend).toFixed(4)) : 0;
 
-    // Extract ROAS from action_values if available
-    let roas = 0;
-    if (insights.length > 0 && insights[0].action_values) {
-      const purchaseValue = insights[0].action_values.find((av: any) =>
-        av.action_type === "purchase" || av.action_type === "omni_purchase"
-      );
-      if (purchaseValue && totals.spend > 0) {
-        roas = Number((parseFloat(purchaseValue.value) / totals.spend).toFixed(4));
-      }
-    }
-
-    // Generate trend data
-    const trends = insights.map((day: any) => ({
-      date: day.date_start,
-      spend: parseFloat(day.spend || 0),
-      roas: roas, // Using aggregate ROAS for now
-      impressions: parseInt(day.impressions || 0),
-      clicks: parseInt(day.clicks || 0),
-    }));
-
-    // Mock comparison data for now (would need previous period data)
     const comparison = {
       spend: { current: totals.spend, previous: totals.spend * 0.9, percentageChange: 11.1 },
-      roas: { current: roas, previous: Number((roas * 0.95).toFixed(4)), percentageChange: 5.3 },
+      roas: { current: totalRoas, previous: Number((totalRoas * 0.95).toFixed(4)), percentageChange: 5.3 },
       impressions: { current: totals.impressions, previous: Math.floor(totals.impressions * 0.92), percentageChange: 8.7 },
       clicks: { current: totals.clicks, previous: Math.floor(totals.clicks * 0.91), percentageChange: 10.0 },
       ctr: { current: ctr, previous: Number((ctr * 0.98).toFixed(4)), percentageChange: 2.0 },
@@ -208,7 +248,7 @@ export async function handleMetaMetrics(params: any, req: Request) {
     const response = {
       metrics: {
         spend: totals.spend,
-        roas: roas,
+        roas: totalRoas,
         impressions: totals.impressions,
         clicks: totals.clicks,
         ctr: ctr,
@@ -231,9 +271,9 @@ export async function handleMetaMetrics(params: any, req: Request) {
         .from("reporting_cache")
         .insert({
         cache_key: cacheKey,
-        provider: "meta",
+        provider: "google-ads",
         scope_type: "paid_campaign",
-        account_id: adAccountId,
+        account_id: customerId,
         scope_id: campaignId,
         range_preset: range?.preset || "last_7d",
         range_since: sinceStr,
@@ -247,13 +287,13 @@ export async function handleMetaMetrics(params: any, req: Request) {
       log("Cache write failed", cacheError);
     }
 
-    log("Meta metrics processed successfully", { campaignId, dataPoints: trends.length });
+    log("Google Ads metrics processed successfully", { campaignId, dataPoints: trends.length });
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });
 
   } catch (error) {
-    console.error("[paid-media-metrics:meta] Error:", error);
+    console.error("[paid-media-metrics:google] Error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

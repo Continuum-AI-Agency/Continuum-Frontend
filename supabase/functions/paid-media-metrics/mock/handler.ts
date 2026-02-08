@@ -13,7 +13,7 @@ export async function handleMockMetrics(params: any) {
 
   const current = {
       spend: rand(5000, 15000),
-      roas: rand(200, 500) / 100, // 2.00 - 5.00
+      roas: rand(20000, 50000) / 10000, // 2.0000 - 5.0000
       impressions: rand(50000, 200000),
       clicks: rand(1000, 5000),
       ctr: 0,
@@ -21,19 +21,19 @@ export async function handleMockMetrics(params: any) {
   };
 
   // Calculated metrics
-  current.ctr = (current.clicks / current.impressions) * 100;
-  current.cpc = current.spend / current.clicks;
+  current.ctr = Number(((current.clicks / current.impressions) * 100).toFixed(4));
+  current.cpc = Number((current.spend / current.clicks).toFixed(4));
 
   const previous = {
       spend: current.spend * 0.9,
-      roas: current.roas * 0.95,
+      roas: Number((current.roas * 0.95).toFixed(4)),
       impressions: current.impressions * 0.92,
       clicks: current.clicks * 0.91,
       ctr: 0,
       cpc: 0,
   };
-  previous.ctr = (previous.clicks / previous.impressions) * 100;
-  previous.cpc = previous.spend / previous.clicks;
+  previous.ctr = Number(((previous.clicks / previous.impressions) * 100).toFixed(4));
+  previous.cpc = Number((previous.spend / previous.clicks).toFixed(4));
 
   const comparison = {
       spend: { current: current.spend, previous: previous.spend, percentageChange: 10 },
@@ -53,7 +53,7 @@ export async function handleMockMetrics(params: any) {
       trends.push({
           date: d.toISOString().split('T')[0],
           spend: rand(500, 2500),
-          roas: rand(150, 600) / 100,
+          roas: rand(15000, 60000) / 10000,
           impressions: rand(5000, 30000),
           clicks: rand(100, 600)
       });
