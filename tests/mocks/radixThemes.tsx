@@ -125,6 +125,64 @@ vi.mock("@radix-ui/themes", () => ({
   IconButton: createComponent("button"),
   ScrollArea: createComponent("div"),
   Separator,
+  Tabs: {
+    Root: ({
+      value,
+      onValueChange,
+      children,
+    }: {
+      value: string;
+      onValueChange: (v: string) => void;
+      children: React.ReactNode;
+    }) => {
+      // Pass context or clone children to handle logic if needed,
+      // but for simple testing we can just expose the buttons to trigger onValueChange
+      return React.createElement(
+        "div",
+        { "data-tabs-root": true, "data-value": value },
+        React.Children.map(children, (child) => {
+          if (React.isValidElement(child)) {
+            // @ts-expect-error - injecting props for testing
+            return React.cloneElement(child, { value, onValueChange });
+          }
+          return child;
+        })
+      );
+    },
+    List: ({ children, onValueChange }: { children: React.ReactNode; onValueChange?: (v: string) => void }) => {
+      return React.createElement(
+        "div",
+        { "data-tabs-list": true },
+        React.Children.map(children, (child) => {
+          if (React.isValidElement(child)) {
+            // Pass onValueChange down to Triggers
+            // @ts-expect-error - injecting props for testing
+            return React.cloneElement(child, { onValueChange });
+          }
+          return child;
+        })
+      );
+    },
+    Trigger: ({
+      value,
+      children,
+      onValueChange, // Injected from Root
+    }: {
+      value: string;
+      children: React.ReactNode;
+      onValueChange?: (v: string) => void;
+    }) => {
+      return React.createElement(
+        "button",
+        {
+          "data-tabs-trigger": value,
+          onClick: () => onValueChange?.(value),
+        },
+        children
+      );
+    },
+    Content: (props: Record<string, unknown>) => React.createElement("div", { "data-tabs-content": true }, props.children),
+  },
   TextField: {
     Root: createComponent("div"),
     Slot: createComponent("span"),

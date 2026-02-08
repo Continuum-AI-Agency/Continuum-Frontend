@@ -1,4 +1,10 @@
 import { Window } from 'happy-dom';
+import { mock } from "bun:test";
+
+// Mock server-only to allow testing components that import server files
+mock.module("server-only", () => {
+  return {};
+});
 
 const window = new Window({
     url: 'http://localhost:3000',
