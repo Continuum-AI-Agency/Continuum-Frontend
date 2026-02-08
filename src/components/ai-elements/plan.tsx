@@ -1,78 +1,240 @@
 "use client";
 
-import { Box, Flex, Text } from "@radix-ui/themes";
-import { CheckIcon, CircleIcon } from "@radix-ui/react-icons";
-import { Spinner } from "@/components/ui/Loading";
+import type { ComponentProps } from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { 
+  ChevronsUpDownIcon, 
+  CircleIcon, 
+  CheckCircle2Icon, 
+  Loader2Icon, 
+  AlertCircleIcon,
+  UserCheckIcon,
+  MessageSquareIcon
+} from "lucide-react";
+import { createContext, useContext, useState } from "react";
 
-export type PlanStep = {
-  id: string;
-  title: string;
-  status: "pending" | "in_progress" | "completed" | "cancelled";
-  details?: string;
-};
+import { Shimmer } from "./shimmer";
 
-type PlanProps = {
-  steps: PlanStep[];
-};
+export type PlanStatus = 
+  | "pending" 
+  | "awaiting_approval" 
+  | "approved" 
+  | "rejected" 
+  | "in_progress" 
+  | "completed";
 
-export function Plan({ steps }: PlanProps) {
-  return (
-    <div className="relative space-y-0">
-      {steps.map((step, index) => {
-        const isLast = index === steps.length - 1;
-        const isCompleted = step.status === "completed";
-        const isInProgress = step.status === "in_progress";
-        const isPending = step.status === "pending";
-        
-        return (
-          <div key={step.id} className="relative flex gap-4 pb-6 last:pb-0">
-            {!isLast && (
-              <div 
-                className={cn(
-                  "absolute left-[11px] top-6 bottom-0 w-[2px]",
-                  isCompleted ? "bg-indigo-500/30" : "bg-white/10"
-                )} 
-              />
-            )}
-            
-            <div className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface ring-4 ring-surface">
-              <StepIcon status={step.status} />
-            </div>
-
-            <div className="flex-1 pt-0.5">
-              <Text 
-                size="2" 
-                weight="medium" 
-                className={cn(
-                  isCompleted || isInProgress ? "text-white" : "text-gray-500",
-                  step.status === "cancelled" && "text-gray-500 line-through"
-                )}
-              >
-                {step.title}
-              </Text>
-              {step.details && (
-                <Text as="div" size="1" color="gray" className="mt-1">
-                  {step.details}
-                </Text>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+interface PlanContextValue {
+  isStreaming: boolean;
+  status: PlanStatus;
 }
 
-function StepIcon({ status }: { status: PlanStep["status"] }) {
+const PlanContext = createContext<PlanContextValue | null>(null);
+
+const usePlan = () => {
+  const context = useContext(PlanContext);
+  if (!context) {
+    throw new Error("Plan components must be used within Plan");
+  }
+  return context;
+};
+
+export type PlanProps = ComponentProps<typeof Collapsible> & {
+  isStreaming?: boolean;
+  status?: PlanStatus;
+};
+
+export const Plan = ({
+  className,
+  isStreaming = false,
+  status = "pending",
+  children,
+  ...props
+}: PlanProps) => (
+  <PlanContext.Provider value={{ isStreaming, status }}>
+    <Collapsible asChild data-slot="plan" {...props}>
+      <Card className={cn(
+        "shadow-none transition-all duration-300",
+        status === "awaiting_approval" && "border-amber-500/50 bg-amber-500/5",
+        status === "approved" && "border-emerald-500/50 bg-emerald-500/5",
+        status === "rejected" && "border-red-500/50 bg-red-500/5",
+        className
+      )}>
+        {children}
+      </Card>
+    </Collapsible>
+  </PlanContext.Provider>
+);
+
+export type PlanHeaderProps = ComponentProps<typeof CardHeader>;
+
+export const PlanHeader = ({ className, ...props }: PlanHeaderProps) => (
+  <CardHeader
+    className={cn("flex items-start justify-between", className)}
+    data-slot="plan-header"
+    {...props}
+  />
+);
+
+export type PlanTitleProps = Omit<
+  ComponentProps<typeof CardTitle>,
+  "children"
+> & {
+  children: string;
+};
+
+export const PlanTitle = ({ children, className, ...props }: PlanTitleProps) => {
+  const { isStreaming, status } = usePlan();
+
+  return (
+    <CardTitle 
+      data-slot="plan-title" 
+      className={cn("flex items-center gap-2", className)} 
+      {...props}
+    >
+      <StatusIcon status={status} />
+      <span className="flex-1">
+        {isStreaming ? <Shimmer>{children}</Shimmer> : children}
+      </span>
+    </CardTitle>
+  );
+};
+
+function StatusIcon({ status }: { status: PlanStatus }) {
   switch (status) {
     case "completed":
-      return <div className="h-5 w-5 rounded-full bg-indigo-500 flex items-center justify-center"><CheckIcon className="text-white h-3 w-3" /></div>;
+      return <CheckCircle2Icon className="size-4 text-emerald-500 shrink-0" />;
+    case "approved":
+      return <UserCheckIcon className="size-4 text-emerald-500 shrink-0" />;
     case "in_progress":
-      return <div className="h-5 w-5 bg-surface rounded-full flex items-center justify-center"><Spinner size={16} /></div>;
-    case "cancelled":
-      return <div className="h-2 w-2 rounded-full bg-gray-600" />;
+      return <Loader2Icon className="size-4 text-indigo-400 animate-spin shrink-0" />;
+    case "awaiting_approval":
+      return <AlertCircleIcon className="size-4 text-amber-500 shrink-0" />;
+    case "rejected":
+      return <AlertCircleIcon className="size-4 text-red-500 shrink-0" />;
     default:
-      return <div className="h-2 w-2 rounded-full bg-gray-700" />;
+      return <CircleIcon className="size-4 text-muted-foreground/40 shrink-0" />;
   }
 }
+
+export type PlanDescriptionProps = Omit<
+  ComponentProps<typeof CardDescription>,
+  "children"
+> & {
+  children: string;
+};
+
+export const PlanDescription = ({
+  className,
+  children,
+  ...props
+}: PlanDescriptionProps) => {
+  const { isStreaming } = usePlan();
+
+  return (
+    <CardDescription
+      className={cn("text-balance", className)}
+      data-slot="plan-description"
+      {...props}
+    >
+      {isStreaming ? <Shimmer>{children}</Shimmer> : children}
+    </CardDescription>
+  );
+};
+
+export type PlanActionProps = ComponentProps<typeof CardAction>;
+
+export const PlanAction = (props: PlanActionProps) => (
+  <CardAction data-slot="plan-action" {...props} />
+);
+
+export type PlanContentProps = ComponentProps<typeof CardContent>;
+
+export const PlanContent = (props: PlanContentProps) => (
+  <CollapsibleContent asChild>
+    <CardContent data-slot="plan-content" {...props} />
+  </CollapsibleContent>
+);
+
+export type PlanFooterProps = ComponentProps<"div">;
+
+export const PlanFooter = (props: PlanFooterProps) => (
+  <CardFooter data-slot="plan-footer" {...props} />
+);
+
+export type PlanTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
+
+export const PlanTrigger = ({ className, ...props }: PlanTriggerProps) => (
+  <CollapsibleTrigger asChild>
+    <Button
+      className={cn("size-8", className)}
+      data-slot="plan-trigger"
+      size="icon"
+      variant="ghost"
+      {...props}
+    >
+      <ChevronsUpDownIcon className="size-4" />
+      <span className="sr-only">Toggle plan</span>
+    </Button>
+  </CollapsibleTrigger>
+);
+
+export type PlanFeedbackProps = Omit<ComponentProps<"div">, "onSubmit"> & {
+  onFeedback?: (feedback: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+};
+
+export const PlanFeedback = ({ 
+  onFeedback, 
+  placeholder = "Provide feedback on this plan...", 
+  disabled,
+  className,
+  ...props 
+}: PlanFeedbackProps) => {
+  const [value, setValue] = useState("");
+
+  return (
+    <div className={cn("mt-4 space-y-3", className)} {...props}>
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <MessageSquareIcon className="size-3" />
+        <span>Human Feedback</span>
+      </div>
+      <div className="relative">
+        <textarea
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+          className="w-full min-h-[80px] rounded-md border bg-muted/30 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+        />
+        <Button
+          size="sm"
+          className="absolute bottom-2 right-2"
+          disabled={!value.trim() || disabled}
+          onClick={() => {
+            onFeedback?.(value);
+            setValue("");
+          }}
+        >
+          Send Feedback
+        </Button>
+      </div>
+    </div>
+  );
+};
