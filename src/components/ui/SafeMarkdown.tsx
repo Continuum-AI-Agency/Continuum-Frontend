@@ -1,6 +1,11 @@
 import React from "react";
-import { Streamdown, defaultRehypePlugins } from "streamdown";
+import { Streamdown } from "streamdown";
 import { harden } from "rehype-harden";
+import { math } from "@streamdown/math";
+import { code } from "@streamdown/code";
+import { mermaid } from "@streamdown/mermaid";
+import { cjk } from "@streamdown/cjk";
+import "katex/dist/katex.min.css";
 
 type SafeMarkdownProps = {
   content: string;
@@ -16,31 +21,39 @@ const getDefaultOrigin = () => {
   return "https://example.com";
 };
 
-const buildSafeRehypePlugins = (defaultOrigin: string) => [
-  defaultRehypePlugins.katex,
-  [
-    harden,
-    {
-      defaultOrigin,
-      allowedProtocols: ["https"],
-      allowedLinkPrefixes: ["*"],
-      allowedImagePrefixes: [],
-      allowDataImages: false,
-    },
-  ],
-];
-
-export function SafeMarkdown({ content, className, isAnimating, mode = "streaming" }: SafeMarkdownProps) {
+export function SafeMarkdown({
+  content,
+  className,
+  isAnimating,
+  mode = "streaming",
+}: SafeMarkdownProps) {
   if (!content || !content.trim()) return null;
 
-  const rehypePlugins = buildSafeRehypePlugins(getDefaultOrigin()) as any;
+  const defaultOrigin = getDefaultOrigin();
 
   return (
     <Streamdown
       className={className}
       isAnimating={isAnimating}
       mode={mode}
-      rehypePlugins={rehypePlugins}
+      plugins={{
+        math,
+        code,
+        mermaid,
+        cjk,
+      }}
+      rehypePlugins={[
+        [
+          harden,
+          {
+            defaultOrigin,
+            allowedProtocols: ["https"],
+            allowedLinkPrefixes: ["*"],
+            allowedImagePrefixes: [],
+            allowDataImages: false,
+          },
+        ],
+      ]}
     >
       {content}
     </Streamdown>
