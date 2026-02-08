@@ -164,3 +164,36 @@ export const sotReportSchema = z.object({
 });
 
 export type SoTReport = z.infer<typeof sotReportSchema>;
+
+export const thoughtEventSchema = z.object({
+  text: z.string(),
+  chunk: z.boolean().optional(),
+});
+
+export type ThoughtEventData = z.infer<typeof thoughtEventSchema>;
+
+export const adkEventSchema = z.object({
+  content: z.object({
+    parts: z.array(
+      z.object({
+        text: z.string(),
+      })
+    ),
+  }),
+});
+
+export type AdkEventData = z.infer<typeof adkEventSchema>;
+
+export const directAnswerSchema = z.object({
+  type: z.literal("direct_answer"),
+  content: z.string(),
+});
+
+export type DirectAnswerPayload = z.infer<typeof directAnswerSchema>;
+
+export const reportPayloadSchema = z.union([
+  sotReportSchema,
+  directAnswerSchema,
+]);
+
+export type ReportPayload = z.infer<typeof reportPayloadSchema>;

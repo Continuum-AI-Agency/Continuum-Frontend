@@ -523,7 +523,7 @@ function MetricsPanel({
   expandedMetric: MetricKey | null;
   onMetricSelect: (key: MetricKey | null) => void;
 }) {
-  const { metrics, comparison, range } = data;
+  const { metrics, comparison, range, trends } = data;
 
   const metricCards: MetricCard[] = [
     { key: "spend", label: "Spend", value: metrics.spend, format: "currency" },
@@ -536,33 +536,48 @@ function MetricsPanel({
 
   const expandedKey = expandedMetric ?? metricCards[0]?.key;
   const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
-  const expandedComparison = expandedKey ? comparison?.[expandedKey] : undefined;
+  
+  // Calculate trend data for the selected metric
+  const chartData = React.useMemo(() => {
+    if (!trends) return [];
+    return trends.map(day => {
+      let value = 0;
+      
+      // Handle direct metrics
+      if (expandedKey === 'spend') value = day.spend;
+      else if (expandedKey === 'roas') value = day.roas;
+      else if (expandedKey === 'impressions') value = day.impressions || 0;
+      else if (expandedKey === 'clicks') value = day.clicks || 0;
+      
+      // Handle derived metrics
+      else if (expandedKey === 'ctr') {
+        value = (day.clicks && day.impressions) ? (day.clicks / day.impressions) * 100 : 0;
+      }
+      else if (expandedKey === 'cpc') {
+        value = (day.clicks && day.spend) ? (day.spend / day.clicks) : 0;
+      }
+      
+      return {
+        date: day.date,
+        value: value
+      };
+    });
+  }, [trends, expandedKey]);
 
-  const chartData = [
-    {
-      name: "Performance",
-      current: metrics[expandedKey as keyof typeof metrics],
-      previous: expandedComparison?.previous ?? 0,
-    },
-  ];
+  const metricColorMap: Record<string, string> = {
+    spend: "var(--chart-1)",
+    roas: "var(--chart-2)",
+    impressions: "var(--chart-3)",
+    clicks: "var(--chart-4)",
+    ctr: "var(--chart-5)",
+    cpc: "var(--chart-1)",
+  };
 
-  const chartConfig = {
-    current: { label: "Current", color: "var(--color-primary)" },
-    previous: { label: "Previous", color: "var(--color-muted)" },
-    spend: { label: "Spend", color: "var(--chart-1)" },
-    roas: { label: "ROAS", color: "var(--chart-2)" },
-    impressions: { label: "Impressions", color: "var(--chart-3)" },
-    clicks: { label: "Clicks", color: "var(--chart-4)" },
-    ctr: { label: "CTR", color: "var(--chart-5)" },
-    cpc: { label: "CPC", color: "var(--chart-1)" },
-  } satisfies ChartConfig;
-
-  const activeColor = chartConfig[expandedKey as keyof typeof chartConfig]?.color ?? "var(--color-primary)";
+  const activeColor = metricColorMap[expandedKey as string] || "var(--color-primary)";
 
   const mainChartConfig = {
-    ...chartConfig,
-    current: { ...chartConfig.current, color: activeColor },
-  };
+    value: { label: expandedLabel, color: activeColor },
+  } satisfies ChartConfig;
 
   return (
     <Flex direction="column" gap="4" className="h-full min-h-0">
@@ -614,34 +629,53 @@ function MetricsPanel({
           <Box p="3" className="flex-1 flex flex-col min-h-0">
             <Flex align="center" justify="between" gap="2" mb="2">
               <Box>
-                <Heading size="3">{expandedLabel}</Heading>
+                <Heading size="3">{expandedLabel} Trend</Heading>
                 <Text color="gray" size="1">{range.since} → {range.until}</Text>
               </Box>
             </Flex>
 
             <Box className="flex-1 min-h-0 overflow-hidden">
-              <ChartContainer config={mainChartConfig} className="h-full w-full min-h-0 aspect-auto overflow-hidden">
-                <BarChart accessibilityLayer data={chartData} layout="vertical" margin={{ left: 0, right: 8 }}>
-                  <CartesianGrid horizontal={false} />
-                  <YAxis dataKey="name" type="category" hide />
-                  <XAxis type="number" hide />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="previous" fill="var(--color-previous)" radius={4} barSize={40} />
-                  <Bar dataKey="current" fill="var(--color-current)" radius={4} barSize={40} />
-                </BarChart>
+              <ChartContainer config={mainChartConfig} className="h-[250px] w-full aspect-auto">
+                <LineChart data={chartData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="date" 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    minTickGap={30}
+                  />
+                  <YAxis 
+                    tickLine={false} 
+                    axisLine={false} 
+                    domain={['auto', 'auto']}
+                    width={40}
+                    tickFormatter={(value) => {
+                       if (typeof value !== 'number') return String(value);
+                       if (expandedKey === 'ctr' || expandedKey === 'roas') return value.toFixed(1);
+                       if (expandedKey === 'spend' || expandedKey === 'cpc') {
+                          return `$${value >= 1000 ? (value/1000).toFixed(1) + 'k' : value}`;
+                       }
+                       return value >= 1000 ? (value/1000).toFixed(1) + 'k' : String(value);
+                    }}
+                  />
+                  <ChartTooltip
+                    content={<ChartTooltipContent
+                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                    />}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke={activeColor}
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: activeColor }}
+                    activeDot={{ r: 6 }}
+                    animationDuration={500}
+                  />
+                </LineChart>
               </ChartContainer>
             </Box>
-            
-            <Flex align="center" justify="center" gap="4" mt="2">
-              <Flex align="center" gap="1">
-                <Box className="w-2 h-2 rounded-full bg-muted" />
-                <Text size="1" color="gray">Prev</Text>
-              </Flex>
-              <Flex align="center" gap="1">
-                <Box className="w-2 h-2 rounded-full bg-primary" />
-                <Text size="1" color="gray">Curr</Text>
-              </Flex>
-            </Flex>
           </Box>
         </Card>
       </Box>

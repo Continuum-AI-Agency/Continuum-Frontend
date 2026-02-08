@@ -1,10 +1,18 @@
-import type { ToolCallEventData, ToolResultEventData, ProgressEventData, SoTReport } from "@/lib/jaina/schemas";
+import type { ToolCallEventData, ToolResultEventData, ProgressEventData, ReportPayload } from "@/lib/jaina/schemas";
+import type { PlanStatus } from "@/components/ai-elements/plan";
 
 export type JainaProgressEntry = {
   stage: string;
   at: string;
   detail?: string;
   data: ProgressEventData;
+};
+
+export type JainaPlan = {
+  id: string;
+  title: string;
+  description: string;
+  status: PlanStatus;
 };
 
 export type JainaChatMessage = {
@@ -17,5 +25,6 @@ export type JainaChatMessage = {
   reasoning?: JainaProgressEntry[];
   toolCalls?: ToolCallEventData[];
   toolResults?: ToolResultEventData[];
-  report?: SoTReport;
+  report?: ReportPayload;
+  plan?: JainaPlan;
 };
