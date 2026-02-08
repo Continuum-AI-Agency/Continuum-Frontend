@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import PaidMediaClientPage from "./PaidMediaClient";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 
 export const dynamic = "force-dynamic";
 
@@ -14,9 +15,9 @@ export default async function PaidMediaPage() {
 
   // Permission gate: allow only tiers 1,2,3; tier 0 (or missing) is blocked.
   if (activeBrandTier === 0) {
-    // Redirect back to dashboard with a clear message.
-    const msg = encodeURIComponent("Access Restricted: Paid Media is a paid feature. Please contact an Administrator.");
-    redirect(`/dashboard?error=${msg}`);
+    return (
+      <TierAccessRedirect description="Paid Media is a paid feature. Please contact an Administrator." />
+    );
   }
 
   const brandName =

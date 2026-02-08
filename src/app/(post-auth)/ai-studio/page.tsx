@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import AIStudioClient from "./AIStudioClient";
 import { ClientOnly } from "@/components/ui/ClientOnly";
+import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import { listPromptTemplatesAction } from "./actions";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
@@ -17,9 +18,9 @@ export default async function AIStudioPage() {
 
   // Permission gate: allow only tiers 1,2,3; tier 0 (or missing) is blocked.
   if (activeBrandTier === 0) {
-    // Redirect back to dashboard with a clear message.
-    const msg = encodeURIComponent("Access Restricted: AI Studio is a paid feature. Please contact an Administrator.");
-    redirect(`/dashboard?error=${msg}`);
+    return (
+      <TierAccessRedirect description="AI Studio is a paid feature. Please contact an Administrator." />
+    );
   }
 
   const brandName =
