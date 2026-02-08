@@ -24,7 +24,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { fetchOrganicMetrics, type InsightsRequest, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
-import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison } from "@/lib/schemas/organicMetrics";
+import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicMetrics } from "@/lib/schemas/organicMetrics";
 import { cn } from "@/lib/utils";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
@@ -94,37 +94,45 @@ function formatPercent(value?: number) {
   return `${value >= 0 ? "+" : "-"}${rounded}%`;
 }
 
+function generateSampleTrendData(range: { since: string; until: string }, metrics: OrganicMetrics, specificMetric?: MetricKey) {
+  const days = [];
+  const startDate = new Date(range.since);
+  const endDate = new Date(range.until);
+  const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  for (let i = 0; i <= daysDiff; i++) {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i);
+    const dateStr = date.toISOString().split('T')[0];
+    const baseMultiplier = 0.7 + Math.random() * 0.6; 
+
+    const dayData: any = { date: dateStr };
+    
+    if (specificMetric) {
+       const totalValue = metrics[specificMetric as keyof typeof metrics] as number | undefined;
+       if (totalValue !== undefined) {
+          dayData[specificMetric] = Math.round((totalValue / (daysDiff + 1)) * baseMultiplier);
+          dayData.value = dayData[specificMetric]; 
+       } else {
+          dayData.value = 0;
+       }
+    } else {
+       if (metrics.reach !== undefined) dayData.reach = Math.round((metrics.reach / (daysDiff + 1)) * baseMultiplier);
+       if (metrics.views !== undefined) dayData.views = Math.round((metrics.views / (daysDiff + 1)) * baseMultiplier);
+       if (metrics.likes !== undefined) dayData.likes = Math.round((metrics.likes / (daysDiff + 1)) * baseMultiplier);
+       if (metrics.comments !== undefined) dayData.comments = Math.round((metrics.comments / (daysDiff + 1)) * baseMultiplier);
+       if (metrics.shares !== undefined) dayData.shares = Math.round((metrics.shares / (daysDiff + 1)) * baseMultiplier);
+    }
+
+    days.push(dayData);
+  }
+  return days;
+}
+
 function TrendsPanel({ data }: { data: OrganicMetricsResponse }) {
   const { insights, range } = data;
 
-  // Generate sample daily trend data based on the current period
-  const generateSampleTrendData = () => {
-    const days = [];
-    const startDate = new Date(range.since);
-    const endDate = new Date(range.until);
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    for (let i = 0; i <= daysDiff; i++) {
-      const date = new Date(startDate);
-      date.setDate(startDate.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
-
-      // Generate sample data with some variation
-      const baseMultiplier = 0.7 + Math.random() * 0.6; // 70-130% of period average
-
-      days.push({
-        date: dateStr,
-        reach: Math.round(((data.metrics.reach ?? 0) / (daysDiff + 1)) * baseMultiplier),
-        views: Math.round(((data.metrics.views ?? 0) / (daysDiff + 1)) * baseMultiplier),
-        likes: data.metrics.likes ? Math.round((data.metrics.likes / (daysDiff + 1)) * baseMultiplier) : undefined,
-        comments: data.metrics.comments ? Math.round((data.metrics.comments / (daysDiff + 1)) * baseMultiplier) : undefined,
-        shares: data.metrics.shares ? Math.round((data.metrics.shares / (daysDiff + 1)) * baseMultiplier) : undefined,
-      });
-    }
-    return days;
-  };
-
-  const trendData = generateSampleTrendData();
+  const trendData = React.useMemo(() => generateSampleTrendData(range, data.metrics), [range, data.metrics]);
 
   const chartConfig = {
     reach: {
@@ -546,25 +554,15 @@ function MetricsPanel({
 
   const expandedKey = expandedMetric ?? "views";
   const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
-  const expandedValue = expandedKey ? (metrics[expandedKey as keyof typeof metrics] as number | undefined) ?? 0 : 0;
-  const expandedComparison = expandedKey ? comparison?.[expandedKey] : undefined;
-
-  const chartData = [
-    {
-      name: expandedComparison ? "Comparison" : "Current",
-      current: expandedComparison?.current ?? expandedValue,
-      previous: expandedComparison?.previous ?? null,
-    },
-  ];
+  
+  const chartData = React.useMemo(() => {
+    return generateSampleTrendData(range, metrics, expandedKey);
+  }, [range, metrics, expandedKey]);
 
   const chartConfig = {
-    current: {
-      label: "Current",
+    value: {
+      label: expandedLabel,
       color: "var(--color-primary)",
-    },
-    previous: {
-      label: "Previous",
-      color: "var(--color-muted)",
     },
   } satisfies ChartConfig;
 
@@ -621,7 +619,7 @@ function MetricsPanel({
             <Box p="3" className="flex-1 flex flex-col min-h-0">
               <Flex align="center" justify="between" gap="2" mb="2">
                 <Box>
-                  <Heading size="3">{expandedLabel}</Heading>
+                  <Heading size="3">{expandedLabel} Trend</Heading>
                   <Text color="gray" size="1">
                     {range.since} → {range.until} ({rangeLabel(range.preset)})
                   </Text>
@@ -629,29 +627,41 @@ function MetricsPanel({
               </Flex>
 
               <Box className="flex-1 min-h-0 overflow-hidden">
-                <ChartContainer config={chartConfig} className="h-full w-full min-h-0 aspect-auto overflow-hidden">
-                  <BarChart accessibilityLayer data={chartData} margin={{ left: 0, right: 8 }}>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="name" tickLine={false} axisLine={false} />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    {expandedComparison ? (
-                      <Bar dataKey="previous" fill="var(--color-previous)" radius={6} barSize={40} />
-                    ) : null}
-                    <Bar dataKey="current" fill="var(--color-current)" radius={6} barSize={40} />
-                  </BarChart>
+                <ChartContainer config={chartConfig} className="h-[250px] w-full aspect-auto">
+                  <LineChart data={chartData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickLine={false} 
+                      axisLine={false}
+                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      minTickGap={30}
+                    />
+                    <YAxis 
+                      tickLine={false} 
+                      axisLine={false} 
+                      domain={['auto', 'auto']}
+                      width={40}
+                      tickFormatter={(value) => {
+                         if (typeof value !== 'number') return String(value);
+                         return value >= 1000 ? (value/1000).toFixed(1) + 'k' : String(value);
+                      }}
+                    />
+                    <ChartTooltip content={<ChartTooltipContent 
+                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                    />} />
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="var(--color-primary)"
+                      strokeWidth={2}
+                      dot={{ r: 4, fill: "var(--color-primary)" }}
+                      activeDot={{ r: 6 }}
+                      animationDuration={500}
+                    />
+                  </LineChart>
                 </ChartContainer>
               </Box>
-
-              <Flex align="center" justify="center" gap="4" mt="2">
-                <Text color="gray" size="1">
-                  Curr: {formatNumber(expandedValue)}
-                </Text>
-                {expandedComparison && (
-                  <Text color="gray" size="1">
-                    Prev: {formatNumber(expandedComparison.previous)}
-                  </Text>
-                )}
-              </Flex>
             </Box>
           </Card>
         </Box>
