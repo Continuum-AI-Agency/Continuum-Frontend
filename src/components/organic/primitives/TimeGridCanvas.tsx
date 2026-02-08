@@ -64,7 +64,7 @@ function TimeGridDayColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex-1 min-w-[200px] border-r border-subtle last:border-r-0 flex flex-col transition-colors",
+        "flex-1 min-w-[250px] border-r border-subtle last:border-r-0 flex flex-col transition-colors",
         isOver && "bg-brand-primary/5"
       )}
       onDragOver={(e) => {

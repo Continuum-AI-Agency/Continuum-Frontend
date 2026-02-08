@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { GlassPanel } from "@/components/ui/GlassPanel";
 import { Button } from "@/components/ui/button";
 import { RocketIcon, LightningBoltIcon, MagicWandIcon, ListBulletIcon, UpdateIcon, TrashIcon, ArchiveIcon, EyeOpenIcon } from "@radix-ui/react-icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -77,65 +76,60 @@ export function WorkspacePanel({
     <div 
       ref={setNodeRef}
       className={cn(
-        "flex flex-col gap-4 h-full transition-colors rounded-xl",
+        "flex flex-col gap-2 h-full transition-colors rounded-xl overflow-hidden",
         isOver && "ring-2 ring-brand-primary ring-inset bg-brand-primary/5"
       )}
     >
-      <GlassPanel className="p-4 flex flex-col gap-4 relative z-10">
-        <div>
-          <h3 className="text-sm font-semibold text-primary mb-3">
-            Content Direction
-          </h3>
-          <div className="flex gap-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 relative z-10">
+        <div className="flex items-center justify-between px-1 gap-2">
+          <TabsList className="grid grid-cols-4 flex-1">
+            <TabsTrigger value="trends" className="gap-2 text-xs px-2">
+              <MagicWandIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Trends</span>
+            </TabsTrigger>
+            <TabsTrigger value="preview" className="gap-2 text-xs px-2">
+              <EyeOpenIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Preview</span>
+            </TabsTrigger>
+            <TabsTrigger value="drafts" className="gap-2 text-xs px-2">
+              <ArchiveIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Drafts</span>
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="gap-2 text-xs px-2">
+              <ListBulletIcon className="w-3 h-3" />
+              <span className="hidden sm:inline">Templates</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          <div className="flex gap-1">
              <Button 
-              className="flex-1 cursor-pointer" 
-              variant="secondary"
+              className="h-8 px-2 text-xs" 
+              variant="ghost"
+              size="sm"
               onClick={onAutoSort}
               type="button"
               disabled={isGenerating}
+              title="Auto-Sort"
             >
-              <LightningBoltIcon className="mr-2" />
-              Auto-Sort
+              <LightningBoltIcon className="w-3 h-3" />
             </Button>
             <Button 
-              className="flex-1 cursor-pointer" 
-              variant="destructive"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-destructive" 
+              variant="ghost"
+              size="sm"
               onClick={onClearAll}
               type="button"
               disabled={isGenerating}
+              title="Clear All"
             >
-              <TrashIcon className="mr-2" />
-              Clear All
+              <TrashIcon className="w-3 h-3" />
             </Button>
           </div>
-        </div>
-      </GlassPanel>
-      
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 relative z-10">
-        <div className="px-1">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="trends" className="gap-2">
-              <MagicWandIcon className="w-4 h-4" />
-              Trends
-            </TabsTrigger>
-            <TabsTrigger value="preview" className="gap-2">
-              <EyeOpenIcon className="w-4 h-4" />
-              Preview
-            </TabsTrigger>
-            <TabsTrigger value="drafts" className="gap-2">
-              <ArchiveIcon className="w-4 h-4" />
-              Drafts
-            </TabsTrigger>
-            <TabsTrigger value="templates" className="gap-2">
-              <ListBulletIcon className="w-4 h-4" />
-              Templates
-            </TabsTrigger>
-          </TabsList>
         </div>
 
         <TabsContent value="trends" className="flex-1 min-h-0 mt-2">
           <div className="h-full overflow-y-auto rounded border border-subtle bg-surface/30">
-            <div className="p-4">
+            <div className="p-2">
               <TrendSelector
                 trendTypes={trendTypes}
                 trends={trends}
@@ -144,18 +138,18 @@ export function WorkspacePanel({
                 maxSelections={maxTrendSelections}
                 onToggleTrend={onToggleTrend}
                 withContainer={false}
-                showHeader={true}
+                showHeader={false}
                 allowDrag={true}
                 allowSelect={true}
                 allowActions={true}
-                className="space-y-3"
+                className="space-y-2"
               />
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="preview" className="flex-1 min-h-0 mt-2">
-          <div className="h-full rounded border border-subtle bg-surface/30">
+          <div className="h-full rounded border border-subtle bg-surface/30 overflow-hidden">
             {selectedDraft ? (
               <OrganicDraftPreview draft={selectedDraft} />
             ) : (
@@ -169,7 +163,7 @@ export function WorkspacePanel({
         </TabsContent>
 
         <TabsContent value="drafts" className="flex-1 min-h-0 mt-2">
-          <div className="h-full overflow-y-auto rounded border border-subtle bg-surface/30 p-4">
+          <div className="h-full overflow-y-auto rounded border border-subtle bg-surface/30 p-2">
             {unscheduledDrafts.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center opacity-40 pointer-events-none">
                 <ArchiveIcon className="w-8 h-8 mb-3" />
@@ -177,7 +171,7 @@ export function WorkspacePanel({
                 <p className="text-[10px] mt-1">Drop items here to unschedule</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {unscheduledDrafts.map((draft) => (
                   <DraggableDraftCard
                     key={draft.id}
@@ -194,7 +188,7 @@ export function WorkspacePanel({
         </TabsContent>
 
         <TabsContent value="templates" className="flex-1 min-h-0 mt-2">
-          <div className="h-full flex flex-col items-center justify-center rounded border border-dashed border-subtle bg-surface/30 text-center p-8">
+          <div className="h-full flex flex-col items-center justify-center rounded border border-dashed border-subtle bg-surface/30 text-center p-4">
             <ListBulletIcon className="w-8 h-8 text-secondary mb-3 opacity-20" />
             <p className="text-sm text-secondary">
               Daily templates integration in progress.
@@ -203,10 +197,10 @@ export function WorkspacePanel({
         </TabsContent>
       </Tabs>
       
-      <div className="p-4 bg-surface/80 backdrop-blur-xl border border-brand-primary/20 rounded-xl shadow-2xl relative z-30">
+      <div className="p-2 bg-surface/80 backdrop-blur-xl border border-brand-primary/20 rounded-xl shadow-2xl relative z-30 shrink-0">
         <Button 
-          className="w-full h-14 text-lg font-bold shadow-2xl shadow-brand-primary/30 cursor-pointer active:scale-95 transition-all bg-brand-primary hover:bg-brand-primary/90 text-white rounded-md flex items-center justify-center pointer-events-auto" 
-          size="lg"
+          className="w-full h-10 text-sm font-bold shadow-2xl shadow-brand-primary/30 cursor-pointer active:scale-95 transition-all bg-brand-primary hover:bg-brand-primary/90 text-white rounded-md flex items-center justify-center pointer-events-auto" 
+          size="default"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -216,13 +210,13 @@ export function WorkspacePanel({
           type="button"
         >
           {isGenerating ? (
-            <UpdateIcon className="mr-2 w-6 h-6 animate-spin" />
+            <UpdateIcon className="mr-2 w-4 h-4 animate-spin" />
           ) : (
-            <RocketIcon className="mr-2 w-6 h-6" /> 
+            <RocketIcon className="mr-2 w-4 h-4" /> 
           )}
-          {isGenerating ? "Processing batch..." : "Generate Drafts"}
+          {isGenerating ? "Processing..." : "Generate Drafts"}
         </Button>
-        <p className="text-[10px] uppercase tracking-widest text-secondary mt-3 text-center font-bold opacity-60">
+        <p className="text-[10px] uppercase tracking-widest text-secondary mt-1 text-center font-bold opacity-60">
           {seedCount > 0 ? `${seedCount} trends ready` : "Full Week AI Generation"}
         </p>
       </div>

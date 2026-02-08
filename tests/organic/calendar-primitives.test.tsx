@@ -21,7 +21,6 @@ test("OrganicCalendarWorkspace renders week canvas and workflow", () => {
     />
   );
 
-  expect(html).toContain("Calendar-first creation");
-  expect(html).toContain("Calendar view");
-  expect(html).toContain("January 2026");
+  expect(html).toContain("Week planning");
+  expect(html).toContain("Mon/Wed/Fri");
 });

@@ -192,8 +192,8 @@ export function OrganicCalendarWorkspaceClient({
           ) : null
         }
       >
-        <div className="grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-6 h-full p-2">
-          <div className="min-w-0 h-full overflow-hidden">
+        <div className="flex flex-col h-full">
+          <div className="flex-1 min-h-0 relative overflow-hidden p-2">
             <div className="flex items-center justify-between gap-4 px-1 pb-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-secondary">
@@ -221,7 +221,7 @@ export function OrganicCalendarWorkspaceClient({
               onNativeDrop={handleNativeDrop}
             />
           </div>
-          <div className="h-full min-w-0 overflow-hidden">
+          <div className="h-[350px] min-h-[300px] border-t border-subtle bg-surface">
             <WorkspacePanel
               trendTypes={trendTypes}
               trends={trends}
