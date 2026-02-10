@@ -20,3 +20,47 @@ global.HTMLInputElement = window.HTMLInputElement as any;
 global.HTMLTextAreaElement = window.HTMLTextAreaElement as any;
 // Add DocumentFragment which was missing
 global.DocumentFragment = window.DocumentFragment as any;
+global.Node = window.Node as any;
+global.Event = window.Event as any;
+global.CustomEvent = window.CustomEvent as any;
+global.MouseEvent = window.MouseEvent as any;
+global.KeyboardEvent = window.KeyboardEvent as any;
+global.FocusEvent = window.FocusEvent as any;
+global.DOMRect = (window as any).DOMRect;
+global.sessionStorage = window.sessionStorage as any;
+global.localStorage = window.localStorage as any;
+
+mock.module("next/navigation", () => {
+  return {
+    useRouter: () => ({
+      push: () => {},
+      replace: () => {},
+      prefetch: () => {},
+      back: () => {},
+      forward: () => {},
+      refresh: () => {},
+    }),
+    useSearchParams: () => new URLSearchParams(),
+    usePathname: () => "",
+    useSelectedLayoutSegment: () => null,
+    useSelectedLayoutSegments: () => [],
+    redirect: (url: string) => {
+      console.log(`Redirecting to ${url}`);
+    },
+    notFound: () => {
+      console.log("Not found");
+    },
+  };
+});
+
+mock.module("@/components/theme-provider", () => {
+  return {
+    useTheme: () => ({
+      mode: "light",
+      appearance: "light",
+      setMode: () => {},
+      toggle: () => {},
+    }),
+    ThemeProvider: ({ children }: any) => children,
+  };
+});
