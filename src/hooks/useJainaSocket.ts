@@ -12,7 +12,11 @@ import {
 
 export type JainaSocketStatus = "connecting" | "connected" | "disconnected" | "error";
 
-export function useJainaSocket(brandId: string, adAccountId: string | null) {
+export function useJainaSocket(
+  brandId: string, 
+  adAccountId: string | null,
+  options: { disabled?: boolean } = {}
+) {
   const [state, setState] = useState<JainaStreamState>(() =>
     createInitialJainaStreamState()
   );
@@ -24,6 +28,7 @@ export function useJainaSocket(brandId: string, adAccountId: string | null) {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const connect = useCallback(async () => {
+    if (options.disabled) return;
     if (socketRef.current?.readyState === WebSocket.OPEN) return;
     
     setSocketStatus("connecting");
@@ -37,9 +42,6 @@ export function useJainaSocket(brandId: string, adAccountId: string | null) {
 
       ws.onopen = () => {
         setSocketStatus("connected");
-        if (adAccountId) {
-          ws.send(JSON.stringify({ type: "context.sync", data: { adAccountId } }));
-        }
       };
 
       ws.onmessage = (event) => {
@@ -51,7 +53,9 @@ export function useJainaSocket(brandId: string, adAccountId: string | null) {
 
       ws.onclose = () => {
         setSocketStatus("disconnected");
-        reconnectTimeoutRef.current = setTimeout(connect, 3000);
+        if (!options.disabled) {
+          reconnectTimeoutRef.current = setTimeout(connect, 3000);
+        }
       };
 
       ws.onerror = () => {
@@ -60,22 +64,39 @@ export function useJainaSocket(brandId: string, adAccountId: string | null) {
     } catch (err) {
       setSocketStatus("error");
     }
-  }, [brandId, adAccountId]);
+  }, [brandId, options.disabled]);
 
   useEffect(() => {
+    if (options.disabled) {
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      socketRef.current?.close();
+      socketRef.current = null;
+      setSocketStatus("disconnected");
+      return;
+    }
+
     connect();
     return () => {
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       socketRef.current?.close();
     };
-  }, [connect]);
+  }, [connect, options.disabled]);
 
-  const sendPrompt = useCallback((text: string, metadata: any = {}) => {
+  useEffect(() => {
+    if (socketRef.current?.readyState === WebSocket.OPEN && adAccountId) {
+      socketRef.current.send(JSON.stringify({ 
+        type: "context.sync", 
+        data: { adAccountId } 
+      }));
+    }
+  }, [adAccountId, socketStatus]);
+
+  const sendPrompt = useCallback((query: string, metadata: any = {}) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return false;
     
     socketRef.current.send(JSON.stringify({
       type: "prompt",
-      data: { text, ...metadata }
+      data: { query, ...metadata }
     }));
     
     return true;
