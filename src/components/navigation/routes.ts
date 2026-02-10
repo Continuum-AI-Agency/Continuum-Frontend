@@ -87,14 +87,14 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     },
     items: [
       {
+        label: "Dashboard",
+        href: "/paid-media?tab=dashboard",
+        icon: ChartBarSquareIcon,
+      },
+      {
         label: "Jaina",
         href: "/paid-media?tab=jaina",
         icon: ChatBubbleIcon,
-      },
-      {
-        label: "Campaigns",
-        href: "/paid-media?tab=campaigns",
-        icon: ClipboardDocumentListIcon,
       },
       {
         label: "DCO",

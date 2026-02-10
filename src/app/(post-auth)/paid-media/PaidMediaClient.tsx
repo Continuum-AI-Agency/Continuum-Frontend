@@ -3,8 +3,9 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
-import { CampaignList } from "@/components/paid-media/CampaignList";
 import { JainaChatSurface } from "@/components/paid-media/jaina/JainaChatSurface";
+import { PaidMediaDashboard } from "@/components/paid-media/dashboard/PaidMediaDashboard";
+import { useSearchParams, useRouter } from "next/navigation";
 
 type PaidMediaClientPageProps = {
   brandProfileId: string;
@@ -15,25 +16,35 @@ export default function PaidMediaClientPage({
   brandProfileId,
   brandName,
 }: PaidMediaClientPageProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const tabParam = searchParams.get("tab");
+  
   const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState("jaina");
+  const [activeTab, setActiveTab] = React.useState(tabParam || "dashboard");
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Reset campaign selection when ad account changes
+  React.useEffect(() => {
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam, activeTab]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", value);
+    router.push(`?${params.toString()}`);
+  };
+
   React.useEffect(() => {
     setSelectedCampaign(null);
   }, [selectedAdAccount]);
-
-  const handleCampaignSelect = (campaignId: string) => {
-    setSelectedCampaign(campaignId);
-    // Switch to Jaina tab to analyze the selected campaign
-    setActiveTab("jaina");
-  };
 
   if (!mounted) {
     return (
@@ -56,13 +67,17 @@ export default function PaidMediaClientPage({
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full min-h-0 flex-1 flex flex-col">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full min-h-0 flex-1 flex flex-col">
         <div className="border-b px-1">
           <TabsList>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="jaina">Jaina Analyst</TabsTrigger>
-            <TabsTrigger value="campaigns">Campaigns</TabsTrigger>
           </TabsList>
         </div>
+
+        <TabsContent value="dashboard" className="flex-1 min-h-0 pt-4 overflow-auto">
+          <PaidMediaDashboard brandId={brandProfileId} />
+        </TabsContent>
 
         <TabsContent value="jaina" className="flex-1 min-h-0 pt-4">
           <JainaChatSurface
@@ -70,14 +85,6 @@ export default function PaidMediaClientPage({
             brandName={brandName}
             adAccountId={selectedAdAccount}
             campaignId={selectedCampaign}
-          />
-        </TabsContent>
-
-        <TabsContent value="campaigns" className="flex-1 min-h-0 pt-4 overflow-auto">
-          <CampaignList
-            brandId={brandProfileId}
-            adAccountId={selectedAdAccount}
-            onSelectCampaign={handleCampaignSelect}
           />
         </TabsContent>
       </Tabs>
