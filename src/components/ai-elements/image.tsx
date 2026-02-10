@@ -15,7 +15,7 @@ export const Image = ({
   const src = base64 
     ? `data:${mediaType};base64,${base64}` 
     : uint8Array 
-    ? URL.createObjectURL(new Blob([uint8Array], { type: mediaType }))
+    ? URL.createObjectURL(new Blob([uint8Array as any], { type: mediaType }))
     : "";
 
   return (

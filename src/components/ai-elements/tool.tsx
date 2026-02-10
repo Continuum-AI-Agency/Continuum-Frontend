@@ -6,6 +6,34 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Spinner } from "@/components/ui/Loading";
 
+export function getStatusBadge(state: string) {
+  switch (state) {
+    case "call":
+    case "running":
+    case "input-available":
+      return (
+        <Badge color="yellow" variant="soft">
+          Running
+        </Badge>
+      );
+    case "result":
+    case "output-available":
+      return (
+        <Badge color="green" variant="soft">
+          Success
+        </Badge>
+      );
+    case "error":
+      return (
+        <Badge color="red" variant="soft">
+          Error
+        </Badge>
+      );
+    default:
+      return null;
+  }
+}
+
 type ToolContextType = {
   type: string;
   state: "input-available" | "output-available" | "error" | "running";
