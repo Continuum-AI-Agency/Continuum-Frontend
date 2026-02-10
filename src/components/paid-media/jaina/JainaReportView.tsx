@@ -36,13 +36,26 @@ import type { SoTReport } from "@/lib/jaina/schemas";
 import type { JainaStreamStatus } from "@/lib/jaina/stream";
 import { JainaReportNav } from "./components/JainaReportNav";
 
+import {
+  Artifact,
+  ArtifactActions,
+  ArtifactContent,
+  ArtifactHeader,
+  ArtifactTitle,
+  ArtifactAction,
+} from "@/components/ai-elements/artifact";
+import { Sources, SourcesContent, SourcesTrigger, Source } from "@/components/ai-elements/sources";
+import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import { Task, TaskContent, TaskTrigger, TaskItem } from "@/components/ai-elements/task";
+
 type JainaReportViewProps = {
   report: SoTReport | null;
   status: JainaStreamStatus;
   error?: string;
+  onSuggestionClick?: (query: string) => void;
 };
 
-export function JainaReportView({ report, status, error }: JainaReportViewProps) {
+export function JainaReportView({ report, status, error, onSuggestionClick }: JainaReportViewProps) {
   if (status === "error") {
     return (
       <Callout.Root color="red" variant="surface">
@@ -71,186 +84,201 @@ export function JainaReportView({ report, status, error }: JainaReportViewProps)
   };
 
   return (
-    <Flex gap="6" align="start" className="relative">
-      <JainaReportNav />
-      
-      <Flex direction="column" gap="4" className="flex-1 min-w-0">
-        <Flex justify="end" gap="2" className="mb-2">
-          <Button variant="soft" color="gray" size="1" onClick={handleSendEmail}>
-            <EnvelopeClosedIcon />
-            Send Email
-          </Button>
-          <Button variant="soft" color="gray" size="1" onClick={handleDownloadJSON}>
-            <DownloadIcon />
-            Download JSON
-          </Button>
-        </Flex>
-
-        <div id="executive-summary">
-          <Card className="border border-subtle bg-surface">
-            <Box p="4" className="space-y-2">
-              <Flex align="center" justify="between">
-                <Heading size="4">Executive Summary</Heading>
-                <Badge color="blue" variant="soft">{report.language}</Badge>
-              </Flex>
-              <SafeMarkdown content={report.executive_summary} className="text-sm text-white" mode="static" />
-            </Box>
-          </Card>
+    <Artifact className="border-white/10 bg-black/20 backdrop-blur-xl shadow-2xl">
+      <ArtifactHeader className="bg-white/5 border-b border-white/10">
+        <div className="flex items-center gap-3">
+          <div className="size-2 rounded-full bg-purple-500 animate-pulse" />
+          <ArtifactTitle className="text-primary font-bold tracking-tight uppercase text-xs">
+            Performance Analysis Report
+          </ArtifactTitle>
         </div>
+        <ArtifactActions>
+          <ArtifactAction
+            tooltip="Send to Email"
+            icon={EnvelopeClosedIcon as any}
+            onClick={handleSendEmail}
+          />
+          <ArtifactAction
+            tooltip="Download JSON"
+            icon={DownloadIcon as any}
+            onClick={handleDownloadJSON}
+          />
+        </ArtifactActions>
+      </ArtifactHeader>
 
-        {report.performance_snapshot.length ? (
-          <div id="performance-snapshot">
-            <Card className="border border-subtle bg-surface">
-              <Box p="4" className="space-y-4">
-                <Heading size="4">Performance Snapshot</Heading>
-                <Flex direction="column" gap="4">
-                  {report.performance_snapshot.map((section) => (
-                    <TableSection key={section.title} section={section} />
-                  ))}
-                </Flex>
-              </Box>
-            </Card>
+      <ArtifactContent className="p-0">
+        <Flex gap="0" align="start" className="relative h-full">
+          <div className="hidden lg:block border-r border-white/5 p-4 sticky top-0">
+            <JainaReportNav />
           </div>
-        ) : null}
 
-        {report.graphs.length ? (
-          <div id="key-trends">
-            <Card className="border border-subtle bg-surface">
-              <Box p="4" className="space-y-4">
-                <Heading size="4">Key Trends</Heading>
+          <Flex direction="column" gap="6" className="flex-1 p-6 overflow-y-auto no-scrollbar max-h-[800px]">
+            <div id="executive-summary" className="space-y-4">
+              <Flex align="center" justify="between">
+                <Heading size="5" className="text-primary">Executive Summary</Heading>
+                <Badge color="blue" variant="soft" className="uppercase tracking-tighter text-[10px]">
+                  {report.language}
+                </Badge>
+              </Flex>
+              <div className="prose prose-invert max-w-none">
+                <SafeMarkdown
+                  content={report.executive_summary || (report as any).summary || "No summary provided."}
+                  className="text-[15px] leading-relaxed text-secondary"
+                  mode="static"
+                />
+              </div>
+            </div>
+
+            {report.performance_snapshot.length ? (
+              <div id="performance-snapshot" className="space-y-4 pt-4 border-t border-white/5">
+                <Heading size="4" className="text-primary/80">Performance Snapshot</Heading>
+                <Grid columns={{ initial: "1", md: "2" }} gap="4">
+                  {report.performance_snapshot.map((section) => (
+                    <Card key={section.title} className="bg-white/5 border-white/5 p-4 shadow-sm hover:bg-white/10 transition-colors">
+                      <TableSection section={section} />
+                    </Card>
+                  ))}
+                </Grid>
+              </div>
+            ) : null}
+
+            {report.graphs.length ? (
+              <div id="key-trends" className="space-y-4 pt-4 border-t border-white/5">
+                <Heading size="4" className="text-primary/80">Key Trends</Heading>
                 <Grid columns={{ initial: "1", lg: "2" }} gap="4">
                   {report.graphs.map((graph) => (
                     <GraphCard key={graph.title} graph={graph} />
                   ))}
                 </Grid>
-              </Box>
-            </Card>
-          </div>
-        ) : null}
+              </div>
+            ) : null}
 
-        {report.sections.map((section) => (
-          <Card key={`${section.heading}-${section.scope}`} className="border border-subtle bg-surface">
-            <Box p="4" className="space-y-4">
-              <Flex align="center" justify="between" gap="2" wrap="wrap">
-                <Box>
-                  <Heading size="4">{section.heading}</Heading>
-                  <Text size="2" color="gray">{section.scope}</Text>
-                </Box>
-                {section.confidence ? (
-                  <Badge color="purple" variant="soft">Confidence: {section.confidence}</Badge>
-                ) : null}
-              </Flex>
-              <SafeMarkdown content={section.summary} className="text-sm text-white" mode="static" />
+            {report.sections.map((section) => (
+              <div
+                key={`${section.heading}-${section.scope}`}
+                id={section.heading.toLowerCase().replace(/\s+/g, "-")}
+                className="space-y-6 pt-6 border-t border-white/5"
+              >
+                <Flex align="center" justify="between" gap="2" wrap="wrap">
+                  <Box>
+                    <Heading size="4" className="text-primary">{section.heading}</Heading>
+                    <Text size="1" color="gray" className="uppercase tracking-widest opacity-60">
+                      {section.scope}
+                    </Text>
+                  </Box>
+                  {section.confidence ? (
+                    <Badge color="purple" variant="soft" className="rounded-full px-3">
+                      {section.confidence} Confidence
+                    </Badge>
+                  ) : null}
+                </Flex>
 
-              {section.highlights.length ? (
-                <Box>
-                  <Heading size="3" className="mb-2">Highlights</Heading>
-                  <Flex direction="column" gap="2">
+                <SafeMarkdown content={section.summary} className="text-[14px] text-secondary leading-relaxed" mode="static" />
+
+                {section.highlights.length ? (
+                  <Box className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {section.highlights.map((item) => (
                       <HighlightItem key={item.text} item={item} />
                     ))}
-                  </Flex>
-                </Box>
-              ) : null}
+                  </Box>
+                ) : null}
 
-              {section.tables.length ? (
-                <Flex direction="column" gap="4">
-                  {section.tables.map((table) => (
-                    <TableSection key={table.title} section={table} />
-                  ))}
-                </Flex>
-              ) : null}
-
-              {section.graphs.length ? (
-                <Grid columns={{ initial: "1", lg: "2" }} gap="4">
-                  {section.graphs.map((graph) => (
-                    <GraphCard key={graph.title} graph={graph} />
-                  ))}
-                </Grid>
-              ) : null}
-
-              {section.actions.length ? (
-                <Box>
-                  <Heading size="3" className="mb-2">Recommended Actions</Heading>
-                  <Flex direction="column" gap="2">
-                    {section.actions.map((action) => (
-                      <Card key={action.title} className="border border-white/10 bg-default">
-                        <Box p="3" className="space-y-1">
-                          <Flex align="center" justify="between">
-                            <Text weight="medium">{action.title}</Text>
-                            <Badge color="amber" variant="soft">{action.priority}</Badge>
-                          </Flex>
-                          <Text size="2" className="text-gray-400">{action.rationale}</Text>
-                          {action.expected_impact ? (
-                            <Text size="2">Expected impact: {action.expected_impact}</Text>
-                          ) : null}
-                        </Box>
+                {section.tables.length ? (
+                  <Flex direction="column" gap="4">
+                    {section.tables.map((table) => (
+                      <Card key={table.title} className="bg-white/5 border-white/5 p-4">
+                        <TableSection section={table} />
                       </Card>
                     ))}
                   </Flex>
-                </Box>
-              ) : null}
-            </Box>
-          </Card>
-        ))}
+                ) : null}
 
-        <div id="strategic-recommendations">
-          <Card className="border border-subtle bg-surface">
-            <Box p="4" className="space-y-4">
-              <Heading size="4">Strategic Recommendations</Heading>
-              <Flex direction="column" gap="2">
+                {section.graphs.length ? (
+                  <Grid columns={{ initial: "1", lg: "2" }} gap="4">
+                    {section.graphs.map((graph) => (
+                      <GraphCard key={graph.title} graph={graph} />
+                    ))}
+                  </Grid>
+                ) : null}
+
+                {section.actions.length ? (
+                  <div className="space-y-3">
+                    <Text size="1" color="gray" weight="bold" className="uppercase tracking-widest block mb-2">
+                      Recommended Actions
+                    </Text>
+                    {section.actions.map((action) => (
+                      <Task key={action.title} status="pending" className="bg-white/5 border-white/5 rounded-lg overflow-hidden">
+                        <TaskTrigger title={action.title} />
+                        <TaskContent>
+                          <div className="space-y-2 py-1">
+                            <Text size="2" className="text-secondary">{action.rationale}</Text>
+                            {action.expected_impact && (
+                              <div className="flex items-center gap-2">
+                                <Badge color="amber" variant="soft" className="text-[10px]">Impact</Badge>
+                                <Text size="1" color="gray">{action.expected_impact}</Text>
+                              </div>
+                            )}
+                          </div>
+                        </TaskContent>
+                      </Task>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+
+            <div id="strategic-recommendations" className="space-y-4 pt-6 border-t border-white/5">
+              <Heading size="4" className="text-primary">Strategic Recommendations</Heading>
+              <div className="space-y-3">
                 {report.strategic_recommendations.map((item) => (
-                  <Card key={item.title} className="border border-white/10 bg-default">
-                    <Box p="3" className="space-y-1">
-                      <Flex align="center" justify="between">
-                        <Text weight="medium">{item.title}</Text>
-                        <Badge color="indigo" variant="soft">{item.priority}</Badge>
-                      </Flex>
-                      <Text size="2" className="text-gray-400">{item.rationale}</Text>
-                      {item.expected_impact ? (
-                        <Text size="2">Expected impact: {item.expected_impact}</Text>
-                      ) : null}
-                    </Box>
-                  </Card>
+                  <Task key={item.title} status="pending" className="bg-purple-500/5 border-purple-500/10 rounded-lg overflow-hidden">
+                    <TaskTrigger title={item.title} />
+                    <TaskContent>
+                      <div className="space-y-2 py-1">
+                        <Text size="2" className="text-secondary">{item.rationale}</Text>
+                        <Flex align="center" gap="3">
+                          <Badge color="indigo" variant="soft" className="text-[10px] uppercase">{item.priority} Priority</Badge>
+                          {item.expected_impact && (
+                            <Text size="1" color="gray">Est. Impact: {item.expected_impact}</Text>
+                          )}
+                        </Flex>
+                      </div>
+                    </TaskContent>
+                  </Task>
                 ))}
-              </Flex>
-            </Box>
-          </Card>
-        </div>
+              </div>
+            </div>
 
-        <div id="follow-up-questions">
-          <Card className="border border-subtle bg-surface">
-            <Box p="4" className="space-y-3">
-              <Heading size="4">Follow-up Questions</Heading>
-              <Flex direction="column" gap="2">
+            <div id="follow-up-questions" className="space-y-4 pt-6 border-t border-white/5">
+              <Heading size="4" className="text-primary/80">Continue Exploration</Heading>
+              <Suggestions>
                 {report.follow_up_questions.map((question, index) => (
-                  <Text key={`${question}-${index}`} size="2">
-                    {question}
-                  </Text>
+                  <Suggestion
+                    key={`${question}-${index}`}
+                    suggestion={question}
+                    onClick={onSuggestionClick}
+                    className="bg-white/5 hover:bg-white/10 border-white/10 text-secondary whitespace-normal h-auto text-left py-2"
+                  />
                 ))}
-              </Flex>
-            </Box>
-          </Card>
-        </div>
+              </Suggestions>
+            </div>
 
-        {report.cached_sources.length ? (
-          <div id="cached-sources">
-            <Card className="border border-subtle bg-surface">
-              <Box p="4" className="space-y-2">
-                <Heading size="4">Cached Sources</Heading>
-                <Flex gap="2" wrap="wrap">
-                  {report.cached_sources.map((source) => (
-                    <Badge key={source} color="gray" variant="soft">
-                      {source}
-                    </Badge>
-                  ))}
-                </Flex>
-              </Box>
-            </Card>
-          </div>
-        ) : null}
-      </Flex>
-    </Flex>
+            {report.cached_sources.length ? (
+              <div id="cached-sources" className="pt-6 border-t border-white/5">
+                <Sources>
+                  <SourcesTrigger count={report.cached_sources.length} />
+                  <SourcesContent>
+                    {report.cached_sources.map((source) => (
+                      <Source key={source} title={source} href="#" />
+                    ))}
+                  </SourcesContent>
+                </Sources>
+              </div>
+            ) : null}
+          </Flex>
+        </Flex>
+      </ArtifactContent>
+    </Artifact>
   );
 }
 

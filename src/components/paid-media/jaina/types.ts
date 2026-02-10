@@ -22,6 +22,8 @@ export type JainaChatMessage = {
   createdAt: string;
   status?: "streaming" | "done" | "error";
   title?: string;
+  finalThought?: string;
+  renderAsReport?: boolean;
   reasoning?: JainaProgressEntry[];
   toolCalls?: ToolCallEventData[];
   toolResults?: ToolResultEventData[];
