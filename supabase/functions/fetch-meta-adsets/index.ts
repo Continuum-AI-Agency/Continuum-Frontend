@@ -10,7 +10,7 @@ const corsHeaders = {
 serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
-    console.log(`[fetch-meta-campaigns] ${requestId} ${msg}`, extra ?? "");
+    console.log(`[fetch-meta-adsets] ${requestId} ${msg}`, extra ?? "");
 
   try {
     if (req.method === "OPTIONS") {
@@ -19,10 +19,12 @@ serve(async (req: Request) => {
 
     let brandId: string | null = null;
     let adAccountId: string | null = null;
+    let campaignId: string | null = null;
 
     const url = new URL(req.url);
     brandId = url.searchParams.get("brandId") || url.searchParams.get("brandProfileId");
     adAccountId = url.searchParams.get("adAccountId") || url.searchParams.get("accountId") || url.searchParams.get("ad_account_id");
+    campaignId = url.searchParams.get("campaignId") || url.searchParams.get("campaign_id");
 
     if (req.method === "POST") {
       try {
@@ -32,16 +34,17 @@ serve(async (req: Request) => {
           const body = JSON.parse(text);
           brandId = brandId || body.brandId || body.brandProfileId;
           adAccountId = adAccountId || body.adAccountId || body.accountId || body.ad_account_id;
+          campaignId = campaignId || body.campaignId || body.campaign_id;
         }
       } catch (e) {
         log("Error parsing body text as JSON", e);
       }
     }
 
-    log("Final extracted params:", { brandId, adAccountId });
+    log("Final extracted params:", { brandId, adAccountId, campaignId });
 
-    if (!brandId || !adAccountId) {
-      return new Response(JSON.stringify({ error: "brandId and adAccountId required" }), {
+    if (!brandId || !adAccountId || !campaignId) {
+      return new Response(JSON.stringify({ error: "brandId, adAccountId, and campaignId required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -79,11 +82,11 @@ serve(async (req: Request) => {
       });
     }
 
-    // Fetch campaigns from Meta API
-    const metaApiUrl = `https://graph.facebook.com/v23.0/${adAccountId}/campaigns`;
+    log("Fetching ad sets for campaign:", campaignId);
+
+    const metaApiUrl = `https://graph.facebook.com/v23.0/${campaignId}/adsets`;
     const params = new URLSearchParams({
-      fields: "id,name,status,objective,daily_budget,lifetime_budget",
-      filtering: JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]),
+      fields: "id,name,status,daily_budget,lifetime_budget,bid_strategy,targeting,created_time,start_time,end_time",
       limit: "100",
       access_token: accessToken,
     });
@@ -92,29 +95,33 @@ serve(async (req: Request) => {
     if (!response.ok) {
       const errorData = await response.json();
       log("Meta API error", { status: response.status, error: errorData });
-      return new Response(JSON.stringify({ error: "Failed to fetch campaigns from Meta API" }), {
+      return new Response(JSON.stringify({ error: "Failed to fetch ad sets from Meta API" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const data = await response.json();
-    const campaigns = data.data.map((campaign: any) => ({
-      id: campaign.id,
-      name: campaign.name,
-      objective: campaign.objective,
-      status: campaign.status,
-      dailyBudget: campaign.daily_budget,
-      lifetimeBudget: campaign.lifetime_budget,
+    const adsets = (data.data || []).map((adset: any) => ({
+      id: adset.id,
+      name: adset.name,
+      status: adset.status,
+      dailyBudget: adset.daily_budget,
+      lifetimeBudget: adset.lifetime_budget,
+      bidStrategy: adset.bid_strategy,
+      targeting: adset.targeting,
+      createdTime: adset.created_time,
+      startTime: adset.start_time,
+      endTime: adset.end_time,
     }));
 
-    log("success", { count: campaigns.length });
+    log("success", { count: adsets.length });
 
-    return new Response(JSON.stringify({ campaigns }), {
+    return new Response(JSON.stringify({ adsets }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("[fetch-meta-campaigns] unhandled error:", error);
+    console.error("[fetch-meta-adsets] unhandled error:", error);
     return new Response(JSON.stringify({ error: (error as Error)?.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
