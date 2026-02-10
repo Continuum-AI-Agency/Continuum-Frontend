@@ -40,7 +40,7 @@ type Platform = "meta" | "google-ads" | "dv360";
 
 const platforms = [
   { id: "meta" as Platform, name: "Meta", active: true },
-  { id: "google-ads" as Platform, name: "Google Ads", active: false },
+  { id: "google-ads" as Platform, name: "Google Ads", active: true },
   { id: "dv360" as Platform, name: "DV360", active: false },
 ];
 
@@ -203,12 +203,21 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
 
   const adAccounts = React.useMemo(() => {
     if (!integrations) return [];
-    const facebookAccounts = integrations.facebook?.accounts ?? [];
-    return facebookAccounts.map((acc) => ({
+    
+    let platformAccounts: any[] = [];
+    if (platform === "meta") {
+      platformAccounts = integrations.facebook?.accounts ?? [];
+    } else if (platform === "google-ads") {
+      platformAccounts = integrations.googleAds?.accounts ?? [];
+    } else if (platform === "dv360") {
+      platformAccounts = integrations.dv360?.accounts ?? [];
+    }
+    
+    return platformAccounts.map((acc) => ({
       id: acc.externalAccountId ?? acc.integrationAccountId,
       name: acc.name,
     }));
-  }, [integrations]);
+  }, [integrations, platform]);
 
   // Auto-select first account if none selected
   React.useEffect(() => {
@@ -279,10 +288,11 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
       const errorMessage = error instanceof Error ? error.message : "Failed to load campaigns";
 
       // Check if it's an access token issue
-      if (errorMessage.includes("Meta account not configured") || errorMessage.includes("access token missing")) {
+      if (errorMessage.toLowerCase().includes("account not configured") || errorMessage.toLowerCase().includes("access token missing")) {
+        const platformName = platforms.find(p => p.id === platform)?.name || "selected";
         setState({
           status: "error",
-          message: "This ad account needs to be reconnected. Please contact support or reconfigure your Meta integration."
+          message: `This ${platformName} account needs to be reconnected. Please contact support or reconfigure your integration.`
         });
       } else {
         setState({ status: "error", message: errorMessage });

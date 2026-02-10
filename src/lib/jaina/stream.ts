@@ -125,6 +125,7 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return nextBase;
       }
+      const detail = formatThoughtDetail(parsed.data.text);
       return {
         ...nextBase,
         progress: [
@@ -132,7 +133,7 @@ export function reduceJainaStreamEvent(
           {
             stage: "thinking",
             at: new Date().toISOString(),
-            detail: parsed.data.text,
+            detail,
             data: parsed.data,
           },
         ],
@@ -145,6 +146,7 @@ export function reduceJainaStreamEvent(
       }
       const text = parsed.data.content?.parts?.[0]?.text;
       if (text) {
+        const detail = formatThoughtDetail(text);
         return {
           ...nextBase,
           progress: [
@@ -152,7 +154,7 @@ export function reduceJainaStreamEvent(
             {
               stage: "thinking",
               at: new Date().toISOString(),
-              detail: text,
+              detail,
               data: parsed.data,
             },
           ],
@@ -259,16 +261,169 @@ function buildProgressDetail(data: ProgressEventData): string | undefined {
     return "Report ready";
   }
   if (data.stage === "tool_start") {
-    return `Running tool: ${String(data.tool_name ?? "unknown").replace(
-      /_/g,
-      " "
-    )}`;
+    return `Running tool: ${formatToolLabel(data.tool_name)}`;
   }
   if (data.stage === "tool_complete") {
-    return `Finished tool: ${String(data.tool_name ?? "unknown").replace(
-      /_/g,
-      " "
-    )}`;
+    return `Finished tool: ${formatToolLabel(data.tool_name)}`;
   }
   return undefined;
+}
+
+function formatToolLabel(toolName: unknown) {
+  const value = String(toolName ?? "unknown");
+  if (value === "router") {
+    return "Consulting the Council";
+  }
+  return value.replace(/_/g, " ");
+}
+
+type ThoughtPayload = Record<string, unknown>;
+
+function formatThoughtDetail(text: string | undefined): string | undefined {
+  if (!text) return text;
+
+  const parsed = parseThoughtPayload(text);
+  if (!parsed) {
+    return stripThoughtCodeFence(text);
+  }
+
+  const summary =
+    getNonEmptyString(parsed.summary) ??
+    getNonEmptyString(parsed.summary_text) ??
+    getNonEmptyString(parsed.summaryText) ??
+    getNonEmptyString(parsed.content);
+
+  const insights = formatInsightItems(parsed.insights);
+  const recommendations = formatRecommendationItems(parsed.recommendations);
+  const nextSteps = formatNextStepItems(parsed.next_steps);
+  const tables = formatTableItems(parsed.tables);
+
+  const parts: string[] = [];
+  if (summary) {
+    parts.push(summary);
+  } else {
+    const scope = getNonEmptyString(parsed.scope);
+    if (scope) {
+      parts.push(`Scope: ${scope}`);
+    }
+  }
+
+  if (insights.length > 0) {
+    parts.push(`Insights: ${insights.join("; ")}`);
+  }
+  if (recommendations.length > 0) {
+    parts.push(`Recommendations: ${recommendations.join("; ")}`);
+  }
+  if (nextSteps.length > 0) {
+    parts.push(`Next steps: ${nextSteps.join("; ")}`);
+  }
+  if (tables.length > 0) {
+    parts.push(`Tables: ${tables.join("; ")}`);
+  }
+
+  return parts.length > 0 ? parts.join(" • ") : undefined;
+}
+
+function parseThoughtPayload(text: string): ThoughtPayload | null {
+  const candidate = extractJsonCandidate(text);
+  if (!candidate) return null;
+
+  try {
+    const parsed = JSON.parse(candidate);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as ThoughtPayload;
+  } catch {
+    return null;
+  }
+}
+
+function extractJsonCandidate(text: string): string | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+  return null;
+}
+
+function stripThoughtCodeFence(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  return text.trim();
+}
+
+function getNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function formatInsightItems(value: unknown): string[] {
+  return asArray(value)
+    .map((item) => {
+      if (typeof item === "string") return getNonEmptyString(item);
+      if (!item || typeof item !== "object") return undefined;
+      const record = item as Record<string, unknown>;
+      const title =
+        getNonEmptyString(record.title) ??
+        getNonEmptyString(record.label) ??
+        getNonEmptyString(record.value);
+      const description = getNonEmptyString(record.description);
+      if (title && description) return `${title} — ${description}`;
+      return title ?? description;
+    })
+    .filter((item): item is string => Boolean(item));
+}
+
+function formatRecommendationItems(value: unknown): string[] {
+  return asArray(value)
+    .map((item) => {
+      if (typeof item === "string") return getNonEmptyString(item);
+      if (!item || typeof item !== "object") return undefined;
+      const record = item as Record<string, unknown>;
+      const title =
+        getNonEmptyString(record.title) ?? getNonEmptyString(record.action);
+      const priority = getNonEmptyString(record.priority);
+      const rationale = getNonEmptyString(record.rationale);
+      if (title && priority) return `${title} (${priority})`;
+      if (title) return title;
+      return rationale;
+    })
+    .filter((item): item is string => Boolean(item));
+}
+
+function formatNextStepItems(value: unknown): string[] {
+  return asArray(value)
+    .map((item) => {
+      if (typeof item === "string") return getNonEmptyString(item);
+      if (!item || typeof item !== "object") return undefined;
+      const record = item as Record<string, unknown>;
+      return (
+        getNonEmptyString(record.title) ??
+        getNonEmptyString(record.action) ??
+        getNonEmptyString(record.step)
+      );
+    })
+    .filter((item): item is string => Boolean(item));
+}
+
+function formatTableItems(value: unknown): string[] {
+  return asArray(value)
+    .map((item) => {
+      if (!item || typeof item !== "object") return undefined;
+      const record = item as Record<string, unknown>;
+      return getNonEmptyString(record.title);
+    })
+    .filter((item): item is string => Boolean(item));
 }

@@ -5,7 +5,7 @@ export const jainaChatRequestSchema = z.object({
   userId: z.string().optional(),
   context: z.object({
     adAccountId: z.string().min(1),
-    brandId: z.string().optional(),
+    brandId: z.string().min(1),
   }),
 });
 
@@ -152,15 +152,17 @@ const sotSectionSchema = z.object({
 });
 
 export const sotReportSchema = z.object({
-  language: z.string(),
-  executive_summary: z.string(),
-  performance_snapshot: z.array(tableSectionSchema),
-  sections: z.array(sotSectionSchema),
-  strategic_recommendations: z.array(recommendationItemSchema),
-  follow_up_questions: z.array(z.string()),
-  handoff_trace: z.array(z.record(z.string(), z.unknown())),
-  cached_sources: z.array(z.string()),
-  graphs: z.array(graphSpecSchema),
+  language: z.string().optional().default("en"),
+  executive_summary: z.string().optional(),
+  summary: z.string().optional(),
+  reasoning_trace: z.string().optional(),
+  performance_snapshot: z.array(tableSectionSchema).optional().default([]),
+  sections: z.array(sotSectionSchema).optional().default([]),
+  strategic_recommendations: z.array(recommendationItemSchema).optional().default([]),
+  follow_up_questions: z.array(z.string()).optional().default([]),
+  handoff_trace: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  cached_sources: z.array(z.string()).optional().default([]),
+  graphs: z.array(graphSpecSchema).optional().default([]),
 });
 
 export type SoTReport = z.infer<typeof sotReportSchema>;
