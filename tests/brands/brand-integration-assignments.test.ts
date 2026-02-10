@@ -22,8 +22,8 @@ function createEmptySummary(): Summary {
 test("applyBrandProfileIntegrationAccountsRequestSchema accepts asset_pks payload", () => {
   const parsed = applyBrandProfileIntegrationAccountsRequestSchema.parse({
     asset_pks: [
-      "22222222-2222-2222-2222-222222222222",
-      "33333333-3333-3333-3333-333333333333",
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
     ],
   });
   assert.ok("asset_pks" in parsed);
@@ -41,8 +41,8 @@ test("applyBrandProfileIntegrationAccountsRequestSchema rejects invalid ids", ()
 test("applyBrandProfileIntegrationAccountsRequestSchema accepts integration_account_ids", () => {
   const parsed = applyBrandProfileIntegrationAccountsRequestSchema.parse({
     integration_account_ids: [
-      "22222222-2222-2222-2222-222222222222",
-      "33333333-3333-3333-3333-333333333333",
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
     ],
   });
   assert.ok("integration_account_ids" in parsed);
@@ -67,7 +67,7 @@ test("selectableAssetsResponseSchema accepts backend selectable asset shape", ()
     stale: false,
     assets: [
       {
-        asset_pk: "11111111-1111-1111-1111-111111111111",
+        asset_pk: "11111111-1111-4111-8111-111111111111",
         integration_account_id: null,
         external_id: "external-1",
         type: "meta_page",

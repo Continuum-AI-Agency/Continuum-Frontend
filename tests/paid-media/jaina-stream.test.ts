@@ -105,6 +105,21 @@ test("records tool progress details", () => {
   assert.equal(state.progress[0]?.detail, "Running tool: get key metrics");
 });
 
+test("maps router tool label to Consulting the Council", () => {
+  const startState = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "response.progress",
+    data: { stage: "tool_start", tool_name: "router" },
+  });
+
+  const completeState = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "response.progress",
+    data: { stage: "tool_complete", tool_name: "router" },
+  });
+
+  assert.equal(startState.progress[0]?.detail, "Running tool: Consulting the Council");
+  assert.equal(completeState.progress[0]?.detail, "Finished tool: Consulting the Council");
+});
+
 test("sets error state on error event", () => {
   const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
     type: "error",
@@ -121,4 +136,37 @@ test("parseJainaStreamEvent handles invalid JSON and schemas gracefully", () => 
   
   const valid = JSON.stringify({ type: "test" });
   assert.equal(parseJainaStreamEvent(valid)?.type, "test");
+});
+
+test("summarizes structured thought payloads into readable text", () => {
+  const thoughtPayload = {
+    summary: "I'm still encountering a technical hurdle.",
+    tables: [{ title: "Data Connectivity Status" }],
+    insights: [
+      {
+        title: "Authentication Blockage",
+        description: "Missing context value.",
+      },
+    ],
+    recommendations: [
+      {
+        title: "Re-authorize Meta Integration",
+        priority: "high",
+      },
+    ],
+    next_steps: ["Refresh connection", "Confirm permissions"],
+  };
+
+  const text = `\\\`\\\`\\\`json\\n${JSON.stringify(thoughtPayload, null, 2)}\\n\\\`\\\`\\\``;
+  const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "thought",
+    data: { text },
+  });
+
+  const detail = state.progress[0]?.detail ?? "";
+  assert.ok(detail.includes(thoughtPayload.summary));
+  assert.ok(detail.includes("Insights:"));
+  assert.ok(detail.includes("Recommendations:"));
+  assert.ok(detail.includes("Next steps:"));
+  assert.ok(detail.includes("Tables:"));
 });
