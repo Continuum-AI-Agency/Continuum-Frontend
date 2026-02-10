@@ -39,6 +39,7 @@ import {
   TableRow as ShadcnTableRow 
 } from "@/components/ui/table";
 import React from "react";
+import Image from "next/image";
 
 type Props = {
   brandProfileId?: string;
@@ -47,6 +48,20 @@ type Props = {
   isLoading?: boolean;
   onRefresh?: () => Promise<void> | void;
 };
+
+function PlatformIcon({ platform, className = "w-4 h-4" }: { platform: string; className?: string }) {
+  const p = platform.toLowerCase();
+  
+  if (p === "facebook" || p === "meta_page" || p === "page") {
+    return <Image src="/logos/facebook-icon.svg" alt="Facebook" width={16} height={16} className={className} />;
+  }
+  
+  if (p === "instagram" || p === "meta_instagram_user" || p === "instagram_user") {
+    return <Image src="/logos/instagram-icon.svg" alt="Instagram" width={16} height={16} className={className} />;
+  }
+
+  return null;
+}
 
 function formatConnectionBadge(connectedCount: number): {
   label: string;
@@ -372,10 +387,20 @@ function AssignmentsDialog({
                                     <ShadcnTableBody>
                                       {bundle.assets.map((asset: SelectableAsset) => {
                                         const id = asset.integration_account_id || asset.asset_pk;
+                                        const icon = PlatformIcon({ platform: asset.type });
+                                        const isSubItem = Boolean(asset.ad_account_id);
+
                                         return (
                                           <ShadcnTableRow key={asset.asset_pk} className="border-none hover:bg-muted/50">
-                                            <ShadcnTableCell className="py-2 pl-8">
-                                              <Flex align="center" gap="3">
+                                            <ShadcnTableCell className="py-2 pl-4">
+                                              <Flex align="center" gap="2">
+                                                <div className="flex items-center justify-center w-6 h-6 text-slate-400/30 shrink-0">
+                                                  {isSubItem && (
+                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                      <path d="M4 0V8C4 10.2091 5.79086 12 8 12H16" stroke="currentColor" strokeWidth="1.5" />
+                                                    </svg>
+                                                  )}
+                                                </div>
                                                 <Checkbox
                                                   checked={!!id && selectedById[id]}
                                                   disabled={isSaving || !id}
@@ -390,9 +415,11 @@ function AssignmentsDialog({
                                               </Flex>
                                             </ShadcnTableCell>
                                             <ShadcnTableCell className="py-2 text-right">
-                                              <Badge color="gray" variant="outline" size="1" className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700">
-                                                {asset.type.replace('meta_', '')}
-                                              </Badge>
+                                              {icon || (
+                                                <Badge color="gray" variant="outline" size="1" className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700">
+                                                  {asset.type.replace('meta_', '')}
+                                                </Badge>
+                                              )}
                                             </ShadcnTableCell>
                                           </ShadcnTableRow>
                                         );
@@ -864,17 +891,19 @@ export function BrandIntegrationsCard({
                               return (
                                 <Flex key={account.integrationAccountId} justify="between" align="center" className="py-1">
                                   <Flex align="center" gap="3">
-                                    <Box className="min-w-0">
-                                      <Text size="2" className="text-black block truncate font-bold">{account.name}</Text>
-                                      <Flex gap="2" align="center">
-                                        <Badge variant="outline" className="text-[9px] uppercase opacity-50 px-1 py-0 h-4">
-                                          {platformName}
-                                        </Badge>
-                                        <Text size="1" color="gray" className="block font-mono opacity-60" style={{ fontSize: '10px' }}>
-                                          ID: {account.externalAccountId || account.integrationAccountId}
-                                        </Text>
-                                      </Flex>
-                                    </Box>
+                                      <Box className="min-w-0">
+                                        <Text size="2" className="text-black block truncate font-bold">{account.name}</Text>
+                                        <Flex gap="2" align="center">
+                                          {PlatformIcon({ platform: account._platformKey }) || (
+                                            <Badge variant="outline" className="text-[9px] uppercase opacity-50 px-1 py-0 h-4">
+                                              {platformName}
+                                            </Badge>
+                                          )}
+                                          <Text size="1" color="gray" className="block font-mono opacity-60" style={{ fontSize: '10px' }}>
+                                            ID: {account.externalAccountId || account.integrationAccountId}
+                                          </Text>
+                                        </Flex>
+                                      </Box>
                                   </Flex>
                                   <Badge color={sColor as any} variant="soft" size="1" className="text-[9px] uppercase tracking-wider opacity-80">
                                     {account.status || 'Active'}
