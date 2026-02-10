@@ -106,3 +106,20 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
   const nextBrandId = await repo.deleteBrand(brandId);
   return { nextBrandId };
 }
+
+export async function createSignedDocumentUrlAction(storagePath: string): Promise<string> {
+  if (!storagePath) {
+    throw new Error("Storage path is required");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.storage
+    .from("brand-docs")
+    .createSignedUrl(storagePath, 60, { download: true });
+
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Failed to generate signed URL");
+  }
+
+  return data.signedUrl;
+}

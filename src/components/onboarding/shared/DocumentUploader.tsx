@@ -2,14 +2,14 @@
 
 import React, { useRef, useState } from "react";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { uploadCreativeAsset } from "@/lib/creative-assets/storageClient";
-import { enqueueDocumentEmbedAction, removeDocumentAction } from "@/app/onboarding/actions";
+import { removeDocumentAction } from "@/app/onboarding/actions";
+import { createSignedDocumentUrlAction } from "@/app/(post-auth)/settings/actions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Upload, X, Loader2 } from "lucide-react";
+import { FileText, Upload, X, Loader2, Download } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 
 export function DocumentUploader() {
@@ -35,20 +35,25 @@ export function DocumentUploader() {
 
     for (const file of fileList) {
       try {
-        const { asset } = await uploadCreativeAsset(brandId, "documents", file);
+        const formData = new FormData();
+        formData.append("brandId", brandId);
+        formData.append("file", file);
+        formData.append("source", "upload");
+
+        const response = await fetch("/api/onboarding/documents", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+
+        const data = await response.json();
         
         setUploadProgress((prev) => prev + (80 / fileList.length));
 
-        const nextState = await enqueueDocumentEmbedAction(brandId, {
-          name: file.name,
-          source: "upload",
-          storagePath: asset.fullPath,
-          mimeType: file.type,
-          fileName: file.name,
-          size: file.size,
-        });
-
-        await updateState({ documents: nextState.documents });
+        await updateState({ documents: data.state.documents });
         completed++;
       } catch (error) {
         console.error("Failed to upload document", file.name, error);
@@ -85,6 +90,21 @@ export function DocumentUploader() {
       await updateState({ documents: nextState.documents });
     } catch (error) {
       show({ title: "Remove Failed", description: "Could not remove document.", variant: "error" });
+    }
+  };
+
+  const handleDownload = async (e: React.MouseEvent, storagePath: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!storagePath) {
+      show({ title: "Download Failed", description: "Storage path not found.", variant: "error" });
+      return;
+    }
+    try {
+      const signedUrl = await createSignedDocumentUrlAction(storagePath);
+      window.open(signedUrl, "_blank");
+    } catch (error) {
+      show({ title: "Download Failed", description: "Failed to generate download link.", variant: "error" });
     }
   };
 
@@ -168,7 +188,18 @@ export function DocumentUploader() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => handleDownload(e, doc.storagePath || "")}
+                      title="Download"
+                    >
+                      <Download className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                    </Button>
+                    <Button
+                      type="button" 
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={(e) => handleRemove(e, doc.id)}
+                      title="Remove"
                     >
                       <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                     </Button>

@@ -2,10 +2,11 @@
 
 import React, { useRef, useState, useEffect } from "react";
 import { Flex, Heading, Text, Button, Grid, Badge, IconButton } from "@radix-ui/themes";
-import { FileIcon, UploadIcon, Cross2Icon, UpdateIcon } from "@radix-ui/react-icons";
+import { FileIcon, UploadIcon, Cross2Icon, UpdateIcon, DownloadIcon } from "@radix-ui/react-icons";
 import { useRouter } from "next/navigation";
 import type { OnboardingDocument } from "@/lib/onboarding/state";
 import { removeDocumentAction } from "@/app/onboarding/actions";
+import { createSignedDocumentUrlAction } from "@/app/(post-auth)/settings/actions";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -144,6 +145,29 @@ export function BrandDocumentsSection({ brandId, documents: initialDocuments }: 
     }
   };
 
+  const handleDownload = async (doc: OnboardingDocument) => {
+    if (!doc.storagePath) {
+      show({
+        title: "Error",
+        description: "Storage path not found for this document.",
+        variant: "error",
+      });
+      return;
+    }
+
+    try {
+      const signedUrl = await createSignedDocumentUrlAction(doc.storagePath);
+      window.open(signedUrl, "_blank");
+    } catch (error) {
+      console.error("Download error:", error);
+      show({
+        title: "Error",
+        description: "Failed to generate download link.",
+        variant: "error",
+      });
+    }
+  };
+
   return (
     <Flex direction="column" gap="4">
       <Flex justify="between" align="center">
@@ -235,14 +259,27 @@ export function BrandDocumentsSection({ brandId, documents: initialDocuments }: 
                   <Badge color="red" variant="soft">Error</Badge>
                 )}
                 
-                <IconButton 
-                  variant="ghost" 
-                  color="gray" 
-                  onClick={() => handleRemove(doc.id)}
-                  size="1"
-                >
-                  <Cross2Icon />
-                </IconButton>
+                <Flex gap="1">
+                  <IconButton 
+                    variant="ghost" 
+                    color="gray" 
+                    onClick={() => handleDownload(doc)}
+                    size="1"
+                    title="Download"
+                  >
+                    <DownloadIcon />
+                  </IconButton>
+
+                  <IconButton 
+                    variant="ghost" 
+                    color="gray" 
+                    onClick={() => handleRemove(doc.id)}
+                    size="1"
+                    title="Remove"
+                  >
+                    <Cross2Icon />
+                  </IconButton>
+                </Flex>
               </Flex>
             </Flex>
           ))}
