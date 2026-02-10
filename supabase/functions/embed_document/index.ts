@@ -121,67 +121,11 @@ async function createEmbeddings(inputs: string[]): Promise<number[][]> {
 async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: string | null) {
   const supabase = createSupabase(authHeader);
 
-  // Step 1: Acquire bytes
-  const bytes = await fetchBytes({
-    source: input.source,
-    storagePath: input.storagePath,
-    externalUrl: input.externalUrl,
-  }, supabase);
-
-  // Step 2: Extract text
-  const { text, mimeType, fileName } = await extractText(bytes, {
-    mimeType: input.mimeType,
-    fileName: input.fileName,
-  });
-
-  // Step 3: Chunk & sanitize (remove null bytes that Postgres rejects)
-  const sanitize = (value: string) =>
-    value
-      .replace(/[\u0000-\u001f\u007f]/g, (char) => {
-        if (char === "\n" || char === "\r" || char === "\t") {
-          return char;
-        }
-        return " ";
-      })
-      .replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u");
-  const chunks = chunkText(text, { chunkSize: 2000, overlap: 200 }).map(sanitize);
-  const safeFileName = sanitize(fileName ?? "document");
-
-  // Step 4: Embed chunks with Gemini
-  let embeddings: number[][] = [];
-  if (chunks.length > 0) {
-    try {
-      const batchResults: number[][] = [];
-      for (let i = 0; i < chunks.length; i += GEMINI_BATCH_LIMIT) {
-        const slice = chunks.slice(i, i + GEMINI_BATCH_LIMIT);
-        const vectors = await createEmbeddings(slice);
-        batchResults.push(...vectors);
-      }
-      embeddings = batchResults;
-      if (embeddings.length !== chunks.length) {
-        throw new Error(
-          `Embedding count mismatch: expected ${chunks.length}, received ${embeddings.length}`
-        );
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("Embedding error:", message);
-      await supabase
-        .schema("brand_profiles")
-        .from("brand_documents")
-        .update({ status: "error", error_message: message, updated_at: new Date().toISOString() })
-        .eq("id", input.documentId);
-      throw new Error(message);
-    }
-  }
-
-  // Step 5: Persist (best-effort; tables may not exist yet)
   try {
-    // Ensure a brand_documents row exists (upsert by PK)
     const baseDoc = {
       id: input.documentId,
       brand_id: input.brandId,
-      name: safeFileName,
+      name: input.fileName ?? "document",
       source: input.source,
       status: "processing",
       storage_path: input.storagePath,
@@ -189,13 +133,85 @@ async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: 
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    const { error: upsertErr } = await supabase
+    const { error: initialUpsertErr } = await supabase
       .schema("brand_profiles")
       .from("brand_documents")
-      // @ts-expect-error Deno supabase client typings lack onConflict support
-      .upsert(baseDoc, { onConflict: "id" });
-    if (upsertErr) console.warn("Doc upsert error", upsertErr.message);
-    // Insert chunks in batches of 100
+      .upsert(baseDoc, { onConflict: "id" } as any);
+    if (initialUpsertErr) {
+      console.error("Initial doc upsert error", initialUpsertErr.message);
+      throw new Error(`Initial doc upsert failed: ${initialUpsertErr.message}`);
+    }
+  } catch (err) {
+    console.error("Failed to perform initial document upsert:", err);
+    throw err;
+  }
+
+  try {
+    const bytes = await fetchBytes({
+      source: input.source,
+      storagePath: input.storagePath,
+      externalUrl: input.externalUrl,
+    }, supabase);
+
+    const { text, mimeType, fileName } = await extractText(bytes, {
+      mimeType: input.mimeType,
+      fileName: input.fileName,
+    });
+
+    const sanitize = (value: string) =>
+      value
+        .replace(/[\u0000-\u001f\u007f]/g, (char) => {
+          if (char === "\n" || char === "\r" || char === "\t") {
+            return char;
+          }
+          return " ";
+        })
+        .replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u");
+    const chunks = chunkText(text, { chunkSize: 2000, overlap: 200 }).map(sanitize);
+    const safeFileName = sanitize(fileName ?? input.fileName ?? "document");
+
+    let embeddings: number[][] = [];
+    if (chunks.length > 0) {
+      try {
+        const batchResults: number[][] = [];
+        for (let i = 0; i < chunks.length; i += GEMINI_BATCH_LIMIT) {
+          const slice = chunks.slice(i, i + GEMINI_BATCH_LIMIT);
+          const vectors = await createEmbeddings(slice);
+          batchResults.push(...vectors);
+        }
+        embeddings = batchResults;
+        if (embeddings.length !== chunks.length) {
+          throw new Error(
+            `Embedding count mismatch: expected ${chunks.length}, received ${embeddings.length}`
+          );
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("Embedding error:", message);
+        await supabase
+          .schema("brand_profiles")
+          .from("brand_documents")
+          .update({ status: "error", error_message: message, updated_at: new Date().toISOString() })
+          .eq("id", input.documentId);
+        throw new Error(message);
+      }
+    }
+
+    const finalDoc = {
+      id: input.documentId,
+      name: safeFileName,
+      mime_type: mimeType,
+      updated_at: new Date().toISOString(),
+    };
+    
+    const { error: updateDocErr } = await supabase
+      .schema("brand_profiles")
+      .from("brand_documents")
+      .update(finalDoc)
+      .eq("id", input.documentId);
+    
+    if (updateDocErr) console.warn("Doc final update error", updateDocErr.message);
+
     const batchSize = 100;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const slice = chunks.slice(i, i + batchSize);
@@ -206,28 +222,29 @@ async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: 
         content,
         embedding: vectors[idx],
       }));
-      // @ts-expect-error Vector column type is supported server-side
       const { error } = await supabase
         .schema("brand_profiles")
         .from("brand_document_chunks")
-        .insert(rows);
-      if (error) console.warn("Insert chunk batch error", error.message);
+        .insert(rows as any);
+      if (error) {
+        console.error("Insert chunk batch error", error.message);
+        throw new Error(`Insert chunk batch failed: ${error.message}`);
+      }
     }
 
-    const { error: updateErr } = await supabase
+    const { error: finalizeErr } = await supabase
       .schema("brand_profiles")
       .from("brand_documents")
-      .update({ status: "ready", mime_type: mimeType, updated_at: new Date().toISOString() })
+      .update({ status: "ready", updated_at: new Date().toISOString() })
       .eq("id", input.documentId);
-    if (updateErr) console.warn("Update document status error", updateErr.message);
-
-    // Optional: broadcast realtime event via Postgres triggers or here
+    if (finalizeErr) console.warn("Finalize document status error", finalizeErr.message);
   } catch (err) {
-    console.error("Persist error:", err);
+    console.error("Processing error:", err);
+    const message = err instanceof Error ? err.message : String(err);
     await supabase
       .schema("brand_profiles")
       .from("brand_documents")
-      .update({ status: "error", error_message: String(err) })
+      .update({ status: "error", error_message: message, updated_at: new Date().toISOString() })
       .eq("id", input.documentId);
   }
 }

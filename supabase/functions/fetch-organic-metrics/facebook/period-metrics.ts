@@ -9,7 +9,7 @@ export function calculatePercentageChange(current: number, previous: number): nu
 
 // Fetch and process metrics for a given period
 export async function fetchPeriodMetrics(pageId: string, accessToken: string, dateParams: { since: string, until: string }) {
-  const metricsUrl = new URL(`https://graph.facebook.com/v22.0/${pageId}/insights`);
+  const metricsUrl = new URL(`https://graph.facebook.com/v23.0/${pageId}/insights`);
   metricsUrl.searchParams.append('metric', 'page_fan_adds,page_fan_removes,page_impressions_unique,page_impressions');
   metricsUrl.searchParams.append('period', 'day');
   metricsUrl.searchParams.append('since', dateParams.since);
@@ -17,7 +17,7 @@ export async function fetchPeriodMetrics(pageId: string, accessToken: string, da
   metricsUrl.searchParams.append('access_token', accessToken);
 
   // Posts URL setup for engagement metrics
-  const postsUrl = new URL(`https://graph.facebook.com/v22.0/${pageId}/feed`);
+  const postsUrl = new URL(`https://graph.facebook.com/v23.0/${pageId}/feed`);
   const effectiveSinceDate = new Date(dateParams.since);
   const requestedSinceDate = new Date(dateParams.since);
   const untilDate = new Date(dateParams.until);

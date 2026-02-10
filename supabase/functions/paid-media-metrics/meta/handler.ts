@@ -35,11 +35,21 @@ export async function handleMetaMetrics(params: any, req: Request) {
     console.log(`[paid-media-metrics:meta] ${requestId} ${msg}`, extra ?? "");
 
   try {
-    const { brandId, accountId: adAccountId, campaignId, range, forceRefresh } = params;
+    const { brandId, accountId: adAccountId, campaignId, adsetId, range, forceRefresh } = params;
 
-    if (!brandId || !adAccountId || !campaignId) {
+    if (!brandId || !adAccountId) {
       return new Response(
-        JSON.stringify({ error: "brandId, accountId, and campaignId are required" }),
+        JSON.stringify({ error: "brandId and accountId are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    if (!campaignId && !adsetId) {
+      return new Response(
+        JSON.stringify({ error: "Either campaignId or adsetId is required" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -93,11 +103,14 @@ export async function handleMetaMetrics(params: any, req: Request) {
     const sinceStr = since.toISOString().split("T")[0];
     const untilStr = until.toISOString().split("T")[0];
 
+    const entityId = adsetId || campaignId;
+    const scopeType = adsetId ? "paid_adset" : "paid_campaign";
+    
     const cacheKey = buildCacheKey({
       provider: "meta",
-      scopeType: "paid_campaign",
+      scopeType,
       accountId: adAccountId,
-      scopeId: campaignId,
+      scopeId: entityId,
       rangePreset: range?.preset || "last_7d",
       rangeSince: sinceStr,
       rangeUntil: untilStr,
@@ -138,14 +151,14 @@ export async function handleMetaMetrics(params: any, req: Request) {
       });
     }
 
-    log(`Fetching insights for campaign ${campaignId} from ${sinceStr} to ${untilStr}`);
+    log(`Fetching insights for ${adsetId ? 'adset' : 'campaign'} ${entityId} from ${sinceStr} to ${untilStr}`);
 
-    // Fetch campaign insights from Meta API
-    const insightsUrl = `https://graph.facebook.com/v18.0/${campaignId}/insights`;
+    // Fetch insights from Meta API (campaign or adset level)
+    const insightsUrl = `https://graph.facebook.com/v23.0/${entityId}/insights`;
     const insightsParams = new URLSearchParams({
       fields: "spend,impressions,clicks,cpc,ctr,actions,action_values,cost_per_action_type",
       time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
-      level: "campaign",
+      level: adsetId ? "adset" : "campaign",
       time_increment: "1",
       access_token: accessToken,
     });
@@ -232,9 +245,9 @@ export async function handleMetaMetrics(params: any, req: Request) {
         .insert({
         cache_key: cacheKey,
         provider: "meta",
-        scope_type: "paid_campaign",
+        scope_type: scopeType,
         account_id: adAccountId,
-        scope_id: campaignId,
+        scope_id: entityId,
         range_preset: range?.preset || "last_7d",
         range_since: sinceStr,
         range_until: untilStr,
@@ -247,7 +260,7 @@ export async function handleMetaMetrics(params: any, req: Request) {
       log("Cache write failed", cacheError);
     }
 
-    log("Meta metrics processed successfully", { campaignId, dataPoints: trends.length });
+    log("Meta metrics processed successfully", { entityId, scopeType, dataPoints: trends.length });
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });

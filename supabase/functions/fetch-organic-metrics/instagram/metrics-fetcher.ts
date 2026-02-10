@@ -6,7 +6,7 @@ import { formatDate } from "../date-utils.ts";
 export async function fetchMetricsForPeriod(instagramId: string, accessToken: string, dateParams: DateParams) {
   try {
     // Fetch Instagram metrics (reach + views + engagement)
-    const metricsUrl = new URL(`https://graph.facebook.com/v22.0/${instagramId}/insights`);
+    const metricsUrl = new URL(`https://graph.facebook.com/v23.0/${instagramId}/insights`);
     metricsUrl.searchParams.append('metric', 'reach,views,accounts_engaged');
     metricsUrl.searchParams.append('metric_type', 'total_value');
     metricsUrl.searchParams.append('period', 'day');
@@ -37,7 +37,7 @@ export async function fetchMetricsForPeriod(instagramId: string, accessToken: st
 
 // Fetch views breakdown by media type
 export async function fetchViewsBreakdown(instagramId: string, accessToken: string, dateParams: DateParams) {
-  const viewsBreakdownUrl = new URL(`https://graph.facebook.com/v22.0/${instagramId}/insights`);
+  const viewsBreakdownUrl = new URL(`https://graph.facebook.com/v23.0/${instagramId}/insights`);
   viewsBreakdownUrl.searchParams.append('metric', 'views');
   viewsBreakdownUrl.searchParams.append('metric_type', 'total_value');
   viewsBreakdownUrl.searchParams.append('breakdown', 'media_product_type');
@@ -55,7 +55,7 @@ export async function fetchViewsBreakdown(instagramId: string, accessToken: stri
 
 // Fetch reach breakdown by follower type
 export async function fetchReachBreakdown(instagramId: string, accessToken: string, dateParams: DateParams) {
-  const reachBreakdownUrl = new URL(`https://graph.facebook.com/v22.0/${instagramId}/insights`);
+  const reachBreakdownUrl = new URL(`https://graph.facebook.com/v23.0/${instagramId}/insights`);
   reachBreakdownUrl.searchParams.append('metric', 'reach');
   reachBreakdownUrl.searchParams.append('metric_type', 'total_value');
   reachBreakdownUrl.searchParams.append('breakdown', 'follow_type');
@@ -80,7 +80,7 @@ export async function fetchProfileVisits(instagramId: string, accessToken: strin
   dayBeforeYesterday.setDate(dayBeforeYesterday.getDate() - 1);
   const dayBeforeYesterdayStr = dayBeforeYesterday.toISOString().split('T')[0];
   
-  const profileVisitsUrl = new URL(`https://graph.facebook.com/v22.0/${instagramId}/insights`);
+  const profileVisitsUrl = new URL(`https://graph.facebook.com/v23.0/${instagramId}/insights`);
   profileVisitsUrl.searchParams.append('metric', 'profile_views');
   profileVisitsUrl.searchParams.append('metric_type', 'total_value');
   profileVisitsUrl.searchParams.append('period', 'day');
@@ -97,7 +97,7 @@ export async function fetchProfileVisits(instagramId: string, accessToken: strin
 
 // Fetch follower growth
 export async function fetchFollowerGrowth(instagramId: string, accessToken: string, dateParams: DateParams) {
-  const followerUrl = new URL(`https://graph.facebook.com/v22.0/${instagramId}/insights`);
+  const followerUrl = new URL(`https://graph.facebook.com/v23.0/${instagramId}/insights`);
   followerUrl.searchParams.append('metric', 'follower_count');
   followerUrl.searchParams.append('period', 'day');
   followerUrl.searchParams.append('since', dateParams.since);
