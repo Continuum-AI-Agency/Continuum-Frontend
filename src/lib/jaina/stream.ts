@@ -144,23 +144,104 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return nextBase;
       }
-      const text = parsed.data.content?.parts?.[0]?.text;
-      if (text) {
-        const detail = formatThoughtDetail(text);
-        return {
-          ...nextBase,
+      
+      let newState = { ...nextBase };
+      const author = parsed.data.author;
+
+      const lastAuthorEntry = [...state.progress]
+        .reverse()
+        .find((p) => p.data && typeof p.data === "object" && "author" in p.data && p.data.author);
+      const lastAuthor = lastAuthorEntry?.data?.author;
+
+      if (author && lastAuthor && author !== lastAuthor) {
+        newState = {
+          ...newState,
           progress: [
-            ...state.progress,
+            ...newState.progress,
             {
-              stage: "thinking",
+              stage: "handoff_start",
               at: new Date().toISOString(),
-              detail,
-              data: parsed.data,
+              detail: `Delegating to ${author}`,
+              data: { stage: "handoff_start", to: author, from: lastAuthor },
             },
           ],
         };
       }
-      return nextBase;
+
+      for (const part of parsed.data.content.parts) {
+        if ("text" in part) {
+          const text = part.text;
+          const detail = formatThoughtDetail(text);
+          newState = {
+            ...newState,
+            progress: [
+              ...newState.progress,
+              {
+                stage: "thinking",
+                at: new Date().toISOString(),
+                detail,
+                data: { ...parsed.data, author },
+              },
+            ],
+          };
+        } else if ("functionCall" in part) {
+          const call = part.functionCall;
+          const toolCall = {
+            id: call.id,
+            name: call.name,
+            args: call.args,
+            metadata: {},
+          };
+          newState = {
+            ...newState,
+            toolCalls: [...newState.toolCalls, toolCall],
+            progress: [
+              ...newState.progress,
+              {
+                stage: "tool_start",
+                at: new Date().toISOString(),
+                detail: `Running tool: ${formatToolLabel(call.name)}`,
+                data: {
+                  stage: "tool_start",
+                  tool_name: call.name,
+                  tool_call_id: call.id,
+                  author,
+                },
+              },
+            ],
+          };
+        } else if ("functionResponse" in part) {
+          const res = part.functionResponse;
+          const isError = res.response && typeof res.response === "object" && "error" in res.response;
+          const toolResult = {
+            id: res.id,
+            name: res.name,
+            ok: !isError,
+            cached: false,
+            output: res.response,
+            error: isError ? String((res.response as any).error) : undefined,
+          };
+          newState = {
+            ...newState,
+            toolResults: [...newState.toolResults, toolResult],
+            progress: [
+              ...newState.progress,
+              {
+                stage: "tool_complete",
+                at: new Date().toISOString(),
+                detail: `Finished tool: ${formatToolLabel(res.name)}`,
+                data: {
+                  stage: "tool_complete",
+                  tool_name: res.name,
+                  tool_call_id: res.id,
+                  author,
+                },
+              },
+            ],
+          };
+        }
+      }
+      return newState;
     }
     case "response.output_json.delta": {
       const parsed = outputJsonDeltaSchema.safeParse(event.data ?? {});

@@ -47,6 +47,7 @@ import {
 import { Sources, SourcesContent, SourcesTrigger, Source } from "@/components/ai-elements/sources";
 import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
 import { Task, TaskContent, TaskTrigger, TaskItem } from "@/components/ai-elements/task";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type JainaReportViewProps = {
   report: SoTReport | null;
@@ -56,6 +57,8 @@ type JainaReportViewProps = {
 };
 
 export function JainaReportView({ report, status, error, onSuggestionClick }: JainaReportViewProps) {
+  const { show } = useToast();
+
   if (status === "error") {
     return (
       <Callout.Root color="red" variant="surface">
@@ -80,7 +83,11 @@ export function JainaReportView({ report, status, error, onSuggestionClick }: Ja
   };
 
   const handleSendEmail = () => {
-    alert("This feature is coming soon! It will allow you to send this report directly to your inbox.");
+    show({
+      title: "Coming Soon",
+      description: "Email reports are currently in development.",
+      variant: "info",
+    });
   };
 
   return (

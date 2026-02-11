@@ -175,14 +175,30 @@ export const thoughtEventSchema = z.object({
 export type ThoughtEventData = z.infer<typeof thoughtEventSchema>;
 
 export const adkEventSchema = z.object({
+  author: z.string().optional(),
   content: z.object({
+    role: z.string().optional(),
     parts: z.array(
-      z.object({
-        text: z.string(),
-      })
+      z.union([
+        z.object({ text: z.string() }),
+        z.object({
+          functionCall: z.object({
+            name: z.string(),
+            args: z.record(z.string(), z.unknown()),
+            id: z.string(),
+          }),
+        }),
+        z.object({
+          functionResponse: z.object({
+            name: z.string(),
+            response: z.record(z.string(), z.unknown()),
+            id: z.string(),
+          }),
+        }),
+      ])
     ),
   }),
-});
+}).passthrough();
 
 export type AdkEventData = z.infer<typeof adkEventSchema>;
 

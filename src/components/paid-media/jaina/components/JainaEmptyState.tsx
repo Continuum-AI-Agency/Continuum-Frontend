@@ -25,6 +25,7 @@ export function JainaEmptyState({
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5 }}
           className="rounded-full bg-indigo-50/5 p-4 border border-indigo-500/20 backdrop-blur-sm shadow-[0_0_20px_rgba(79,70,229,0.1)]"
+          aria-hidden="true"
         >
           <RocketIcon className="h-8 w-8 text-indigo-400" />
         </motion.div>
@@ -50,6 +51,7 @@ export function JainaEmptyState({
         transition={{ duration: 0.5 }}
         whileHover={{ scale: 1.1, rotate: 5 }}
         className="rounded-full bg-purple-500/10 p-4 mb-2 cursor-pointer border border-purple-500/20 shadow-lg shadow-purple-500/5"
+        aria-hidden="true"
       >
         <RocketIcon className="h-10 w-10 text-purple-400" />
       </motion.div>

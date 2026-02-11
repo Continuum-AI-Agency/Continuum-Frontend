@@ -68,6 +68,7 @@ export function JainaHeader({
           size="1"
           onClick={onClearMemory}
           className="hover:bg-white/10"
+          aria-label="Clear Memory"
         >
           <ResetIcon />
           <span className="hidden xs:inline">Memory</span>
@@ -78,6 +79,7 @@ export function JainaHeader({
           size="1"
           onClick={onClearConversation}
           className="hover:bg-white/10"
+          aria-label="Clear Conversation"
         >
           <Cross2Icon />
           <span className="hidden xs:inline">Clear</span>

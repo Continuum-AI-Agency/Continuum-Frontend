@@ -196,11 +196,10 @@ export function JainaMessageItem({
                                 />
                                 <AgentContent>
                                   <Text size="1" color="gray">
-                                    Delegating task to specialized agent for deeper analysis.
+                                    {entry.data.from
+                                      ? `Transferring control from ${entry.data.from} to ${entry.data.to}.`
+                                      : `Delegating task to ${entry.data.to}.`}
                                   </Text>
-                                  <pre className="mt-2 text-[10px] bg-black/40 p-2 rounded border border-white/5 overflow-x-auto text-secondary font-mono">
-                                    {JSON.stringify(entry.data, null, 2)}
-                                  </pre>
                                 </AgentContent>
                               </Agent>
                             </div>

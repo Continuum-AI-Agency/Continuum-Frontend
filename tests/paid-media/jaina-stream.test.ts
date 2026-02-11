@@ -82,7 +82,7 @@ test("accumulates JSON deltas into a SoTReport on response.done", () => {
   const finalState = events.reduce(reduceJainaStreamEvent, createInitialJainaStreamState());
 
   assert.equal(finalState.status, "complete");
-  assert.equal(finalState.report?.executive_summary, sampleReport.executive_summary);
+  assert.equal((finalState.report as SoTReport)?.executive_summary, sampleReport.executive_summary);
 });
 
 test("records progress details and tool results", () => {
@@ -157,7 +157,7 @@ test("summarizes structured thought payloads into readable text", () => {
     next_steps: ["Refresh connection", "Confirm permissions"],
   };
 
-  const text = `\\\`\\\`\\\`json\\n${JSON.stringify(thoughtPayload, null, 2)}\\n\\\`\\\`\\\``;
+  const text = "```json\n" + JSON.stringify(thoughtPayload, null, 2) + "\n```";
   const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
     type: "thought",
     data: { text },
@@ -169,4 +169,95 @@ test("summarizes structured thought payloads into readable text", () => {
   assert.ok(detail.includes("Recommendations:"));
   assert.ok(detail.includes("Next steps:"));
   assert.ok(detail.includes("Tables:"));
+});
+
+test("parses adk.event with functionCall", () => {
+  const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "adk.event",
+    data: {
+      author: "Jaina_specialist",
+      content: {
+        parts: [{
+          functionCall: {
+            name: "test_tool",
+            args: { foo: "bar" },
+            id: "call_123"
+          }
+        }]
+      }
+    }
+  });
+
+  assert.equal(state.toolCalls.length, 1);
+  assert.equal(state.toolCalls[0].name, "test_tool");
+  assert.deepEqual(state.toolCalls[0].args, { foo: "bar" });
+  
+  const progress = state.progress.find(p => p.stage === "tool_start");
+  assert.ok(progress);
+  assert.equal(progress.data.tool_name, "test_tool");
+});
+
+test("parses adk.event with functionResponse", () => {
+  const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "adk.event",
+    data: {
+      author: "Jaina_specialist",
+      content: {
+        parts: [{
+          functionResponse: {
+            name: "test_tool",
+            response: { result: "success" },
+            id: "call_123"
+          }
+        }]
+      }
+    }
+  });
+
+  assert.equal(state.toolResults.length, 1);
+  assert.equal(state.toolResults[0].id, "call_123");
+  assert.deepEqual(state.toolResults[0].output, { result: "success" });
+
+  const progress = state.progress.find(p => p.stage === "tool_complete");
+  assert.ok(progress);
+  assert.equal(progress.data.tool_name, "test_tool");
+});
+
+test("parses adk.event with author for handoff detection", () => {
+  const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+    type: "adk.event",
+    data: {
+      author: "Jaina_campaign_specialist",
+      content: {
+        parts: [{ text: "Thinking..." }]
+      }
+    }
+  });
+  
+  assert.equal(state.progress.length, 1);
+  assert.equal((state.progress[0].data as any).author, "Jaina_campaign_specialist");
+});
+
+test("detects handoff when author changes", () => {
+  const initialState = createInitialJainaStreamState();
+  const state1 = reduceJainaStreamEvent(initialState, {
+    type: "adk.event",
+    data: {
+      author: "Agent_A",
+      content: { parts: [{ text: "Hello" }] }
+    }
+  });
+  
+  const state2 = reduceJainaStreamEvent(state1, {
+    type: "adk.event",
+    data: {
+      author: "Agent_B",
+      content: { parts: [{ text: "Hi there" }] }
+    }
+  });
+
+  const handoff = state2.progress.find(p => p.stage === "handoff_start");
+  assert.ok(handoff, "Should inject handoff_start event");
+  assert.equal(handoff.data.to, "Agent_B");
+  assert.equal(handoff.data.from, "Agent_A");
 });
