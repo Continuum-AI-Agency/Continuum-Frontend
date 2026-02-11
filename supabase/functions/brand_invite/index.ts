@@ -34,6 +34,12 @@ const InputSchema = z.discriminatedUnion("action", [
     token: z.string().min(10),
     brandId: z.string().uuid(),
   }),
+  z.object({
+    action: z.literal("remove_member"),
+    brandId: z.string().uuid(),
+    userId: z.string().uuid().optional(),
+    email: z.string().email().optional(),
+  }),
 ]);
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -479,6 +485,82 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>, lo
   return json({ brandId: invite.brand_profile_id });
 }
 
+async function handleRemoveMember(req: Request, input: z.infer<typeof InputSchema>, logger: Logger) {
+  if (input.action !== "remove_member") return json({ error: "Invalid action" }, 400);
+  if (!input.userId && !input.email) {
+    return json({ error: "userId or email is required" }, 400);
+  }
+
+  const authed = createSupabaseForRequest(req);
+  const service = createServiceClient();
+
+  const { data: userData, error: userError } = await authed.auth.getUser();
+  if (userError) {
+    logger.error("Auth user lookup failed", { error: userError });
+    return json({ error: "Not authenticated" }, 401);
+  }
+
+  const actorId = userData?.user?.id ?? "";
+  if (!actorId) return json({ error: "Not authenticated" }, 401);
+
+  const permissionError = await assertOwnerOrAdmin(authed, input.brandId, actorId, logger);
+  if (permissionError) return permissionError;
+
+  const email = input.email?.toLowerCase();
+  const nowIso = new Date().toISOString();
+
+  if (input.userId) {
+    const { error: deleteError } = await service
+      .schema("brand_profiles")
+      .from("permissions")
+      .delete()
+      .eq("brand_profile_id", input.brandId)
+      .eq("user_id", input.userId);
+
+    if (deleteError) {
+      logger.error("Permission delete failed", { error: deleteError });
+      return json({ error: deleteError.message }, 500);
+    }
+  }
+
+  if (email) {
+    const { error: deleteError } = await service
+      .schema("brand_profiles")
+      .from("permissions")
+      .delete()
+      .eq("brand_profile_id", input.brandId)
+      .eq("email", email);
+
+    if (deleteError) {
+      logger.error("Permission delete by email failed", { error: deleteError });
+      return json({ error: deleteError.message }, 500);
+    }
+
+    const { error: inviteError } = await service
+      .schema("brand_profiles")
+      .from("invites")
+      .update({ revoked_at: nowIso })
+      .eq("brand_profile_id", input.brandId)
+      .eq("email", email)
+      .is("accepted_at", null)
+      .is("revoked_at", null);
+
+    if (inviteError) {
+      logger.error("Invite revoke failed", { error: inviteError });
+      return json({ error: inviteError.message }, 500);
+    }
+  }
+
+  logger.info("Member removed", {
+    brandId: input.brandId,
+    userId: input.userId ?? null,
+    email: email ?? null,
+    actorId,
+  });
+
+  return json({ ok: true });
+}
+
 async function handler(req: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   const logger = createLogger(requestId);
@@ -496,7 +578,10 @@ async function handler(req: Request): Promise<Response> {
     if (parsed.action === "create") {
       return await handleCreate(req, parsed, logger);
     }
-    return await handleAccept(req, parsed, logger);
+    if (parsed.action === "accept") {
+      return await handleAccept(req, parsed, logger);
+    }
+    return await handleRemoveMember(req, parsed, logger);
   } catch (err) {
     logger.error("Unhandled error", { error: err });
     return json({ error: "Internal server error" }, 500);

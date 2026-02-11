@@ -1,6 +1,7 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 import {
   BRAND_ROLES,
   type BrandInvite,
@@ -829,30 +830,28 @@ export async function removeMemberFromBrand(
     throw new Error("Member identifier is required");
   }
 
-  if (member.userId) {
-    const { error } = await supabase
-      .schema("brand_profiles")
-      .from("permissions")
-      .delete()
-      .eq("brand_profile_id", brandId)
-      .eq("user_id", member.userId);
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-    if (error) {
-      throw error;
-    }
+  if (sessionError || !session?.access_token) {
+    throw new Error("Missing session access token");
   }
 
-  if (member.email) {
-    const { error } = await supabase
-      .schema("brand_profiles")
-      .from("permissions")
-      .delete()
-      .eq("brand_profile_id", brandId)
-      .eq("email", member.email.toLowerCase());
+  const { error } = await supabase.functions.invoke("brand_invite", {
+    body: {
+      action: "remove_member",
+      brandId,
+      userId: member.userId,
+      email: member.email,
+    },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
 
-    if (error) {
-      throw error;
-    }
+  if (error) {
+    const message = await getFunctionsInvokeErrorMessage(error);
+    throw new Error(message ?? error.message ?? "Unable to remove member");
   }
 
   return updateBrandState(brandId, state => {
