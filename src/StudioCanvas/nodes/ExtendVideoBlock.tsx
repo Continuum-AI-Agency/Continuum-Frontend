@@ -1,15 +1,47 @@
-import React, { useState } from 'react';
-import { Handle, Position, NodeProps, Node } from '@xyflow/react';
+import React, { useCallback, useState } from 'react';
+import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
 import { Card } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Skeleton } from '@/components/ui/skeleton';
+import { VideoIcon } from '@radix-ui/react-icons';
 import type { ExtendVideoNodeData } from '../types';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { useStudioStore } from '../stores/useStudioStore';
+import { BlockToolbar } from '../components/BlockToolbar';
+import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
+import { executeWorkflow } from '../utils/executeWorkflow';
+import { useToast } from '@/components/ui/ToastProvider';
+import { downloadAsset } from '../utils/downloadAsset';
 
-export function ExtendVideoBlock({ id, selected }: NodeProps<Node<ExtendVideoNodeData>>) {
+export function ExtendVideoBlock({ id, data, selected }: NodeProps<Node<ExtendVideoNodeData>>) {
   const [isHovered, setIsHovered] = useState(false);
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
+  const executionControls = useWorkflowExecution();
+  const { show } = useToast();
+
+  const handleRun = useCallback(async () => {
+    console.info("[studio] run extend video node", { nodeId: id });
+    await executeWorkflow(executionControls, { targetNodeId: id });
+  }, [executionControls, id]);
+
+  const handleDownload = useCallback(() => {
+    const success = downloadAsset({
+      data: data.generatedVideo as string | Blob | undefined,
+      baseName: `extended-video-${id}`,
+      fallbackExtension: 'mp4',
+    });
+
+    if (!success) {
+      show({
+        title: 'Download unavailable',
+        description: 'Run the node to generate a video before downloading.',
+        variant: 'warning',
+      });
+    }
+  }, [data.generatedVideo, id, show]);
 
   return (
     <TooltipProvider>
@@ -24,12 +56,43 @@ export function ExtendVideoBlock({ id, selected }: NodeProps<Node<ExtendVideoNod
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
+        <NodeResizer 
+          minWidth={260} 
+          minHeight={160} 
+          isVisible={selected} 
+          lineClassName="border-brand-primary/60" 
+          handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
+        />
+
+        <BlockToolbar 
+          isVisible={isHovered || !!data.isToolbarVisible}
+          onDuplicate={() => duplicateNode(id)}
+          onDelete={() => deleteNode(id)}
+          onRun={handleRun}
+          onDownload={handleDownload}
+        />
+
       <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-3 py-1 border-b border-subtle text-[10px] font-semibold uppercase tracking-widest text-secondary bg-default/70">
           <span>Extend Video</span>
         </div>
-        <div className="flex-1 flex items-center justify-center text-secondary text-xs">
-          Placeholder block for future video extension workflows.
+        <div className="flex-1 flex items-center justify-center text-secondary text-xs relative overflow-hidden bg-default/60">
+          {data.isExecuting ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-default p-4">
+              <Skeleton className="w-full h-full bg-muted" />
+            </div>
+          ) : data.generatedVideo ? (
+            <video
+              src={data.generatedVideo as string}
+              controls
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <VideoIcon className="w-8 h-8 opacity-20" />
+              <span className="opacity-50 text-[10px]">Ready to extend video</span>
+            </div>
+          )}
         </div>
       </Card>
 

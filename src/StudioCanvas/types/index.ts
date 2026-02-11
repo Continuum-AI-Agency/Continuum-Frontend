@@ -90,6 +90,7 @@ export interface VideoGenNodeData extends BaseNodeData {
 
 export interface ExtendVideoNodeData extends BaseNodeData {
   prompt?: string;
+  generatedVideo?: string | Blob;
 }
 
 export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData;
