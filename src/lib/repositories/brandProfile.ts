@@ -36,7 +36,7 @@ export interface BrandProfileRepository {
   renameBrand(brandId: string, name: string): Promise<void>;
   updateLogo(brandId: string, logoPath: string | null): Promise<void>;
   createBrand(name?: string): Promise<{ brandId: string }>;
-  removeMember(brandId: string, email: string): Promise<void>;
+  removeMember(brandId: string, member: { userId?: string; email?: string }): Promise<void>;
   createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }>;
   revokeInvite(brandId: string, inviteId: string): Promise<void>;
   deleteBrand(brandId: string): Promise<string | null>;
@@ -60,8 +60,8 @@ export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
       const { brandId } = await createBrandProfile(name);
       return { brandId };
     },
-    async removeMember(brandId: string, email: string) {
-      await removeMemberFromBrand(brandId, email);
+    async removeMember(brandId: string, member: { userId?: string; email?: string }) {
+      await removeMemberFromBrand(brandId, member);
     },
     async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string) {
       const { link } = await createMagicLinkInvite(brandId, email, role, siteUrl);
@@ -102,8 +102,12 @@ export function createGatewayBrandProfileRepository(): BrandProfileRepository {
       const schema = z.object({ brandId: z.string() });
       return await httpServer.request({ path: "/brands", method: "POST", body: { name }, schema });
     },
-    async removeMember(brandId: string, email: string): Promise<void> {
-      await httpServer.request({ path: `/brands/${brandId}/members`, method: "DELETE", body: { email } });
+    async removeMember(brandId: string, member: { userId?: string; email?: string }): Promise<void> {
+      await httpServer.request({
+        path: `/brands/${brandId}/members`,
+        method: "DELETE",
+        body: { email: member.email, userId: member.userId },
+      });
     },
     async createMagicLink(brandId: string, email: string, role: BrandRole, siteUrl: string): Promise<{ link: string }> {
       const schema = z.object({ link: z.string().min(1) });

@@ -43,6 +43,31 @@ function json(body: Record<string, unknown>, status = 200) {
   });
 }
 
+type Logger = {
+  info: (message: string, details?: Record<string, unknown>) => void;
+  error: (message: string, details?: Record<string, unknown>) => void;
+};
+
+function createLogger(requestId: string): Logger {
+  const prefix = `[brand_invite:${requestId}]`;
+  return {
+    info: (message, details) => {
+      if (details) {
+        console.log(prefix, message, details);
+        return;
+      }
+      console.log(prefix, message);
+    },
+    error: (message, details) => {
+      if (details) {
+        console.error(prefix, message, details);
+        return;
+      }
+      console.error(prefix, message);
+    },
+  };
+}
+
 function createSupabaseForRequest(req: Request) {
   const url = Deno.env.get("SUPABASE_URL");
   const anon = Deno.env.get("SUPABASE_ANON_KEY");
@@ -62,6 +87,7 @@ async function assertOwnerOrAdmin(
   supabase: ReturnType<typeof createSupabaseForRequest>,
   brandId: string,
   userId: string,
+  logger: Logger,
 ): Promise<Response | null> {
   const { data, error } = await supabase
     .schema("brand_profiles")
@@ -72,11 +98,12 @@ async function assertOwnerOrAdmin(
     .maybeSingle();
 
   if (error) {
-    console.error("Permission lookup failed", error);
+    logger.error("Permission lookup failed", { error });
     return json({ error: "Permission check failed" }, 500);
   }
   const role = data?.role;
   if (!role || !["owner", "admin"].includes(role)) {
+    logger.info("Permission denied", { brandId, userId, role });
     return json({ error: "Forbidden" }, 403);
   }
   return null;
@@ -84,7 +111,7 @@ async function assertOwnerOrAdmin(
 
 function buildMagicLink(siteUrl: string, token: string, brandId: string) {
   const base = siteUrl.replace(/\/$/, "");
-  const url = new URL("/invite", base);
+  const url = new URL("/invite/callback", base);
   url.searchParams.set("token", token);
   url.searchParams.set("brand", brandId);
   return url.toString();
@@ -198,7 +225,7 @@ async function updateActiveBrandMetadata(options: {
   }
 }
 
-async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
+async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, logger: Logger) {
   if (input.action !== "create") return json({ error: "Invalid action" }, 400);
 
   const authed = createSupabaseForRequest(req);
@@ -206,13 +233,21 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
 
   const { data: userData, error: userError } = await authed.auth.getUser();
   if (userError) {
-    console.error("Auth user lookup failed", userError);
+    logger.error("Auth user lookup failed", { error: userError });
     return json({ error: "Not authenticated" }, 401);
   }
   const inviterId = userData?.user?.id ?? "";
   if (!inviterId) return json({ error: "Not authenticated" }, 401);
 
-  const permissionError = await assertOwnerOrAdmin(authed, input.brandId, inviterId);
+  logger.info("Invite create requested", {
+    brandId: input.brandId,
+    email: input.email,
+    role: input.role,
+    inviterId,
+    forceResend: Boolean(input.forceResend),
+  });
+
+  const permissionError = await assertOwnerOrAdmin(authed, input.brandId, inviterId, logger);
   if (permissionError) return permissionError;
 
   const email = input.email.toLowerCase();
@@ -242,12 +277,12 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
         options: { redirectTo: destination },
       });
       if (magicLink.error) {
-        console.error("Magic link generation failed", magicLink.error);
+        logger.error("Magic link generation failed", { error: magicLink.error });
         return json({ error: magicLink.error.message ?? "Magic link generation failed" }, 500);
       }
       linkData = magicLink.data as GeneratedLinkData | null;
     } else {
-      console.error("Invite link generation failed", inviteLink.error);
+      logger.error("Invite link generation failed", { error: inviteLink.error });
       return json({ error: authError.message ?? "Invite link generation failed" }, 500);
     }
   } else {
@@ -267,10 +302,13 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
       .eq("brand_profile_id", input.brandId)
       .maybeSingle();
     if (memberError) {
-      console.error("Membership lookup failed", memberError);
+      logger.error("Membership lookup failed", { error: memberError });
       return json({ error: "Failed to validate invitee" }, 500);
     }
-    if (member) return json({ error: "User is already a member of this brand" }, 400);
+    if (member) {
+      logger.info("Invite rejected: already a member", { brandId: input.brandId, userId: linkUserId });
+      return json({ error: "User is already a member of this brand" }, 400);
+    }
   }
 
   const { error: upsertError, data: inviteRow } = await service
@@ -288,7 +326,7 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
     .single<{ id: string }>();
 
   if (upsertError) {
-    console.error("Invite upsert failed", upsertError);
+    logger.error("Invite upsert failed", { error: upsertError });
     return json({ error: upsertError.message }, 500);
   }
 
@@ -306,7 +344,7 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
         { onConflict: "user_id,brand_profile_id" }
       );
     if (permError) {
-      console.error("Permissions upsert failed", permError);
+      logger.error("Permissions upsert failed", { error: permError });
       return json({ error: permError.message }, 500);
     }
   }
@@ -318,7 +356,7 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
     .eq("id", input.brandId)
     .maybeSingle();
   if (brandError) {
-    console.error("Brand lookup failed", brandError);
+    logger.error("Brand lookup failed", { error: brandError });
     return json({ error: "Unable to resolve brand details" }, 500);
   }
 
@@ -348,9 +386,10 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
     emailSent = emailResult.ok;
     if (!emailResult.ok) {
       warning = emailResult.message ?? "Invite link created but email failed to send.";
+      logger.error("Resend email failed", { message: warning });
     }
   } catch (err) {
-    console.error("Resend email failed", err);
+    logger.error("Resend email failed", { error: err });
     warning = "Invite link created but email failed to send.";
   }
 
@@ -364,13 +403,19 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>) {
   });
 }
 
-async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
+async function handleAccept(req: Request, input: z.infer<typeof InputSchema>, logger: Logger) {
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
   const { data: userData } = await authed.auth.getUser();
   const user = userData?.user;
   if (!user) return json({ error: "Not authenticated" }, 401);
+
+  logger.info("Invite accept requested", {
+    brandId: input.brandId,
+    userId: user.id,
+    userEmail: user.email,
+  });
 
   const tokenHash = await hashToken(input.token);
   const nowIso = new Date().toISOString();
@@ -406,7 +451,7 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
       { onConflict: "user_id,brand_profile_id" }
     );
   if (permError) {
-    console.error("Permissions upsert failed", permError);
+    logger.error("Permissions upsert failed", { error: permError });
     return json({ error: permError.message }, 500);
   }
 
@@ -418,7 +463,7 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
       existingMetadata: (user.user_metadata ?? {}) as Record<string, unknown>,
     });
   } catch (error) {
-    console.error("Active brand metadata update failed", error);
+    logger.error("Active brand metadata update failed", { error });
   }
 
   const { error: acceptError } = await service
@@ -427,7 +472,7 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
     .update({ accepted_at: new Date().toISOString() })
     .eq("id", invite.id);
   if (acceptError) {
-    console.error("Invite accept update failed", acceptError);
+    logger.error("Invite accept update failed", { error: acceptError });
     return json({ error: acceptError.message }, 500);
   }
 
@@ -435,6 +480,8 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>) {
 }
 
 async function handler(req: Request): Promise<Response> {
+  const requestId = crypto.randomUUID();
+  const logger = createLogger(requestId);
   try {
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -447,11 +494,11 @@ async function handler(req: Request): Promise<Response> {
     }
 
     if (parsed.action === "create") {
-      return await handleCreate(req, parsed);
+      return await handleCreate(req, parsed, logger);
     }
-    return await handleAccept(req, parsed);
+    return await handleAccept(req, parsed, logger);
   } catch (err) {
-    console.error("Unhandled error", err);
+    logger.error("Unhandled error", { error: err });
     return json({ error: "Internal server error" }, 500);
   }
 }

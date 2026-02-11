@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
 import type { BrandRole } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
@@ -35,9 +36,13 @@ export async function createBrandProfileAction(name?: string): Promise<void> {
   redirect(`/onboarding?brand=${result.brandId}`);
 }
 
-export async function removeMemberAction(brandId: string, email: string): Promise<void> {
+export async function removeMemberAction(
+  brandId: string,
+  memberId: string,
+  email?: string
+): Promise<void> {
   const repo = createBrandProfileRepository();
-  await repo.removeMember(brandId, email);
+  await repo.removeMember(brandId, { userId: memberId, email });
 }
 
 export async function createMagicLinkAction(
@@ -87,7 +92,8 @@ export async function createMagicLinkAction(
   });
 
   if (error || !data?.link) {
-    throw new Error(error?.message ?? "Unable to create invite");
+    const message = await getFunctionsInvokeErrorMessage(error);
+    throw new Error(message ?? error?.message ?? "Unable to create invite");
   }
 
   return data;

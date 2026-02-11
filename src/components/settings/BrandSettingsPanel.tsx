@@ -195,11 +195,11 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
     });
   }
 
-  function handleRemoveMember(email: string) {
+  function handleRemoveMember(memberId: string, email?: string) {
     startTransition(async () => {
       try {
-        await removeMemberAction(activeBrandId, email);
-        show({ title: "Member removed", description: `${email} no longer has access.`, variant: "success" });
+        await removeMemberAction(activeBrandId, memberId, email);
+        show({ title: "Member removed", description: `${email ?? "Member"} no longer has access.`, variant: "success" });
         router.refresh();
       } catch (error) {
         show({
@@ -428,7 +428,7 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
                       variant="ghost"
                       color="red"
                       disabled={member.role === "owner" || isPending}
-                      onClick={() => handleRemoveMember(member.email)}
+                      onClick={() => handleRemoveMember(member.id, member.email)}
                     >
                       Remove
                     </Button>

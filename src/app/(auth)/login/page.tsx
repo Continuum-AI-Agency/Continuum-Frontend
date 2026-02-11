@@ -15,6 +15,7 @@ import { FeatureList } from "@/components/auth/FeatureList";
 import { EmailSent } from "@/components/auth/EmailSent";
 import { useAuth } from "@/hooks/useAuth";
 import { magicLinkSchema, type MagicLinkInput } from "@/lib/auth/schemas";
+import { buildInviteCallbackPath } from "@/lib/invites/urls";
 import styles from "./login.module.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -46,7 +47,7 @@ export default function LoginPage() {
   const inviteBrand = searchParams.get("brand");
   const inviteRedirect =
     inviteToken && inviteBrand
-      ? `/invite?token=${encodeURIComponent(inviteToken)}&brand=${encodeURIComponent(inviteBrand)}`
+      ? buildInviteCallbackPath(inviteToken, inviteBrand)
       : undefined;
 
   const {

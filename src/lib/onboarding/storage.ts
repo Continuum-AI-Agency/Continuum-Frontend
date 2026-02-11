@@ -821,19 +821,50 @@ export async function updateBrandLogo(
 
 export async function removeMemberFromBrand(
   brandId: string,
-  email: string
+  member: { userId?: string; email?: string }
 ): Promise<OnboardingState> {
   const { supabase } = await getAuthContext();
-  
-  await supabase
-    .schema("brand_profiles")
-    .from("permissions")
-    .delete()
-    .eq("brand_profile_id", brandId)
-    .eq("email", email);
+
+  if (!member.userId && !member.email) {
+    throw new Error("Member identifier is required");
+  }
+
+  if (member.userId) {
+    const { error } = await supabase
+      .schema("brand_profiles")
+      .from("permissions")
+      .delete()
+      .eq("brand_profile_id", brandId)
+      .eq("user_id", member.userId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  if (member.email) {
+    const { error } = await supabase
+      .schema("brand_profiles")
+      .from("permissions")
+      .delete()
+      .eq("brand_profile_id", brandId)
+      .eq("email", member.email.toLowerCase());
+
+    if (error) {
+      throw error;
+    }
+  }
 
   return updateBrandState(brandId, state => {
-    const members = state.members.filter((member: BrandMember) => member.email !== email);
+    const members = state.members.filter((memberEntry: BrandMember) => {
+      if (member.userId && memberEntry.id === member.userId) {
+        return false;
+      }
+      if (member.email && memberEntry.email === member.email) {
+        return false;
+      }
+      return true;
+    });
     return mergeOnboardingState(state, { members });
   });
 }
@@ -870,7 +901,7 @@ export async function createMagicLinkInvite(
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     }, { onConflict: "brand_profile_id,email" } as any);
 
-  const link = `${siteUrl.replace(/\/$/, "")}/invite?token=${token}&brand=${brandId}`;
+  const link = `${siteUrl.replace(/\/$/, "")}/invite/callback?token=${token}&brand=${brandId}`;
   
   const state = await updateBrandState(brandId, current => {
     const invites = current.invites.filter((item: BrandInvite) => item.email !== email);

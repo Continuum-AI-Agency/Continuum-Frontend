@@ -3,7 +3,7 @@
 import { Flex } from "@radix-ui/themes";
 import React from "react";
 import { useSession } from "@/hooks/useSession";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useToastContext } from "@/components/ui/ToastProvider";
 import {
   createDashboardWelcomeToastOptions,
@@ -23,6 +23,7 @@ import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./navigation/routes";
 
 export function DashboardHeader() {
   useDashboardWelcomeToast();
+  useInviteToast();
   const pathname = usePathname();
   
   // Find current route label for breadcrumb
@@ -77,4 +78,51 @@ function useDashboardWelcomeToast() {
 
     toast.show(createDashboardWelcomeToastOptions(displayName ?? "User"));
   }, [displayName, pathname, toast, user]);
+}
+
+function useInviteToast() {
+  const toast = useToastContext();
+  const searchParams = useSearchParams();
+  const lastShownKeyRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!toast) return;
+    const inviteStatus = searchParams.get("invite");
+    if (!inviteStatus) return;
+
+    const messageParam = searchParams.get("message");
+    const key = `${inviteStatus}:${messageParam ?? ""}`;
+    if (lastShownKeyRef.current === key) return;
+    lastShownKeyRef.current = key;
+
+    if (inviteStatus === "accepted") {
+      toast.show({
+        title: "Invite accepted",
+        description: "You're now a member of this brand.",
+        variant: "success",
+        durationMs: 6000,
+      });
+    } else if (inviteStatus === "missing_params") {
+      toast.show({
+        title: "Invite link incomplete",
+        description: "The invite link is missing details. Please request a new invite.",
+        variant: "warning",
+        durationMs: 6000,
+      });
+    } else if (inviteStatus === "error") {
+      toast.show({
+        title: "Invite failed",
+        description: messageParam ?? "The invite could not be accepted.",
+        variant: "error",
+        durationMs: 7000,
+      });
+    }
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("invite");
+      url.searchParams.delete("message");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, [searchParams, toast]);
 }
