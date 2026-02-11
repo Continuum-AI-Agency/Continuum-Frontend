@@ -58,7 +58,7 @@ export function JainaChatSurface({
       updateMessage(activeResponseId, {
         status: "done",
         content,
-        report: state.report,
+        report: state.report ?? undefined,
         finalThought,
         renderAsReport,
         reasoning: state.progress,

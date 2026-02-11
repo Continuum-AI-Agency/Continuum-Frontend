@@ -56,7 +56,13 @@ export const getReportSummary = (report: ReportPayload | null) => {
   if ("type" in report && report.type === "direct_answer") {
     return report.content;
   }
-  return report.executive_summary ?? (report as { summary?: string }).summary ?? "";
+  if ("executive_summary" in report && report.executive_summary) {
+    return report.executive_summary;
+  }
+  if ("summary" in report && report.summary) {
+    return report.summary;
+  }
+  return "";
 };
 
 export const formatStageLabel = (stage: string) => {
