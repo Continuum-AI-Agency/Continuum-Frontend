@@ -85,6 +85,19 @@ export async function GET(request: Request) {
         fallbackRedirect: `${origin}/login?error=auth_callback_failed`,
       });
     }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const isEmailUser = user.app_metadata.provider === "email";
+      const hasPassword = user.user_metadata?.has_password === true;
+
+      if (isEmailUser && !hasPassword) {
+        return renderPopupAwareResult({
+          success: true,
+          fallbackRedirect: `${origin}/set-password`,
+        });
+      }
+    }
   } catch (error) {
     console.error("[AUTH_CALLBACK] Unexpected error during OAuth callback:", {
       error: error instanceof Error ? error.message : "Unknown error",

@@ -10,6 +10,7 @@ import {
   signInWithGoogleAction,
   signInWithLinkedInAction,
   sendMagicLinkAction,
+  checkUserStatusAction,
 } from "@/lib/auth/actions";
 import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "@/lib/auth/schemas";
 import { openCenteredPopup, waitForPopupMessage } from "@/lib/popup";
@@ -133,6 +134,11 @@ export function useAuth() {
     });
   };
 
+  const checkUserStatus = async (email: string) => {
+    setError(null);
+    return await checkUserStatusAction(email);
+  };
+
   const signInWithGooglePopup = async (): Promise<void> => {
     setError(null);
     setIsGooglePending(true);
@@ -205,6 +211,7 @@ export function useAuth() {
     signInWithGoogle,
     signInWithLinkedIn,
     sendMagicLink,
+    checkUserStatus,
     signInWithGooglePopup,
     isPending,
     isGooglePending,

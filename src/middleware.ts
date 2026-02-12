@@ -54,13 +54,23 @@ export async function middleware(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/signup") ||
-    request.nextUrl.pathname.startsWith("/recovery");
+    request.nextUrl.pathname.startsWith("/recovery") ||
+    request.nextUrl.pathname.startsWith("/set-password");
   
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/organic") ||
     request.nextUrl.pathname.startsWith("/paid-media") ||
     request.nextUrl.pathname.startsWith("/ai-studio") ||
-    request.nextUrl.pathname.startsWith("/integrations");
+    request.nextUrl.pathname.startsWith("/integrations") ||
+    request.nextUrl.pathname.startsWith("/settings");
+
+  const needsPassword = user && 
+    user.app_metadata.provider === "email" && 
+    user.user_metadata?.has_password !== true;
+
+  if (needsPassword && isProtectedRoute && !request.nextUrl.pathname.startsWith("/set-password")) {
+    return NextResponse.redirect(new URL("/set-password", request.url));
+  }
 
   if (!user && isProtectedRoute) {
     const redirectUrl = new URL("/login", request.url);
@@ -69,6 +79,9 @@ export async function middleware(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
+    if (needsPassword && request.nextUrl.pathname.startsWith("/set-password")) {
+      return supabaseResponse;
+    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

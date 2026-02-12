@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loginSchema, signupSchema, recoverySchema, magicLinkSchema } from "./schemas";
 import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "./schemas";
 
@@ -299,6 +300,87 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
         emailRedirectTo,
         shouldCreateUser: true,
       },
+    });
+
+    if (error) {
+      return {
+        success: false,
+        error: getSafeErrorMessage(error),
+      };
+    }
+
+    return {
+      success: true,
+      data: undefined,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: getSafeErrorMessage(error as Error),
+    };
+  }
+}
+
+export async function checkUserStatusAction(email: string): Promise<ActionResult<{ 
+  exists: boolean; 
+  flow: 'password' | 'magic-link' | 'oauth'; 
+  providers?: string[]; 
+}>> {
+  const admin = createSupabaseAdminClient();
+  
+  try {
+    const { data: { users }, error } = await admin.auth.admin.listUsers();
+
+    if (error) {
+      return {
+        success: false,
+        error: getSafeErrorMessage(error),
+      };
+    }
+
+    const user = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+    if (!user) {
+      return {
+        success: true,
+        data: { exists: false, flow: 'magic-link' }
+      };
+    }
+
+    const hasPassword = user.user_metadata?.has_password === true;
+    const providers = (user.app_metadata?.providers as string[]) || [];
+    
+    let flow: 'password' | 'magic-link' | 'oauth' = 'magic-link';
+    
+    if (hasPassword) {
+      flow = 'password';
+    } else if (providers.length > 0 && !providers.includes('email')) {
+      flow = 'oauth';
+    }
+
+    return {
+      success: true,
+      data: {
+        exists: true,
+        flow,
+        providers
+      }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: getSafeErrorMessage(error as Error),
+    };
+  }
+}
+
+export async function setPasswordAction(password: string): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  
+  try {
+    const { error } = await supabase.auth.updateUser({ 
+      password,
+      data: { has_password: true }
     });
 
     if (error) {
