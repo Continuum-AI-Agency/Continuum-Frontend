@@ -68,7 +68,9 @@ export async function middleware(request: NextRequest) {
     user.app_metadata.provider === "email" && 
     user.user_metadata?.has_password !== true;
 
-  if (needsPassword && isProtectedRoute && !request.nextUrl.pathname.startsWith("/set-password")) {
+  const isImpersonating = request.cookies.get("is_impersonating")?.value === "true";
+
+  if (needsPassword && !isImpersonating && isProtectedRoute && !request.nextUrl.pathname.startsWith("/set-password")) {
     return NextResponse.redirect(new URL("/set-password", request.url));
   }
 

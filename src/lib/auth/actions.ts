@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loginSchema, signupSchema, recoverySchema, magicLinkSchema } from "./schemas";
@@ -133,6 +134,7 @@ export async function signupAction(input: SignupInput): Promise<ActionResult> {
 
 export async function logoutAction(): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
+  const cookieStore = await cookies();
   
   try {
     const { error } = await supabase.auth.signOut();
@@ -144,6 +146,7 @@ export async function logoutAction(): Promise<ActionResult> {
       };
     }
 
+    cookieStore.delete("is_impersonating");
     revalidatePath("/", "layout");
     redirect("/login");
   } catch (error) {

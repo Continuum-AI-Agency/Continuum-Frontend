@@ -44,7 +44,7 @@ export default function ImpersonatePage() {
         if (code) {
           addLog("Authorization code found. Redirecting to callback handler...");
           if (mounted) setStatus("Exchanging authorization code...");
-          router.replace(`/auth/callback?code=${code}&next=/dashboard`);
+          router.replace(`/auth/callback?code=${code}&next=/dashboard&impersonate=true`);
           return;
         }
 

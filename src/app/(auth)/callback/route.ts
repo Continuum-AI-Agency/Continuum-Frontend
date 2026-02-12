@@ -60,6 +60,7 @@ function renderPopupAwareResult(options: {
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  const isImpersonating = requestUrl.searchParams.get("impersonate") === "true";
   const origin = requestUrl.origin;
 
   if (!code) {
@@ -91,13 +92,28 @@ export async function GET(request: Request) {
       const isEmailUser = user.app_metadata.provider === "email";
       const hasPassword = user.user_metadata?.has_password === true;
 
-      if (isEmailUser && !hasPassword) {
+      if (isEmailUser && !hasPassword && !isImpersonating) {
         return renderPopupAwareResult({
           success: true,
           fallbackRedirect: `${origin}/set-password`,
         });
       }
     }
+
+    const response = renderPopupAwareResult({
+      success: true,
+      fallbackRedirect: `${origin}/dashboard`,
+    });
+
+    if (isImpersonating) {
+      response.cookies.set("is_impersonating", "true", {
+        path: "/",
+        maxAge: 3600,
+        sameSite: "lax",
+      });
+    }
+
+    return response;
   } catch (error) {
     console.error("[AUTH_CALLBACK] Unexpected error during OAuth callback:", {
       error: error instanceof Error ? error.message : "Unknown error",
@@ -109,10 +125,5 @@ export async function GET(request: Request) {
       fallbackRedirect: `${origin}/login?error=unexpected_error`,
     });
   }
-
-  return renderPopupAwareResult({
-    success: true,
-    fallbackRedirect: `${origin}/dashboard`,
-  });
 }
 
