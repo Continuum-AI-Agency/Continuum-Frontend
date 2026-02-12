@@ -3,7 +3,9 @@
 import React from "react";
 import { Text } from "@radix-ui/themes";
 import { motion } from "framer-motion";
+import { CheckCircle2Icon, CircleIcon, Loader2Icon } from "lucide-react";
 import { Message } from "@/components/ai-elements/message";
+import { Button } from "@/components/ui/button";
 import {
   ChainOfThought,
   ChainOfThoughtContent,
@@ -52,6 +54,7 @@ type JainaMessageItemProps = {
   activeResponseId: string | null;
   state: JainaStreamState;
   onSuggestionClick?: (query: string) => void;
+  onPlanFeedback?: (payload: { text: string; planId?: string }) => void;
 };
 
 export function JainaMessageItem({
@@ -59,6 +62,7 @@ export function JainaMessageItem({
   activeResponseId,
   state,
   onSuggestionClick,
+  onPlanFeedback,
 }: JainaMessageItemProps) {
   const isStreaming = message.id === activeResponseId;
   const reasoning = isStreaming ? state.progress : message.reasoning;
@@ -219,7 +223,48 @@ export function JainaMessageItem({
                     <PlanTrigger />
                   </PlanHeader>
                   <PlanContent>
-                    <div className="space-y-4" />
+                    <div className="space-y-4">
+                      {plan.steps.map((step, i) => (
+                        <div key={i} className="flex items-start gap-3 text-sm">
+                          <div className="mt-0.5">
+                            {step.status === "completed" && (
+                              <CheckCircle2Icon className="size-4 text-emerald-500" />
+                            )}
+                            {step.status === "in_progress" && (
+                              <Loader2Icon className="size-4 text-indigo-500 animate-spin" />
+                            )}
+                            {step.status === "pending" && (
+                              <CircleIcon className="size-4 text-muted-foreground/30" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-foreground">
+                              {step.title}
+                            </div>
+                            {step.description && (
+                              <div className="text-muted-foreground text-xs">
+                                {step.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {plan.status === "awaiting_approval" && (
+                        <div className="flex justify-end pt-2">
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              onPlanFeedback?.({
+                                text: "Go",
+                                planId: plan.id,
+                              })
+                            }
+                          >
+                            Approve Plan
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </PlanContent>
                 </Plan>
               )}

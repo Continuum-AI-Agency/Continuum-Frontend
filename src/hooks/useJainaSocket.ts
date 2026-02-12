@@ -102,12 +102,12 @@ export function useJainaSocket(
     return true;
   }, []);
 
-  const sendFeedback = useCallback((feedback: string, planId: string) => {
+  const sendFeedback = useCallback((payload: { text: string; planId?: string }) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) return false;
 
     socketRef.current.send(JSON.stringify({
       type: "feedback",
-      data: { feedback, planId }
+      data: { text: payload.text, planId: payload.planId }
     }));
 
     return true;

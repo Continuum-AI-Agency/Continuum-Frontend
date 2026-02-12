@@ -152,6 +152,30 @@ export function JainaChatSurface({
     setActiveResponseId(null);
   }, [reset]);
 
+  const handlePlanFeedback = React.useCallback(
+    async (payload: { text: string; planId?: string }) => {
+      if (payload.planId) {
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.plan && msg.plan.id === payload.planId) {
+              return {
+                ...msg,
+                plan: {
+                  ...msg.plan,
+                  status: "approved",
+                },
+              };
+            }
+            return msg;
+          })
+        );
+      }
+
+      await handleSubmit(payload.text);
+    },
+    [handleSubmit]
+  );
+
   const handleClearMemory = React.useCallback(async () => {
     if (!adAccountId) return;
     try {
@@ -204,6 +228,7 @@ export function JainaChatSurface({
                   activeResponseId={activeResponseId}
                   state={state}
                   onSuggestionClick={handleSubmit}
+                  onPlanFeedback={handlePlanFeedback}
                 />
               ))}
             </AnimatePresence>

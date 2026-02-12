@@ -67,6 +67,24 @@ export const stateDeltaSchema = z.object({
 
 export type StateDeltaEventData = z.infer<typeof stateDeltaSchema>;
 
+export const planStepSchema = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  status: z.enum(["pending", "in_progress", "completed", "failed", "cancelled"]).optional(),
+});
+
+export type PlanStep = z.infer<typeof planStepSchema>;
+
+export const responsePlanDeltaSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  steps: z.array(planStepSchema).optional(),
+  status: z.enum(["pending", "awaiting_approval", "approved", "rejected", "in_progress", "completed"]).optional(),
+});
+
+export type ResponsePlanDeltaEventData = z.infer<typeof responsePlanDeltaSchema>;
+
 export const responseCreatedSchema = z.object({
   id: z.string(),
 });

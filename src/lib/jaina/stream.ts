@@ -12,13 +12,16 @@ import {
   toolResultSchema,
   thoughtEventSchema,
   adkEventSchema,
+  responsePlanDeltaSchema,
   type JainaStreamEvent,
   type ProgressEventData,
   type ReportPayload,
   type StateDeltaEventData,
   type ToolCallEventData,
   type ToolResultEventData,
+  type PlanStep,
 } from "./schemas";
+import type { JainaPlan } from "@/components/paid-media/jaina/types";
 
 export type JainaStreamStatus = "idle" | "starting" | "streaming" | "complete" | "error";
 
@@ -33,8 +36,10 @@ export type JainaStreamState = {
   status: JainaStreamStatus;
   reportJson: string;
   report: ReportPayload | null;
+  plan: JainaPlan | null;
   error?: string;
   responseId?: string;
+
   itemId?: string;
   partId?: string;
   progress: JainaProgressEntry[];
@@ -49,6 +54,7 @@ export function createInitialJainaStreamState(): JainaStreamState {
     status: "idle",
     reportJson: "",
     report: null,
+    plan: null,
     progress: [],
     toolCalls: [],
     toolResults: [],
@@ -81,6 +87,40 @@ export function reduceJainaStreamEvent(
   };
 
   switch (event.type) {
+    case "response.plan.delta": {
+      const parsed = responsePlanDeltaSchema.safeParse(event.data ?? {});
+      if (!parsed.success) {
+        return { ...nextBase, status: "error", error: "Malformed response.plan.delta event" };
+      }
+
+      const currentPlan: JainaPlan = state.plan || {
+        id: parsed.data.id || "plan-1",
+        title: parsed.data.title || "Execution Plan",
+        description: parsed.data.description || "Review the plan below.",
+        status: (parsed.data.status as any) || "pending",
+        steps: [],
+      };
+
+      const newSteps = parsed.data.steps
+        ? parsed.data.steps.map((s) => ({
+            title: s.title,
+            description: s.description,
+            status: (s.status as any) || "pending",
+          }))
+        : currentPlan.steps;
+
+      return {
+        ...nextBase,
+        plan: {
+          ...currentPlan,
+          id: parsed.data.id || currentPlan.id,
+          title: parsed.data.title || currentPlan.title,
+          description: parsed.data.description || currentPlan.description,
+          status: (parsed.data.status as any) || currentPlan.status,
+          steps: newSteps,
+        },
+      };
+    }
     case "response.created": {
       const parsed = responseCreatedSchema.safeParse(event.data ?? {});
       if (!parsed.success) {

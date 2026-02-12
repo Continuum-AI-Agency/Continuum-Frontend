@@ -1,4 +1,4 @@
-import type { ToolCallEventData, ToolResultEventData, ProgressEventData, ReportPayload } from "@/lib/jaina/schemas";
+import type { ToolCallEventData, ToolResultEventData, ProgressEventData, ReportPayload, PlanStep } from "@/lib/jaina/schemas";
 import type { PlanStatus } from "@/components/ai-elements/plan";
 
 export type JainaProgressEntry = {
@@ -13,6 +13,7 @@ export type JainaPlan = {
   title: string;
   description: string;
   status: PlanStatus;
+  steps: PlanStep[];
 };
 
 export type JainaChatMessage = {
