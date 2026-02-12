@@ -5,8 +5,6 @@ import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from
 import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData, StringNodeData, ImageNodeData } from '../types';
 import { parseDataUrl } from './dataUrl';
 
-const BRAND_PROFILE_ID = "default-brand";
-
 function resolveInputValue(
   nodeId: string,
   handleId: string,
@@ -162,11 +160,13 @@ function resolveDocumentInput(
   return documents.length > 0 ? documents : undefined;
 }
 
+
 export function buildEnrichPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
-  allEdges: Edge[]
+  allEdges: Edge[],
+  brandId: string
 ): EnrichPromptPayload | null {
   const data = node.data as StringNodeData;
   const prompt = data.value || "";
@@ -196,7 +196,7 @@ export function buildEnrichPayload(
 
   return {
     prompt,
-    brandId: BRAND_PROFILE_ID,
+    brandId,
     context: {
       images: images.length > 0 ? images.map(img => ({ type: 'base64' as const, data: img!.base64, mimeType: img!.mimeType })) : undefined,
       audio: audio ? { type: 'base64' as const, data: audio.base64, mimeType: audio.mimeType } : undefined,
@@ -210,7 +210,8 @@ export function buildNanoGenPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
-  allEdges: Edge[]
+  allEdges: Edge[],
+  brandId: string
 ): GenerationPayload | null {
   const data = node.data as NanoGenNodeData;
 
@@ -272,7 +273,7 @@ export function buildNanoGenPayload(
       : data.model;
 
   return {
-    brandId: BRAND_PROFILE_ID,
+    brandId,
     model: backendModel,
     medium: 'image',
     prompt,
@@ -290,7 +291,8 @@ export function buildVeoPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
-  allEdges: Edge[]
+  allEdges: Edge[],
+  brandId: string
 ): GenerationPayload | null {
   const data = node.data as VideoGenNodeData;
 
@@ -394,7 +396,7 @@ export function buildVeoPayload(
     : 'veo-3.1-generate-preview';
 
   return {
-    brandId: BRAND_PROFILE_ID,
+    brandId,
     model: backendModel,
     medium: 'video',
     prompt,
@@ -412,7 +414,8 @@ export function buildExtendVideoPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
-  allEdges: Edge[]
+  allEdges: Edge[],
+  brandId: string
 ): ExtendVideoPayload | null {
   const data = node.data as ExtendVideoNodeData;
 
@@ -425,7 +428,7 @@ export function buildExtendVideoPayload(
   }
 
   return {
-    brandId: BRAND_PROFILE_ID,
+    brandId,
     service: 'veo-3.1',
     model: 'veo-3.1-generate-preview',
     prompt,

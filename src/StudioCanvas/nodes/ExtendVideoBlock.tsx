@@ -19,13 +19,14 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<Node<ExtendVi
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const brandId = useStudioStore((state) => state.brandId);
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run extend video node", { nodeId: id });
-    await executeWorkflow(executionControls, { targetNodeId: id });
-  }, [executionControls, id]);
+    await executeWorkflow(executionControls, { targetNodeId: id, brandId });
+  }, [executionControls, id, brandId]);
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({

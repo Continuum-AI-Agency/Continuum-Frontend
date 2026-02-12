@@ -214,6 +214,7 @@ const getNodeReadiness = (
 type ExecuteWorkflowOptions = {
   targetNodeId?: string;
   clearDownstream?: boolean;
+  brandId?: string;
 };
 
 const buildUpstreamScope = (nodes: StudioNode[], edges: Edge[], targetNodeId: string): Set<string> => {
@@ -438,8 +439,9 @@ export async function executeWorkflow(
     updateNodeStatus(nodeId, 'running');
 
     try {
+      const brandId = options.brandId || "default-brand";
       if (node.type === 'string') {
-        const payload = buildEnrichPayload(node, resolvedOutputs, nodes, edges);
+        const payload = buildEnrichPayload(node, resolvedOutputs, nodes, edges, brandId);
         
         const hasExternalInputs = (payload?.context?.images?.length ?? 0) > 0 || !!payload?.context?.audio || (payload?.context?.documents?.length ?? 0) > 0 || !!payload?.context?.video;
 
@@ -546,7 +548,7 @@ export async function executeWorkflow(
       }
 
       if (node.type === 'extendVideo') {
-        const payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges);
+        const payload = buildExtendVideoPayload(node, resolvedOutputs, nodes, edges, brandId);
 
         if (!payload) {
           updateNodeStatus(nodeId, 'failed', 'Missing required inputs or prompt');
@@ -584,9 +586,9 @@ export async function executeWorkflow(
       let payload = null;
 
       if (node.type === 'nanoGen') {
-        payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges);
+        payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges, brandId);
       } else if (node.type === 'veoDirector' || node.type === 'veoFast') {
-        payload = buildVeoPayload(node, resolvedOutputs, nodes, edges);
+        payload = buildVeoPayload(node, resolvedOutputs, nodes, edges, brandId);
       }
 
       if (!payload) {

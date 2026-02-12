@@ -143,10 +143,17 @@ const edgeTypes = {
 };
 
 function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: string; realtime: ReturnType<typeof useCanvasRealtime>, activeRoomId?: string }) {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode, triggerSave } = useStudioStore();
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode, triggerSave, setBrandId } = useStudioStore();
   const { remoteCursors, updateCursor, isLoading, saveCanvasToDatabase } = realtime;
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition, deleteElements } = useReactFlow();
+
+  useEffect(() => {
+    if (brandProfileId) {
+      setBrandId(brandProfileId);
+    }
+  }, [brandProfileId, setBrandId]);
+
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
 

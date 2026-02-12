@@ -80,6 +80,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const brandId = useStudioStore((state) => state.brandId);
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -98,8 +99,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run image node", { nodeId: id });
-    await executeWorkflow(executionControls, { targetNodeId: id });
-  }, [executionControls, id]);
+    await executeWorkflow(executionControls, { targetNodeId: id, brandId });
+  }, [executionControls, id, brandId]);
 
   const previewImage = data.generatedImage;
   const refImageLimit = 14;

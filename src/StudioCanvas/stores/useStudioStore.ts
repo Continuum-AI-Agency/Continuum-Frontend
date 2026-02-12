@@ -43,6 +43,8 @@ interface StudioState {
   clearDeletedIds: (nodeIds: string[], edgeIds: string[]) => void;
   saveTrigger: number;
   triggerSave: () => void;
+  brandId?: string;
+  setBrandId: (id: string) => void;
   
   history: {
     past: Array<{ nodes: StudioNode[]; edges: Edge[] }>;
@@ -157,6 +159,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   deletedNodeIds: [],
   deletedEdgeIds: [],
   saveTrigger: 0,
+  brandId: undefined,
+
+  setBrandId: (id: string) => set({ brandId: id }),
 
   onNodesChange: (changes: NodeChange<StudioNode>[]) => {
     const deletedNodes = changes

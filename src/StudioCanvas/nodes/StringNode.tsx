@@ -14,6 +14,7 @@ import { useDebouncedSave } from '../hooks/useDebouncedSave';
 
 export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -61,7 +62,8 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
     try {
       await executeWorkflow(executionControls, { 
         targetNodeId: id,
-        clearDownstream: false
+        clearDownstream: false,
+        brandId
       });
     } catch (err) {
       console.error("Enrichment trigger failed", err);

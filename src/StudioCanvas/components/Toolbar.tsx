@@ -22,14 +22,14 @@ const EDGE_TYPE_OPTIONS: { value: EdgeType; label: string; icon: React.ReactNode
 
 export function Toolbar() {
   const [isRunning, setIsRunning] = useState(false);
-  const { defaultEdgeType, setDefaultEdgeType } = useStudioStore();
+  const { defaultEdgeType, setDefaultEdgeType, brandId } = useStudioStore();
   const executionControls = useWorkflowExecution();
   const { streamState, cancel } = executionControls;
 
   const handleRun = async () => {
       setIsRunning(true);
       try {
-        await executeWorkflow(executionControls);
+        await executeWorkflow(executionControls, { brandId });
       } finally {
         setIsRunning(false);
       }

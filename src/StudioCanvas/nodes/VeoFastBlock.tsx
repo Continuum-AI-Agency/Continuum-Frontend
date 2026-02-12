@@ -59,6 +59,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const brandId = useStudioStore((state) => state.brandId);
   const flowEdges = useEdges();
   const executionControls = useWorkflowExecution();
   const { show } = useToast();
@@ -79,8 +80,8 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run veo-fast node", { nodeId: id });
-    await executeWorkflow(executionControls, { targetNodeId: id });
-  }, [executionControls, id]);
+    await executeWorkflow(executionControls, { targetNodeId: id, brandId });
+  }, [executionControls, id, brandId]);
 
   const fileBaseName = `video-${id}`;
 
