@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Box } from "@radix-ui/themes";
+import { Box, Button } from "@radix-ui/themes";
 import { AnimatePresence } from "framer-motion";
 
 import { useToast } from "@/components/ui/ToastProvider";
@@ -13,7 +13,7 @@ import type { JainaChatMessage } from "./types";
 import { JainaHeader } from "./components/JainaHeader";
 import { JainaEmptyState } from "./components/JainaEmptyState";
 import { JainaMessageItem } from "./components/JainaMessageItem";
-import { getFinalThought, getReportSummary, resolveReportSignal } from "./jainaUtils";
+import { getFinalThought, getReportSummary, resolveReportSignal, hasReportContent } from "./jainaUtils";
 
 type JainaChatSurfaceProps = {
   brandProfileId: string;
@@ -31,6 +31,7 @@ export function JainaChatSurface({
   const { show } = useToast();
   
   const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
+  const [isPlanMode, setIsPlanMode] = React.useState(false);
 
   const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(
@@ -48,22 +49,42 @@ export function JainaChatSurface({
 
   React.useEffect(() => {
     if (!activeResponseId) return;
+
+    if (state.status === "streaming" && state.responseText) {
+      const isJsonStart = state.responseText.trim().startsWith("{");
+      updateMessage(activeResponseId, {
+        content: isJsonStart ? "Generating analysis..." : state.responseText,
+      });
+    }
+
     if (state.status === "complete") {
       const finalThought = getFinalThought(state.progress);
       const reportSummary = getReportSummary(state.report);
-      const content = finalThought || reportSummary || "Response ready.";
-      const renderAsReport = state.report
-        ? resolveReportSignal(state.progress, state.stateDeltas)
-        : false;
+      
+      // If we have streaming text, prefer that as the content, unless a structured report summary overrides it
+      let content = state.responseText || finalThought || reportSummary || "Response ready.";
+      
+      // Special case: If the streaming text looks like a raw JSON report, we might want to hide it 
+      // and show the summary instead. But for now, we assume text delta is conversational.
+      if (typeof content === 'string' && content.trim().startsWith('{') && state.report) {
+         content = reportSummary || "Report generated.";
+      }
+
+      const isDirectAnswer = state.report && "type" in (state.report as any) && (state.report as any).type === "direct_answer";
+      const hasReportSignal = resolveReportSignal(state.progress, state.stateDeltas);
+      const reportHasContent = hasReportContent(state.report);
+      const renderAsReport = !!(state.report && !isDirectAnswer && reportHasContent && hasReportSignal);
+        
       updateMessage(activeResponseId, {
         status: "done",
-        content,
-        report: state.report ?? undefined,
+        content: content as string,
+        report: (state.report as any) ?? undefined,
         finalThought,
         renderAsReport,
         reasoning: state.progress,
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
+        artifacts: state.artifacts,
       });
       setActiveResponseId(null);
     }
@@ -75,6 +96,7 @@ export function JainaChatSurface({
         reasoning: state.progress,
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
+        artifacts: state.artifacts,
       });
       setActiveResponseId(null);
     }
@@ -88,6 +110,8 @@ export function JainaChatSurface({
     state.toolCalls,
     state.toolResults,
     state.stateDeltas,
+    state.responseText,
+    state.artifacts,
   ]);
 
   React.useEffect(() => {
@@ -131,6 +155,7 @@ export function JainaChatSurface({
 
       const result = await start({
         query: query,
+        plan: isPlanMode,
         adAccountId: adAccountId,
         brandId: brandProfileId,
       });
@@ -143,7 +168,7 @@ export function JainaChatSurface({
         });
       }
     },
-    [brandProfileId, adAccountId, show, start]
+    [brandProfileId, adAccountId, isPlanMode, show, start]
   );
 
   const handleClearConversation = React.useCallback(() => {
@@ -241,6 +266,19 @@ export function JainaChatSurface({
           onSubmit={(v) => handleSubmit(v)}
           disabled={state.status === "streaming"}
           placeholder="Ask Jaina anything..."
+          actions={
+            <Button
+              type="button"
+              size="1"
+              variant={isPlanMode ? "solid" : "soft"}
+              color={isPlanMode ? "amber" : "gray"}
+              disabled={state.status === "streaming"}
+              aria-pressed={isPlanMode}
+              onClick={() => setIsPlanMode((prev) => !prev)}
+            >
+              Plan
+            </Button>
+          }
         />
       </Box>
     </div>

@@ -7,11 +7,6 @@ import { CheckCircle2Icon, CircleIcon, Loader2Icon } from "lucide-react";
 import { Message } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   ChainOfThought,
   ChainOfThoughtContent,
   ChainOfThoughtHeader,
@@ -32,15 +27,47 @@ import {
   PlanContent,
   PlanTrigger,
 } from "@/components/ai-elements/plan";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 import { JainaReportView } from "../JainaReportView";
+import { CreativeCard } from "./CreativeCard";
 import type { JainaChatMessage } from "../types";
 import type { JainaStreamState } from "@/lib/jaina/stream";
 import { formatStageLabel, formatToolLabel } from "../jainaUtils";
 
 import { Agent, AgentContent, AgentHeader } from "@/components/ai-elements/agent";
 import { Checkpoint } from "@/components/ai-elements/checkpoint";
+import { hasReportContent, type CreativeArtifact, type ToolResultEventData } from "@/lib/jaina/schemas";
+
+function extractCreativeFromToolResult(toolResult: ToolResultEventData): CreativeArtifact | null {
+  if (!toolResult.ok || !toolResult.output) return null;
+  
+  const output = toolResult.output as Record<string, unknown>;
+  const creativeDetails = output.creative_details as Record<string, unknown> | undefined;
+  
+  if (creativeDetails) {
+    return {
+      id: String(creativeDetails.id || `creative-${Date.now()}`),
+      type: "creative",
+      url: String(creativeDetails.image_url || ""),
+      thumbnail_url: creativeDetails.thumbnail_url ? String(creativeDetails.thumbnail_url) : undefined,
+      post_copy: creativeDetails.body ? String(creativeDetails.body) : undefined,
+      headline: creativeDetails.title ? String(creativeDetails.title) : undefined,
+      description: creativeDetails.name ? String(creativeDetails.name) : undefined,
+      call_to_action: creativeDetails.call_to_action_type ? String(creativeDetails.call_to_action_type) : undefined,
+    };
+  }
+  
+  if (output.preview_iframe && typeof output.preview_iframe === "string") {
+    return {
+      id: `preview-${Date.now()}`,
+      type: "creative",
+      url: "",
+      format: "video",
+    };
+  }
+  
+  return null;
+}
 
 function cleanseReasoning(detail: string | undefined): string | undefined {
   if (!detail) return detail;
@@ -52,6 +79,76 @@ function cleanseReasoning(detail: string | undefined): string | undefined {
     }
   } catch {}
   return detail;
+}
+
+function tryParseJsonArray(detail: string): unknown[] | null {
+  const trimmed = detail.trim();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function JsonTable({ data }: { data: unknown[] }) {
+  if (data.length === 0) return null;
+  
+  const firstItem = data[0];
+  if (typeof firstItem !== "object" || firstItem === null) {
+    return <Text size="2" className="text-white/80">{JSON.stringify(data)}</Text>;
+  }
+
+  const keys = Object.keys(firstItem as Record<string, unknown>);
+  const displayKeys = keys.filter(k => !k.toLowerCase().includes("id") && k !== "metadata");
+
+  return (
+    <div className="overflow-x-auto mt-2">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="border-b border-white/20">
+            {displayKeys.map((key) => (
+              <th key={key} className="text-left px-2 py-1 text-indigo-400 font-medium">
+                {key.replace(/_/g, " ")}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.slice(0, 5).map((item, i) => (
+            <tr key={i} className="border-b border-white/10 hover:bg-white/5">
+              {displayKeys.map((key) => {
+                const value = (item as Record<string, unknown>)[key];
+                let displayValue: string;
+                if (typeof value === "number") {
+                  displayValue = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                } else if (typeof value === "object" && value !== null) {
+                  displayValue = JSON.stringify(value).slice(0, 30);
+                } else {
+                  displayValue = String(value);
+                }
+                return (
+                  <td key={key} className="px-2 py-1.5 text-white/70 truncate max-w-[150px]">
+                    {displayValue}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+          {data.length > 5 && (
+            <tr>
+              <td colSpan={displayKeys.length} className="px-2 py-1 text-white/50 italic">
+                +{data.length - 5} more rows
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 type JainaMessageItemProps = {
@@ -75,22 +172,42 @@ export function JainaMessageItem({
   const toolResults = isStreaming ? state.toolResults : message.toolResults;
   const report = isStreaming ? state.report : message.report;
   const plan = message.plan;
-  const finalThought = message.finalThought;
   const renderAsReport = message.renderAsReport ?? false;
-  const displayReasoning = React.useMemo(() => {
-    if (!reasoning || !finalThought) return reasoning;
-    const lastIndex = [...reasoning]
-      .map((entry, index) => ({ entry, index }))
-      .reverse()
-      .find(
-        ({ entry }) =>
-          entry.stage === "thinking" && entry.detail === finalThought
-      )?.index;
-    if (lastIndex === undefined) return reasoning;
-    return reasoning.filter((_, index) => index !== lastIndex);
-  }, [reasoning, finalThought]);
+  const shouldRenderReport = Boolean(
+    report &&
+      !("type" in report && report.type === "direct_answer") &&
+      (renderAsReport || hasReportContent(report))
+  );
+
+  const { surfacedThoughts, chainOfThoughtEntries } = React.useMemo(() => {
+    if (!reasoning) {
+      return { surfacedThoughts: [], chainOfThoughtEntries: [] };
+    }
+    const surfaced: typeof reasoning = [];
+    const cot: typeof reasoning = [];
+    for (const entry of reasoning) {
+      if (entry.stage === "thinking") {
+        surfaced.push(entry);
+      } else {
+        cot.push(entry);
+      }
+    }
+    return { surfacedThoughts: surfaced, chainOfThoughtEntries: cot };
+  }, [reasoning]);
 
   const toolCallCount = toolCalls?.length ?? 0;
+  const artifacts = isStreaming ? state.artifacts : message.artifacts;
+  const artifactCreatives = artifacts?.creatives ?? [];
+  
+  const toolCreatives = React.useMemo(() => {
+    const results = isStreaming ? state.toolResults : message.toolResults;
+    if (!results) return [];
+    return results
+      .map(extractCreativeFromToolResult)
+      .filter((c): c is CreativeArtifact => c !== null);
+  }, [isStreaming, state.toolResults, message.toolResults]);
+  
+  const allCreatives = [...toolCreatives, ...artifactCreatives];
 
   return (
     <Message role={message.role}>
@@ -109,11 +226,45 @@ export function JainaMessageItem({
             <SafeMarkdown
               content={message.content}
               className="text-[15px] text-white"
-              mode="static"
+              mode={isStreaming ? "streaming" : "static"}
+              isAnimating={isStreaming}
             />
 
             <div className="mt-4 space-y-3">
-              {displayReasoning && displayReasoning.length > 0 && (
+              {surfacedThoughts.length > 0 && (
+                <div className="space-y-2">
+                  {surfacedThoughts.map((entry, index) => {
+                    const label = formatStageLabel(entry.stage);
+                    const detail = cleanseReasoning(entry.detail);
+                    const jsonArray = detail ? tryParseJsonArray(detail) : null;
+                    
+                    return (
+                      <motion.div
+                        key={`surfaced-${index}`}
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: index * 0.05 }}
+                        className="text-sm text-muted-foreground border-l-2 border-indigo-500/50 pl-3 py-2"
+                      >
+                        <Text size="1" className="text-indigo-400 font-medium">
+                          {label}
+                        </Text>
+                        {detail && (
+                          jsonArray ? (
+                            <JsonTable data={jsonArray} />
+                          ) : (
+                            <Text size="2" className="block text-white/80 mt-0.5">
+                              {detail}
+                            </Text>
+                          )
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {chainOfThoughtEntries.length > 0 && (
                 <ChainOfThought defaultOpen={false} className="border rounded-md bg-muted/20">
                   <ChainOfThoughtHeader className="text-base px-4 py-3">
                     <span className="font-semibold text-foreground/90">Jaina thoughts</span>
@@ -124,14 +275,14 @@ export function JainaMessageItem({
                     )}
                   </ChainOfThoughtHeader>
                   <ChainOfThoughtContent className="max-h-[300px] overflow-y-auto px-4 pb-4 custom-scrollbar">
-                    {displayReasoning.map((entry, index) => {
+                    {chainOfThoughtEntries.map((entry, index) => {
                       const isToolStep = entry.stage === "tool_start";
                       const isHandoffStep = entry.stage === "handoff_start";
                       const isCheckpoint =
                         entry.stage === "synthesis_start" ||
                         entry.stage === "report_ready";
 
-                      const prevEntry = index > 0 ? displayReasoning[index - 1] : null;
+                      const prevEntry = index > 0 ? chainOfThoughtEntries[index - 1] : null;
                       const showBreakpoint = prevEntry && prevEntry.stage !== entry.stage;
 
                       const toolCall = isToolStep
@@ -172,25 +323,14 @@ export function JainaMessageItem({
                            {showBreakpoint && <div className="h-px bg-border/40 my-3" />}
                            <ChainOfThoughtStep
                             status={
-                              (entry.stage === "thinking" ||
-                                entry.stage === "tool_start") &&
-                              isStreaming
+                              entry.stage === "tool_start" && isStreaming
                                 ? "active"
                                 : "complete"
                             }
-                            label={
-                              entry.stage === "thinking" && isStreaming ? (
-                                <Shimmer>{label}</Shimmer>
-                              ) : (
-                                label
-                              )
-                            }
+                            label={label}
                             description={
                               isToolStep ? null : (
-                                cleanseReasoning(entry.detail) ??
-                                (entry.stage === "thinking"
-                                  ? "Analyzing request..."
-                                  : "Working…")
+                                cleanseReasoning(entry.detail) ?? "Working…"
                               )
                             }
                           >
@@ -292,15 +432,27 @@ export function JainaMessageItem({
 
             </div>
 
-            {report &&
-            !("type" in report && report.type === "direct_answer") &&
-            renderAsReport && (
+            {shouldRenderReport && (
               <div className="mt-6 border-t border-white/10 pt-6">
                 <JainaReportView
                   report={report as any}
                   status={isStreaming ? state.status : "complete"}
                   onSuggestionClick={onSuggestionClick}
+                  idPrefix={message.id}
                 />
+              </div>
+            )}
+
+            {allCreatives.length > 0 && (
+              <div className="mt-6 space-y-4">
+                <Text size="3" className="font-semibold text-white/90">
+                  Creatives
+                </Text>
+                <div className="flex flex-wrap gap-4">
+                  {allCreatives.map((creative) => (
+                    <CreativeCard key={creative.id} creative={creative} />
+                  ))}
+                </div>
               </div>
             )}
           </>

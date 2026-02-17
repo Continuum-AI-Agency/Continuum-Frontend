@@ -1,12 +1,15 @@
 import {
   jainaStreamEventSchema,
   outputJsonDeltaSchema,
+  outputTextDeltaSchema,
   progressEventSchema,
   responseContentPartSchema,
   responseCreatedSchema,
   responseOutputItemSchema,
+  responseOutputItemDoneSchema,
   reportPayloadSchema,
   stateDeltaSchema,
+  artifactDeltaSchema,
   streamErrorSchema,
   toolCallSchema,
   toolResultSchema,
@@ -17,6 +20,7 @@ import {
   type ProgressEventData,
   type ReportPayload,
   type StateDeltaEventData,
+  type ArtifactDeltaEventData,
   type ToolCallEventData,
   type ToolResultEventData,
   type PlanStep,
@@ -35,6 +39,7 @@ export type JainaProgressEntry = {
 export type JainaStreamState = {
   status: JainaStreamStatus;
   reportJson: string;
+  responseText: string;
   report: ReportPayload | null;
   plan: JainaPlan | null;
   error?: string;
@@ -42,10 +47,12 @@ export type JainaStreamState = {
 
   itemId?: string;
   partId?: string;
+  outputItemId?: string;
   progress: JainaProgressEntry[];
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
   stateDeltas: StateDeltaEventData[];
+  artifacts: ArtifactDeltaEventData;
   lastEventType?: string;
 };
 
@@ -53,13 +60,40 @@ export function createInitialJainaStreamState(): JainaStreamState {
   return {
     status: "idle",
     reportJson: "",
+    responseText: "",
     report: null,
     plan: null,
     progress: [],
     toolCalls: [],
     toolResults: [],
     stateDeltas: [],
+    artifacts: {},
   };
+}
+
+function parseReportFromAccumulatedText(reportJson: string): ReportPayload | null {
+  const trimmed = reportJson.trim();
+  if (!trimmed) return null;
+
+  const candidates = [trimmed];
+  const firstBraceIndex = trimmed.indexOf("{");
+  const lastBraceIndex = trimmed.lastIndexOf("}");
+  if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
+    const extracted = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
+    if (extracted !== trimmed) candidates.push(extracted);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsedJson = JSON.parse(candidate);
+      const parsedReport = reportPayloadSchema.safeParse(parsedJson);
+      if (parsedReport.success) return parsedReport.data;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 export function parseJainaStreamEvent(line: string): JainaStreamEvent | null {
@@ -133,7 +167,7 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return { ...nextBase, status: "error", error: "Malformed response.output_item.added event" };
       }
-      return { ...nextBase, itemId: parsed.data.item.id };
+      return { ...nextBase, itemId: parsed.data.item.id, outputItemId: parsed.data.item.id };
     }
     case "response.content_part.added": {
       const parsed = responseContentPartSchema.safeParse(event.data ?? {});
@@ -293,6 +327,20 @@ export function reduceJainaStreamEvent(
         reportJson: `${state.reportJson}${parsed.data.delta}`,
       };
     }
+    case "response.output_text.delta": {
+      const parsed = outputTextDeltaSchema.safeParse(event.data ?? {});
+      if (!parsed.success) {
+        return { ...nextBase, status: "error", error: "Malformed response.output_text.delta event" };
+      }
+      // Track the item_id from delta if not already set
+      const itemId = parsed.data.item_id;
+      return {
+        ...nextBase,
+        ...(itemId && !nextBase.outputItemId ? { outputItemId: itemId } : {}),
+        reportJson: `${state.reportJson}${parsed.data.delta}`,
+        responseText: `${state.responseText || ""}${parsed.data.delta}`,
+      };
+    }
     case "tool.call": {
       const parsed = toolCallSchema.safeParse(event.data ?? {});
       if (!parsed.success) {
@@ -314,25 +362,47 @@ export function reduceJainaStreamEvent(
       }
       return { ...nextBase, stateDeltas: [...state.stateDeltas, parsed.data] };
     }
+    case "artifact.delta": {
+      const parsed = artifactDeltaSchema.safeParse(event.data ?? {});
+      if (!parsed.success) {
+        return nextBase;
+      }
+      return {
+        ...nextBase,
+        artifacts: {
+          creatives: [...(state.artifacts.creatives || []), ...(parsed.data.creatives || [])],
+          images: [...(state.artifacts.images || []), ...(parsed.data.images || [])],
+        },
+      };
+    }
     case "error": {
       const parsed = streamErrorSchema.safeParse(event.data ?? {});
       const message = parsed.success ? parsed.data.message : "Stream error";
       return { ...nextBase, status: "error", error: message };
     }
-    case "response.content_part.done":
     case "response.output_item.done": {
+      const parsed = responseOutputItemDoneSchema.safeParse(event.data ?? {});
+      if (parsed.success) {
+        if (parsed.data.item_id !== state.outputItemId) {
+          return nextBase;
+        }
+      }
       if (!state.reportJson.trim() || state.report) {
         return nextBase;
       }
-      try {
-        const parsedReport = reportPayloadSchema.safeParse(
-          JSON.parse(state.reportJson)
-        );
-        if (parsedReport.success) {
-          return { ...nextBase, report: parsedReport.data };
-        }
-      } catch {
+      const parsedReport = parseReportFromAccumulatedText(state.reportJson);
+      if (parsedReport) {
+        return { ...nextBase, report: parsedReport };
+      }
+      return nextBase;
+    }
+    case "response.content_part.done": {
+      if (!state.reportJson.trim() || state.report) {
         return nextBase;
+      }
+      const parsedReport = parseReportFromAccumulatedText(state.reportJson);
+      if (parsedReport) {
+        return { ...nextBase, report: parsedReport };
       }
       return nextBase;
     }
@@ -340,23 +410,35 @@ export function reduceJainaStreamEvent(
       if (!state.reportJson.trim()) {
         return { ...nextBase, status: "complete" };
       }
-      try {
-        const parsedReport = reportPayloadSchema.safeParse(
-          JSON.parse(state.reportJson)
-        );
-        if (!parsedReport.success) {
-          return {
-            ...nextBase,
-            status: "error",
-            error: "Invalid report schema",
-          };
-        }
-        return { ...nextBase, status: "complete", report: parsedReport.data };
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Invalid report payload";
-        return { ...nextBase, status: "error", error: message };
+      const parsedReport = parseReportFromAccumulatedText(state.reportJson);
+      if (parsedReport) {
+        return { ...nextBase, status: "complete", report: parsedReport };
       }
+      return { ...nextBase, status: "complete" };
+    }
+    case undefined: {
+      const eventData = event as Record<string, unknown>;
+      const content = eventData.content as Record<string, unknown> | undefined;
+      const parts = content?.parts as Array<Record<string, unknown>> | undefined;
+      if (!parts) {
+        return nextBase;
+      }
+      for (const part of parts) {
+        const text = part.text as string | undefined;
+        if (text?.trim().startsWith("{") && text.trim().endsWith("}")) {
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed.specialist_insights || parsed.performance_summary || parsed.key_insights) {
+              return {
+                ...nextBase,
+                reportJson: text,
+                responseText: parsed.thought || parsed.user_query || "",
+              };
+            }
+          } catch {}
+        }
+      }
+      return nextBase;
     }
     default:
       return nextBase;

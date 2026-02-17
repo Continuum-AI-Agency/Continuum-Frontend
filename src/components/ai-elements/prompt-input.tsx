@@ -1,18 +1,20 @@
 "use client";
 
 import React, { useRef } from "react";
-import { Button, TextArea, Box, Flex, IconButton } from "@radix-ui/themes";
+import { Button, TextArea, Box, IconButton } from "@radix-ui/themes";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
 import { Paperclip } from "lucide-react";
 import { Attachments, type Attachment } from "./attachments";
+import { cn } from "@/lib/utils";
 
 type PromptInputProps = {
   onSubmit: (value: string, attachments: Attachment[]) => void;
   disabled?: boolean;
   placeholder?: string;
+  actions?: React.ReactNode;
 };
 
-export function PromptInput({ onSubmit, disabled, placeholder }: PromptInputProps) {
+export function PromptInput({ onSubmit, disabled, placeholder, actions }: PromptInputProps) {
   const [value, setValue] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,10 +67,14 @@ export function PromptInput({ onSubmit, disabled, placeholder }: PromptInputProp
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={disabled}
-            className="min-h-[56px] w-full resize-none rounded-2xl pr-24 pt-3 pb-3 text-white focus:ring-2 focus:ring-purple-500/20"
+            className={cn(
+              "min-h-[56px] w-full resize-none rounded-2xl pt-3 pb-3 text-white focus:ring-2 focus:ring-purple-500/20",
+              actions ? "pr-40" : "pr-24"
+            )}
             aria-label="Message Jaina Analyst"
           />
           <Box className="absolute bottom-2 right-2 flex items-center gap-2">
+            {actions}
             <input
               type="file"
               multiple

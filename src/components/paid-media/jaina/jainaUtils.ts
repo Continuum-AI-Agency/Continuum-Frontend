@@ -1,4 +1,4 @@
-import type { ReportPayload } from "@/lib/jaina/schemas";
+import { hasReportContent, type ReportPayload, type SoTReport } from "@/lib/jaina/schemas";
 import type { JainaChatMessage } from "./types";
 
 const reportSignalKeys = [
@@ -56,13 +56,8 @@ export const getReportSummary = (report: ReportPayload | null) => {
   if ("type" in report && report.type === "direct_answer") {
     return report.content;
   }
-  if ("executive_summary" in report && report.executive_summary) {
-    return report.executive_summary;
-  }
-  if ("summary" in report && report.summary) {
-    return report.summary;
-  }
-  return "";
+  const r = report as SoTReport;
+  return r.executive_summary || "";
 };
 
 export const formatStageLabel = (stage: string) => {
@@ -79,3 +74,5 @@ export const formatToolLabel = (toolName: string) =>
   toolName === "router"
     ? "Consulting the Council"
     : toolName.replace(/_/g, " ");
+
+export { hasReportContent };

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import { jainaChatRequestSchema, type JainaChatRequest } from "@/lib/jaina/schemas";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { getApiUrl } from "@/lib/api/config";
 import {
   createInitialJainaStreamState,
   parseJainaStreamEvent,
@@ -15,6 +14,7 @@ import {
 
 type JainaChatInput = {
   query: string;
+  plan?: boolean;
   adAccountId: string;
   brandId?: string;
   userId?: string;
@@ -83,6 +83,7 @@ export function useJainaChatStream() {
       try {
         payload = jainaChatRequestSchema.parse({
           query: input.query,
+          plan: Boolean(input.plan),
           userId: input.userId,
           context: {
             adAccountId: input.adAccountId,
@@ -127,13 +128,7 @@ export function useJainaChatStream() {
           },
         });
 
-        if (stateRef.current.status === "streaming") {
-          setState((prev) => ({
-            ...prev,
-            status: "error",
-            error: "Stream ended unexpectedly",
-          }));
-        }
+        setState((prev) => ({ ...prev, status: "complete" }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Stream failed";
         if (!controller.signal.aborted) {
