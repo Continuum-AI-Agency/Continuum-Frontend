@@ -1,3 +1,4 @@
+"use client";
 import React, { memo, useCallback } from 'react';
 import { type NodeProps } from '@xyflow/react';
 import { type AdSetData } from '../types';

@@ -1,3 +1,4 @@
+"use client";
 import React, { useRef, useEffect } from 'react';
 import { useChat } from 'ai/react';
 import { useCampaignAI } from '../hooks/useCampaignAI';

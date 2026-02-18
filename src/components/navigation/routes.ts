@@ -101,6 +101,11 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
         href: "/paid-media?tab=dco",
         icon: ChartBarSquareIcon,
       },
+      {
+        label: "Campaign Canvas",
+        href: "/paid-media/campaign-canvas",
+        icon: FrameIcon,
+      },
     ],
   },
   {

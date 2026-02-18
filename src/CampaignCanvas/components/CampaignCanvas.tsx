@@ -1,3 +1,4 @@
+"use client";
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import {
   MiniMap,
@@ -15,12 +16,12 @@ import { Connection } from '@/components/ai-elements/connection';
 import { Edge } from '@/components/ai-elements/edge';
 
 import { useCampaignStore } from '../stores/useCampaignStore';
-import { CampaignNode } from './CampaignNode';
-import { AdSetNode } from './AdSetNode';
-import { AdNode } from './AdNode';
-import { AudienceNode } from './AudienceNode';
-import { CreativeNode } from './CreativeNode';
-import { BudgetNode } from './BudgetNode';
+import { CampaignNode } from '../nodes/CampaignNode';
+import { AdSetNode } from '../nodes/AdSetNode';
+import { AdNode } from '../nodes/AdNode';
+import { AudienceNode } from '../nodes/AudienceNode';
+import { CreativeNode } from '../nodes/CreativeNode';
+import { BudgetNode } from '../nodes/BudgetNode';
 import { type CampaignNodeType } from '../types';
 import { Button } from '@/components/ui/button';
 import { Plus, Send, ShieldCheck, Trash2, Undo, Redo, Settings, MousePointer2, Download } from 'lucide-react';
@@ -47,7 +48,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/components/ui/ToastProvider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,7 +95,7 @@ export const CampaignCanvas = () => {
   const { screenToFlowPosition, fitView } = useReactFlow();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const { toast } = useToast();
+  const { show: toast } = useToast();
 
   const lastMousePos = useRef({ x: 0, y: 0 });
 
