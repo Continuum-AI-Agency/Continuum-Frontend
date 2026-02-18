@@ -76,7 +76,7 @@ export default function PaidMediaClientPage({
         </div>
 
         <TabsContent value="dashboard" className="flex-1 min-h-0 pt-4 overflow-auto">
-          <PaidMediaDashboard brandId={brandProfileId} />
+          <PaidMediaDashboard brandId={brandProfileId} adAccountId={selectedAdAccount} />
         </TabsContent>
 
         <TabsContent value="jaina" className="flex-1 min-h-0 pt-4">

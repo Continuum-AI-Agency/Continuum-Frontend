@@ -2,18 +2,17 @@
 
 import * as React from "react";
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { Box, Flex, Heading, IconButton, Select, Text, Card } from "@radix-ui/themes";
-import { CampaignAccordion } from "./CampaignAccordion";
+import { Box, Card, Flex, Heading, IconButton, Select, Text } from "@radix-ui/themes";
+
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import type { PaidMetricsResponse } from "@/lib/schemas/paidMetrics";
+import { CampaignAccordion } from "./CampaignAccordion";
 
 type Campaign = {
   id: string;
@@ -37,6 +36,7 @@ type TimePreset = "last_7d" | "last_14d" | "last_30d";
 
 type PaidMediaDashboardProps = {
   brandId: string;
+  adAccountId: string | null;
 };
 
 type LoadState =
@@ -46,40 +46,32 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "success" };
 
-export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
+export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardProps) {
   const [platform, setPlatform] = React.useState<Platform>("meta");
   const [timeRange, setTimeRange] = React.useState<TimePreset>("last_7d");
   const [loadState, setLoadState] = React.useState<LoadState>({ status: "idle" });
-  
-  const [selectedAccount, setSelectedAccount] = React.useState<string | null>(null);
+
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
 
-  const { integrations, isLoading: integrationsLoading } = useBrandIntegrations(brandId);
-
-  const adAccounts = React.useMemo(() => {
-    if (!integrations) return [];
-    const facebookAccounts = integrations.facebook?.accounts ?? [];
-    return facebookAccounts.map((acc) => ({
-      id: acc.externalAccountId ?? acc.integrationAccountId,
-      name: acc.name,
-    }));
-  }, [integrations]);
-
   const loadCampaigns = React.useCallback(async () => {
-    if (!selectedAccount) return;
+    if (!adAccountId) {
+      setCampaigns([]);
+      setLoadState({ status: "idle" });
+      return;
+    }
 
     setLoadState({ status: "loading-campaigns" });
 
     try {
       const supabase = createSupabaseBrowserClient();
-      
+
       const { data, error: fetchError } = await supabase.functions.invoke(
-        `fetch-meta-campaigns?brandId=${brandId}&adAccountId=${selectedAccount}`, 
+        `fetch-meta-campaigns?brandId=${brandId}&adAccountId=${adAccountId}`,
         {
           method: "POST",
           body: {
             brandId,
-            adAccountId: selectedAccount,
+            adAccountId,
           },
         }
       );
@@ -88,25 +80,25 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
         throw new Error(`Failed to fetch campaigns: ${fetchError.message}`);
       }
 
-      const rawCampaigns = data.campaigns || [];
+      const rawCampaigns = data?.campaigns ?? [];
 
       const campaignsWithMetrics = await Promise.all(
-        rawCampaigns.map(async (campaign: any) => {
+        rawCampaigns.map(async (campaign: Campaign) => {
           try {
             const { data: metricsData, error: metricsError } = await supabase.functions.invoke(
-              `paid-media-metrics?platform=${platform}&brandId=${brandId}&accountId=${selectedAccount}&campaignId=${campaign.id}`,
+              `paid-media-metrics?platform=${platform}&brandId=${brandId}&accountId=${adAccountId}&campaignId=${campaign.id}`,
               {
                 body: {
                   platform,
                   brandId,
-                  accountId: selectedAccount,
+                  accountId: adAccountId,
                   campaignId: campaign.id,
                   range: { preset: timeRange },
                 },
               }
             );
 
-            if (!metricsError && metricsData) {
+            if (!metricsError && metricsData?.metrics) {
               return {
                 ...campaign,
                 metrics: metricsData.metrics,
@@ -115,6 +107,7 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
           } catch (err) {
             console.error(`Failed to load metrics for campaign ${campaign.id}`, err);
           }
+
           return campaign;
         })
       );
@@ -128,33 +121,18 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
         message: error instanceof Error ? error.message : "Failed to load campaigns",
       });
     }
-  }, [brandId, selectedAccount, platform, timeRange]);
+  }, [adAccountId, brandId, platform, timeRange]);
 
   React.useEffect(() => {
-    if (adAccounts.length > 0 && !selectedAccount) {
-      setSelectedAccount(adAccounts[0].id);
-    }
-  }, [adAccounts, selectedAccount]);
-
-  React.useEffect(() => {
-    if (selectedAccount) {
-      loadCampaigns();
-    }
-  }, [loadCampaigns, selectedAccount]);
+    void loadCampaigns();
+  }, [loadCampaigns]);
 
   const handleRefresh = () => {
-    if (selectedAccount) {
-      loadCampaigns();
-    }
-  };
-
-  const handleAccountChange = (value: string) => {
-    setSelectedAccount(value);
+    void loadCampaigns();
   };
 
   const handlePlatformChange = (value: Platform) => {
     setPlatform(value);
-    setSelectedAccount(null);
     setCampaigns([]);
   };
 
@@ -181,19 +159,6 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
               </Select.Content>
             </Select.Root>
 
-            {adAccounts.length > 0 && (
-              <Select.Root value={selectedAccount || undefined} onValueChange={handleAccountChange}>
-                <Select.Trigger placeholder="Select account" className="min-w-[140px]" />
-                <Select.Content>
-                  {adAccounts.map((account) => (
-                    <Select.Item key={account.id} value={account.id}>
-                      {account.name}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
-            )}
-
             <Select.Root value={timeRange} onValueChange={handleTimeRangeChange}>
               <Select.Trigger placeholder="Select time range" className="min-w-[130px]" />
               <Select.Content>
@@ -209,9 +174,7 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
               disabled={loadState.status === "loading-campaigns"}
               className="min-h-[44px] min-w-[44px]"
             >
-              <ReloadIcon
-                className={loadState.status === "loading-campaigns" ? "animate-spin" : ""}
-              />
+              <ReloadIcon className={loadState.status === "loading-campaigns" ? "animate-spin" : ""} />
             </IconButton>
           </Flex>
         </Flex>
@@ -227,7 +190,7 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
           </Card>
         )}
 
-        <div className="h-[calc(100vh-280px)] min-h-[600px] border rounded-xl overflow-hidden bg-white/5">
+        <div className="h-[calc(100vh-280px)] min-h-[600px] overflow-hidden rounded-xl border bg-white/5">
           <ResizablePanelGroup orientation="horizontal">
             <ResizablePanel defaultSize={65} minSize={30}>
               <Box className="h-full overflow-auto p-4">
@@ -238,26 +201,26 @@ export function PaidMediaDashboard({ brandId }: PaidMediaDashboardProps) {
                     <Skeleton className="h-16 w-full" />
                     <Skeleton className="h-16 w-full" />
                   </div>
-                ) : selectedAccount ? (
+                ) : adAccountId ? (
                   <CampaignAccordion
                     campaigns={campaigns}
                     brandId={brandId}
-                    accountId={selectedAccount}
+                    accountId={adAccountId}
                     timeRange={{ preset: timeRange }}
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-muted-foreground">
-                    Select an ad account to view campaigns
+                    Select an ad account from the top-left selector to view campaigns.
                   </div>
                 )}
               </Box>
             </ResizablePanel>
-            
+
             <ResizableHandle withHandle className="bg-white/10" />
-            
+
             <ResizablePanel defaultSize={35} minSize={20}>
-              <Box className="h-full overflow-auto p-4 bg-black/20">
-                <DCOActionsWidget brandId={brandId} />
+              <Box className="h-full overflow-auto bg-black/20 p-4">
+                <DCOActionsWidget brandId={brandId} metaAccountId={adAccountId ?? undefined} />
               </Box>
             </ResizablePanel>
           </ResizablePanelGroup>

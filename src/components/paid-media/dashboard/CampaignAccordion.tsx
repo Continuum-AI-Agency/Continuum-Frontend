@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDownIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { ReloadIcon } from "@radix-ui/react-icons";
+
 import {
   Accordion,
   AccordionContent,
@@ -9,9 +10,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { AdSetTable, type AdSet } from "./AdSetTable";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { PaidMetricsResponse } from "@/lib/schemas/paidMetrics";
+import { AdSetTable, type AdSet, type AdSetAdsLoadState } from "./AdSetTable";
 
 type Campaign = {
   id: string;
@@ -35,7 +35,6 @@ type CampaignAccordionProps = {
   brandId: string;
   accountId: string;
   timeRange: { preset: string };
-  onAdSetSelect?: (campaignId: string, adSetId: string) => void;
 };
 
 type AdSetLoadState = {
@@ -68,15 +67,16 @@ function getStatusColor(status: string): "default" | "secondary" | "destructive"
   }
 }
 
-export function CampaignAccordion({
-  campaigns,
-  brandId,
-  accountId,
-  timeRange,
-  onAdSetSelect,
-}: CampaignAccordionProps) {
+export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: CampaignAccordionProps) {
   const [adSetState, setAdSetState] = React.useState<AdSetLoadState>({});
+  const [adStateByAdSet, setAdStateByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
   const [expandedCampaigns, setExpandedCampaigns] = React.useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    setAdSetState({});
+    setAdStateByAdSet({});
+    setExpandedCampaigns(new Set());
+  }, [accountId, timeRange.preset]);
 
   const loadAdSets = React.useCallback(
     async (campaignId: string) => {
@@ -91,7 +91,7 @@ export function CampaignAccordion({
 
       try {
         const supabase = createSupabaseBrowserClient();
-        
+
         const { data, error: fetchError } = await supabase.functions.invoke(
           `fetch-meta-adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}`,
           {
@@ -108,10 +108,10 @@ export function CampaignAccordion({
           throw new Error(`Failed to fetch ad sets: ${fetchError.message}`);
         }
 
-        const rawAdSets = data.adsets || [];
+        const rawAdSets = data?.adsets ?? [];
 
         const adSetsWithMetrics = await Promise.all(
-          rawAdSets.map(async (adSet: any) => {
+          rawAdSets.map(async (adSet: AdSet) => {
             try {
               const { data: metricsData, error: metricsError } = await supabase.functions.invoke(
                 `paid-media-metrics?platform=meta&brandId=${brandId}&accountId=${accountId}&adsetId=${adSet.id}`,
@@ -126,7 +126,7 @@ export function CampaignAccordion({
                 }
               );
 
-              if (!metricsError && metricsData) {
+              if (!metricsError && metricsData?.metrics) {
                 return {
                   ...adSet,
                   metrics: metricsData.metrics,
@@ -135,6 +135,7 @@ export function CampaignAccordion({
             } catch (err) {
               console.error(`Failed to load metrics for ad set ${adSet.id}`, err);
             }
+
             return adSet;
           })
         );
@@ -155,16 +156,80 @@ export function CampaignAccordion({
         }));
       }
     },
-    [brandId, accountId, timeRange, adSetState]
+    [accountId, adSetState, brandId, timeRange]
+  );
+
+  const loadAdsForAdSet = React.useCallback(
+    async (adSetId: string) => {
+      let shouldLoad = true;
+
+      setAdStateByAdSet((prev) => {
+        const currentState = prev[adSetId];
+
+        if (currentState?.status === "loading" || currentState?.status === "success") {
+          shouldLoad = false;
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [adSetId]: { status: "loading", ads: [] },
+        };
+      });
+
+      if (!shouldLoad) {
+        return;
+      }
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+
+        const { data, error: fetchError } = await supabase.functions.invoke(
+          `fetch-meta-ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRange.preset}`,
+          {
+            method: "POST",
+            body: {
+              brandId,
+              adAccountId: accountId,
+              adSetId,
+              datePreset: timeRange.preset,
+            },
+          }
+        );
+
+        if (fetchError) {
+          throw new Error(`Failed to fetch ads: ${fetchError.message}`);
+        }
+
+        setAdStateByAdSet((prev) => ({
+          ...prev,
+          [adSetId]: {
+            status: "success",
+            ads: data?.ads ?? [],
+          },
+        }));
+      } catch (error) {
+        console.error("Failed to load ads for ad set:", error);
+        setAdStateByAdSet((prev) => ({
+          ...prev,
+          [adSetId]: {
+            status: "error",
+            ads: [],
+            errorMessage: error instanceof Error ? error.message : "Failed to load ads",
+          },
+        }));
+      }
+    },
+    [accountId, brandId, timeRange.preset]
   );
 
   const handleValueChange = React.useCallback(
     (value: string[]) => {
       const newExpanded = new Set(value);
-      const added = value.find((v) => !expandedCampaigns.has(v));
+      const added = value.find((item) => !expandedCampaigns.has(item));
 
       if (added) {
-        loadAdSets(added);
+        void loadAdSets(added);
       }
 
       setExpandedCampaigns(newExpanded);
@@ -173,11 +238,7 @@ export function CampaignAccordion({
   );
 
   if (campaigns.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        No campaigns found.
-      </div>
-    );
+    return <div className="py-8 text-center text-muted-foreground">No campaigns found.</div>;
   }
 
   return (
@@ -193,43 +254,43 @@ export function CampaignAccordion({
         return (
           <AccordionItem key={campaign.id} value={campaign.id}>
             <AccordionTrigger className="hover:no-underline">
-              <div className="flex items-center justify-between w-full pr-4">
+              <div className="flex w-full items-center justify-between pr-4">
                 <div className="flex items-center gap-3">
                   <span className="font-medium">{campaign.name}</span>
-                  <Badge variant={getStatusColor(campaign.status)}>
-                    {campaign.status}
-                  </Badge>
+                  <Badge variant={getStatusColor(campaign.status)}>{campaign.status}</Badge>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  {campaign.metrics && (
+                  {campaign.metrics ? (
                     <>
                       <span>Spend: {formatCurrency(campaign.metrics.spend)}</span>
                       <span>ROAS: {campaign.metrics.roas.toFixed(2)}</span>
                     </>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent>
-              <div className="pt-4 px-2">
-                {state.status === "loading" && (
+              <div className="px-2 pt-4">
+                {state.status === "loading" ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
                     <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
                     Loading ad sets...
                   </div>
-                )}
-                {state.status === "error" && (
-                  <div className="text-center py-8 text-destructive">
-                    {state.errorMessage || "Failed to load ad sets"}
-                  </div>
-                )}
-                {state.status === "success" && (
+                ) : null}
+                {state.status === "error" ? (
+                  <div className="py-8 text-center text-destructive">{state.errorMessage || "Failed to load ad sets"}</div>
+                ) : null}
+                {state.status === "success" ? (
                   <AdSetTable
                     adSets={state.adSets}
-                    campaignId={campaign.id}
-                    onAdSetSelect={(adSetId) => onAdSetSelect?.(campaign.id, adSetId)}
+                    adsByAdSet={adStateByAdSet}
+                    onAdSetToggle={(adSetId, expanded) => {
+                      if (expanded) {
+                        void loadAdsForAdSet(adSetId);
+                      }
+                    }}
                   />
-                )}
+                ) : null}
               </div>
             </AccordionContent>
           </AccordionItem>
