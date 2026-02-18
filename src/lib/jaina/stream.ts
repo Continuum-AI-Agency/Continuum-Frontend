@@ -96,6 +96,280 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
   return null;
 }
 
+function scoreReport(report: ReportPayload | null): number {
+  if (!report) return -1;
+  if ("type" in report && report.type === "direct_answer") {
+    return report.content.trim().length > 0 ? 1 : 0;
+  }
+
+  const structured = report as any;
+  return (
+    (structured.executive_summary ? 1 : 0) +
+    (Array.isArray(structured.performance_snapshot)
+      ? structured.performance_snapshot.length
+      : 0) +
+    (Array.isArray(structured.graphs) ? structured.graphs.length : 0) +
+    (Array.isArray(structured.strategic_recommendations)
+      ? structured.strategic_recommendations.length
+      : 0) +
+    (Array.isArray(structured.sections)
+      ? structured.sections.reduce(
+          (acc: number, section: any) =>
+            acc +
+            (section?.summary ? 1 : 0) +
+            (Array.isArray(section?.highlights) ? section.highlights.length : 0) +
+            (Array.isArray(section?.tables) ? section.tables.length : 0) +
+            (Array.isArray(section?.graphs) ? section.graphs.length : 0),
+          0
+        )
+      : 0)
+  );
+}
+
+function pickRicherReport(
+  currentReport: ReportPayload | null,
+  candidateReport: ReportPayload | null
+): ReportPayload | null {
+  if (!candidateReport) return currentReport;
+  if (!currentReport) return candidateReport;
+  return scoreReport(candidateReport) >= scoreReport(currentReport)
+    ? candidateReport
+    : currentReport;
+}
+
+function skipWhitespace(text: string, index: number): number {
+  let cursor = index;
+  while (cursor < text.length && /\s/.test(text[cursor])) {
+    cursor += 1;
+  }
+  return cursor;
+}
+
+function findJsonValueStartByKey(text: string, key: string): number | null {
+  let searchFrom = 0;
+  while (searchFrom < text.length) {
+    const keyIndex = text.indexOf(`"${key}"`, searchFrom);
+    if (keyIndex === -1) return null;
+    let cursor = skipWhitespace(text, keyIndex + key.length + 2);
+    if (text[cursor] !== ":") {
+      searchFrom = keyIndex + 1;
+      continue;
+    }
+    cursor = skipWhitespace(text, cursor + 1);
+    return cursor;
+  }
+  return null;
+}
+
+function extractBalancedJsonSegment(
+  text: string,
+  startIndex: number,
+  openChar: "{" | "["
+): string | null {
+  const closeChar = openChar === "{" ? "}" : "]";
+  if (text[startIndex] !== openChar) return null;
+
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let cursor = startIndex; cursor < text.length; cursor += 1) {
+    const char = text[cursor];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        isEscaped = true;
+        continue;
+      }
+      if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === openChar) {
+      depth += 1;
+      continue;
+    }
+    if (char === closeChar) {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(startIndex, cursor + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractStringFieldByKeys(
+  text: string,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const valueStart = findJsonValueStartByKey(text, key);
+    if (valueStart === null || text[valueStart] !== "\"") continue;
+
+    let cursor = valueStart + 1;
+    let isEscaped = false;
+    while (cursor < text.length) {
+      const char = text[cursor];
+      if (isEscaped) {
+        isEscaped = false;
+        cursor += 1;
+        continue;
+      }
+      if (char === "\\") {
+        isEscaped = true;
+        cursor += 1;
+        continue;
+      }
+      if (char === "\"") {
+        const encoded = text.slice(valueStart, cursor + 1);
+        try {
+          return JSON.parse(encoded);
+        } catch {
+          return undefined;
+        }
+      }
+      cursor += 1;
+    }
+  }
+  return undefined;
+}
+
+function extractArrayFieldByKeys(text: string, keys: string[]): unknown[] | undefined {
+  for (const key of keys) {
+    const valueStart = findJsonValueStartByKey(text, key);
+    if (valueStart === null || text[valueStart] !== "[") continue;
+    const segment = extractBalancedJsonSegment(text, valueStart, "[");
+    if (!segment) continue;
+    try {
+      const parsed = JSON.parse(segment);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function extractObjectFieldByKeys(
+  text: string,
+  keys: string[]
+): Record<string, unknown> | undefined {
+  for (const key of keys) {
+    const valueStart = findJsonValueStartByKey(text, key);
+    if (valueStart === null || text[valueStart] !== "{") continue;
+    const segment = extractBalancedJsonSegment(text, valueStart, "{");
+    if (!segment) continue;
+    try {
+      const parsed = JSON.parse(segment);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function parsePartialReportFromAccumulatedText(
+  reportJson: string
+): ReportPayload | null {
+  const trimmed = reportJson.trim();
+  if (!trimmed) return null;
+
+  const raw: Record<string, unknown> = {};
+
+  const executiveSummary = extractStringFieldByKeys(trimmed, [
+    "executive_summary",
+    "summary",
+    "title",
+  ]);
+  if (executiveSummary) {
+    raw.summary = executiveSummary;
+  }
+
+  const sectionSummary = extractStringFieldByKeys(trimmed, [
+    "section_summary",
+    "analysis_summary",
+    "section_overview",
+  ]);
+  if (sectionSummary) {
+    raw.section_summary = sectionSummary;
+  }
+
+  const performanceSnapshot = extractArrayFieldByKeys(trimmed, [
+    "performance_snapshot",
+    "key_metrics",
+  ]);
+  if (performanceSnapshot) {
+    raw.performance_snapshot = performanceSnapshot;
+  }
+
+  const keyInsights = extractArrayFieldByKeys(trimmed, [
+    "key_insights",
+    "strategic_analysis",
+    "strategy_and_insights",
+    "insights",
+    "key_findings",
+  ]);
+  if (keyInsights) {
+    raw.key_insights = keyInsights;
+  }
+
+  const recommendationList = extractArrayFieldByKeys(trimmed, [
+    "action_plan",
+    "next_steps",
+    "recommendations",
+    "reccomendations",
+    "priority_recommendations",
+    "priority_reccomendations",
+    "priority reccomendations",
+  ]);
+  if (recommendationList) {
+    raw.recommendations = recommendationList;
+  }
+
+  const charts = extractArrayFieldByKeys(trimmed, ["charts", "graphs"]);
+  if (charts) {
+    raw.charts = charts;
+  }
+
+  const mainGraph = extractObjectFieldByKeys(trimmed, [
+    "main_graph",
+    "primary_performance_graph",
+  ]);
+  if (mainGraph) {
+    raw.main_graph = mainGraph;
+  }
+
+  const tableRows = extractArrayFieldByKeys(trimmed, [
+    "performance_table",
+    "campaign_table",
+  ]);
+  if (tableRows) {
+    raw.performance_table = tableRows;
+  }
+
+  const hasData = Object.keys(raw).length > 0;
+  if (!hasData) return null;
+
+  const parsed = reportPayloadSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  return parsed.data;
+}
+
 export function parseJainaStreamEvent(line: string): JainaStreamEvent | null {
   try {
     const json = JSON.parse(line);
@@ -322,9 +596,14 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return { ...nextBase, status: "error", error: "Malformed response.output_json.delta event" };
       }
+      const nextReportJson = `${state.reportJson}${parsed.data.delta}`;
+      const parsedReport =
+        parseReportFromAccumulatedText(nextReportJson) ??
+        parsePartialReportFromAccumulatedText(nextReportJson);
       return {
         ...nextBase,
-        reportJson: `${state.reportJson}${parsed.data.delta}`,
+        reportJson: nextReportJson,
+        report: pickRicherReport(state.report, parsedReport),
       };
     }
     case "response.output_text.delta": {
@@ -334,11 +613,16 @@ export function reduceJainaStreamEvent(
       }
       // Track the item_id from delta if not already set
       const itemId = parsed.data.item_id;
+      const nextReportJson = `${state.reportJson}${parsed.data.delta}`;
+      const parsedReport =
+        parseReportFromAccumulatedText(nextReportJson) ??
+        parsePartialReportFromAccumulatedText(nextReportJson);
       return {
         ...nextBase,
         ...(itemId && !nextBase.outputItemId ? { outputItemId: itemId } : {}),
-        reportJson: `${state.reportJson}${parsed.data.delta}`,
+        reportJson: nextReportJson,
         responseText: `${state.responseText || ""}${parsed.data.delta}`,
+        report: pickRicherReport(state.report, parsedReport),
       };
     }
     case "tool.call": {

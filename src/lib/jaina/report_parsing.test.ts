@@ -268,9 +268,12 @@ describe("Report Parsing Integration", () => {
       expect(data.strategic_recommendations[0].action).toBe("Pause Underperformer");
       expect(data.strategic_recommendations[0].type).toBe("Pause Underperformer");
       expect(data.strategic_recommendations[0].priority).toBe("HIGH");
-      expect(data.graphs.length).toBeGreaterThan(0);
+      expect(data.graphs.length).toBe(3);
       expect(data.graphs[0].type).toBe("bar");
-      expect(data.graphs[0].series.length).toBe(3);
+      expect(data.graphs[0].title).toContain("CPA");
+      expect(data.graphs[0].data.length).toBe(2);
+      expect(data.graphs[1].title).toContain("CTR");
+      expect(data.graphs[2].title).toContain("ROAS");
       expect(data.performance_snapshot[0].prefix).toBe("$");
       expect(data.performance_snapshot[1].suffix).toBe("x");
     }

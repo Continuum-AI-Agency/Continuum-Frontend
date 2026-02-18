@@ -438,15 +438,15 @@ function toTableFromRows(rows: any[] | undefined): { headers: string[]; rows: st
   };
 }
 
-function parseWideSeriesFromRows(graph: any): any | null {
+function parseWideChartsFromRows(graph: any): any[] {
   const rows = Array.isArray(graph?.data)
     ? graph.data.filter((row: unknown) => row && typeof row === "object")
     : [];
-  if (rows.length === 0) return null;
+  if (rows.length === 0) return [];
 
   const firstRow = rows[0] as Record<string, unknown>;
   const keys = Object.keys(firstRow);
-  if (keys.length === 0) return null;
+  if (keys.length === 0) return [];
 
   const candidateLabelKeys = ["label", "name", "x", "category", "campaign", "ad_set", "ad_set_name"];
   const labelKey =
@@ -465,31 +465,24 @@ function parseWideSeriesFromRows(graph: any): any | null {
     return false;
   });
 
-  if (numericKeys.length === 0) return null;
+  if (numericKeys.length === 0) return [];
 
-  if (numericKeys.length === 1) {
-    const metricKey = numericKeys[0];
-    return {
-      type: normalizeChartType(graph.type || graph.graph_type || "bar"),
-      data: rows.map((row: Record<string, unknown>) => ({
-        label: toDisplayString(row[labelKey]),
-        value: toFiniteNumber(row[metricKey]),
-      })),
-      y_axis_label: metricKey,
-    };
-  }
+  const baseTitle = toDisplayString(graph?.title || graph?.graph_name || "Chart");
+  const chartType = normalizeChartType(graph?.type || graph?.graph_type || "bar");
+  const xAxisLabel = graph?.x_axis_label || formatEnumLabel(labelKey);
+  const description = graph?.description || graph?.graph_description;
 
-  return {
-    type: normalizeChartType(graph.type || graph.graph_type || "line"),
-    series: numericKeys.map((metricKey) => ({
-      name: metricKey,
-      data: rows.map((row: Record<string, unknown>) => ({
-        x: toDisplayString(row[labelKey]),
-        y: toFiniteNumber(row[metricKey]),
-      })),
+  return numericKeys.map((metricKey) => ({
+    title: numericKeys.length > 1 ? `${baseTitle} — ${metricKey}` : baseTitle,
+    type: chartType,
+    data: rows.map((row: Record<string, unknown>) => ({
+      label: toDisplayString(row[labelKey]),
+      value: toFiniteNumber(row[metricKey]),
     })),
-    x_axis_label: formatEnumLabel(labelKey),
-  };
+    x_axis_label: xAxisLabel,
+    y_axis_label: metricKey,
+    description,
+  }));
 }
 
 function parseGraph(graph: any): any {
@@ -513,16 +506,6 @@ function parseGraph(graph: any): any {
       })),
       x_axis_label: graph.x_axis_label,
       y_axis_label: graph.y_axis_label,
-    };
-  }
-
-  const wideSeries = parseWideSeriesFromRows(graph);
-  if (wideSeries) {
-    return {
-      ...baseChart,
-      ...wideSeries,
-      x_axis_label: graph.x_axis_label || wideSeries.x_axis_label,
-      y_axis_label: graph.y_axis_label || wideSeries.y_axis_label,
     };
   }
 
@@ -564,6 +547,16 @@ function parseGraph(graph: any): any {
       fill: d.fill,
     })),
   };
+}
+
+function parseGraphsFromInput(graph: any): any[] {
+  if (!graph) return [];
+  const wideCharts = parseWideChartsFromRows(graph);
+  if (wideCharts.length > 0) {
+    return wideCharts;
+  }
+  const parsed = parseGraph(graph);
+  return parsed ? [parsed] : [];
 }
 
 function parseReportData(reportData: any): { 
@@ -617,18 +610,20 @@ function parseReportData(reportData: any): {
   }
   
   if (Array.isArray(reportData.graphs)) {
-    result.graphs = reportData.graphs.map(parseGraph).filter(Boolean);
+    result.graphs = reportData.graphs.flatMap((graph: any) =>
+      parseGraphsFromInput(graph)
+    );
   }
   if (Array.isArray(reportData.charts)) {
-    result.graphs.push(...reportData.charts.map(parseGraph).filter(Boolean));
+    result.graphs.push(
+      ...reportData.charts.flatMap((graph: any) => parseGraphsFromInput(graph))
+    );
   }
   if (reportData.main_graph) {
-    const parsedMainGraph = parseGraph(reportData.main_graph);
-    if (parsedMainGraph) result.graphs.push(parsedMainGraph);
+    result.graphs.push(...parseGraphsFromInput(reportData.main_graph));
   }
   if (reportData.primary_performance_graph) {
-    const parsedPrimaryGraph = parseGraph(reportData.primary_performance_graph);
-    if (parsedPrimaryGraph) result.graphs.push(parsedPrimaryGraph);
+    result.graphs.push(...parseGraphsFromInput(reportData.primary_performance_graph));
   }
   
   if (reportData.table) {
@@ -772,18 +767,20 @@ export const reportPayloadSchema = z.union([
     const allGraphs: any[] = [];
     // Support: main_graph, primary_performance_graph, graphs, charts
     if (anyData.main_graph) {
-      const parsedGraph = parseGraph(anyData.main_graph);
-      if (parsedGraph) allGraphs.push(parsedGraph);
+      allGraphs.push(...parseGraphsFromInput(anyData.main_graph));
     }
     if (anyData.primary_performance_graph) {
-      const parsedGraph = parseGraph(anyData.primary_performance_graph);
-      if (parsedGraph) allGraphs.push(parsedGraph);
+      allGraphs.push(...parseGraphsFromInput(anyData.primary_performance_graph));
     }
     if (Array.isArray(anyData.graphs)) {
-      allGraphs.push(...anyData.graphs.map(parseGraph).filter(Boolean));
+      allGraphs.push(
+        ...anyData.graphs.flatMap((graph: any) => parseGraphsFromInput(graph))
+      );
     }
     if (Array.isArray(anyData.charts)) {
-      allGraphs.push(...anyData.charts.map(parseGraph).filter(Boolean));
+      allGraphs.push(
+        ...anyData.charts.flatMap((graph: any) => parseGraphsFromInput(graph))
+      );
     }
     
     const sections: any[] = [];
