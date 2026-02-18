@@ -3,10 +3,11 @@ import type { EdgeProps, InternalNode, Node } from "@xyflow/react";
 import {
   BaseEdge,
   getBezierPath,
-  getSimpleBezierPath,
+  getStraightPath,
   Position,
   useInternalNode,
 } from "@xyflow/react";
+import { useCampaignStore } from "@/CampaignCanvas/stores/useCampaignStore";
 
 const Temporary = ({
   id,
@@ -17,14 +18,23 @@ const Temporary = ({
   sourcePosition,
   targetPosition,
 }: EdgeProps) => {
-  const [edgePath] = getSimpleBezierPath({
-    sourcePosition,
-    sourceX,
-    sourceY,
-    targetPosition,
-    targetX,
-    targetY,
-  });
+  const edgeStyle = useCampaignStore((state) => state.edgeStyle);
+  
+  const [edgePath] = edgeStyle === 'straight' 
+    ? getStraightPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+      })
+    : getBezierPath({
+        sourcePosition,
+        sourceX,
+        sourceY,
+        targetPosition,
+        targetX,
+        targetY,
+      });
 
   return (
     <BaseEdge
@@ -42,7 +52,6 @@ const getHandleCoordsByPosition = (
   node: InternalNode<Node>,
   handlePosition: Position
 ) => {
-  // Choose the handle type based on position - Left is for target, Right is for source
   const handleType = handlePosition === Position.Left ? "target" : "source";
 
   const handle = node.internals.handleBounds?.[handleType]?.find(
@@ -56,9 +65,6 @@ const getHandleCoordsByPosition = (
   let offsetX = handle.width / 2;
   let offsetY = handle.height / 2;
 
-  // this is a tiny detail to make the markerEnd of an edge visible.
-  // The handle position that gets calculated has the origin top-left, so depending which side we are using, we add a little offset
-  // when the handlePosition is Position.Right for example, we need to add an offset as big as the handle itself in order to get the correct position
   switch (handlePosition) {
     case Position.Left: {
       offsetX = 0;
@@ -109,6 +115,7 @@ const getEdgeParams = (
 const Animated = ({ id, source, target, markerEnd, style }: EdgeProps) => {
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
+  const edgeStyle = useCampaignStore((state) => state.edgeStyle);
 
   if (!(sourceNode && targetNode)) {
     return null;
@@ -119,18 +126,31 @@ const Animated = ({ id, source, target, markerEnd, style }: EdgeProps) => {
     targetNode
   );
 
-  const [edgePath] = getBezierPath({
-    sourcePosition: sourcePos,
-    sourceX: sx,
-    sourceY: sy,
-    targetPosition: targetPos,
-    targetX: tx,
-    targetY: ty,
-  });
+  const [edgePath] = edgeStyle === 'straight'
+    ? getStraightPath({
+        sourceX: sx,
+        sourceY: sy,
+        targetX: tx,
+        targetY: ty,
+      })
+    : getBezierPath({
+        sourcePosition: sourcePos,
+        sourceX: sx,
+        sourceY: sy,
+        targetPosition: targetPos,
+        targetX: tx,
+        targetY: ty,
+      });
 
   return (
     <>
-      <BaseEdge id={id} markerEnd={markerEnd} path={edgePath} style={style} />
+      <BaseEdge 
+        id={id} 
+        markerEnd={markerEnd} 
+        path={edgePath} 
+        style={style} 
+        className="transition-all duration-300 hover:stroke-[3px] cursor-pointer"
+      />
       <circle fill="var(--primary)" r="4">
         <animateMotion dur="2s" path={edgePath} repeatCount="indefinite" />
       </circle>
