@@ -10,24 +10,9 @@ import {
   NodeDescription 
 } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
-import { CheckCircle2, AlertCircle, XCircle, Layers, Trash2, Copy, Edit, Plus } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, Layers, Trash2, Copy, Plus, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCampaignStore } from '../stores/useCampaignStore';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuShortcut,
-  ContextMenuSeparator,
-  ContextMenuGroup,
-  ContextMenuLabel,
-} from "@/components/ui/context-menu";
-import { EditableLabel } from '../components/EditableLabel';
-import { cn } from '@/lib/utils';
-
-import { Separator } from '@/components/ui/separator';
-
 import {
   ContextMenu,
   ContextMenuContent,
@@ -42,9 +27,9 @@ import {
   ContextMenuSubTrigger,
   ContextMenuCheckboxItem,
 } from "@/components/ui/context-menu";
-import { useCampaignStore } from '../stores/useCampaignStore';
 import { EditableLabel } from '../components/EditableLabel';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 import { Separator } from '@/components/ui/separator';
 

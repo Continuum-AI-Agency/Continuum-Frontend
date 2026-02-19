@@ -9,15 +9,7 @@ import {
   NodeContent,
   NodeDescription 
 } from '@/components/ai-elements/node';
-import { DollarSign, Edit, Copy, Trash2 } from 'lucide-react';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-  ContextMenuShortcut,
-  ContextMenuSeparator,
-} from "@/components/ui/context-menu";
+import { DollarSign, Copy, Trash2 } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
