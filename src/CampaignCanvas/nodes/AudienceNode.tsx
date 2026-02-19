@@ -9,10 +9,12 @@ import {
   NodeContent,
   NodeDescription 
 } from '@/components/ai-elements/node';
-import { Users, CheckCircle2, AlertCircle, XCircle, Copy, Trash2 } from 'lucide-react';
+import { Users, Copy, Trash2, Layout, Settings } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuLabel,
+  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuTrigger,
   ContextMenuShortcut,
@@ -24,25 +26,34 @@ import {
 } from "@/components/ui/context-menu";
 import { useCampaignStore } from '../stores/useCampaignStore';
 import { EditableLabel } from '../components/EditableLabel';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 
 import { Separator } from '@/components/ui/separator';
 
 const LOCATIONS = [
-  { value: 'US', label: 'United States' },
-  { value: 'GB', label: 'United Kingdom' },
-  { value: 'CA', label: 'Canada' },
-  { value: 'AU', label: 'Australia' },
-  { value: 'DE', label: 'Germany' },
+  { value: 'MX', label: 'Mexico', description: 'Mexico targeting restricts delivery to users located in Mexico.' },
+  { value: 'BR', label: 'Brazil', description: 'Brazil targeting restricts delivery to users located in Brazil.' },
+  { value: 'AR', label: 'Argentina', description: 'Argentina targeting restricts delivery to users located in Argentina.' },
+  { value: 'CO', label: 'Colombia', description: 'Colombia targeting restricts delivery to users located in Colombia.' },
+  { value: 'CL', label: 'Chile', description: 'Chile targeting restricts delivery to users located in Chile.' },
+  { value: 'PE', label: 'Peru', description: 'Peru targeting restricts delivery to users located in Peru.' },
+  { value: 'EC', label: 'Ecuador', description: 'Ecuador targeting restricts delivery to users located in Ecuador.' },
+  { value: 'UY', label: 'Uruguay', description: 'Uruguay targeting restricts delivery to users located in Uruguay.' },
+  { value: 'PY', label: 'Paraguay', description: 'Paraguay targeting restricts delivery to users located in Paraguay.' },
+  { value: 'BO', label: 'Bolivia', description: 'Bolivia targeting restricts delivery to users located in Bolivia.' },
+  { value: 'CR', label: 'Costa Rica', description: 'Costa Rica targeting restricts delivery to users located in Costa Rica.' },
+  { value: 'PA', label: 'Panama', description: 'Panama targeting restricts delivery to users located in Panama.' },
+  { value: 'DO', label: 'Dominican Republic', description: 'Dominican Republic targeting restricts delivery to users located in the Dominican Republic.' },
 ];
 
 const AGE_RANGES = [
-  { min: 18, max: 24, label: '18-24' },
-  { min: 25, max: 34, label: '25-34' },
-  { min: 35, max: 44, label: '35-44' },
-  { min: 45, max: 54, label: '45-54' },
-  { min: 55, max: 64, label: '55-64' },
-  { min: 65, max: 100, label: '65+' },
+  { min: 18, max: 24, label: '18-24', description: 'Targets adults between ages 18 and 24.' },
+  { min: 25, max: 34, label: '25-34', description: 'Targets adults between ages 25 and 34.' },
+  { min: 35, max: 44, label: '35-44', description: 'Targets adults between ages 35 and 44.' },
+  { min: 45, max: 54, label: '45-54', description: 'Targets adults between ages 45 and 54.' },
+  { min: 55, max: 64, label: '55-64', description: 'Targets adults between ages 55 and 64.' },
+  { min: 65, max: 100, label: '65+', description: 'Targets adults age 65 and older.' },
 ];
 
 export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData>) => {
@@ -127,6 +138,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
             <ContextMenuSubTrigger>
               <Users className="mr-2 h-4 w-4" />
               Genders
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Gender targeting narrows delivery to selected gender groups." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               <ContextMenuCheckboxItem 
@@ -134,12 +146,14 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
                 onClick={() => handleGenderToggle(1)}
               >
                 Men
+                <ContextMenuItemInfo description="Men targeting includes users categorized as male." />
               </ContextMenuCheckboxItem>
               <ContextMenuCheckboxItem 
                 checked={data.genders?.includes(2)} 
                 onClick={() => handleGenderToggle(2)}
               >
                 Women
+                <ContextMenuItemInfo description="Women targeting includes users categorized as female." />
               </ContextMenuCheckboxItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
@@ -148,6 +162,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
             <ContextMenuSubTrigger>
               <Layout className="mr-2 h-4 w-4" />
               Locations
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Location targeting limits delivery to specific geographies." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {LOCATIONS.map((loc) => (
@@ -157,6 +172,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
                   onClick={() => handleLocationToggle(loc.value)}
                 >
                   {loc.label}
+                  <ContextMenuItemInfo description={loc.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
@@ -166,6 +182,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
             <ContextMenuSubTrigger>
               <Settings className="mr-2 h-4 w-4" />
               Age Range
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Age range sets the eligible age band for delivery." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {AGE_RANGES.map((range) => (
@@ -175,6 +192,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
                   onClick={() => handleAgeChange(range.min, range.max)}
                 >
                   {range.label}
+                  <ContextMenuItemInfo description={range.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
@@ -187,6 +205,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+            <ContextMenuItemInfo className="ml-2" description="A duplicate copies this audience setup for quick experimentation." />
           </ContextMenuItem>
         </ContextMenuGroup>
         
@@ -195,6 +214,7 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          <ContextMenuItemInfo className="ml-2" description="Delete removes this audience object from the current graph." />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

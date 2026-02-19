@@ -28,32 +28,40 @@ import {
   ContextMenuCheckboxItem,
 } from "@/components/ui/context-menu";
 import { EditableLabel } from '../components/EditableLabel';
+import { EditableAmount } from '../components/EditableAmount';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 
 import { Separator } from '@/components/ui/separator';
 
 const OPTIMIZATION_GOALS = [
-  { value: 'CONVERSIONS', label: 'Conversions' },
-  { value: 'LANDING_PAGE_VIEWS', label: 'Landing Page Views' },
-  { value: 'LINK_CLICKS', label: 'Link Clicks' },
-  { value: 'IMPRESSIONS', label: 'Impressions' },
-  { value: 'REACH', label: 'Reach' },
+  { value: 'CONVERSIONS', label: 'Conversions', description: 'Conversions optimization focuses on users likely to complete conversion events.' },
+  { value: 'LANDING_PAGE_VIEWS', label: 'Landing Page Views', description: 'Landing Page Views optimization prioritizes users likely to fully load your page.' },
+  { value: 'LINK_CLICKS', label: 'Link Clicks', description: 'Link Clicks optimization targets users likely to click your ad link.' },
+  { value: 'IMPRESSIONS', label: 'Impressions', description: 'Impressions optimization prioritizes showing the ad as often as possible.' },
+  { value: 'REACH', label: 'Reach', description: 'Reach optimization prioritizes unique people seeing the ad.' },
 ];
 
 const BILLING_EVENTS = [
-  { value: 'IMPRESSIONS', label: 'Impressions' },
-  { value: 'LINK_CLICKS', label: 'Link Clicks' },
+  { value: 'IMPRESSIONS', label: 'Impressions', description: 'Impressions billing charges based on ad views.' },
+  { value: 'LINK_CLICKS', label: 'Link Clicks', description: 'Link Clicks billing charges when users click your ad link.' },
 ];
 
 const BID_STRATEGIES = [
-  { value: 'LOWEST_COST_WITHOUT_CAP', label: 'Highest Volume' },
-  { value: 'COST_CAP', label: 'Cost Cap' },
-  { value: 'BID_CAP', label: 'Bid Cap' },
+  { value: 'LOWEST_COST_WITHOUT_CAP', label: 'Highest Volume', description: 'Highest Volume seeks the most results for your budget without a strict cost target.' },
+  { value: 'COST_CAP', label: 'Cost Cap', description: 'Cost Cap aims to keep average result cost around your target cap.' },
+  { value: 'BID_CAP', label: 'Bid Cap', description: 'Bid Cap sets a hard maximum bid your ad can place in auctions.' },
+];
+
+const BUDGET_TYPES: Array<{ value: NonNullable<AdSetData['budgetType']>; label: string }> = [
+  { value: 'DAILY', label: 'Daily' },
+  { value: 'LIFETIME', label: 'Lifetime' },
 ];
 
 export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
+  const activeBudgetType = data.budgetType || 'DAILY';
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
@@ -81,9 +89,13 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
     addConnectedNode(id, 'audience');
   }, [id, addConnectedNode]);
 
-  const handleAddBudget = useCallback(() => {
-    addConnectedNode(id, 'budget');
-  }, [id, addConnectedNode]);
+  const handleBudgetAmountSave = useCallback((budgetAmount: number) => {
+    updateNodeData(id, { budgetAmount: Math.max(0, budgetAmount) });
+  }, [id, updateNodeData]);
+
+  const handleBudgetTypeChange = useCallback((budgetType: NonNullable<AdSetData['budgetType']>) => {
+    updateNodeData(id, { budgetType });
+  }, [id, updateNodeData]);
 
   return (
     <ContextMenu>
@@ -142,6 +154,44 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
                   </Badge>
                 )}
               </div>
+              <div className="mt-1.5 rounded-md border border-purple-500/20 bg-purple-500/5 p-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <EditableAmount
+                    value={data.budgetAmount ?? 0}
+                    currency={data.budgetCurrency || 'USD'}
+                    onSave={handleBudgetAmountSave}
+                    className="text-xs font-semibold tracking-tight text-foreground/90 cursor-text"
+                  />
+                  <span className="text-[8px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Budget Type
+                  </span>
+                </div>
+                <div className="mt-1 inline-flex w-full rounded-sm border border-purple-500/25 bg-background/70 p-0.5">
+                  {BUDGET_TYPES.map((type) => {
+                    const isActive = activeBudgetType === type.value;
+
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        aria-pressed={isActive}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleBudgetTypeChange(type.value);
+                        }}
+                        className={cn(
+                          "flex-1 rounded-sm px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-purple-500/40",
+                          isActive
+                            ? "bg-purple-500/15 text-foreground"
+                            : "text-muted-foreground hover:bg-purple-500/10"
+                        )}
+                      >
+                        {type.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </NodeContent>
         </Node>
@@ -152,14 +202,12 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
           <ContextMenuItem onClick={handleAddAd}>
             <Plus className="mr-2 h-4 w-4 text-emerald-500" />
             Add Ad
+            <ContextMenuItemInfo description="An ad is the message and creative shown to people in this ad set." />
           </ContextMenuItem>
           <ContextMenuItem onClick={handleAddAudience}>
             <Plus className="mr-2 h-4 w-4 text-orange-500" />
             Add Audience
-          </ContextMenuItem>
-          <ContextMenuItem onClick={handleAddBudget}>
-            <Plus className="mr-2 h-4 w-4 text-amber-500" />
-            Add Budget
+            <ContextMenuItemInfo description="Audience defines who this ad set is allowed to reach." />
           </ContextMenuItem>
         </ContextMenuGroup>
         
@@ -171,6 +219,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
             <ContextMenuSubTrigger>
               <Layers className="mr-2 h-4 w-4" />
               Optimization Goal
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Optimization goal is the result type the system tries to maximize." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {OPTIMIZATION_GOALS.map((goal) => (
@@ -180,6 +229,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
                   onClick={() => handleGoalChange(goal.value)}
                 >
                   {goal.label}
+                  <ContextMenuItemInfo description={goal.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
@@ -189,6 +239,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
             <ContextMenuSubTrigger>
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Billing Event
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Billing event determines which user action triggers spend measurement." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {BILLING_EVENTS.map((event) => (
@@ -198,6 +249,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
                   onClick={() => handleBillingChange(event.value)}
                 >
                   {event.label}
+                  <ContextMenuItemInfo description={event.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
@@ -207,6 +259,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
             <ContextMenuSubTrigger>
               <ShieldCheck className="mr-2 h-4 w-4" />
               Bid Strategy
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Bid strategy controls how aggressively the system bids in auctions." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-56">
               {BID_STRATEGIES.map((strategy) => (
@@ -216,10 +269,12 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
                   onClick={() => handleBidChange(strategy.value)}
                 >
                   {strategy.label}
+                  <ContextMenuItemInfo description={strategy.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+
         </ContextMenuGroup>
 
         <ContextMenuSeparator />
@@ -228,6 +283,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+            <ContextMenuItemInfo className="ml-2" description="A duplicate copies this ad set configuration for quick variant testing." />
           </ContextMenuItem>
         </ContextMenuGroup>
         
@@ -236,6 +292,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          <ContextMenuItemInfo className="ml-2" description="Delete removes this ad set object from the current graph." />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

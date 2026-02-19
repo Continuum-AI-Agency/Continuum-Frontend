@@ -3,6 +3,9 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import {
   MiniMap,
   useReactFlow,
+  type OnConnectEnd,
+  type OnConnectStart,
+  type OnConnectStartParams,
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -19,13 +22,19 @@ import { AdSetNode } from '../nodes/AdSetNode';
 import { AdNode } from '../nodes/AdNode';
 import { AudienceNode } from '../nodes/AudienceNode';
 import { CreativeNode } from '../nodes/CreativeNode';
-import { BudgetNode } from '../nodes/BudgetNode';
 import { type CampaignNodeType } from '../types';
+import { getNodeTypeToCreateFromHandle } from '../types/hierarchyNavigation';
+import {
+  getExpectedSingleParentTypeForChild,
+  getSingleParentConstraintMessage,
+  hasExistingSingleParentAttachment,
+} from '../validation/hierarchyRelationships';
 import { Button } from '@/components/ui/button';
-import { Plus, Send, ShieldCheck, Download, Undo, Redo, Settings, MousePointer2 } from 'lucide-react';
+import { Plus, Send, ShieldCheck, Download, Undo, Redo, Settings, MousePointer2, Trash2 } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
+  ContextMenuLabel,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuSub,
@@ -47,6 +56,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { buildCampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 
 const nodeTypes = {
   campaign: CampaignNode,
@@ -54,12 +64,28 @@ const nodeTypes = {
   ad: AdNode,
   audience: AudienceNode,
   creative: CreativeNode,
-  budget: BudgetNode,
 };
 
 const edgeTypes = {
   animated: Edge.Animated,
 };
+
+function getClientPositionFromPointerEvent(
+  event: MouseEvent | TouchEvent
+): { x: number; y: number } | null {
+  if ('changedTouches' in event && event.changedTouches.length > 0) {
+    return {
+      x: event.changedTouches[0]!.clientX,
+      y: event.changedTouches[0]!.clientY,
+    };
+  }
+
+  if ('clientX' in event && 'clientY' in event) {
+    return { x: event.clientX, y: event.clientY };
+  }
+
+  return null;
+}
 
 export const CampaignCanvas = () => {
   const { 
@@ -83,6 +109,7 @@ export const CampaignCanvas = () => {
   const { show: toast } = useToast();
 
   const lastMousePos = useRef({ x: 0, y: 0 });
+  const connectStartRef = useRef<OnConnectStartParams | null>(null);
 
   const handleMouseMove = useCallback((event: React.MouseEvent) => {
     lastMousePos.current = { x: event.clientX, y: event.clientY };
@@ -95,6 +122,73 @@ export const CampaignCanvas = () => {
     });
     addNode(type, {}, position);
   }, [addNode, screenToFlowPosition]);
+
+  const handleConnectStart = useCallback<OnConnectStart>((_event, params) => {
+    connectStartRef.current = params;
+  }, []);
+
+  const handleConnectEnd = useCallback<OnConnectEnd>((event, connectionState) => {
+    const connectStart = connectStartRef.current;
+    connectStartRef.current = null;
+
+    if (!connectStart?.nodeId || !connectStart.handleType) {
+      return;
+    }
+
+    // A valid drop onto an existing node is handled by React Flow via onConnect.
+    if (connectionState.toNode) {
+      return;
+    }
+
+    const startNode = nodes.find((node) => node.id === connectStart.nodeId);
+    if (!startNode) {
+      return;
+    }
+
+    const nodeTypeToCreate = getNodeTypeToCreateFromHandle(startNode.type, connectStart.handleType);
+    if (!nodeTypeToCreate) {
+      return;
+    }
+
+    if (connectStart.handleType === 'target') {
+      const expectedParentType = getExpectedSingleParentTypeForChild(startNode.type);
+      if (
+        expectedParentType === nodeTypeToCreate &&
+        hasExistingSingleParentAttachment(startNode.id, expectedParentType, nodes, edges)
+      ) {
+        toast({
+          title: 'Connection blocked',
+          description: getSingleParentConstraintMessage(startNode.type, expectedParentType),
+        });
+        return;
+      }
+    }
+
+    const pointerPosition = getClientPositionFromPointerEvent(event);
+    if (!pointerPosition) {
+      return;
+    }
+
+    const nodePosition = screenToFlowPosition(pointerPosition);
+    const newNodeId = addNode(nodeTypeToCreate, {}, nodePosition);
+
+    if (connectStart.handleType === 'source') {
+      onConnect({
+        source: connectStart.nodeId,
+        sourceHandle: connectStart.handleId,
+        target: newNodeId,
+        targetHandle: null,
+      });
+      return;
+    }
+
+    onConnect({
+      source: newNodeId,
+      sourceHandle: null,
+      target: connectStart.nodeId,
+      targetHandle: connectStart.handleId,
+    });
+  }, [addNode, edges, nodes, onConnect, screenToFlowPosition, toast]);
 
   const confirmDelete = useCallback(() => {
     const selectedNodes = nodes.filter((n) => n.selected);
@@ -110,16 +204,49 @@ export const CampaignCanvas = () => {
   }, [nodes, removeNode, toast]);
 
   const handleExport = useCallback(() => {
-    const data = { nodes, edges };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const payload = buildCampaignCanvasPayload(nodes, edges, { source: "export" });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'campaign-structure.json';
+    a.download = 'campaign-canvas-payload.json';
     a.click();
     URL.revokeObjectURL(url);
-    toast({ title: "Exported", description: "Campaign structure downloaded as JSON." });
+    toast({ title: "Exported", description: "Canonical campaign payload downloaded as JSON." });
   }, [nodes, edges, toast]);
+
+  const handleDeploy = useCallback(() => {
+    const payload = buildCampaignCanvasPayload(nodes, edges, { source: "deploy" });
+    console.info("[campaign-canvas] deploy payload prepared", payload);
+    toast({
+      title: "Deploy payload ready",
+      description: `${payload.summary.nodeCount} nodes mapped for backend handoff.`,
+    });
+  }, [edges, nodes, toast]);
+
+  const handleValidateStructure = useCallback(() => {
+    const validationResult = validateGraph();
+    if (!validationResult.payloadValid) {
+      toast({
+        title: "Validation failed",
+        description: validationResult.payloadError ?? "Payload schema check failed.",
+      });
+      return;
+    }
+
+    if (validationResult.invalidNodeCount > 0) {
+      toast({
+        title: "Validation warnings",
+        description: `Found ${validationResult.invalidNodeCount} node(s) with errors. Payload schema passed.`,
+      });
+      return;
+    }
+
+    toast({
+      title: "Structure valid",
+      description: "Graph rules and canonical payload schema both passed.",
+    });
+  }, [toast, validateGraph]);
 
   const selectedCount = useMemo(() => nodes.filter(n => n.selected).length, [nodes]);
 
@@ -172,6 +299,8 @@ export const CampaignCanvas = () => {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectStart={handleConnectStart}
+            onConnectEnd={handleConnectEnd}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
@@ -203,11 +332,11 @@ export const CampaignCanvas = () => {
             )}
 
             <Panel position="bottom-right" className="flex flex-col gap-2 bg-transparent border-none shadow-none!">
-              <Button variant="outline" className="gap-2 bg-background shadow-lg" onClick={validateGraph}>
+              <Button variant="outline" className="gap-2 bg-background shadow-lg" onClick={handleValidateStructure}>
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 Validate
               </Button>
-              <Button className="gap-2 shadow-lg" onClick={() => console.log('Deploying...')}>
+              <Button className="gap-2 shadow-lg" onClick={handleDeploy}>
                 <Send className="h-4 w-4" />
                 Deploy
               </Button>
@@ -265,12 +394,6 @@ export const CampaignCanvas = () => {
                   Creative
                 </div>
               </ContextMenuItem>
-              <ContextMenuItem onClick={() => handleAddNode('budget')}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-amber-500" />
-                  Budget
-                </div>
-              </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
 
@@ -303,7 +426,7 @@ export const CampaignCanvas = () => {
           <ContextMenuSeparator />
 
           <ContextMenuLabel>Campaign Tools</ContextMenuLabel>
-          <ContextMenuItem inset onClick={validateGraph}>
+          <ContextMenuItem inset onClick={handleValidateStructure}>
             <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
             Validate Structure
           </ContextMenuItem>

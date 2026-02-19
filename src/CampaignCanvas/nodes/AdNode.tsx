@@ -1,15 +1,14 @@
 "use client";
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { type NodeProps } from '@xyflow/react';
-import { type AdData } from '../types';
+import { type AdData, type AdFormat, type CreativeAssetType } from '../types';
 import { 
   Node, 
   NodeHeader, 
   NodeTitle, 
-  NodeContent,
-  NodeDescription 
+  NodeContent
 } from '@/components/ai-elements/node';
-import { CheckCircle2, AlertCircle, XCircle, Megaphone, Edit, Copy, Trash2, Plus } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, Megaphone, Copy, Trash2, Plus, Send } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -27,27 +26,33 @@ import {
 import { useCampaignStore } from '../stores/useCampaignStore';
 import { EditableLabel } from '../components/EditableLabel';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
+import {
+  DEFAULT_AD_FORMAT,
+  isAdFormatCompatibleWithCreativeType,
+} from '../types/adCreativeCompatibility';
 
 import { Separator } from '@/components/ui/separator';
 
-const AD_FORMATS = [
-  { value: 'IMAGE', label: 'Single Image' },
-  { value: 'VIDEO', label: 'Single Video' },
-  { value: 'CAROUSEL', label: 'Carousel' },
-  { value: 'COLLECTION', label: 'Collection' },
+const AD_FORMATS: Array<{ value: AdFormat; label: string; description: string }> = [
+  { value: 'IMAGE', label: 'Single Image', description: 'Single Image uses one static visual for each impression.' },
+  { value: 'VIDEO', label: 'Single Video', description: 'Single Video uses one motion creative with optional audio.' },
+  { value: 'CAROUSEL', label: 'Carousel', description: 'Carousel presents multiple swipeable cards in one ad unit.' },
+  { value: 'COLLECTION', label: 'Collection', description: 'Collection combines a hero asset with product-style follow-up cards.' },
 ];
 
 const CALL_TO_ACTIONS = [
-  { value: 'LEARN_MORE', label: 'Learn More' },
-  { value: 'SHOP_NOW', label: 'Shop Now' },
-  { value: 'SIGN_UP', label: 'Sign Up' },
-  { value: 'BOOK_NOW', label: 'Book Now' },
-  { value: 'CONTACT_US', label: 'Contact Us' },
-  { value: 'DOWNLOAD', label: 'Download' },
+  { value: 'LEARN_MORE', label: 'Learn More', description: 'Learn More invites users to explore details before deciding.' },
+  { value: 'SHOP_NOW', label: 'Shop Now', description: 'Shop Now emphasizes immediate product browsing or purchase intent.' },
+  { value: 'SIGN_UP', label: 'Sign Up', description: 'Sign Up prompts users to register or create an account.' },
+  { value: 'BOOK_NOW', label: 'Book Now', description: 'Book Now directs users toward scheduling or reservation actions.' },
+  { value: 'CONTACT_US', label: 'Contact Us', description: 'Contact Us encourages direct outreach through message or form.' },
+  { value: 'DOWNLOAD', label: 'Download', description: 'Download prompts users to save a file or install an asset.' },
 ];
 
 export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
-  const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
+  const { duplicateNode, removeNode, updateNodeData, addConnectedNode, nodes, edges } = useCampaignStore();
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
@@ -59,17 +64,39 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
     updateNodeData(id, { headline });
   }, [id, updateNodeData]);
 
-  const handleFormatChange = useCallback((adFormat: string) => {
-    updateNodeData(id, { adFormat } as any);
-  }, [id, updateNodeData]);
+  const connectedCreativeAssetTypes = useMemo<CreativeAssetType[]>(() => {
+    const creativeNodeIds = edges
+      .filter((edge) => edge.source === id)
+      .map((edge) => edge.target);
 
-  const handleCTAChange = useCallback((callToAction: string) => {
-    updateNodeData(id, { callToAction } as any);
+    return creativeNodeIds
+      .map((creativeNodeId) => nodes.find((node) => node.id === creativeNodeId))
+      .filter((node): node is typeof nodes[number] => node?.type === 'creative')
+      .map((node) => node.data.assetType ?? 'image');
+  }, [edges, id, nodes]);
+
+  const isFormatCompatibleWithConnectedCreatives = useCallback((adFormat: AdFormat) => {
+    return connectedCreativeAssetTypes.every((assetType) =>
+      isAdFormatCompatibleWithCreativeType(adFormat, assetType)
+    );
+  }, [connectedCreativeAssetTypes]);
+
+  const handleFormatChange = useCallback((adFormat: AdData['adFormat']) => {
+    if (!isFormatCompatibleWithConnectedCreatives(adFormat)) {
+      return;
+    }
+    updateNodeData(id, { adFormat });
+  }, [id, isFormatCompatibleWithConnectedCreatives, updateNodeData]);
+
+  const handleCTAChange = useCallback((callToAction: AdData['callToAction']) => {
+    updateNodeData(id, { callToAction });
   }, [id, updateNodeData]);
 
   const handleAddCreative = useCallback(() => {
     addConnectedNode(id, 'creative');
   }, [id, addConnectedNode]);
+
+  const selectedAdFormat = data.adFormat ?? DEFAULT_AD_FORMAT;
 
   return (
     <ContextMenu>
@@ -114,7 +141,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
             </div>
             <div className="flex items-center gap-1.5">
               <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase opacity-70">
-                {AD_FORMATS.find(f => f.value === data.adFormat)?.label || 'IMAGE'}
+                {AD_FORMATS.find((format) => format.value === selectedAdFormat)?.label || 'Single Image'}
               </Badge>
               {data.callToAction && (
                 <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
@@ -131,6 +158,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
           <ContextMenuItem onClick={handleAddCreative}>
             <Plus className="mr-2 h-4 w-4 text-pink-500" />
             Add Creative
+            <ContextMenuItemInfo description="Creative is the visual asset (image or video) this ad uses." />
           </ContextMenuItem>
         </ContextMenuGroup>
         
@@ -142,15 +170,18 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
             <ContextMenuSubTrigger>
               <Megaphone className="mr-2 h-4 w-4" />
               Ad Format
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Ad format defines how creative is structured in placements." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {AD_FORMATS.map((format) => (
                 <ContextMenuCheckboxItem
                   key={format.value}
-                  checked={data.adFormat === format.value || (!data.adFormat && format.value === 'IMAGE')}
+                  checked={selectedAdFormat === format.value}
+                  disabled={!isFormatCompatibleWithConnectedCreatives(format.value)}
                   onClick={() => handleFormatChange(format.value)}
                 >
                   {format.label}
+                  <ContextMenuItemInfo description={format.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
@@ -160,6 +191,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
             <ContextMenuSubTrigger>
               <Send className="mr-2 h-4 w-4" />
               Call to Action
+              <ContextMenuItemInfo className="ml-2 mr-4" description="Call to action is the primary next-step prompt shown on the ad." />
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
               {CALL_TO_ACTIONS.map((cta) => (
@@ -169,6 +201,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
                   onClick={() => handleCTAChange(cta.value)}
                 >
                   {cta.label}
+                  <ContextMenuItemInfo description={cta.description} />
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
@@ -181,6 +214,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+            <ContextMenuItemInfo className="ml-2" description="A duplicate creates another ad with the same current setup." />
           </ContextMenuItem>
         </ContextMenuGroup>
         
@@ -189,6 +223,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          <ContextMenuItemInfo className="ml-2" description="Delete removes this ad object from the current graph." />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
