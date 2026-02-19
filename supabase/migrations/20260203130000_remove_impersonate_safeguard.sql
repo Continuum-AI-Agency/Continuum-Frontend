@@ -1,4 +1,5 @@
-CREATE OR REPLACE FUNCTION public.impersonate_user(admin_id uuid, target_id uuid)
+
+\CREATE OR REPLACE FUNCTION public.impersonate_user(admin_id uuid, target_id uuid)
  RETURNS json
  LANGUAGE plpgsql
  SECURITY DEFINER

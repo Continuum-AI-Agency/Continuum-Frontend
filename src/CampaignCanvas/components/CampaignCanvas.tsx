@@ -303,7 +303,7 @@ export const CampaignCanvas = () => {
             onConnect={onConnect}
             onConnectStart={handleConnectStart}
             onConnectEnd={handleConnectEnd}
-            nodeTypes={nodeTypes}
+            nodeTypes={nodeTypes as unknown as NodeTypes}
             edgeTypes={edgeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
             connectionLineComponent={Connection}

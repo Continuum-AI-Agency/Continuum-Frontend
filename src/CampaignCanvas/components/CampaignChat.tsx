@@ -1,6 +1,7 @@
 "use client";
-import React, { useRef, useEffect } from 'react';
-import { useChat } from 'ai/react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport, isTextUIPart, type UIMessage } from 'ai';
 import { useCampaignAI } from '../hooks/useCampaignAI';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,15 +10,24 @@ import { Separator } from '@/components/ui/separator';
 import { Bot, User, Send, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+function getMessageText(message: UIMessage): string {
+  return message.parts
+    .filter((part) => isTextUIPart(part))
+    .map((part) => part.text)
+    .join('\n')
+    .trim();
+}
+
 export const CampaignChat = () => {
   const { processAIAction } = useCampaignAI();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState('');
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/campaign/chat',
-    onFinish: (message) => {
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({ api: '/api/campaign/chat' }),
+    onFinish: ({ message }) => {
       try {
-        const actionMatch = message.content.match(/```json\n([\s\S]*?)\n```/);
+        const actionMatch = getMessageText(message).match(/```json\n([\s\S]*?)\n```/);
         if (actionMatch) {
           const action = JSON.parse(actionMatch[1]);
           if (Array.isArray(action)) {
@@ -31,6 +41,24 @@ export const CampaignChat = () => {
       }
     },
   });
+
+  const isLoading = status === 'submitted' || status === 'streaming';
+
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(event.target.value);
+  }, []);
+
+  const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextInput = input.trim();
+    if (!nextInput || isLoading) return;
+
+    sendMessage({
+      role: 'user',
+      parts: [{ type: 'text', text: nextInput }],
+    });
+    setInput('');
+  }, [input, isLoading, sendMessage]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -78,7 +106,7 @@ export const CampaignChat = () => {
                 "max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm",
                 m.role === 'user' ? "bg-muted" : "bg-accent"
               )}>
-                {m.content.replace(/```json\n[\s\S]*?\n```/g, '').trim() || "Building your campaign structure..."}
+                {getMessageText(m).replace(/```json\n[\s\S]*?\n```/g, '').trim() || "Building your campaign structure..."}
               </div>
             </div>
           ))}
