@@ -265,10 +265,10 @@ export const CampaignCanvas = () => {
       if (isCmd && event.key === 'z') {
         if (event.shiftKey) {
           redo();
-          toast({ title: "Redo", duration: 1000 });
+          toast({ title: "Redo", durationMs: 1000 });
         } else {
           undo();
-          toast({ title: "Undo", duration: 1000 });
+          toast({ title: "Undo", durationMs: 1000 });
         }
       } else if (isCmd && event.key === 'd') {
         event.preventDefault();
