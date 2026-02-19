@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useStudioStore } from "@/StudioCanvas/stores/useStudioStore";
 import { useSession } from "@/hooks/useSession";
@@ -15,6 +15,8 @@ type CanvasSession = {
   room_id: string;
   nodes: any[];
   edges: any[];
+  deleted_node_ids?: string[];
+  deleted_edge_ids?: string[];
   updated_at: string;
 };
 
@@ -29,6 +31,17 @@ type PresenceUser = {
 };
 
 type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
+
+type CanvasUpdatePayload = {
+  nodes: any[];
+  edges: any[];
+  deleted_node_ids?: string[];
+  deleted_edge_ids?: string[];
+  updated_at: string;
+};
+
+const normalizeRealtimeStatus = (value: string): RealtimeStatus =>
+  value === "CHANNEL_ERROR" ? "ERROR" : (value as RealtimeStatus);
 
 export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const supabase = createSupabaseBrowserClient();
@@ -50,14 +63,11 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const hasLoadedInitialDataRef = useRef<boolean>(false);
   const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
   const lastRemoteEdgeIdsRef = useRef<Set<string>>(new Set());
+  const pendingSaveRef = useRef<boolean>(false);
+  const saveInFlightRef = useRef<boolean>(false);
+  const pendingBroadcastPayloadRef = useRef<CanvasUpdatePayload | null>(null);
 
-  const handleRemoteUpdate = useCallback((payload: { 
-    nodes: any[], 
-    edges: any[], 
-    deleted_node_ids?: string[], 
-    deleted_edge_ids?: string[], 
-    updated_at: string 
-  }) => {
+  const handleRemoteUpdate = useCallback((payload: CanvasUpdatePayload) => {
     const remoteTimestamp = payload.updated_at;
     const localTimestamp = lastUpdateRef.current;
 
@@ -100,6 +110,33 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       isRemoteChangeRef.current = false;
     }, 100);
   }, []);
+
+  const syncLatestCanvasSession = useCallback(async () => {
+    if (!brandProfileId || !roomId) return;
+
+    const { data, error } = await supabase
+      .schema("brand_profiles" as any)
+      .from("canvas_sessions" as any)
+      .select("*")
+      .eq("brand_profile_id", brandProfileId)
+      .eq("room_id", roomId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Canvas Sync] Catch-up load failed", error);
+      return;
+    }
+
+    if (!data) return;
+    const session = data as unknown as CanvasSession;
+    handleRemoteUpdate({
+      nodes: session.nodes || [],
+      edges: session.edges || [],
+      deleted_node_ids: session.deleted_node_ids || [],
+      deleted_edge_ids: session.deleted_edge_ids || [],
+      updated_at: session.updated_at,
+    });
+  }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
 
   useEffect(() => {
     if (!brandProfileId || !roomId) {
@@ -198,7 +235,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       .subscribe((subStatus, err) => {
         console.log("[Canvas Sync] Broadcast channel status:", subStatus);
         if (err) console.error("[Canvas Sync] Broadcast error:", err);
-        setStatus(subStatus as RealtimeStatus);
+        setStatus(normalizeRealtimeStatus(subStatus));
       });
 
     broadcastChannelRef.current = channel;
@@ -251,7 +288,11 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       .subscribe((subStatus, err) => {
         console.log("[Canvas Sync] DB channel status:", subStatus);
         if (err) console.error("[Canvas Sync] DB Realtime error:", err);
-        setDbStatus(subStatus as RealtimeStatus);
+        const normalizedStatus = normalizeRealtimeStatus(subStatus);
+        setDbStatus(normalizedStatus);
+        if (subStatus === "SUBSCRIBED") {
+          void syncLatestCanvasSession();
+        }
       });
 
     dbChannelRef.current = channel;
@@ -261,7 +302,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       supabase.removeChannel(channel);
       dbChannelRef.current = null;
     };
-  }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
+  }, [brandProfileId, roomId, supabase, handleRemoteUpdate, syncLatestCanvasSession]);
 
   useEffect(() => {
     if (status === "SUBSCRIBED" && user && broadcastChannelRef.current) {
@@ -278,8 +319,13 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   }, [status, user]);
 
   const saveCanvasToDatabase = useCallback(async () => {
-    if (!brandProfileId || !roomId || !hasLoadedInitialDataRef.current) return;
+    if (!brandProfileId || !roomId) return;
+    if (!hasLoadedInitialDataRef.current || saveInFlightRef.current) {
+      pendingSaveRef.current = true;
+      return;
+    }
 
+    saveInFlightRef.current = true;
     setIsSaving(true);
     try {
       const state = useStudioStore.getState();
@@ -313,7 +359,15 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         console.error("[Canvas Sync] Save failed", error);
       } else if (data) {
         lastUpdateRef.current = (data as any).updated_at;
-        
+
+        const syncPayload: CanvasUpdatePayload = {
+          nodes: currentNodes as any[],
+          edges: currentEdges as any[],
+          deleted_node_ids: deletedNodeIds,
+          deleted_edge_ids: deletedEdgeIds,
+          updated_at: lastUpdateRef.current as string,
+        };
+
         lastRemoteNodeIdsRef.current = new Set(serialized.nodes.map((n: any) => n.id));
         lastRemoteEdgeIdsRef.current = new Set(serialized.edges.map((e: any) => e.id));
 
@@ -321,31 +375,52 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
           broadcastChannelRef.current.send({
             type: "broadcast",
             event: "canvas_updated",
-            payload: {
-              nodes: serialized.nodes,
-              edges: serialized.edges,
-              deleted_node_ids: deletedNodeIds,
-              deleted_edge_ids: deletedEdgeIds,
-              updated_at: lastUpdateRef.current
-            }
+            payload: syncPayload
           });
+        } else {
+          pendingBroadcastPayloadRef.current = syncPayload;
         }
-        
+
         state.clearDeletedIds(deletedNodeIds, deletedEdgeIds);
       }
     } catch (err) {
       console.error("[Canvas Sync] Save error", err);
     } finally {
+      saveInFlightRef.current = false;
       setIsSaving(false);
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false;
+        void saveCanvasToDatabase();
+      }
     }
   }, [brandProfileId, roomId, supabase, status]);
 
   const saveTrigger = useStudioStore((state) => state.saveTrigger);
   useEffect(() => {
     if (saveTrigger > 0) {
-      saveCanvasToDatabase();
+      void saveCanvasToDatabase();
     }
   }, [saveTrigger, saveCanvasToDatabase]);
+
+  useEffect(() => {
+    if (!isLoading && hasLoadedInitialDataRef.current && pendingSaveRef.current && !saveInFlightRef.current) {
+      pendingSaveRef.current = false;
+      void saveCanvasToDatabase();
+    }
+  }, [isLoading, saveCanvasToDatabase]);
+
+  useEffect(() => {
+    if (status !== "SUBSCRIBED" || !broadcastChannelRef.current || !pendingBroadcastPayloadRef.current) {
+      return;
+    }
+
+    broadcastChannelRef.current.send({
+      type: "broadcast",
+      event: "canvas_updated",
+      payload: pendingBroadcastPayloadRef.current,
+    });
+    pendingBroadcastPayloadRef.current = null;
+  }, [status]);
 
   const lastCursorSendRef = useRef<number>(0);
   const updateCursor = useCallback((x: number, y: number) => {

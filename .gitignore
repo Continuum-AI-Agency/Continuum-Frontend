@@ -50,3 +50,6 @@ calendar/
 .cursor/plans
 .ralph-state
 those files in .sisyphus
+.agent/skills/supabase-realtime
+.agents/skills/supabase-realtime/SKILL.md
+.claude/skills/supabase-realtime

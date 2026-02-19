@@ -179,6 +179,122 @@ describe('mergeNodes', () => {
     expect(result[0].position).toEqual({ x: 200, y: 200 });
     expect(result[0].data).toEqual({ value: 'new' });
   });
+
+  it('preserves local media payload when remote snapshot strips encoded data', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'image-1',
+        type: 'image',
+        position: { x: 0, y: 0 },
+        data: {
+          image: 'data:image/png;base64,abc123',
+          fileName: 'ref.png',
+          referenceType: 'product',
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'image-1',
+        type: 'image',
+        position: { x: 10, y: 10 },
+        data: {
+          fileName: 'ref.png',
+          referenceType: 'product',
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).image).toBe('data:image/png;base64,abc123');
+    expect(result[0].position).toEqual({ x: 10, y: 10 });
+  });
+
+  it('preserves local document contents when remote snapshot contains metadata only', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'doc-1',
+        type: 'document',
+        position: { x: 0, y: 0 },
+        data: {
+          documents: [{ name: 'brief.txt', content: 'important context', type: 'txt' }],
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'doc-1',
+        type: 'document',
+        position: { x: 5, y: 5 },
+        data: {
+          documents: [{ name: 'brief.txt', content: '', type: 'txt' }],
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).documents?.[0]?.content).toBe('important context');
+    expect(result[0].position).toEqual({ x: 5, y: 5 });
+  });
+
+  it('applies remote generated output when remote provides a new value', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'gen-1',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          generatedImage: 'data:image/png;base64,old',
+          isComplete: true,
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'gen-1',
+        type: 'nanoGen',
+        position: { x: 1, y: 1 },
+        data: {
+          generatedImage: 'data:image/png;base64,new',
+          isComplete: true,
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).generatedImage).toBe('data:image/png;base64,new');
+  });
+
+  it('preserves local generated output when remote omits it', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'gen-2',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          generatedImage: 'data:image/png;base64,keep',
+          isComplete: true,
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'gen-2',
+        type: 'nanoGen',
+        position: { x: 2, y: 2 },
+        data: {
+          isComplete: true,
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).generatedImage).toBe('data:image/png;base64,keep');
+  });
 });
 
 describe('mergeEdges', () => {

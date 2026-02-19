@@ -1,6 +1,57 @@
 import type { StudioNode } from '@/StudioCanvas/types';
 import type { Edge } from '@xyflow/react';
 
+const runtimeDataKeys = [
+  'isExecuting',
+  'isComplete',
+  'error',
+  'executionTime',
+  'generatedImage',
+  'generatedVideo',
+] as const;
+
+const richInputDataKeys = [
+  'image',
+  'video',
+  'audio',
+  'documents',
+  'inputs',
+  'frameList',
+  'fileName',
+] as const;
+
+const localOnlyDataKeys = ['isToolbarVisible'] as const;
+
+const isRemoteValueEffectivelyMissing = (key: (typeof richInputDataKeys)[number], value: unknown) => {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return true;
+    if (key === 'documents') {
+      return value.every((entry) => {
+        if (!entry || typeof entry !== 'object') return true;
+        const content = (entry as Record<string, unknown>).content;
+        return typeof content !== 'string' || content.trim().length === 0;
+      });
+    }
+    if (key === 'inputs' || key === 'frameList') {
+      return value.every((entry) => {
+        if (!entry || typeof entry !== 'object') return true;
+        const src = (entry as Record<string, unknown>).src;
+        return typeof src !== 'string' || src.trim().length === 0;
+      });
+    }
+  }
+
+  return false;
+};
+
+const isRemoteRuntimeValueMissing = (value: unknown) => {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  return false;
+};
+
 export function mergeNodes(
   local: StudioNode[],
   remote: StudioNode[],
@@ -20,12 +71,28 @@ export function mergeNodes(
     
     const mergedData = { ...remoteNode.data };
     if (localNode) {
-      const runtimeKeys = [
-        'isExecuting', 'isComplete', 'error', 'executionTime',
-        'isToolbarVisible', 'generatedImage', 'generatedVideo'
-      ] as const;
-      runtimeKeys.forEach(key => {
-        if (localNode.data[key] !== undefined) (mergedData as any)[key] = localNode.data[key];
+      localOnlyDataKeys.forEach((key) => {
+        if (localNode.data[key] !== undefined) {
+          (mergedData as any)[key] = localNode.data[key];
+        }
+      });
+
+      runtimeDataKeys.forEach(key => {
+        const localValue = (localNode.data as any)[key];
+        if (localValue === undefined) return;
+        const remoteValue = (mergedData as any)[key];
+        if (isRemoteRuntimeValueMissing(remoteValue)) {
+          (mergedData as any)[key] = localValue;
+        }
+      });
+
+      richInputDataKeys.forEach((key) => {
+        const localValue = (localNode.data as any)[key];
+        if (localValue === undefined) return;
+        const remoteValue = (mergedData as any)[key];
+        if (isRemoteValueEffectivelyMissing(key, remoteValue)) {
+          (mergedData as any)[key] = localValue;
+        }
       });
     }
 

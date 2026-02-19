@@ -2,10 +2,16 @@ import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { useCanvasRealtime } from "./useCanvasRealtime";
 
+let subscribeStatusSequence: string[] = ["SUBSCRIBED"];
+let maybeSingleResponses: any[] = [null];
+let maybeSingleCallCount = 0;
+
 const mockChannel = {
   on: mock(() => mockChannel),
   subscribe: mock((callback: any) => {
-    setTimeout(() => callback("SUBSCRIBED"), 0);
+    setTimeout(() => {
+      subscribeStatusSequence.forEach((status) => callback(status));
+    }, 0);
     return mockChannel;
   }),
   send: mock(() => {}),
@@ -19,7 +25,11 @@ const createMockQueryBuilder = () => {
     select: mock(() => queryBuilder),
     eq: mock(() => queryBuilder),
     order: mock(() => queryBuilder),
-    maybeSingle: mock(() => Promise.resolve({ data: null, error: null })),
+    maybeSingle: mock(() => {
+      maybeSingleCallCount += 1;
+      const nextValue = maybeSingleResponses.length > 0 ? maybeSingleResponses.shift() : null;
+      return Promise.resolve({ data: nextValue ?? null, error: null });
+    }),
     single: mock(() => Promise.resolve({ data: null, error: null })),
     upsert: mock(() => queryBuilder),
   };
@@ -60,6 +70,9 @@ mock.module("@/StudioCanvas/stores/useStudioStore", () => ({
 
 describe("useCanvasRealtime", () => {
   beforeEach(() => {
+    subscribeStatusSequence = ["SUBSCRIBED"];
+    maybeSingleResponses = [null];
+    maybeSingleCallCount = 0;
     mockSetNodes.mockClear();
     mockSetEdges.mockClear();
     mockChannel.send.mockClear();
@@ -151,5 +164,33 @@ describe("useCanvasRealtime", () => {
     expect(result.current.status).toBeDefined();
     expect(typeof result.current.status).toBe("string");
     expect(result.current.status).toBe("SUBSCRIBED");
+  });
+
+  it("should fetch latest canvas state again after DB subscription", async () => {
+    maybeSingleResponses = [
+      { nodes: [], edges: [], updated_at: "2026-02-18T10:00:00.000Z" },
+      { nodes: [], edges: [], updated_at: "2026-02-18T10:00:01.000Z" },
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 60));
+    });
+
+    expect(maybeSingleCallCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("maps CHANNEL_ERROR status to ERROR", async () => {
+    subscribeStatusSequence = ["CHANNEL_ERROR"];
+
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 60));
+    });
+
+    expect(result.current.status).toBe("ERROR");
+    expect(result.current.dbStatus).toBe("ERROR");
   });
 });

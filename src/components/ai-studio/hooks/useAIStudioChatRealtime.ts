@@ -16,20 +16,34 @@ export type ChatMessage = {
   created_at: string;
 };
 
+type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "ERROR";
+
+const normalizeRealtimeStatus = (value: string): RealtimeStatus =>
+  value === "CHANNEL_ERROR" ? "ERROR" : (value as RealtimeStatus);
+
+const mergeMessages = (existing: ChatMessage[], incoming: ChatMessage[]) => {
+  const map = new Map<string, ChatMessage>();
+  [...existing, ...incoming].forEach((message) => {
+    map.set(message.id, message);
+  });
+
+  return [...map.values()].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+};
+
 export function useAIStudioChatRealtime(brandProfileId: string, roomId: string = "main") {
   const supabase = createSupabaseBrowserClient();
   const { user } = useSession();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [channelStatus, setChannelStatus] = useState<RealtimeStatus>("INITIALIZING");
   const channelRef = useRef<any>(null);
 
-  // Load initial messages
-  useEffect(() => {
-    if (!brandProfileId) return;
+  const loadLatestMessages = useCallback(
+    async (showErrorToast: boolean = true) => {
+      if (!brandProfileId) return;
 
-    const loadInitialMessages = async () => {
-      setIsLoading(true);
-      
       const { data, error } = await supabase
         .schema("brand_profiles")
         .from("chat_messages")
@@ -41,15 +55,34 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
 
       if (error) {
         console.error("Error loading chat messages:", error);
-        toast.error("Failed to load chat history");
-      } else if (data) {
-        setMessages([...data].reverse() as ChatMessage[]);
+        if (showErrorToast) {
+          toast.error("Failed to load chat history");
+        }
+        return;
       }
+
+      const latestMessages = [...(data ?? [])].reverse() as ChatMessage[];
+      setMessages((prev) => mergeMessages(prev, latestMessages));
+    },
+    [brandProfileId, roomId, supabase]
+  );
+
+  // Load initial messages
+  useEffect(() => {
+    if (!brandProfileId) {
+      setMessages([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const loadInitialMessages = async () => {
+      setIsLoading(true);
+      await loadLatestMessages();
       setIsLoading(false);
     };
 
-    loadInitialMessages();
-  }, [brandProfileId, roomId, supabase]);
+    void loadInitialMessages();
+  }, [brandProfileId, loadLatestMessages]);
 
   // Realtime subscription
   useEffect(() => {
@@ -73,23 +106,31 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
         async (payload) => {
           const newMessage = payload.new as ChatMessage;
           if (newMessage.room_id !== roomId) return;
-          setMessages((prev) => [...prev, newMessage]);
+          setMessages((prev) => mergeMessages(prev, [newMessage]));
         }
       )
-      .subscribe();
+      .subscribe((subStatus) => {
+        const normalizedStatus = normalizeRealtimeStatus(subStatus);
+        setChannelStatus(normalizedStatus);
+        if (subStatus === "SUBSCRIBED") {
+          void loadLatestMessages(false);
+        }
+      });
 
     channelRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
+      setChannelStatus("INITIALIZING");
     };
-  }, [brandProfileId, roomId, supabase]);
+  }, [brandProfileId, roomId, supabase, loadLatestMessages]);
 
   const sendMessage = useCallback(
     async (content: string) => {
       if (!user || !brandProfileId) return;
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .schema("brand_profiles")
         .from("chat_messages")
         .insert({
@@ -99,14 +140,25 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
           user_avatar: user.user_metadata?.avatar_url || "",
           room_id: roomId,
           content,
-        });
+        })
+        .select("*")
+        .single();
 
       if (error) {
         console.error("Error sending message:", error);
         toast.error("Failed to send message");
+        return;
+      }
+
+      if (data) {
+        setMessages((prev) => mergeMessages(prev, [data as ChatMessage]));
+      }
+
+      if (channelStatus !== "SUBSCRIBED" || !data) {
+        void loadLatestMessages(false);
       }
     },
-    [brandProfileId, roomId, user, supabase]
+    [brandProfileId, roomId, user, supabase, channelStatus, loadLatestMessages]
   );
 
   return { messages, sendMessage, isLoading };
