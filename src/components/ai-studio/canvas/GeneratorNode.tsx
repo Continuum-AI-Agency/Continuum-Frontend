@@ -10,9 +10,9 @@ import {
   ExclamationTriangleIcon,
 } from "@radix-ui/react-icons";
 
-import { getPortColor } from "@/lib/ai-studio/portTypes";
 import { providerAspectRatioOptions, type AiStudioJob } from "@/lib/schemas/aiStudio";
 import type { GeneratorNodeData } from "@/lib/ai-studio/nodeTypes";
+import { ContextMenuItemInfo } from "@/components/ui/context-menu-item-info";
 
 type GeneratorNodeProps = {
   id: string;
@@ -135,11 +135,19 @@ export function GeneratorNode({ id, data, selected }: GeneratorNodeProps) {
       </ContextMenu.Trigger>
 
       <ContextMenu.Content className="rounded-lg border border-white/10 bg-slate-900/95 p-2 text-sm text-white shadow-xl">
-        <ContextMenu.Item onSelect={() => window.dispatchEvent(new CustomEvent("node:duplicate", { detail: { id } }))}>
+        <ContextMenu.Item
+          className="flex cursor-default items-center rounded px-2 py-1 hover:bg-white/10"
+          onSelect={() => window.dispatchEvent(new CustomEvent("node:duplicate", { detail: { id } }))}
+        >
           Duplicate
+          <ContextMenuItemInfo description="Duplicate keeps the same generator setup for rapid prompt or parameter variants." />
         </ContextMenu.Item>
-        <ContextMenu.Item onSelect={() => window.dispatchEvent(new CustomEvent("node:delete", { detail: { id } }))} className="text-red-300">
+        <ContextMenu.Item
+          onSelect={() => window.dispatchEvent(new CustomEvent("node:delete", { detail: { id } }))}
+          className="flex cursor-default items-center rounded px-2 py-1 text-red-300 hover:bg-white/10"
+        >
           Delete
+          <ContextMenuItemInfo description="Delete removes the generator node from the active graph." />
         </ContextMenu.Item>
         <ContextMenu.Separator className="my-1 h-px bg-white/10" />
         <ContextMenu.Label className="text-gray-300">Advanced</ContextMenu.Label>

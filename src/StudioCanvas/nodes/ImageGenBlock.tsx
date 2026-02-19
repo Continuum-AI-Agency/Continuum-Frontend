@@ -19,6 +19,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
+import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
@@ -200,7 +201,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
                     </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="min-w-[160px]">
-                    <ContextMenuItem onClick={handleDownload}>Download Image</ContextMenuItem>
+                    <ContextMenuItem onClick={handleDownload}>
+                      Download Image
+                      <ContextMenuItemInfo description="Generated image is the model output artifact produced by this node." />
+                    </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>
               </div>

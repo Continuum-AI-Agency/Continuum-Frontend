@@ -1,12 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
+import { useReactFlow } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
-import {
-  ContextMenu as UIContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
 
 interface ContextMenuProps {
   id: string;
@@ -96,24 +91,27 @@ export function ContextMenu({ id, top, left, right, bottom, onClick }: ContextMe
       <div className="flex flex-col text-sm">
         {isPaneMenu ? (
           <button
-            className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full text-red-500"
+            className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-red-500 hover:bg-slate-100 dark:hover:bg-slate-900"
             onClick={clearCanvas}
           >
-            Clear Canvas
+            <span>Clear Canvas</span>
+            <ContextMenuItemInfo description="Canvas is the full working graph that holds all nodes and connections." />
           </button>
         ) : (
           <>
             <button
-              className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full"
+              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-900"
               onClick={duplicateNode}
             >
-              Duplicate
+              <span>Duplicate</span>
+              <ContextMenuItemInfo description="Duplicate keeps the same configuration so you can iterate variations faster." />
             </button>
             <button
-              className="text-left px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-sm w-full text-red-500"
+              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-red-500 hover:bg-slate-100 dark:hover:bg-slate-900"
               onClick={handleDelete}
             >
-              Delete
+              <span>Delete</span>
+              <ContextMenuItemInfo description="Delete removes the node from the active graph and breaks its links." />
             </button>
           </>
         )}
