@@ -1,7 +1,6 @@
 "use client";
 import React, { memo, useCallback, useMemo } from 'react';
-import { type NodeProps } from '@xyflow/react';
-import { type AdData, type AdFormat, type CreativeAssetType } from '../types';
+import { type CampaignNodeProps, type CampaignCanvasNodeMap, type AdData, type AdFormat, type CreativeAssetType } from '../types';
 import { 
   Node, 
   NodeHeader, 
@@ -51,7 +50,7 @@ const CALL_TO_ACTIONS = [
   { value: 'DOWNLOAD', label: 'Download', description: 'Download prompts users to save a file or install an asset.' },
 ];
 
-export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
+export const AdNode = memo(({ id, data, selected }: CampaignNodeProps<'ad'>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode, nodes, edges } = useCampaignStore();
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
@@ -71,7 +70,7 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
 
     return creativeNodeIds
       .map((creativeNodeId) => nodes.find((node) => node.id === creativeNodeId))
-      .filter((node): node is typeof nodes[number] => node?.type === 'creative')
+      .filter((node): node is CampaignCanvasNodeMap['creative'] => node?.type === 'creative')
       .map((node) => node.data.assetType ?? 'image');
   }, [edges, id, nodes]);
 

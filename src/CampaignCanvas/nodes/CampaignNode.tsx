@@ -1,7 +1,6 @@
 "use client";
 import React, { memo, useCallback } from 'react';
-import { type NodeProps } from '@xyflow/react';
-import { type CampaignData } from '../types';
+import { type CampaignNodeProps, type CampaignData } from '../types';
 import { 
   Node, 
   NodeHeader, 
@@ -52,7 +51,7 @@ const SPECIAL_CATEGORIES = [
   { value: 'ISSUES_ELECTIONS_POLITICS', label: 'Issues, Elections or Politics', description: 'This category flags social issue, election, or political content.' },
 ];
 
-export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData>) => {
+export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'campaign'>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);

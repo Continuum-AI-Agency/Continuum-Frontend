@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import React from "react";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { ReactFlowProvider, type NodeProps } from "@xyflow/react";
+import { ReactFlowProvider } from "@xyflow/react";
 
 import { AdSetNode } from "./AdSetNode";
 import { type AdSetData } from "../types";
 import { useCampaignStore } from "../stores/useCampaignStore";
+import { type CampaignNodeProps } from "../types";
 
 const updateNodeData = mock();
 let originalUpdateNodeData: ReturnType<typeof useCampaignStore.getState>["updateNodeData"];
@@ -30,9 +31,9 @@ const buildProps = (overrides: Partial<AdSetData> = {}) =>
     positionAbsoluteY: 0,
     dragging: false,
     dragHandle: "",
-  }) as unknown as NodeProps<AdSetData>;
+  }) as unknown as CampaignNodeProps<'ad-set'>;
 
-const renderNode = async (props: NodeProps<AdSetData>) => {
+const renderNode = async (props: CampaignNodeProps<'ad-set'>) => {
   await act(async () => {
     render(
       <ReactFlowProvider>

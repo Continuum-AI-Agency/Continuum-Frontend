@@ -1,4 +1,4 @@
-import { type Node, type Edge } from '@xyflow/react';
+import { type Node, type NodeProps, type Edge } from '@xyflow/react';
 
 export type CampaignNodeType = 
   | 'campaign' 
@@ -62,16 +62,22 @@ export interface CreativeData extends BaseCampaignNodeData {
   aspectRatio?: string;
 }
 
-export type CampaignCanvasNodeData = 
-  | CampaignData 
-  | AdSetData 
-  | AdData 
-  | AudienceData 
-  | CreativeData;
-
-export type CampaignCanvasNode = Node & { 
-  type: CampaignNodeType;
-  data: CampaignCanvasNodeData; 
+type CampaignNodeDataMap = {
+  campaign: CampaignData;
+  'ad-set': AdSetData;
+  ad: AdData;
+  audience: AudienceData;
+  creative: CreativeData;
 };
+
+export type CampaignCanvasNodeData = CampaignNodeDataMap[CampaignNodeType];
+
+export type CampaignCanvasNodeMap = {
+  [K in CampaignNodeType]: Node<CampaignNodeDataMap[K], K>;
+};
+
+export type CampaignCanvasNode = Node<CampaignCanvasNodeData, CampaignNodeType>;
+
+export type CampaignNodeProps<NodeType extends CampaignNodeType> = NodeProps<CampaignCanvasNodeMap[NodeType]>;
 
 export type CampaignCanvasEdge = Edge;

@@ -1,7 +1,6 @@
 "use client";
 import React, { memo, useCallback } from 'react';
-import { type NodeProps } from '@xyflow/react';
-import { type AudienceData } from '../types';
+import { type CampaignNodeProps, type AudienceData } from '../types';
 import { 
   Node, 
   NodeHeader, 
@@ -56,7 +55,7 @@ const AGE_RANGES = [
   { min: 65, max: 100, label: '65+', description: 'Targets adults age 65 and older.' },
 ];
 
-export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData>) => {
+export const AudienceNode = memo(({ id, data, selected }: CampaignNodeProps<'audience'>) => {
   const { duplicateNode, removeNode, updateNodeData } = useCampaignStore();
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);

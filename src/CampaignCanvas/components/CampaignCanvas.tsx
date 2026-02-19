@@ -1,11 +1,13 @@
 "use client";
-import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useRef, useState, useEffect, useMemo, type ComponentType } from 'react';
 import {
   MiniMap,
   useReactFlow,
   type OnConnectEnd,
   type OnConnectStart,
   type OnConnectStartParams,
+  type NodeProps as ReactFlowNodeProps,
+  type NodeTypes,
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -58,12 +60,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buildCampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 
-const nodeTypes = {
-  campaign: CampaignNode,
-  'ad-set': AdSetNode,
-  ad: AdNode,
-  audience: AudienceNode,
-  creative: CreativeNode,
+const nodeTypes: NodeTypes = {
+  campaign: CampaignNode as unknown as ComponentType<ReactFlowNodeProps>,
+  'ad-set': AdSetNode as unknown as ComponentType<ReactFlowNodeProps>,
+  ad: AdNode as unknown as ComponentType<ReactFlowNodeProps>,
+  audience: AudienceNode as unknown as ComponentType<ReactFlowNodeProps>,
+  creative: CreativeNode as unknown as ComponentType<ReactFlowNodeProps>,
 };
 
 const edgeTypes = {

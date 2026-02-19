@@ -1,7 +1,6 @@
 "use client";
 import React, { memo, useCallback } from 'react';
-import { type NodeProps } from '@xyflow/react';
-import { type AdSetData } from '../types';
+import { type CampaignNodeProps, type AdSetData } from '../types';
 import { 
   Node, 
   NodeHeader, 
@@ -59,7 +58,7 @@ const BUDGET_TYPES: Array<{ value: NonNullable<AdSetData['budgetType']>; label: 
   { value: 'LIFETIME', label: 'Lifetime' },
 ];
 
-export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => {
+export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set'>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
   const activeBudgetType = data.budgetType || 'DAILY';
 

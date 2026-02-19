@@ -1,8 +1,7 @@
 "use client";
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { type NodeProps } from '@xyflow/react';
-import { type AdFormat, type CreativeAssetType, type CreativeData } from '../types';
+import { type CampaignNodeProps, type CampaignCanvasNodeMap, type AdFormat, type CreativeAssetType, type CreativeData } from '../types';
 import { 
   Node,
 } from '@/components/ai-elements/node';
@@ -57,7 +56,7 @@ export function resolveCreativePreviewRatio(
   return widthPart / heightPart;
 }
 
-export const CreativeNode = memo(({ id, data, selected }: NodeProps<CreativeData>) => {
+export const CreativeNode = memo(({ id, data, selected }: CampaignNodeProps<'creative'>) => {
   const { duplicateNode, removeNode, updateNodeData, nodes, edges } = useCampaignStore();
 
   const handleDuplicate = useCallback(() => duplicateNode(id), [duplicateNode, id]);
@@ -70,7 +69,7 @@ export const CreativeNode = memo(({ id, data, selected }: NodeProps<CreativeData
 
     return adNodeIds
       .map((adNodeId) => nodes.find((node) => node.id === adNodeId))
-      .filter((node): node is typeof nodes[number] => node?.type === 'ad')
+      .filter((node): node is CampaignCanvasNodeMap['ad'] => node?.type === 'ad')
       .map((node) => node.data.adFormat ?? 'IMAGE');
   }, [edges, id, nodes]);
 

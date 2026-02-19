@@ -17,10 +17,12 @@ export type NodeProps = ComponentProps<typeof Card> & {
     target: boolean;
     source: boolean;
   };
+  selected?: boolean;
 };
 
-export const Node = ({ handles, className, ...props }: NodeProps) => (
+export const Node = ({ handles, className, selected, ...props }: NodeProps) => (
   <Card
+    data-selected={selected ? "true" : undefined}
     className={cn(
       "node-container relative size-full h-auto w-sm gap-0 rounded-md p-0",
       className

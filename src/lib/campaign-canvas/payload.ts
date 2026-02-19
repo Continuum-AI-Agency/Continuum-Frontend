@@ -469,7 +469,7 @@ export function buildCampaignCanvasPayload(
     } as Record<CampaignNodeType, number>
   );
 
-  const validationIssues = normalizedNodes
+  const validationIssues: CampaignCanvasPayload["agentCheckIn"]["validationIssues"] = normalizedNodes
     .filter((node) => node.validation.status === "warning" || node.validation.status === "error")
     .map((node) => ({
       nodeId: node.nodeId,
