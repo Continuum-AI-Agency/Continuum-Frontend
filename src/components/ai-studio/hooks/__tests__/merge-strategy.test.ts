@@ -366,6 +366,155 @@ describe('mergeNodes', () => {
     const result = mergeNodes(local, remote, []);
     expect((result[0].data as any).generatedImage).toBe('data:image/png;base64,keep');
   });
+
+  it('preserves local generated video when remote omits output payload', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'gen-video-1',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: {
+          generatedVideo: 'data:video/mp4;base64,keep-video',
+          isComplete: true,
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'gen-video-1',
+        type: 'veoDirector',
+        position: { x: 3, y: 3 },
+        data: {
+          isComplete: true,
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).generatedVideo).toBe('data:video/mp4;base64,keep-video');
+  });
+
+  it('preserves local reference video when remote snapshot contains metadata only', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'video-ref-1',
+        type: 'video',
+        position: { x: 0, y: 0 },
+        data: {
+          video: 'data:video/mp4;base64,reference-video',
+          fileName: 'reference.mp4',
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'video-ref-1',
+        type: 'video',
+        position: { x: 4, y: 4 },
+        data: {
+          fileName: 'reference.mp4',
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).video).toBe('data:video/mp4;base64,reference-video');
+    expect((result[0].data as any).fileName).toBe('reference.mp4');
+  });
+
+  it('preserves local frame media when remote frameList strips src values', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'veo-frames-1',
+        type: 'veoFast',
+        position: { x: 0, y: 0 },
+        data: {
+          frameList: [
+            { id: 'f1', src: 'data:image/png;base64,frame1', type: 'image' },
+            { id: 'f2', src: 'data:image/png;base64,frame2', type: 'image' },
+          ],
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'veo-frames-1',
+        type: 'veoFast',
+        position: { x: 6, y: 6 },
+        data: {
+          frameList: [
+            { id: 'f1', type: 'image' },
+            { id: 'f2', type: 'image' },
+          ],
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).frameList?.[0]?.src).toBe('data:image/png;base64,frame1');
+    expect((result[0].data as any).frameList?.[1]?.src).toBe('data:image/png;base64,frame2');
+  });
+
+  it('preserves local generator prompt when remote payload sends prompt as empty', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'gen-prompt-1',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          positivePrompt: 'cinematic product shot with shallow depth of field',
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'gen-prompt-1',
+        type: 'nanoGen',
+        position: { x: 10, y: 10 },
+        data: {
+          positivePrompt: '',
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).positivePrompt).toBe(
+      'cinematic product shot with shallow depth of field'
+    );
+    expect(result[0].position).toEqual({ x: 10, y: 10 });
+  });
+
+  it('applies remote generator prompt when remote payload has a non-empty update', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'gen-prompt-2',
+        type: 'veoDirector',
+        position: { x: 0, y: 0 },
+        data: {
+          prompt: 'old storyboard prompt',
+        },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'gen-prompt-2',
+        type: 'veoDirector',
+        position: { x: 20, y: 20 },
+        data: {
+          prompt: 'new storyboard prompt with camera movement',
+        },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).prompt).toBe('new storyboard prompt with camera movement');
+    expect(result[0].position).toEqual({ x: 20, y: 20 });
+  });
 });
 
 describe('mergeEdges', () => {
