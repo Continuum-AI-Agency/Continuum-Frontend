@@ -8,6 +8,7 @@ import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnr
 import type { ExtendVideoPayload } from "../types/execution";
 import { buildDataUrl, parseDataUrl } from "./dataUrl";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
+import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
@@ -477,6 +478,7 @@ export async function executeWorkflow(
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
+                    'Accept': 'text/event-stream',
                 },
                 body: JSON.stringify({ prompt: payload.prompt }),
             });
@@ -494,28 +496,54 @@ export async function executeWorkflow(
                 return false;
             }
 
-            const decoder = new TextDecoder();
             let accumulatedValue = "";
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        try {
-                            const data = JSON.parse(line.slice(6));
-                            if (data.delta) {
-                                accumulatedValue += data.delta;
-                                onPartialUpdate({ delta: data.delta });
-                            }
-                        } catch (e) {
-                            // ignore malformed lines
-                        }
+            let streamError: string | undefined;
+
+            await readServerSentEvents({
+              reader,
+              onEvent: (eventName, data) => {
+                const payloadText = data.trimStart();
+
+                if (eventName === "delta" || eventName === "message") {
+                  try {
+                    const parsed = JSON.parse(payloadText) as { delta?: string };
+                    if (typeof parsed.delta === "string" && parsed.delta.length > 0) {
+                      accumulatedValue += parsed.delta;
+                      onPartialUpdate({ delta: parsed.delta });
                     }
+                  } catch {
+                    console.warn("[studio] failed to parse fast enrichment delta", {
+                      nodeId,
+                      eventName,
+                      payloadPreview: payloadText.slice(0, 120),
+                    });
+                  }
+                  return;
                 }
+
+                if (eventName === "error") {
+                  try {
+                    const parsed = JSON.parse(payloadText) as { message?: string; error?: string };
+                    streamError = parsed.message || parsed.error || payloadText || "Fast enrichment failed";
+                  } catch {
+                    streamError = payloadText || "Fast enrichment failed";
+                  }
+                }
+              },
+            });
+
+            if (streamError) {
+                console.error("[studio] fast enrichment stream error", { nodeId, streamError });
+                updateNodeStatus(nodeId, 'failed', streamError);
+                return false;
             }
-            
+
+            if (!accumulatedValue.trim()) {
+                console.error("[studio] fast enrichment stream completed without output", { nodeId });
+                updateNodeStatus(nodeId, 'failed', "Fast enrichment returned empty output");
+                return false;
+            }
+
             setNodeOutput(nodeId, { type: 'text', value: accumulatedValue });
             updateNodeStatus(nodeId, 'completed');
             console.info("[studio] fast enrichment complete", { nodeId, length: accumulatedValue.length });

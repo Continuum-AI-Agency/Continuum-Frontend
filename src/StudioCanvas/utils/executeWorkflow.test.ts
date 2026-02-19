@@ -4,7 +4,21 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 
+function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  });
+}
+
 describe('executeWorkflow', () => {
+  const originalFetch = globalThis.fetch;
+
   beforeEach(() => {
     // Reset store state
     useStudioStore.setState({
@@ -14,14 +28,22 @@ describe('executeWorkflow', () => {
     });
   });
 
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   const buildControls = (
     executeGeneration: ReturnType<typeof mock>,
     executeVideoExtension: ReturnType<typeof mock> = mock(async () => {
       return { success: true, output: { type: 'video', url: 'video_url' } };
     }),
+    executeEnrichment: ReturnType<typeof mock> = mock(async () => {
+      return { success: true, output: { type: 'text', value: 'enriched' } };
+    }),
   ) => ({
     executeGeneration,
     executeVideoExtension,
+    executeEnrichment,
     cancel: () => {},
     reset: () => {},
     isExecuting: true,
@@ -283,5 +305,91 @@ describe('executeWorkflow', () => {
     const finalNodes = useStudioStore.getState().nodes;
     const updatedNode = finalNodes.find(n => n.id === 'extend-1');
     expect(updatedNode?.data.generatedVideo).toBe('data:video/mp4;base64,extended_video');
+  });
+
+  it('should parse fast enrichment SSE deltas across chunk boundaries', async () => {
+    mock.module("@/lib/supabase/client", () => ({
+      createSupabaseBrowserClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: { access_token: "token" } } }),
+        },
+      }),
+    }));
+
+    const fetchMock = mock(async () => {
+      return new Response(
+        streamFromChunks([
+          'event: ready\n',
+          'data: {"requestId":"abc"}\n\n',
+          'event: delta\n',
+          'da',
+          'ta: {"delta":"Hello"}\n\n',
+          'event: delta\ndata: {"delta":" world"}\n\n',
+          'event: done\ndata: {"requestId":"abc"}\n\n',
+        ]),
+        {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }
+      );
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const nodes: StudioNode[] = [
+      { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    const executeGeneration = mock(async () => ({ success: true }));
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const finalNodes = useStudioStore.getState().nodes;
+    const updatedNode = finalNodes.find((n) => n.id === 'text-1');
+    expect(updatedNode?.data.value).toBe('Hello world');
+    expect(updatedNode?.data.isComplete).toBe(true);
+    expect(updatedNode?.data.error).toBeUndefined();
+  });
+
+  it('should fail string node when fast enrichment emits an error event', async () => {
+    mock.module("@/lib/supabase/client", () => ({
+      createSupabaseBrowserClient: () => ({
+        auth: {
+          getSession: async () => ({ data: { session: { access_token: "token" } } }),
+        },
+      }),
+    }));
+
+    globalThis.fetch = mock(async () => {
+      return new Response(
+        streamFromChunks([
+          'event: error\ndata: {"message":"Gemini upstream failed"}\n\n',
+          'event: done\ndata: {"requestId":"abc"}\n\n',
+        ]),
+        {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }
+      );
+    }) as typeof fetch;
+
+    const nodes: StudioNode[] = [
+      { id: 'text-1', position: { x: 0, y: 0 }, data: { value: 'draft prompt' }, type: 'string' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    const executeGeneration = mock(async () => ({ success: true }));
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'text-1', clearDownstream: false });
+
+    const finalNodes = useStudioStore.getState().nodes;
+    const updatedNode = finalNodes.find((n) => n.id === 'text-1');
+    expect(updatedNode?.data.error).toBe('Gemini upstream failed');
+    expect(updatedNode?.data.isComplete).toBe(false);
+    expect(updatedNode?.data.isExecuting).toBe(false);
   });
 });

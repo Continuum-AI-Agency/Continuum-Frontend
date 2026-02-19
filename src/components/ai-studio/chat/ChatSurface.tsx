@@ -22,6 +22,7 @@ import type {
   BackendChatImageRequestPayload,
 } from "@/lib/types/chatImage";
 import { getApiUrl } from "@/lib/api/config";
+import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
 import type {
   PromptTemplate,
   PromptTemplateCreateInput,
@@ -70,6 +71,7 @@ export function ChatSurface({
   const { show } = useToast();
   const { state: streamState, start, cancel, reset } = useImageSseStream();
   const supabase = createSupabaseBrowserClient();
+  const supabaseAuth = supabase.auth;
 
   const [activeModel, setActiveModel] = React.useState<SupportedModel>("nano-banana");
   const [refs, setRefs] = React.useState<RefImage[]>([]);
@@ -90,7 +92,7 @@ export function ChatSurface({
 
     try {
       // Get the user's session token for authentication
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseAuth.getSession();
       if (!session?.access_token) {
         throw new Error("No authentication session found");
       }
@@ -100,6 +102,7 @@ export function ChatSurface({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
+          Accept: "text/event-stream",
         },
         body: JSON.stringify({ prompt: currentPrompt }),
       });
@@ -111,29 +114,45 @@ export function ChatSurface({
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No response body");
 
-      const decoder = new TextDecoder();
       let accumulated = "";
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      let streamError: string | undefined;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
+      await readServerSentEvents({
+        reader,
+        onEvent: (eventName, data) => {
+          const payload = data.trimStart();
+
+          if (eventName === "delta" || eventName === "message") {
             try {
-              const data = JSON.parse(line.slice(6));
-              if (data.delta) {
-                accumulated += data.delta;
+              const parsed = JSON.parse(payload) as { delta?: string };
+              if (typeof parsed.delta === "string" && parsed.delta.length > 0) {
+                accumulated += parsed.delta;
                 setEnrichedPrompt(accumulated);
               }
-            } catch (e) {
-              // ignore
+            } catch {
+              // ignore non-json keepalive payloads
+            }
+            return;
+          }
+
+          if (eventName === "error") {
+            try {
+              const parsed = JSON.parse(payload) as { message?: string; error?: string };
+              streamError = parsed.message || parsed.error || payload || "Prompt enrichment failed";
+            } catch {
+              streamError = payload || "Prompt enrichment failed";
             }
           }
-        }
+        },
+      });
+
+      if (streamError) {
+        throw new Error(streamError);
       }
+      if (!accumulated.trim()) {
+        throw new Error("Prompt enrichment returned empty output");
+      }
+
       // Show success toast when enrichment completes
       show({ title: "Prompt enriched", description: "Your prompt has been enhanced!", variant: "success" });
     } catch (err) {
@@ -141,7 +160,7 @@ export function ChatSurface({
     } finally {
       setIsEnriching(false);
     }
-  }, [isEnriching, show]);
+  }, [isEnriching, show, supabaseAuth]);
 
   // Compute if any references are attached
   const hasAnyReferences = React.useMemo(() => {

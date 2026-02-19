@@ -68,7 +68,7 @@ export function StringNode({ id, data, selected }: NodeProps<Node<StringNodeData
     } catch (err) {
       console.error("Enrichment trigger failed", err);
     }
-  }, [id, executionControls, data.isExecuting]);
+  }, [id, executionControls, data.isExecuting, brandId]);
 
   return (
     <div 
