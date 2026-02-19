@@ -6,6 +6,12 @@ import { AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
 import { JainaChatSurface } from "@/components/paid-media/jaina/JainaChatSurface";
 import { PaidMediaDashboard } from "@/components/paid-media/dashboard/PaidMediaDashboard";
 import { useSearchParams, useRouter } from "next/navigation";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { CampaignCanvas } from "@/CampaignCanvas/components/CampaignCanvas";
+import { ReactFlowProvider } from "@xyflow/react";
+import { useCampaignStore } from "@/CampaignCanvas/stores/useCampaignStore";
+import { buildCampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
+import { useSession } from "@/hooks/useSession";
 
 type PaidMediaClientPageProps = {
   brandProfileId: string;
@@ -19,10 +25,13 @@ export default function PaidMediaClientPage({
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get("tab");
+  const { user } = useSession();
   
   const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState(tabParam || "dashboard");
+  const nodes = useCampaignStore((state) => state.nodes);
+  const edges = useCampaignStore((state) => state.edges);
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
@@ -45,6 +54,17 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setSelectedCampaign(null);
   }, [selectedAdAccount]);
+
+  const campaignCanvasPayload = React.useMemo(
+    () =>
+      buildCampaignCanvasPayload(nodes, edges, {
+        source: "agent-check-in",
+        brandProfileId,
+        adAccountId: selectedAdAccount,
+        campaignId: selectedCampaign,
+      }),
+    [brandProfileId, edges, nodes, selectedAdAccount, selectedCampaign]
+  );
 
   if (!mounted) {
     return (
@@ -79,13 +99,45 @@ export default function PaidMediaClientPage({
           <PaidMediaDashboard brandId={brandProfileId} adAccountId={selectedAdAccount} />
         </TabsContent>
 
-        <TabsContent value="jaina" className="flex-1 min-h-0 pt-4">
-          <JainaChatSurface
-            brandProfileId={brandProfileId}
-            brandName={brandName}
-            adAccountId={selectedAdAccount}
-            campaignId={selectedCampaign}
-          />
+        <TabsContent value="jaina" className="flex-1 min-h-0 pt-4 flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col border rounded-xl overflow-hidden bg-white/5 shadow-2xl relative">
+            <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+              {/* Jaina Analyst (Left) */}
+              <ResizablePanel 
+                defaultSize="35%" 
+                minSize="25%" 
+                maxSize="55%" 
+                className="flex flex-col overflow-hidden bg-black/20"
+                style={{ minWidth: 0 }}
+              >
+                <JainaChatSurface
+                  brandProfileId={brandProfileId}
+                  brandName={brandName}
+                  adAccountId={selectedAdAccount}
+                  campaignId={selectedCampaign}
+                  campaignCanvasPayload={campaignCanvasPayload}
+                  userId={user?.id ?? null}
+                  className="rounded-none border-none bg-transparent backdrop-blur-none"
+                />
+              </ResizablePanel>
+              
+              <ResizableHandle withHandle className="bg-white/10 z-50 hover:bg-primary/40 transition-colors w-1.5" />
+              
+              {/* Campaign Canvas (Right) */}
+              <ResizablePanel 
+                defaultSize="65%" 
+                minSize="30%"
+                className="relative overflow-hidden bg-black/10"
+                style={{ minWidth: 0 }}
+              >
+                <div className="absolute inset-0 p-0.5">
+                  <ReactFlowProvider>
+                    <CampaignCanvas />
+                  </ReactFlowProvider>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

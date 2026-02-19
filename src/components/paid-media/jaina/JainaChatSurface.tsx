@@ -8,18 +8,25 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useJainaChatStream } from "@/hooks/useJainaChatStream";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
+import { cn } from "@/lib/utils";
 import type { JainaChatMessage } from "./types";
 
 import { JainaHeader } from "./components/JainaHeader";
 import { JainaEmptyState } from "./components/JainaEmptyState";
 import { JainaMessageItem } from "./components/JainaMessageItem";
 import { getFinalThought, getReportSummary, resolveReportSignal, hasReportContent } from "./jainaUtils";
+import type { CampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
+import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
+import { extractCampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
 
 type JainaChatSurfaceProps = {
   brandProfileId: string;
   brandName: string;
   adAccountId: string | null;
   campaignId?: string | null;
+  campaignCanvasPayload?: CampaignCanvasPayload | null;
+  userId?: string | null;
+  className?: string;
 };
 
 export function JainaChatSurface({
@@ -27,9 +34,13 @@ export function JainaChatSurface({
   brandName,
   adAccountId,
   campaignId,
+  campaignCanvasPayload,
+  userId,
+  className,
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
-  
+  const { processAIAction } = useCampaignAI();
+
   const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
   const [isPlanMode, setIsPlanMode] = React.useState(false);
 
@@ -37,6 +48,7 @@ export function JainaChatSurface({
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(
     null
   );
+  const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
 
   const updateMessage = React.useCallback(
     (id: string, update: Partial<JainaChatMessage>) => {
@@ -70,15 +82,19 @@ export function JainaChatSurface({
          content = reportSummary || "Report generated.";
       }
 
-      const isDirectAnswer = state.report && "type" in (state.report as any) && (state.report as any).type === "direct_answer";
+      const reportType =
+        state.report && typeof state.report === "object" && "type" in state.report
+          ? (state.report as { type?: unknown }).type
+          : undefined;
+      const isDirectAnswer = reportType === "direct_answer";
       const hasReportSignal = resolveReportSignal(state.progress, state.stateDeltas);
       const reportHasContent = hasReportContent(state.report);
       const renderAsReport = !!(state.report && !isDirectAnswer && reportHasContent && hasReportSignal);
         
       updateMessage(activeResponseId, {
         status: "done",
-        content: content as string,
-        report: (state.report as any) ?? undefined,
+        content,
+        report: state.report ?? undefined,
         finalThought,
         renderAsReport,
         reasoning: state.progress,
@@ -115,10 +131,47 @@ export function JainaChatSurface({
   ]);
 
   React.useEffect(() => {
+    if (state.toolResults.length === 0) return;
+
+    for (const toolResult of state.toolResults) {
+      if (processedToolResultIdsRef.current.has(toolResult.id)) {
+        continue;
+      }
+      processedToolResultIdsRef.current.add(toolResult.id);
+
+      if (!toolResult.ok || !toolResult.output) {
+        continue;
+      }
+
+      const envelope = extractCampaignCanvasActionsEnvelope(toolResult.output);
+      if (!envelope) {
+        continue;
+      }
+
+      const hasBrandMatch = envelope.brandId === brandProfileId;
+      const hasUserMatch = !userId || envelope.userId === userId;
+      if (!hasBrandMatch || !hasUserMatch) {
+        continue;
+      }
+
+      for (const action of envelope.actions) {
+        processAIAction(action);
+      }
+
+      show({
+        title: "Canvas updated by Jaina",
+        description: `${envelope.actions.length} change(s) applied to this session.`,
+        variant: "success",
+      });
+    }
+  }, [brandProfileId, processAIAction, show, state.toolResults, userId]);
+
+  React.useEffect(() => {
     if (adAccountId) {
       reset();
       setMessages([]);
       setActiveResponseId(null);
+      processedToolResultIdsRef.current.clear();
     }
   }, [adAccountId, reset]);
 
@@ -152,12 +205,15 @@ export function JainaChatSurface({
 
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setActiveResponseId(assistantMessage.id);
+      processedToolResultIdsRef.current.clear();
 
       const result = await start({
         query: query,
         plan: isPlanMode,
         adAccountId: adAccountId,
         brandId: brandProfileId,
+        userId: userId ?? undefined,
+        campaignCanvas: campaignCanvasPayload ?? undefined,
       });
 
       if (result.error) {
@@ -168,13 +224,14 @@ export function JainaChatSurface({
         });
       }
     },
-    [brandProfileId, adAccountId, isPlanMode, show, start]
+    [brandProfileId, adAccountId, campaignCanvasPayload, isPlanMode, show, start, userId]
   );
 
   const handleClearConversation = React.useCallback(() => {
     reset();
     setMessages([]);
     setActiveResponseId(null);
+    processedToolResultIdsRef.current.clear();
   }, [reset]);
 
   const handlePlanFeedback = React.useCallback(
@@ -222,7 +279,7 @@ export function JainaChatSurface({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20 backdrop-blur-xl">
+    <div className={cn("relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20 backdrop-blur-xl", className)}>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(88,80,236,0.12),transparent_55%),radial-gradient(circle_at_20%_80%,rgba(14,116,144,0.16),transparent_50%)]" />
 
       <JainaHeader

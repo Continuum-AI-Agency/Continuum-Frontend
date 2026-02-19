@@ -43,7 +43,7 @@ export function JainaEmptyState({
     <Flex
       direction="column"
       gap="4"
-      className="mt-20 items-center justify-center text-center"
+      className="mt-12 items-center justify-center text-center"
     >
       <motion.div
         initial={{ y: 20, opacity: 0 }}

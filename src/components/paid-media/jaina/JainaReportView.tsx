@@ -135,7 +135,7 @@ export function JainaReportView({
   };
 
   return (
-    <Artifact className="border-white/10 bg-black/20 backdrop-blur-xl shadow-2xl h-[calc(100vh-120px)] flex flex-col">
+    <Artifact className="border-white/10 bg-black/20 backdrop-blur-xl shadow-2xl h-[600px] max-h-[calc(100vh-200px)] flex flex-col">
       <ArtifactHeader className="bg-white/5 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3">
           <div className="size-2 rounded-full bg-purple-500 animate-pulse" />

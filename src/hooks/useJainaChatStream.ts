@@ -18,6 +18,7 @@ type JainaChatInput = {
   adAccountId: string;
   brandId?: string;
   userId?: string;
+  campaignCanvas?: Record<string, unknown>;
 };
 
 type StartResult = { error?: string };
@@ -98,6 +99,15 @@ export function useJainaChatStream() {
 
       try {
         const token = await getAccessToken();
+        const payloadWithCanvas = input.campaignCanvas
+          ? {
+              ...payload,
+              context: {
+                ...payload.context,
+                campaignCanvas: input.campaignCanvas,
+              },
+            }
+          : payload;
         const response = await fetch("/api/agents/jaina/chat/stream", {
           method: "POST",
           headers: {
@@ -105,7 +115,7 @@ export function useJainaChatStream() {
             Accept: "application/x-ndjson",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payloadWithCanvas),
           signal: controller.signal,
         });
 
