@@ -155,6 +155,77 @@ describe('mergeNodes', () => {
     expect((result[0].data as any).isExecuting).toBe(true);
   });
 
+  it('keeps local isExecuting when remote sends stale false flags', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'local', isExecuting: true, isComplete: false },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 10, y: 10 },
+        data: { value: 'remote', isExecuting: false, isComplete: false },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).isExecuting).toBe(true);
+    expect((result[0].data as any).isComplete).toBe(false);
+  });
+
+  it('keeps local isComplete when remote sends stale false and is not executing', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'local', isExecuting: false, isComplete: true },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 10, y: 10 },
+        data: { value: 'remote', isExecuting: false, isComplete: false },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).isComplete).toBe(true);
+  });
+
+  it('lets remote completion win over local executing state', () => {
+    const local: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'local', isExecuting: true, isComplete: false },
+      } as StudioNode,
+    ];
+
+    const remote: StudioNode[] = [
+      {
+        id: 'node1',
+        type: 'string',
+        position: { x: 10, y: 10 },
+        data: { value: 'remote', isExecuting: false, isComplete: true },
+      } as StudioNode,
+    ];
+
+    const result = mergeNodes(local, remote, []);
+    expect((result[0].data as any).isComplete).toBe(true);
+    expect((result[0].data as any).isExecuting).toBe(false);
+  });
+
   it('updates existing node from remote (LWW)', () => {
     const local: StudioNode[] = [
       {

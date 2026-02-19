@@ -52,6 +52,32 @@ const isRemoteRuntimeValueMissing = (value: unknown) => {
   return false;
 };
 
+const mergeExecutionFlags = (
+  localData: Record<string, unknown>,
+  mergedData: Record<string, unknown>
+) => {
+  const localIsExecuting = localData.isExecuting === true;
+  const localIsComplete = localData.isComplete === true;
+  const remoteIsExecuting = mergedData.isExecuting === true;
+  const remoteIsComplete = mergedData.isComplete === true;
+  const remoteHasIsExecuting = typeof mergedData.isExecuting === 'boolean';
+  const remoteHasIsComplete = typeof mergedData.isComplete === 'boolean';
+
+  if (remoteIsComplete) {
+    mergedData.isComplete = true;
+    mergedData.isExecuting = false;
+    return;
+  }
+
+  if (localIsExecuting && remoteHasIsExecuting && !remoteIsExecuting) {
+    mergedData.isExecuting = true;
+  }
+
+  if (localIsComplete && remoteHasIsComplete && !remoteIsComplete && !remoteIsExecuting) {
+    mergedData.isComplete = true;
+  }
+};
+
 export function mergeNodes(
   local: StudioNode[],
   remote: StudioNode[],
@@ -69,38 +95,43 @@ export function mergeNodes(
   for (const remoteNode of remote) {
     const localNode = localMap.get(remoteNode.id);
     
-    const mergedData = { ...remoteNode.data };
+    const mergedData: Record<string, unknown> = { ...remoteNode.data };
     if (localNode) {
+      const localData = localNode.data as Record<string, unknown>;
+
       localOnlyDataKeys.forEach((key) => {
-        if (localNode.data[key] !== undefined) {
-          (mergedData as any)[key] = localNode.data[key];
+        const localValue = localData[key];
+        if (localValue !== undefined) {
+          mergedData[key] = localValue;
         }
       });
 
       runtimeDataKeys.forEach(key => {
-        const localValue = (localNode.data as any)[key];
+        const localValue = localData[key];
         if (localValue === undefined) return;
-        const remoteValue = (mergedData as any)[key];
+        const remoteValue = mergedData[key];
         if (isRemoteRuntimeValueMissing(remoteValue)) {
-          (mergedData as any)[key] = localValue;
+          mergedData[key] = localValue;
         }
       });
 
       richInputDataKeys.forEach((key) => {
-        const localValue = (localNode.data as any)[key];
+        const localValue = localData[key];
         if (localValue === undefined) return;
-        const remoteValue = (mergedData as any)[key];
+        const remoteValue = mergedData[key];
         if (isRemoteValueEffectivelyMissing(key, remoteValue)) {
-          (mergedData as any)[key] = localValue;
+          mergedData[key] = localValue;
         }
       });
+
+      mergeExecutionFlags(localData, mergedData);
     }
 
     merged.set(remoteNode.id, {
       ...remoteNode,
       selected: localNode?.selected,
       dragging: localNode?.dragging,
-      data: mergedData,
+      data: mergedData as StudioNode['data'],
     } as StudioNode);
   }
   

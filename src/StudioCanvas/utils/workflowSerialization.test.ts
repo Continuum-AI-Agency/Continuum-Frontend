@@ -113,4 +113,26 @@ describe('workflowSerialization', () => {
     );
     expect((snapshot.nodes[0].data as any).image).toBeUndefined();
   });
+
+  it('preserves style and dimensions during serialization', () => {
+    const snapshot = serializeWorkflowSnapshot(
+      [
+        buildNode({
+          id: 'nano',
+          type: 'nanoGen',
+          style: { width: 400, height: 400 },
+          measured: { width: 392, height: 398 },
+          width: undefined,
+          height: undefined,
+          data: { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' } as any,
+        }),
+      ],
+      [],
+      'bezier'
+    );
+
+    expect(snapshot.nodes[0].style).toEqual({ width: 400, height: 400 });
+    expect(snapshot.nodes[0].width).toBe(392);
+    expect(snapshot.nodes[0].height).toBe(398);
+  });
 });

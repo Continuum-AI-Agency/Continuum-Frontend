@@ -96,12 +96,16 @@ function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
 }
 
 function sanitizeNode(node: StudioNode): StudioNode {
+  const width = node.width ?? node.measured?.width;
+  const height = node.height ?? node.measured?.height;
+
   return {
     id: node.id,
     type: node.type,
     position: node.position,
-    width: node.width,
-    height: node.height,
+    style: node.style,
+    width,
+    height,
     data: stripRuntimeNodeData(node.data),
   };
 }
