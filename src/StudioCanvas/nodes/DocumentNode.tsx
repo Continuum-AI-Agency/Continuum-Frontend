@@ -1,6 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
-import { Card } from '@/components/ui/card';
+import React, { useCallback } from 'react';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer } from '@xyflow/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -23,12 +22,14 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
-export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNodeData>>) {
+export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<DocumentNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const edges = useEdges();
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -47,14 +48,16 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
   const addDocuments = useCallback((newDocs: Array<{name: string, content: string, type: 'pdf' | 'txt'}>) => {
     const currentDocs = data.documents || [];
     updateNodeData(id, { documents: [...currentDocs, ...newDocs] });
-  }, [data.documents, id, updateNodeData]);
+    triggerSave();
+  }, [data.documents, id, triggerSave, updateNodeData]);
 
   const removeDocument = useCallback((index: number) => {
     const currentDocs = data.documents || [];
     const newDocs = [...currentDocs];
     newDocs.splice(index, 1);
     updateNodeData(id, { documents: newDocs });
-  }, [data.documents, id, updateNodeData]);
+    triggerSave();
+  }, [data.documents, id, triggerSave, updateNodeData]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -164,9 +167,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
           "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
           isSelectedByOther && "selected-by-other"
         )}
-        style={{ 
-          ['--other-user-color' as any]: selectingUser?.color 
-        }}
+        style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
         onDragOver={handleDragOver} 
         onDrop={handleDrop}
       >
@@ -177,29 +178,33 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
-      <Card className="w-full h-full border border-subtle bg-surface shadow-sm overflow-hidden p-0 relative flex flex-col">
-        <div className="flex items-center justify-between px-3 py-1 border-b border-subtle text-[10px] font-semibold uppercase tracking-widest text-secondary bg-default/70 cursor-grab">
+      <CanvasNode
+        handles={{ target: false, source: false }}
+        selected={selected}
+        className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <NodeHeader className="!h-7 !px-3 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           <span>Documents ({documents.length})</span>
-          <Label htmlFor={`doc-upload-${id}`} className="cursor-pointer hover:text-primary transition-colors">
+          <Label htmlFor={`doc-upload-${id}`} className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground">
             <UploadIcon className="w-3 h-3" />
           </Label>
-        </div>
+        </NodeHeader>
         
-        <div className="relative flex-1 min-h-0 flex flex-col bg-slate-50/50 dark:bg-slate-900/50">
+        <NodeContent className="relative flex-1 min-h-0 p-0 flex flex-col bg-muted/30">
             {documents.length > 0 ? (
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 nodrag">
+                <div className="flex-1 space-y-2 overflow-y-auto p-2 nodrag">
                     {documents.map((doc, index) => (
-                        <div key={index} className="flex items-center gap-2 p-2 bg-white dark:bg-slate-800 rounded border border-border shadow-sm group/item">
-                            <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded text-indigo-600 dark:text-indigo-400">
+                        <div key={index} className="group/item flex items-center gap-2 rounded-md border border-border/70 bg-background/90 p-2 shadow-sm">
+                            <div className="rounded bg-amber-500/10 p-1.5 text-amber-600">
                                 <FileTextIcon className="w-4 h-4" />
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium truncate">{doc.name}</p>
-                                <p className="text-[9px] text-muted-foreground uppercase">{doc.type}</p>
+                                <p className="truncate text-xs font-medium text-foreground">{doc.name}</p>
+                                <p className="text-[9px] uppercase text-muted-foreground">{doc.type}</p>
                             </div>
                             <button 
                                 onClick={() => removeDocument(index)}
-                                className="opacity-0 group-hover/item:opacity-100 p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-all"
+                                className="rounded p-1 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                             >
                                 <Cross2Icon className="w-3 h-3" />
                             </button>
@@ -210,7 +215,7 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
                 <div className="flex-1 flex flex-col items-center justify-center p-4">
                     <Label
                         htmlFor={`doc-upload-${id}`}
-                        className="cursor-pointer flex flex-col items-center justify-center w-full h-full hover:opacity-70 transition-opacity"
+                        className="cursor-pointer flex h-full w-full flex-col items-center justify-center transition-opacity hover:opacity-80"
                     >
                         <Empty>
                             <EmptyHeader>
@@ -233,8 +238,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<Node<DocumentNode
                 className="hidden" 
                 onChange={handleFileUpload}
             />
-        </div>
-      </Card>
+        </NodeContent>
+      </CanvasNode>
       
       <Tooltip>
         <TooltipTrigger asChild>

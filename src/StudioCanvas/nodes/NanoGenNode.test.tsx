@@ -53,7 +53,7 @@ describe('NanoGenNode', () => {
       </ReactFlowProvider>
     );
 
-    expect(screen.getByText(/Nano Gen/)).toBeTruthy();
+    expect(screen.getAllByText(/Nano Gen/).length).toBeGreaterThan(0);
     expect(screen.getByText('Prompt')).toBeTruthy();
   });
 

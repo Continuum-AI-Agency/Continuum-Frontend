@@ -2,9 +2,11 @@ import { describe, it, expect } from 'bun:test';
 import { render } from '@testing-library/react';
 import { DocumentNode } from './DocumentNode';
 import { ReactFlowProvider } from '@xyflow/react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+import type { ComponentProps } from 'react';
 
 describe('DocumentNode', () => {
-  const defaultProps = {
+  const defaultProps: ComponentProps<typeof DocumentNode> = {
     id: '1',
     data: { documents: [{ name: 'test.pdf', content: 'base64', type: 'pdf' as const }] },
     selected: false,
@@ -19,9 +21,11 @@ describe('DocumentNode', () => {
 
   it('should render correctly with documents', () => {
     const { container } = render(
-        <ReactFlowProvider>
-            <DocumentNode {...defaultProps as any} />
-        </ReactFlowProvider>
+        <ToastProvider>
+            <ReactFlowProvider>
+                <DocumentNode {...defaultProps} />
+            </ReactFlowProvider>
+        </ToastProvider>
     );
     expect(container.textContent).toContain('Documents (1)');
     expect(container.textContent).toContain('test.pdf');
@@ -30,9 +34,11 @@ describe('DocumentNode', () => {
   it('should show empty state', () => {
     const props = { ...defaultProps, data: { documents: [] } };
     const { container } = render(
-        <ReactFlowProvider>
-            <DocumentNode {...props as any} />
-        </ReactFlowProvider>
+        <ToastProvider>
+            <ReactFlowProvider>
+                <DocumentNode {...props} />
+            </ReactFlowProvider>
+        </ToastProvider>
     );
     expect(container.textContent).toContain('No Documents');
   });

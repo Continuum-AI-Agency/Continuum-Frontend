@@ -1,12 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer, NodeToolbar, HandleProps, useEdges, type Edge } from '@xyflow/react';
-import { Card } from '@/components/ui/card';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudioStore } from '../stores/useStudioStore';
 import { VideoGenNodeData } from '../types';
-import { BlockToolbar } from '../components/BlockToolbar';
-import { VideoIcon } from '@radix-ui/react-icons';
-import { Label } from '@/components/ui/label';
+import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon, VideoIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,6 +11,7 @@ import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useToast } from '@/components/ui/ToastProvider';
 import { downloadAsset } from '../utils/downloadAsset';
+import { Button } from '@/components/ui/button';
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
   Empty,
@@ -23,38 +21,31 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Toolbar } from '@/components/ai-elements/toolbar';
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
-  
-  const checkConnectable = useCallback((params: { node: Node; connectedEdges: Edge[] }) => {
-    const { connectedEdges } = params;
-    
-    let baseConnectable = true;
-    
-    if (typeof isConnectable === 'boolean') {
-        baseConnectable = isConnectable;
-    } else if (typeof isConnectable === 'function') {
-        baseConnectable = (isConnectable as Function)(params);
-    }
-    
-    if (!baseConnectable) return false;
-    
-    if (maxConnections) {
-      const handleId = props.id;
-      const connectionCount = connectedEdges.filter(
-        (e) => e.targetHandle === handleId || e.sourceHandle === handleId
-      ).length;
-      
-      if (connectionCount >= maxConnections) return false;
-    }
-    
-    return true;
-  }, [maxConnections, isConnectable, props.id]);
+  const edges = useEdges();
+  const nodeId = useNodeId();
+  const handleId = props.id ?? null;
 
-  return <Handle {...props} isConnectable={checkConnectable as any} />;
+  const connectionCount = edges.filter((edge) => {
+    if (!nodeId) return false;
+
+    if (props.type === 'target') {
+      return edge.target === nodeId && (edge.targetHandle ?? null) === handleId;
+    }
+
+    return edge.source === nodeId && (edge.sourceHandle ?? null) === handleId;
+  }).length;
+
+  const withinLimit = !maxConnections || connectionCount < maxConnections;
+  const baseConnectable = isConnectable ?? true;
+
+  return <Handle {...props} isConnectable={baseConnectable && withinLimit} />;
 };
 
-export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNodeData>>) {
+export function VeoFastBlock({ id, data, selected }: NodeProps<ReactFlowNode<VideoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -66,6 +57,8 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
 
   const [isHovered, setIsHovered] = useState(false);
+  const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
+  const generatorDescription = `Veo 3.1 Fast • ${data.resolution ?? '720p'} • ${data.aspectRatio ?? '16:9'}`;
 
   // Calculate connection counts for tooltips
   const promptConnections = flowEdges.filter(edge => edge.target === id && edge.targetHandle === 'prompt-in').length;
@@ -108,9 +101,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
           "relative group h-full w-full min-w-[300px] min-h-[170px] rounded-xl transition-shadow",
           isSelectedByOther && "selected-by-other"
         )}
-        style={{ 
-          ['--other-user-color' as any]: selectingUser?.color 
-        }}
+        style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -122,8 +113,11 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
 
-      <NodeToolbar isVisible={selected} position={Position.Bottom} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
-          <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Veo 3.1 Fast</Label>
+      <Toolbar
+        isVisible={isToolbarVisible}
+        position={Position.Top}
+        className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+      >
           <Select value={data.aspectRatio ?? '16:9'} onValueChange={handleAspectRatioChange}>
             <SelectTrigger className="h-7 text-xs border-subtle w-20 bg-surface text-primary">
               <SelectValue placeholder="Ratio" />
@@ -134,7 +128,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
             </SelectContent>
           </Select>
           <Select 
-            value={(data as any).resolution ?? '720p'} 
+            value={data.resolution ?? '720p'} 
             onValueChange={(val) => {
               updateNodeData(id, { resolution: val });
               triggerSave();
@@ -151,30 +145,59 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
           <div className="flex items-center gap-2 border-l border-subtle pl-2">
             <span className="text-[10px] font-medium text-secondary px-2">First/Last Frame Only</span>
           </div>
-      </NodeToolbar>
+          <div className="mx-0.5 h-5 w-px bg-border/60" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
+            <PlayIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicateNode(id)} title="Duplicate">
+            <CopyIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download Output">
+            <DownloadIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive hover:text-destructive"
+            onClick={() => deleteNode(id)}
+            title="Delete"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+      </Toolbar>
 
-      <BlockToolbar 
-        isVisible={isHovered || !!data.isToolbarVisible}
-        onDuplicate={() => duplicateNode(id)}
-        onDelete={() => deleteNode(id)}
-        onRun={handleRun}
-        onDownload={handleDownload}
-      />
-
-       <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
-        <div className="relative flex-1 bg-default/60 group/preview min-h-0">
-            <AspectRatio ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16} className="h-full w-full">
+       <CanvasNode
+        handles={{ target: false, source: false }}
+        selected={selected}
+        className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
+            <AspectRatio ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16} className="h-full w-full overflow-hidden bg-muted">
             {data.isExecuting ? (
-              <div className="w-full h-full flex items-center justify-center bg-default p-4">
+              <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                       <Skeleton className="w-full h-full bg-muted" />
               </div>
             ) : data.generatedVideo ? (
-              <div className="w-full h-full flex items-center justify-center bg-default">
-                      <video
-                        src={data.generatedVideo as string}
-                        controls
-                        className="w-full h-full object-cover"
-                      />
+              <div className="relative w-full h-full flex items-center justify-center bg-black/85">
+                <video
+                  src={data.generatedVideo as string}
+                  controls
+                  className="w-full h-full object-contain"
+                />
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDownload();
+                  }}
+                  title="Download Output"
+                  aria-label="Download generated video"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                </Button>
               </div>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
@@ -191,8 +214,8 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
             )}
             </AspectRatio>
 
-        </div>
-      </Card>
+        </NodeContent>
+      </CanvasNode>
 
       <div
         className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
@@ -319,6 +342,10 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<Node<VideoGenNode
             <p>Last Frame: {lastFrameConnections}/1</p>
             </TooltipContent>
         </Tooltip>
+      </div>
+
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+        {generatorDescription}
       </div>
      </div>
     </TooltipProvider>

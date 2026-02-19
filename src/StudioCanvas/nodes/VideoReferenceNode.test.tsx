@@ -7,22 +7,30 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 
 const updateNodeData = mock();
+const triggerSave = mock();
 let originalUpdateNodeData: any;
+let originalTriggerSave: any;
 
 describe('VideoReferenceNode', () => {
   beforeEach(() => {
     originalUpdateNodeData = useStudioStore.getState().updateNodeData;
+    originalTriggerSave = useStudioStore.getState().triggerSave;
     useStudioStore.setState({
       nodes: [],
       edges: [],
       updateNodeData,
+      triggerSave,
     });
     updateNodeData.mockClear();
+    triggerSave.mockClear();
   });
 
   afterEach(() => {
     if (originalUpdateNodeData) {
       useStudioStore.setState({ updateNodeData: originalUpdateNodeData });
+    }
+    if (originalTriggerSave) {
+      useStudioStore.setState({ triggerSave: originalTriggerSave });
     }
     cleanup();
   });
@@ -88,6 +96,7 @@ describe('VideoReferenceNode', () => {
 
     await waitFor(() => {
       expect(updateNodeData).toHaveBeenCalledWith('1', { video: dataUrl, fileName: undefined });
+      expect(triggerSave).toHaveBeenCalled();
     });
   });
 });

@@ -1,10 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
-import { Card } from '@/components/ui/card';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer } from '@xyflow/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
-import { ImageNodeData } from '../types';
+import { ImageNodeData, ImageReferenceType } from '../types';
 import { ImageIcon, UploadIcon } from '@radix-ui/react-icons';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
@@ -26,14 +25,14 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
-import { AspectRatio } from "@/components/ui/aspect-ratio"
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { cn } from '@/lib/utils';
+import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
-export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>) {
+export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const edges = useEdges();
@@ -44,7 +43,7 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
 
   const handleRefTypeChange = useCallback((value: string) => {
     setRefType(value);
-    updateNodeData(id, { referenceType: value as any });
+    updateNodeData(id, { referenceType: value as ImageReferenceType });
     triggerSave();
   }, [id, updateNodeData, triggerSave]);
 
@@ -62,7 +61,7 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
       };
       reader.readAsDataURL(file);
     }
-  }, [id, updateNodeData]);
+  }, [id, triggerSave, updateNodeData]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -145,9 +144,7 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
           "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
           isSelectedByOther && "selected-by-other"
         )}
-        style={{ 
-          ['--other-user-color' as any]: selectingUser?.color 
-        }}
+        style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
         onDragOver={handleDragOver} 
         onDrop={handleDrop}
       >
@@ -159,8 +156,12 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
-      <Card className="w-full h-full border border-subtle bg-surface shadow-sm overflow-hidden p-0 relative flex flex-col">
-        <div className="flex items-center justify-between px-2 py-1 border-b border-subtle text-[10px] font-semibold uppercase tracking-widest text-secondary bg-default/70 cursor-grab h-7">
+      <CanvasNode
+        handles={{ target: false, source: false }}
+        selected={selected}
+        className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <NodeHeader className="!h-7 !px-2 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           <span>Image Reference</span>
           <div className="nodrag" onMouseDown={(e) => e.stopPropagation()}>
             <Select value={refType} onValueChange={handleRefTypeChange}>
@@ -175,23 +176,21 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
                 </SelectContent>
             </Select>
           </div>
-        </div>
-        <div className="relative flex-1 min-h-0 nodrag bg-slate-50/50 dark:bg-slate-900/50">
+        </NodeHeader>
+        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
             <Label
               htmlFor={`file-${id}`}
-              className="cursor-pointer flex items-center justify-center w-full h-full hover:bg-default/60 transition-colors"
+              className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
               onDragOver={handleDragOver}
               onDrop={handleDrop}
             >
                 {preview ? (
-                    <div className="w-full h-full relative p-2 flex items-center justify-center">
-                        <AspectRatio ratio={1} className="w-full h-full relative">
-                            <img src={preview} alt="Preview" className="w-full h-full object-cover rounded-md" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 rounded-md pointer-events-none">
-                                <UploadIcon className="w-6 h-6 text-white" />
-                                <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Replace</span>
-                            </div>
-                        </AspectRatio>
+                    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
+                      <img src={preview} alt="Preview" className="h-full w-full object-contain" />
+                      <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        <UploadIcon className="mr-1 inline-block h-3 w-3" />
+                        Replace
+                      </div>
                     </div>
                 ) : (
                     <Empty>
@@ -218,8 +217,8 @@ export function ImageNode({ id, data, selected }: NodeProps<Node<ImageNodeData>>
                     {data.fileName}
                 </div>
             )}
-        </div>
-      </Card>
+        </NodeContent>
+      </CanvasNode>
       
       <Tooltip>
         <TooltipTrigger asChild>
