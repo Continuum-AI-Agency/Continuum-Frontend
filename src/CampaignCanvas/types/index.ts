@@ -5,8 +5,10 @@ export type CampaignNodeType =
   | 'ad-set' 
   | 'ad' 
   | 'audience' 
-  | 'creative' 
-  | 'budget';
+  | 'creative';
+
+export type AdFormat = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'COLLECTION';
+export type CreativeAssetType = 'image' | 'video';
 
 export interface BaseCampaignNodeData extends Record<string, unknown> {
   label: string;
@@ -26,13 +28,16 @@ export interface AdSetData extends BaseCampaignNodeData {
   optimizationGoal: string;
   billingEvent: string;
   bidStrategy?: string;
+  budgetType?: 'DAILY' | 'LIFETIME';
+  budgetAmount?: number;
+  budgetCurrency?: string;
   startTime?: string;
   endTime?: string;
   pacingType?: string[];
 }
 
 export interface AdData extends BaseCampaignNodeData {
-  adFormat: 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'COLLECTION';
+  adFormat: AdFormat;
   primaryText: string;
   headline: string;
   description?: string;
@@ -50,16 +55,11 @@ export interface AudienceData extends BaseCampaignNodeData {
 }
 
 export interface CreativeData extends BaseCampaignNodeData {
-  assetType: 'image' | 'video';
+  assetType: CreativeAssetType;
   assetUrl?: string;
   thumbnailUrl?: string;
   mediaId?: string;
-}
-
-export interface BudgetData extends BaseCampaignNodeData {
-  type: 'DAILY' | 'LIFETIME';
-  amount: number;
-  currency: string;
+  aspectRatio?: string;
 }
 
 export type CampaignCanvasNodeData = 
@@ -67,8 +67,7 @@ export type CampaignCanvasNodeData =
   | AdSetData 
   | AdData 
   | AudienceData 
-  | CreativeData 
-  | BudgetData;
+  | CreativeData;
 
 export type CampaignCanvasNode = Node & { 
   type: CampaignNodeType;

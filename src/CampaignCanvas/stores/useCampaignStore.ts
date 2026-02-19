@@ -17,6 +17,9 @@ import {
   type CampaignCanvasNodeData 
 } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { applyCampaignGraphValidation } from '../validation/applyCampaignGraphValidation';
+import { getSingleParentConnectionViolationMessage } from '../validation/hierarchyRelationships';
+import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
 
 interface HistoryState {
   nodes: CampaignCanvasNode[];
@@ -37,12 +40,19 @@ interface CampaignStore {
   updateNodeData: (id: string, data: Partial<CampaignCanvasNodeData>) => void;
   removeNode: (id: string) => void;
   duplicateNode: (id: string) => void;
-  validateGraph: () => void;
+  validateGraph: () => {
+    invalidNodeCount: number;
+    payloadValid: boolean;
+    payloadError?: string;
+  };
   undo: () => void;
   redo: () => void;
   pushHistory: () => void;
   setEdgeStyle: (style: 'curved' | 'straight') => void;
 }
+
+const CONNECTED_NODE_HORIZONTAL_OFFSET = 300;
+const CONNECTED_NODE_VERTICAL_OFFSET = 300;
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
   nodes: [],
@@ -60,19 +70,24 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   onNodesChange: (changes: NodeChange[]) => {
+    const nextNodes = applyNodeChanges(changes, get().nodes) as CampaignCanvasNode[];
+    const nextEdges = get().edges;
     set({
-      nodes: applyNodeChanges(changes, get().nodes) as CampaignCanvasNode[],
+      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
     });
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
+    const nextEdges = applyEdgeChanges(changes, get().edges) as CampaignCanvasEdge[];
+    const nextNodes = get().nodes;
     set({
-      edges: applyEdgeChanges(changes, get().edges) as CampaignCanvasEdge[],
+      edges: nextEdges,
+      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
     });
   },
 
   onConnect: (connection: Connection) => {
-    const { nodes, pushHistory } = get();
+    const { nodes, edges, pushHistory } = get();
     const sourceNode = nodes.find(n => n.id === connection.source);
     const targetNode = nodes.find(n => n.id === connection.target);
 
@@ -84,9 +99,18 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       }
     }
 
+    const singleParentViolation = getSingleParentConnectionViolationMessage(connection, nodes, edges);
+    if (singleParentViolation) {
+      console.warn(singleParentViolation);
+      return;
+    }
+
     pushHistory();
+    const nextEdges = addEdge(connection, edges);
+    const nextNodes = applyCampaignGraphValidation(nodes, nextEdges);
     set({
-      edges: addEdge(connection, get().edges),
+      edges: nextEdges,
+      nodes: nextNodes,
     });
   },
 
@@ -109,9 +133,11 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       selected: true,
     };
 
-    set({
-      nodes: [...deselectedNodes, newNode],
-    });
+    const nextNodes = applyCampaignGraphValidation(
+      [...deselectedNodes, newNode],
+      get().edges
+    );
+    set({ nodes: nextNodes });
 
     return id;
   },
@@ -121,30 +147,39 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
     const sourceNode = nodes.find(n => n.id === sourceId);
     if (!sourceNode) return;
 
-    // Calculate position for the new node (to the right of the source)
-    const newPosition = {
-      x: sourceNode.position.x + 300,
-      y: sourceNode.position.y,
-    };
+    const shouldAttachBelowSource = sourceNode.type === 'ad-set' && targetType === 'audience';
+    const newPosition = shouldAttachBelowSource
+      ? {
+          x: sourceNode.position.x,
+          y: sourceNode.position.y + CONNECTED_NODE_VERTICAL_OFFSET,
+        }
+      : {
+          x: sourceNode.position.x + CONNECTED_NODE_HORIZONTAL_OFFSET,
+          y: sourceNode.position.y,
+        };
 
     const targetId = addNode(targetType, data, newPosition);
-    onConnect({ source: sourceId, target: targetId });
+    onConnect({ source: sourceId, sourceHandle: null, target: targetId, targetHandle: null });
   },
 
   updateNodeData: (id, data) => {
+    const nextEdges = get().edges;
+    const nextNodes = get().nodes.map((node) =>
+      node.id === id ? { ...node, data: { ...node.data, ...data } } : node
+    );
     set({
-      nodes: get().nodes.map((node) =>
-        node.id === id ? { ...node, data: { ...node.data, ...data } } : node
-      ),
+      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
     });
   },
 
   removeNode: (id) => {
     const { pushHistory } = get();
     pushHistory();
+    const nextNodes = get().nodes.filter((node) => node.id !== id);
+    const nextEdges = get().edges.filter((edge) => edge.source !== id && edge.target !== id);
     set({
-      nodes: get().nodes.filter((node) => node.id !== id),
-      edges: get().edges.filter((edge) => edge.source !== id && edge.target !== id),
+      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
+      edges: nextEdges,
     });
   },
 
@@ -170,9 +205,11 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
       selected: true,
     };
 
-    set({
-      nodes: [...deselectedNodes, newNode],
-    });
+    const nextNodes = applyCampaignGraphValidation(
+      [...deselectedNodes, newNode],
+      get().edges
+    );
+    set({ nodes: nextNodes });
   },
 
   undo: () => {
@@ -208,18 +245,33 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   setEdgeStyle: (edgeStyle) => set({ edgeStyle }),
 
   validateGraph: () => {
-    console.log('Validating campaign graph...');
+    const { nodes, edges } = get();
+    const validatedNodes = applyCampaignGraphValidation(nodes, edges);
+    const invalidNodeCount = validatedNodes.filter(
+      (node) => node.data.validationStatus === 'error'
+    ).length;
+    set({ nodes: validatedNodes });
+
+    try {
+      buildCampaignCanvasPayload(validatedNodes, edges, { source: 'unknown' });
+      console.log(`Validating campaign graph... Found ${invalidNodeCount} invalid node(s). Payload schema valid.`);
+      return { invalidNodeCount, payloadValid: true };
+    } catch (error) {
+      const payloadError =
+        error instanceof Error ? error.message : 'Unknown payload schema validation error.';
+      console.warn('Campaign payload validation failed:', payloadError);
+      return { invalidNodeCount, payloadValid: false, payloadError };
+    }
   },
 }));
 
 function validateConnection(sourceType: CampaignNodeType, targetType: CampaignNodeType): boolean {
   const rules: Record<CampaignNodeType, CampaignNodeType[]> = {
-    'campaign': ['ad-set', 'budget'],
-    'ad-set': ['ad', 'audience', 'budget'],
+    'campaign': ['ad-set'],
+    'ad-set': ['ad', 'audience'],
     'ad': ['creative'],
     'audience': [],
     'creative': [],
-    'budget': [],
   };
 
   return rules[sourceType]?.includes(targetType) || false;
