@@ -37,6 +37,15 @@ const AD_FORMATS = [
   { value: 'COLLECTION', label: 'Collection' },
 ];
 
+const CALL_TO_ACTIONS = [
+  { value: 'LEARN_MORE', label: 'Learn More' },
+  { value: 'SHOP_NOW', label: 'Shop Now' },
+  { value: 'SIGN_UP', label: 'Sign Up' },
+  { value: 'BOOK_NOW', label: 'Book Now' },
+  { value: 'CONTACT_US', label: 'Contact Us' },
+  { value: 'DOWNLOAD', label: 'Download' },
+];
+
 export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
 
@@ -52,6 +61,10 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
 
   const handleFormatChange = useCallback((adFormat: string) => {
     updateNodeData(id, { adFormat } as any);
+  }, [id, updateNodeData]);
+
+  const handleCTAChange = useCallback((callToAction: string) => {
+    updateNodeData(id, { callToAction } as any);
   }, [id, updateNodeData]);
 
   const handleAddCreative = useCallback(() => {
@@ -92,20 +105,27 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
               <EditableLabel value={data.label} onSave={handleLabelSave} />
             </h3>
             <Separator className="my-1.5 opacity-50" />
-            <div className="text-xs font-medium text-foreground italic">
+            <div className="text-xs font-medium text-foreground italic mb-1">
               <EditableLabel 
                 value={data.headline || 'Add compelling headline...'} 
                 onSave={handleHeadlineSave}
                 className="cursor-text"
               />
             </div>
-            <NodeDescription className="text-[10px] text-muted-foreground uppercase tracking-tight">
-              {AD_FORMATS.find(f => f.value === data.adFormat)?.label || 'SINGLE IMAGE'}
-            </NodeDescription>
+            <div className="flex items-center gap-1.5">
+              <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase opacity-70">
+                {AD_FORMATS.find(f => f.value === data.adFormat)?.label || 'IMAGE'}
+              </Badge>
+              {data.callToAction && (
+                <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase h-4 bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                  {CALL_TO_ACTIONS.find(c => c.value === data.callToAction)?.label || 'LEARN MORE'}
+                </Badge>
+              )}
+            </div>
           </NodeContent>
         </Node>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
+      <ContextMenuContent className="w-64">
         <ContextMenuLabel>Ad Actions</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleAddCreative}>
@@ -113,7 +133,10 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
             Add Creative
           </ContextMenuItem>
         </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        <ContextMenuLabel>Configurations</ContextMenuLabel>
+        
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
@@ -132,12 +155,37 @@ export const AdNode = memo(({ id, data, selected }: NodeProps<AdData>) => {
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Send className="mr-2 h-4 w-4" />
+              Call to Action
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {CALL_TO_ACTIONS.map((cta) => (
+                <ContextMenuCheckboxItem
+                  key={cta.value}
+                  checked={data.callToAction === cta.value || (!data.callToAction && cta.value === 'LEARN_MORE')}
+                  onClick={() => handleCTAChange(cta.value)}
+                >
+                  {cta.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </ContextMenuGroup>
+
+        <ContextMenuSeparator />
+        
+        <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>

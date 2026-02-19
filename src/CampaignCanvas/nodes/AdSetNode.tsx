@@ -56,6 +56,17 @@ const OPTIMIZATION_GOALS = [
   { value: 'REACH', label: 'Reach' },
 ];
 
+const BILLING_EVENTS = [
+  { value: 'IMPRESSIONS', label: 'Impressions' },
+  { value: 'LINK_CLICKS', label: 'Link Clicks' },
+];
+
+const BID_STRATEGIES = [
+  { value: 'LOWEST_COST_WITHOUT_CAP', label: 'Highest Volume' },
+  { value: 'COST_CAP', label: 'Cost Cap' },
+  { value: 'BID_CAP', label: 'Bid Cap' },
+];
+
 export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
 
@@ -67,6 +78,14 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
 
   const handleGoalChange = useCallback((optimizationGoal: string) => {
     updateNodeData(id, { optimizationGoal });
+  }, [id, updateNodeData]);
+
+  const handleBillingChange = useCallback((billingEvent: string) => {
+    updateNodeData(id, { billingEvent });
+  }, [id, updateNodeData]);
+
+  const handleBidChange = useCallback((bidStrategy: string) => {
+    updateNodeData(id, { bidStrategy });
   }, [id, updateNodeData]);
 
   const handleAddAd = useCallback(() => {
@@ -124,13 +143,25 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
               <EditableLabel value={data.label} onSave={handleLabelSave} />
             </h3>
             <Separator className="my-1.5 opacity-50" />
-            <NodeDescription className="text-xs text-muted-foreground">
-              {OPTIMIZATION_GOALS.find(g => g.value === data.optimizationGoal)?.label || 'ConVERSIONS'}
-            </NodeDescription>
+            <div className="flex flex-col gap-1">
+              <NodeDescription className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                {OPTIMIZATION_GOALS.find(g => g.value === data.optimizationGoal)?.label || 'CONVERSIONS'}
+              </NodeDescription>
+              <div className="flex flex-wrap items-center gap-1 mt-1">
+                <Badge variant="secondary" className="text-[8px] px-1 py-0 opacity-80 h-4">
+                  {data.billingEvent || 'IMPRESSIONS'}
+                </Badge>
+                {data.bidStrategy && (
+                  <Badge variant="outline" className="text-[8px] px-1 py-0 opacity-80 h-4 border-purple-500/20">
+                    {BID_STRATEGIES.find(s => s.value === data.bidStrategy)?.label || 'Highest Vol'}
+                  </Badge>
+                )}
+              </div>
+            </div>
           </NodeContent>
         </Node>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
+      <ContextMenuContent className="w-64">
         <ContextMenuLabel>Ad Set Actions</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleAddAd}>
@@ -146,7 +177,10 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
             Add Budget
           </ContextMenuItem>
         </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        <ContextMenuLabel>Configurations</ContextMenuLabel>
+        
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
@@ -165,12 +199,55 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Billing Event
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {BILLING_EVENTS.map((event) => (
+                <ContextMenuCheckboxItem
+                  key={event.value}
+                  checked={data.billingEvent === event.value || (!data.billingEvent && event.value === 'IMPRESSIONS')}
+                  onClick={() => handleBillingChange(event.value)}
+                >
+                  {event.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Bid Strategy
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-56">
+              {BID_STRATEGIES.map((strategy) => (
+                <ContextMenuCheckboxItem
+                  key={strategy.value}
+                  checked={data.bidStrategy === strategy.value || (!data.bidStrategy && strategy.value === 'LOWEST_COST_WITHOUT_CAP')}
+                  onClick={() => handleBidChange(strategy.value)}
+                >
+                  {strategy.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </ContextMenuGroup>
+
+        <ContextMenuSeparator />
+        
+        <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>

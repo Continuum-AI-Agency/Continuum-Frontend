@@ -216,6 +216,7 @@ export const CampaignCanvas = () => {
         </ContextMenuTrigger>
         
         <ContextMenuContent className="w-64">
+          <ContextMenuLabel>Workspace Actions</ContextMenuLabel>
           <ContextMenuItem inset onClick={() => toast({ title: "Paste", description: "Functionality coming soon" })}>
             Paste
             <ContextMenuShortcut>⌘V</ContextMenuShortcut>
@@ -224,37 +225,64 @@ export const CampaignCanvas = () => {
             Select All
             <ContextMenuShortcut>⌘A</ContextMenuShortcut>
           </ContextMenuItem>
+          
           <ContextMenuSeparator />
+          
           <ContextMenuSub>
-            <ContextMenuSubTrigger inset>Add Node</ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
+            <ContextMenuSubTrigger inset>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Component
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-56">
               <ContextMenuItem onClick={() => handleAddNode('campaign')}>
-                <Plus className="mr-2 h-4 w-4" /> Campaign
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500" />
+                  Campaign
+                </div>
               </ContextMenuItem>
               <ContextMenuItem onClick={() => handleAddNode('ad-set')}>
-                <Plus className="mr-2 h-4 w-4" /> Ad Set
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-purple-500" />
+                  Ad Set
+                </div>
               </ContextMenuItem>
               <ContextMenuItem onClick={() => handleAddNode('ad')}>
-                <Plus className="mr-2 h-4 w-4" /> Ad
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Ad
+                </div>
               </ContextMenuItem>
               <ContextMenuSeparator />
               <ContextMenuItem onClick={() => handleAddNode('audience')}>
-                <Plus className="mr-2 h-4 w-4" /> Audience
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-orange-500" />
+                  Audience
+                </div>
               </ContextMenuItem>
               <ContextMenuItem onClick={() => handleAddNode('creative')}>
-                <Plus className="mr-2 h-4 w-4" /> Creative
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-pink-500" />
+                  Creative
+                </div>
               </ContextMenuItem>
               <ContextMenuItem onClick={() => handleAddNode('budget')}>
-                <Plus className="mr-2 h-4 w-4" /> Budget
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-amber-500" />
+                  Budget
+                </div>
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
+
           <ContextMenuSeparator />
+
+          <ContextMenuLabel>Canvas & View</ContextMenuLabel>
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
-               <Settings className="mr-2 h-4 w-4" /> Canvas Settings
+               <Settings className="mr-2 h-4 w-4" />
+               View Settings
             </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
+            <ContextMenuSubContent className="w-56">
                <ContextMenuCheckboxItem checked={edgeStyle === 'curved'} onClick={() => setEdgeStyle('curved')}>
                   Curved Connections
                </ContextMenuCheckboxItem>
@@ -264,9 +292,33 @@ export const CampaignCanvas = () => {
                <ContextMenuSeparator />
                <ContextMenuItem onClick={() => fitView({ duration: 800 })}>
                   Fit to Screen
+                  <ContextMenuShortcut>⇧F</ContextMenuShortcut>
+               </ContextMenuItem>
+               <ContextMenuItem onClick={() => fitView({ padding: 0.5, duration: 800 })}>
+                  Zoom to Content
                </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
+
+          <ContextMenuSeparator />
+
+          <ContextMenuLabel>Campaign Tools</ContextMenuLabel>
+          <ContextMenuItem inset onClick={validateGraph}>
+            <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
+            Validate Structure
+          </ContextMenuItem>
+          <ContextMenuItem inset onClick={handleExport}>
+            <Download className="mr-2 h-4 w-4" />
+            Export Schema (JSON)
+          </ContextMenuItem>
+          
+          <ContextMenuSeparator />
+          
+          <ContextMenuItem inset className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => setShowDeleteDialog(true)} disabled={selectedCount === 0}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete Selected
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 

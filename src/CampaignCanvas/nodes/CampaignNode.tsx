@@ -38,6 +38,18 @@ const OBJECTIVES = [
   { value: 'OUTCOME_SALES', label: 'Sales' },
 ];
 
+const BUYING_TYPES = [
+  { value: 'AUCTION', label: 'Auction' },
+  { value: 'RESERVATION', label: 'Reservation' },
+];
+
+const SPECIAL_CATEGORIES = [
+  { value: 'HOUSING', label: 'Housing' },
+  { value: 'EMPLOYMENT', label: 'Employment' },
+  { value: 'CREDIT', label: 'Credit' },
+  { value: 'ISSUES_ELECTIONS_POLITICS', label: 'Issues, Elections or Politics' },
+];
+
 export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
 
@@ -50,6 +62,18 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
   const handleObjectiveChange = useCallback((objective: string) => {
     updateNodeData(id, { objective } as any);
   }, [id, updateNodeData]);
+
+  const handleBuyingTypeChange = useCallback((buyingType: string) => {
+    updateNodeData(id, { buyingType } as any);
+  }, [id, updateNodeData]);
+
+  const handleCategoryToggle = useCallback((category: string) => {
+    const current = data.specialAdCategories || [];
+    const next = current.includes(category)
+      ? current.filter(c => c !== category)
+      : [...current, category];
+    updateNodeData(id, { specialAdCategories: next });
+  }, [id, data.specialAdCategories, updateNodeData]);
 
   const handleAddAdSet = useCallback(() => {
     addConnectedNode(id, 'ad-set');
@@ -93,9 +117,21 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
             <h3 className="font-semibold text-foreground leading-tight">
               <EditableLabel value={data.label} onSave={handleLabelSave} />
             </h3>
-            <NodeDescription className="text-xs text-muted-foreground">
-              {OBJECTIVES.find(o => o.value === data.objective)?.label || 'No Objective Set'}
-            </NodeDescription>
+            <div className="flex flex-col gap-0.5">
+              <NodeDescription className="text-xs text-muted-foreground">
+                {OBJECTIVES.find(o => o.value === data.objective)?.label || 'No Objective Set'}
+              </NodeDescription>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase opacity-70">
+                  {data.buyingType || 'AUCTION'}
+                </Badge>
+                {data.specialAdCategories?.length ? (
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase text-blue-500 border-blue-500/30">
+                    Special Cat.
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
             
             {data.metaId && (
               <>
@@ -108,7 +144,7 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
           </NodeContent>
         </Node>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
+      <ContextMenuContent className="w-64">
         <ContextMenuLabel>Campaign Actions</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleAddAdSet}>
@@ -120,7 +156,10 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
             Add Budget
           </ContextMenuItem>
         </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        <ContextMenuLabel>Configurations</ContextMenuLabel>
+        
         <ContextMenuGroup>
           <ContextMenuSub>
             <ContextMenuSubTrigger>
@@ -139,12 +178,55 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              Buying Type
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {BUYING_TYPES.map((type) => (
+                <ContextMenuCheckboxItem
+                  key={type.value}
+                  checked={data.buyingType === type.value || (!data.buyingType && type.value === 'AUCTION')}
+                  onClick={() => handleBuyingTypeChange(type.value)}
+                >
+                  {type.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Settings className="mr-2 h-4 w-4" />
+              Special Categories
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-56">
+              {SPECIAL_CATEGORIES.map((cat) => (
+                <ContextMenuCheckboxItem
+                  key={cat.value}
+                  checked={data.specialAdCategories?.includes(cat.value)}
+                  onClick={() => handleCategoryToggle(cat.value)}
+                >
+                  {cat.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </ContextMenuGroup>
+
+        <ContextMenuSeparator />
+        
+        <ContextMenuGroup>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
         </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>

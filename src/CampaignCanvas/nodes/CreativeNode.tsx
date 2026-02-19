@@ -31,6 +31,10 @@ export const CreativeNode = memo(({ id, data, selected }: NodeProps<CreativeData
     updateNodeData(id, { label: newLabel });
   }, [id, updateNodeData]);
 
+  const handleTypeChange = useCallback((assetType: 'image' | 'video') => {
+    updateNodeData(id, { assetType });
+  }, [id, updateNodeData]);
+
   return (
     <ContextMenu>
       <ContextMenuTrigger>
@@ -55,22 +59,57 @@ export const CreativeNode = memo(({ id, data, selected }: NodeProps<CreativeData
               <EditableLabel value={data.label} onSave={handleLabelSave} />
             </h3>
             <Separator className="my-1 opacity-50" />
-            {data.thumbnailUrl ? (
-              <img src={data.thumbnailUrl} className="aspect-square w-full rounded-md object-cover" alt="Creative Preview" />
-            ) : (
-              <div className="flex aspect-square w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <ImageIcon className="h-8 w-8 opacity-20" />
-              </div>
-            )}
+            <div className="relative group w-full">
+              {data.thumbnailUrl ? (
+                <img src={data.thumbnailUrl} className="aspect-square w-full rounded-md object-cover" alt="Creative Preview" />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <ImageIcon className="h-8 w-8 opacity-20" />
+                </div>
+              )}
+              <Badge variant="secondary" className="absolute bottom-1 right-1 text-[8px] px-1 py-0 opacity-80">
+                {data.assetType?.toUpperCase() || 'IMAGE'}
+              </Badge>
+            </div>
           </NodeContent>
         </Node>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-48">
-        <ContextMenuItem onClick={handleDuplicate}>
-          <Copy className="mr-2 h-4 w-4" /> Duplicate
-          <ContextMenuShortcut>⌘D</ContextMenuShortcut>
-        </ContextMenuItem>
+      <ContextMenuContent className="w-56">
+        <ContextMenuLabel>Creative Actions</ContextMenuLabel>
+        <ContextMenuGroup>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ImageIcon className="mr-2 h-4 w-4" />
+              Asset Type
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              <ContextMenuCheckboxItem 
+                checked={data.assetType === 'image' || !data.assetType} 
+                onClick={() => handleTypeChange('image')}
+              >
+                Image
+              </ContextMenuCheckboxItem>
+              <ContextMenuCheckboxItem 
+                checked={data.assetType === 'video'} 
+                onClick={() => handleTypeChange('video')}
+              >
+                Video
+              </ContextMenuCheckboxItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        </ContextMenuGroup>
+        
         <ContextMenuSeparator />
+        
+        <ContextMenuGroup>
+          <ContextMenuItem onClick={handleDuplicate}>
+            <Copy className="mr-2 h-4 w-4" /> Duplicate
+            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuGroup>
+        
+        <ContextMenuSeparator />
+        
         <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" /> Delete
           <ContextMenuShortcut>⌫</ContextMenuShortcut>
