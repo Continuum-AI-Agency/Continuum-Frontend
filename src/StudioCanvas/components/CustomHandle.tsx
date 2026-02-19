@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useMemo } from 'react';
-import { Handle, Position, useHandleConnections, useNodeId, type HandleProps, type Connection } from '@xyflow/react';
+import { useMemo } from 'react';
+import { Handle, useNodeConnections, useNodeId, type HandleProps, type Connection } from '@xyflow/react';
 
 export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnectable'> {
   /**
@@ -39,16 +39,15 @@ export interface ConnectionLimitHandleProps extends Omit<HandleProps, 'isConnect
 export function CustomHandle({
   maxConnections,
   connectionType = 'target',
-  errorMessage = 'Connection limit reached',
-  onLimitReached,
   className,
   ...props
 }: ConnectionLimitHandleProps) {
   const nodeId = useNodeId();
-  const connections = useHandleConnections({
-    id: props.id,
-    type: connectionType,
-    nodeId: nodeId ?? undefined,
+  const resolvedNodeId = nodeId ?? '__detached_custom_handle__';
+  const connections = useNodeConnections({
+    id: resolvedNodeId,
+    handleType: connectionType,
+    handleId: props.id ?? undefined,
   });
 
   const isAtLimit = useMemo(() => {
@@ -106,10 +105,11 @@ export function CustomHandle({
  */
 export function useConnectionLimit(handleId: string, maxConnections?: number, type: 'source' | 'target' = 'target') {
   const nodeId = useNodeId();
-  const connections = useHandleConnections({
-    id: handleId,
-    type,
-    nodeId: nodeId ?? undefined,
+  const resolvedNodeId = nodeId ?? '__detached_connection_limit__';
+  const connections = useNodeConnections({
+    id: resolvedNodeId,
+    handleType: type,
+    handleId,
   });
 
   return useMemo(() => {

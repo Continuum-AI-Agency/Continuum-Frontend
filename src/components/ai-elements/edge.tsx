@@ -1,8 +1,10 @@
+import type { CSSProperties } from "react";
 import type { EdgeProps, InternalNode, Node } from "@xyflow/react";
 
 import {
   BaseEdge,
   getBezierPath,
+  getSmoothStepPath,
   getStraightPath,
   Position,
   useInternalNode,
@@ -158,7 +160,89 @@ const Animated = ({ id, source, target, markerEnd, style }: EdgeProps) => {
   );
 };
 
+type DataType = "text" | "image" | "video" | "audio" | "document";
+
+type DataTypeEdgeData = {
+  dataType?: DataType;
+  isActive?: boolean;
+  isDotted?: boolean;
+  pathType?: "bezier" | "straight" | "step" | "smoothstep";
+  label?: string;
+};
+
+const getDataTypeColorToken = (dataType?: DataType) => {
+  if (dataType === "image") return "var(--edge-image)";
+  if (dataType === "video") return "var(--edge-video)";
+  if (dataType === "audio") return "var(--edge-audio, #10b981)";
+  if (dataType === "document") return "var(--edge-document, #f59e0b)";
+  return "var(--edge-text)";
+};
+
+const DataType = ({
+  style,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  data,
+}: EdgeProps) => {
+  const edgeData = data as DataTypeEdgeData | undefined;
+  const pathType = edgeData?.pathType ?? "bezier";
+  const isActive = edgeData?.isActive ?? false;
+  const isDotted = edgeData?.isDotted ?? false;
+
+  const pathArgs = {
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  };
+
+  const [edgePath] =
+    pathType === "straight"
+      ? getStraightPath(pathArgs)
+      : pathType === "step" || pathType === "smoothstep"
+        ? getSmoothStepPath(pathArgs)
+        : getBezierPath(pathArgs);
+
+  const mergedStyle: CSSProperties = {
+    ["--edge-color" as keyof CSSProperties]: getDataTypeColorToken(edgeData?.dataType),
+    ...style,
+  };
+
+  return (
+    <>
+      <BaseEdge
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={mergedStyle}
+        className={[
+          "studio-edge-path",
+          isDotted ? "studio-edge-path--inactive" : "",
+          isActive ? "studio-edge-path--active-base" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      />
+      {isActive && (
+        <path
+          className="studio-edge-path studio-edge-path--flow"
+          d={edgePath}
+          fill="none"
+          style={mergedStyle}
+        />
+      )}
+    </>
+  );
+};
+
 export const Edge = {
   Animated,
   Temporary,
+  DataType,
 };
