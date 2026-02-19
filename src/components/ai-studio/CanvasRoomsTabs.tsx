@@ -70,7 +70,7 @@ export function CanvasRoomsTabs({
             className={cn(
               "group relative flex items-center h-7 px-3 rounded-md transition-all cursor-pointer select-none border text-xs font-medium",
               isActive 
-                ? "bg-indigo-600 text-white border-indigo-700 shadow-sm" 
+                ? "bg-emerald-600 text-white border-emerald-700 shadow-sm" 
                 : "bg-background/50 text-muted-foreground border-transparent hover:bg-indigo-500/10 hover:text-indigo-600"
             )}
             onClick={() => !isEditing && onRoomChange(room.id)}
@@ -79,7 +79,7 @@ export function CanvasRoomsTabs({
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                 <input
                   autoFocus
-                  className="bg-transparent border-none outline-none w-20 p-0 text-white placeholder:text-indigo-200"
+                  className="bg-transparent border-none outline-none w-20 p-0 text-white placeholder:text-emerald-200"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onKeyDown={(e) => {

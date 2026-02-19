@@ -21,6 +21,12 @@ type RealtimeStatus = "INITIALIZING" | "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "
 const normalizeRealtimeStatus = (value: string): RealtimeStatus =>
   value === "CHANNEL_ERROR" ? "ERROR" : (value as RealtimeStatus);
 
+const CHAT_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+function getChatRetentionCutoffIso(now = Date.now()): string {
+  return new Date(now - CHAT_RETENTION_MS).toISOString();
+}
+
 const mergeMessages = (existing: ChatMessage[], incoming: ChatMessage[]) => {
   const map = new Map<string, ChatMessage>();
   [...existing, ...incoming].forEach((message) => {
@@ -43,6 +49,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
   const loadLatestMessages = useCallback(
     async (showErrorToast: boolean = true) => {
       if (!brandProfileId) return;
+      const cutoffIso = getChatRetentionCutoffIso();
 
       const { data, error } = await supabase
         .schema("brand_profiles")
@@ -50,6 +57,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
         .select("*")
         .eq("brand_profile_id", brandProfileId)
         .eq("room_id", roomId)
+        .gte("created_at", cutoffIso)
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -62,7 +70,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
       }
 
       const latestMessages = [...(data ?? [])].reverse() as ChatMessage[];
-      setMessages((prev) => mergeMessages(prev, latestMessages));
+      setMessages(latestMessages);
     },
     [brandProfileId, roomId, supabase]
   );
@@ -77,6 +85,7 @@ export function useAIStudioChatRealtime(brandProfileId: string, roomId: string =
 
     const loadInitialMessages = async () => {
       setIsLoading(true);
+      setMessages([]);
       await loadLatestMessages();
       setIsLoading(false);
     };

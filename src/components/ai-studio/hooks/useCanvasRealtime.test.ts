@@ -73,6 +73,8 @@ describe("useCanvasRealtime", () => {
     subscribeStatusSequence = ["SUBSCRIBED"];
     maybeSingleResponses = [null];
     maybeSingleCallCount = 0;
+    mockStore.nodes = [];
+    mockStore.edges = [];
     mockSetNodes.mockClear();
     mockSetEdges.mockClear();
     mockChannel.send.mockClear();
@@ -192,5 +194,122 @@ describe("useCanvasRealtime", () => {
 
     expect(result.current.status).toBe("ERROR");
     expect(result.current.dbStatus).toBe("ERROR");
+  });
+
+  it("preserves local generator prompt when remote broadcast sends empty prompt value", async () => {
+    mockStore.nodes = [
+      {
+        id: "gen-1",
+        type: "nanoGen",
+        position: { x: 0, y: 0 },
+        data: { positivePrompt: "high-detail product ad shot" },
+      },
+    ];
+    maybeSingleResponses = [
+      {
+        nodes: mockStore.nodes,
+        edges: [],
+        updated_at: "2026-02-18T10:00:00.000Z",
+      },
+      null,
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const calls = (mockChannel.on as any).mock.calls;
+    const updateCall = calls.find((c: any) => c[0] === "broadcast" && c[1]?.event === "canvas_updated");
+    const updateHandler = updateCall[2];
+
+    await act(async () => {
+      updateHandler({
+        payload: {
+          nodes: [
+            {
+              id: "gen-1",
+              type: "nanoGen",
+              position: { x: 50, y: 40 },
+              data: { positivePrompt: "" },
+            },
+          ],
+          edges: [],
+          updated_at: "2026-02-18T10:00:01.000Z",
+        },
+      });
+    });
+
+    const latestSetNodesPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
+    expect(latestSetNodesPayload?.[0]?.data?.positivePrompt).toBe("high-detail product ad shot");
+    expect(latestSetNodesPayload?.[0]?.position).toEqual({ x: 50, y: 40 });
+  });
+
+  it("preserves local generator/reference media when remote payload strips media fields", async () => {
+    mockStore.nodes = [
+      {
+        id: "gen-2",
+        type: "veoDirector",
+        position: { x: 0, y: 0 },
+        data: { generatedVideo: "data:video/mp4;base64,local-output", prompt: "make a teaser" },
+      },
+      {
+        id: "ref-1",
+        type: "image",
+        position: { x: 8, y: 8 },
+        data: { image: "data:image/png;base64,local-ref", fileName: "ref.png" },
+      },
+    ];
+    maybeSingleResponses = [
+      {
+        nodes: mockStore.nodes,
+        edges: [],
+        updated_at: "2026-02-18T10:00:00.000Z",
+      },
+      null,
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const calls = (mockChannel.on as any).mock.calls;
+    const updateCall = calls.find((c: any) => c[0] === "broadcast" && c[1]?.event === "canvas_updated");
+    const updateHandler = updateCall[2];
+
+    await act(async () => {
+      updateHandler({
+        payload: {
+          nodes: [
+            {
+              id: "gen-2",
+              type: "veoDirector",
+              position: { x: 12, y: 12 },
+              data: { prompt: "make a teaser" },
+            },
+            {
+              id: "ref-1",
+              type: "image",
+              position: { x: 18, y: 18 },
+              data: { fileName: "ref.png" },
+            },
+          ],
+          edges: [],
+          updated_at: "2026-02-18T10:00:01.000Z",
+        },
+      });
+    });
+
+    const latestSetNodesPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
+    const mergedGenerator = latestSetNodesPayload?.find((node: any) => node.id === "gen-2");
+    const mergedReference = latestSetNodesPayload?.find((node: any) => node.id === "ref-1");
+
+    expect(mergedGenerator?.data?.generatedVideo).toBe("data:video/mp4;base64,local-output");
+    expect(mergedReference?.data?.image).toBe("data:image/png;base64,local-ref");
+    expect(mergedGenerator?.position).toEqual({ x: 12, y: 12 });
+    expect(mergedReference?.position).toEqual({ x: 18, y: 18 });
   });
 });

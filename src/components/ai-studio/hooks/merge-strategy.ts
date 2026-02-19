@@ -20,6 +20,8 @@ const richInputDataKeys = [
   'fileName',
 ] as const;
 
+const richTextDataKeys = ['positivePrompt', 'prompt', 'negativePrompt'] as const;
+
 const localOnlyDataKeys = ['isToolbarVisible'] as const;
 
 const isRemoteValueEffectivelyMissing = (key: (typeof richInputDataKeys)[number], value: unknown) => {
@@ -50,6 +52,12 @@ const isRemoteRuntimeValueMissing = (value: unknown) => {
   if (value === undefined || value === null) return true;
   if (typeof value === 'string') return value.trim().length === 0;
   return false;
+};
+
+const isRemoteTextValueMissing = (value: unknown) => {
+  if (value === undefined || value === null) return true;
+  if (typeof value !== 'string') return false;
+  return value.trim().length === 0;
 };
 
 const mergeExecutionFlags = (
@@ -120,6 +128,15 @@ export function mergeNodes(
         if (localValue === undefined) return;
         const remoteValue = mergedData[key];
         if (isRemoteValueEffectivelyMissing(key, remoteValue)) {
+          mergedData[key] = localValue;
+        }
+      });
+
+      richTextDataKeys.forEach((key) => {
+        const localValue = localData[key];
+        if (typeof localValue !== 'string' || localValue.trim().length === 0) return;
+        const remoteValue = mergedData[key];
+        if (isRemoteTextValueMissing(remoteValue)) {
           mergedData[key] = localValue;
         }
       });

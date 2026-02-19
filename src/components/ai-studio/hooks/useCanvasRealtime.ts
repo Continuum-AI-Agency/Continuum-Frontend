@@ -140,6 +140,8 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
 
   useEffect(() => {
     if (!brandProfileId || !roomId) {
+      pendingBroadcastPayloadRef.current = null;
+      pendingSaveRef.current = false;
       if (!roomId) setIsLoading(false);
       return;
     }
@@ -158,6 +160,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
 
       if (error) {
         console.error("[Canvas Sync] Load failed", error);
+        hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
         return;
       }
@@ -244,6 +247,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       console.log("[Canvas Sync] Tearing down broadcast channel");
       supabase.removeChannel(channel);
       broadcastChannelRef.current = null;
+      pendingBroadcastPayloadRef.current = null;
     };
   }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
 

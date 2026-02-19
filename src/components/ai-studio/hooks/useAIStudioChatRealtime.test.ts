@@ -32,6 +32,7 @@ const insertQueryBuilder: any = {
 const queryBuilder: any = {
   select: mock(() => queryBuilder),
   eq: mock(() => queryBuilder),
+  gte: mock(() => queryBuilder),
   order: mock(() => queryBuilder),
   limit: mock(() =>
     Promise.resolve({ data: messageLoadResponses.shift() ?? [], error: null })
@@ -83,6 +84,7 @@ describe("useAIStudioChatRealtime", () => {
 
     queryBuilder.select.mockClear();
     queryBuilder.eq.mockClear();
+    queryBuilder.gte.mockClear();
     queryBuilder.order.mockClear();
     queryBuilder.limit.mockClear();
     queryBuilder.insert.mockClear();
@@ -105,7 +107,7 @@ describe("useAIStudioChatRealtime", () => {
       content: "hello",
       created_at: "2026-02-18T10:00:00.000Z",
     };
-    messageLoadResponses = [[], []];
+    messageLoadResponses = [[], [insertResponse]];
 
     const { result } = renderHook(() => useAIStudioChatRealtime("brand-1", "room-1"));
 
@@ -175,5 +177,66 @@ describe("useAIStudioChatRealtime", () => {
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0]?.id).toBe("msg-3");
+  });
+
+  it("replaces chat state when room changes", async () => {
+    messageLoadResponses = [
+      [
+        {
+          id: "room-1-msg",
+          brand_profile_id: "brand-1",
+          user_id: "user-1",
+          room_id: "room-1",
+          content: "room 1",
+          created_at: "2026-02-18T10:00:00.000Z",
+        },
+      ],
+      [
+        {
+          id: "room-2-msg",
+          brand_profile_id: "brand-1",
+          user_id: "user-1",
+          room_id: "room-2",
+          content: "room 2",
+          created_at: "2026-02-18T10:01:00.000Z",
+        },
+      ],
+    ];
+
+    const { result, rerender } = renderHook(
+      ({ roomId }) => useAIStudioChatRealtime("brand-1", roomId),
+      { initialProps: { roomId: "room-1" } }
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.id).toBe("room-1-msg");
+
+    rerender({ roomId: "room-2" });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.messages).toHaveLength(1);
+    expect(result.current.messages[0]?.id).toBe("room-2-msg");
+  });
+
+  it("loads only messages from the last 24 hours", async () => {
+    messageLoadResponses = [[]];
+
+    renderHook(() => useAIStudioChatRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(queryBuilder.gte).toHaveBeenCalledWith(
+      "created_at",
+      expect.any(String)
+    );
   });
 });
