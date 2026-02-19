@@ -1,6 +1,35 @@
 import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
-import { ReactFlow, Background, Controls, MiniMap, ReactFlowProvider, useReactFlow, Connection, Edge, SelectionMode, Panel } from '@xyflow/react';
+import {
+  MiniMap,
+  ReactFlowProvider,
+  useReactFlow,
+  type Connection as ReactFlowConnection,
+  type Edge,
+  SelectionMode,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { v4 as uuidv4 } from 'uuid';
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+
+import { Canvas } from '@/components/ai-elements/canvas';
+import { Controls } from '@/components/ai-elements/controls';
+import { Panel } from '@/components/ai-elements/panel';
+import { Connection as ConnectionLine } from '@/components/ai-elements/connection';
+import { Edge as AiElementsEdge } from '@/components/ai-elements/edge';
+
 import { useStudioStore } from '../stores/useStudioStore';
 import { StringNode } from '../nodes/StringNode';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
@@ -15,115 +44,192 @@ import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
-import { Badge } from '@/components/ui/badge';
-import { v4 as uuidv4 } from 'uuid';
-import { ButtonEdge, DataTypeEdge } from '../edges';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
-import CustomConnectionLine from './CustomConnectionLine';
-import { ContextMenu } from './ContextMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { isValidConnection } from '../utils/isValidConnection';
-import * as AccordionPrimitive from '@radix-ui/react-accordion';
-import { ChevronDownIcon } from '@radix-ui/react-icons';
 import { useCanvasRealtime } from '@/components/ai-studio/hooks/useCanvasRealtime';
-import { useSession } from '@/hooks/useSession';
 import { Cursor } from '@/components/realtime/cursor';
 import { CanvasSyncStatus } from '@/components/ai-studio/CanvasSyncStatus';
 import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
 import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
 import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
+import { StudioNode } from '../types';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
-import { StudioNode } from '../types';
 
-const LIBRARY_SECTIONS = [
+type StudioCanvasNodeType =
+  | 'nanoGen'
+  | 'veoDirector'
+  | 'veoFast'
+  | 'extendVideo'
+  | 'string'
+  | 'image'
+  | 'audio'
+  | 'document'
+  | 'video';
+
+type LibraryItem = {
+  type: StudioCanvasNodeType;
+  label: string;
+  desc: string;
+  tag: string;
+  disabled?: boolean;
+};
+
+type LibrarySection = {
+  value: string;
+  label: string;
+  items: LibraryItem[];
+};
+
+const LIBRARY_SECTIONS: LibrarySection[] = [
   {
     value: 'generators',
     label: 'Generators',
-    defaultOpen: true,
     items: [
       {
-        type: 'nanoGen' as const,
+        type: 'nanoGen',
         label: 'Image Generation',
-        desc: 'Canvas & Generator',
+        desc: 'Canvas and generator output',
         tag: 'Creative',
-        borderColor: 'hover:border-[color:var(--edge-image)]',
       },
       {
-        type: 'veoDirector' as const,
+        type: 'veoDirector',
         label: 'Veo 3.1',
-        desc: 'Cinematic Video',
+        desc: 'Cinematic video generation',
         tag: 'Creative',
-        borderColor: 'hover:border-[color:var(--edge-video)]',
       },
       {
-        type: 'veoFast' as const,
+        type: 'veoFast',
         label: 'Veo 3.1 Fast',
-        desc: 'Fast Social Video',
+        desc: 'Fast social video generation',
         tag: 'Creative',
-        borderColor: 'hover:border-[color:var(--edge-video)]',
       },
       {
-        type: 'extendVideo' as const,
+        type: 'extendVideo',
         label: 'Extend Video',
-        desc: 'Continue from existing footage',
+        desc: 'Continue existing footage',
         tag: 'Creative',
-        borderColor: 'hover:border-[color:var(--edge-video)]',
       },
     ],
   },
   {
     value: 'inputs',
-    label: 'Inputs & References',
-    defaultOpen: false,
+    label: 'Inputs and References',
     items: [
       {
-        type: 'string' as const,
+        type: 'string',
         label: 'Text Block',
-        desc: 'LLM & Prompting',
+        desc: 'Prompt and enrichment input',
         tag: 'Intelligence',
-        borderColor: 'hover:border-[color:var(--edge-text)]',
       },
       {
-        type: 'image' as const,
+        type: 'image',
         label: 'Image Reference',
-        desc: 'Simple File Input',
+        desc: 'Image file input',
         tag: 'Utility',
-        borderColor: 'hover:border-[color:var(--edge-image)]',
       },
       {
-        type: 'audio' as const,
+        type: 'audio',
         label: 'Audio Reference',
-        desc: 'Voice or Sound Input',
+        desc: 'Voice or sound input',
         tag: 'Utility',
-        borderColor: 'hover:border-[color:var(--edge-audio, #10b981)]',
       },
       {
-        type: 'document' as const,
+        type: 'document',
         label: 'Document Context',
-        desc: 'PDF/Text Knowledge',
+        desc: 'PDF and text knowledge',
         tag: 'Utility',
-        borderColor: 'hover:border-[color:var(--edge-document, #f59e0b)]',
       },
       {
-        type: 'video' as const,
+        type: 'video',
         label: 'Video Reference',
-        desc: 'Video File Input',
+        desc: 'Video file input',
         tag: 'Utility',
-        borderColor: 'hover:border-[color:var(--edge-video)]',
       },
     ],
   },
 ];
 
-const DEFAULT_OPEN_LIBRARY_SECTIONS = LIBRARY_SECTIONS
-  .filter((section) => section.defaultOpen)
-  .map((section) => section.value);
+const NODE_TYPES = new Set<StudioCanvasNodeType>([
+  'nanoGen',
+  'veoDirector',
+  'veoFast',
+  'extendVideo',
+  'string',
+  'image',
+  'audio',
+  'document',
+  'video',
+]);
+
+const isStudioCanvasNodeType = (value: string): value is StudioCanvasNodeType =>
+  NODE_TYPES.has(value as StudioCanvasNodeType);
+
+const createNodeConfig = (type: StudioCanvasNodeType): { data: Record<string, unknown>; style?: Record<string, number> } => {
+  if (type === 'nanoGen') {
+    return {
+      data: { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' },
+      style: { width: 400, height: 400 },
+    };
+  }
+
+  if (type === 'veoDirector') {
+    return {
+      data: { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'images' },
+      style: { width: 512, height: 288 },
+    };
+  }
+
+  if (type === 'veoFast') {
+    return {
+      data: { model: 'veo-3.1-fast', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'frames' },
+      style: { width: 512, height: 288 },
+    };
+  }
+
+  if (type === 'extendVideo') {
+    return {
+      data: { prompt: '' },
+      style: { width: 360, height: 200 },
+    };
+  }
+
+  if (type === 'string') {
+    return { data: { value: '' } };
+  }
+
+  if (type === 'image') {
+    return {
+      data: { image: undefined },
+      style: { width: 192, height: 192 },
+    };
+  }
+
+  if (type === 'audio') {
+    return {
+      data: { audio: undefined },
+      style: { width: 192, height: 100 },
+    };
+  }
+
+  if (type === 'document') {
+    return {
+      data: { documents: [] },
+      style: { width: 200, height: 200 },
+    };
+  }
+
+  return {
+    data: { video: undefined },
+    style: { width: 192, height: 192 },
+  };
+};
 
 const nodeTypes = {
   nanoGen: ImageGenBlock,
@@ -138,15 +244,41 @@ const nodeTypes = {
 };
 
 const edgeTypes = {
-  button: ButtonEdge,
-  dataType: DataTypeEdge,
+  button: AiElementsEdge.DataType,
+  dataType: AiElementsEdge.DataType,
 };
 
-function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: string; realtime: ReturnType<typeof useCanvasRealtime>, activeRoomId?: string }) {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, setNodes, setEdges, takeSnapshot, undo, redo, getNodeById, interactionMode, setInteractionMode, triggerSave, setBrandId } = useStudioStore();
-  const { remoteCursors, updateCursor, isLoading, saveCanvasToDatabase } = realtime;
+function Flow({
+  brandProfileId,
+  realtime,
+  activeRoomId,
+}: {
+  brandProfileId?: string;
+  realtime: ReturnType<typeof useCanvasRealtime>;
+  activeRoomId?: string;
+}) {
+  const {
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
+    setNodes,
+    setEdges,
+    takeSnapshot,
+    undo,
+    redo,
+    interactionMode,
+    setInteractionMode,
+    triggerSave,
+    setBrandId,
+  } = useStudioStore();
+
+  const { remoteCursors, updateCursor, isLoading } = realtime;
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { screenToFlowPosition, deleteElements } = useReactFlow();
+  const lastMousePositionRef = useRef({ x: 240, y: 180 });
+
+  const { screenToFlowPosition, deleteElements, fitView, zoomIn, zoomOut } = useReactFlow();
 
   useEffect(() => {
     if (brandProfileId) {
@@ -157,26 +289,42 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
 
-  const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null);
+  const handleMouseMove = useCallback(
+    (event: React.MouseEvent) => {
+      lastMousePositionRef.current = { x: event.clientX, y: event.clientY };
+      if (!reactFlowWrapper.current) return;
+      const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      updateCursor(x, y);
+    },
+    [screenToFlowPosition, updateCursor],
+  );
 
-  const onMouseMove = useCallback((event: React.MouseEvent) => {
-    if (!reactFlowWrapper.current) return;
-    const { x, y } = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    updateCursor(x, y);
-  }, [screenToFlowPosition, updateCursor]);
+  const addNodeAtPointer = useCallback(
+    (type: StudioCanvasNodeType) => {
+      takeSnapshot();
+      const position = screenToFlowPosition(lastMousePositionRef.current);
+      const { data, style } = createNodeConfig(type);
 
-  const onPaneContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
-    event.preventDefault();
-    setMenu({
-      id: 'pane',
-      top: event.clientY,
-      left: event.clientX,
-    });
-  }, []);
+      const newNode: StudioNode = {
+        id: uuidv4(),
+        type,
+        position,
+        data: data as StudioNode['data'],
+        style,
+      } as StudioNode;
 
-  const onPaneClick = useCallback(() => {
-    setMenu(null);
-  }, []);
+      setNodes(nodes.concat(newNode));
+      triggerSave();
+    },
+    [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave],
+  );
+
+  const clearCanvas = useCallback(() => {
+    takeSnapshot();
+    setNodes([]);
+    setEdges([]);
+    triggerSave();
+  }, [setEdges, setNodes, takeSnapshot, triggerSave]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -197,6 +345,7 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
         event.preventDefault();
         return;
       }
+
       if ((event.metaKey || event.ctrlKey) && event.key === 'y') {
         redo();
         event.preventDefault();
@@ -207,32 +356,31 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
         setInteractionMode('pan');
         return;
       }
+
       if (event.key.toLowerCase() === 'v') {
         setInteractionMode('select');
         return;
       }
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        const selectedNodes = nodes.filter(node => node.selected);
-        const selectedEdges = edges.filter(edge => edge.selected);
-        
+        const selectedNodes = nodes.filter((node) => node.selected);
+        const selectedEdges = edges.filter((edge) => edge.selected);
+
         if (selectedNodes.length > 0 || selectedEdges.length > 0) {
-           takeSnapshot();
-           deleteElements({ nodes: selectedNodes, edges: selectedEdges });
+          takeSnapshot();
+          deleteElements({ nodes: selectedNodes, edges: selectedEdges });
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes, edges, deleteElements, undo, redo, takeSnapshot]);
+  }, [deleteElements, edges, nodes, redo, setInteractionMode, takeSnapshot, undo]);
 
   const readyNodeIds = useMemo(() => {
     const isGeneratorReady = (node: StudioNode) => {
       if (node.type === 'nanoGen') {
-        const hasPromptEdge = edges.some(
-          (edge) => edge.target === node.id && edge.targetHandle === 'prompt',
-        );
+        const hasPromptEdge = edges.some((edge) => edge.target === node.id && edge.targetHandle === 'prompt');
         const promptValue =
           typeof (node.data as { positivePrompt?: string }).positivePrompt === 'string'
             ? (node.data as { positivePrompt?: string }).positivePrompt?.trim()
@@ -241,9 +389,7 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
       }
 
       if (node.type === 'veoDirector' || node.type === 'veoFast') {
-        const hasPromptEdge = edges.some(
-          (edge) => edge.target === node.id && edge.targetHandle === 'prompt-in',
-        );
+        const hasPromptEdge = edges.some((edge) => edge.target === node.id && edge.targetHandle === 'prompt-in');
         const promptValue =
           typeof (node.data as { prompt?: string }).prompt === 'string'
             ? (node.data as { prompt?: string }).prompt?.trim()
@@ -255,15 +401,20 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
     };
 
     return new Set(nodes.filter(isGeneratorReady).map((node) => node.id));
-  }, [nodes, edges]);
+  }, [edges, nodes]);
 
   const styledEdges = useMemo(() => {
     const nodeTypeById = new Map(nodes.map((node) => [node.id, node.type]));
+
     const resolveDataType = (edge: Edge) => {
       const dataType = (edge.data as { dataType?: string } | undefined)?.dataType;
-      if (dataType === 'image' || dataType === 'video' || dataType === 'text') return dataType;
+      if (dataType === 'image' || dataType === 'video' || dataType === 'audio' || dataType === 'document' || dataType === 'text') {
+        return dataType;
+      }
       if (edge.sourceHandle === 'image') return 'image';
       if (edge.sourceHandle === 'video') return 'video';
+      if (edge.sourceHandle === 'audio') return 'audio';
+      if (edge.sourceHandle === 'document') return 'document';
       return 'text';
     };
 
@@ -327,54 +478,23 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
       event.preventDefault();
       takeSnapshot();
 
-      const type = event.dataTransfer.getData('application/reactflow');
-
+      const droppedType = event.dataTransfer.getData('application/reactflow');
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
 
-      if (typeof type !== 'undefined' && type) {
-        let data: Record<string, unknown> = { label: `New ${type}` };
-        let style = {};
-
-      if (type === 'nanoGen') {
-          data = { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' };
-          style = { width: 400, height: 400 };
-        } else if (type === 'veoDirector') {
-          data = { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'images' };
-          style = { width: 512, height: 288 }; // 16:9
-        } else if (type === 'veoFast') {
-          data = { model: 'veo-3.1-fast', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'frames' };
-          style = { width: 512, height: 288 }; // 16:9
-        } else if (type === 'extendVideo') {
-          data = { prompt: '' };
-          style = { width: 360, height: 200 };
-        } else if (type === 'string') {
-          data = { value: '' };
-        } else if (type === 'image') {
-          data = { image: undefined };
-          style = { width: 192, height: 192 };
-        } else if (type === 'audio') {
-          data = { audio: undefined };
-          style = { width: 192, height: 100 };
-        } else if (type === 'document') {
-          data = { documents: [] };
-          style = { width: 200, height: 200 };
-        } else if (type === 'video') {
-          data = { video: undefined };
-          style = { width: 192, height: 192 };
-        }
-
-        const newNode = {
+      if (isStudioCanvasNodeType(droppedType)) {
+        const { data, style } = createNodeConfig(droppedType);
+        const newNode: StudioNode = {
           id: uuidv4(),
-          type,
+          type: droppedType,
           position,
-          data,
+          data: data as StudioNode['data'],
           style,
-        };
+        } as StudioNode;
 
-        setNodes(nodes.concat(newNode as any));
+        setNodes(nodes.concat(newNode));
         triggerSave();
         return;
       }
@@ -399,7 +519,6 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
       }
 
       const assetNodeType = resolved.nodeType;
-      
       let assetData = {};
       let style = { width: 192, height: 192 };
 
@@ -411,105 +530,167 @@ function Flow({ brandProfileId, realtime, activeRoomId }: { brandProfileId?: str
         assetData = { audio: resolved.dataUrl, fileName: resolved.fileName };
         style = { width: 192, height: 100 };
       } else if (assetNodeType === 'document') {
-        assetData = { 
-            documents: [{ 
-                name: resolved.fileName || 'Document', 
-                content: resolved.dataUrl, 
-                type: resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt' 
-            }] 
+        assetData = {
+          documents: [
+            {
+              name: resolved.fileName || 'Document',
+              content: resolved.dataUrl,
+              type: resolved.mimeType === 'application/pdf' ? 'pdf' : 'txt',
+            },
+          ],
         };
         style = { width: 200, height: 200 };
       }
 
-      const newNode = {
+      const newNode: StudioNode = {
         id: uuidv4(),
         type: assetNodeType,
         position,
-        data: assetData,
+        data: assetData as StudioNode['data'],
         style,
-      };
+      } as StudioNode;
 
-      setNodes(nodes.concat(newNode as any));
+      setNodes(nodes.concat(newNode));
       triggerSave();
     },
-    [screenToFlowPosition, nodes, setNodes, takeSnapshot, show, triggerSave],
+    [nodes, screenToFlowPosition, setNodes, show, takeSnapshot, triggerSave],
   );
 
-  const isValidConnectionCallback = useCallback((connection: Connection | Edge) => {
-    return isValidConnection(connection, edges, nodes);
-  }, [edges, nodes]);
-
-  const onSelectionChange = useCallback((params: { nodes: StudioNode[]; edges: Edge[] }) => {
-  }, []);
+  const isValidConnectionCallback = useCallback(
+    (connection: ReactFlowConnection | Edge) => {
+      return isValidConnection(connection, edges, nodes);
+    },
+    [edges, nodes],
+  );
 
   if (isLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <div className="text-slate-500 text-sm font-medium animate-pulse">
-            Syncing session...
-          </div>
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+          <div className="animate-pulse text-sm font-medium text-slate-500">Syncing session...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full" ref={reactFlowWrapper}>
-        <ReactFlow
-          nodes={nodes}
-          edges={styledEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onSelectionChange={onSelectionChange}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          onMouseMove={onMouseMove}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDragStop={onNodeDragStop}
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd as any}
-          isValidConnection={isValidConnectionCallback}
-          connectionLineComponent={CustomConnectionLine}
-          onPaneContextMenu={onPaneContextMenu}
-          fitView
-          panOnDrag={interactionMode === 'pan'}
-          panOnScroll={true}
-          selectionOnDrag={interactionMode === 'select'}
-          selectionMode={SelectionMode.Partial}
-          className="studio-canvas"
-          defaultEdgeOptions={{
-            type: 'dataType',
-            animated: false,
-            className: 'studio-edge',
-          }}
-        >
-          <Panel position="top-left">
-            <InteractionModeToggle />
-          </Panel>
-          <Background color="var(--studio-grid-dot)" gap={16} />
-          {menu && <ContextMenu onClick={onPaneClick} {...menu} />}
-          <Controls />
-          <MiniMap />
-          {Object.entries(remoteCursors).map(([userId, cursor]) => (
-            <Cursor
-              key={userId}
-              x={cursor.x}
-              y={cursor.y}
-              color={cursor.color}
-              name={cursor.name}
-            />
-          ))}
-          
-          <Panel position="bottom-right" className="mb-4 mr-4">
-            <AIStudioChat brandProfileId={brandProfileId || ''} roomId={activeRoomId} />
-          </Panel>
-        </ReactFlow>
-      </div>
+    <div className="h-full w-full" ref={reactFlowWrapper} onMouseMove={handleMouseMove}>
+      <ContextMenu>
+        <ContextMenuTrigger className="block h-full w-full">
+          <Canvas
+            nodes={nodes}
+            edges={styledEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDragStop={onNodeDragStop}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd as never}
+            isValidConnection={isValidConnectionCallback}
+            connectionLineComponent={ConnectionLine}
+            panOnDrag={interactionMode === 'pan'}
+            panOnScroll
+            selectionOnDrag={interactionMode === 'select'}
+            selectionMode={SelectionMode.Partial}
+            className="studio-canvas"
+            defaultEdgeOptions={{
+              type: 'dataType',
+              animated: false,
+              className: 'studio-edge',
+            }}
+          >
+            <Panel position="top-left" className="flex items-center gap-2 bg-background/95 p-1 backdrop-blur">
+              <InteractionModeToggle />
+            </Panel>
+
+            <Controls />
+            <MiniMap className="!border !bg-background/95" />
+
+            {Object.entries(remoteCursors).map(([userId, cursor]) => (
+              <Cursor key={userId} x={cursor.x} y={cursor.y} color={cursor.color} name={cursor.name} />
+            ))}
+
+            <Panel position="bottom-right" className="mb-4 mr-4 border-none bg-transparent p-0 shadow-none">
+              <AIStudioChat brandProfileId={brandProfileId || ''} roomId={activeRoomId} />
+            </Panel>
+          </Canvas>
+        </ContextMenuTrigger>
+
+        <ContextMenuContent className="w-72">
+          <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger inset>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Node
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-72">
+              {LIBRARY_SECTIONS.map((section) => (
+                <React.Fragment key={section.value}>
+                  <ContextMenuLabel>{section.label}</ContextMenuLabel>
+                  {section.items.map((item) => (
+                    <ContextMenuItem
+                      key={item.type}
+                      disabled={Boolean(item.disabled)}
+                      onClick={() => addNodeAtPointer(item.type)}
+                    >
+                      <div className="flex min-w-0 flex-col">
+                        <span>{item.label}</span>
+                        <span className="text-xs text-muted-foreground">{item.desc}</span>
+                      </div>
+                      <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                    </ContextMenuItem>
+                  ))}
+                  <ContextMenuSeparator />
+                </React.Fragment>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+
+          <ContextMenuSub>
+            <ContextMenuSubTrigger inset>
+              <ScanLine className="mr-2 h-4 w-4" />
+              View and Interaction
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-64">
+              <ContextMenuCheckboxItem checked={interactionMode === 'pan'} onClick={() => setInteractionMode('pan')}>
+                Pan Mode
+                <ContextMenuShortcut>H</ContextMenuShortcut>
+              </ContextMenuCheckboxItem>
+              <ContextMenuCheckboxItem checked={interactionMode === 'select'} onClick={() => setInteractionMode('select')}>
+                Select Mode
+                <ContextMenuShortcut>V</ContextMenuShortcut>
+              </ContextMenuCheckboxItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => zoomIn({ duration: 250 })}>
+                <ZoomIn className="mr-2 h-4 w-4" />
+                Zoom In
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => zoomOut({ duration: 250 })}>
+                <ZoomOut className="mr-2 h-4 w-4" />
+                Zoom Out
+              </ContextMenuItem>
+              <ContextMenuItem onClick={() => fitView({ padding: 0.2, duration: 350 })}>
+                Fit View
+                <ContextMenuShortcut>Shift+F</ContextMenuShortcut>
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+
+          <ContextMenuSeparator />
+
+          <ContextMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive" onClick={clearCanvas}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Clear Canvas
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    </div>
   );
 }
 
@@ -526,112 +707,46 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
     if (!activeRoomId && rooms.length > 0) {
       setActiveRoomId(rooms[0].id);
     }
-  }, [rooms, activeRoomId]);
+  }, [activeRoomId, rooms]);
 
   const realtime = useCanvasRealtime(brandProfileId || '', activeRoomId);
 
   return (
     <ReactFlowProvider>
       <div className="flex h-full flex-col bg-background">
-          {!embedded && (
-              <div className="h-14 border-b px-4 flex items-center justify-between bg-background z-[100] relative shrink-0">
-                  <div className="flex items-center gap-4">
-                    <div className="font-bold text-lg flex items-center gap-2">
-                      <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">Continuum</span>
-                      <span className="text-muted-foreground font-normal">Studio</span>
-                    </div>
-                    <div className="h-4 w-px bg-border hidden sm:block opacity-20" />
-                    <div className="flex items-center h-10 px-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
-                      <CanvasSyncStatus 
-                        status={realtime.status} 
-                        dbStatus={realtime.dbStatus} 
-                        isSaving={realtime.isSaving} 
-                      />
-                      <div className="w-px h-4 bg-indigo-500/20 mx-1" />
-                      <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as any} />
-                    </div>
-                    <div className="h-4 w-px bg-border hidden sm:block opacity-20" />
-                    <CanvasRoomsTabs 
-                      brandProfileId={brandProfileId || ''} 
-                      activeRoomId={activeRoomId} 
-                      onRoomChange={setActiveRoomId} 
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Toolbar />
-                  </div>
+        {!embedded && (
+          <div className="relative z-[100] flex h-14 shrink-0 items-center justify-between border-b bg-background px-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-lg font-bold">
+                <span className="bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">Continuum</span>
+                <span className="font-normal text-muted-foreground">Studio</span>
               </div>
-          )}
-          <div className="flex-1 flex overflow-hidden">
-              <aside className="w-64 border-r border-subtle bg-default p-4 flex flex-col gap-3 overflow-y-auto z-10">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium text-sm text-secondary">Library</div>
-                      <div className="flex items-center gap-2">
-                        <LoadWorkflowDialog brandProfileId={brandProfileId} />
-                        <SaveWorkflowDialog brandProfileId={brandProfileId} />
-                      </div>
-                    </div>
-                    {embedded && (
-                      <div className="scale-90 origin-right">
-                        <Toolbar />
-                      </div>
-                    )}
-                  </div>
-                  <AccordionPrimitive.Root
-                    type="multiple"
-                    defaultValue={DEFAULT_OPEN_LIBRARY_SECTIONS}
-                    className="flex flex-col gap-2"
-                  >
-                    {LIBRARY_SECTIONS.map((section) => (
-                      <AccordionPrimitive.Item
-                        key={section.value}
-                        value={section.value}
-                        className="rounded-lg border border-subtle bg-surface"
-                      >
-                        <AccordionPrimitive.Header>
-                          <AccordionPrimitive.Trigger className="group flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
-                            {section.label}
-                            <ChevronDownIcon className="h-4 w-4 text-secondary transition-transform group-data-[state=open]:rotate-180" />
-                          </AccordionPrimitive.Trigger>
-                        </AccordionPrimitive.Header>
-                        <AccordionPrimitive.Content className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                          <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
-                            {section.items.map((item) => {
-                              const isDisabled = Boolean((item as { disabled?: boolean }).disabled);
-                              return (
-                              <div
-                                key={item.type}
-                                className={`p-3 border border-subtle rounded-md bg-surface transition-colors shadow-sm ${
-                                  isDisabled ? 'cursor-not-allowed opacity-60' : `cursor-grab ${item.borderColor}`
-                                }`}
-                                draggable={!isDisabled}
-                                onDragStart={(event) => {
-                                  if (isDisabled) return;
-                                  event.dataTransfer.setData('application/reactflow', item.type);
-                                }}
-                              >
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="font-medium text-sm text-primary">{item.label}</div>
-                                  <Badge variant="secondary" className="text-xs">
-                                    {item.tag}
-                                  </Badge>
-                                </div>
-                                <div className="text-xs text-secondary">{item.desc}</div>
-                              </div>
-                            );
-                            })}
-                          </div>
-                        </AccordionPrimitive.Content>
-                      </AccordionPrimitive.Item>
-                    ))}
-                  </AccordionPrimitive.Root>
-              </aside>
-               <main className="flex-1 relative bg-slate-50 dark:bg-slate-950">
-                   <Flow brandProfileId={brandProfileId} realtime={realtime} activeRoomId={activeRoomId} />
-               </main>
+              <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
+              <div className="flex h-10 items-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-2 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+                <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} />
+                <div className="mx-1 h-4 w-px bg-indigo-500/20" />
+                <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as never} />
+              </div>
+              <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
+              <CanvasRoomsTabs
+                brandProfileId={brandProfileId || ''}
+                activeRoomId={activeRoomId}
+                onRoomChange={setActiveRoomId}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <LoadWorkflowDialog brandProfileId={brandProfileId} />
+              <SaveWorkflowDialog brandProfileId={brandProfileId} />
+              <Toolbar />
+            </div>
           </div>
-        </div>
-      </ReactFlowProvider>
+        )}
+
+        <main className="relative flex-1 overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <Flow brandProfileId={brandProfileId} realtime={realtime} activeRoomId={activeRoomId} />
+        </main>
+      </div>
+    </ReactFlowProvider>
   );
 }

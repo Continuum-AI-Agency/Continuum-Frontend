@@ -1,16 +1,17 @@
 import type { ReactFlowProps } from "@xyflow/react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { Background, ReactFlow } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
 type CanvasProps = ReactFlowProps & {
   children?: ReactNode;
+  backgroundProps?: Partial<ComponentProps<typeof Background>>;
 };
 
 const deleteKeyCode = ["Backspace", "Delete"];
 
-export const Canvas = ({ children, ...props }: CanvasProps) => (
+export const Canvas = ({ children, backgroundProps, ...props }: CanvasProps) => (
   <ReactFlow
     deleteKeyCode={deleteKeyCode}
     fitView
@@ -20,7 +21,7 @@ export const Canvas = ({ children, ...props }: CanvasProps) => (
     zoomOnDoubleClick={false}
     {...props}
   >
-    <Background bgColor="var(--sidebar)" />
+    <Background color="var(--studio-grid-dot)" gap={16} {...backgroundProps} />
     {children}
   </ReactFlow>
 );
