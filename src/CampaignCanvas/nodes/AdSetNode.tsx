@@ -28,6 +28,34 @@ import { cn } from '@/lib/utils';
 
 import { Separator } from '@/components/ui/separator';
 
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuShortcut,
+  ContextMenuSeparator,
+  ContextMenuGroup,
+  ContextMenuLabel,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuCheckboxItem,
+} from "@/components/ui/context-menu";
+import { useCampaignStore } from '../stores/useCampaignStore';
+import { EditableLabel } from '../components/EditableLabel';
+import { cn } from '@/lib/utils';
+
+import { Separator } from '@/components/ui/separator';
+
+const OPTIMIZATION_GOALS = [
+  { value: 'CONVERSIONS', label: 'Conversions' },
+  { value: 'LANDING_PAGE_VIEWS', label: 'Landing Page Views' },
+  { value: 'LINK_CLICKS', label: 'Link Clicks' },
+  { value: 'IMPRESSIONS', label: 'Impressions' },
+  { value: 'REACH', label: 'Reach' },
+];
+
 export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
 
@@ -35,6 +63,10 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
   const handleLabelSave = useCallback((newLabel: string) => {
     updateNodeData(id, { label: newLabel });
+  }, [id, updateNodeData]);
+
+  const handleGoalChange = useCallback((optimizationGoal: string) => {
+    updateNodeData(id, { optimizationGoal });
   }, [id, updateNodeData]);
 
   const handleAddAd = useCallback(() => {
@@ -93,7 +125,7 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
             </h3>
             <Separator className="my-1.5 opacity-50" />
             <NodeDescription className="text-xs text-muted-foreground">
-              {data.optimizationGoal || 'Optimizing for conversions'}
+              {OPTIMIZATION_GOALS.find(g => g.value === data.optimizationGoal)?.label || 'ConVERSIONS'}
             </NodeDescription>
           </NodeContent>
         </Node>
@@ -116,9 +148,23 @@ export const AdSetNode = memo(({ id, data, selected }: NodeProps<AdSetData>) => 
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuGroup>
-          <ContextMenuItem>
-            <Edit className="mr-2 h-4 w-4" /> Edit Details
-          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Layers className="mr-2 h-4 w-4" />
+              Optimization Goal
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-56">
+              {OPTIMIZATION_GOALS.map((goal) => (
+                <ContextMenuCheckboxItem
+                  key={goal.value}
+                  checked={data.optimizationGoal === goal.value || (!data.optimizationGoal && goal.value === 'CONVERSIONS')}
+                  onClick={() => handleGoalChange(goal.value)}
+                >
+                  {goal.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>

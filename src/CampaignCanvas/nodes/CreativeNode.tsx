@@ -8,7 +8,7 @@ import {
   NodeTitle, 
   NodeContent 
 } from '@/components/ai-elements/node';
-import { Image as ImageIcon, Edit, Copy, Trash2 } from 'lucide-react';
+import { Image as ImageIcon, Copy, Trash2 } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -66,9 +66,6 @@ export const CreativeNode = memo(({ id, data, selected }: NodeProps<CreativeData
         </Node>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuItem>
-          <Edit className="mr-2 h-4 w-4" /> Edit Details
-        </ContextMenuItem>
         <ContextMenuItem onClick={handleDuplicate}>
           <Copy className="mr-2 h-4 w-4" /> Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>

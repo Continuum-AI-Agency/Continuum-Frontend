@@ -9,7 +9,7 @@ import {
   NodeContent,
   NodeDescription 
 } from '@/components/ai-elements/node';
-import { Users, CheckCircle2, AlertCircle, XCircle, Edit, Copy, Trash2 } from 'lucide-react';
+import { Users, CheckCircle2, AlertCircle, XCircle, Copy, Trash2 } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,6 +17,10 @@ import {
   ContextMenuTrigger,
   ContextMenuShortcut,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuCheckboxItem,
 } from "@/components/ui/context-menu";
 import { useCampaignStore } from '../stores/useCampaignStore';
 import { EditableLabel } from '../components/EditableLabel';
@@ -32,6 +36,14 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
   const handleLabelSave = useCallback((newLabel: string) => {
     updateNodeData(id, { label: newLabel });
   }, [id, updateNodeData]);
+
+  const handleGenderToggle = useCallback((gender: number) => {
+    const currentGenders = data.genders || [];
+    const nextGenders = currentGenders.includes(gender)
+      ? currentGenders.filter(g => g !== gender)
+      : [...currentGenders, gender];
+    updateNodeData(id, { genders: nextGenders });
+  }, [id, data.genders, updateNodeData]);
 
   return (
     <ContextMenu>
@@ -58,15 +70,34 @@ export const AudienceNode = memo(({ id, data, selected }: NodeProps<AudienceData
             </h3>
             <Separator className="my-1.5 opacity-50" />
             <NodeDescription className="text-xs text-muted-foreground">
-              {data.locations?.length ? `${data.locations.length} locations` : 'Broad targeting'}
+              {data.genders?.length === 1 
+                ? (data.genders[0] === 1 ? 'Men' : 'Women') 
+                : 'All Genders'}
             </NodeDescription>
           </NodeContent>
         </Node>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuItem>
-          <Edit className="mr-2 h-4 w-4" /> Edit Details
-        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <Users className="mr-2 h-4 w-4" />
+            Genders
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-48">
+            <ContextMenuCheckboxItem 
+              checked={data.genders?.includes(1)} 
+              onClick={() => handleGenderToggle(1)}
+            >
+              Men
+            </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem 
+              checked={data.genders?.includes(2)} 
+              onClick={() => handleGenderToggle(2)}
+            >
+              Women
+            </ContextMenuCheckboxItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuItem onClick={handleDuplicate}>
           <Copy className="mr-2 h-4 w-4" /> Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>

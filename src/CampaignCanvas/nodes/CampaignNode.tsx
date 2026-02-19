@@ -20,10 +20,23 @@ import {
   ContextMenuSeparator,
   ContextMenuGroup,
   ContextMenuLabel,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuCheckboxItem,
 } from "@/components/ui/context-menu";
 import { useCampaignStore } from '../stores/useCampaignStore';
 import { EditableLabel } from '../components/EditableLabel';
 import { cn } from '@/lib/utils';
+
+const OBJECTIVES = [
+  { value: 'OUTCOME_AWARENESS', label: 'Awareness' },
+  { value: 'OUTCOME_TRAFFIC', label: 'Traffic' },
+  { value: 'OUTCOME_ENGAGEMENT', label: 'Engagement' },
+  { value: 'OUTCOME_LEADS', label: 'Leads' },
+  { value: 'OUTCOME_APP_PROMOTION', label: 'App Promotion' },
+  { value: 'OUTCOME_SALES', label: 'Sales' },
+];
 
 export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData>) => {
   const { duplicateNode, removeNode, updateNodeData, addConnectedNode } = useCampaignStore();
@@ -32,6 +45,10 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
   const handleLabelSave = useCallback((newLabel: string) => {
     updateNodeData(id, { label: newLabel });
+  }, [id, updateNodeData]);
+
+  const handleObjectiveChange = useCallback((objective: string) => {
+    updateNodeData(id, { objective } as any);
   }, [id, updateNodeData]);
 
   const handleAddAdSet = useCallback(() => {
@@ -77,7 +94,7 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
               <EditableLabel value={data.label} onSave={handleLabelSave} />
             </h3>
             <NodeDescription className="text-xs text-muted-foreground">
-              {data.objective?.replace('OUTCOME_', '') || 'No Objective Set'}
+              {OBJECTIVES.find(o => o.value === data.objective)?.label || 'No Objective Set'}
             </NodeDescription>
             
             {data.metaId && (
@@ -105,9 +122,23 @@ export const CampaignNode = memo(({ id, data, selected }: NodeProps<CampaignData
         </ContextMenuGroup>
         <ContextMenuSeparator />
         <ContextMenuGroup>
-          <ContextMenuItem>
-            <Edit className="mr-2 h-4 w-4" /> Edit Details
-          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <Layout className="mr-2 h-4 w-4" />
+              Set Objective
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-48">
+              {OBJECTIVES.map((obj) => (
+                <ContextMenuCheckboxItem
+                  key={obj.value}
+                  checked={data.objective === obj.value}
+                  onClick={() => handleObjectiveChange(obj.value)}
+                >
+                  {obj.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuItem onClick={handleDuplicate}>
             <Copy className="mr-2 h-4 w-4" /> Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>

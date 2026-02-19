@@ -3,8 +3,6 @@ import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react'
 import {
   MiniMap,
   useReactFlow,
-  ReactFlowProvider,
-  Node,
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -24,11 +22,10 @@ import { CreativeNode } from '../nodes/CreativeNode';
 import { BudgetNode } from '../nodes/BudgetNode';
 import { type CampaignNodeType } from '../types';
 import { Button } from '@/components/ui/button';
-import { Plus, Send, ShieldCheck, Trash2, Undo, Redo, Settings, MousePointer2, Download } from 'lucide-react';
+import { Plus, Send, ShieldCheck, Download, Undo, Redo, Settings, MousePointer2 } from 'lucide-react';
 import {
   ContextMenu,
   ContextMenuContent,
-  ContextMenuGroup,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuSub,
@@ -38,16 +35,6 @@ import {
   ContextMenuShortcut,
   ContextMenuCheckboxItem,
 } from "@/components/ui/context-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   AlertDialog,
@@ -84,7 +71,6 @@ export const CampaignCanvas = () => {
     addNode, 
     removeNode,
     duplicateNode,
-    updateNodeData,
     undo,
     redo,
     edgeStyle,
@@ -93,7 +79,6 @@ export const CampaignCanvas = () => {
   } = useCampaignStore();
 
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { show: toast } = useToast();
 
@@ -113,33 +98,16 @@ export const CampaignCanvas = () => {
 
   const confirmDelete = useCallback(() => {
     const selectedNodes = nodes.filter((n) => n.selected);
-    if (selectedNodes.length === 0 && !selectedNodeId) return;
+    if (selectedNodes.length === 0) return;
     
-    if (selectedNodes.length > 0) {
-      selectedNodes.forEach((n) => removeNode(n.id));
-      toast({
-        title: "Nodes deleted",
-        description: `Removed ${selectedNodes.length} node(s) from the canvas.`,
-      });
-    } else if (selectedNodeId) {
-       removeNode(selectedNodeId);
-       toast({
-        title: "Node deleted",
-        description: "The selected node has been removed.",
-      });
-    }
+    selectedNodes.forEach((n) => removeNode(n.id));
+    toast({
+      title: "Nodes deleted",
+      description: `Removed ${selectedNodes.length} node(s) from the canvas.`,
+    });
     
-    setSelectedNodeId(null);
     setShowDeleteDialog(false);
-  }, [nodes, removeNode, selectedNodeId, toast]);
-
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNodeId(node.id);
-  }, []);
-
-  const onPaneClick = useCallback(() => {
-    setSelectedNodeId(null);
-  }, []);
+  }, [nodes, removeNode, toast]);
 
   const handleExport = useCallback(() => {
     const data = { nodes, edges };
@@ -154,13 +122,6 @@ export const CampaignCanvas = () => {
   }, [nodes, edges, toast]);
 
   const selectedCount = useMemo(() => nodes.filter(n => n.selected).length, [nodes]);
-
-  useEffect(() => {
-    const selected = nodes.find(n => n.selected);
-    if (selected && selected.id !== selectedNodeId) {
-      setSelectedNodeId(selected.id);
-    }
-  }, [nodes, selectedNodeId]);
 
   const defaultEdgeOptions = useMemo(() => ({
     type: 'animated',
@@ -190,7 +151,7 @@ export const CampaignCanvas = () => {
         const activeElement = document.activeElement;
         if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
           const selectedNodes = nodes.filter(n => n.selected);
-          if (selectedNodes.length > 0 || (selectedNodeId && nodes.find(n => n.id === selectedNodeId)?.selected)) {
+          if (selectedNodes.length > 0) {
             setShowDeleteDialog(true);
           }
         }
@@ -199,9 +160,7 @@ export const CampaignCanvas = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [nodes, selectedNodeId, undo, redo, duplicateNode, toast]);
-
-  const selectedNode = nodes.find(n => n.id === selectedNodeId);
+  }, [nodes, undo, redo, duplicateNode, toast]);
 
   return (
     <div className="relative h-full w-full" onMouseMove={handleMouseMove}>
@@ -217,8 +176,6 @@ export const CampaignCanvas = () => {
             edgeTypes={edgeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
             connectionLineComponent={Connection}
-            onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
             fitView
           >
             <Controls />
@@ -312,44 +269,6 @@ export const CampaignCanvas = () => {
           </ContextMenuSub>
         </ContextMenuContent>
       </ContextMenu>
-
-      {/* Properties Sheet */}
-      <Sheet open={!!selectedNodeId} onOpenChange={(open) => !open && setSelectedNodeId(null)}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>Node Properties</SheetTitle>
-            <SheetDescription>
-              Edit {selectedNode?.type} details.
-            </SheetDescription>
-          </SheetHeader>
-          
-          <Separator className="my-4" />
-
-          {selectedNode && (
-            <div className="grid gap-6 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Label</Label>
-                <Input
-                  id="name"
-                  value={selectedNode.data.label as string}
-                  onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-                />
-              </div>
-              
-              <Separator />
-              
-              <div className="flex flex-col gap-2 pt-4">
-                 <Button variant="outline" className="w-full justify-start gap-2" onClick={() => duplicateNode(selectedNode.id)}>
-                    <Plus className="h-4 w-4" /> Duplicate Node
-                 </Button>
-                 <Button variant="destructive" className="w-full justify-start gap-2" onClick={() => setShowDeleteDialog(true)}>
-                    <Trash2 className="h-4 w-4" /> Delete Node
-                 </Button>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
 
       {/* Delete Confirmation */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

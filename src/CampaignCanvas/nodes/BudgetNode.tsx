@@ -18,8 +18,21 @@ import {
   ContextMenuShortcut,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuShortcut,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuCheckboxItem,
+} from "@/components/ui/context-menu";
 import { useCampaignStore } from '../stores/useCampaignStore';
 import { EditableLabel } from '../components/EditableLabel';
+import { EditableAmount } from '../components/EditableAmount';
 
 import { Separator } from '@/components/ui/separator';
 
@@ -30,6 +43,14 @@ export const BudgetNode = memo(({ id, data, selected }: NodeProps<BudgetData>) =
   const handleDelete = useCallback(() => removeNode(id), [removeNode, id]);
   const handleLabelSave = useCallback((newLabel: string) => {
     updateNodeData(id, { label: newLabel });
+  }, [id, updateNodeData]);
+
+  const handleAmountSave = useCallback((newAmount: number) => {
+    updateNodeData(id, { amount: newAmount });
+  }, [id, updateNodeData]);
+
+  const handleTypeChange = useCallback((type: 'DAILY' | 'LIFETIME') => {
+    updateNodeData(id, { type });
   }, [id, updateNodeData]);
 
   return (
@@ -52,9 +73,12 @@ export const BudgetNode = memo(({ id, data, selected }: NodeProps<BudgetData>) =
           </NodeHeader>
 
           <NodeContent className="space-y-1 text-center">
-            <h3 className="font-bold text-2xl text-foreground tracking-tight">
-              {new Intl.NumberFormat('en-US', { style: 'currency', currency: data.currency || 'USD' }).format(data.amount || 0)}
-            </h3>
+            <EditableAmount 
+              value={data.amount || 0} 
+              currency={data.currency || 'USD'} 
+              onSave={handleAmountSave}
+              className="font-bold text-2xl text-foreground tracking-tight cursor-text" 
+            />
             <Separator className="my-2 opacity-50" />
             <NodeDescription className="text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
               {data.type || 'DAILY'} BUDGET
@@ -66,9 +90,26 @@ export const BudgetNode = memo(({ id, data, selected }: NodeProps<BudgetData>) =
         </Node>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
-        <ContextMenuItem>
-          <Edit className="mr-2 h-4 w-4" /> Edit Details
-        </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <DollarSign className="mr-2 h-4 w-4" />
+            Budget Type
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-48">
+            <ContextMenuCheckboxItem 
+              checked={data.type === 'DAILY' || !data.type} 
+              onClick={() => handleTypeChange('DAILY')}
+            >
+              Daily
+            </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem 
+              checked={data.type === 'LIFETIME'} 
+              onClick={() => handleTypeChange('LIFETIME')}
+            >
+              Lifetime
+            </ContextMenuCheckboxItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuItem onClick={handleDuplicate}>
           <Copy className="mr-2 h-4 w-4" /> Duplicate
           <ContextMenuShortcut>⌘D</ContextMenuShortcut>
