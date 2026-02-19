@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer, useEdges } from '@xyflow/react';
-import { Card } from '@/components/ui/card';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, useEdges } from '@xyflow/react';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { BaseNodeData } from '../types';
@@ -12,6 +11,8 @@ import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { cn } from '@/lib/utils';
+import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
+import { AspectRatio } from '@/components/ui/aspect-ratio';
 
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
@@ -30,8 +31,9 @@ import {
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
-export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoNodeData>>) {
+export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNode<VideoNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
   const { show } = useToast();
@@ -48,10 +50,11 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
         const result = reader.result as string;
         setPreview(result);
         updateNodeData(id, { video: result, fileName: file.name });
+        triggerSave();
       };
       reader.readAsDataURL(file);
     }
-  }, [id, updateNodeData]);
+  }, [id, triggerSave, updateNodeData]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -84,6 +87,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
         const result = await fileToDataUrl(file);
         setPreview(result);
         updateNodeData(id, { video: result, fileName: file.name });
+        triggerSave();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -123,7 +127,8 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
 
     setPreview(resolved.dataUrl);
     updateNodeData(id, { video: resolved.dataUrl, fileName: resolved.fileName });
-  }, [fileToDataUrl, id, updateNodeData, show]);
+    triggerSave();
+  }, [fileToDataUrl, id, triggerSave, updateNodeData, show]);
 
   return (
     <TooltipProvider>
@@ -132,9 +137,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
           "relative group w-full h-full min-w-[180px] min-h-[180px] rounded-xl transition-shadow",
           isSelectedByOther && "selected-by-other"
         )}
-        style={{ 
-          ['--other-user-color' as any]: selectingUser?.color 
-        }}
+        style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
         onDragOver={handleDragOver} 
         onDrop={handleDrop}
       >
@@ -146,32 +149,37 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
-      <Card className="w-full h-full border border-subtle bg-surface shadow-sm overflow-hidden p-0 relative flex flex-col">
-        <div className="flex items-center justify-between px-3 py-1 border-b border-subtle text-[10px] font-semibold uppercase tracking-widest text-secondary bg-default/70 cursor-grab">
+      <CanvasNode
+        handles={{ target: false, source: false }}
+        selected={selected}
+        className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <NodeHeader className="!h-7 !px-3 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           <span>Video Reference</span>
-        </div>
-        <div className="relative flex-1 min-h-0 nodrag">
+          <label htmlFor={`video-file-${id}`} className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground">
+            <UploadIcon className="h-3 w-3" />
+          </label>
+        </NodeHeader>
+        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
             <label
               htmlFor={`video-file-${id}`}
-              className="cursor-pointer flex items-center justify-center w-full h-full hover:bg-default/60 transition-colors"
+              className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
               onDragOver={handleDragOver}
               onDrop={handleDrop}
             >
                 {preview ? (
-                    <>
+                    <div className="h-full w-full bg-black/80">
+                      <AspectRatio ratio={16 / 9} className="h-full w-full">
                         <video
                           src={preview}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain"
                           muted
                           loop
                           onMouseEnter={(e) => e.currentTarget.play()}
                           onMouseLeave={(e) => e.currentTarget.pause()}
                         />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                            <UploadIcon className="w-6 h-6 text-white" />
-                            <span className="text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Replace</span>
-                        </div>
-                    </>
+                      </AspectRatio>
+                    </div>
                 ) : (
                     <Empty>
                       <EmptyHeader>
@@ -197,8 +205,8 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<Node<VideoN
                     {data.fileName}
                 </div>
             )}
-        </div>
-      </Card>
+        </NodeContent>
+      </CanvasNode>
 
       <Tooltip>
         <TooltipTrigger asChild>

@@ -1,18 +1,16 @@
 import React, { useCallback, useState } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer, NodeToolbar, HandleProps } from '@xyflow/react';
-import { Card } from '@/components/ui/card';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStudioStore } from '../stores/useStudioStore';
 import { NanoGenNodeData } from '../types';
-import { BlockToolbar } from '../components/BlockToolbar';
 import { ImageIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useToast } from '@/components/ui/ToastProvider';
 import { downloadAsset } from '../utils/downloadAsset';
+import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,6 +18,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { ContextMenuItemInfo } from '@/components/ui/context-menu-item-info';
+import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
 
 import { AspectRatio } from "@/components/ui/aspect-ratio"
 import {
@@ -30,6 +29,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import { Toolbar } from '@/components/ai-elements/toolbar';
 
 const resolveAspectRatioValue = (value?: string) => {
   switch (value) {
@@ -48,35 +49,27 @@ const resolveAspectRatioValue = (value?: string) => {
 };
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
-  const edges = useStudioStore((state) => state.edges);
-  
-  const checkConnectable = useCallback((params: any) => {
-    let baseConnectable = true;
-    
-    if (typeof isConnectable === 'boolean') {
-        baseConnectable = isConnectable;
-    } else if (typeof isConnectable === 'function') {
-        const result = (isConnectable as Function)(params);
-        baseConnectable = result === undefined ? true : result;
-    }
-    
-    if (!baseConnectable) return false;
-    
-    if (maxConnections) {
-      const nodeEdges = edges.filter(
-        (e) => (e.target === params.nodeId && e.targetHandle === params.handleId) ||
-               (e.source === params.nodeId && e.sourceHandle === params.handleId)
-      );
-      if (nodeEdges.length >= maxConnections) return false;
-    }
-    
-    return true;
-  }, [edges, maxConnections, isConnectable]);
+  const edges = useEdges();
+  const nodeId = useNodeId();
+  const handleId = props.id ?? null;
 
-  return <Handle {...props} isConnectable={checkConnectable as any} />;
+  const connectionCount = edges.filter((edge) => {
+    if (!nodeId) return false;
+
+    if (props.type === 'target') {
+      return edge.target === nodeId && (edge.targetHandle ?? null) === handleId;
+    }
+
+    return edge.source === nodeId && (edge.sourceHandle ?? null) === handleId;
+  }).length;
+
+  const withinLimit = !maxConnections || connectionCount < maxConnections;
+  const baseConnectable = isConnectable ?? true;
+
+  return <Handle {...props} isConnectable={baseConnectable && withinLimit} />;
 };
 
-export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNodeData>>) {
+export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<NanoGenNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
@@ -89,7 +82,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const [isHovered, setIsHovered] = useState(false);
 
   const handleModelChange = useCallback((value: string) => {
-    updateNodeData(id, { model: value as any });
+    updateNodeData(id, { model: value as NanoGenNodeData['model'] });
     triggerSave();
   }, [id, updateNodeData, triggerSave]);
 
@@ -108,6 +101,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = resolveAspectRatioValue(aspectRatio);
   const fileBaseName = `image-${id}`;
+  const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
+  const generatorDescription = `${data.model === 'nano-banana-pro' ? 'Nano Banana Pro' : 'Nano Banana'} • ${aspectRatio}`;
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
@@ -131,9 +126,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         "relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
         isSelectedByOther && "selected-by-other"
       )}
-      style={{ 
-        ['--other-user-color' as any]: selectingUser?.color 
-      }}
+      style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -145,8 +138,11 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
 
-      <NodeToolbar isVisible={selected} position={Position.Bottom} className="flex gap-2 items-center bg-background/95 backdrop-blur p-1 rounded-md border shadow-sm">
-          <Label className="text-[10px] font-bold text-secondary uppercase tracking-wider px-2">Image Generation</Label>
+      <Toolbar
+        isVisible={isToolbarVisible}
+        position={Position.Top}
+        className="gap-1.5 border-border/80 bg-background/95 shadow-lg backdrop-blur-sm"
+      >
           <Select value={data.model || 'nano-banana'} onValueChange={handleModelChange}>
             <SelectTrigger className="h-7 text-xs border-subtle w-32 bg-surface text-primary">
               <SelectValue placeholder="Model" />
@@ -168,34 +164,49 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
               <SelectItem value="3:4">3:4</SelectItem>
             </SelectContent>
           </Select>
-      </NodeToolbar>
+          <div className="mx-0.5 h-5 w-px bg-border/60" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
+            <PlayIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicateNode(id)} title="Duplicate">
+            <CopyIcon className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download Output">
+            <DownloadIcon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-destructive hover:text-destructive"
+            onClick={() => deleteNode(id)}
+            title="Delete"
+          >
+            <TrashIcon className="h-4 w-4" />
+          </Button>
+      </Toolbar>
 
-      <BlockToolbar 
-        isVisible={isHovered || !!data.isToolbarVisible}
-        onDuplicate={() => duplicateNode(id)}
-        onDelete={() => deleteNode(id)}
-        onRun={handleRun}
-        onDownload={handleDownload}
-      />
-
-      <Card className="h-full border border-subtle shadow-md bg-surface flex flex-col overflow-hidden">
-        <div className="relative flex-1 bg-default/60 group/preview min-h-0">
+      <CanvasNode
+        handles={{ target: false, source: false }}
+        selected={selected}
+        className="h-full w-full overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <NodeContent className="relative flex-1 min-h-0 p-0 bg-muted/30 group/preview">
             {data.isExecuting ? (
-              <div className="w-full h-full flex items-center justify-center bg-default p-4">
+              <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                   <AspectRatio ratio={ratio} className="w-full h-full">
                       <Skeleton className="w-full h-full bg-muted" />
                   </AspectRatio>
               </div>
             ) : previewImage ? (
-              <div className="w-full h-full flex items-center justify-center bg-default">
+              <div className="relative w-full h-full flex items-center justify-center bg-muted">
                 <ContextMenu>
                   <ContextMenuTrigger asChild>
                     <div className="w-full h-full" onContextMenu={(event) => event.stopPropagation()}>
-                      <AspectRatio ratio={ratio} className="w-full h-full">
+                      <AspectRatio ratio={ratio} className="h-full w-full">
                         <img
                           src={previewImage as string}
                           alt="Generated Image"
-                          className="w-full h-full object-cover"
+                          className="h-full w-full object-contain"
                         />
                       </AspectRatio>
                     </div>
@@ -207,6 +218,20 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
                     </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleDownload();
+                  }}
+                  title="Download Output"
+                  aria-label="Download generated image"
+                >
+                  <DownloadIcon className="h-4 w-4" />
+                </Button>
               </div>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-secondary gap-2">
@@ -221,8 +246,8 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
                 </Empty>
               </div>
             )}
-        </div>
-      </Card>
+        </NodeContent>
+      </CanvasNode>
 
       <div
         className="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col items-center group/handle pointer-events-none"
@@ -279,6 +304,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<Node<NanoGenNode
             </span>
           </div>
        </div>
+
+      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+        {generatorDescription}
+      </div>
     </div>
   );
 }

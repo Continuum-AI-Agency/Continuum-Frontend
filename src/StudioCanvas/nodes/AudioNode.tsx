@@ -1,11 +1,10 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { Handle, Position, NodeProps, Node, NodeResizer } from '@xyflow/react';
-import { Card } from '@/components/ui/card';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer } from '@xyflow/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { AudioNodeData } from '../types';
-import { SpeakerLoudIcon, UploadIcon, PlayIcon, PauseIcon } from '@radix-ui/react-icons';
+import { PauseIcon, PlayIcon, SpeakerLoudIcon } from '@radix-ui/react-icons';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
@@ -23,12 +22,14 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
 import { useNodeSelection } from '../contexts/PresenceContext';
+import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
-export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>) {
+export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const triggerSave = useStudioStore((state) => state.triggerSave);
   const edges = useEdges();
   const [audioSrc, setAudioSrc] = useState<string | undefined>(data.audio);
   const { show } = useToast();
@@ -68,10 +69,11 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
         const result = reader.result as string;
         setAudioSrc(result);
         updateNodeData(id, { audio: result, fileName: file.name });
+        triggerSave();
       };
       reader.readAsDataURL(file);
     }
-  }, [id, updateNodeData]);
+  }, [id, triggerSave, updateNodeData]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -104,6 +106,7 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
         const result = await fileToDataUrl(file);
         setAudioSrc(result);
         updateNodeData(id, { audio: result, fileName: file.name });
+        triggerSave();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -143,7 +146,8 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
 
     setAudioSrc(resolved.dataUrl);
     updateNodeData(id, { audio: resolved.dataUrl, fileName: resolved.fileName });
-  }, [fileToDataUrl, id, updateNodeData, show]);
+    triggerSave();
+  }, [fileToDataUrl, id, triggerSave, updateNodeData, show]);
 
   return (
     <TooltipProvider>
@@ -152,9 +156,7 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
           "relative group w-full h-full min-w-[180px] min-h-[100px] rounded-xl transition-shadow",
           isSelectedByOther && "selected-by-other"
         )}
-        style={{ 
-          ['--other-user-color' as any]: selectingUser?.color 
-        }}
+        style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
         onDragOver={handleDragOver} 
         onDrop={handleDrop}
       >
@@ -165,46 +167,47 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
       />
-      <Card className="w-full h-full border border-subtle bg-surface shadow-sm overflow-hidden p-0 relative flex flex-col">
-        <div className="flex items-center justify-between px-3 py-1 border-b border-subtle text-[10px] font-semibold uppercase tracking-widest text-secondary bg-default/70 cursor-grab">
+      <CanvasNode
+        handles={{ target: false, source: false }}
+        selected={selected}
+        className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <NodeHeader className="!h-7 !px-3 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           <span>Audio Input</span>
-        </div>
-        <div className="relative flex-1 min-h-0 nodrag flex flex-col items-center justify-center p-4 bg-slate-50/50 dark:bg-slate-900/50">
+        </NodeHeader>
+        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
             <Label
               htmlFor={`file-${id}`}
-              className="cursor-pointer flex flex-col items-center justify-center w-full h-full hover:bg-default/60 transition-colors rounded-md"
+              className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
               onDragOver={handleDragOver}
               onDrop={handleDrop}
             >
                 {audioSrc ? (
-                    <div className="flex flex-col items-center gap-3 w-full">
+                    <div className="flex h-full w-full items-center justify-center p-4">
                         <audio 
                           ref={audioRef} 
                           src={audioSrc} 
                           onEnded={handleEnded}
                           className="hidden" 
                         />
-                        
-                        <div className="w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center border-2 border-indigo-200 dark:border-indigo-800">
-                          <button 
-                            onClick={togglePlay}
-                            className="w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-white transition-all shadow-md active:scale-95"
-                          >
-                            {isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6 ml-0.5" />}
-                          </button>
-                        </div>
-                        
-                        <div className="text-center w-full px-2">
-                          <p className="text-xs font-medium truncate max-w-full text-slate-700 dark:text-slate-300">
-                            {data.fileName || "Audio File"}
-                          </p>
-                          <p className="text-[10px] text-slate-500">Click to play/pause</p>
-                        </div>
 
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="bg-background/80 backdrop-blur p-1.5 rounded-md shadow-sm border border-border cursor-pointer hover:bg-accent">
-                                <UploadIcon className="w-4 h-4 text-muted-foreground" />
-                            </div>
+                        <div className="flex w-full max-w-[220px] items-center gap-3 rounded-md border border-border/70 bg-background/90 px-3 py-2 shadow-sm">
+                          <button
+                            onClick={togglePlay}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition-colors hover:bg-emerald-700"
+                            aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+                          >
+                            {isPlaying ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="ml-0.5 h-4 w-4" />}
+                          </button>
+
+                          <div className="min-w-0 flex-1 text-left">
+                            <p className="truncate text-xs font-medium text-foreground">{data.fileName || "Audio File"}</p>
+                            <p className="text-[10px] text-muted-foreground">{isPlaying ? 'Playing…' : 'Click to play'}</p>
+                          </div>
+
+                          <div className="rounded-sm bg-emerald-500/10 p-1.5 text-emerald-600">
+                            <SpeakerLoudIcon className="h-4 w-4" />
+                          </div>
                         </div>
                     </div>
                 ) : (
@@ -226,8 +229,8 @@ export function AudioNode({ id, data, selected }: NodeProps<Node<AudioNodeData>>
                 className="hidden" 
                 onChange={handleFileUpload}
             />
-        </div>
-      </Card>
+        </NodeContent>
+      </CanvasNode>
       
       <Tooltip>
         <TooltipTrigger asChild>

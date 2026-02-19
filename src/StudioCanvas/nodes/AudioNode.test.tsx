@@ -2,9 +2,11 @@ import { describe, it, expect } from 'bun:test';
 import { render } from '@testing-library/react';
 import { AudioNode } from './AudioNode';
 import { ReactFlowProvider } from '@xyflow/react';
+import { ToastProvider } from '@/components/ui/ToastProvider';
+import type { ComponentProps } from 'react';
 
 describe('AudioNode', () => {
-  const defaultProps = {
+  const defaultProps: ComponentProps<typeof AudioNode> = {
     id: '1',
     data: { audio: 'data:audio/mp3;base64,test' },
     selected: false,
@@ -19,9 +21,11 @@ describe('AudioNode', () => {
 
   it('should render correctly', () => {
     const { container } = render(
-        <ReactFlowProvider>
-            <AudioNode {...defaultProps as any} />
-        </ReactFlowProvider>
+        <ToastProvider>
+            <ReactFlowProvider>
+                <AudioNode {...defaultProps} />
+            </ReactFlowProvider>
+        </ToastProvider>
     );
     expect(container.querySelector('audio')).not.toBeNull();
     expect(container.textContent).toContain('Audio Input');
@@ -30,9 +34,11 @@ describe('AudioNode', () => {
   it('should show upload state when empty', () => {
     const props = { ...defaultProps, data: { audio: undefined } };
     const { container } = render(
-        <ReactFlowProvider>
-            <AudioNode {...props as any} />
-        </ReactFlowProvider>
+        <ToastProvider>
+            <ReactFlowProvider>
+                <AudioNode {...props} />
+            </ReactFlowProvider>
+        </ToastProvider>
     );
     expect(container.textContent).toContain('Upload Audio');
   });

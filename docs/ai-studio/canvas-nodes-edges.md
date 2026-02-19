@@ -1,304 +1,168 @@
-# Canvas Node & Edge Definitions
-
-## Node Types
-
-### PromptNode
-**Purpose**: Provides text prompt input for generation
-
-**Outputs:**
-- `output` (type: `text`) - The prompt text
-
-**Data:**
-```typescript
-type PromptNodeData = {
-  prompt: string;
-}
-```
-
----
-
-### NegativeNode
-**Purpose**: Provides negative prompt text (what to avoid)
-
-**Outputs:**
-- `output` (type: `text`) - The negative prompt text
-
-**Data:**
-```typescript
-type NegativeNodeData = {
-  negativePrompt: string;
-}
-```
-
----
-
-### ModelNode
-**Purpose**: Defines generation model and parameters
-
-**Outputs:**
-- `aspect` (type: `aspect`) - Aspect ratio (1:1, 16:9, etc.)
-- `provider` (type: `provider`) - AI model (nano-banana, veo-3-1, sora-2)
-
-**Data:**
-```typescript
-type ModelNodeData = {
-  provider: AiStudioProvider;
-  medium: AiStudioMedium;
-  aspectRatio: string;
-  imageSize?: "1k" | "2k" | "4k";
-  responseModality?: "image" | "image+text";
-}
-```
-
----
-
-### AttachmentNode
-**Purpose**: References uploaded or generated assets
-
-**Outputs:**
-- `output` (type: `image` or `video`) - Dynamic based on MIME type
-
-**Data:**
-```typescript
-type AttachmentNodeData = {
-  label: string;
-  path: string;
-  mimeType: string;
-  previewUrl: string;
-}
-```
-
-**MIME Type Handling:**
-- `image/*` → Output type: `image`
-- `video/*` → Output type: `video`
-
----
-
-### GeneratorNode
-**Purpose**: Executes AI generation using connected inputs
-
-**Inputs:**
-- `prompt` (type: `text`) - Required prompt text
-- `negative` (type: `text`) - Optional negative prompt
-- `ref` (type: `image`) - Optional reference image(s) - multiple allowed
-- `firstFrame` (type: `image`) - First frame for video (video only)
-- `lastFrame` (type: `image`) - Last frame for video (video only)
-- `aspect` (type: `aspect`) - Aspect ratio override
-- `provider` (type: `provider`) - Model provider override
-
-**Outputs:**
-- `output` (type: `image` or `video`) - Generated artifact for downstream use
-
-**Data:**
-```typescript
-type GeneratorNodeData = {
-  provider: AiStudioProvider;
-  medium: AiStudioMedium;
-  prompt: string;
-  aspectRatio: string;
-  negativePrompt?: string;
-  guidanceScale?: number;
-  seed?: number;
-  referenceAssetPath?: string;
-  firstFramePath?: string;
-  lastFramePath?: string;
-  status?: string;
-  jobId?: string;
-  artifactPreview?: string;
-  artifactName?: string;
-  
-  // Output exposure for downstream nodes
-  outputPath?: string;
-  outputUrl?: string;
-  outputType?: 'image' | 'video';
-}
-```
-
-**Conditional Handles:**
-- `firstFrame` and `lastFrame` handles only visible when `medium === 'video'`
-
----
-
-### PreviewNode
-**Purpose**: Displays generated output
-
-**Inputs:**
-- `input` (type: `image`) - Input from generator
-
-**Data:**
-```typescript
-type PreviewNodeData = {
-  artifactPreview?: string;
-  artifactName?: string;
-  medium?: AiStudioMedium;
-}
-```
-
----
-
-## Edge Definitions
-
-### Edge Structure
-```typescript
-type Edge = {
-  id: string;
-  source: string;           // Source node ID
-  target: string;           // Target node ID
-  sourceHandle?: string;     // Source handle ID (usually "output")
-  targetHandle: string;     // Target handle ID (input handle)
-  type: "default";
-}
-```
-
-### Valid Target Handles
-
-| Handle ID | Port Type | Description | Source Node Types |
-|-----------|------------|-------------|-------------------|
-| `prompt` | `text` | Prompt input | PromptNode, NegativeNode, GeneratorNode |
-| `negative` | `text` | Negative prompt input | NegativeNode |
-| `ref` | `image` | Reference image input | AttachmentNode, GeneratorNode (image output) |
-| `firstFrame` | `image` | First frame for video | AttachmentNode, GeneratorNode (image output) |
-| `lastFrame` | `image` | Last frame for video | AttachmentNode, GeneratorNode (image output) |
-| `aspect` | `aspect` | Aspect ratio | ModelNode, GeneratorNode |
-| `provider` | `provider` | AI model provider | ModelNode, GeneratorNode |
-| `input` | `image` | Preview input | GeneratorNode (any output), AttachmentNode |
-
----
-
-## Port Type Compatibility
-
-### Text Port
-**Can connect to:** `prompt`, `negative`
-
-**Compatible source nodes:**
-- PromptNode
-- NegativeNode
-- GeneratorNode
-
----
-
-### Image Port
-**Can connect to:** `ref`, `firstFrame`, `lastFrame`, `input`
-
-**Compatible source nodes:**
-- AttachmentNode (image/* MIME)
-- GeneratorNode (outputType: 'image')
-
----
-
-### Video Port
-**Can connect to:** `referenceVideo` (future)
-
-**Compatible source nodes:**
-- AttachmentNode (video/* MIME)
-
----
-
-### Aspect Port
-**Can connect to:** `aspect`
-
-**Compatible source nodes:**
-- ModelNode
-- GeneratorNode
-
----
-
-### Provider Port
-**Can connect to:** `provider`
-
-**Compatible source nodes:**
-- ModelNode
-- GeneratorNode
-
----
-
-## Connection Rules
-
-### Valid Connections
-✅ PromptNode.output → GeneratorNode.prompt
-✅ NegativeNode.output → GeneratorNode.negative
-✅ ModelNode.aspect → GeneratorNode.aspect
-✅ ModelNode.provider → GeneratorNode.provider
-✅ AttachmentNode.output → GeneratorNode.ref
-✅ GeneratorNode.output (image) → GeneratorNode.ref
-✅ GeneratorNode.output (image) → GeneratorNode.firstFrame
-✅ GeneratorNode.output (image) → GeneratorNode.lastFrame
-✅ GeneratorNode.output → PreviewNode.input
-
-### Invalid Connections
-❌ PromptNode.output → GeneratorNode.ref (text → image)
-❌ AttachmentNode.output → GeneratorNode.prompt (image → text)
-❌ ModelNode.aspect → GeneratorNode.prompt (aspect → text)
-
----
-
-## Input Resolution Flow
-
-When a GeneratorNode is triggered:
-
-1. **Find all incoming edges** to the generator node
-2. **For each edge, extract data from source node:**
-   - PromptNode/NegativeNode → Extract `prompt` or `negativePrompt`
-   - AttachmentNode → Create RefImage with `path`, `mimeType`, `label`
-   - GeneratorNode with `outputPath` → Create RefImage from output
-   - ModelNode → Extract `aspectRatio` or `provider`
-3. **Merge with local data** as fallback:
-   - Connected inputs take precedence
-   - Local GeneratorNodeData fields used if not connected
-4. **Construct payload** for backend API
-5. **After generation**, store output in GeneratorNodeData:
-   - `outputPath`: Backend artifact path
-   - `outputUrl`: Public URL
-   - `outputType`: 'image' or 'video'
-
----
-
-## Example Workflows
-
-### Simple Image Generation
-```
-[PromptNode] --prompt--> [GeneratorNode] --output--> [PreviewNode]
-```
-
-### Multi-Reference Generation
-```
-[AttachmentNode1] --ref-\
-[AttachmentNode2] --ref--> [GeneratorNode] --output--> [PreviewNode]
-[AttachmentNode3] --ref-/
-```
-
-### Image to Video Pipeline
-```
-[PromptNode] --prompt--> [Generator: Nano Banana] --output--> [Attachment: Generated Image]
-                                                                           |
-                                                                           --firstFrame--> [Generator: Veo 3.1] --output--> [PreviewNode]
-```
-
-### Full Pipeline with Model Control
-```
-            --prompt--> 
-[PromptNode]            [PromptNode2] --negative--> 
-                        \                         /
-[ModelNode] --aspect, provider--> [GeneratorNode] --output--> [PreviewNode]
-```
-
----
-
-## Handle Positioning
-
-### Left (Input Handles - GeneratorNode)
-- `prompt`: top 30%
-- `negative`: top 45%
-- `ref`: top 60%
-- `firstFrame`: top 72% (video only)
-- `lastFrame`: top 82% (video only)
-
-### Right (Output Handles - Most Nodes)
-- `output`: top 50%
-
-### Left (Input Handles - PreviewNode)
-- `input`: top 50%
-
-### Right (Output Handles - ModelNode)
-- `aspect`: top 70%
-- `provider`: top 85%
+# AI Studio Canvas V1.2 Node and Edge Spec
+
+## Scope
+V1.2 applies to the live AI Studio canvas rendered by `src/StudioCanvas/components/StudioCanvas.tsx`.
+
+This version standardizes the canvas shell on `ai-elements` primitives:
+- `src/components/ai-elements/canvas.tsx`
+- `src/components/ai-elements/controls.tsx`
+- `src/components/ai-elements/panel.tsx`
+- `src/components/ai-elements/edge.tsx`
+
+## V1.2 Changes
+- Replaced left node sidebar with canvas-first context menu actions.
+- Context menu now drives node creation and view controls.
+- Canvas rendering moved to `ai-elements` `Canvas` and `Controls` wrappers.
+- Data-type edges use the shared `ai-elements` edge implementation (`Edge.DataType`).
+- Image reference media renders cleaner: no inner wrapper chrome, aspect ratio preserved with `object-contain`.
+- Generation previews also preserve aspect ratio (`object-contain`) instead of cropping.
+- Generator/extension node toolbars now use `ai-elements` `Toolbar` and only appear on active/hover, floating above the node.
+- Reference nodes (image/audio/document/video) follow the same clean media-first visual treatment as Campaign `CreativeNode`.
+- Generator nodes now render as preview-first cards with a compact descriptor chip floating below the node.
+- Remaining utility nodes (`string`, `nanoGen` legacy, `extendVideo`) now share the same low-chrome visual language and iconography (no emoji icons).
+
+## Live Node Types
+
+### `string`
+Purpose: prompt, negative prompt, enrichment instructions.
+
+Source handles:
+- `text`
+
+Target handles:
+- `image`
+- `audio`
+- `video`
+- `document`
+
+### `image`
+Purpose: image reference input.
+
+Source handles:
+- `image`
+
+### `audio`
+Purpose: audio reference input.
+
+Source handles:
+- `audio`
+
+### `document`
+Purpose: document context input.
+
+Source handles:
+- `document`
+
+### `video`
+Purpose: video reference input.
+
+Source handles:
+- `video`
+
+### `nanoGen`
+Purpose: image generation block.
+
+Target handles:
+- `prompt`
+- `ref-image`
+
+Source handles:
+- `image`
+
+### `veoDirector`
+Purpose: Veo 3.1 video generation.
+
+Target handles:
+- `prompt-in`
+- `negative`
+- `ref-images`
+
+Source handles:
+- `video`
+
+### `veoFast`
+Purpose: Veo 3.1 Fast video generation.
+
+Target handles:
+- `prompt-in`
+- `negative`
+- `first-frame`
+- `last-frame`
+
+Source handles:
+- `video`
+
+### `extendVideo`
+Purpose: extend an existing video with prompt guidance.
+
+Target handles:
+- `prompt`
+- `video`
+
+Source handles:
+- `video`
+
+## Connection Validation
+Validation source of truth remains:
+- `src/StudioCanvas/utils/isValidConnection.ts`
+
+Rules preserved in V1.2:
+- Type-safe source/target handle matching.
+- Single-connection constraints for text-like handles.
+- Reference limits (for example `nanoGen` ref image capacity).
+- Frame-only constraints for Veo Fast (`first-frame`, `last-frame`).
+
+## Edge Model
+Edge rendering in V1.2:
+- Edge component: `Edge.DataType` from `src/components/ai-elements/edge.tsx`
+- Edge class: `studio-edge`
+- Data payload: `{ dataType, isActive, isDotted, pathType }`
+
+Supported data types:
+- `text`
+- `image`
+- `video`
+- `audio`
+- `document`
+
+Token source:
+- `src/components/ai-studio/canvas/canvas.css`
+- `src/app/globals.css`
+
+## Canvas Interaction Model
+Workspace actions are context-menu first (`src/components/ui/context-menu.tsx`):
+- Add node (all supported node types)
+- Switch interaction mode (pan/select)
+- Zoom in/out
+- Fit view
+- Clear canvas
+
+Drag-create remains supported:
+- Connection drag from a handle to empty pane creates a compatible node via `useEdgeDropNode`.
+
+Drop ingestion remains supported:
+- Node payload drops via `application/reactflow`
+- Asset drops via creative asset payload and text/data fallback
+
+## Reference Media Rendering Rules
+V1.2 reference media rules:
+- Preserve source aspect ratio.
+- Avoid extra inner cards/wrappers around the media plane.
+- Render image references with `object-contain`.
+- Keep replace affordance minimal and non-blocking.
+
+Relevant files:
+- `src/StudioCanvas/nodes/ImageNode.tsx`
+- `src/StudioCanvas/nodes/ImageGenBlock.tsx`
+
+## Runtime/Reactivity
+Realtime and execution semantics are unchanged by V1.2:
+- Realtime sync: `src/components/ai-studio/hooks/useCanvasRealtime.ts`
+- Merge strategy: `src/components/ai-studio/hooks/merge-strategy.ts`
+- Workflow execution: `src/StudioCanvas/utils/executeWorkflow.ts`
+
+## Follow-ups
+Potential V1.3 items:
+- Add node-level context actions to match workspace menu polish.
+- Unify remaining node cards on shared `ai-elements/node.tsx` composition primitives.
+- Introduce run-id/timestamp merge freshness for long-running concurrent sessions.
