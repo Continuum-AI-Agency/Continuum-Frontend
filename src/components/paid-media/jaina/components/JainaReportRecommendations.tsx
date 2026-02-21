@@ -1,12 +1,9 @@
 import { Heading, Text, Badge, Flex } from "@radix-ui/themes";
 import { Task, TaskTrigger, TaskContent } from "@/components/ai-elements/task";
-import { recommendationSchema } from "@/lib/jaina/schemas";
-import { z } from "zod";
-
-type Recommendation = z.infer<typeof recommendationSchema>;
+import { type RecommendationItem } from "@/lib/jaina/schemas";
 
 interface JainaReportRecommendationsProps {
-  recommendations: Recommendation[];
+  recommendations: RecommendationItem[];
 }
 
 export function JainaReportRecommendations({ recommendations }: JainaReportRecommendationsProps) {
@@ -20,30 +17,20 @@ export function JainaReportRecommendations({ recommendations }: JainaReportRecom
       <div className="space-y-3">
         {recommendations.map((item, index) => (
           <Task
-            key={`${item.action || item.title || "rec"}-${index}`}
+            key={`${item.title || "rec"}-${index}`}
             status="pending"
             className="bg-white/5 border-white/5 rounded-lg overflow-hidden hover:bg-white/10 transition-colors"
           >
-            <TaskTrigger title={item.action || item.title || "Recommendation"} />
+            <TaskTrigger title={item.title || "Recommendation"} />
             <TaskContent>
               <div className="space-y-3 py-2">
                 <Text size="2" className="text-secondary leading-relaxed block">
-                  {item.description || item.rationale || ""}
+                  {item.rationale}
                 </Text>
                 <Flex align="center" gap="3" wrap="wrap">
-                  {item.type && (
-                    <Badge color="violet" variant="soft" className="text-[10px] uppercase">
-                      {item.type}
-                    </Badge>
-                  )}
-                  {(item.impact || item.expected_impact) && (
+                  {item.expected_impact && (
                     <Badge color="indigo" variant="soft" className="text-[10px] uppercase">
-                      Impact: {item.impact || item.expected_impact}
-                    </Badge>
-                  )}
-                  {item.effort && (
-                    <Badge color="gray" variant="soft" className="text-[10px] uppercase">
-                      Effort: {item.effort}
+                      Impact: {item.expected_impact}
                     </Badge>
                   )}
                   {item.priority && (

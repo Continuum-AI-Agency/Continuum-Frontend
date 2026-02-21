@@ -2,13 +2,13 @@
 
 import React from "react";
 import { Badge, Callout, Flex, Heading } from "@radix-ui/themes";
-import { DownloadIcon, EnvelopeClosedIcon } from "@radix-ui/react-icons";
+import { DownloadIcon, MailIcon } from "lucide-react";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
-import type { SoTReport } from "@/lib/jaina/schemas";
+import type { FrontendSoTReport } from "@/lib/jaina/schemas";
 import type { JainaStreamStatus } from "@/lib/jaina/stream";
 import { JainaReportNav } from "./components/JainaReportNav";
 import { JainaReportMetrics } from "./components/JainaReportMetrics";
-import { JainaReportCharts } from "./components/JainaReportCharts";
+import { JainaReportCharts, isJainaChartInput } from "./components/JainaReportCharts";
 import { JainaReportSections } from "./components/JainaReportSections";
 import { JainaReportRecommendations } from "./components/JainaReportRecommendations";
 import { JainaReportTables } from "./components/JainaReportTables";
@@ -19,14 +19,23 @@ import { Sources, SourcesContent, SourcesTrigger, Source } from "@/components/ai
 import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
 import { hasReportContent } from "@/lib/jaina/schemas";
 import { buildJitSnapshotFallbackTables } from "./reportTableUtils";
+import { cn } from "@/lib/utils";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 type JainaReportViewProps = {
-  report: SoTReport | null;
+  report: FrontendSoTReport | null;
   status: JainaStreamStatus;
   error?: string;
   onSuggestionClick?: (query: string) => void;
   idPrefix?: string;
 };
+
+const MIN_REPORT_HEIGHT_PX = 320;
+
+export function clampReportHeight(nextHeight: number, maxHeight: number): number {
+  if (!Number.isFinite(nextHeight)) return MIN_REPORT_HEIGHT_PX;
+  return Math.min(Math.max(nextHeight, MIN_REPORT_HEIGHT_PX), Math.max(maxHeight, MIN_REPORT_HEIGHT_PX));
+}
 
 export function JainaReportView({
   report,
@@ -37,6 +46,77 @@ export function JainaReportView({
 }: JainaReportViewProps) {
   const { show } = useToast();
   const reportExportRef = React.useRef<HTMLDivElement | null>(null);
+  const reportFrameRef = React.useRef<HTMLDivElement | null>(null);
+  const [maxAutoHeightPx, setMaxAutoHeightPx] = React.useState<number>(900);
+  const [showSidebarNav, setShowSidebarNav] = React.useState<boolean>(false);
+
+  const resolvedIdPrefix = React.useMemo(
+    () => (idPrefix && idPrefix.trim() ? idPrefix : "jaina-report"),
+    [idPrefix]
+  );
+  const sectionId = React.useCallback(
+    (suffix: string) => `${resolvedIdPrefix}-${suffix}`,
+    [resolvedIdPrefix]
+  );
+  const fallbackTables = React.useMemo(
+    () => (report ? buildJitSnapshotFallbackTables(report) : []),
+    [report]
+  );
+  const topLevelCharts = React.useMemo(
+    () => (report ? report.graphs.filter((chart) => isJainaChartInput(chart)) : []),
+    [report]
+  );
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const frame = reportFrameRef.current;
+    if (!frame) return;
+
+    const computeAvailableHeight = () => {
+      const rect = frame.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const reservedBottom = 20;
+      const available = Math.floor(viewportHeight - rect.top - reservedBottom);
+      const nextMax = Math.max(MIN_REPORT_HEIGHT_PX, available);
+      setMaxAutoHeightPx((prev) => (prev === nextMax ? prev : nextMax));
+    };
+
+    computeAvailableHeight();
+    window.addEventListener("resize", computeAvailableHeight);
+
+    const conversationViewport = frame.closest(
+      "[data-radix-scroll-area-viewport]"
+    ) as HTMLElement | null;
+    conversationViewport?.addEventListener("scroll", computeAvailableHeight, {
+      passive: true,
+    });
+
+    return () => {
+      window.removeEventListener("resize", computeAvailableHeight);
+      conversationViewport?.removeEventListener("scroll", computeAvailableHeight);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const frame = reportFrameRef.current;
+    if (!frame) return;
+
+    const updateLayoutMode = () => {
+      const width = frame.clientWidth;
+      setShowSidebarNav(width >= 980);
+    };
+
+    updateLayoutMode();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateLayoutMode);
+      return () => window.removeEventListener("resize", updateLayoutMode);
+    }
+
+    const observer = new ResizeObserver(() => updateLayoutMode());
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   if (status === "error") {
     return (
@@ -49,19 +129,6 @@ export function JainaReportView({
   if (!report || !hasReportContent(report)) {
     return <EmptyReport status={status} />;
   }
-
-  const resolvedIdPrefix = React.useMemo(
-    () => (idPrefix && idPrefix.trim() ? idPrefix : "jaina-report"),
-    [idPrefix]
-  );
-  const sectionId = React.useCallback(
-    (suffix: string) => `${resolvedIdPrefix}-${suffix}`,
-    [resolvedIdPrefix]
-  );
-  const fallbackTables = buildJitSnapshotFallbackTables(report);
-  const hasSectionGraphs = report.sections.some(
-    (section) => Array.isArray(section.graphs) && section.graphs.length > 0
-  );
 
   const handleDownloadPDF = async () => {
     if (!report) return;
@@ -134,8 +201,30 @@ export function JainaReportView({
     });
   };
 
+  const reportFrameHeightPx = Math.max(
+    MIN_REPORT_HEIGHT_PX,
+    Math.min(maxAutoHeightPx, 760)
+  );
+  const minReportPanelPercent = Math.min(
+    95,
+    Math.max(35, (MIN_REPORT_HEIGHT_PX / reportFrameHeightPx) * 100)
+  );
+
   return (
-    <Artifact className="border-white/10 bg-black/20 backdrop-blur-xl shadow-2xl h-[600px] max-h-[calc(100vh-200px)] flex flex-col">
+    <div
+      ref={reportFrameRef}
+      className="w-full min-h-0 min-w-0 overflow-hidden"
+      style={{
+        height: `${reportFrameHeightPx}px`,
+        maxHeight: `${maxAutoHeightPx}px`,
+      }}
+    >
+      <ResizablePanelGroup orientation="vertical" className="h-full w-full min-h-0">
+      <ResizablePanel
+        defaultSize="84%"
+        minSize={`${Math.round(minReportPanelPercent)}%`}
+      >
+      <Artifact className="h-full max-h-full min-w-0 border-white/10 bg-black/20 backdrop-blur-xl shadow-2xl flex flex-col">
       <ArtifactHeader className="bg-white/5 border-b border-white/10 shrink-0">
         <div className="flex items-center gap-3">
           <div className="size-2 rounded-full bg-purple-500 animate-pulse" />
@@ -146,27 +235,32 @@ export function JainaReportView({
         <ArtifactActions>
           <ArtifactAction
             tooltip="Send to Email"
-            icon={EnvelopeClosedIcon as any}
+            icon={MailIcon}
             onClick={handleSendEmail}
           />
           <ArtifactAction
             tooltip="Download PDF"
-            icon={DownloadIcon as any}
+            icon={DownloadIcon}
             onClick={handleDownloadPDF}
           />
         </ArtifactActions>
       </ArtifactHeader>
 
-      <ArtifactContent className="p-0 flex-1 min-h-0 relative">
-        <Flex gap="0" align="start" className="relative h-full">
-          <div className="hidden lg:block border-r border-white/5 p-4 sticky top-0 shrink-0 w-64 h-full overflow-y-auto">
+      <ArtifactContent className="p-0 flex-1 min-h-0 min-w-0 overflow-hidden relative">
+        <Flex gap="0" align="start" className="relative h-full min-h-0 min-w-0">
+          {showSidebarNav ? (
+          <div className="border-r border-white/5 p-4 sticky top-0 shrink-0 w-64 max-h-full min-h-0 overflow-y-auto">
             <JainaReportNav idPrefix={resolvedIdPrefix} />
           </div>
+          ) : null}
 
           <Flex
             direction="column"
             gap="6"
-            className="flex-1 p-6 overflow-y-auto no-scrollbar h-full"
+            className={cn(
+              "flex-1 min-h-0 min-w-0 overflow-y-auto no-scrollbar h-full",
+              showSidebarNav ? "p-6" : "p-4 sm:p-6"
+            )}
           >
             <div ref={reportExportRef} className="space-y-6">
               <div id={sectionId("executive-summary")} className="space-y-4 scroll-mt-20">
@@ -182,17 +276,6 @@ export function JainaReportView({
                     {report.language || "EN"}
                   </Badge>
                 </Flex>
-
-                {report.reasoning_trace && (
-                  <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-                    <Text size="2" color="gray" className="uppercase tracking-wider mb-2">
-                      Analysis Context
-                    </Text>
-                    <Text size="2" className="text-white/80 leading-relaxed">
-                      {report.reasoning_trace}
-                    </Text>
-                  </div>
-                )}
 
                 <div className="prose prose-invert max-w-none">
                   <SafeMarkdown
@@ -215,9 +298,9 @@ export function JainaReportView({
                 </div>
               )}
 
-              {report.graphs.length > 0 && !hasSectionGraphs && (
+              {topLevelCharts.length > 0 && (
                 <div id={sectionId("key-trends")} className="scroll-mt-20">
-                  <JainaReportCharts charts={report.graphs} />
+                  <JainaReportCharts charts={topLevelCharts} />
                 </div>
               )}
 
@@ -271,6 +354,22 @@ export function JainaReportView({
         </Flex>
       </ArtifactContent>
     </Artifact>
+    </ResizablePanel>
+    <ResizableHandle
+      withHandle
+      className="bg-white/10 hover:bg-primary/40 transition-colors h-1 cursor-row-resize [&>div]:h-1.5 [&>div]:w-8 [&>div]:rounded-full"
+    />
+    <ResizablePanel
+      defaultSize="16%"
+      minSize="0%"
+      collapsible
+      collapsedSize="0%"
+      className="min-h-0"
+    >
+      <div className="h-full w-full bg-transparent" />
+    </ResizablePanel>
+    </ResizablePanelGroup>
+    </div>
   );
 }
 
@@ -289,28 +388,40 @@ function EmptyReport({ status }: { status: JainaStreamStatus }) {
   );
 }
 
-type PdfTable = SoTReport["sections"][number]["tables"][number];
+type PdfTable = {
+  headers: string[];
+  rows: string[][];
+};
 
-function formatMetricValueForPdf(metric: SoTReport["performance_snapshot"][number]) {
-  const value = metric.value;
+function formatMetricValueForPdf(
+  metric: FrontendSoTReport["performance_snapshot"][number]
+) {
+  if (!metric || typeof metric !== "object") return "";
+  const typedMetric = metric as {
+    value?: unknown;
+    format?: string;
+    prefix?: string;
+    suffix?: string;
+  };
+  const value = typedMetric.value;
   if (typeof value !== "number") return String(value);
-  if (metric.format === "currency" || metric.prefix === "$") {
+  if (typedMetric.format === "currency" || typedMetric.prefix === "$") {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
       maximumFractionDigits: 2,
     }).format(value);
   }
-  if (metric.format === "percentage" || metric.suffix === "%") {
+  if (typedMetric.format === "percentage" || typedMetric.suffix === "%") {
     return `${value}%`;
   }
   const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return `${metric.prefix || ""}${formatted}${metric.suffix || ""}`;
+  return `${typedMetric.prefix || ""}${formatted}${typedMetric.suffix || ""}`;
 }
 
 function renderReportPdf(
   doc: InstanceType<typeof import("jspdf").jsPDF>,
-  report: SoTReport,
+  report: FrontendSoTReport,
   fallbackTables: PdfTable[]
 ) {
   const marginX = 40;
@@ -372,20 +483,25 @@ function renderReportPdf(
   addHeading("Executive Summary");
   addParagraph(report.executive_summary || "No summary provided.");
 
-  if (report.reasoning_trace) {
-    addHeading("Analysis Context");
-    addParagraph(report.reasoning_trace);
-  }
-
   if (report.performance_snapshot.length > 0) {
     addHeading("Performance Snapshot");
     for (const metric of report.performance_snapshot) {
-      const metricLabel = metric.metric || "Metric";
+      const metricRecord = metric as {
+        metric?: string;
+        change?: string | number | null;
+        context?: string;
+        sub_label?: string;
+      };
+      const metricLabel = metricRecord.metric || "Metric";
       const metricValue = formatMetricValueForPdf(metric);
       const change =
-        metric.change === undefined || metric.change === null ? "" : ` (Δ ${metric.change})`;
+        metricRecord.change === undefined || metricRecord.change === null
+          ? ""
+          : ` (Δ ${metricRecord.change})`;
       const context =
-        metric.context || metric.sub_label ? ` — ${metric.context || metric.sub_label}` : "";
+        metricRecord.context || metricRecord.sub_label
+          ? ` — ${metricRecord.context || metricRecord.sub_label}`
+          : "";
       addBullet(`${metricLabel}: ${metricValue}${change}${context}`);
     }
     y += 4;
@@ -402,7 +518,16 @@ function renderReportPdf(
         addBullet(`${title}${insight.text}${impact}`);
       }
       for (let index = 0; index < section.tables.length; index += 1) {
-        addTable(`${section.heading} Table ${index + 1}`, section.tables[index]);
+        const table = section.tables[index] as Partial<PdfTable>;
+        if (!table || !Array.isArray(table.headers) || !Array.isArray(table.rows)) {
+          continue;
+        }
+        addTable(`${section.heading} Table ${index + 1}`, {
+          headers: table.headers.map((header) => String(header)),
+          rows: table.rows.map((row) =>
+            Array.isArray(row) ? row.map((cell) => String(cell)) : []
+          ),
+        });
       }
     }
   }
@@ -417,13 +542,12 @@ function renderReportPdf(
   if (report.strategic_recommendations.length > 0) {
     addHeading("Priority Recommendations");
     for (const recommendation of report.strategic_recommendations) {
-      const title = recommendation.action || recommendation.title || "Recommendation";
-      const details = recommendation.description || recommendation.reasoning || recommendation.rationale || "";
+      const title = recommendation.title || "Recommendation";
+      const details = recommendation.rationale || "";
       const tags = [
-        recommendation.type ? `Type: ${recommendation.type}` : "",
         recommendation.priority ? `Priority: ${recommendation.priority}` : "",
-        recommendation.impact || recommendation.expected_impact
-          ? `Impact: ${recommendation.impact || recommendation.expected_impact}`
+        recommendation.expected_impact
+          ? `Impact: ${recommendation.expected_impact}`
           : "",
       ]
         .filter(Boolean)

@@ -1,10 +1,10 @@
-import { Card, Box, Text, Badge, Heading, Flex, Grid } from "@radix-ui/themes";
+import { Card, Box, Text, Badge, Heading, Flex } from "@radix-ui/themes";
 import { CheckCircle2Icon, AlertCircleIcon, InfoIcon } from "lucide-react";
-import { type SoTReport } from "@/lib/jaina/schemas";
-import { JainaReportCharts } from "./JainaReportCharts";
+import { type FrontendSoTReport } from "@/lib/jaina/schemas";
+import { JainaReportCharts, isJainaChartInput } from "./JainaReportCharts";
 
 type JainaReportSectionsProps = {
-  sections: SoTReport["sections"];
+  sections: FrontendSoTReport["sections"];
 };
 
 export function JainaReportSections({ sections }: JainaReportSectionsProps) {
@@ -13,18 +13,25 @@ export function JainaReportSections({ sections }: JainaReportSectionsProps) {
   return (
     <div className="space-y-8">
       {sections.map((section, index) => (
-        <SectionCard key={index} section={section} index={index} />
+        <SectionCard key={index} section={section} />
       ))}
     </div>
   );
 }
 
-function SectionCard({ section, index }: { section: SoTReport["sections"][number]; index: number }) {
+function SectionCard({ section }: { section: FrontendSoTReport["sections"][number] }) {
   const severityColor = {
     positive: "green",
     neutral: "blue",
     watch: "yellow",
     risk: "red",
+  } as const;
+
+  const severityTextClass = {
+    positive: "text-green-500",
+    neutral: "text-blue-500",
+    watch: "text-yellow-500",
+    risk: "text-red-500",
   } as const;
 
   const severityIcon = {
@@ -34,8 +41,17 @@ function SectionCard({ section, index }: { section: SoTReport["sections"][number
     risk: AlertCircleIcon,
   };
 
+  const sectionCharts = Array.isArray(section.graphs)
+    ? section.graphs.filter((chart) => isJainaChartInput(chart))
+    : [];
+  const sectionTables = Array.isArray(section.tables)
+    ? section.tables
+        .map((table) => toRenderableTable(table))
+        .filter((table): table is RenderableTable => Boolean(table))
+    : [];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       <div className="flex items-center gap-3">
         <Heading size="4" className="text-primary/80">
           {section.heading}
@@ -64,7 +80,7 @@ function SectionCard({ section, index }: { section: SoTReport["sections"][number
               <Card key={hIndex} className="bg-white/5 border-white/5">
                 <Box p="3">
                   <Flex gap="3" align="start">
-                    <div className={`mt-0.5 text-${severityColor[highlight.severity]}-500`}>
+                    <div className={`mt-0.5 ${severityTextClass[highlight.severity]}`}>
                       <Icon className="size-4" />
                     </div>
                     <div className="flex-1 space-y-1">
@@ -95,18 +111,30 @@ function SectionCard({ section, index }: { section: SoTReport["sections"][number
         </div>
       )}
 
-      {section.graphs && section.graphs.length > 0 && (
+      {sectionCharts.length > 0 && (
         <div className="pt-2">
-          <JainaReportCharts charts={section.graphs as any} />
+          <JainaReportCharts charts={sectionCharts} showHeading={false} />
         </div>
       )}
 
-      {section.tables && section.tables.length > 0 && (
+      {sectionTables.length > 0 && (
         <div className="space-y-4">
-          {section.tables.map((table, tIndex) => (
-            <Card key={tIndex} className="border border-white/10 bg-black/20 overflow-hidden">
+          {sectionTables.map((table, tIndex) => (
+            <Card key={tIndex} className="min-w-0 border border-white/10 bg-black/20 overflow-hidden">
               <Box p="0">
-                <div className="overflow-x-auto">
+                {table.title ? (
+                  <div className="border-b border-white/10 bg-white/5 px-4 py-2">
+                    <Text size="2" weight="medium" className="text-white/85">
+                      {table.title}
+                    </Text>
+                    {table.subtitle ? (
+                      <Text size="1" className="text-white/60 block mt-0.5">
+                        {table.subtitle}
+                      </Text>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="w-full max-w-full overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-white/5 border-b border-white/10">
                       <tr>
@@ -156,7 +184,7 @@ function SectionCard({ section, index }: { section: SoTReport["sections"][number
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Text size="2" weight="bold" className="text-white/90">
-                      {action.title || action.action || "Action"}
+                      {action.title || "Action"}
                     </Text>
                     <div className="flex gap-2">
                       {action.priority && (
@@ -164,21 +192,16 @@ function SectionCard({ section, index }: { section: SoTReport["sections"][number
                           {action.priority}
                         </Badge>
                       )}
-                      {action.impact && (
+                      {action.expected_impact && (
                         <Badge color="green" variant="soft" size="1">
-                          Impact: {action.impact}
+                          Impact: {action.expected_impact}
                         </Badge>
                       )}
                     </div>
                   </div>
                   <Text size="2" className="text-white/70">
-                    {action.description || action.rationale || ""}
+                    {action.rationale}
                   </Text>
-                  {action.expected_impact && (
-                    <Text size="1" className="text-white/50">
-                      Expected: {action.expected_impact}
-                    </Text>
-                  )}
                 </div>
               </Box>
             </Card>
@@ -187,4 +210,72 @@ function SectionCard({ section, index }: { section: SoTReport["sections"][number
       )}
     </div>
   );
+}
+
+type RenderableTable = {
+  title?: string;
+  subtitle?: string | null;
+  headers: string[];
+  rows: string[][];
+};
+
+function toRenderableTable(value: unknown): RenderableTable | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const table = value as Record<string, unknown>;
+
+  const headersValue = Array.isArray(table.headers) ? table.headers : [];
+  const rowsValue = Array.isArray(table.rows) ? table.rows : [];
+
+  if (headersValue.length > 0 && rowsValue.length > 0) {
+    const headers = headersValue.map((header) => String(header));
+    return {
+      title: typeof table.title === "string" ? table.title : undefined,
+      subtitle:
+        typeof table.subtitle === "string" ? table.subtitle : null,
+      headers,
+      rows: rowsValue.map((row) => {
+        if (Array.isArray(row)) {
+          return row.map((cell) => String(cell ?? ""));
+        }
+        if (row && typeof row === "object") {
+          const objectRow = row as Record<string, unknown>;
+          return headers.map((header) => String(objectRow[header] ?? ""));
+        }
+        return [];
+      }),
+    };
+  }
+
+  if (rowsValue.length > 0) {
+    const arrayRows = rowsValue.filter((row) => Array.isArray(row)) as unknown[][];
+    if (arrayRows.length > 0) {
+      const width = Math.max(...arrayRows.map((row) => row.length));
+      const generatedHeaders = Array.from({ length: width }, (_, index) => `Column ${index + 1}`);
+      return {
+        title: typeof table.title === "string" ? table.title : undefined,
+        subtitle:
+          typeof table.subtitle === "string" ? table.subtitle : null,
+        headers: generatedHeaders,
+        rows: arrayRows.map((row) => row.map((cell) => String(cell ?? ""))),
+      };
+    }
+
+    const objectRows = rowsValue.filter(
+      (row) => row && typeof row === "object" && !Array.isArray(row)
+    ) as Array<Record<string, unknown>>;
+    if (objectRows.length === 0) return null;
+
+    const headers = Object.keys(objectRows[0]);
+    if (headers.length === 0) return null;
+
+    return {
+      title: typeof table.title === "string" ? table.title : undefined,
+      subtitle:
+        typeof table.subtitle === "string" ? table.subtitle : null,
+      headers,
+      rows: objectRows.map((row) => headers.map((header) => String(row[header] ?? ""))),
+    };
+  }
+
+  return null;
 }

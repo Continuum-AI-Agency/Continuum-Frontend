@@ -1,6 +1,11 @@
-import type { SoTReport } from "@/lib/jaina/schemas";
+import type { FrontendSoTReport } from "@/lib/jaina/schemas";
 
-type ReportTable = SoTReport["sections"][number]["tables"][number];
+type ReportTable = {
+  headers: string[];
+  rows: string[][];
+};
+
+type GraphRecord = Record<string, unknown>;
 
 const TIMELINE_LABEL_HINTS = [
   "date",
@@ -12,6 +17,19 @@ const TIMELINE_LABEL_HINTS = [
   "year",
   "hour",
 ];
+
+function asRecord(value: unknown): GraphRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as GraphRecord)
+    : null;
+}
+
+function asRecordArray(value: unknown): GraphRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => asRecord(item))
+    .filter((item): item is GraphRecord => Boolean(item));
+}
 
 function toDisplayString(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -42,60 +60,96 @@ function isTimelineLikeValue(value: unknown): boolean {
   return !Number.isNaN(parsed);
 }
 
-function collectReportGraphs(report: SoTReport): any[] {
-  const topLevelGraphs = Array.isArray(report.graphs) ? report.graphs : [];
+function collectReportGraphs(report: FrontendSoTReport): GraphRecord[] {
+  const topLevelGraphs = Array.isArray(report.graphs)
+    ? report.graphs
+        .map((graph) => asRecord(graph))
+        .filter((graph): graph is GraphRecord => Boolean(graph))
+    : [];
   const sectionGraphs = report.sections.flatMap((section) =>
-    Array.isArray(section.graphs) ? section.graphs : []
+    Array.isArray(section.graphs)
+      ? section.graphs
+          .map((graph) => asRecord(graph))
+          .filter((graph): graph is GraphRecord => Boolean(graph))
+      : []
   );
   return [...topLevelGraphs, ...sectionGraphs];
 }
 
-export function hasTimelineCharts(report: SoTReport): boolean {
+function resolveGraphType(graph: GraphRecord): string {
+  return toDisplayString(graph.type ?? graph.graph_type ?? graph.chart_type)
+    .toLowerCase()
+    .trim();
+}
+
+function resolveGraphXHeader(graph: GraphRecord): string {
+  const explicit = toDisplayString(graph.x_axis_label).trim();
+  if (explicit) return explicit;
+  const labels = Array.isArray(graph.labels) ? graph.labels : [];
+  const hasTimelineLabel = labels.some((label) => isTimelineLikeValue(label));
+  return hasTimelineLabel ? "Date" : "Label";
+}
+
+function extractGraphLabels(graph: GraphRecord): string[] {
+  if (!Array.isArray(graph.labels)) return [];
+  return graph.labels.map((label) => toDisplayString(label));
+}
+
+function extractTimelineCandidates(graph: GraphRecord): unknown[] {
+  const values: unknown[] = [];
+  values.push(...extractGraphLabels(graph));
+
+  const dataPoints = asRecordArray(graph.data);
+  for (const point of dataPoints) {
+    values.push(point.label ?? point.x);
+  }
+
+  const series = asRecordArray(graph.series);
+  for (const seriesEntry of series) {
+    const points = asRecordArray(seriesEntry.data);
+    for (const point of points) {
+      values.push(point.x ?? point.label);
+    }
+  }
+
+  return values;
+}
+
+export function hasTimelineCharts(report: FrontendSoTReport): boolean {
   const graphs = collectReportGraphs(report);
 
   return graphs.some((graph) => {
-    const type = String(graph?.type ?? "").toLowerCase();
+    const type = resolveGraphType(graph);
     if (type === "line" || type === "area") {
       return true;
     }
 
-    const xAxisLabel = String(graph?.x_axis_label ?? "").toLowerCase();
+    const xAxisLabel = toDisplayString(graph.x_axis_label).toLowerCase();
     if (TIMELINE_LABEL_HINTS.some((hint) => xAxisLabel.includes(hint))) {
       return true;
     }
 
-    const dataPoints = Array.isArray(graph?.data) ? graph.data : [];
-    if (
-      dataPoints.some((point: Record<string, unknown>) =>
-        isTimelineLikeValue(point?.label ?? point?.x)
-      )
-    ) {
-      return true;
-    }
-
-    const series = Array.isArray(graph?.series) ? graph.series : [];
-    return series.some((entry: Record<string, unknown>) => {
-      const points = Array.isArray(entry?.data) ? entry.data : [];
-      return points.some((point: Record<string, unknown>) =>
-        isTimelineLikeValue(point?.x)
-      );
-    });
+    const timelineCandidates = extractTimelineCandidates(graph);
+    return timelineCandidates.some((candidate) => isTimelineLikeValue(candidate));
   });
 }
 
-function buildSnapshotMetricsTable(report: SoTReport): ReportTable | null {
+function buildSnapshotMetricsTable(report: FrontendSoTReport): ReportTable | null {
   if (!Array.isArray(report.performance_snapshot) || report.performance_snapshot.length === 0) {
     return null;
   }
 
   const headers = ["Metric", "Value", "Change", "Direction", "Context"];
-  const rows = report.performance_snapshot.map((item) => [
-    toDisplayString(item.metric),
-    toDisplayString(item.value),
-    toDisplayString(item.change),
-    toDisplayString(item.direction),
-    toDisplayString(item.context ?? item.sub_label),
-  ]);
+  const rows = report.performance_snapshot.map((item) => {
+    const metric = (item ?? {}) as Record<string, unknown>;
+    return [
+      toDisplayString(metric.metric),
+      toDisplayString(metric.value),
+      toDisplayString(metric.change),
+      toDisplayString(metric.direction),
+      toDisplayString(metric.context ?? metric.sub_label),
+    ];
+  });
 
   const nonEmptyColumnIndexes = headers
     .map((_, index) => index)
@@ -107,49 +161,88 @@ function buildSnapshotMetricsTable(report: SoTReport): ReportTable | null {
   };
 }
 
-function buildGraphDataTables(report: SoTReport): ReportTable[] {
+function buildGraphDataTables(report: FrontendSoTReport): ReportTable[] {
   const graphs = collectReportGraphs(report);
   const tables: ReportTable[] = [];
 
   for (const graph of graphs) {
-    const title = String(graph?.title ?? "Snapshot");
-    const xHeader = String(graph?.x_axis_label ?? "Label");
+    const title = toDisplayString(graph.title) || "Snapshot";
+    const xHeader = resolveGraphXHeader(graph);
 
-    if (Array.isArray(graph?.data) && graph.data.length > 0) {
+    const labels = extractGraphLabels(graph);
+    const datasets = asRecordArray(graph.datasets);
+    const indexedDatasets = datasets
+      .map((entry, index) => {
+        const data = Array.isArray(entry.data) ? entry.data : [];
+        return {
+          name: toDisplayString(entry.label) || `Series ${index + 1}`,
+          values: data,
+        };
+      })
+      .filter((entry) => entry.values.length > 0);
+
+    const indexedSeries = asRecordArray(graph.series)
+      .map((entry, index) => {
+        const values = Array.isArray(entry.values) ? entry.values : [];
+        return {
+          name: toDisplayString(entry.name) || `Series ${index + 1}`,
+          values,
+        };
+      })
+      .filter((entry) => entry.values.length > 0);
+
+    const indexedColumns = indexedDatasets.length > 0 ? indexedDatasets : indexedSeries;
+    if (labels.length > 0 && indexedColumns.length > 0) {
       tables.push({
-        headers: ["Chart", xHeader, "Value"],
-        rows: graph.data.map((point: Record<string, unknown>) => [
+        headers: ["Chart", xHeader, ...indexedColumns.map((entry) => entry.name)],
+        rows: labels.map((label, labelIndex) => [
           title,
-          toDisplayString(point?.label ?? point?.x),
-          toDisplayString(point?.value ?? point?.y),
+          label,
+          ...indexedColumns.map((entry) => toDisplayString(entry.values[labelIndex])),
         ]),
       });
       continue;
     }
 
-    if (Array.isArray(graph?.series) && graph.series.length > 0) {
+    const dataPoints = asRecordArray(graph.data);
+    if (dataPoints.length > 0) {
+      tables.push({
+        headers: ["Chart", xHeader, "Value"],
+        rows: dataPoints.map((point) => [
+          title,
+          toDisplayString(point.label ?? point.x ?? point.name),
+          toDisplayString(point.value ?? point.y),
+        ]),
+      });
+      continue;
+    }
+
+    const series = asRecordArray(graph.series).filter((entry) =>
+      Array.isArray(entry.data)
+    );
+    if (series.length > 0) {
       const xValues = new Set<string>();
-      graph.series.forEach((seriesEntry: Record<string, unknown>) => {
-        const points = Array.isArray(seriesEntry?.data) ? seriesEntry.data : [];
-        points.forEach((point: Record<string, unknown>) => {
-          xValues.add(toDisplayString(point?.x));
+      series.forEach((seriesEntry) => {
+        const points = asRecordArray(seriesEntry.data);
+        points.forEach((point) => {
+          xValues.add(toDisplayString(point.x));
         });
       });
 
       const sortedXValues = Array.from(xValues);
-      const seriesNames = graph.series.map((seriesEntry: Record<string, unknown>) =>
-        toDisplayString(seriesEntry?.name) || "Series"
+      const seriesNames = series.map((seriesEntry) =>
+        toDisplayString(seriesEntry.name) || "Series"
       );
 
       tables.push({
         headers: ["Chart", xHeader, ...seriesNames],
         rows: sortedXValues.map((xValue) => {
-          const values = graph.series.map((seriesEntry: Record<string, unknown>) => {
-            const points = Array.isArray(seriesEntry?.data) ? seriesEntry.data : [];
+          const values = series.map((seriesEntry) => {
+            const points = asRecordArray(seriesEntry.data);
             const point = points.find(
-              (candidate: Record<string, unknown>) => toDisplayString(candidate?.x) === xValue
+              (candidate) => toDisplayString(candidate.x) === xValue
             );
-            return toDisplayString(point?.y ?? point?.value);
+            return toDisplayString(point?.y ?? point?.value ?? point?.x);
           });
           return [title, xValue, ...values];
         }),
@@ -160,7 +253,7 @@ function buildGraphDataTables(report: SoTReport): ReportTable[] {
   return tables.filter((table) => table.rows.length > 0);
 }
 
-export function buildJitSnapshotFallbackTables(report: SoTReport): ReportTable[] {
+export function buildJitSnapshotFallbackTables(report: FrontendSoTReport): ReportTable[] {
   if (hasTimelineCharts(report)) {
     return [];
   }

@@ -31,12 +31,17 @@ import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 import { JainaReportView } from "../JainaReportView";
 import { CreativeCard } from "./CreativeCard";
 import type { JainaChatMessage } from "../types";
-import type { JainaStreamState } from "@/lib/jaina/stream";
+import type { JainaProgressEntry, JainaStreamState } from "@/lib/jaina/stream";
 import { formatStageLabel, formatToolLabel } from "../jainaUtils";
 
 import { Agent, AgentContent, AgentHeader } from "@/components/ai-elements/agent";
 import { Checkpoint } from "@/components/ai-elements/checkpoint";
-import { hasReportContent, type CreativeArtifact, type ToolResultEventData } from "@/lib/jaina/schemas";
+import {
+  frontendSoTReportSchema,
+  hasReportContent,
+  type CreativeArtifact,
+  type ToolResultEventData,
+} from "@/lib/jaina/schemas";
 
 function extractCreativeFromToolResult(toolResult: ToolResultEventData): CreativeArtifact | null {
   if (!toolResult.ok || !toolResult.output) return null;
@@ -92,6 +97,20 @@ function tryParseJsonArray(detail: string): unknown[] | null {
     } catch {}
   }
   return null;
+}
+
+function getProgressValueAsString(data: unknown, key: string): string {
+  if (!data || typeof data !== "object") return "";
+  const value = (data as Record<string, unknown>)[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function resolveToolProgressMetadata(entry: JainaProgressEntry) {
+  const toolCallId =
+    getProgressValueAsString(entry.data, "tool_call_id") ||
+    getProgressValueAsString(entry.data, "call_id");
+  const toolName = getProgressValueAsString(entry.data, "tool_name");
+  return { toolCallId, toolName };
 }
 
 function JsonTable({ data }: { data: unknown[] }) {
@@ -156,7 +175,11 @@ type JainaMessageItemProps = {
   activeResponseId: string | null;
   state: JainaStreamState;
   onSuggestionClick?: (query: string) => void;
-  onPlanFeedback?: (payload: { text: string; planId?: string }) => void;
+  onPlanFeedback?: (payload: {
+    planId: string;
+    approved: boolean;
+    reason?: string;
+  }) => void;
 };
 
 export function JainaMessageItem({
@@ -173,10 +196,15 @@ export function JainaMessageItem({
   const report = isStreaming ? state.report : message.report;
   const plan = message.plan;
   const renderAsReport = message.renderAsReport ?? false;
+  const structuredReport = React.useMemo(() => {
+    if (!report || ("type" in report && report.type === "direct_answer")) {
+      return null;
+    }
+    const parsed = frontendSoTReportSchema.safeParse(report);
+    return parsed.success ? parsed.data : null;
+  }, [report]);
   const shouldRenderReport = Boolean(
-    report &&
-      !("type" in report && report.type === "direct_answer") &&
-      (renderAsReport || hasReportContent(report))
+    structuredReport && (renderAsReport || hasReportContent(structuredReport))
   );
 
   const { surfacedThoughts, chainOfThoughtEntries } = React.useMemo(() => {
@@ -276,7 +304,8 @@ export function JainaMessageItem({
                   </ChainOfThoughtHeader>
                   <ChainOfThoughtContent className="max-h-[300px] overflow-y-auto px-4 pb-4 custom-scrollbar">
                     {chainOfThoughtEntries.map((entry, index) => {
-                      const isToolStep = entry.stage === "tool_start";
+                      const isToolStep =
+                        entry.stage === "tool_start" || entry.stage === "tool_complete";
                       const isHandoffStep = entry.stage === "handoff_start";
                       const isCheckpoint =
                         entry.stage === "synthesis_start" ||
@@ -285,23 +314,31 @@ export function JainaMessageItem({
                       const prevEntry = index > 0 ? chainOfThoughtEntries[index - 1] : null;
                       const showBreakpoint = prevEntry && prevEntry.stage !== entry.stage;
 
+                      const { toolCallId, toolName } = resolveToolProgressMetadata(entry);
+
                       const toolCall = isToolStep
                         ? toolCalls?.find(
                             (tc) =>
-                              tc.id === entry.data.tool_call_id ||
-                              tc.name === entry.data.tool_name
+                              (toolCallId && tc.id === toolCallId) ||
+                              (!toolCallId && toolName && tc.name === toolName)
                           )
-                        : null;
+                        : undefined;
 
                       const toolResult = toolCall
                         ? toolResults?.find((tr) => tr.id === toolCall.id)
-                        : null;
+                        : toolResults?.find(
+                            (tr) =>
+                              (toolCallId && tr.id === toolCallId) ||
+                              (!toolCallId && toolName && tr.name === toolName)
+                          );
 
-                      const toolState = toolResult
+                      const toolState: "output-available" | "error" | "running" = toolResult
                         ? toolResult.ok
                           ? "output-available"
                           : "error"
-                        : "running";
+                        : getProgressValueAsString(entry.data, "error")
+                          ? "error"
+                          : "running";
 
                       if (isCheckpoint) {
                         return (
@@ -322,30 +359,42 @@ export function JainaMessageItem({
                         <React.Fragment key={`${entry.stage}-${index}`}>
                            {showBreakpoint && <div className="h-px bg-border/40 my-3" />}
                            <ChainOfThoughtStep
-                            status={
-                              entry.stage === "tool_start" && isStreaming
+                           status={
+                              entry.stage === "tool_start" && isStreaming && toolState === "running"
                                 ? "active"
                                 : "complete"
                             }
                             label={label}
                             description={
-                              isToolStep ? null : (
-                                cleanseReasoning(entry.detail) ?? "Working…"
-                              )
+                              cleanseReasoning(entry.detail) ??
+                              (isToolStep ? "Tool execution update." : "Working…")
                             }
                           >
-                            {toolCall && (
+                            {isToolStep && (toolCall || toolName) && (
                               <div className="mt-2">
-                                <Tool type={toolCall.name} state={toolState as any}>
-                                  <ToolHeader title={formatToolLabel(toolCall.name)} />
+                                <Tool type={toolCall?.name || toolName} state={toolState}>
+                                  <ToolHeader
+                                    title={formatToolLabel(toolCall?.name || toolName)}
+                                  />
                                   <ToolContent>
-                                    <ToolInput value={toolCall.args} />
-                                    {toolResult && (
+                                    <ToolInput
+                                      value={
+                                        toolCall?.args ??
+                                        ((entry.data as Record<string, unknown>)?.args ?? {})
+                                      }
+                                    />
+                                    {toolResult ? (
                                       <ToolOutput
                                         value={
                                           toolResult.output ?? toolResult.error
                                         }
                                       />
+                                    ) : (
+                                      getProgressValueAsString(entry.data, "error") && (
+                                        <ToolOutput
+                                          value={getProgressValueAsString(entry.data, "error")}
+                                        />
+                                      )
                                     )}
                                   </ToolContent>
                                 </Tool>
@@ -411,13 +460,27 @@ export function JainaMessageItem({
                         </div>
                       ))}
                       {plan.status === "awaiting_approval" && (
-                        <div className="flex justify-end pt-2">
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() =>
+                              onPlanFeedback?.({
+                                planId: plan.id,
+                                approved: false,
+                                reason: "Rejected by user",
+                              })
+                            }
+                          >
+                            Reject
+                          </Button>
                           <Button
                             size="sm"
                             onClick={() =>
                               onPlanFeedback?.({
-                                text: "Go",
                                 planId: plan.id,
+                                approved: true,
+                                reason: "Proceed",
                               })
                             }
                           >
@@ -435,7 +498,7 @@ export function JainaMessageItem({
             {shouldRenderReport && (
               <div className="mt-6 border-t border-white/10 pt-6">
                 <JainaReportView
-                  report={report as any}
+                  report={structuredReport}
                   status={isStreaming ? state.status : "complete"}
                   onSuggestionClick={onSuggestionClick}
                   idPrefix={message.id}

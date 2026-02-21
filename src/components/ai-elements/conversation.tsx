@@ -27,12 +27,12 @@ export function Conversation({ children, className }: ConversationProps) {
   }, [children]);
 
   return (
-    <div className={cn("relative h-full w-full", className)}>
+    <div className={cn("relative h-full min-h-0 w-full overflow-hidden", className)}>
       <ScrollArea
         ref={viewportRef}
         type="always"
         scrollbars="vertical"
-        className="h-full w-full"
+        className="h-full min-h-0 w-full"
       >
         {children}
       </ScrollArea>
@@ -97,6 +97,7 @@ export function ConversationEmptyState({ icon, title, description, children }: C
   );
 }
 
-export function ConversationDownload({ messages }: { messages: any[] }) {
-    return null;
+export function ConversationDownload({ messages }: { messages: unknown[] }) {
+  void messages;
+  return null;
 }

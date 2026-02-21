@@ -13,30 +13,65 @@ import {
   LineChart,
   Pie,
   PieChart,
-  XAxis,
-  YAxis,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
-import { chartSchema } from "@/lib/jaina/schemas";
-import { z } from "zod";
+import { type GraphSpec } from "@/lib/jaina/schemas";
 
-type Chart = z.infer<typeof chartSchema>;
+type ChartPoint = {
+  label: string;
+  value: number;
+  fill?: string;
+};
+
+type ChartSeries = {
+  name: string;
+  data: Array<{ x: string | number; y: number }>;
+};
+
+type ChartType = "line" | "bar" | "pie" | "area" | "stacked_bar";
+
+export type NormalizedChart = {
+  title: string;
+  description?: string | null;
+  type: ChartType;
+  data?: ChartPoint[];
+  series?: ChartSeries[];
+  x_axis_label?: string;
+  y_axis_label?: string;
+};
 
 interface JainaReportChartsProps {
-  charts: Chart[] | any[];
+  charts: JainaChartInput[];
+  showHeading?: boolean;
 }
 
-export function JainaReportCharts({ charts }: JainaReportChartsProps) {
+export type JainaChartInput = GraphSpec | Record<string, unknown>;
+
+export function isJainaChartInput(value: unknown): value is JainaChartInput {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+export function JainaReportCharts({ charts, showHeading = true }: JainaReportChartsProps) {
   if (!charts || charts.length === 0) return null;
+
+  const normalizedCharts = charts
+    .map(normalizeJainaChart)
+    .filter((chart): chart is NormalizedChart => Boolean(chart));
+
+  if (normalizedCharts.length === 0) return null;
 
   return (
     <div className="space-y-4 pt-4 border-t border-white/5">
-      <Heading size="4" className="text-primary/80">
-        Key Trends
-      </Heading>
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4">
-        {charts.map((chart: Chart, index: number) => (
+      {showHeading ? (
+        <Heading size="4" className="text-primary/80">
+          Key Trends
+        </Heading>
+      ) : null}
+      <Grid columns={{ initial: "1", xl: "2" }} gap="4">
+        {normalizedCharts.map((chart, index) => (
           <ChartCard key={`${chart.title || "chart"}-${index}`} chart={chart} />
         ))}
       </Grid>
@@ -44,9 +79,208 @@ export function JainaReportCharts({ charts }: JainaReportChartsProps) {
   );
 }
 
-function ChartCard({ chart }: { chart: Chart }) {
+function normalizeChartType(input: unknown): ChartType {
+  const value = String(input ?? "").toLowerCase().trim();
+  if (value === "stacked_bar" || value === "stacked-bar") return "stacked_bar";
+  if (value === "line") return "line";
+  if (value === "pie" || value === "doughnut" || value === "donut") return "pie";
+  if (value === "area") return "area";
+  return "bar";
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const cleaned = value.replace(/,/g, "");
+    const parsed = Number.parseFloat(cleaned);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function resolveCategoryLabel(row: Record<string, unknown>, index: number): string {
+  const candidateKeys = ["label", "x", "name", "campaign", "title"];
+  for (const key of candidateKeys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return String(index + 1);
+}
+
+function parseWideSeriesFromDataRows(rows: Record<string, unknown>[]): ChartSeries[] | null {
+  if (rows.length === 0) return null;
+
+  const numericKeys = Array.from(
+    rows.reduce<Set<string>>((set, row) => {
+      Object.entries(row).forEach(([key, value]) => {
+        if (key === "label" || key === "x" || key === "name") return;
+        if (toFiniteNumber(value) !== null) {
+          set.add(key);
+        }
+      });
+      return set;
+    }, new Set<string>())
+  );
+
+  if (numericKeys.length < 2) return null;
+
+  return numericKeys.map((key) => ({
+    name: key,
+    data: rows.map((row, index) => ({
+      x: resolveCategoryLabel(row, index),
+      y: toFiniteNumber(row[key]) ?? 0,
+    })),
+  }));
+}
+
+export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart | null {
+  if (!rawChart || typeof rawChart !== "object") return null;
+
+  const chart = rawChart as Record<string, unknown>;
+  const title = typeof chart.title === "string" ? chart.title : "Chart";
+  const description =
+    typeof chart.description === "string" ? chart.description : null;
+  const type = normalizeChartType(chart.type ?? chart.graph_type ?? chart.chart_type);
+
+  if (Array.isArray(chart.labels) && Array.isArray(chart.datasets)) {
+    const labels = chart.labels.map((label) => String(label ?? ""));
+    const datasets = chart.datasets.filter(
+      (dataset) => dataset && typeof dataset === "object"
+    );
+
+    if (datasets.length === 1) {
+      const firstDataset = datasets[0] as Record<string, unknown>;
+      const values = Array.isArray(firstDataset.data) ? firstDataset.data : [];
+      return {
+        title,
+        description,
+        type,
+        data: labels.map((label, index) => ({
+          label,
+          value: Number(values[index] ?? 0),
+        })),
+      };
+    }
+
+    return {
+      title,
+      description,
+      type,
+      series: datasets.map((dataset, datasetIndex) => {
+        const record = dataset as Record<string, unknown>;
+        const values = Array.isArray(record.data) ? record.data : [];
+        return {
+          name:
+            typeof record.label === "string"
+              ? record.label
+              : `Series ${datasetIndex + 1}`,
+          data: labels.map((label, index) => ({
+            x: label,
+            y: Number(values[index] ?? 0),
+          })),
+        };
+      }),
+    };
+  }
+
+  if (Array.isArray(chart.labels) && Array.isArray(chart.series)) {
+    const labels = chart.labels.map((label) => String(label ?? ""));
+    const series = chart.series.filter((item) => item && typeof item === "object");
+
+    return {
+      title,
+      description,
+      type,
+      series: series.map((item, index) => {
+        const record = item as Record<string, unknown>;
+        const values = Array.isArray(record.values) ? record.values : [];
+        return {
+          name: typeof record.name === "string" ? record.name : `Series ${index + 1}`,
+          data: labels.map((label, labelIndex) => ({
+            x: label,
+            y: Number(values[labelIndex] ?? 0),
+          })),
+        };
+      }),
+    };
+  }
+
+  if (Array.isArray(chart.series)) {
+    const series = chart.series.filter((item) => item && typeof item === "object");
+
+    return {
+      title,
+      description,
+      type,
+      series: series.map((item, seriesIndex) => {
+        const record = item as Record<string, unknown>;
+        const data = Array.isArray(record.data) ? record.data : [];
+        return {
+          name: typeof record.name === "string" ? record.name : `Series ${seriesIndex + 1}`,
+          data: data.map((point, pointIndex) => {
+            if (!point || typeof point !== "object") {
+              return { x: pointIndex + 1, y: 0 };
+            }
+            const pointRecord = point as Record<string, unknown>;
+            return {
+              x: String(pointRecord.x ?? pointRecord.label ?? pointIndex + 1),
+              y: Number(pointRecord.y ?? pointRecord.value ?? 0),
+            };
+          }),
+        };
+      }),
+      x_axis_label:
+        typeof chart.x_axis_label === "string" ? chart.x_axis_label : undefined,
+      y_axis_label:
+        typeof chart.y_axis_label === "string" ? chart.y_axis_label : undefined,
+    };
+  }
+
+  if (Array.isArray(chart.data)) {
+    const rows = chart.data.filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item && typeof item === "object" && !Array.isArray(item))
+    );
+    const wideSeries = parseWideSeriesFromDataRows(rows);
+    if (wideSeries) {
+      return {
+        title,
+        description,
+        type,
+        series: wideSeries,
+        x_axis_label:
+          typeof chart.x_axis_label === "string" ? chart.x_axis_label : undefined,
+        y_axis_label:
+          typeof chart.y_axis_label === "string" ? chart.y_axis_label : undefined,
+      };
+    }
+
+    return {
+      title,
+      description,
+      type,
+      data: rows.map((item) => {
+          const record = item as Record<string, unknown>;
+          return {
+            label: String(record.label ?? record.x ?? record.name ?? ""),
+            value: Number(record.value ?? record.y ?? 0),
+            fill: typeof record.fill === "string" ? record.fill : undefined,
+          };
+      }),
+      x_axis_label:
+        typeof chart.x_axis_label === "string" ? chart.x_axis_label : undefined,
+      y_axis_label:
+        typeof chart.y_axis_label === "string" ? chart.y_axis_label : undefined,
+    };
+  }
+
+  return null;
+}
+
+function ChartCard({ chart }: { chart: NormalizedChart }) {
   return (
-    <Card className="border border-white/10 bg-black/20">
+    <Card className="min-w-0 border border-white/10 bg-black/20">
       <Box p="3" className="space-y-4">
         <div className="space-y-1">
           <Text weight="medium" size="3">
@@ -66,7 +300,7 @@ function ChartCard({ chart }: { chart: Chart }) {
   );
 }
 
-function ChartRenderer({ chart }: { chart: Chart }) {
+function ChartRenderer({ chart }: { chart: NormalizedChart }) {
   const colors = [
     "#38bdf8",
     "#60a5fa",
@@ -93,7 +327,7 @@ function ChartRenderer({ chart }: { chart: Chart }) {
             outerRadius={80}
             paddingAngle={5}
           >
-            {data.map((entry: any, index: number) => (
+            {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.fill || colors[index % colors.length]} stroke="transparent" />
             ))}
           </Pie>
@@ -107,12 +341,7 @@ function ChartRenderer({ chart }: { chart: Chart }) {
   }
 
   if (chart.series && chart.series.length > 0) {
-    return (
-      <SeriesChartRenderer
-        chart={chart}
-        colors={colors}
-      />
-    );
+    return <SeriesChartRenderer chart={chart} colors={colors} />;
   }
 
   const data = chart.data || [];
@@ -140,7 +369,7 @@ function ChartRenderer({ chart }: { chart: Chart }) {
             contentStyle={{ backgroundColor: "#111", borderColor: "#333", color: "#fff" }}
           />
           <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} barSize={36}>
-            {data.map((entry: any, index: number) => (
+            {data.map((entry, index) => (
               <Cell key={`bar-cell-${index}`} fill={entry.fill || colors[index % colors.length]} />
             ))}
           </Bar>
@@ -216,9 +445,9 @@ function ChartRenderer({ chart }: { chart: Chart }) {
 
 function SeriesChartRenderer({
   chart,
-  colors
+  colors,
 }: {
-  chart: Chart;
+  chart: NormalizedChart;
   colors: string[];
 }) {
   const series = chart.series || [];
@@ -226,16 +455,16 @@ function SeriesChartRenderer({
   const yLabel = chart.y_axis_label;
 
   const allXValues = new Set<string | number>();
-  series.forEach((s: any) => {
-    s.data.forEach((d: any) => allXValues.add(d.x));
+  series.forEach((entry) => {
+    entry.data.forEach((point) => allXValues.add(point.x));
   });
   const xValues = Array.from(allXValues).sort();
 
-  const transformedData = xValues.map(x => {
+  const transformedData = xValues.map((x) => {
     const dataPoint: Record<string, string | number> = { x };
-    series.forEach((s: any) => {
-      const point = s.data.find((d: any) => d.x === x);
-      dataPoint[s.name] = point ? point.y : 0;
+    series.forEach((entry) => {
+      const point = entry.data.find((candidate) => candidate.x === x);
+      dataPoint[entry.name] = point ? point.y : 0;
     });
     return dataPoint;
   });
@@ -251,74 +480,38 @@ function SeriesChartRenderer({
             axisLine={false}
             tick={{ fill: "#888", fontSize: 12 }}
             dy={10}
-            label={xLabel ? { value: xLabel, position: "insideBottom", dy: 25, fill: "#888" } : undefined}
+            label={
+              xLabel
+                ? { value: xLabel, position: "insideBottom", dy: 25, fill: "#888" }
+                : undefined
+            }
           />
           <YAxis
             tickLine={false}
             axisLine={false}
             tick={{ fill: "#888", fontSize: 12 }}
-            label={yLabel ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#888" } : undefined}
+            label={
+              yLabel
+                ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#888" }
+                : undefined
+            }
           />
           <Tooltip
             cursor={{ fill: "rgba(255,255,255,0.05)" }}
             contentStyle={{ backgroundColor: "#111", borderColor: "#333", color: "#fff" }}
           />
-          <Legend
-            wrapperStyle={{ paddingTop: "10px" }}
-            iconType="circle"
-          />
-          {series.map((s: any, index: number) => (
+          <Legend wrapperStyle={{ color: "#fff" }} />
+          {series.map((entry, index) => (
             <Bar
-              key={s.name}
-              dataKey={s.name}
-              stackId={chart.type === "stacked_bar" ? "stack" : undefined}
+              key={entry.name}
+              dataKey={entry.name}
               fill={colors[index % colors.length]}
               radius={[4, 4, 0, 0]}
+              barSize={24}
+              stackId={chart.type === "stacked_bar" ? "stack" : undefined}
             />
           ))}
         </BarChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.type === "area") {
-    return (
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={transformedData}>
-          <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.1)" />
-          <XAxis
-            dataKey="x"
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: "#888", fontSize: 12 }}
-            dy={10}
-            label={xLabel ? { value: xLabel, position: "insideBottom", dy: 25, fill: "#888" } : undefined}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: "#888", fontSize: 12 }}
-            label={yLabel ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#888" } : undefined}
-          />
-          <Tooltip
-            contentStyle={{ backgroundColor: "#111", borderColor: "#333", color: "#fff" }}
-          />
-          <Legend
-            wrapperStyle={{ paddingTop: "10px" }}
-            iconType="circle"
-          />
-          {series.map((s: any, index: number) => (
-            <Area
-              key={s.name}
-              type="monotone"
-              dataKey={s.name}
-              stroke={colors[index % colors.length]}
-              fill={colors[index % colors.length]}
-              fillOpacity={0.2}
-              strokeWidth={2}
-            />
-          ))}
-        </AreaChart>
       </ResponsiveContainer>
     );
   }
@@ -333,29 +526,34 @@ function SeriesChartRenderer({
           axisLine={false}
           tick={{ fill: "#888", fontSize: 12 }}
           dy={10}
-          label={xLabel ? { value: xLabel, position: "insideBottom", dy: 25, fill: "#888" } : undefined}
+          label={
+            xLabel
+              ? { value: xLabel, position: "insideBottom", dy: 25, fill: "#888" }
+              : undefined
+          }
         />
         <YAxis
           tickLine={false}
           axisLine={false}
           tick={{ fill: "#888", fontSize: 12 }}
-          label={yLabel ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#888" } : undefined}
+          label={
+            yLabel
+              ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#888" }
+              : undefined
+          }
         />
         <Tooltip
           contentStyle={{ backgroundColor: "#111", borderColor: "#333", color: "#fff" }}
         />
-        <Legend
-          wrapperStyle={{ paddingTop: "10px" }}
-          iconType="circle"
-        />
-        {series.map((s: any, index: number) => (
+        <Legend wrapperStyle={{ color: "#fff" }} />
+        {series.map((entry, index) => (
           <Line
-            key={s.name}
+            key={entry.name}
             type="monotone"
-            dataKey={s.name}
+            dataKey={entry.name}
             stroke={colors[index % colors.length]}
             strokeWidth={2}
-            dot={{ r: 3, fill: colors[index % colors.length], strokeWidth: 0 }}
+            dot={{ r: 3, strokeWidth: 0 }}
             activeDot={{ r: 5, strokeWidth: 0 }}
           />
         ))}

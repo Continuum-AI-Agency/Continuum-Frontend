@@ -29,6 +29,10 @@ type JainaChatSurfaceProps = {
   className?: string;
 };
 
+function normalizeIdentity(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
 export function JainaChatSurface({
   brandProfileId,
   brandName,
@@ -41,7 +45,7 @@ export function JainaChatSurface({
   const { show } = useToast();
   const { processAIAction } = useCampaignAI();
 
-  const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
+  const { state, start, cancel, reset, clearMemory, approvePlan } = useJainaChatStream();
   const [isPlanMode, setIsPlanMode] = React.useState(false);
 
   const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
@@ -49,6 +53,7 @@ export function JainaChatSurface({
     null
   );
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
+  const processedCanvasEnvelopeKeysRef = React.useRef<Set<string>>(new Set());
 
   const updateMessage = React.useCallback(
     (id: string, update: Partial<JainaChatMessage>) => {
@@ -61,6 +66,12 @@ export function JainaChatSurface({
 
   React.useEffect(() => {
     if (!activeResponseId) return;
+
+    if (state.plan) {
+      updateMessage(activeResponseId, {
+        plan: state.plan,
+      });
+    }
 
     if (state.status === "streaming" && state.responseText) {
       const isJsonStart = state.responseText.trim().startsWith("{");
@@ -95,6 +106,9 @@ export function JainaChatSurface({
         status: "done",
         content,
         report: state.report ?? undefined,
+        reportAssembly: state.reportAssembly ?? undefined,
+        reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
+        plan: state.plan ?? undefined,
         finalThought,
         renderAsReport,
         reasoning: state.progress,
@@ -109,6 +123,9 @@ export function JainaChatSurface({
         status: "error",
         content: state.error,
         title: "Jaina error",
+        reportAssembly: state.reportAssembly ?? undefined,
+        reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
+        plan: state.plan ?? undefined,
         reasoning: state.progress,
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
@@ -120,7 +137,10 @@ export function JainaChatSurface({
     activeResponseId,
     state.status,
     state.report,
+    state.reportAssembly,
+    state.reportAssemblyHtml,
     state.error,
+    state.plan,
     updateMessage,
     state.progress,
     state.toolCalls,
@@ -131,7 +151,9 @@ export function JainaChatSurface({
   ]);
 
   React.useEffect(() => {
-    if (state.toolResults.length === 0) return;
+    if (state.toolResults.length === 0 && state.canvasActions.length === 0) return;
+
+    const envelopesToApply: Array<ReturnType<typeof extractCampaignCanvasActionsEnvelope>> = [];
 
     for (const toolResult of state.toolResults) {
       if (processedToolResultIdsRef.current.has(toolResult.id)) {
@@ -144,14 +166,46 @@ export function JainaChatSurface({
       }
 
       const envelope = extractCampaignCanvasActionsEnvelope(toolResult.output);
-      if (!envelope) {
+      if (envelope) {
+        envelopesToApply.push(envelope);
+      }
+    }
+
+    for (const envelope of state.canvasActions) {
+      envelopesToApply.push(envelope);
+    }
+
+    for (const envelope of envelopesToApply) {
+      if (!envelope) continue;
+
+      const envelopeKey = JSON.stringify({
+        brandId: envelope.brandId,
+        userId: envelope.userId,
+        sessionId: envelope.sessionId,
+        actions: envelope.actions,
+      });
+      if (processedCanvasEnvelopeKeysRef.current.has(envelopeKey)) {
+        continue;
+      }
+      processedCanvasEnvelopeKeysRef.current.add(envelopeKey);
+
+      const hasBrandMatch = envelope.brandId === brandProfileId;
+      if (!hasBrandMatch) {
         continue;
       }
 
-      const hasBrandMatch = envelope.brandId === brandProfileId;
-      const hasUserMatch = !userId || envelope.userId === userId;
-      if (!hasBrandMatch || !hasUserMatch) {
-        continue;
+      const normalizedEnvelopeUserId = normalizeIdentity(envelope.userId);
+      const normalizedSessionUserId = normalizeIdentity(userId);
+      const hasUserMatch =
+        !normalizedSessionUserId ||
+        !normalizedEnvelopeUserId ||
+        normalizedEnvelopeUserId === normalizedSessionUserId;
+      if (!hasUserMatch) {
+        console.warn(
+          "Applying canvas action envelope despite userId mismatch",
+          envelope.userId,
+          userId
+        );
       }
 
       for (const action of envelope.actions) {
@@ -164,7 +218,7 @@ export function JainaChatSurface({
         variant: "success",
       });
     }
-  }, [brandProfileId, processAIAction, show, state.toolResults, userId]);
+  }, [brandProfileId, processAIAction, show, state.canvasActions, state.toolResults, userId]);
 
   React.useEffect(() => {
     if (adAccountId) {
@@ -172,6 +226,7 @@ export function JainaChatSurface({
       setMessages([]);
       setActiveResponseId(null);
       processedToolResultIdsRef.current.clear();
+      processedCanvasEnvelopeKeysRef.current.clear();
     }
   }, [adAccountId, reset]);
 
@@ -206,10 +261,11 @@ export function JainaChatSurface({
       setMessages((prev) => [...prev, userMessage, assistantMessage]);
       setActiveResponseId(assistantMessage.id);
       processedToolResultIdsRef.current.clear();
+      processedCanvasEnvelopeKeysRef.current.clear();
 
       const result = await start({
         query: query,
-        plan: isPlanMode,
+        canvas: isPlanMode || Boolean(campaignCanvasPayload),
         adAccountId: adAccountId,
         brandId: brandProfileId,
         userId: userId ?? undefined,
@@ -232,11 +288,28 @@ export function JainaChatSurface({
     setMessages([]);
     setActiveResponseId(null);
     processedToolResultIdsRef.current.clear();
+    processedCanvasEnvelopeKeysRef.current.clear();
   }, [reset]);
 
   const handlePlanFeedback = React.useCallback(
-    async (payload: { text: string; planId?: string }) => {
-      if (payload.planId) {
+    async (payload: { planId: string; approved: boolean; reason?: string }) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.plan && msg.plan.id === payload.planId) {
+            return {
+              ...msg,
+              plan: {
+                ...msg.plan,
+                status: payload.approved ? "approved" : "rejected",
+              },
+            };
+          }
+          return msg;
+        })
+      );
+
+      const result = await approvePlan(payload);
+      if (result.error) {
         setMessages((prev) =>
           prev.map((msg) => {
             if (msg.plan && msg.plan.id === payload.planId) {
@@ -244,18 +317,29 @@ export function JainaChatSurface({
                 ...msg,
                 plan: {
                   ...msg.plan,
-                  status: "approved",
+                  status: "awaiting_approval",
                 },
               };
             }
             return msg;
           })
         );
+        show({
+          title: "Plan decision failed",
+          description: result.error,
+          variant: "error",
+        });
+        return;
       }
 
-      await handleSubmit(payload.text);
+      const statusLabel = payload.approved ? "approved" : "rejected";
+      show({
+        title: "Plan decision sent",
+        description: `Plan ${statusLabel}.`,
+        variant: payload.approved ? "success" : "warning",
+      });
     },
-    [handleSubmit]
+    [approvePlan, show]
   );
 
   const handleClearMemory = React.useCallback(async () => {
