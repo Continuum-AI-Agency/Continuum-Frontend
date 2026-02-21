@@ -27,6 +27,11 @@ import { useDraftGeneration } from "../hooks/useDraftGeneration"
 import { BulkActionToolbar } from "./BulkActionToolbar"
 import { GenerationProgressPanel } from "./GenerationProgressPanel"
 import { EventStreamPanel } from "./EventStreamPanel"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[]
@@ -146,7 +151,7 @@ export function OrganicCalendarWorkspaceClient({
     seededDraftCount,
     gridStatus,
     handleAutoSort,
-    handleGenerateDrafts,
+    handleGenerateGridJob,
     handleRegenerate,
   } = useDraftGeneration({
     brandProfileId,
@@ -192,15 +197,16 @@ export function OrganicCalendarWorkspaceClient({
           ) : null
         }
       >
-        <div className="flex flex-col h-full">
-          <div className="flex-1 min-h-0 relative overflow-hidden p-2">
+        <ResizablePanelGroup direction="horizontal" className="h-full gap-2 p-2">
+          <ResizablePanel defaultSize={68} minSize={52}>
+            <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-800/80 bg-gradient-to-b from-slate-950 to-slate-900 p-2">
             <div className="flex items-center justify-between gap-4 px-1 pb-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-secondary">
-                  Week planning
+              <div className="space-y-1">
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-slate-300">
+                  Week Planning
                 </p>
-                <p className="text-xs text-secondary">
-                  Mon/Wed/Fri Instagram · Tue/Thu/Sat LinkedIn
+                <p className="text-xs text-slate-400">
+                  Weekly calendar placement for Instagram, Facebook, and LinkedIn.
                 </p>
               </div>
               <WeekPicker
@@ -220,52 +226,53 @@ export function OrganicCalendarWorkspaceClient({
               onRegenerate={handleRegenerate}
               onNativeDrop={handleNativeDrop}
             />
-          </div>
-          <div className="h-[350px] min-h-[300px] border-t border-subtle bg-surface">
-            <WorkspacePanel
-              trendTypes={trendTypes}
-              trends={trends}
-              selectedTrendIds={useCalendarStore((s) => s.selectedTrendIds)}
-              activePlatforms={activePlatforms}
-              maxTrendSelections={maxTrendSelections}
-              onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-              onGenerate={() => {
-                console.log("[DEBUG] OrganicCalendarWorkspaceClient: onGenerate triggered");
-                handleGenerateDrafts();
-              }}
-              viewMode="week"
-              onViewModeChange={() => {}}
-              onAutoSort={handleAutoSort}
-              onClearAll={clearCalendar}
-              onSelectDraft={(id) => handleSelect(id, false)}
-              onToggleSelection={(id) => handleSelect(id, true)}
-              selectedDraftId={selectedId}
-              selectedDraftIds={selectedIds}
-              unscheduledDrafts={unscheduledDrafts}
-              allDrafts={drafts}
-              seedCount={seededDraftCount}
-              gridStatus={gridStatus}
-            />
-          </div>
-        </div>
+
+            <div className="mt-3 space-y-3">
+              <GenerationProgressPanel
+                status={gridStatus}
+                percent={gridProgress.percent}
+                message={gridProgress.message}
+                error={gridError}
+              />
+
+              {eventHistory.length > 0 && (
+                <EventStreamPanel
+                  events={eventHistory}
+                  onClear={clearEventHistory}
+                  onPlacementSelect={(id) => handleSelect(id, false)}
+                />
+              )}
+            </div>
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
+
+          <ResizablePanel defaultSize={32} minSize={24} maxSize={42}>
+            <aside className="h-full rounded-xl border border-slate-800/80 bg-slate-950/80">
+              <WorkspacePanel
+                trendTypes={trendTypes}
+                trends={trends}
+                selectedTrendIds={selectedTrendIds}
+                activePlatforms={activePlatforms}
+                maxTrendSelections={maxTrendSelections}
+                onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                onGenerateGrid={handleGenerateGridJob}
+                onAutoSort={handleAutoSort}
+                onClearAll={clearCalendar}
+                onSelectDraft={(id) => handleSelect(id, false)}
+                onToggleSelection={(id) => handleSelect(id, true)}
+                selectedDraftId={selectedId}
+                selectedDraftIds={selectedIds}
+                unscheduledDrafts={unscheduledDrafts}
+                allDrafts={drafts}
+                seedCount={seededDraftCount}
+                gridStatus={gridStatus}
+              />
+            </aside>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </CalendarDndContext>
-
-      <div className="px-2 pb-6 space-y-4">
-        <GenerationProgressPanel
-          status={gridStatus}
-          percent={gridProgress.percent}
-          message={gridProgress.message}
-          error={gridError}
-        />
-
-        {eventHistory.length > 0 && (
-          <EventStreamPanel
-            events={eventHistory}
-            onClear={clearEventHistory}
-            onPlacementSelect={(id) => handleSelect(id, false)}
-          />
-        )}
-      </div>
 
       <BulkActionToolbar
         selectedCount={selectedIds.length}

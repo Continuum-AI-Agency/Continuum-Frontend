@@ -1,32 +1,219 @@
 import * as React from "react";
+
+import type {
+  CalendarGenerationRequest,
+  CalendarPlacement,
+  CalendarPlacementSeed,
+} from "@/lib/organic/calendar-generation";
+import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import {
+  ORGANIC_MVP_PLATFORM_KEYS,
+} from "@/lib/organic/platforms";
+import {
+  generationRequestSchema,
+  type GenerationRequestPayload,
+  type WeeklyGrid,
+} from "@/lib/organic/types";
 import { useCalendarStore } from "@/lib/organic/store";
-import type { StreamEvent } from "@/components/organic/primitives/types";
-import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation";
-import type { 
-  OrganicCalendarDay, 
-  OrganicCalendarDraft, 
-  OrganicPlatformTag 
-} from "../primitives/types";
-import { 
-  ORGANIC_BETA_LAUNCH_SCHEDULE, 
-  ORGANIC_NEWSLETTER_DEFAULT 
-} from "../primitives/organic-calendar-config";
-import { 
-  buildScheduledAt, 
-  formatTimeLabel, 
-  formatTimeLabelFromIso, 
-  formatDayIdFromIso,
-  resolveTimeLabel 
-} from "../primitives/calendar-utils";
-import { streamCalendarGeneration } from "../primitives/organic-calendar-api";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { Trend } from "@/lib/organic/trends";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
-import type { 
-  CalendarPlacement, 
-  CalendarPlacementSeed,
-  CalendarGenerationRequest,
-} from "@/lib/organic/calendar-generation";
+import { parseWeeklyGridPayload } from "@/lib/organic/weekly-grid";
+
+import {
+  ORGANIC_BETA_LAUNCH_SCHEDULE,
+  ORGANIC_NEWSLETTER_DEFAULT,
+} from "../primitives/organic-calendar-config";
+import {
+  buildScheduledAt,
+  formatDayIdFromIso,
+  formatTimeLabelFromIso,
+  resolveTimeLabel,
+} from "../primitives/calendar-utils";
+import { streamCalendarGeneration } from "../primitives/organic-calendar-api";
+import type {
+  OrganicCalendarDay,
+  OrganicCalendarDraft,
+  OrganicPlatformTag,
+} from "../primitives/types";
+
+const DEFAULT_GRID_PROMPT: GenerationRequestPayload["prompt"] = {
+  id: "calendar-weekly-mvp",
+  name: "Calendar Weekly MVP",
+  description: "Generate a weekly post plan for selected trends.",
+  content:
+    "Generate a weekly content grid for Instagram, Facebook, and LinkedIn. Keep posts distinct by platform and optimize for posting time.",
+  source: "preset",
+};
+
+type GridControlValues = {
+  language: string;
+  userPrompt: string;
+  generationPrompt?: string;
+};
+
+type GridPlacement = {
+  dayId: string;
+  draft: OrganicCalendarDraft;
+};
+
+function normalizeDayToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveGridPlatformOrder(activePlatforms: OrganicPlatformKey[]) {
+  const mvpSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
+  const preferred = activePlatforms.filter((platform) => mvpSet.has(platform));
+
+  if (preferred.length > 0) {
+    return preferred;
+  }
+
+  return [...ORGANIC_MVP_PLATFORM_KEYS];
+}
+
+function resolveGridDay(rowDay: string, calendarDays: OrganicCalendarDay[], rowIndex: number) {
+  const trimmedDay = rowDay.trim();
+  if (!trimmedDay) {
+    return calendarDays[rowIndex % calendarDays.length] ?? null;
+  }
+
+  const dayToken = normalizeDayToken(trimmedDay);
+  const exact = calendarDays.find((day) => normalizeDayToken(day.id) === dayToken);
+  if (exact) return exact;
+
+  const byLabel = calendarDays.find((day) => {
+    const label = normalizeDayToken(day.label);
+    return dayToken.startsWith(label) || label.startsWith(dayToken);
+  });
+  if (byLabel) return byLabel;
+
+  const byDateLabel = calendarDays.find((day) => normalizeDayToken(day.dateLabel) === dayToken);
+  if (byDateLabel) return byDateLabel;
+
+  const shorthand = dayToken.slice(0, 3);
+  const byShortLabel = calendarDays.find((day) => normalizeDayToken(day.label).slice(0, 3) === shorthand);
+  if (byShortLabel) return byShortLabel;
+
+  return calendarDays[rowIndex % calendarDays.length] ?? null;
+}
+
+export function mapWeeklyGridToCalendarPlacements({
+  weeklyGrid,
+  calendarDays,
+  selectedTrendIds,
+  activePlatforms,
+  platformAccountIds,
+}: {
+  weeklyGrid: WeeklyGrid;
+  calendarDays: OrganicCalendarDay[];
+  selectedTrendIds: string[];
+  activePlatforms: OrganicPlatformKey[];
+  platformAccountIds: Partial<Record<OrganicPlatformKey, string>>;
+}): GridPlacement[] {
+  if (calendarDays.length === 0) {
+    return [];
+  }
+
+  const platformOrder = resolveGridPlatformOrder(activePlatforms);
+  const daySlotCount = new Map<string, number>();
+
+  return weeklyGrid.grid.reduce<GridPlacement[]>((placements, row, index) => {
+    const day = resolveGridDay(row.day, calendarDays, index);
+    if (!day) {
+      return placements;
+    }
+
+    const slotIndex = daySlotCount.get(day.id) ?? 0;
+    daySlotCount.set(day.id, slotIndex + 1);
+
+    const platform = platformOrder[(index + slotIndex) % platformOrder.length] ?? "instagram";
+    const trendId = selectedTrendIds.length
+      ? selectedTrendIds[index % selectedTrendIds.length]
+      : undefined;
+
+    const timeLabel = day.suggestedTimes[slotIndex % day.suggestedTimes.length] ?? "9:00 AM";
+    const title = row.title_topic || row.type || "Planned post";
+    const objective = row.objective || "Engagement";
+
+    placements.push({
+      dayId: day.id,
+      draft: {
+        id: `grid-${day.id}-${index + 1}`,
+        title,
+        summary: objective,
+        timeLabel,
+        dateLabel: `${day.label}, ${day.dateLabel}`,
+        status: "draft",
+        platforms: [platform],
+        format: row.format || row.type || "Post",
+        objective,
+        captionPreview:
+          row.cta?.trim().length
+            ? `${title}\n\nCTA: ${row.cta}`
+            : "Generated from weekly grid. Refine copy before publishing.",
+        tags: trendId ? [trendId] : [],
+        mediaCount: row.num_slides ?? 1,
+        seedTrendId: trendId,
+        targetAccountId: platformAccountIds[platform],
+        titleTopic: row.title_topic || undefined,
+        target: row.target || undefined,
+        tone: row.tone || undefined,
+        cta: row.cta || undefined,
+      },
+    });
+
+    return placements;
+  }, []);
+}
+
+function parseJsonSafely(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+async function safeParseJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function queueGridJob(payload: GenerationRequestPayload): Promise<string> {
+  const supabase = createSupabaseBrowserClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
+  const response = await fetch("/api/organic/generate-grid", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = await safeParseJson(response);
+    const message =
+      typeof data === "object" && data && "error" in data && typeof data.error === "string"
+        ? data.error
+        : "Failed to queue organic content generation.";
+    throw new Error(message);
+  }
+
+  const data = (await response.json()) as { jobId?: string };
+  if (!data.jobId) {
+    throw new Error("Generation service did not return a job identifier.");
+  }
+
+  return data.jobId;
+}
 
 export function useDraftGeneration({
   brandProfileId,
@@ -56,7 +243,18 @@ export function useDraftGeneration({
     updateDraft: updateDraftById,
     setGhosts,
     addEvent,
+    setDays,
+    setUnscheduledDrafts,
   } = useCalendarStore();
+
+  const gridEventSourceRef = React.useRef<EventSource | null>(null);
+
+  const closeGridStream = React.useCallback(() => {
+    gridEventSourceRef.current?.close();
+    gridEventSourceRef.current = null;
+  }, []);
+
+  React.useEffect(() => () => closeGridStream(), [closeGridStream]);
 
   const seededDraftCount = React.useMemo(
     () =>
@@ -81,7 +279,7 @@ export function useDraftGeneration({
 
       const relativeMatch = dayId.match(/^day-(\d+)$/);
       if (relativeMatch) {
-        const index = parseInt(relativeMatch[1], 10) - 1;
+        const index = Number.parseInt(relativeMatch[1], 10) - 1;
         const indexedDay = calendarDays[index];
         if (indexedDay) return indexedDay;
       }
@@ -101,18 +299,14 @@ export function useDraftGeneration({
       const seedTrendId = placement.seed?.trendId ?? null;
       const tags = seedTrendId ? [seedTrendId] : existing?.tags ?? [];
       const title = content.titleTopic ?? existing?.title ?? "Planned draft";
-      const summary = placement.creative?.creativeIdea ?? content.objective ?? existing?.summary ?? "Planned draft";
+      const summary =
+        placement.creative?.creativeIdea ?? content.objective ?? existing?.summary ?? "Planned draft";
       const caption = placement.copy?.caption ?? existing?.captionPreview ?? "Details incoming.";
       const hashtags = placement.copy?.hashtags;
       let finalCaption = caption;
-      
+
       if (hashtags) {
-        const allTags = [
-          ...(hashtags.high || []),
-          ...(hashtags.medium || []),
-          ...(hashtags.low || [])
-        ].filter(Boolean);
-        
+        const allTags = [...(hashtags.high || []), ...(hashtags.medium || []), ...(hashtags.low || [])].filter(Boolean);
         if (allTags.length > 0) {
           finalCaption = `${caption}\n\n${allTags.join(" ")}`;
         }
@@ -142,6 +336,42 @@ export function useDraftGeneration({
       };
     },
     [resolveDayMeta]
+  );
+
+  const hydrateCalendarFromGrid = React.useCallback(
+    (weeklyGrid: WeeklyGrid) => {
+      const placements = mapWeeklyGridToCalendarPlacements({
+        weeklyGrid,
+        calendarDays,
+        selectedTrendIds,
+        activePlatforms,
+        platformAccountIds,
+      });
+
+      setDays(calendarDays.map((day) => ({ ...day, slots: [] })));
+      setUnscheduledDrafts([]);
+
+      placements.forEach((placement) => {
+        addDraft(placement.dayId, placement.draft);
+      });
+
+      setGridProgress({
+        percent: 100,
+        message: `Placed ${placements.length} planned posts on this week.`,
+      });
+      setGridStatus("complete");
+    },
+    [
+      activePlatforms,
+      addDraft,
+      calendarDays,
+      platformAccountIds,
+      selectedTrendIds,
+      setDays,
+      setGridProgress,
+      setGridStatus,
+      setUnscheduledDrafts,
+    ]
   );
 
   const handleAutoSort = React.useCallback(async () => {
@@ -177,7 +407,8 @@ export function useDraftGeneration({
         continue;
       }
 
-      const platform = ORGANIC_BETA_LAUNCH_SCHEDULE[day.label as keyof typeof ORGANIC_BETA_LAUNCH_SCHEDULE];
+      const platform =
+        ORGANIC_BETA_LAUNCH_SCHEDULE[day.label as keyof typeof ORGANIC_BETA_LAUNCH_SCHEDULE];
       const trendId = itemsToSchedule[trendIndex];
 
       if (platform && trendId) {
@@ -186,8 +417,8 @@ export function useDraftGeneration({
         const tags = trend?.tags?.includes("question")
           ? [trendId, "question"]
           : trend?.tags?.includes("event")
-          ? [trendId, "event"]
-          : [trendId];
+            ? [trendId, "event"]
+            : [trendId];
         const seedId = `seed-${day.id}-${trendId}`;
         const alreadyExists = day.slots.some((slot) => slot.id === seedId);
         if (!alreadyExists) {
@@ -234,8 +465,8 @@ export function useDraftGeneration({
           const seedSource = draft.tags.includes("question")
             ? "question"
             : draft.tags.includes("event")
-            ? "event"
-            : "trend";
+              ? "event"
+              : "trend";
 
           return {
             placementId: draft.id,
@@ -255,7 +486,9 @@ export function useDraftGeneration({
     let resolvedTz = "UTC";
     try {
       resolvedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    } catch (e) {}
+    } catch {
+      resolvedTz = "UTC";
+    }
 
     try {
       seeds.forEach((seed) => {
@@ -280,59 +513,62 @@ export function useDraftGeneration({
         },
       };
 
-      await streamCalendarGeneration(
-        payload,
-        (event) => {
-          addEvent({
-            id: crypto.randomUUID(),
-            type: event.type,
-            timestamp: new Date().toISOString(),
-            data: event,
-          });
+      await streamCalendarGeneration(payload, (event) => {
+        addEvent({
+          id: crypto.randomUUID(),
+          type: event.type,
+          timestamp: new Date().toISOString(),
+          data: event,
+        });
 
-          if (event.type === "progress") {
-            const message = event.stage 
-              ? `[${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
-              : event.message ?? "Generating content...";
-            setGridProgress({
-              percent: Math.round((event.completed / event.total) * 100),
-              message,
-            });
-          } else if (event.type === "placement") {
-            const placement = event.placement;
-            const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
-            const nextDraft = mapPlacementToDraft(placement, existing);
-            
-            const targetDay = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
-            if (!targetDay) {
-              console.error("Target day not found for placement", placement.schedule.dayId, "Available:", calendarDays.map(d => d.id));
-            } else {
-              addDraft(targetDay.id, nextDraft);
-              setGhosts(targetDay.id, 0);
-            }
-          } else if (event.type === "error") {
-            setGridError(event.message);
-            setGridStatus("error");
-          } else if (event.type === "complete") {
-            setGridStatus("complete");
-          }
+        if (event.type === "progress") {
+          const message = event.stage
+            ? `[${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
+            : event.message ?? "Generating content...";
+          setGridProgress({
+            percent: Math.round((event.completed / event.total) * 100),
+            message,
+          });
+          return;
         }
-      );
+
+        if (event.type === "placement") {
+          const placement = event.placement;
+          const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
+          const nextDraft = mapPlacementToDraft(placement, existing);
+
+          const targetDay = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
+          if (targetDay) {
+            addDraft(targetDay.id, nextDraft);
+            setGhosts(targetDay.id, 0);
+          }
+          return;
+        }
+
+        if (event.type === "error") {
+          setGridError(event.message);
+          setGridStatus("error");
+          return;
+        }
+
+        if (event.type === "complete") {
+          setGridStatus("complete");
+        }
+      });
     } catch (error) {
-      console.error("[DEBUG] useDraftGeneration: Execution error", error);
       setGridStatus("error");
-      setGridError(
-        error instanceof Error ? error.message : "Generation failed. Please try again."
-      );
+      setGridError(error instanceof Error ? error.message : "Generation failed. Please try again.");
     }
   }, [
     activePlatforms,
     addDraft,
+    addEvent,
     brandProfileId,
     calendarDays,
     drafts,
     mapPlacementToDraft,
     platformAccountIds,
+    resolveDayMeta,
     setGhosts,
     setGridError,
     setGridProgress,
@@ -340,6 +576,130 @@ export function useDraftGeneration({
     updateDraftById,
     weekStartId,
   ]);
+
+  const handleGenerateGridJob = React.useCallback(
+    async ({ language, userPrompt, generationPrompt }: GridControlValues) => {
+      closeGridStream();
+      setGridError(null);
+      setGridStatus("running");
+      setGridProgress({ percent: 5, message: "Queuing weekly grid generation..." });
+
+      if (!brandProfileId) {
+        setGridStatus("error");
+        setGridError("Missing brand context. Please reconnect your brand profile.");
+        return;
+      }
+
+      const availableAccountIds = Object.entries(platformAccountIds).reduce<
+        Record<OrganicPlatformKey, string>
+      >((acc, [platform, accountId]) => {
+        if (
+          accountId &&
+          ORGANIC_MVP_PLATFORM_KEYS.includes(platform as OrganicPlatformKey)
+        ) {
+          acc[platform as OrganicPlatformKey] = accountId;
+        }
+        return acc;
+      }, {} as Record<OrganicPlatformKey, string>);
+
+      if (Object.keys(availableAccountIds).length === 0) {
+        setGridStatus("error");
+        setGridError("Connect at least one Instagram, Facebook, or LinkedIn account.");
+        return;
+      }
+
+      const payload = generationRequestSchema.parse({
+        platformAccountIds: availableAccountIds,
+        language: language.trim() || "English",
+        userPrompt:
+          userPrompt.trim() ||
+          "Create a weekly organic post plan from the selected trends with platform-specific copy.",
+        generationPrompt: generationPrompt?.trim() || undefined,
+        selectedTrendIds,
+        prompt: DEFAULT_GRID_PROMPT,
+      });
+
+      try {
+        const jobId = await queueGridJob(payload);
+        setGridProgress({ percent: 10, message: "Generation job queued. Waiting for stream..." });
+
+        const source = new EventSource(
+          `/api/organic/generate-grid/events?job_id=${encodeURIComponent(jobId)}`
+        );
+        gridEventSourceRef.current = source;
+
+        const handleStreamError = (message: string) => {
+          closeGridStream();
+          setGridStatus("error");
+          setGridError(message);
+        };
+
+        source.addEventListener("progress", (event) => {
+          const payload = parseJsonSafely((event as MessageEvent).data) as {
+            completed?: number;
+            total?: number;
+            message?: string;
+            detail?: string;
+          };
+
+          const completed = payload?.completed;
+          const total = payload?.total;
+          const percent =
+            typeof completed === "number" && typeof total === "number" && total > 0
+              ? Math.max(10, Math.round((completed / total) * 100))
+              : 30;
+
+          setGridProgress({
+            percent,
+            message: payload?.message ?? payload?.detail ?? "Generating weekly grid...",
+          });
+        });
+
+        source.addEventListener("complete", (event) => {
+          const streamPayload = parseJsonSafely((event as MessageEvent).data);
+          const grid = parseWeeklyGridPayload(streamPayload);
+          if (!grid) {
+            handleStreamError("Received an invalid weekly grid payload.");
+            return;
+          }
+
+          hydrateCalendarFromGrid(grid);
+          closeGridStream();
+        });
+
+        source.addEventListener("error", (event) => {
+          const streamPayload = parseJsonSafely((event as MessageEvent).data) as {
+            error?: string;
+            detail?: string;
+            message?: string;
+          };
+          handleStreamError(
+            streamPayload?.error ??
+              streamPayload?.message ??
+              streamPayload?.detail ??
+              "The generation stream closed unexpectedly."
+          );
+        });
+
+        source.onerror = () => {
+          handleStreamError("The generation stream closed unexpectedly.");
+        };
+      } catch (error) {
+        setGridStatus("error");
+        setGridError(error instanceof Error ? error.message : "Unable to start grid generation.");
+      }
+    },
+    [
+      brandProfileId,
+      closeGridStream,
+      hydrateCalendarFromGrid,
+      platformAccountIds,
+      selectedTrendIds,
+      setGridError,
+      setGridProgress,
+      setGridStatus,
+    ]
+  );
 
   const handleRegenerate = React.useCallback(
     async (draftId: string) => {
@@ -359,8 +719,8 @@ export function useDraftGeneration({
       const seedSource = draft.tags.includes("question")
         ? "question"
         : draft.tags.includes("event")
-        ? "event"
-        : "trend";
+          ? "event"
+          : "trend";
 
       updateDraftById(draftId, (current) => ({ ...current, status: "streaming" }));
 
@@ -380,7 +740,9 @@ export function useDraftGeneration({
                 scheduledAt: buildScheduledAt(dayId, draft.timeLabel) ?? dayId,
                 timeLabel: draft.timeLabel,
                 platform: draft.platforms[0] ?? "instagram",
-                accountId: draft.targetAccountId ?? platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
+                accountId:
+                  draft.targetAccountId ??
+                  platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
                 seedSource,
                 desiredFormat: draft.format,
               },
@@ -404,12 +766,13 @@ export function useDraftGeneration({
             }
           }
         );
-      } catch (e) {
+      } catch {
         updateDraftById(draftId, (current) => ({ ...current, status: "draft" }));
       }
     },
     [
       addDraft,
+      addEvent,
       brandProfileId,
       calendarDays,
       drafts,
@@ -426,6 +789,7 @@ export function useDraftGeneration({
     gridStatus,
     handleAutoSort,
     handleGenerateDrafts,
+    handleGenerateGridJob,
     handleRegenerate,
   };
 }

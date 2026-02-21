@@ -27,7 +27,6 @@ import { z } from "zod";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
-  ORGANIC_PLATFORMS,
   ORGANIC_PLATFORM_KEYS,
   type OrganicPlatformKey,
 } from "@/lib/organic/platforms";
@@ -44,6 +43,7 @@ import {
   detailedPostTemplateSchema,
   weeklyGridSchema,
 } from "@/lib/organic/types";
+import { parseWeeklyGridPayload } from "@/lib/organic/weekly-grid";
 import { WeeklyGridEditor } from "./WeeklyGridEditor";
 import { DailyTemplatesPanel } from "./DailyTemplatesPanel";
 import { PromptSelector } from "./PromptSelector";
@@ -674,13 +674,9 @@ function useGridGeneration(show: ReturnType<typeof useToast>["show"]): {
 
       source.addEventListener("complete", (event) => {
         const payload = safeJson((event as MessageEvent).data);
-        const parsed = weeklyGridSchema.safeParse(
-          (payload as { grid?: unknown; weekly_grid?: unknown })?.grid ??
-            (payload as { weekly_grid?: unknown })?.weekly_grid ??
-            payload
-        );
-        if (parsed.success) {
-          handleComplete(parsed.data);
+        const parsed = parseWeeklyGridPayload(payload);
+        if (parsed) {
+          handleComplete(parsed);
         } else {
           handleError("Received an invalid grid from the generation service.");
         }

@@ -2,9 +2,12 @@
 
 import * as React from "react";
 import {
+  CopyIcon,
   CheckIcon,
   LightningBoltIcon,
+  Pencil1Icon,
   QuestionMarkCircledIcon,
+  TrashIcon,
 } from "@radix-ui/react-icons";
 
 import {
@@ -13,9 +16,6 @@ import {
   ContextMenuItem,
   ContextMenuLabel,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -31,6 +31,18 @@ import type { OrganicCalendarDraft } from "./types";
 import { PlatformBadge, StatusBadge } from "./DraftCardBadges";
 import { DraftHoverCardContent } from "./DraftHoverCardContent";
 import { cardVariants } from "./draft-card-styles";
+import { useCalendarStore } from "@/lib/organic/store";
+import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+
+const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "facebook", "linkedin"];
+const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
+const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+};
 
 export function CalendarDraftCard({
   draft,
@@ -55,6 +67,41 @@ export function CalendarDraftCard({
 }) {
   const platform = (draft.platforms[0] || "instagram") as "instagram" | "linkedin" | "facebook" | "tiktok" | "youtube" | "twitter";
   const isStreaming = draft.status === "streaming";
+  const [isHovered, setIsHovered] = React.useState(false);
+  const updateDraft = useCalendarStore((state) => state.updateDraft);
+  const moveDraft = useCalendarStore((state) => state.moveDraft);
+  const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const addDraft = useCalendarStore((state) => state.addDraft);
+
+  const focusEditor = React.useCallback(
+    (draftId: string) => {
+      onSelect(draftId);
+    },
+    [onSelect]
+  );
+
+  const applyQuickEdit = React.useCallback(
+    (updater: (currentDraft: OrganicCalendarDraft) => OrganicCalendarDraft) => {
+      updateDraft(draft.id, updater);
+      focusEditor(draft.id);
+    },
+    [draft.id, focusEditor, updateDraft]
+  );
+
+  const duplicateToUnscheduled = React.useCallback(() => {
+    const nextId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? `${draft.id}-copy-${crypto.randomUUID()}`
+        : `${draft.id}-copy-${Date.now()}`;
+    const duplicate: OrganicCalendarDraft = {
+      ...draft,
+      id: nextId,
+      status: "draft",
+      title: `${draft.title} (Copy)`,
+    };
+    addDraft("unscheduled", duplicate);
+    focusEditor(nextId);
+  }, [addDraft, draft, focusEditor]);
 
   return (
     <HoverCard openDelay={250} closeDelay={120}>
@@ -72,8 +119,14 @@ export function CalendarDraftCard({
               }}
               draggable={!!onDragStart}
               onDragStart={(event) => onDragStart?.(event, draft.id)}
-              onMouseEnter={onMouseEnter}
-              onMouseLeave={onMouseLeave}
+              onMouseEnter={() => {
+                setIsHovered(true);
+                onMouseEnter?.();
+              }}
+              onMouseLeave={() => {
+                setIsHovered(false);
+                onMouseLeave?.();
+              }}
               aria-pressed={isSelected || isMultiSelected}
               className={cn(
                 cardVariants({
@@ -82,6 +135,9 @@ export function CalendarDraftCard({
                   streaming: isStreaming,
                   platformHover: isSelected ? "none" : platform,
                 }),
+                isHovered &&
+                  !isSelected &&
+                  "scale-[1.015] -translate-y-0.5 border-sky-400/30 shadow-[0_10px_26px_rgba(14,165,233,.18)]",
                 draft.status === "placeholder" && "opacity-80 grayscale-[0.5]"
               )}
             >
@@ -153,9 +209,29 @@ export function CalendarDraftCard({
                   {draft.creativeIdea || draft.title}
                 </p>
                 
-                <p className="mt-1 text-[11px] text-secondary line-clamp-2 leading-snug opacity-70 font-medium">
+                <p className={cn(
+                  "mt-1 text-[11px] text-secondary leading-snug opacity-70 font-medium transition-all",
+                  isHovered ? "line-clamp-3" : "line-clamp-2"
+                )}>
                   {draft.captionPreview}
                 </p>
+
+                <div
+                  className={cn(
+                    "grid transition-all",
+                    isHovered ? "mt-2 max-h-16 opacity-100" : "max-h-0 opacity-0 overflow-hidden"
+                  )}
+                >
+                  <div className="rounded border border-slate-700/80 bg-slate-900/70 px-2 py-1.5">
+                    <p className="font-mono text-[9px] uppercase tracking-widest text-slate-400">
+                      Quick Preview
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-[10px] text-slate-200">
+                      {draft.objective}
+                      {draft.cta ? ` • CTA: ${draft.cta}` : ""}
+                    </p>
+                  </div>
+                </div>
 
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex gap-1.5">
@@ -182,20 +258,77 @@ export function CalendarDraftCard({
           </HoverCardTrigger>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Draft actions</ContextMenuLabel>
-          <ContextMenuItem onSelect={() => onSelect(draft.id)}>Open composer</ContextMenuItem>
-          <ContextMenuItem>Duplicate draft</ContextMenuItem>
-          <ContextMenuSub>
-            <ContextMenuSubTrigger>Move to</ContextMenuSubTrigger>
-            <ContextMenuSubContent>
-              <ContextMenuItem>Tomorrow</ContextMenuItem>
-              <ContextMenuItem>Next week</ContextMenuItem>
-              <ContextMenuItem>Backlog</ContextMenuItem>
-            </ContextMenuSubContent>
-          </ContextMenuSub>
+          <ContextMenuLabel>Quick Edit</ContextMenuLabel>
+          <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
+            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+            Open in editor
+          </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-destructive focus:text-destructive">
-            Unschedule
+          {QUICK_PLATFORM_OPTIONS.map((option) => (
+            <ContextMenuItem
+              key={option}
+              onSelect={() =>
+                applyQuickEdit((currentDraft) => ({
+                  ...currentDraft,
+                  platforms: [option],
+                }))
+              }
+            >
+              Platform: {QUICK_PLATFORM_LABELS[option]}
+            </ContextMenuItem>
+          ))}
+          {QUICK_TIME_OPTIONS.map((time) => (
+            <ContextMenuItem
+              key={time}
+              onSelect={() =>
+                applyQuickEdit((currentDraft) => ({
+                  ...currentDraft,
+                  timeLabel: time,
+                }))
+              }
+            >
+              Time: {time}
+            </ContextMenuItem>
+          ))}
+          <ContextMenuItem
+            onSelect={() =>
+              applyQuickEdit((currentDraft) => ({
+                ...currentDraft,
+                status: "scheduled",
+              }))
+            }
+          >
+            Mark as scheduled
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() =>
+              applyQuickEdit((currentDraft) => ({
+                ...currentDraft,
+                status: "draft",
+              }))
+            }
+          >
+            Mark as draft
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={duplicateToUnscheduled}>
+            <CopyIcon className="mr-2 h-3.5 w-3.5" />
+            Duplicate to unscheduled
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() => {
+              moveDraft(draft.id, "unscheduled");
+              focusEditor(draft.id);
+            }}
+          >
+            Send to unscheduled
+          </ContextMenuItem>
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onSelect={() => bulkDeleteDrafts([draft.id])}
+          >
+            <TrashIcon className="mr-2 h-3.5 w-3.5" />
+            Delete draft
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>

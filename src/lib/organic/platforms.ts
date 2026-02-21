@@ -10,6 +10,12 @@ export const ORGANIC_PLATFORM_KEYS = [
 
 export type OrganicPlatformKey = (typeof ORGANIC_PLATFORM_KEYS)[number];
 
+export const ORGANIC_MVP_PLATFORM_KEYS = [
+  "instagram",
+  "facebook",
+  "linkedin",
+] as const satisfies readonly OrganicPlatformKey[];
+
 const LABEL_LOOKUP = PLATFORMS.reduce<Record<PlatformKey, string>>((acc, item) => {
   acc[item.key] = item.label;
   return acc;
