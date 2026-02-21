@@ -15,29 +15,76 @@ const flowPositionSchema = z.object({
   y: z.number(),
 });
 
+const createNodePayloadSchema = z
+  .union([
+    z.object({
+      nodeType: z.enum(NODE_TYPES),
+      data: z.record(z.string(), z.unknown()).optional().default({}),
+      position: flowPositionSchema.optional(),
+      id: z.string().min(1).optional(),
+    }),
+    z.object({
+      type: z.enum(NODE_TYPES),
+      data: z.record(z.string(), z.unknown()).optional().default({}),
+      position: flowPositionSchema.optional(),
+      id: z.string().min(1).optional(),
+    }),
+  ])
+  .transform((payload) => {
+    const nodeType = "nodeType" in payload ? payload.nodeType : payload.type;
+    return {
+      nodeType,
+      data: payload.data ?? {},
+      position: payload.position,
+      clientNodeId: payload.id,
+    };
+  });
+
 const actionCreateNodeSchema = z.object({
   type: z.literal("CREATE_NODE"),
-  payload: z.object({
-    nodeType: z.enum(NODE_TYPES),
-    data: z.record(z.string(), z.unknown()).optional().default({}),
-    position: flowPositionSchema.optional(),
-  }),
+  payload: createNodePayloadSchema,
 });
+
+const connectNodesPayloadSchema = z
+  .union([
+    z.object({
+      sourceId: z.string().min(1),
+      targetId: z.string().min(1),
+    }),
+    z.object({
+      source_id: z.string().min(1),
+      target_id: z.string().min(1),
+    }),
+  ])
+  .transform((payload) => ({
+    sourceId: "sourceId" in payload ? payload.sourceId : payload.source_id,
+    targetId: "targetId" in payload ? payload.targetId : payload.target_id,
+  }));
 
 const actionConnectNodesSchema = z.object({
   type: z.literal("CONNECT_NODES"),
-  payload: z.object({
-    sourceId: z.string().min(1),
-    targetId: z.string().min(1),
-  }),
+  payload: connectNodesPayloadSchema,
 });
+
+const updateNodePayloadSchema = z
+  .union([
+    z.object({
+      nodeId: z.string().min(1),
+      data: z.record(z.string(), z.unknown()).default({}),
+    }),
+    z.object({
+      node_id: z.string().min(1),
+      data: z.record(z.string(), z.unknown()).default({}),
+    }),
+  ])
+  .transform((payload) => ({
+    nodeId: "nodeId" in payload ? payload.nodeId : payload.node_id,
+    data: payload.data ?? {},
+  }));
 
 const actionUpdateNodeSchema = z.object({
   type: z.literal("UPDATE_NODE"),
-  payload: z.object({
-    nodeId: z.string().min(1),
-    data: z.record(z.string(), z.unknown()).default({}),
-  }),
+  payload: updateNodePayloadSchema,
 });
 
 const actionRecommendStructureSchema = z.object({
@@ -61,6 +108,7 @@ export const campaignCanvasActionsEnvelopeSchema = z.object({
   brandId: z.string().min(1),
   userId: z.string().min(1),
   sessionId: z.string().min(1).optional(),
+  rationale: z.string().optional(),
   actions: z.array(campaignCanvasAgentActionSchema).min(1),
 });
 

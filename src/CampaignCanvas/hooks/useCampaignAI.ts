@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useCampaignStore } from '../stores/useCampaignStore';
 import {
   type CampaignData,
@@ -15,6 +15,7 @@ export type CampaignAIAction =
         nodeType: CampaignNodeType;
         data: Record<string, unknown>;
         position?: FlowPosition;
+        clientNodeId?: string;
       };
     }
   | {
@@ -40,6 +41,7 @@ export type CampaignAIAction =
 
 export const useCampaignAI = () => {
   const { addNode, updateNodeData, onConnect, nodes } = useCampaignStore();
+  const nodeAliasMapRef = useRef<Map<string, string>>(new Map());
 
   const generateStandardCampaign = useCallback((objective: CampaignData['objective']) => {
     // Logic to spawn a Campaign -> Ad Set -> Ad chain automatically
@@ -61,18 +63,24 @@ export const useCampaignAI = () => {
   const processAIAction = useCallback((action: CampaignAIAction) => {
     switch (action.type) {
       case 'CREATE_NODE': {
-        const { nodeType, data, position } = action.payload;
-        addNode(nodeType, data as Partial<CampaignCanvasNodeData>, position);
+        const { nodeType, data, position, clientNodeId } = action.payload;
+        const nodeId = addNode(nodeType, data as Partial<CampaignCanvasNodeData>, position);
+        if (clientNodeId) {
+          nodeAliasMapRef.current.set(clientNodeId, nodeId);
+        }
         break;
       }
       case 'CONNECT_NODES': {
         const { sourceId, targetId } = action.payload;
-        onConnect({ source: sourceId, sourceHandle: null, target: targetId, targetHandle: null });
+        const resolvedSourceId = nodeAliasMapRef.current.get(sourceId) ?? sourceId;
+        const resolvedTargetId = nodeAliasMapRef.current.get(targetId) ?? targetId;
+        onConnect({ source: resolvedSourceId, sourceHandle: null, target: resolvedTargetId, targetHandle: null });
         break;
       }
       case 'UPDATE_NODE': {
         const { nodeId, data } = action.payload;
-        updateNodeData(nodeId, data as Partial<CampaignCanvasNodeData>);
+        const resolvedNodeId = nodeAliasMapRef.current.get(nodeId) ?? nodeId;
+        updateNodeData(resolvedNodeId, data as Partial<CampaignCanvasNodeData>);
         break;
       }
       case 'RECOMMEND_STRUCTURE': {

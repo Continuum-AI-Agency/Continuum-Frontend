@@ -68,7 +68,7 @@ export default function PaidMediaClientPage({
 
   if (!mounted) {
     return (
-      <div className="flex h-full min-h-0 w-full max-w-none flex-col gap-4 px-3 py-6 sm:px-4 lg:px-6">
+      <div className="box-border flex h-full min-h-0 w-full max-w-none flex-col gap-4 px-3 py-6 sm:px-4 lg:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="h-10 w-48 animate-pulse rounded-md bg-white/5" />
         </div>
@@ -78,7 +78,7 @@ export default function PaidMediaClientPage({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full max-w-none flex-col gap-4 px-3 py-6 sm:px-4 lg:px-6">
+    <div className="box-border flex h-full min-h-0 w-full max-w-none flex-col gap-4 overflow-hidden px-3 py-6 sm:px-4 lg:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <AdAccountSelector
           brandId={brandProfileId}
@@ -87,7 +87,7 @@ export default function PaidMediaClientPage({
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full min-h-0 flex-1 flex flex-col">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full min-h-0 flex-1 flex flex-col overflow-hidden">
         <div className="border-b px-1">
           <TabsList>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
@@ -95,19 +95,18 @@ export default function PaidMediaClientPage({
           </TabsList>
         </div>
 
-        <TabsContent value="dashboard" className="flex-1 min-h-0 pt-4 overflow-auto">
+        <TabsContent value="dashboard" className="box-border flex-1 min-h-0 pt-4 overflow-auto">
           <PaidMediaDashboard brandId={brandProfileId} adAccountId={selectedAdAccount} />
         </TabsContent>
 
-        <TabsContent value="jaina" className="flex-1 min-h-0 pt-4 flex flex-col">
+        <TabsContent value="jaina" className="box-border flex-1 min-h-0 pt-4 flex flex-col overflow-hidden">
           <div className="flex-1 min-h-0 flex flex-col border rounded-xl overflow-hidden bg-white/5 shadow-2xl relative">
-            <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-              {/* Jaina Analyst (Left) */}
-              <ResizablePanel 
-                defaultSize="35%" 
-                minSize="25%" 
-                maxSize="55%" 
-                className="flex flex-col overflow-hidden bg-black/20"
+            <ResizablePanelGroup orientation="horizontal" className="h-full w-full min-h-0">
+              <ResizablePanel
+                defaultSize="62%"
+                minSize="35%"
+                maxSize="85%"
+                className="flex min-h-0 flex-col overflow-hidden bg-black/20"
                 style={{ minWidth: 0 }}
               >
                 <JainaChatSurface
@@ -120,14 +119,13 @@ export default function PaidMediaClientPage({
                   className="rounded-none border-none bg-transparent backdrop-blur-none"
                 />
               </ResizablePanel>
-              
+
               <ResizableHandle withHandle className="bg-white/10 z-50 hover:bg-primary/40 transition-colors w-1.5" />
-              
-              {/* Campaign Canvas (Right) */}
-              <ResizablePanel 
-                defaultSize="65%" 
-                minSize="30%"
-                className="relative overflow-hidden bg-black/10"
+
+              <ResizablePanel
+                defaultSize="38%"
+                minSize="15%"
+                className="relative min-h-0 overflow-hidden bg-black/10"
                 style={{ minWidth: 0 }}
               >
                 <div className="absolute inset-0 p-0.5">
