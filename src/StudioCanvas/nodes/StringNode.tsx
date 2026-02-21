@@ -6,16 +6,26 @@ import { StringNodeData } from '../types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { MagicWandIcon } from '@radix-ui/react-icons';
-import { Badge } from '@/components/ui/badge';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { useDebouncedSave } from '../hooks/useDebouncedSave';
-import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
-import { FileText, Sparkles, CircleSlash2 } from 'lucide-react';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Copy, Trash2 } from 'lucide-react';
 
 export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<StringNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
   const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const executionControls = useWorkflowExecution();
@@ -24,30 +34,22 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
   
   const connectedEdge = edges.find(e => e.source === id);
   const incomingEdges = edges.filter(e => e.target === id);
-  
   const hasInputs = incomingEdges.length > 0;
-  
-  const inputCounts = useMemo(() => ({
-    image: incomingEdges.filter(e => e.targetHandle === 'image').length,
-    audio: incomingEdges.filter(e => e.targetHandle === 'audio').length,
-    video: incomingEdges.filter(e => e.targetHandle === 'video').length,
-    document: incomingEdges.filter(e => e.targetHandle === 'document').length,
-  }), [incomingEdges]);
 
   const context = useMemo(() => {
     if (!connectedEdge) {
-      return { label: 'Text', icon: FileText, edgeColor: 'var(--edge-text)', border: 'border-border/60' };
+      return { edgeColor: 'var(--edge-text)', border: 'border-border/60' };
     }
 
     if (connectedEdge.targetHandle === 'prompt' || connectedEdge.targetHandle === 'prompt-in') {
-      return { label: 'Prompt', icon: Sparkles, edgeColor: 'var(--edge-text)', border: 'border-brand-primary/40' };
+      return { edgeColor: 'var(--edge-text)', border: 'border-brand-primary/40' };
     }
 
     if (connectedEdge.targetHandle === 'negative') {
-      return { label: 'Negative Prompt', icon: CircleSlash2, edgeColor: 'var(--edge-text)', border: 'border-red-500/40' };
+      return { edgeColor: 'var(--edge-text)', border: 'border-red-500/40' };
     }
 
-    return { label: 'Text', icon: FileText, edgeColor: 'var(--edge-text)', border: 'border-border/60' };
+    return { edgeColor: 'var(--edge-text)', border: 'border-border/60' };
   }, [connectedEdge]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -75,13 +77,15 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
   }, [id, executionControls, data.isExecuting, brandId]);
 
   return (
-    <div 
-      className={cn(
-        "relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px] rounded-lg transition-shadow",
-        isSelectedByOther && "selected-by-other"
-      )}
-      style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-    >
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className={cn(
+            "relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px] rounded-lg transition-shadow",
+            isSelectedByOther && "selected-by-other"
+          )}
+          style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
+        >
       <NodeResizer
         minWidth={280}
         minHeight={180}
@@ -100,29 +104,13 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
           hasInputs && "ring-1 ring-brand-primary/30"
         )}
       >
-          <NodeHeader className="!h-8 !px-3 !py-1 rounded-none bg-muted/60 border-b border-border/60 flex items-center justify-between min-h-[32px] shrink-0">
-              <div className="flex items-center gap-1.5">
-                <context.icon className="h-3 w-3 text-muted-foreground" />
-                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{context.label}</span>
-              </div>
-              
-              {hasInputs && (
-                  <div className="flex items-center gap-1">
-                      {inputCounts.image > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px]">{inputCounts.image} img</Badge>}
-                      {inputCounts.audio > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px]">{inputCounts.audio} aud</Badge>}
-                      {inputCounts.video > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px]">{inputCounts.video} vid</Badge>}
-                      {inputCounts.document > 0 && <Badge variant="secondary" className="h-4 px-1 text-[9px]">{inputCounts.document} doc</Badge>}
-                  </div>
-              )}
-          </NodeHeader>
-          
           <NodeContent className="relative flex-1 flex flex-col min-h-0 overflow-hidden p-0 bg-muted/20">
               <Textarea 
                 value={data.value} 
                 onChange={handleChange} 
                 onKeyDown={(event) => event.stopPropagation()}
                 className="nodrag text-xs text-primary placeholder:text-muted-foreground/70 flex-1 w-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none bg-transparent p-3 pr-8 overflow-y-auto whitespace-pre-wrap break-words block h-full min-h-[100px]" 
-                placeholder={hasInputs ? "Enter instructions for prompt enrichment..." : "Enter prompt..."} 
+                placeholder="Enter prompt or instructions..." 
               />
               
               <div className="p-2 border-t border-border/60 bg-background/70 flex justify-end relative z-20 shrink-0">
@@ -158,9 +146,6 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                 style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-image)' }}
                 className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
-                IMG
-            </span>
         </div>
         <div className="relative group/handle">
             <Handle 
@@ -170,9 +155,6 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                 style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-audio, #10b981)' }}
                 className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
-                AUD
-            </span>
         </div>
         <div className="relative group/handle">
             <Handle 
@@ -182,9 +164,6 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                 style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-video)' }}
                 className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
-                VID
-            </span>
         </div>
         <div className="relative group/handle">
             <Handle 
@@ -194,9 +173,6 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
                 style={{ ['--edge-color' as keyof React.CSSProperties]: 'var(--edge-document, #f59e0b)' }}
                 className="studio-handle !w-3 !h-3 !border-2 shadow-sm transition-transform hover:scale-125" 
             />
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground opacity-0 group-hover/handle:opacity-100 transition-opacity bg-background/80 px-1 rounded pointer-events-none">
-                DOC
-            </span>
         </div>
       </div>
 
@@ -212,13 +188,29 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
               "studio-handle !w-4 !h-4 !border-2 shadow-sm transition-all duration-300 hover:scale-125 pointer-events-auto"
           )} 
         />
-        <span className={cn(
-          "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none uppercase tracking-tighter",
-          selected ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-        )}>
-          {context.label} Output
-        </span>
       </div>
     </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <ContextMenuLabel>Text Block</ContextMenuLabel>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => void handleEnrich()}>
+          <MagicWandIcon className="mr-2 h-4 w-4" />
+          Enrich Prompt
+          <ContextMenuShortcut>R</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => duplicateNode(id)}>
+          <Copy className="mr-2 h-4 w-4" />
+          Duplicate
+          <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+          <ContextMenuShortcut>⌫</ContextMenuShortcut>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

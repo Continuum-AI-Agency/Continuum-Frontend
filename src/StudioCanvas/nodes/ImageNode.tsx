@@ -27,7 +27,21 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useEdges } from '@xyflow/react';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { cn } from '@/lib/utils';
-import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Copy, Trash2 } from 'lucide-react';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -35,6 +49,8 @@ const TEXT_MIME = 'text/plain';
 export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
@@ -139,6 +155,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
 
   return (
     <TooltipProvider>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
       <div 
         className={cn(
           "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
@@ -161,23 +179,20 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         selected={selected}
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
-        <NodeHeader className="!h-7 !px-2 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          <span>Image Reference</span>
-          <div className="nodrag" onMouseDown={(e) => e.stopPropagation()}>
-            <Select value={refType} onValueChange={handleRefTypeChange}>
-                <SelectTrigger className="h-5 w-[85px] text-[9px] px-1 py-0 border-none bg-transparent hover:bg-black/5 dark:hover:bg-white/5 focus:ring-0 shadow-none text-right">
-                <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                <SelectItem value="default">Default</SelectItem>
-                <SelectItem value="product">Product</SelectItem>
-                <SelectItem value="color">Color/Theme</SelectItem>
-                <SelectItem value="person">Person</SelectItem>
-                </SelectContent>
-            </Select>
-          </div>
-        </NodeHeader>
-        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
+        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
+            <div className="absolute right-2 top-2 z-20 nodrag opacity-0 transition-opacity group-hover/preview:opacity-100 focus-within:opacity-100" onMouseDown={(e) => e.stopPropagation()}>
+              <Select value={refType} onValueChange={handleRefTypeChange}>
+                  <SelectTrigger className="h-6 w-[94px] text-[10px] px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
+                  <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="product">Product</SelectItem>
+                  <SelectItem value="color">Color/Theme</SelectItem>
+                  <SelectItem value="person">Person</SelectItem>
+                  </SelectContent>
+              </Select>
+            </div>
             <Label
               htmlFor={`file-${id}`}
               className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
@@ -187,7 +202,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 {preview ? (
                     <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
                       <img src={preview} alt="Preview" className="h-full w-full object-contain" />
-                      <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover/preview:opacity-100">
                         <UploadIcon className="mr-1 inline-block h-3 w-3" />
                         Replace
                       </div>
@@ -235,6 +250,41 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         </TooltipContent>
       </Tooltip>
     </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-56">
+          <ContextMenuLabel>Image Reference</ContextMenuLabel>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Reference Type</ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-44">
+              {[
+                { value: 'default', label: 'Default' },
+                { value: 'product', label: 'Product' },
+                { value: 'color', label: 'Color/Theme' },
+                { value: 'person', label: 'Person' },
+              ].map((option) => (
+                <ContextMenuCheckboxItem
+                  key={option.value}
+                  checked={refType === option.value}
+                  onClick={() => handleRefTypeChange(option.value)}
+                >
+                  {option.label}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => duplicateNode(id)}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicate
+            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </TooltipProvider>
   );
 }

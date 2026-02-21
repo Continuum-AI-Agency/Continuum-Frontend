@@ -27,8 +27,8 @@ describe('DocumentNode', () => {
             </ReactFlowProvider>
         </ToastProvider>
     );
-    expect(container.textContent).toContain('Documents (1)');
     expect(container.textContent).toContain('test.pdf');
+    expect(container.textContent).toContain('pdf');
   });
 
   it('should show empty state', () => {

@@ -7,6 +7,10 @@ export type WorkflowSnapshot = {
   edges: Edge[];
 };
 
+export type SerializeWorkflowSnapshotOptions = {
+  preserveGeneratedOutputs?: boolean;
+};
+
 const runtimeNodeKeys = [
   'isExecuting',
   'isComplete',
@@ -32,14 +36,20 @@ function stripEncodedString(value: unknown): string | undefined {
   return isEncodedPayload(value) ? undefined : value;
 }
 
-function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
+function stripRuntimeNodeData(
+  data: StudioNodeData,
+  options: SerializeWorkflowSnapshotOptions = {}
+): StudioNodeData {
+  const { preserveGeneratedOutputs = false } = options;
   const next = { ...data } as Record<string, unknown>;
   
   runtimeNodeKeys.forEach((key) => {
     delete next[key];
   });
 
-  const mediaKeys = ['image', 'video', 'audio', 'generatedImage', 'generatedVideo'];
+  const mediaKeys = preserveGeneratedOutputs
+    ? ['image', 'video', 'audio']
+    : ['image', 'video', 'audio', 'generatedImage', 'generatedVideo'];
   mediaKeys.forEach(key => {
     const val = next[key];
     if (typeof val === 'string' && isEncodedPayload(val)) {
@@ -48,6 +58,15 @@ function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
       delete next[key];
     }
   });
+
+  if (preserveGeneratedOutputs) {
+    if (next.generatedImage && typeof next.generatedImage === 'object') {
+      delete next.generatedImage;
+    }
+    if (next.generatedVideo && typeof next.generatedVideo === 'object') {
+      delete next.generatedVideo;
+    }
+  }
 
   if (Array.isArray(next.inputs)) {
     next.inputs = next.inputs
@@ -95,7 +114,10 @@ function stripRuntimeNodeData(data: StudioNodeData): StudioNodeData {
   return next as StudioNodeData;
 }
 
-function sanitizeNode(node: StudioNode): StudioNode {
+function sanitizeNode(
+  node: StudioNode,
+  options: SerializeWorkflowSnapshotOptions = {}
+): StudioNode {
   const width = node.width ?? node.measured?.width;
   const height = node.height ?? node.measured?.height;
 
@@ -106,7 +128,7 @@ function sanitizeNode(node: StudioNode): StudioNode {
     style: node.style,
     width,
     height,
-    data: stripRuntimeNodeData(node.data),
+    data: stripRuntimeNodeData(node.data, options),
   };
 }
 
@@ -145,9 +167,10 @@ function sanitizeEdge(edge: Edge, defaultEdgeType: EdgeType): Edge {
 
 export function normalizeWorkflowSnapshot(
   snapshot: WorkflowSnapshot,
-  defaultEdgeType: EdgeType
+  defaultEdgeType: EdgeType,
+  options: SerializeWorkflowSnapshotOptions = {}
 ): WorkflowSnapshot {
-  const nodes = snapshot.nodes.map(sanitizeNode);
+  const nodes = snapshot.nodes.map((node) => sanitizeNode(node, options));
   const nodeIds = new Set(nodes.map((node) => node.id));
 
   const edges = snapshot.edges
@@ -160,7 +183,8 @@ export function normalizeWorkflowSnapshot(
 export function serializeWorkflowSnapshot(
   nodes: StudioNode[],
   edges: Edge[],
-  defaultEdgeType: EdgeType
+  defaultEdgeType: EdgeType,
+  options: SerializeWorkflowSnapshotOptions = {}
 ): WorkflowSnapshot {
-  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType);
+  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, options);
 }

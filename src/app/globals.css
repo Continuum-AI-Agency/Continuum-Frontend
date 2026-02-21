@@ -261,6 +261,11 @@ body {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
 }
 
+.react-flow__edge.studio-edge--connected .react-flow__edge-path,
+.react-flow__edge.studio-edge--connected .studio-edge-path {
+  animation: studio-edge-connect 720ms cubic-bezier(0.16, 1, 0.3, 1) 1;
+}
+
 .studio-edge-path {
   stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-base), transparent);
   stroke-width: var(--edge-stroke-width);
@@ -297,11 +302,23 @@ body {
   stroke: color-mix(in srgb, var(--edge-color) var(--edge-alpha-hover), transparent);
   stroke-width: var(--edge-stroke-width);
   stroke-linecap: round;
+  stroke-dasharray: 8 10;
+  animation: studio-connection-drift 1.9s linear infinite;
 }
 
 .studio-handle {
   background-color: var(--edge-color) !important;
   border-color: var(--edge-handle-border) !important;
+  transition: filter 180ms ease, opacity 180ms ease;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--edge-color) 22%, transparent));
+  animation: studio-handle-pulse 2.6s ease-in-out infinite;
+}
+
+.studio-handle:hover,
+.react-flow__handle-connecting.studio-handle,
+.react-flow__handle-valid.studio-handle {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--edge-color) 34%, transparent));
+  animation-duration: 1.45s;
 }
 
 .studio-handle-pill {
@@ -320,12 +337,57 @@ body {
   }
 }
 
+@keyframes studio-edge-connect {
+  0% {
+    stroke-dasharray: 0 9999;
+    stroke-width: calc(var(--edge-stroke-width) - 0.25px);
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--edge-color) 0%, transparent));
+  }
+  55% {
+    stroke-width: calc(var(--edge-stroke-width) + 0.85px);
+    filter: drop-shadow(0 0 11px color-mix(in srgb, var(--edge-color) var(--edge-alpha-glow), transparent));
+  }
+  100% {
+    stroke-dasharray: none;
+    stroke-width: var(--edge-stroke-width);
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--edge-color) var(--edge-alpha-base-glow), transparent));
+  }
+}
+
+@keyframes studio-handle-pulse {
+  0%,
+  100% {
+    opacity: 0.92;
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--edge-color) 22%, transparent));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--edge-color) 34%, transparent));
+  }
+}
+
+@keyframes studio-connection-drift {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .react-flow__edge.studio-edge--active .react-flow__edge-path,
   .studio-edge-path--active,
-  .studio-edge-path--flow {
+  .studio-edge-path--flow,
+  .react-flow__edge.studio-edge--connected .react-flow__edge-path,
+  .react-flow__edge.studio-edge--connected .studio-edge-path,
+  .studio-connection-line {
     animation: none;
     stroke-dasharray: none;
+  }
+
+  .studio-handle {
+    animation: none;
   }
 }
 

@@ -2,20 +2,12 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { UploadIcon } from '@radix-ui/react-icons';
+import { Cross2Icon, UploadIcon } from '@radix-ui/react-icons';
 
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { coerceToastOptions, throwToastError, useToast } from '@/components/ui/ToastProvider';
 import { createAiStudioWorkflowAction } from '@/lib/ai-studio/workflowActions';
@@ -52,6 +44,12 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
     mode: 'onSubmit',
   });
 
+  const closePanel = React.useCallback(() => {
+    setOpen(false);
+    form.reset();
+    setError(null);
+  }, [form]);
+
   const onSubmit = form.handleSubmit(async (values) => {
     if (!brandProfileId) {
       setError('Select a brand profile to save workflows.');
@@ -78,8 +76,7 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
         edges: snapshot.edges,
       });
       show({ title: 'Workflow saved', description: values.name, variant: 'success' });
-      form.reset();
-      setOpen(false);
+      closePanel();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to save workflow';
       const toastOptions = coerceToastOptions(err, {
@@ -95,60 +92,54 @@ export function SaveWorkflowDialog({ brandProfileId }: SaveWorkflowDialogProps) 
   });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          form.reset();
-          setError(null);
-        }
-      }}
-    >
-      <DialogTrigger asChild>
+    <Popover open={open} onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : closePanel())}>
+      <PopoverTrigger asChild>
         <Button variant="outline" size="sm">
-          <UploadIcon className="w-4 h-4 mr-2" /> Save
+          <UploadIcon className="mr-2 h-4 w-4" /> Save
         </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle>Save workflow</DialogTitle>
-          <DialogDescription>
-            Store this canvas as a reusable template for your brand.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="grid gap-4 py-4">
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[420px] p-0">
+        <form onSubmit={onSubmit} className="grid gap-3 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-primary">Save workflow</p>
+              <p className="text-xs text-muted-foreground">Store this canvas as a reusable template for your brand.</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={closePanel}
+              aria-label="Close workflow saver"
+            >
+              <Cross2Icon className="h-4 w-4" />
+            </Button>
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="workflow-name">Name</Label>
-            <Input
-              id="workflow-name"
-              placeholder="Launch creative flow"
-              {...form.register('name')}
-            />
-            {form.formState.errors.name?.message && (
-              <p className="text-xs text-danger">{form.formState.errors.name.message}</p>
-            )}
+            <Input id="workflow-name" placeholder="Launch creative flow" {...form.register('name')} />
+            {form.formState.errors.name?.message && <p className="text-xs text-danger">{form.formState.errors.name.message}</p>}
           </div>
+
           <div className="grid gap-2">
             <Label htmlFor="workflow-description">Description</Label>
-            <Textarea
-              id="workflow-description"
-              placeholder="Optional notes for your team"
-              rows={3}
-              {...form.register('description')}
-            />
+            <Textarea id="workflow-description" placeholder="Optional notes for your team" rows={3} {...form.register('description')} />
           </div>
-          <div className="text-xs text-muted-foreground">
+
+          <p className="text-xs text-muted-foreground">
             Ready to save {nodes.length} nodes and {edges.length} connections.
-          </div>
+          </p>
           {error && <p className="text-xs text-danger">{error}</p>}
+
+          <div className="flex justify-end">
+            <Button type="submit" size="sm" disabled={!brandProfileId || isSaving}>
+              {isSaving ? 'Saving...' : 'Save workflow'}
+            </Button>
+          </div>
         </form>
-        <DialogFooter>
-          <Button type="button" size="sm" onClick={onSubmit} disabled={!brandProfileId || isSaving}>
-            {isSaving ? 'Saving...' : 'Save workflow'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 }

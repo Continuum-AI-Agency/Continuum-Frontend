@@ -22,7 +22,17 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
 import { useNodeSelection } from '../contexts/PresenceContext';
-import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Copy, Trash2 } from 'lucide-react';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -30,6 +40,8 @@ const TEXT_MIME = 'text/plain';
 export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<DocumentNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
   const edges = useEdges();
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -162,6 +174,8 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
 
   return (
     <TooltipProvider>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
       <div 
         className={cn(
           "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
@@ -183,14 +197,14 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
         selected={selected}
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
-        <NodeHeader className="!h-7 !px-3 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          <span>Documents ({documents.length})</span>
-          <Label htmlFor={`doc-upload-${id}`} className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground">
-            <UploadIcon className="w-3 h-3" />
-          </Label>
-        </NodeHeader>
-        
-        <NodeContent className="relative flex-1 min-h-0 p-0 flex flex-col bg-muted/30">
+        <NodeContent className="relative flex-1 min-h-0 p-0 flex flex-col bg-muted/30 group/preview">
+            <Label
+              htmlFor={`doc-upload-${id}`}
+              className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <UploadIcon className="w-3 h-3" />
+            </Label>
             {documents.length > 0 ? (
                 <div className="flex-1 space-y-2 overflow-y-auto p-2 nodrag">
                     {documents.map((doc, index) => (
@@ -256,6 +270,22 @@ export function DocumentNode({ id, data, selected }: NodeProps<ReactFlowNode<Doc
         </TooltipContent>
       </Tooltip>
     </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-52">
+          <ContextMenuLabel>Document Context</ContextMenuLabel>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => duplicateNode(id)}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicate
+            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </TooltipProvider>
   );
 }

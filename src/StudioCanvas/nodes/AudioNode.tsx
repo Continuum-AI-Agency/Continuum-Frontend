@@ -22,7 +22,17 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEdges } from '@xyflow/react';
 import { useNodeSelection } from '../contexts/PresenceContext';
-import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Copy, Trash2 } from 'lucide-react';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -30,6 +40,8 @@ const TEXT_MIME = 'text/plain';
 export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
   const edges = useEdges();
   const [audioSrc, setAudioSrc] = useState<string | undefined>(data.audio);
   const { show } = useToast();
@@ -151,6 +163,8 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
 
   return (
     <TooltipProvider>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
       <div 
         className={cn(
           "relative group w-full h-full min-w-[180px] min-h-[100px] rounded-xl transition-shadow",
@@ -172,9 +186,6 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         selected={selected}
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
-        <NodeHeader className="!h-7 !px-3 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          <span>Audio Input</span>
-        </NodeHeader>
         <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
             <Label
               htmlFor={`file-${id}`}
@@ -247,6 +258,22 @@ export function AudioNode({ id, data, selected }: NodeProps<ReactFlowNode<AudioN
         </TooltipContent>
       </Tooltip>
     </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-52">
+          <ContextMenuLabel>Audio Reference</ContextMenuLabel>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => duplicateNode(id)}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicate
+            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </TooltipProvider>
   );
 }

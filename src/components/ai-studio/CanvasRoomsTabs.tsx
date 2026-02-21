@@ -59,7 +59,7 @@ export function CanvasRoomsTabs({
   if (isLoading) return null;
 
   return (
-    <div className="flex items-center gap-1.5 h-10 px-2 bg-indigo-500/5 rounded-lg border border-indigo-500/10 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
+    <div className="flex h-10 items-center gap-1.5 rounded-lg border border-violet-400/15 bg-violet-500/5 px-2 shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]">
       {rooms.map((room) => {
         const isActive = room.id === activeRoomId;
         const isEditing = room.id === editingRoomId;
@@ -70,8 +70,8 @@ export function CanvasRoomsTabs({
             className={cn(
               "group relative flex items-center h-7 px-3 rounded-md transition-all cursor-pointer select-none border text-xs font-medium",
               isActive 
-                ? "bg-emerald-600 text-white border-emerald-700 shadow-sm" 
-                : "bg-background/50 text-muted-foreground border-transparent hover:bg-indigo-500/10 hover:text-indigo-600"
+                ? "border-violet-400/35 bg-violet-500/14 text-violet-700 shadow-[0_1px_2px_rgba(76,29,149,0.12)] dark:text-violet-200"
+                : "border-transparent bg-background/50 text-muted-foreground hover:bg-violet-500/10 hover:text-violet-700 dark:hover:text-violet-200"
             )}
             onClick={() => !isEditing && onRoomChange(room.id)}
           >
@@ -79,7 +79,7 @@ export function CanvasRoomsTabs({
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                 <input
                   autoFocus
-                  className="bg-transparent border-none outline-none w-20 p-0 text-white placeholder:text-emerald-200"
+                  className="w-20 border-none bg-transparent p-0 text-foreground outline-none placeholder:text-violet-500/60"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onKeyDown={(e) => {
@@ -95,12 +95,12 @@ export function CanvasRoomsTabs({
                 {isActive && (
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1.5 ml-1">
                     <Pencil2Icon 
-                      className="h-3.5 w-3.5 hover:scale-110 text-white/80 hover:text-white" 
+                      className="h-3.5 w-3.5 text-violet-700/75 hover:scale-110 hover:text-violet-700 dark:text-violet-200/80 dark:hover:text-violet-100" 
                       onClick={(e) => { e.stopPropagation(); startEditing(room); }} 
                     />
                     {rooms.length > 1 && (
                       <TrashIcon 
-                        className="h-3.5 w-3.5 hover:text-red-200 hover:scale-110 text-white/80" 
+                        className="h-3.5 w-3.5 text-violet-700/75 hover:scale-110 hover:text-red-500 dark:text-violet-200/80 dark:hover:text-red-300" 
                         onClick={(e) => { e.stopPropagation(); handleDelete(room.id); }} 
                       />
                     )}
@@ -118,12 +118,12 @@ export function CanvasRoomsTabs({
             <TooltipTrigger asChild>
               <button
                 onClick={handleCreate}
-                className="flex items-center justify-center h-7 w-7 rounded-md bg-background/50 border border-transparent hover:border-indigo-500/20 hover:bg-indigo-500/10 text-muted-foreground hover:text-indigo-600 transition-all ml-0.5"
+                className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-md border border-transparent bg-background/50 text-muted-foreground transition-all hover:border-violet-400/25 hover:bg-violet-500/10 hover:text-violet-700 dark:hover:text-violet-200"
               >
                 <PlusIcon className="h-4 w-4" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" className="bg-indigo-900 text-white border-none text-[10px]">
+            <TooltipContent side="bottom" align="center" className="border-none bg-violet-900 text-[10px] text-white">
               New Workspace
             </TooltipContent>
           </Tooltip>

@@ -12,7 +12,7 @@ import {
   NodeChange,
   EdgeChange,
 } from '@xyflow/react';
-import { StudioNode, VideoGenNodeData } from '../types';
+import { StudioNode } from '../types';
 import { isValidConnection, getAllowedTargetHandles, getAllowedSourceHandles } from '../utils/isValidConnection';
 import { resolveCollisions } from '../utils/nodeCollisions';
 
@@ -32,6 +32,7 @@ interface StudioState {
   setNodes: (nodes: StudioNode[]) => void;
   setEdges: (edges: Edge[]) => void;
   updateNodeData: (id: string, data: Partial<StudioNode['data']>) => void;
+  updateNode: (id: string, updater: (node: StudioNode) => StudioNode) => void;
   getNodeById: (id: string) => StudioNode | undefined;
   getConnectedEdges: (nodeId: string, handleType?: 'source' | 'target') => Edge[];
   setDefaultEdgeType: (type: EdgeType) => void;
@@ -91,7 +92,7 @@ const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): 
   return connection;
 };
 
-const getEdgeStyle = (sourceHandle: string | null, _edgeType: EdgeType) => {
+const getEdgeStyle = (sourceHandle: string | null) => {
   const dataType = getDataTypeFromHandle(sourceHandle);
 
   return {
@@ -171,7 +172,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set((state) => {
         const newNodes = applyNodeChanges(changes, state.nodes);
         
-        const isDragging = changes.some(c => c.type === 'position' && (c as any).dragging);
+        const isDragging = changes.some(
+          (c) => c.type === 'position' && 'dragging' in c && c.dragging === true
+        );
         const multipleMoving = changes.filter(c => c.type === 'position').length > 1;
 
         if (isDragging || multipleMoving) {
@@ -210,13 +213,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
 
     const edgeType = get().defaultEdgeType;
-    const style = getEdgeStyle(normalized.sourceHandle, edgeType);
+    const style = getEdgeStyle(normalized.sourceHandle);
 
     const newEdge = {
       ...normalized,
       id: `e-${normalized.source}-${normalized.target}-${Date.now()}`,
       type: 'dataType',
-      className: 'studio-edge',
+      className: 'studio-edge studio-edge--connected',
       style,
       data: {
         dataType: getDataTypeFromHandle(normalized.sourceHandle),
@@ -258,6 +261,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       newNodes[nodeIndex] = updatedNode as StudioNode;
 
       return { nodes: newNodes };
+    });
+  },
+
+  updateNode: (id: string, updater: (node: StudioNode) => StudioNode) => {
+    set((state) => {
+      const nodeIndex = state.nodes.findIndex((node) => node.id === id);
+      if (nodeIndex === -1) return state;
+
+      const nextNodes = [...state.nodes];
+      nextNodes[nodeIndex] = updater(state.nodes[nodeIndex]);
+      return { nodes: nextNodes };
     });
   },
 

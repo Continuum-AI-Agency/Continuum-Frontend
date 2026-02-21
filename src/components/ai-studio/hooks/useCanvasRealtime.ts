@@ -339,7 +339,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       const deletedNodeIds = state.getDeletedNodeIds();
       const deletedEdgeIds = state.getDeletedEdgeIds();
 
-      const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
+      const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType, {
+        preserveGeneratedOutputs: true,
+      });
 
       const { data, error } = await supabase
         .schema("brand_profiles" as any)

@@ -16,6 +16,15 @@ import { Toolbar } from '@/components/ai-elements/toolbar';
 import { Button } from '@/components/ui/button';
 import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode<ExtendVideoNodeData>>) {
   const [isHovered, setIsHovered] = useState(false);
@@ -52,6 +61,8 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
 
   return (
     <TooltipProvider>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
       <div
         className={cn(
           "relative group h-full w-full min-w-[260px] min-h-[160px] rounded-xl transition-shadow",
@@ -76,21 +87,6 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
         >
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleRun} title="Run Node">
             <PlayIcon className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => duplicateNode(id)} title="Duplicate">
-            <CopyIcon className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download Output">
-            <DownloadIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => deleteNode(id)}
-            title="Delete"
-          >
-            <TrashIcon className="h-4 w-4" />
           </Button>
         </Toolbar>
 
@@ -148,10 +144,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
             id="video"
             className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
           />
-          <span className={cn(
-            "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-            (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-          )}>
+          <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
             Video Input
           </span>
         </div>
@@ -166,10 +159,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
             id="prompt"
             className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125 pointer-events-auto"
           />
-          <span className={cn(
-            "studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none",
-            (selected || isHovered) ? "opacity-100" : "opacity-0 group-hover/handle:opacity-100"
-          )}>
+          <span className="studio-handle-pill absolute left-6 top-1/2 -translate-y-1/2 px-2 py-1 text-[10px] font-medium shadow-md transition-opacity whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover/handle:opacity-100">
             Prompt (Optional)
           </span>
         </div>
@@ -194,10 +184,39 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
         </Tooltip>
       </div>
 
-      <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+      <div className={cn(
+        "pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 rounded bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-opacity",
+        (selected || isHovered) ? "opacity-100" : "opacity-0"
+      )}>
         {generatorDescription}
       </div>
     </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-52">
+          <ContextMenuLabel>Extend Video</ContextMenuLabel>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={handleRun}>
+            <PlayIcon className="mr-2 h-4 w-4" />
+            Run Node
+            <ContextMenuShortcut>R</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => duplicateNode(id)}>
+            <CopyIcon className="mr-2 h-4 w-4" />
+            Duplicate
+            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem onClick={handleDownload} disabled={!data.generatedVideo}>
+            <DownloadIcon className="mr-2 h-4 w-4" />
+            Download Output
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+            <TrashIcon className="mr-2 h-4 w-4" />
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </TooltipProvider>
   );
 }

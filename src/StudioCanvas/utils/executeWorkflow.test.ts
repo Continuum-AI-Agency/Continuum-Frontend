@@ -271,6 +271,72 @@ describe('executeWorkflow', () => {
     expect(executeGeneration.mock.calls[0][0]).toBe('nano-2');
   });
 
+  it('should execute upstream string enrichment with inputs before running target video node', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'text-a', position: { x: 0, y: 0 }, data: { value: 'banana still life' }, type: 'string' },
+      { id: 'text-b', position: { x: 0, y: 0 }, data: { value: 'red apple still life' }, type: 'string' },
+      { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+      { id: 'enrich-1', position: { x: 0, y: 0 }, data: { value: 'old prompt' }, type: 'string' },
+      { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'text-a', sourceHandle: 'text', target: 'img-a', targetHandle: 'prompt' },
+      { id: 'e2', source: 'text-b', sourceHandle: 'text', target: 'img-b', targetHandle: 'prompt' },
+      { id: 'e3', source: 'img-a', sourceHandle: 'image', target: 'enrich-1', targetHandle: 'image' },
+      { id: 'e4', source: 'img-b', sourceHandle: 'image', target: 'enrich-1', targetHandle: 'image' },
+      { id: 'e5', source: 'enrich-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
+      { id: 'e6', source: 'img-a', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
+      { id: 'e7', source: 'img-b', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (nodeId: string) => {
+      if (nodeId === 'img-a') {
+        return { success: true, output: { type: 'image', base64: 'img_a_base64', mimeType: 'image/png' } };
+      }
+      if (nodeId === 'img-b') {
+        return { success: true, output: { type: 'image', base64: 'img_b_base64', mimeType: 'image/png' } };
+      }
+      if (nodeId === 'video-1') {
+        return { success: true, output: { type: 'video', url: 'video_url' } };
+      }
+      return { success: false, error: `Unexpected node ${nodeId}` };
+    });
+
+    const executeEnrichment = mock(async (nodeId: string, payload: any) => {
+      expect(nodeId).toBe('enrich-1');
+      expect(payload?.context?.images).toHaveLength(2);
+      return { success: true, output: { type: 'text', value: 'enriched combined prompt' } };
+    });
+
+    const controls = buildControls(
+      executeGeneration,
+      mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
+      executeEnrichment
+    );
+
+    await executeWorkflow(controls as any, { targetNodeId: 'video-1' });
+
+    expect(executeEnrichment).toHaveBeenCalledTimes(1);
+    expect(executeGeneration).toHaveBeenCalledTimes(3);
+    expect(executeGeneration.mock.calls.some((call: any[]) => call[0] === 'video-1')).toBe(true);
+
+    const videoCall = executeGeneration.mock.calls.find((call: any[]) => call[0] === 'video-1');
+    expect(videoCall?.[1]?.prompt).toBe('enriched combined prompt');
+    expect(videoCall?.[1]?.reference_images).toHaveLength(2);
+
+    const finalNodes = useStudioStore.getState().nodes;
+    const enrichNode = finalNodes.find((node) => node.id === 'enrich-1');
+    const videoNode = finalNodes.find((node) => node.id === 'video-1');
+    expect(enrichNode?.data.value).toBe('enriched combined prompt');
+    expect(enrichNode?.data.isComplete).toBe(true);
+    expect(videoNode?.data.generatedVideo).toBe('video_url');
+  });
+
   it('should execute extend video nodes with base64 input', async () => {
     const nodes: StudioNode[] = [
       { id: 'vid-1', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,base64_video' }, type: 'video' },

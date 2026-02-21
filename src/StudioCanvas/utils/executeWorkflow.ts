@@ -27,10 +27,18 @@ const normalizeText = (value?: string | null): string | undefined => {
 const getIncomingEdges = (edges: Edge[], nodeId: string) =>
   edges.filter((edge) => edge.target === nodeId);
 
+const stringExternalInputHandles = new Set(['image', 'audio', 'video', 'document']);
+
+const getStringExternalInputEdges = (edges: Edge[], nodeId: string) =>
+  edges.filter(
+    (edge) => edge.target === nodeId && stringExternalInputHandles.has(edge.targetHandle ?? '')
+  );
+
 const resolveTextInput = (
   edge: Edge,
   resolvedOutputs: Map<string, NodeOutput>,
-  nodeById: Map<string, StudioNode>
+  nodeById: Map<string, StudioNode>,
+  allEdges: Edge[]
 ): string | undefined => {
   const output = resolvedOutputs.get(edge.source);
   if (output?.type === 'text') {
@@ -39,6 +47,10 @@ const resolveTextInput = (
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'string') {
+    const sourceRequiresExecution = getStringExternalInputEdges(allEdges, sourceNode.id).length > 0;
+    if (sourceRequiresExecution) {
+      return undefined;
+    }
     return normalizeText((sourceNode.data as any).value);
   }
 
@@ -89,18 +101,53 @@ const resolveVideoInput = (
 
   return undefined;
 };
+
+const resolveAudioInput = (
+  edge: Edge,
+  nodeById: Map<string, StudioNode>
+): { base64: string; mimeType: string } | undefined => {
+  const sourceNode = nodeById.get(edge.source);
+  if (sourceNode?.type === 'audio') {
+    const parsed = parseDataUrl((sourceNode.data as any).audio as string | undefined);
+    if (parsed?.base64) {
+      return { base64: parsed.base64, mimeType: parsed.mimeType };
+    }
+  }
+  return undefined;
+};
+
+const resolveDocumentInput = (
+  edge: Edge,
+  nodeById: Map<string, StudioNode>
+): Array<{ name: string; content: string }> | undefined => {
+  const sourceNode = nodeById.get(edge.source);
+  if (sourceNode?.type !== 'document') return undefined;
+  const documents = ((sourceNode.data as any).documents ?? []) as Array<Record<string, unknown>>;
+  const validDocuments = documents
+    .map((document) => {
+      const content = typeof document.content === 'string' ? document.content : '';
+      if (!content.trim()) return null;
+      const name = typeof document.name === 'string' && document.name.trim() ? document.name : 'document';
+      return { name, content };
+    })
+    .filter((document): document is { name: string; content: string } => document !== null);
+
+  return validDocuments.length > 0 ? validDocuments : undefined;
+};
+
 const getPromptValue = (
   node: StudioNode,
   incomingEdges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
-  nodeById: Map<string, StudioNode>
+  nodeById: Map<string, StudioNode>,
+  allEdges: Edge[]
 ): { value?: string; fromEdge: boolean } => {
   const promptHandles = (node.type === 'veoDirector' || node.type === 'veoFast') ? ['prompt-in', 'prompt'] : ['prompt'];
   const promptEdges = incomingEdges.filter((edge) => promptHandles.includes(edge.targetHandle ?? ""));
 
   if (promptEdges.length > 0) {
     const edgePrompt = promptEdges
-      .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById))
+      .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById, allEdges))
       .find(Boolean);
     return { value: edgePrompt, fromEdge: true };
   }
@@ -117,7 +164,8 @@ const findMissingOptionalInput = (
   node: StudioNode,
   incomingEdges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
-  nodeById: Map<string, StudioNode>
+  nodeById: Map<string, StudioNode>,
+  allEdges: Edge[]
 ): string | undefined => {
   if (node.type === 'nanoGen') {
     const refEdges = incomingEdges.filter((edge) =>
@@ -136,7 +184,7 @@ const findMissingOptionalInput = (
     for (const edge of incomingEdges) {
       const handle = edge.targetHandle ?? "";
       if (handle === 'negative') {
-        if (!resolveTextInput(edge, resolvedOutputs, nodeById)) {
+        if (!resolveTextInput(edge, resolvedOutputs, nodeById, allEdges)) {
           return handle;
         }
       } else if (handle === 'ref-image' || handle === 'ref-images') {
@@ -168,6 +216,38 @@ const getNodeReadiness = (
 
   const incomingEdges = getIncomingEdges(edges, node.id);
 
+  if (node.type === 'string') {
+    const externalInputEdges = getStringExternalInputEdges(edges, node.id);
+    if (externalInputEdges.length === 0) {
+      return normalizeText((node.data as any).value)
+        ? { ready: true }
+        : { ready: false, reason: 'Missing required prompt' };
+    }
+
+    for (const edge of externalInputEdges) {
+      const targetHandle = edge.targetHandle ?? '';
+      const inputAvailable =
+        targetHandle === 'image'
+          ? Boolean(resolveImageInput(edge, resolvedOutputs, nodeById))
+          : targetHandle === 'audio'
+            ? Boolean(resolveAudioInput(edge, nodeById))
+            : targetHandle === 'video'
+              ? Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById))
+              : targetHandle === 'document'
+                ? Boolean(resolveDocumentInput(edge, nodeById))
+                : false;
+
+      if (!inputAvailable) {
+        return {
+          ready: false,
+          reason: `Missing connected input for ${targetHandle || 'string input'}`,
+        };
+      }
+    }
+
+    return { ready: true };
+  }
+
   const failedEdge = incomingEdges.find((edge) => failedNodes.has(edge.source));
   if (failedEdge) {
     return { ready: false, reason: 'Upstream dependency failed' };
@@ -186,7 +266,7 @@ const getNodeReadiness = (
     const promptEdges = incomingEdges.filter((edge) => edge.targetHandle === 'prompt');
     if (promptEdges.length > 0) {
       const promptValue = promptEdges
-        .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById))
+        .map((edge) => resolveTextInput(edge, resolvedOutputs, nodeById, edges))
         .find(Boolean);
       if (!promptValue) {
         return { ready: false, reason: 'Missing connected input for prompt' };
@@ -196,7 +276,7 @@ const getNodeReadiness = (
     return { ready: true };
   }
 
-  const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById);
+  const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
   if (!prompt.value) {
     return {
       ready: false,
@@ -204,7 +284,7 @@ const getNodeReadiness = (
     };
   }
 
-  const missingOptional = findMissingOptionalInput(node, incomingEdges, resolvedOutputs, nodeById);
+  const missingOptional = findMissingOptionalInput(node, incomingEdges, resolvedOutputs, nodeById, edges);
   if (missingOptional) {
     return { ready: false, reason: `Missing connected input for ${missingOptional}` };
   }
@@ -331,11 +411,17 @@ export async function executeWorkflow(
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const resolvedOutputs = new Map<string, NodeOutput>();
   const failedNodes = new Set<string>();
+  const stringNodesWithExternalInputs = new Set(
+    executableNodes
+      .filter((node) => node.type === 'string')
+      .filter((node) => getStringExternalInputEdges(edges, node.id).length > 0)
+      .map((node) => node.id)
+  );
 
   for (const node of nodes) {
     if (node.type === 'string') {
       const value = normalizeText((node.data as any).value);
-      if (value) {
+      if (value && !stringNodesWithExternalInputs.has(node.id)) {
         resolvedOutputs.set(node.id, { type: 'text', value });
       }
     }
@@ -658,6 +744,10 @@ export async function executeWorkflow(
       const node = nodeById.get(id);
       if (node?.type === 'string' && options.targetNodeId === id) {
         console.info("[studio] forcing string node into pending", id);
+        return true;
+      }
+      if (node?.type === 'string' && stringNodesWithExternalInputs.has(id)) {
+        console.info("[studio] scheduling string node with external inputs", id);
         return true;
       }
       return !resolvedOutputs.has(id);

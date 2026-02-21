@@ -28,7 +28,7 @@ describe('AudioNode', () => {
         </ToastProvider>
     );
     expect(container.querySelector('audio')).not.toBeNull();
-    expect(container.textContent).toContain('Audio Input');
+    expect(container.textContent).toContain('Audio File');
   });
 
   it('should show upload state when empty', () => {

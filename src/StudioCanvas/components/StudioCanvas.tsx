@@ -22,7 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { FolderOpen, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
@@ -89,8 +89,8 @@ type LibrarySection = {
 
 const LIBRARY_SECTIONS: LibrarySection[] = [
   {
-    value: 'generators',
-    label: 'Generators',
+    value: 'image',
+    label: 'Image',
     items: [
       {
         type: 'nanoGen',
@@ -98,6 +98,18 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         desc: 'Canvas and generator output',
         tag: 'Creative',
       },
+      {
+        type: 'image',
+        label: 'Image Reference',
+        desc: 'Image file input',
+        tag: 'Utility',
+      },
+    ],
+  },
+  {
+    value: 'video',
+    label: 'Video',
+    items: [
       {
         type: 'veoDirector',
         label: 'Veo 3.1',
@@ -116,24 +128,18 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         desc: 'Continue existing footage',
         tag: 'Creative',
       },
+      {
+        type: 'video',
+        label: 'Video Reference',
+        desc: 'Video file input',
+        tag: 'Utility',
+      },
     ],
   },
   {
-    value: 'inputs',
-    label: 'Inputs and References',
+    value: 'utility',
+    label: 'Utility',
     items: [
-      {
-        type: 'string',
-        label: 'Text Block',
-        desc: 'Prompt and enrichment input',
-        tag: 'Intelligence',
-      },
-      {
-        type: 'image',
-        label: 'Image Reference',
-        desc: 'Image file input',
-        tag: 'Utility',
-      },
       {
         type: 'audio',
         label: 'Audio Reference',
@@ -147,10 +153,10 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         tag: 'Utility',
       },
       {
-        type: 'video',
-        label: 'Video Reference',
-        desc: 'Video file input',
-        tag: 'Utility',
+        type: 'string',
+        label: 'Text Block',
+        desc: 'Prompt and enrichment input',
+        tag: 'Intelligence',
       },
     ],
   },
@@ -277,6 +283,7 @@ function Flow({
   const { remoteCursors, updateCursor, isLoading } = realtime;
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const lastMousePositionRef = useRef({ x: 240, y: 180 });
+  const contextMenuAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
   const { screenToFlowPosition, deleteElements, fitView, zoomIn, zoomOut } = useReactFlow();
 
@@ -288,6 +295,7 @@ function Flow({
 
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
+  const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
 
   const handleMouseMove = useCallback(
     (event: React.MouseEvent) => {
@@ -302,7 +310,8 @@ function Flow({
   const addNodeAtPointer = useCallback(
     (type: StudioCanvasNodeType) => {
       takeSnapshot();
-      const position = screenToFlowPosition(lastMousePositionRef.current);
+      const anchorPosition = contextMenuAnchorRef.current ?? lastMousePositionRef.current;
+      const position = screenToFlowPosition(anchorPosition);
       const { data, style } = createNodeConfig(type);
 
       const newNode: StudioNode = {
@@ -318,6 +327,16 @@ function Flow({
     },
     [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave],
   );
+
+  const handleCanvasContextMenu = useCallback((event: MouseEvent | React.MouseEvent) => {
+    contextMenuAnchorRef.current = { x: event.clientX, y: event.clientY };
+  }, []);
+
+  const handleContextMenuOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      contextMenuAnchorRef.current = null;
+    }
+  }, []);
 
   const clearCanvas = useCallback(() => {
     takeSnapshot();
@@ -575,8 +594,8 @@ function Flow({
   }
 
   return (
-    <div className="h-full w-full" ref={reactFlowWrapper} onMouseMove={handleMouseMove}>
-      <ContextMenu>
+    <div className="h-full min-h-0 w-full" ref={reactFlowWrapper} onMouseMove={handleMouseMove}>
+      <ContextMenu onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas
             nodes={nodes}
@@ -591,7 +610,7 @@ function Flow({
             onNodeDragStart={onNodeDragStart}
             onNodeDragStop={onNodeDragStop}
             onConnectStart={onConnectStart}
-            onConnectEnd={onConnectEnd as never}
+            onConnectEnd={onConnectEnd}
             isValidConnection={isValidConnectionCallback}
             connectionLineComponent={ConnectionLine}
             panOnDrag={interactionMode === 'pan'}
@@ -599,6 +618,7 @@ function Flow({
             selectionOnDrag={interactionMode === 'select'}
             selectionMode={SelectionMode.Partial}
             className="studio-canvas"
+            onPaneContextMenu={handleCanvasContextMenu}
             defaultEdgeOptions={{
               type: 'dataType',
               animated: false,
@@ -631,26 +651,32 @@ function Flow({
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-72">
               {LIBRARY_SECTIONS.map((section) => (
-                <React.Fragment key={section.value}>
-                  <ContextMenuLabel>{section.label}</ContextMenuLabel>
-                  {section.items.map((item) => (
-                    <ContextMenuItem
-                      key={item.type}
-                      disabled={Boolean(item.disabled)}
-                      onClick={() => addNodeAtPointer(item.type)}
-                    >
-                      <div className="flex min-w-0 flex-col">
-                        <span>{item.label}</span>
-                        <span className="text-xs text-muted-foreground">{item.desc}</span>
-                      </div>
-                      <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                    </ContextMenuItem>
-                  ))}
-                  <ContextMenuSeparator />
-                </React.Fragment>
+                <ContextMenuSub key={section.value}>
+                  <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-72">
+                    {section.items.map((item) => (
+                      <ContextMenuItem
+                        key={item.type}
+                        disabled={Boolean(item.disabled)}
+                        onClick={() => addNodeAtPointer(item.type)}
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <span>{item.label}</span>
+                          <span className="text-xs text-muted-foreground">{item.desc}</span>
+                        </div>
+                        <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                      </ContextMenuItem>
+                    ))}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
               ))}
             </ContextMenuSubContent>
           </ContextMenuSub>
+
+          <ContextMenuItem inset onSelect={() => setIsLoadWorkflowOpen(true)}>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Load Workflow
+          </ContextMenuItem>
 
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
@@ -690,6 +716,12 @@ function Flow({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+      <LoadWorkflowDialog
+        brandProfileId={brandProfileId}
+        open={isLoadWorkflowOpen}
+        onOpenChange={setIsLoadWorkflowOpen}
+        showTrigger={false}
+      />
     </div>
   );
 }
@@ -713,7 +745,7 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
 
   return (
     <ReactFlowProvider>
-      <div className="flex h-full flex-col bg-background">
+      <div className="flex h-full min-h-0 w-full flex-col bg-background">
         {!embedded && (
           <div className="relative z-[100] flex h-14 shrink-0 items-center justify-between border-b bg-background px-4">
             <div className="flex items-center gap-4">
@@ -743,7 +775,7 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
           </div>
         )}
 
-        <main className="relative flex-1 overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <main className="relative flex-1 min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
           <Flow brandProfileId={brandProfileId} realtime={realtime} activeRoomId={activeRoomId} />
         </main>
       </div>

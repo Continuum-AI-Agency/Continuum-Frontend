@@ -18,6 +18,7 @@ import type {
 } from "@/lib/schemas/promptTemplates";
 import { StudioCanvas } from "@/StudioCanvas";
 import { useSearchParams, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 type AIStudioClientProps = {
   brandProfileId: string;
@@ -109,8 +110,15 @@ export default function AIStudioClient({
     <div className="fixed inset-x-0 top-0 h-screen h-[100dvh] md:left-[var(--app-sidebar-width,88px)] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
-      <main className="relative z-[1] flex flex-1 flex-col gap-3 px-6 sm:px-10 md:px-16 pt-4 pb-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <main
+        className={cn(
+          "relative z-[1] flex min-h-0 flex-1 flex-col",
+          activeTab === "canvas"
+            ? "gap-2 px-2 pb-2 pt-2 sm:px-3 md:px-4"
+            : "gap-3 px-6 pb-6 pt-4 sm:px-10 md:px-16"
+        )}
+      >
+        <div className={cn("flex flex-wrap items-center justify-between", activeTab === "canvas" ? "gap-2 px-1" : "gap-3")}>
           <div className="flex items-baseline gap-3">
             <Heading size="7" className="text-white">AI Studio</Heading>
             <Text color="gray">Build flows for {brandName}</Text>
@@ -139,8 +147,10 @@ export default function AIStudioClient({
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-            <StudioCanvas brandProfileId={brandProfileId} />
+          <div className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
+            <div className="h-full w-full">
+              <StudioCanvas brandProfileId={brandProfileId} />
+            </div>
           </div>
         )}
       </main>

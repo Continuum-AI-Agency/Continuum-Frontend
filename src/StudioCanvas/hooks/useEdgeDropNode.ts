@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef } from 'react';
-import { useReactFlow, type XYPosition, type Node, type Edge, useStoreApi, type OnNodeDrag } from '@xyflow/react';
+import { useReactFlow, type XYPosition, type Node, type Edge, useStoreApi, type OnNodeDrag, type OnConnectEnd, type OnConnectStart } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
 import { canAcceptSingleTextInput } from '../utils/connectionValidation';
 import { useStudioStore } from '../stores/useStudioStore';
@@ -179,7 +179,7 @@ export function useEdgeDropNode() {
     return 'image';
   }, []);
 
-  const onConnectStart = useCallback((_: any, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
+  const onConnectStart = useCallback<OnConnectStart>((_, params) => {
       if (params.nodeId && params.handleId && params.handleType) {
           connectionStartRef.current = {
               nodeId: params.nodeId,
@@ -189,13 +189,23 @@ export function useEdgeDropNode() {
       }
   }, []);
 
-  const onConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent) => {
+  const onConnectEnd = useCallback<OnConnectEnd>(
+    (event, connectionState) => {
         const startParams = connectionStartRef.current;
         if (!startParams) return;
+
+        // A valid drop onto an existing node/handle should only create an edge.
+        if (connectionState.toNode || connectionState.toHandle) {
+          connectionStartRef.current = null;
+          return;
+        }
         
-        const target = event.target as Element;
-        const isPane = target.classList.contains('react-flow__pane');
+        const target = event.target;
+        if (!(target instanceof Element)) {
+          connectionStartRef.current = null;
+          return;
+        }
+        const isPane = target.classList.contains('react-flow__pane') || !!target.closest('.react-flow__pane');
         
         if (isPane) {
              const { clientX, clientY } = 'changedTouches' in event ? (event as TouchEvent).changedTouches[0] : (event as MouseEvent);
@@ -240,7 +250,7 @@ export function useEdgeDropNode() {
                       target: startParams.nodeId,
                       targetHandle: startParams.handleId,
                       type: 'dataType',
-                      className: 'studio-edge',
+                      className: 'studio-edge studio-edge--connected',
                       data: { 
                         dataType: resolveDataType(resolvedSourceHandle),
                         pathType: defaultEdgeType,
@@ -254,7 +264,7 @@ export function useEdgeDropNode() {
                       target: newNodeId,
                       targetHandle: getTargetHandleForNodeType(nodeType, startParams.handleId), 
                       type: 'dataType',
-                      className: 'studio-edge',
+                      className: 'studio-edge studio-edge--connected',
                       data: { 
                         dataType: resolveDataType(startParams.handleId),
                         pathType: defaultEdgeType,
@@ -283,6 +293,7 @@ export function useProximityConnect() {
     const MIN_DISTANCE = 500;
 
     const getClosestEdge = useCallback((node: Node) => {
+        type ConnectableNodeRef = { id: string; type?: string };
         const { nodeLookup } = store.getState();
         const internalNode = getInternalNode(node.id);
         if (!internalNode) return null;
@@ -313,7 +324,8 @@ export function useProximityConnect() {
     
               if (d < res.distance && d < MIN_DISTANCE) {
                 res.distance = d;
-                res.node = n;
+                res.node = { id: n.id, type: n.type };
+                res.absoluteX = n.internals.positionAbsolute.x;
               }
             }
     
@@ -321,7 +333,8 @@ export function useProximityConnect() {
           },
           {
             distance: Number.MAX_VALUE,
-            node: null as any
+            node: null as ConnectableNodeRef | null,
+            absoluteX: Number.MAX_VALUE,
           },
         );
     
@@ -330,7 +343,7 @@ export function useProximityConnect() {
         }
     
         const closeNodeIsSource =
-          closestNode.node.internals.positionAbsolute.x <
+          closestNode.absoluteX <
           internalNode.internals.positionAbsolute.x;
         
         const sourceNode = closeNodeIsSource ? closestNode.node : node;
@@ -382,7 +395,7 @@ export function useProximityConnect() {
       }, [getInternalNode, store, getEdges]);
 
       const onNodeDrag: OnNodeDrag = useCallback(
-        (_: any, node: Node) => {
+        (_, node: Node) => {
           const closeEdge = getClosestEdge(node);
     
           setEdges((es) => {
@@ -405,7 +418,7 @@ export function useProximityConnect() {
       );
     
       const onNodeDragStop: OnNodeDrag = useCallback(
-        (_: any, node: Node) => {
+        (_, node: Node) => {
           const closeEdge = getClosestEdge(node);
     
           setEdges((es) => {
@@ -429,7 +442,7 @@ export function useProximityConnect() {
                   id: `e-${closeEdge.source}-${closeEdge.target}-${Date.now()}`,
                   style: undefined,
                   type: 'dataType',
-                  className: 'studio-edge',
+                  className: 'studio-edge studio-edge--connected',
                   data: { dataType: resolveDataType(closeEdge.sourceHandle) }
               }
               nextEdges.push(validEdge as unknown as Edge);

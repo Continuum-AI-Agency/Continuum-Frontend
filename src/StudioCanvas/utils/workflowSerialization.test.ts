@@ -114,6 +114,32 @@ describe('workflowSerialization', () => {
     expect((snapshot.nodes[0].data as any).image).toBeUndefined();
   });
 
+  it('preserves generated outputs when requested', () => {
+    const snapshot = serializeWorkflowSnapshot(
+      [
+        buildNode({
+          id: 'gen',
+          type: 'nanoGen',
+          data: {
+            model: 'nano-banana',
+            positivePrompt: 'hero shot',
+            generatedImage: 'data:image/png;base64,keep-generated-image',
+            generatedVideo: 'https://cdn.example.com/generated.mp4',
+            image: 'data:image/png;base64,strip-input-image',
+          } as any,
+        }),
+      ],
+      [],
+      'bezier',
+      { preserveGeneratedOutputs: true }
+    );
+
+    const generatorNode = snapshot.nodes.find((node) => node.id === 'gen');
+    expect((generatorNode?.data as any)?.generatedImage).toBe('data:image/png;base64,keep-generated-image');
+    expect((generatorNode?.data as any)?.generatedVideo).toBe('https://cdn.example.com/generated.mp4');
+    expect((generatorNode?.data as any)?.image).toBeUndefined();
+  });
+
   it('preserves style and dimensions during serialization', () => {
     const snapshot = serializeWorkflowSnapshot(
       [

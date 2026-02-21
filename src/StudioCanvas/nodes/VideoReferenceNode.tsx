@@ -11,8 +11,18 @@ import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { cn } from '@/lib/utils';
-import { Node as CanvasNode, NodeContent, NodeHeader } from '@/components/ai-elements/node';
+import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Copy, Trash2 } from 'lucide-react';
 
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
@@ -34,6 +44,8 @@ const TEXT_MIME = 'text/plain';
 export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNode<VideoNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
   const triggerSave = useStudioStore((state) => state.triggerSave);
+  const duplicateNode = useStudioStore((state) => state.duplicateNode);
+  const deleteNode = useStudioStore((state) => state.deleteNode);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
   const { show } = useToast();
@@ -132,6 +144,8 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
 
   return (
     <TooltipProvider>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
       <div 
         className={cn(
           "relative group w-full h-full min-w-[180px] min-h-[180px] rounded-xl transition-shadow",
@@ -154,13 +168,14 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
         selected={selected}
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
-        <NodeHeader className="!h-7 !px-3 !py-1 cursor-grab items-center justify-between gap-0 rounded-none bg-muted/60 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          <span>Video Reference</span>
-          <label htmlFor={`video-file-${id}`} className="cursor-pointer text-muted-foreground transition-colors hover:text-foreground">
-            <UploadIcon className="h-3 w-3" />
-          </label>
-        </NodeHeader>
-        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30">
+        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
+            <label
+              htmlFor={`video-file-${id}`}
+              className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100 focus-visible:opacity-100"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <UploadIcon className="h-3 w-3" />
+            </label>
             <label
               htmlFor={`video-file-${id}`}
               className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
@@ -223,6 +238,22 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
         </TooltipContent>
       </Tooltip>
     </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-52">
+          <ContextMenuLabel>Video Reference</ContextMenuLabel>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => duplicateNode(id)}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicate
+            <ContextMenuShortcut>⌘D</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => deleteNode(id)}>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
     </TooltipProvider>
   );
 }
