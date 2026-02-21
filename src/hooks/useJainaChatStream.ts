@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
-import { jainaChatRequestSchema, type JainaChatRequest } from "@/lib/jaina/schemas";
+import {
+  feedbackApprovalCommandSchema,
+  jainaChatRequestSchema,
+  parsePlanDecisionPayload,
+  planDecisionCommandSchema,
+  planApprovalCommandSchema,
+  type JainaChatStreamRequest,
+  type ResponsePlanDecisionEventData,
+} from "@/lib/jaina/schemas";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import {
   createInitialJainaStreamState,
@@ -14,14 +22,19 @@ import {
 
 type JainaChatInput = {
   query: string;
-  plan?: boolean;
+  canvas?: boolean;
   adAccountId: string;
-  brandId?: string;
+  brandId: string;
   userId?: string;
   campaignCanvas?: Record<string, unknown>;
 };
 
 type StartResult = { error?: string };
+type ApprovePlanInput = { planId: string; approved: boolean; reason?: string };
+type ApprovePlanResult = {
+  error?: string;
+  decision?: ResponsePlanDecisionEventData;
+};
 
 export function useJainaChatStream() {
   const [state, setState] = useState<JainaStreamState>(() => createInitialJainaStreamState());
@@ -72,6 +85,100 @@ export function useJainaChatStream() {
     [getAccessToken]
   );
 
+  const approvePlan = useCallback(
+    async (input: ApprovePlanInput): Promise<ApprovePlanResult> => {
+      let decisionPayload;
+      let compatibilityPayload;
+      let legacyPayload;
+      try {
+        decisionPayload = planDecisionCommandSchema.parse({
+          type: "plan.decision",
+          data: {
+            decision: input.approved ? "approve" : "deny",
+            planId: input.planId,
+            reason: input.reason,
+          },
+        });
+
+        compatibilityPayload = feedbackApprovalCommandSchema.parse({
+          type: "feedback",
+          data: {
+            approved: input.approved,
+            planId: input.planId,
+            reason: input.reason,
+          },
+        });
+
+        legacyPayload = planApprovalCommandSchema.parse({
+          type: "plan.approval",
+          data: {
+            plan_id: input.planId,
+            approved: input.approved,
+            note: input.reason,
+          },
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Invalid plan approval payload";
+        return { error: message };
+      }
+
+      try {
+        const token = await getAccessToken();
+        const response = await fetch("/api/agents/jaina/chat/plan/decision", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            primary: decisionPayload,
+            compatibility: compatibilityPayload,
+            legacy: legacyPayload,
+          }),
+        });
+
+        if (!response.ok) {
+          const detail = await response
+            .text()
+            .catch(() => "Failed to submit plan approval.");
+          throw new Error(detail || "Failed to submit plan approval.");
+        }
+
+        const rawDecision = await response.json().catch(() => null);
+        const payload =
+          rawDecision && typeof rawDecision === "object" && "data" in rawDecision
+            ? (rawDecision as { data: unknown }).data
+            : rawDecision;
+
+        const parsedDecision = parsePlanDecisionPayload(payload);
+        if (!parsedDecision) {
+          return {};
+        }
+
+        setState((prev) => {
+          const nextPlan =
+            prev.plan && prev.plan.id === parsedDecision.plan_id
+              ? { ...prev.plan, status: parsedDecision.status }
+              : prev.plan;
+          return {
+            ...prev,
+            plan: nextPlan,
+            pendingPlan: null,
+            lastPlanDecision: parsedDecision,
+          };
+        });
+
+        return { decision: parsedDecision };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to submit plan approval.";
+        return { error: message };
+      }
+    },
+    [getAccessToken]
+  );
+
   const start = useCallback(
     async (input: JainaChatInput): Promise<StartResult> => {
       reset();
@@ -80,15 +187,17 @@ export function useJainaChatStream() {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      let payload: JainaChatRequest;
+      let payload: JainaChatStreamRequest;
       try {
         payload = jainaChatRequestSchema.parse({
           query: input.query,
-          plan: Boolean(input.plan),
           userId: input.userId,
+          canvas: input.canvas,
           context: {
             adAccountId: input.adAccountId,
             brandId: input.brandId,
+            canvas: input.canvas,
+            campaignCanvas: input.campaignCanvas,
           },
         });
       } catch (error) {
@@ -99,15 +208,6 @@ export function useJainaChatStream() {
 
       try {
         const token = await getAccessToken();
-        const payloadWithCanvas = input.campaignCanvas
-          ? {
-              ...payload,
-              context: {
-                ...payload.context,
-                campaignCanvas: input.campaignCanvas,
-              },
-            }
-          : payload;
         const response = await fetch("/api/agents/jaina/chat/stream", {
           method: "POST",
           headers: {
@@ -115,7 +215,7 @@ export function useJainaChatStream() {
             Accept: "application/x-ndjson",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(payloadWithCanvas),
+          body: JSON.stringify(payload),
           signal: controller.signal,
         });
 
@@ -158,5 +258,6 @@ export function useJainaChatStream() {
     cancel,
     reset,
     clearMemory,
+    approvePlan,
   };
 }

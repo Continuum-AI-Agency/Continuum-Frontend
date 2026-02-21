@@ -1,13 +1,20 @@
 import { describe, it, expect } from "bun:test";
 import {
+  feedbackApprovalCommandSchema,
   jainaChatRequestSchema,
+  parsePlanDecisionPayload,
+  parsePlanRequestedPayload,
+  planDecisionCommandSchema,
+  planApprovalCommandSchema,
   jainaChatStopRequestSchema,
   jainaChatStopResponseSchema,
+  responsePlanDecisionSchema,
+  responsePlanRequestedSchema,
   sotReportSchema,
 } from "./schemas";
 
 describe("jainaChatRequestSchema", () => {
-  it("defaults plan to false when omitted", () => {
+  it("accepts required request fields", () => {
     const result = jainaChatRequestSchema.safeParse({
       query: "Analyze my campaigns",
       context: {
@@ -17,25 +24,23 @@ describe("jainaChatRequestSchema", () => {
     });
 
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.plan).toBe(false);
-    }
   });
 
-  it("accepts explicit plan=true", () => {
+  it("accepts optional canvas fields", () => {
     const result = jainaChatRequestSchema.safeParse({
       query: "Analyze my campaigns",
-      plan: true,
+      canvas: true,
       context: {
         adAccountId: "act_123",
         brandId: "brand_456",
+        canvas: true,
+        campaignCanvas: {
+          nodes: [],
+        },
       },
     });
 
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.plan).toBe(true);
-    }
   });
 });
 
@@ -57,18 +62,6 @@ describe("sotReportSchema Resilience", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.executive_summary).toBe("Test summary");
-    }
-  });
-
-  it("should parse a report with reasoning_trace", () => {
-    const data = { 
-      executive_summary: "Summary",
-      reasoning_trace: "Trace detail"
-    };
-    const result = sotReportSchema.safeParse(data);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.reasoning_trace).toBe("Trace detail");
     }
   });
 
@@ -133,5 +126,108 @@ describe("jainaChatStopResponseSchema", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe("plan approval contracts", () => {
+  it("accepts response.plan.requested payload", () => {
+    const result = responsePlanRequestedSchema.safeParse({
+      plan_id: "plan_7f3b1c",
+      tool_name: "generate_performance_report",
+      status: "awaiting_approval",
+      summary: "Assemble full report",
+      args: {
+        reason: "Requested report artifact",
+        plan: true,
+        scopes: ["account", "creative"],
+      },
+      created_at: "2026-02-20T21:14:33.000Z",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("normalizes response.plan.requested camelCase payload", () => {
+    const result = parsePlanRequestedPayload({
+      planId: "hitl_call_1",
+      toolName: "generate_performance_report",
+      summary: "Assemble a full report",
+      args: {
+        reason: "User requested report",
+        plan: true,
+      },
+      createdAt: "2026-02-20T21:14:33.000Z",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.plan_id).toBe("hitl_call_1");
+  });
+
+  it("accepts plan.decision command payload", () => {
+    const result = planDecisionCommandSchema.safeParse({
+      type: "plan.decision",
+      data: {
+        decision: "approve",
+        planId: "hitl_call_1",
+        reason: "Looks good",
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts feedback approval compatibility payload", () => {
+    const result = feedbackApprovalCommandSchema.safeParse({
+      type: "feedback",
+      data: {
+        approved: true,
+        planId: "hitl_call_1",
+        reason: "Proceed",
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts plan.approval command payload", () => {
+    const result = planApprovalCommandSchema.safeParse({
+      type: "plan.approval",
+      data: {
+        plan_id: "plan_7f3b1c",
+        approved: true,
+        note: "Proceed",
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts response.plan.decision payload", () => {
+    const result = responsePlanDecisionSchema.safeParse({
+      plan_id: "plan_7f3b1c",
+      approved: false,
+      status: "rejected",
+      note: "Skip full report",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("normalizes response.plan.decision variants", () => {
+    const approve = parsePlanDecisionPayload({
+      decision: "approve",
+      planId: "hitl_call_1",
+      reason: "Looks good",
+    });
+    const deny = parsePlanDecisionPayload({
+      approved: false,
+      planId: "hitl_call_1",
+      reason: "Need tighter scope",
+    });
+
+    expect(approve).not.toBeNull();
+    expect(approve?.status).toBe("approved");
+    expect(deny).not.toBeNull();
+    expect(deny?.status).toBe("rejected");
   });
 });

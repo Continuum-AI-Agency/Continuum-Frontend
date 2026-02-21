@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
 
 // ============================================================================
 // Request/Response Schemas
@@ -6,15 +7,18 @@ import { z } from "zod";
 
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
-  plan: z.boolean().default(false),
   userId: z.string().optional(),
+  canvas: z.boolean().optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
+    canvas: z.boolean().optional(),
+    campaignCanvas: z.record(z.string(), z.unknown()).optional(),
   }),
 });
 
-export type JainaChatRequest = z.infer<typeof jainaChatRequestSchema>;
+export type JainaChatStreamRequest = z.infer<typeof jainaChatRequestSchema>;
+export type JainaChatRequest = JainaChatStreamRequest;
 
 export const jainaChatStopRequestSchema = z.union([
   z.object({
@@ -44,21 +48,345 @@ export const jainaChatInputSchema = z.object({
 export type JainaChatInputValues = z.infer<typeof jainaChatInputSchema>;
 
 // ============================================================================
-// Stream Event Schemas
+// Stream Contracts (HTTP NDJSON)
 // ============================================================================
 
-export const jainaStreamEventSchema = z.object({
-  type: z.string().optional(),
-  data: z.record(z.string(), z.unknown()).optional(),
-}).passthrough();
+export const streamEventSchema = <TType extends string, TData extends z.ZodTypeAny>(
+  type: TType,
+  data: TData
+) =>
+  z.object({
+    type: z.literal(type),
+    data: data.optional(),
+  });
 
-export type JainaStreamEvent = z.infer<typeof jainaStreamEventSchema>;
+export type StreamEvent<TType extends string, TData = Record<string, unknown>> = {
+  type: TType;
+  data?: TData;
+};
 
-export const progressEventSchema = z.object({
-  stage: z.string(),
-}).passthrough();
+export const recommendationItemSchema = z.object({
+  title: z.string(),
+  rationale: z.string(),
+  expected_impact: z.string().nullable(),
+  priority: z.string(),
+});
 
-export type ProgressEventData = z.infer<typeof progressEventSchema>;
+export type RecommendationItem = z.infer<typeof recommendationItemSchema>;
+
+export const insightSchema = z.object({
+  category: z.string(),
+  title: z.string().optional(),
+  text: z.string(),
+  impact: z.string().nullable(),
+  severity: z.enum(["positive", "neutral", "watch", "risk"]),
+  confidence: z.string().nullable(),
+  evidence: z.array(z.string()),
+});
+
+export type InsightItem = z.infer<typeof insightSchema>;
+
+export const tableSectionSchema = z.object({
+  title: z.string(),
+  subtitle: z.string().nullable(),
+  rows: z.array(z.unknown()),
+  notes: z.string().nullable(),
+});
+
+export type TableSection = z.infer<typeof tableSectionSchema>;
+
+export const dataSeriesSchema = z.object({
+  name: z.string(),
+  values: z.array(z.number()),
+  cached: z.boolean(),
+  unit: z.string().nullable(),
+  derived_metrics: z.unknown().optional(),
+});
+
+export type DataSeries = z.infer<typeof dataSeriesSchema>;
+
+export const graphSpecSchema = z.object({
+  title: z.string(),
+  description: z.string().nullable(),
+  graph_type: z.enum(["line", "bar", "stacked_bar", "area", "pie"]),
+  labels: z.array(z.string()),
+  series: z.array(z.unknown()),
+  cached_sources: z.array(z.string()),
+});
+
+export type GraphSpec = z.infer<typeof graphSpecSchema>;
+
+export const reportTableGridSchema = z.object({
+  title: z.string().optional(),
+  subtitle: z.string().nullable().optional(),
+  headers: z.array(z.string()),
+  rows: z.array(z.union([z.array(z.unknown()), z.record(z.string(), z.unknown())])),
+  notes: z.string().nullable().optional(),
+});
+
+export const frontendMetricItemSchema = z.object({
+  metric: z.string(),
+  value: z.union([z.string(), z.number()]),
+  change: z.union([z.string(), z.number()]).optional(),
+  trend: z.union([z.string(), z.number()]).optional(),
+  direction: z.string().optional(),
+  context: z.string().optional(),
+  sub_label: z.string().optional(),
+  prefix: z.string().optional(),
+  suffix: z.string().optional(),
+  status: z.string().nullable().optional(),
+  format: z.string().optional(),
+});
+
+export const frontendGraphSchema = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().nullable().optional(),
+    type: z.string().optional(),
+    graph_type: z.string().optional(),
+    chart_type: z.string().optional(),
+    labels: z.array(z.union([z.string(), z.number()])).optional(),
+    datasets: z.array(z.record(z.string(), z.unknown())).optional(),
+    data: z.array(z.record(z.string(), z.unknown())).optional(),
+    series: z.array(z.record(z.string(), z.unknown())).optional(),
+    x_axis_label: z.string().optional(),
+    y_axis_label: z.string().optional(),
+    cached_sources: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export const frontendSoTSectionSchema = z.object({
+  heading: z.string(),
+  scope: z.string(),
+  summary: z.string(),
+  highlights: z.array(insightSchema),
+  tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])),
+  actions: z.array(recommendationItemSchema),
+  confidence: z.string().nullable(),
+  cached_sources: z.array(z.string()),
+  graphs: z.array(frontendGraphSchema),
+});
+
+export type FrontendSoTSection = z.infer<typeof frontendSoTSectionSchema>;
+
+export const frontendSoTReportSchema = z.object({
+  language: z.string(),
+  executive_summary: z.string(),
+  performance_snapshot: z.array(frontendMetricItemSchema),
+  sections: z.array(frontendSoTSectionSchema),
+  strategic_recommendations: z.array(recommendationItemSchema),
+  follow_up_questions: z.array(z.string()),
+  handoff_trace: z.array(z.unknown()),
+  cached_sources: z.array(z.string()),
+  graphs: z.array(frontendGraphSchema),
+});
+
+export type FrontendSoTReport = z.infer<typeof frontendSoTReportSchema>;
+
+export const chartDatasetSchema = z.object({
+  label: z.string(),
+  data: z.array(z.number()),
+  backgroundColor: z.string().optional(),
+  borderColor: z.string().optional(),
+});
+
+export type ChartDataset = z.infer<typeof chartDatasetSchema>;
+
+export const chartSpecificationSchema = z.object({
+  title: z.string(),
+  chart_type: z.enum(["bar", "line", "pie", "doughnut"]),
+  labels: z.array(z.string()),
+  datasets: z.array(chartDatasetSchema),
+  options: z.record(z.string(), z.any()).optional(),
+});
+
+export type ChartSpecification = z.infer<typeof chartSpecificationSchema>;
+
+export const metricComparisonSchema = z.object({
+  label: z.string(),
+  planned: z.union([z.number(), z.string()]),
+  actual: z.union([z.number(), z.string()]),
+  index_percent: z.number(),
+  unit: z.string(),
+  deviation_type: z.enum(["positive", "negative", "neutral"]),
+});
+
+export type MetricComparison = z.infer<typeof metricComparisonSchema>;
+
+export const reportAssemblySchema = z.object({
+  header: z.object({
+    title: z.string(),
+    subtitle: z.string().optional(),
+    period: z.string(),
+    report_tags: z.array(z.string()),
+  }),
+  summary: z.object({
+    narrative: z.string(),
+    principal_deviation: z.string().optional(),
+  }),
+  metrics: z.array(metricComparisonSchema),
+  charts: z.array(chartSpecificationSchema),
+  insights: z.array(insightSchema),
+  recommendations: z.array(z.union([recommendationItemSchema, z.string()])),
+  metadata: z.record(z.string(), z.any()).optional(),
+});
+
+export type ReportAssembly = z.infer<typeof reportAssemblySchema>;
+
+export const responseCreatedSchema = streamEventSchema(
+  "response.created",
+  z.object({
+    id: z.string(),
+    object: z.literal("realtime.response"),
+    status: z.literal("in_progress"),
+    status_details: z.null(),
+    output: z.array(z.unknown()),
+  })
+);
+
+export const responseOutputItemSchema = streamEventSchema(
+  "response.output_item.added",
+  z.object({
+    item: z.object({
+      id: z.string(),
+      object: z.literal("realtime.item"),
+      type: z.literal("message"),
+      status: z.literal("in_progress"),
+      role: z.literal("assistant"),
+      content: z.array(z.unknown()),
+    }),
+  })
+);
+
+export const responseContentPartSchema = streamEventSchema(
+  "response.content_part.added",
+  z.object({
+    item_id: z.string(),
+    part: z.object({
+      id: z.string(),
+      object: z.literal("realtime.content_part"),
+      type: z.enum(["text", "json"]),
+      text: z.string().optional(),
+      json: z.string().optional(),
+    }),
+  })
+);
+
+export const progressEventSchema = streamEventSchema(
+  "response.progress",
+  z.object({
+    stage: z.string(),
+  }).passthrough()
+);
+
+export type ProgressEventData = Exclude<z.infer<typeof progressEventSchema>["data"], undefined>;
+
+export const stateDeltaSchema = streamEventSchema(
+  "state.delta",
+  z.object({
+    source: z.string(),
+    delta: z.record(z.string(), z.unknown()),
+  })
+);
+
+export type StateDeltaEventData = Exclude<z.infer<typeof stateDeltaSchema>["data"], undefined>;
+
+export const responsePlanDeltaSchema = streamEventSchema(
+  "response.plan.delta",
+  z.object({
+    item_id: z.string(),
+    part_id: z.string(),
+    delta: z.string(),
+  })
+);
+
+export type ResponsePlanDeltaEventData = Exclude<
+  z.infer<typeof responsePlanDeltaSchema>["data"],
+  undefined
+>;
+
+export const hitlPausedSchema = streamEventSchema(
+  "hitl.paused",
+  z.object({
+    prompt: z.string(),
+  })
+);
+
+export type HitlPausedEventData = Exclude<z.infer<typeof hitlPausedSchema>["data"], undefined>;
+
+export const canvasActionsProposedSchema = streamEventSchema(
+  "canvas.actions.proposed",
+  campaignCanvasActionsEnvelopeSchema
+);
+
+export type CanvasActionsProposedEventData = Exclude<
+  z.infer<typeof canvasActionsProposedSchema>["data"],
+  undefined
+>;
+
+export const responseSoTReportSchema = streamEventSchema(
+  "response.sot_report",
+  z.object({
+    item_id: z.string(),
+    part_id: z.string(),
+    report: z.unknown(),
+  })
+);
+
+export const responseReportAssemblySchema = streamEventSchema(
+  "response.report_assembly",
+  z.object({
+    item_id: z.string(),
+    part_id: z.string(),
+    report: reportAssemblySchema,
+    html_preview: z.string(),
+  })
+);
+
+export const outputTextDeltaSchema = streamEventSchema(
+  "response.output_text.delta",
+  z.object({
+    item_id: z.string(),
+    part_id: z.string(),
+    delta: z.string(),
+  })
+);
+
+export const responseContentPartDoneSchema = streamEventSchema(
+  "response.content_part.done",
+  z.object({
+    item_id: z.string(),
+    part_id: z.string(),
+  })
+);
+
+export const responseOutputItemDoneSchema = streamEventSchema(
+  "response.output_item.done",
+  z.object({
+    item_id: z.string(),
+  })
+);
+
+export const responseDoneSchema = streamEventSchema(
+  "response.done",
+  z.object({
+    id: z.string(),
+    object: z.literal("realtime.response"),
+    status: z.literal("completed"),
+    status_details: z.null(),
+    output: z.array(z.unknown()),
+  })
+);
+
+export const streamErrorSchema = streamEventSchema(
+  "error",
+  z.object({
+    type: z.string(),
+    code: z.string(),
+    message: z.string(),
+    param: z.null(),
+  })
+);
 
 export const outputJsonDeltaSchema = z.object({
   item_id: z.string().optional(),
@@ -66,11 +394,40 @@ export const outputJsonDeltaSchema = z.object({
   delta: z.string(),
 });
 
-export const outputTextDeltaSchema = z.object({
-  item_id: z.string().optional(),
-  part_id: z.string().optional(),
-  delta: z.string(),
-});
+export type JainaStreamEvent =
+  | z.infer<typeof responseCreatedSchema>
+  | z.infer<typeof responseOutputItemSchema>
+  | z.infer<typeof responseContentPartSchema>
+  | z.infer<typeof progressEventSchema>
+  | z.infer<typeof stateDeltaSchema>
+  | z.infer<typeof responsePlanDeltaSchema>
+  | z.infer<typeof hitlPausedSchema>
+  | z.infer<typeof canvasActionsProposedSchema>
+  | z.infer<typeof responseSoTReportSchema>
+  | z.infer<typeof responseReportAssemblySchema>
+  | z.infer<typeof outputTextDeltaSchema>
+  | z.infer<typeof responseContentPartDoneSchema>
+  | z.infer<typeof responseOutputItemDoneSchema>
+  | z.infer<typeof responseDoneSchema>
+  | z.infer<typeof streamErrorSchema>;
+
+export const jainaStreamEventSchema = z.union([
+  responseCreatedSchema,
+  responseOutputItemSchema,
+  responseContentPartSchema,
+  progressEventSchema,
+  stateDeltaSchema,
+  responsePlanDeltaSchema,
+  hitlPausedSchema,
+  canvasActionsProposedSchema,
+  responseSoTReportSchema,
+  responseReportAssemblySchema,
+  outputTextDeltaSchema,
+  responseContentPartDoneSchema,
+  responseOutputItemDoneSchema,
+  responseDoneSchema,
+  streamErrorSchema,
+]);
 
 export const toolCallSchema = z.object({
   id: z.string(),
@@ -93,13 +450,6 @@ export const toolResultSchema = z.object({
 });
 
 export type ToolResultEventData = z.infer<typeof toolResultSchema>;
-
-export const stateDeltaSchema = z.object({
-  source: z.string(),
-  delta: z.record(z.string(), z.unknown()),
-});
-
-export type StateDeltaEventData = z.infer<typeof stateDeltaSchema>;
 
 export const creativeArtifactSchema = z.object({
   id: z.string(),
@@ -134,43 +484,192 @@ export const planStepSchema = z.object({
 
 export type PlanStep = z.infer<typeof planStepSchema>;
 
-export const responsePlanDeltaSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().optional(),
+export const planScopeSchema = z.enum([
+  "account",
+  "campaign",
+  "adset",
+  "ad",
+  "creative",
+]);
+
+export type PlanScope = z.infer<typeof planScopeSchema>;
+
+export const planRequestedArgsSchema = z.object({
+  reason: z.string(),
+  plan: z.literal(true),
+  scopes: z.array(planScopeSchema).optional(),
+});
+
+export type PlanRequestedArgs = z.infer<typeof planRequestedArgsSchema>;
+
+export const responsePlanRequestedSchema = z.object({
+  plan_id: z.string(),
+  tool_name: z.string(),
+  status: z.literal("awaiting_approval"),
+  summary: z.string(),
+  args: planRequestedArgsSchema,
+  created_at: z.string(),
+});
+
+export type ResponsePlanRequestedEventData = z.infer<typeof responsePlanRequestedSchema>;
+
+export const responsePlanRequestedPayloadSchema = z.object({
+  plan_id: z.string().optional(),
+  planId: z.string().optional(),
+  tool_name: z.string().optional(),
+  toolName: z.string().optional(),
+  status: z.string().optional(),
+  summary: z.string().optional(),
   description: z.string().optional(),
-  steps: z.array(planStepSchema).optional(),
-  status: z.enum(["pending", "awaiting_approval", "approved", "rejected", "in_progress", "completed"]).optional(),
+  args: z.record(z.string(), z.unknown()).optional(),
+  created_at: z.string().optional(),
+  createdAt: z.string().optional(),
+}).passthrough();
+
+export function parsePlanRequestedPayload(
+  payload: unknown
+): ResponsePlanRequestedEventData | null {
+  const parsedPayload = responsePlanRequestedPayloadSchema.safeParse(payload);
+  if (!parsedPayload.success) return null;
+
+  const raw = parsedPayload.data;
+  const planId = raw.plan_id ?? raw.planId;
+  if (!planId) return null;
+
+  const summary = raw.summary ?? raw.description ?? "Review the plan below.";
+  const parsedArgs = planRequestedArgsSchema.safeParse(raw.args);
+  const args = parsedArgs.success
+    ? parsedArgs.data
+    : {
+        reason: summary,
+        plan: true as const,
+      };
+
+  const normalized: ResponsePlanRequestedEventData = {
+    plan_id: planId,
+    tool_name: raw.tool_name ?? raw.toolName ?? "unknown_tool",
+    status: "awaiting_approval",
+    summary,
+    args,
+    created_at: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
+  };
+
+  return responsePlanRequestedSchema.safeParse(normalized).success
+    ? normalized
+    : null;
+}
+
+export const responsePlanDecisionSchema = z.object({
+  plan_id: z.string(),
+  approved: z.boolean(),
+  status: z.enum(["approved", "rejected"]),
+  note: z.string().optional(),
 });
 
-export type ResponsePlanDeltaEventData = z.infer<typeof responsePlanDeltaSchema>;
+export type ResponsePlanDecisionEventData = z.infer<typeof responsePlanDecisionSchema>;
 
-export const responseCreatedSchema = z.object({
-  id: z.string(),
-});
+export const responsePlanDecisionPayloadSchema = z.object({
+  plan_id: z.string().optional(),
+  planId: z.string().optional(),
+  approved: z.boolean().optional(),
+  status: z.string().optional(),
+  decision: z.string().optional(),
+  action: z.string().optional(),
+  note: z.string().optional(),
+  reason: z.string().optional(),
+}).passthrough();
 
-export const responseOutputItemSchema = z.object({
-  item: z.object({
-    id: z.string(),
+function resolveDecisionBoolean(
+  value: string | undefined
+): boolean | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (
+    ["approve", "approved", "accept", "accepted", "proceed", "proceeded", "yes", "true"].includes(
+      normalized
+    )
+  ) {
+    return true;
+  }
+  if (
+    ["deny", "denied", "reject", "rejected", "decline", "declined", "no", "false"].includes(
+      normalized
+    )
+  ) {
+    return false;
+  }
+  return undefined;
+}
+
+export function parsePlanDecisionPayload(
+  payload: unknown
+): ResponsePlanDecisionEventData | null {
+  const parsedPayload = responsePlanDecisionPayloadSchema.safeParse(payload);
+  if (!parsedPayload.success) return null;
+
+  const raw = parsedPayload.data;
+  const planId = raw.plan_id ?? raw.planId;
+  if (!planId) return null;
+
+  const decisionToken = raw.decision ?? raw.status ?? raw.action;
+  const approved =
+    typeof raw.approved === "boolean"
+      ? raw.approved
+      : resolveDecisionBoolean(decisionToken);
+  if (typeof approved !== "boolean") return null;
+
+  const normalized: ResponsePlanDecisionEventData = {
+    plan_id: planId,
+    approved,
+    status: approved ? "approved" : "rejected",
+    note: raw.note ?? raw.reason,
+  };
+
+  return responsePlanDecisionSchema.safeParse(normalized).success
+    ? normalized
+    : null;
+}
+
+export const planDecisionCommandSchema = z.object({
+  type: z.literal("plan.decision"),
+  data: z.object({
+    decision: z.enum(["approve", "deny"]),
+    planId: z.string().min(1),
+    reason: z.string().optional(),
   }),
 });
 
-export const responseOutputItemDoneSchema = z.object({
-  item_id: z.string(),
-});
+export type PlanDecisionCommand = z.infer<typeof planDecisionCommandSchema>;
 
-export const responseContentPartSchema = z.object({
-  item_id: z.string(),
-  part: z.object({
-    id: z.string(),
+export const feedbackApprovalCommandSchema = z.object({
+  type: z.literal("feedback"),
+  data: z.object({
+    approved: z.boolean(),
+    planId: z.string().min(1),
+    reason: z.string().optional(),
   }),
 });
 
-export const streamErrorSchema = z.object({
-  type: z.string().optional(),
-  code: z.string().optional(),
-  message: z.string(),
-  param: z.unknown().nullable().optional(),
+export type FeedbackApprovalCommand = z.infer<typeof feedbackApprovalCommandSchema>;
+
+export const planApprovalCommandSchema = z.object({
+  type: z.literal("plan.approval"),
+  data: z.object({
+    plan_id: z.string().min(1),
+    approved: z.boolean(),
+    note: z.string().optional(),
+  }),
 });
+
+export type PlanApprovalCommand = z.infer<typeof planApprovalCommandSchema>;
+
+export const planDecisionAnyCommandSchema = z.union([
+  planDecisionCommandSchema,
+  feedbackApprovalCommandSchema,
+  planApprovalCommandSchema,
+]);
+
+export type PlanDecisionAnyCommand = z.infer<typeof planDecisionAnyCommandSchema>;
 
 export const thoughtEventSchema = z.object({
   text: z.string(),
@@ -257,29 +756,15 @@ export const tableSchema = z.object({
   rows: z.array(z.array(z.string())),
 });
 
-export const insightSchema = z.object({
-  category: z.string().optional(),
-  title: z.string().optional(),
-  text: z.string(),
-  impact: z.string().nullable().optional(),
-  severity: z.enum(["positive", "neutral", "watch", "risk"]).default("neutral"),
-  confidence: z.string().nullable().optional(),
-  evidence: z.array(z.string()).default([]),
-});
-
-export const recommendationSchema = z.object({
-  title: z.string().optional(),
+export const recommendationSchema = recommendationItemSchema.extend({
   action: z.string().optional(),
   type: z.string().optional(),
   target: z.string().optional(),
   description: z.string().optional(),
   reasoning: z.string().optional(),
-  rationale: z.string().optional(),
   impact: z.string().optional(),
   effort: z.string().optional(),
-  expected_impact: z.string().optional(),
   expected_outcome: z.string().optional(),
-  priority: z.string().optional(),
 });
 
 export const soTSectionSchema = z.object({
@@ -288,23 +773,22 @@ export const soTSectionSchema = z.object({
   summary: z.string(),
   highlights: z.array(insightSchema).default([]),
   tables: z.array(tableSchema).default([]),
-  actions: z.array(recommendationSchema).default([]),
-  confidence: z.string().nullable().optional(),
+  actions: z.array(recommendationItemSchema).default([]),
+  confidence: z.string().nullable().default(null),
   cached_sources: z.array(z.string()).default([]),
-  graphs: z.array(z.any()).default([]),
+  graphs: z.array(z.unknown()).default([]),
 });
 
 export const sotReportSchema = z.object({
-  reasoning_trace: z.string().optional(),
   language: z.string().default("en"),
-  executive_summary: z.string().optional(),
+  executive_summary: z.string().default(""),
   performance_snapshot: z.array(metricItemSchema).default([]),
   sections: z.array(soTSectionSchema).default([]),
-  strategic_recommendations: z.array(recommendationSchema).default([]),
+  strategic_recommendations: z.array(recommendationItemSchema).default([]),
   follow_up_questions: z.array(z.string()).default([]),
-  handoff_trace: z.array(z.any()).default([]),
+  handoff_trace: z.array(z.unknown()).default([]),
   cached_sources: z.array(z.string()).default([]),
-  graphs: z.array(z.any()).default([]),
+  graphs: z.array(z.unknown()).default([]),
 });
 
 export type SoTReport = z.infer<typeof sotReportSchema>;
@@ -653,7 +1137,6 @@ export const reportPayloadSchema = z.union([
   }).transform((data) => {
     const insights = data.specialist_insights || [];
     
-    let reasoningTrace = "";
     let executiveSummary = "";
     let performanceSnapshot: any[] = [];
     let sections: any[] = [];
@@ -665,11 +1148,6 @@ export const reportPayloadSchema = z.union([
       
       for (const item of items) {
         if (!item) continue;
-        
-        const explanation = item.explanation || "";
-        if (explanation && !reasoningTrace) {
-          reasoningTrace = explanation;
-        }
         
         if (item.report_data) {
           const reportData = item.report_data;
@@ -709,20 +1187,15 @@ export const reportPayloadSchema = z.union([
         if (Array.isArray(itemRecommendations)) {
           strategicRecommendations.push(...itemRecommendations.map((r: any) => ({
             title: r.title || r.action || formatEnumLabel(r.type) || "Recommendation",
-            action: r.action || r.title || formatEnumLabel(r.type) || "Recommendation",
-            type: formatEnumLabel(r.type) || undefined,
-            description: r.rationale || r.description || r.reasoning || "",
-            impact: r.expected_impact || r.impact,
-            priority: r.priority,
-            target: r.target,
-            expected_outcome: r.expected_outcome,
+            rationale: r.rationale || r.description || r.reasoning || "",
+            expected_impact: r.expected_impact ?? r.impact ?? null,
+            priority: r.priority ? String(r.priority).toUpperCase() : "MEDIUM",
           })));
         }
       }
     }
     
     return {
-      reasoning_trace: reasoningTrace,
       language: "en",
       executive_summary: executiveSummary || "Analysis complete.",
       performance_snapshot: performanceSnapshot,
@@ -745,8 +1218,6 @@ export const reportPayloadSchema = z.union([
       anyData.analysis_summary ||
       anyData.section_overview ||
       "";
-    const reasoningTrace = anyData.reasoning_trace || "";
-    
     const performanceSnapshot: any[] = [];
     // Support: key_metrics (Lead Strategist), performance_snapshot (SoT)
     const metricsSource = anyData.key_metrics || anyData.performance_snapshot || [];
@@ -816,10 +1287,13 @@ export const reportPayloadSchema = z.union([
     for (const source of insightsSources) {
       if (!Array.isArray(source)) continue;
       highlights.push(...source.map((a: any) => ({
+        category: a.category || "analysis",
         title: a.title || a.name || "",
         text: a.content || a.description || a.text || "",
-        impact: a.impact || a.metric,
+        impact: a.impact || a.metric || null,
         severity: toInsightSeverity(a),
+        confidence: a.confidence ?? null,
+        evidence: Array.isArray(a.evidence) ? a.evidence.map((item: unknown) => toDisplayString(item)) : [],
       })));
     }
     
@@ -852,21 +1326,13 @@ export const reportPayloadSchema = z.union([
       if (!Array.isArray(source)) continue;
       strategicRecommendations.push(...source.map((s: any) => ({
         title: s.action || s.title || formatEnumLabel(s.type) || "Recommendation",
-        action: s.action || s.title || formatEnumLabel(s.type) || "Recommendation",
-        type: formatEnumLabel(s.type) || undefined,
-        target: s.target,
-        description: s.description || s.recommendation || s.reasoning || s.rationale || "",
-        reasoning: s.reasoning,
-        impact: s.impact || s.expected_impact,
-        expected_impact: s.expected_impact,
-        expected_outcome: s.expected_outcome,
-        priority: s.priority ? String(s.priority).toUpperCase() : undefined,
-        rationale: s.rationale,
+        rationale: s.rationale || s.description || s.recommendation || s.reasoning || "",
+        expected_impact: s.expected_impact ?? s.impact ?? null,
+        priority: s.priority ? String(s.priority).toUpperCase() : "MEDIUM",
       })));
     }
     
     return {
-      reasoning_trace: reasoningTrace,
       language: "en",
       // Primary field names (SoT format)
       executive_summary: executiveSummary,
@@ -880,10 +1346,7 @@ export const reportPayloadSchema = z.union([
       // Aliases for backward compatibility / other formats
       summary: executiveSummary,
       charts: allGraphs,
-      priority_recommendations: strategicRecommendations.map((r) => ({
-        ...r,
-        action: r.action || r.title,
-      })),
+      priority_recommendations: strategicRecommendations,
       strategic_insights: highlights,
       title: anyData.title || "",
       // Legacy fields
@@ -896,13 +1359,15 @@ export const reportPayloadSchema = z.union([
   directAnswerSchema,
 ]);
 
-export type ReportPayload = z.infer<typeof reportPayloadSchema>;
+export type ReportPayload = SoTReport | FrontendSoTReport | DirectAnswerPayload;
 
 // ============================================================================
 // Helper to check if report has content
 // ============================================================================
 
-export function hasReportContent(report: ReportPayload | null): boolean {
+export function hasReportContent(
+  report: ReportPayload | FrontendSoTReport | null
+): boolean {
   if (!report) return false;
   if ("type" in report && report.type === "direct_answer") return true;
   
