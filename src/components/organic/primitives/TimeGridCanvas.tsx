@@ -3,6 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { DraggableDraftCard } from "./DraggableDraftCard";
 import { useCalendarStore } from "@/lib/organic/store";
 import type {
@@ -12,7 +13,7 @@ import type {
 } from "./types";
 import { useDroppable } from "@dnd-kit/core";
 import { AnimatePresence } from "framer-motion";
-import { parseTimeLabelToHour } from "./calendar-utils";
+import { parseTimeLabelToMinutes } from "./calendar-utils";
 
 function TimeGridDayColumn({
   day,
@@ -42,8 +43,8 @@ function TimeGridDayColumn({
 
   const sortedDrafts = React.useMemo(() => {
     return [...drafts].sort((a, b) => {
-      const timeA = parseTimeLabelToHour(a.timeLabel) ?? 0;
-      const timeB = parseTimeLabelToHour(b.timeLabel) ?? 0;
+      const timeA = parseTimeLabelToMinutes(a.timeLabel) ?? 0;
+      const timeB = parseTimeLabelToMinutes(b.timeLabel) ?? 0;
       return timeA - timeB;
     });
   }, [drafts]);
@@ -64,8 +65,8 @@ function TimeGridDayColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex-1 min-w-[250px] border-r border-subtle last:border-r-0 flex flex-col transition-colors",
-        isOver && "bg-brand-primary/5"
+        "flex min-w-[250px] flex-1 flex-col border-r border-slate-800 last:border-r-0 transition-colors",
+        isOver && "bg-sky-500/10"
       )}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes("application/json")) {
@@ -74,12 +75,13 @@ function TimeGridDayColumn({
       }}
       onDrop={handleNativeDrop}
     >
-      <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur border-b border-subtle p-3 text-center">
-        <div className="text-sm font-semibold text-primary">{day.label}</div>
-        <div className="text-xs text-secondary">{day.dateLabel}</div>
+      <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/95 p-3 text-center backdrop-blur">
+        <div className="text-sm font-semibold text-slate-100">{day.label}</div>
+        <div className="font-mono text-[11px] text-slate-400">{day.dateLabel}</div>
       </div>
       
-      <div className="flex-1 p-2 space-y-3 overflow-y-auto">
+      <ScrollArea className="flex-1 bg-slate-950/40 p-2">
+        <div className="space-y-3">
         <AnimatePresence mode="popLayout" initial={false}>
           {sortedDrafts.map((draft) => (
             <DraggableDraftCard
@@ -95,22 +97,23 @@ function TimeGridDayColumn({
         </AnimatePresence>
         
         {Array.from({ length: ghosts }).map((_, i) => (
-          <div key={`ghost-${i}`} className="w-full rounded border border-dashed border-subtle bg-default/20 px-3 py-4 animate-pulse h-24">
+          <div key={`ghost-${i}`} className="h-24 w-full animate-pulse rounded border border-dashed border-slate-700 bg-slate-900/60 px-3 py-4">
             <div className="flex justify-between mb-2">
-               <div className="h-3 w-1/4 bg-subtle rounded" />
-               <div className="h-3 w-1/6 bg-subtle rounded" />
+               <div className="h-3 w-1/4 rounded bg-slate-700" />
+               <div className="h-3 w-1/6 rounded bg-slate-700" />
             </div>
-            <div className="h-4 w-3/4 bg-subtle rounded mb-2" />
-            <div className="h-3 w-1/2 bg-subtle rounded" />
+            <div className="mb-2 h-4 w-3/4 rounded bg-slate-700" />
+            <div className="h-3 w-1/2 rounded bg-slate-700" />
           </div>
         ))}
         
         {drafts.length === 0 && ghosts === 0 && (
-          <div className="h-24 flex items-center justify-center border border-dashed border-subtle rounded opacity-60">
-            <span className="text-xs text-secondary">Drop items here</span>
+          <div className="flex h-24 items-center justify-center rounded border border-dashed border-slate-700 opacity-75">
+            <span className="font-mono text-[11px] text-slate-400">Drop items here</span>
           </div>
         )}
-      </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -132,11 +135,9 @@ export function TimeGridCanvas({
   onRegenerate: (draftId: string) => void;
   onNativeDrop?: (date: string, time: string, data: OrganicSeedDragPayload) => void;
 }) {
-  const hasDrafts = days.some((day) => day.slots.length > 0);
-
   return (
-    <GlassPanel className="flex h-full flex-col p-0 overflow-hidden bg-default/20">
-      <div className="flex-1 overflow-x-auto">
+    <GlassPanel className="flex h-full flex-col overflow-hidden border border-slate-800/80 bg-slate-950/60 p-0">
+      <ScrollArea className="flex-1">
         <div className="flex min-h-full min-w-max">
           {days.map((day) => (
             <TimeGridDayColumn
@@ -152,7 +153,7 @@ export function TimeGridCanvas({
             />
           ))}
         </div>
-      </div>
+      </ScrollArea>
     </GlassPanel>
   );
 }

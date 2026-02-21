@@ -1,10 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import { 
-  MobileIcon, 
-  DesktopIcon, 
   PlayIcon,
   DotsHorizontalIcon,
   Pencil1Icon,
@@ -14,8 +11,24 @@ import { cn } from "@/lib/utils";
 import type { OrganicCalendarDraft } from "./types";
 import { useCalendarStore } from "@/lib/organic/store";
 import { Button } from "@/components/ui/button";
-
-type PreviewMode = "mobile" | "desktop";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { isOrganicPlatformKey } from "@/lib/organic/platforms";
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft;
@@ -23,9 +36,6 @@ interface OrganicDraftPreviewProps {
 
 export function OrganicDraftPreview({ draft }: OrganicDraftPreviewProps) {
   const platform = draft.platforms[0] || "instagram";
-  const [mode, setMode] = React.useState<PreviewMode>(
-    platform === "linkedin" ? "desktop" : "mobile"
-  );
   const [isEditing, setIsEditing] = React.useState(false);
   const updateDraft = useCalendarStore((s) => s.updateDraft);
 
@@ -35,25 +45,35 @@ export function OrganicDraftPreview({ draft }: OrganicDraftPreviewProps) {
     setLocalDraft(draft);
   }, [draft]);
 
+  const selectedPlatform = localDraft.platforms[0] || "instagram";
+
   const handleSave = () => {
     updateDraft(draft.id, (d) => ({
       ...d,
+      titleTopic: localDraft.titleTopic,
       captionPreview: localDraft.captionPreview,
       creativeIdea: localDraft.creativeIdea,
+      format: localDraft.format,
+      objective: localDraft.objective,
+      tone: localDraft.tone,
+      target: localDraft.target,
+      cta: localDraft.cta,
+      timeLabel: localDraft.timeLabel,
+      platforms: localDraft.platforms,
     }));
     setIsEditing(false);
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950/50 rounded-xl border border-slate-800/50 overflow-hidden">
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/30">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-sky-500/20 bg-slate-950/85 shadow-[6px_6px_0_0_rgba(14,116,144,.2)]">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950 p-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-brand-primary/20 flex items-center justify-center border border-brand-primary/30">
              <span className="text-[10px] font-bold text-brand-primary uppercase">{platform.slice(0, 2)}</span>
           </div>
           <div>
-            <p className="text-xs font-bold text-primary tracking-tight">{draft.format}</p>
-            <p className="text-[10px] text-secondary font-medium uppercase tracking-widest opacity-60">{platform}</p>
+            <p className="text-xs font-bold tracking-tight text-slate-100">{draft.format}</p>
+            <p className="font-mono text-[10px] font-medium uppercase tracking-widest text-slate-400">{platform}</p>
           </div>
         </div>
         
@@ -73,45 +93,29 @@ export function OrganicDraftPreview({ draft }: OrganicDraftPreviewProps) {
                     <><Pencil1Icon className="mr-2 h-3.5 w-3.5" /> Edit</>
                 )}
             </Button>
-
-            <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800 ml-2">
-                <button 
-                    onClick={() => setMode("mobile")}
-                    className={cn(
-                    "p-1.5 rounded-md transition-all",
-                    mode === "mobile" ? "bg-slate-800 text-primary shadow-sm" : "text-secondary hover:text-primary"
-                    )}
-                >
-                    <MobileIcon className="w-4 h-4" />
-                </button>
-                <button 
-                    onClick={() => setMode("desktop")}
-                    className={cn(
-                    "p-1.5 rounded-md transition-all",
-                    mode === "desktop" ? "bg-slate-800 text-primary shadow-sm" : "text-secondary hover:text-primary"
-                    )}
-                >
-                    <DesktopIcon className="w-4 h-4" />
-                </button>
-            </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
+      <ScrollArea className="flex-1 bg-slate-950/70 p-6">
         <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
             <div className="flex-shrink-0">
                 {platform === "instagram" && (
                     <InstagramMobilePreview draft={localDraft} />
                 )}
-                {platform === "linkedin" && mode === "mobile" && (
-                    <InstagramMobilePreview draft={localDraft} isLinkedIn />
+                {platform === "facebook" && (
+                    <FacebookFeedPreview draft={localDraft} />
                 )}
-                {platform === "linkedin" && mode === "desktop" && (
+                {platform === "linkedin" && (
                     <LinkedInDesktopPreview draft={localDraft} />
                 )}
-                {platform !== "instagram" && platform !== "linkedin" && (
-                    <div className="w-[340px] p-8 text-center border border-dashed border-slate-800 rounded-2xl opacity-40">
-                        <p className="text-sm">Preview for {platform} coming soon.</p>
+                {platform !== "instagram" && platform !== "facebook" && platform !== "linkedin" && (
+                    <div className="w-[340px] h-[360px] border border-dashed border-slate-800 rounded-2xl">
+                      <Empty className="opacity-50 h-full">
+                        <EmptyHeader>
+                          <EmptyTitle>Preview unavailable</EmptyTitle>
+                          <EmptyDescription>Preview for {platform} coming soon.</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
                     </div>
                 )}
             </div>
@@ -119,28 +123,119 @@ export function OrganicDraftPreview({ draft }: OrganicDraftPreviewProps) {
             {isEditing && (
                 <div className="flex-1 w-full max-w-md space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Creative Direction</label>
-                        <textarea 
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Title / Topic</Label>
+                        <Input
+                            value={localDraft.titleTopic || ""}
+                            onChange={(e) => setLocalDraft((prev) => ({ ...prev, titleTopic: e.target.value }))}
+                            placeholder="Main content topic"
+                            className="bg-slate-900 border-slate-800"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Platform</Label>
+                            <Select
+                                value={selectedPlatform}
+                                onValueChange={(value) => {
+                                  if (!isOrganicPlatformKey(value)) return;
+                                  setLocalDraft((prev) => ({
+                                    ...prev,
+                                    platforms: [value],
+                                  }));
+                                }}
+                            >
+                              <SelectTrigger className="w-full h-9 text-xs bg-slate-900 border-slate-800">
+                                <SelectValue placeholder="Select platform" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="instagram">Instagram</SelectItem>
+                                <SelectItem value="facebook">Facebook</SelectItem>
+                                <SelectItem value="linkedin">LinkedIn</SelectItem>
+                              </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Time</Label>
+                            <Input
+                                value={localDraft.timeLabel}
+                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, timeLabel: e.target.value }))}
+                                placeholder="e.g. 9:00 AM"
+                                className="bg-slate-900 border-slate-800"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Format</Label>
+                            <Input
+                                value={localDraft.format}
+                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, format: e.target.value }))}
+                                className="bg-slate-900 border-slate-800"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Objective</Label>
+                            <Input
+                                value={localDraft.objective}
+                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, objective: e.target.value }))}
+                                className="bg-slate-900 border-slate-800"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Tone</Label>
+                            <Input
+                                value={localDraft.tone || ""}
+                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, tone: e.target.value }))}
+                                className="bg-slate-900 border-slate-800"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Target</Label>
+                            <Input
+                                value={localDraft.target || ""}
+                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, target: e.target.value }))}
+                                className="bg-slate-900 border-slate-800"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Call To Action</Label>
+                        <Input
+                            value={localDraft.cta || ""}
+                            onChange={(e) => setLocalDraft((prev) => ({ ...prev, cta: e.target.value }))}
+                            className="bg-slate-900 border-slate-800"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Creative Direction</Label>
+                        <Textarea
                             value={localDraft.creativeIdea || localDraft.title}
                             onChange={(e) => setLocalDraft(prev => ({ ...prev, creativeIdea: e.target.value }))}
-                            className="w-full h-24 bg-slate-900 border border-slate-800 rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-primary transition-all resize-none"
+                            className="h-24 bg-slate-900 border-slate-800 text-sm resize-none"
                             placeholder="What's the creative hook?"
                         />
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Post Caption</label>
-                        <textarea 
+                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Post Caption</Label>
+                        <Textarea
                             value={localDraft.captionPreview}
                             onChange={(e) => setLocalDraft(prev => ({ ...prev, captionPreview: e.target.value }))}
-                            className="w-full h-64 bg-slate-900 border border-slate-800 rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-brand-primary transition-all resize-none"
+                            className="h-64 bg-slate-900 border-slate-800 text-sm resize-none"
                             placeholder="Write your caption here..."
                         />
                     </div>
                     
-                    <div className="p-4 rounded-lg bg-brand-primary/5 border border-brand-primary/20">
-                        <p className="text-[10px] text-brand-primary font-bold uppercase tracking-wider mb-2">Editor Note</p>
-                        <p className="text-xs text-secondary leading-relaxed">
+                    <div className="rounded-lg border border-sky-500/25 bg-sky-950/20 p-4">
+                        <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-sky-300">Editor Note</p>
+                        <p className="text-xs leading-relaxed text-slate-300">
                             Changes made here will be reflected in the calendar immediately after saving. 
                             AI hints for scenes are preserved but not directly editable yet.
                         </p>
@@ -148,25 +243,20 @@ export function OrganicDraftPreview({ draft }: OrganicDraftPreviewProps) {
                 </div>
             )}
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }
 
-function InstagramMobilePreview({ draft, isLinkedIn = false }: { draft: OrganicCalendarDraft, isLinkedIn?: boolean }) {
+function InstagramMobilePreview({ draft }: { draft: OrganicCalendarDraft }) {
   return (
     <div className="w-full max-w-[340px] bg-white dark:bg-black rounded-lg shadow-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden text-black dark:text-white">
         <div className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-zinc-800">
             <div className="flex items-center space-x-3">
-                <div className={cn(
-                    "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
-                    isLinkedIn ? "bg-blue-600" : "bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 p-[2px]"
-                )}>
-                    {isLinkedIn ? "in" : (
-                        <div className="w-full h-full rounded-full bg-white dark:bg-black flex items-center justify-center">
-                             <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-zinc-800 flex items-center justify-center text-[8px] text-zinc-500">PT</div>
-                        </div>
-                    )}
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 p-[2px]">
+                    <div className="w-full h-full rounded-full bg-white dark:bg-black flex items-center justify-center">
+                         <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-zinc-800 flex items-center justify-center text-[8px] text-zinc-500">PT</div>
+                    </div>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-sm font-semibold leading-none tracking-tight">thepizzatest</span>
@@ -243,6 +333,48 @@ function InstagramMobilePreview({ draft, isLinkedIn = false }: { draft: OrganicC
                 <button className="text-[11px] font-bold text-blue-500 opacity-50 cursor-not-allowed">Post</button>
             </div>
         </div>
+    </div>
+  );
+}
+
+function FacebookFeedPreview({ draft }: { draft: OrganicCalendarDraft }) {
+  return (
+    <div className="w-full bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg shadow-2xl text-black dark:text-white overflow-hidden max-w-[500px]">
+      <div className="p-3 flex items-center justify-between border-b border-gray-100 dark:border-zinc-900">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+            f
+          </div>
+          <div>
+            <p className="text-sm font-bold tracking-tight">The Pizza Test</p>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Sponsored · 1h</p>
+          </div>
+        </div>
+        <button className="text-xs font-semibold text-zinc-500">···</button>
+      </div>
+
+      <div className="px-4 py-3 space-y-2">
+        <p className="text-sm whitespace-pre-wrap leading-relaxed">
+          {draft.captionPreview}
+        </p>
+      </div>
+
+      <div className="aspect-video bg-zinc-100 dark:bg-zinc-900 relative border-y border-gray-100 dark:border-zinc-800">
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-blue-50 to-slate-100 dark:from-zinc-900 dark:to-zinc-950">
+          <div className="w-16 h-16 rounded-full bg-white dark:bg-zinc-800 shadow-lg flex items-center justify-center mb-4 border border-gray-100 dark:border-zinc-700">
+            <PlayIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          </div>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+            {draft.creativeIdea || draft.title}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 text-[12px] text-zinc-600 dark:text-zinc-400 border-t border-gray-100 dark:border-zinc-900">
+        <div className="py-2 text-center font-semibold">Like</div>
+        <div className="py-2 text-center font-semibold">Comment</div>
+        <div className="py-2 text-center font-semibold">Share</div>
+      </div>
     </div>
   );
 }

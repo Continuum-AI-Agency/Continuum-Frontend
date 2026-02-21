@@ -86,16 +86,15 @@ export function moveDraftToDay(
 }
 
 export function parseTimeLabelToHour(timeLabel: string): number | null {
-  const match = timeLabel.match(/(\d+)(?::(\d+))?\s*(AM|PM)/i);
-  if (!match) return null;
-  
-  let hour = parseInt(match[1], 10);
-  const ampm = match[3].toUpperCase();
-  
-  if (ampm === "PM" && hour < 12) hour += 12;
-  if (ampm === "AM" && hour === 12) hour = 0;
-  
-  return hour;
+  const minutes = parseTimeLabelToMinutes(timeLabel)
+  if (minutes === null) return null
+  return Math.floor(minutes / 60)
+}
+
+export function parseTimeLabelToMinutes(timeLabel: string): number | null {
+  const parts = parseTimeLabelToParts(timeLabel)
+  if (!parts) return null
+  return parts.hour * 60 + parts.minute
 }
 
 export function parseTimeLabelToParts(

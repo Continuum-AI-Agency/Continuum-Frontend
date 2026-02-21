@@ -5,7 +5,7 @@ import { OrganicCalendarWorkspace } from "@/components/organic/primitives/Organi
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import {
   ORGANIC_PLATFORMS,
-  ORGANIC_PLATFORM_KEYS,
+  ORGANIC_MVP_PLATFORM_KEYS,
   type OrganicPlatformKey,
 } from "@/lib/organic/platforms";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
@@ -24,7 +24,10 @@ export default async function OrganicPage() {
   const { brandId, state: onboarding } = await ensureOnboardingState(activeBrandId);
   const brandProfileId = brandId;
 
-  const platformAccounts = ORGANIC_PLATFORMS.map(({ key, label }) => {
+  const mvpPlatformSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
+  const platformAccounts = ORGANIC_PLATFORMS.filter(({ key }) =>
+    mvpPlatformSet.has(key as OrganicPlatformKey)
+  ).map(({ key, label }) => {
     const connection = onboarding.connections[key] ?? { connected: false, accountId: null };
     return {
       platform: key as OrganicPlatformKey,
@@ -44,7 +47,7 @@ export default async function OrganicPage() {
     return acc;
   }, {});
   const fallbackPlatforms =
-    activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_PLATFORM_KEYS];
+    activePlatformKeys.length > 0 ? activePlatformKeys : [...ORGANIC_MVP_PLATFORM_KEYS];
 
   let selectorTrends: Trend[] = [];
   let trendTypes: OrganicTrendType[] = [];
