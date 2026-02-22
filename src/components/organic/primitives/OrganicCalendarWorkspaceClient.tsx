@@ -25,13 +25,14 @@ import { useCalendarSelection } from "../hooks/useCalendarSelection"
 import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
 import { BulkActionToolbar } from "./BulkActionToolbar"
-import { GenerationProgressPanel } from "./GenerationProgressPanel"
-import { EventStreamPanel } from "./EventStreamPanel"
+import { OrganicDraftPreview } from "./OrganicDraftPreview"
 import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable"
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[]
@@ -68,10 +69,6 @@ export function OrganicCalendarWorkspaceClient({
     bulkDeleteDrafts,
     clearCalendar,
     selectedTrendIds,
-    gridProgress,
-    gridError,
-    eventHistory,
-    clearEventHistory,
   } = useCalendarStore()
 
   const {
@@ -139,6 +136,20 @@ export function OrganicCalendarWorkspaceClient({
     () => [...calendarDays.flatMap((day) => day.slots), ...unscheduledDrafts],
     [calendarDays, unscheduledDrafts]
   )
+  const assignmentDays = React.useMemo(
+    () =>
+      calendarDays.map((day) => ({
+        id: day.id,
+        label: day.label,
+        dateLabel: day.dateLabel,
+        draftCount: day.slots.length,
+      })),
+    [calendarDays]
+  )
+  const selectedDraft = React.useMemo(() => {
+    if (!selectedId) return null
+    return drafts.find((draft) => draft.id === selectedId) ?? null
+  }, [drafts, selectedId])
 
   const {
     activeDragDraft,
@@ -175,8 +186,8 @@ export function OrganicCalendarWorkspaceClient({
   }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll])
 
   return (
-    <div 
-      className="h-[calc(100vh-6rem)] overflow-hidden focus:outline-none"
+    <div
+      className="h-full min-h-0 w-full overflow-hidden focus:outline-none"
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
@@ -197,16 +208,15 @@ export function OrganicCalendarWorkspaceClient({
           ) : null
         }
       >
-        <ResizablePanelGroup direction="horizontal" className="h-full gap-2 p-2">
-          <ResizablePanel defaultSize={68} minSize={52}>
-            <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-800/80 bg-gradient-to-b from-slate-950 to-slate-900 p-2">
-            <div className="flex items-center justify-between gap-4 px-1 pb-3">
-              <div className="space-y-1">
-                <p className="font-mono text-xs uppercase tracking-[0.2em] text-slate-300">
-                  Week Planning
+        <div className="grid h-full min-h-0 w-full gap-3 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          <section className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-slate-700/70 bg-slate-950/30 p-2">
+            <div className="flex flex-wrap items-start justify-between gap-3 pb-2">
+              <div className="min-w-0 space-y-1">
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-slate-800">
+                  Weekly Calendar
                 </p>
-                <p className="text-xs text-slate-400">
-                  Weekly calendar placement for Instagram, Facebook, and LinkedIn.
+                <p className="text-xs text-slate-700">
+                  Drag selected trends into day columns to seed generation targets.
                 </p>
               </div>
               <WeekPicker
@@ -217,61 +227,71 @@ export function OrganicCalendarWorkspaceClient({
                 onNextWeek={handleNextWeek}
               />
             </div>
-            <TimeGridCanvas
-              days={calendarDays}
-              selectedDraftId={selectedId}
-              selectedDraftIds={selectedIds}
-              onSelectDraft={(id) => handleSelect(id, false)}
-              onToggleSelection={(id) => handleSelect(id, true)}
-              onRegenerate={handleRegenerate}
-              onNativeDrop={handleNativeDrop}
-            />
-
-            <div className="mt-3 space-y-3">
-              <GenerationProgressPanel
-                status={gridStatus}
-                percent={gridProgress.percent}
-                message={gridProgress.message}
-                error={gridError}
-              />
-
-              {eventHistory.length > 0 && (
-                <EventStreamPanel
-                  events={eventHistory}
-                  onClear={clearEventHistory}
-                  onPlacementSelect={(id) => handleSelect(id, false)}
-                />
-              )}
-            </div>
-            </div>
-          </ResizablePanel>
-
-          <ResizableHandle withHandle />
-
-          <ResizablePanel defaultSize={32} minSize={24} maxSize={42}>
-            <aside className="h-full rounded-xl border border-slate-800/80 bg-slate-950/80">
-              <WorkspacePanel
-                trendTypes={trendTypes}
-                trends={trends}
-                selectedTrendIds={selectedTrendIds}
-                activePlatforms={activePlatforms}
-                maxTrendSelections={maxTrendSelections}
-                onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-                onGenerateGrid={handleGenerateGridJob}
-                onAutoSort={handleAutoSort}
-                onClearAll={clearCalendar}
-                onSelectDraft={(id) => handleSelect(id, false)}
-                onToggleSelection={(id) => handleSelect(id, true)}
+            <div className="min-h-0 flex-1">
+              <TimeGridCanvas
+                days={calendarDays}
                 selectedDraftId={selectedId}
                 selectedDraftIds={selectedIds}
-                unscheduledDrafts={unscheduledDrafts}
-                allDrafts={drafts}
-                seedCount={seededDraftCount}
-                gridStatus={gridStatus}
+                onSelectDraft={(id) => handleSelect(id, false)}
+                onToggleSelection={(id) => handleSelect(id, true)}
+                onRegenerate={handleRegenerate}
+                onNativeDrop={handleNativeDrop}
               />
-            </aside>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+            </div>
+          </section>
+
+          <aside className="h-full min-h-0 rounded-xl border border-slate-700/70 bg-slate-950/30 py-2">
+            <WorkspacePanel
+              trendTypes={trendTypes}
+              trends={trends}
+              selectedTrendIds={selectedTrendIds}
+              activePlatforms={activePlatforms}
+              maxTrendSelections={maxTrendSelections}
+              onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+              onGenerateGrid={handleGenerateGridJob}
+              onAutoSort={handleAutoSort}
+              onClearAll={clearCalendar}
+              onSelectDraft={(id) => handleSelect(id, false)}
+              onToggleSelection={(id) => handleSelect(id, true)}
+              selectedDraftId={selectedId}
+              selectedDraftIds={selectedIds}
+              unscheduledDrafts={unscheduledDrafts}
+              allDrafts={drafts}
+              seedCount={seededDraftCount}
+              gridStatus={gridStatus}
+              mode="generation"
+              assignmentDays={assignmentDays}
+            />
+          </aside>
+        </div>
+
+        <Sheet
+          open={Boolean(selectedDraft)}
+          onOpenChange={(open) => {
+            if (!open) {
+              clearAll()
+            }
+          }}
+        >
+          <SheetContent
+            side="right"
+            className="w-[min(96vw,56rem)] gap-0 border-slate-300 bg-white p-0 sm:max-w-[56rem]"
+          >
+            {selectedDraft ? (
+              <>
+                <SheetHeader className="border-b border-slate-300 px-5 py-4">
+                  <SheetTitle className="text-slate-900">Post Editor</SheetTitle>
+                  <SheetDescription className="text-slate-700">
+                    Refine copy, platform, format, and CTA for the selected card.
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="min-h-0 flex-1 p-4">
+                  <OrganicDraftPreview draft={selectedDraft} />
+                </div>
+              </>
+            ) : null}
+          </SheetContent>
+        </Sheet>
       </CalendarDndContext>
 
       <BulkActionToolbar

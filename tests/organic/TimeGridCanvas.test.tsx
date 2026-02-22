@@ -10,7 +10,7 @@ describe("TimeGridCanvas", () => {
     cleanup();
   });
 
-  test("renders with horizontal scrolling container", () => {
+  test("renders a fixed 7-column weekly grid", () => {
     const { container } = render(
       <TimeGridCanvas
         days={organicCalendarDays}
@@ -22,14 +22,11 @@ describe("TimeGridCanvas", () => {
       />
     );
 
-    const scrollContainer = container.querySelector(".overflow-x-auto");
-    expect(scrollContainer).toBeTruthy();
-    
-    const innerContainer = container.querySelector(".min-w-max");
-    expect(innerContainer).toBeTruthy();
+    const grid = container.querySelector(".grid.grid-cols-7");
+    expect(grid).toBeTruthy();
   });
 
-  test("renders day columns with minimum width", () => {
+  test("renders one day column per week day", () => {
     const { container } = render(
       <TimeGridCanvas
         days={organicCalendarDays}
@@ -41,7 +38,7 @@ describe("TimeGridCanvas", () => {
       />
     );
 
-    const columns = container.querySelectorAll(".min-w-\\[250px\\]");
+    const columns = container.querySelectorAll("[data-slot='time-grid-day-column']");
     expect(columns.length).toBeGreaterThan(0);
     expect(columns.length).toBe(organicCalendarDays.length);
   });

@@ -181,7 +181,7 @@ const createNodeConfig = (type: StudioCanvasNodeType): { data: Record<string, un
   if (type === 'nanoGen') {
     return {
       data: { model: 'nano-banana', positivePrompt: '', aspectRatio: '16:9' },
-      style: { width: 400, height: 400 },
+      style: { width: 400, height: 225 },
     };
   }
 
@@ -212,7 +212,7 @@ const createNodeConfig = (type: StudioCanvasNodeType): { data: Record<string, un
 
   if (type === 'image') {
     return {
-      data: { image: undefined },
+      data: { image: undefined, aspectRatio: '1:1' },
       style: { width: 192, height: 192 },
     };
   }

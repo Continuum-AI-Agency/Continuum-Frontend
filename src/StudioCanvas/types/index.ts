@@ -55,6 +55,7 @@ export interface ImageNodeData extends BaseNodeData {
   image?: string;
   fileName?: string;
   referenceType?: ImageReferenceType;
+  aspectRatio?: string;
 }
 
 export interface VideoNodeData extends BaseNodeData {

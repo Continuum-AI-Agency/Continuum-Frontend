@@ -42,12 +42,32 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { Copy, Trash2 } from 'lucide-react';
+import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
+function greatestCommonDivisor(a: number, b: number): number {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y !== 0) {
+    const temp = y;
+    y = x % y;
+    x = temp;
+  }
+  return x || 1;
+}
+
+function simplifyAspectRatio(width: number, height: number): string {
+  const safeWidth = Math.max(1, Math.round(width));
+  const safeHeight = Math.max(1, Math.round(height));
+  const divisor = greatestCommonDivisor(safeWidth, safeHeight);
+  return `${safeWidth / divisor}:${safeHeight / divisor}`;
+}
+
 export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageNodeData>>) {
   const updateNodeData = useStudioStore((state) => state.updateNodeData);
+  const updateNode = useStudioStore((state) => state.updateNode);
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
@@ -65,19 +85,75 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
 
   const imageConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'image').length;
 
+  const snapNodeToAspectRatio = useCallback((value: string) => {
+    updateNode(id, (node) => {
+      const nextDimensions = snapNodeDimensionsToAspectRatio({
+        aspectRatio: value,
+        currentWidth: node.style?.width ?? node.width ?? node.measured?.width,
+        currentHeight: node.style?.height ?? node.height ?? node.measured?.height,
+        minWidth: 200,
+        minHeight: 200,
+        fallbackWidth: 200,
+      });
+
+      return {
+        ...node,
+        data: {
+          ...(node.data as ImageNodeData),
+          aspectRatio: value,
+        },
+        style: {
+          ...(node.style ?? {}),
+          width: nextDimensions.width,
+          height: nextDimensions.height,
+        },
+      };
+    });
+  }, [id, updateNode]);
+
+  const detectAspectRatioFromImage = useCallback((src: string) => new Promise<string | null>((resolve) => {
+    if (typeof Image === 'undefined') {
+      resolve(null);
+      return;
+    }
+
+    const imageElement = new Image();
+    imageElement.onload = () => {
+      const width = imageElement.naturalWidth;
+      const height = imageElement.naturalHeight;
+      if (width > 0 && height > 0) {
+        resolve(simplifyAspectRatio(width, height));
+        return;
+      }
+      resolve(null);
+    };
+    imageElement.onerror = () => resolve(null);
+    imageElement.src = src;
+  }), []);
+
+  const applyPreviewImage = useCallback(async (src: string, fileName?: string) => {
+    setPreview(src);
+    updateNodeData(id, { image: src, fileName });
+
+    const detectedAspectRatio = await detectAspectRatioFromImage(src);
+    if (detectedAspectRatio) {
+      snapNodeToAspectRatio(detectedAspectRatio);
+    }
+
+    triggerSave();
+  }, [detectAspectRatioFromImage, id, snapNodeToAspectRatio, triggerSave, updateNodeData]);
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        setPreview(result);
-        updateNodeData(id, { image: result, fileName: file.name });
-        triggerSave();
+        void applyPreviewImage(result, file.name);
       };
       reader.readAsDataURL(file);
     }
-  }, [id, triggerSave, updateNodeData]);
+  }, [applyPreviewImage]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -108,9 +184,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       }
       try {
         const result = await fileToDataUrl(file);
-        setPreview(result);
-        updateNodeData(id, { image: result, fileName: file.name });
-        triggerSave();
+        await applyPreviewImage(result, file.name);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -148,10 +222,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       return;
     }
 
-    setPreview(resolved.dataUrl);
-    updateNodeData(id, { image: resolved.dataUrl, fileName: resolved.fileName });
-    triggerSave();
-  }, [fileToDataUrl, id, updateNodeData, show, triggerSave]);
+    await applyPreviewImage(resolved.dataUrl, resolved.fileName);
+  }, [applyPreviewImage, fileToDataUrl, show]);
 
   return (
     <TooltipProvider>

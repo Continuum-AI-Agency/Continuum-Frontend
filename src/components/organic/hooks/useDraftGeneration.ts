@@ -8,6 +8,7 @@ import type {
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 import {
   ORGANIC_MVP_PLATFORM_KEYS,
+  isOrganicPlatformKey,
 } from "@/lib/organic/platforms";
 import {
   generationRequestSchema,
@@ -590,14 +591,16 @@ export function useDraftGeneration({
         return;
       }
 
+      const mvpSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
       const availableAccountIds = Object.entries(platformAccountIds).reduce<
         Record<OrganicPlatformKey, string>
       >((acc, [platform, accountId]) => {
         if (
           accountId &&
-          ORGANIC_MVP_PLATFORM_KEYS.includes(platform as OrganicPlatformKey)
+          isOrganicPlatformKey(platform) &&
+          mvpSet.has(platform)
         ) {
-          acc[platform as OrganicPlatformKey] = accountId;
+          acc[platform] = accountId;
         }
         return acc;
       }, {} as Record<OrganicPlatformKey, string>);

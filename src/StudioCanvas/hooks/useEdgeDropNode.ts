@@ -64,7 +64,7 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
             aspectRatio: '16:9',
             label: 'Image Block',
         },
-        style: { width: 400, height: 400 }
+        style: { width: 400, height: 225 }
       };
     case 'veoDirector':
       return {
@@ -89,7 +89,8 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
         return {
             data: {
                 label: 'Image Input',
-                image: undefined
+                image: undefined,
+                aspectRatio: '1:1',
             },
             style: { width: 192, height: 192 }
         }

@@ -154,38 +154,42 @@ export default async function OrganicPage() {
   const showNoTrendsMessage = selectorTrends.length === 0;
 
   return (
-    <div className="space-y-4 w-full max-w-none px-2 sm:px-3 lg:px-4">
-      <BrandInsightsAutoGenerate
-        brandId={brandProfileId}
-        shouldGenerate={shouldAutoGenerateInsights}
-      />
-      <Heading size="6" className="text-white">
-        Organic Planner
-      </Heading>
-      {insightsError ? (
-        <Callout.Root color="red" variant="surface">
-          <Callout.Icon>
-            <LightningBoltIcon />
-          </Callout.Icon>
-          <Callout.Text>{insightsError}</Callout.Text>
-        </Callout.Root>
-      ) : null}
-      {showNoTrendsMessage ? (
-        <Callout.Root color="amber" variant="surface">
-          <Callout.Icon>
-            <LightningBoltIcon />
-          </Callout.Icon>
-          <Callout.Text>No trends yet. You can still plan posts without them.</Callout.Text>
-        </Callout.Root>
-      ) : null}
-      <OrganicCalendarWorkspace
-        trendTypes={trendTypes}
-        trends={selectorTrends}
-        activePlatforms={fallbackPlatforms}
-        platformAccountIds={platformAccountIds}
-        maxTrendSelections={5}
-        brandProfileId={brandProfileId}
-      />
+    <div className="-mx-2 flex h-[calc(100dvh-4.5rem)] min-h-[44rem] w-auto flex-col gap-3 overflow-hidden pb-2 sm:-mx-3 lg:-mx-4">
+      <div className="shrink-0 space-y-3 px-2 sm:px-3 lg:px-4">
+        <BrandInsightsAutoGenerate
+          brandId={brandProfileId}
+          shouldGenerate={shouldAutoGenerateInsights}
+        />
+        <Heading size="6" className="text-white">
+          Organic Planner
+        </Heading>
+        {insightsError ? (
+          <Callout.Root color="red" variant="surface">
+            <Callout.Icon>
+              <LightningBoltIcon />
+            </Callout.Icon>
+            <Callout.Text>{insightsError}</Callout.Text>
+          </Callout.Root>
+        ) : null}
+        {showNoTrendsMessage ? (
+          <Callout.Root color="amber" variant="surface">
+            <Callout.Icon>
+              <LightningBoltIcon />
+            </Callout.Icon>
+            <Callout.Text>No trends yet. You can still plan posts without them.</Callout.Text>
+          </Callout.Root>
+        ) : null}
+      </div>
+      <div className="min-h-0 flex-1 px-2 sm:px-3 lg:px-4">
+        <OrganicCalendarWorkspace
+          trendTypes={trendTypes}
+          trends={selectorTrends}
+          activePlatforms={fallbackPlatforms}
+          platformAccountIds={platformAccountIds}
+          maxTrendSelections={5}
+          brandProfileId={brandProfileId}
+        />
+      </div>
     </div>
   );
 }

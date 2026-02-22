@@ -115,4 +115,29 @@ describe("WorkspacePanel", () => {
     expect(defaultProps.onAutoSort).toHaveBeenCalled();
     expect(defaultProps.onClearAll).toHaveBeenCalled();
   });
+
+  it("renders preview-only mode without generation controls", () => {
+    render(<WorkspacePanel {...defaultProps} mode="preview" />);
+
+    expect(screen.queryByText("Weekly Content Initiation")).toBeNull();
+    expect(screen.getByText("Selected Post")).toBeDefined();
+    expect(screen.queryByText("Unscheduled Pool")).toBeNull();
+  });
+
+  it("renders config mode with assignment days", () => {
+    render(
+      <WorkspacePanel
+        {...defaultProps}
+        mode="config"
+        assignmentDays={[
+          { id: "2026-02-16", label: "Mon", dateLabel: "Feb 16", draftCount: 2 },
+          { id: "2026-02-17", label: "Tue", dateLabel: "Feb 17", draftCount: 0 },
+        ]}
+      />
+    );
+
+    expect(screen.getByText("Day Assignments")).toBeDefined();
+    expect(screen.getByText("2 posts")).toBeDefined();
+    expect(screen.getByText("0 posts")).toBeDefined();
+  });
 });
