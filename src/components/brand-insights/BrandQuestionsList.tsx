@@ -1,11 +1,9 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Box, Callout } from "@radix-ui/themes";
-import { LightningBoltIcon } from "@radix-ui/react-icons";
-import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
-import { TrendsDataTable } from "../organic/TrendsDataTable";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import { useMemo } from "react";
+
+import { BrandInsightsDataTable, type BrandInsightsTableRow } from "@/components/brand-insights/BrandInsightsDataTable";
+import { brandInsightsQuestionSchema, type BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 
 type BrandQuestionsListProps = {
   questionsByNiche: BrandInsightsQuestionsByNiche["questionsByNiche"];
@@ -13,10 +11,19 @@ type BrandQuestionsListProps = {
   scrollWithinSection?: boolean;
 };
 
+function normalizePlatforms(value?: string) {
+  if (!value) return [];
+  return value
+    .split(/[,\s/|]+/)
+    .map((platform) => platform.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function BrandQuestionsList({
   questionsByNiche,
+  density = "default",
+  scrollWithinSection = false,
 }: BrandQuestionsListProps) {
-  
   const allQuestions = useMemo(() => {
     return Object.entries(questionsByNiche ?? {}).flatMap(([audience, nicheQuestions]) =>
       (nicheQuestions.questions ?? []).map((question) => ({
@@ -26,39 +33,45 @@ export function BrandQuestionsList({
     );
   }, [questionsByNiche]);
 
-  const mappedData = useMemo(() => allQuestions.map(q => ({
-    id: q.id,
-    title: q.question,
-    summary: q.whyRelevant ?? q.contentTypeSuggestion ?? `Target: ${q.audience}`,
-    momentum: "stable" as const,
-    tags: ["question", q.audience],
-    platforms: ["instagram", "linkedin"] as OrganicPlatformKey[],
-  })), [allQuestions]);
+  const rows = useMemo<BrandInsightsTableRow[]>(
+    () => {
+      const mappedRows: BrandInsightsTableRow[] = [];
 
-  if (allQuestions.length === 0) {
-    return (
-      <Callout.Root color="gray" variant="surface">
-        <Callout.Icon>
-          <LightningBoltIcon />
-        </Callout.Icon>
-        <Callout.Text>
-          We have not generated any audience questions for this brand yet. Trigger a generation to populate this view.
-        </Callout.Text>
-      </Callout.Root>
-    );
-  }
+      allQuestions.forEach((questionWithNiche) => {
+        const parsed = brandInsightsQuestionSchema.safeParse(questionWithNiche);
+        if (!parsed.success) return;
+        const question = parsed.data;
+        mappedRows.push({
+          id: question.id,
+          title: question.question,
+          subtitle: question.whyRelevant ?? question.contentTypeSuggestion ?? `Audience: ${questionWithNiche.audience}`,
+          secondaryValue: questionWithNiche.audience,
+          platforms: normalizePlatforms(question.socialPlatform),
+          tags: ["question", questionWithNiche.audience],
+          details: [
+            { label: "Audience niche", value: questionWithNiche.audience },
+            { label: "Platform", value: question.socialPlatform },
+            { label: "Content suggestion", value: question.contentTypeSuggestion },
+            { label: "Why relevant", value: question.whyRelevant },
+          ],
+        });
+      });
+
+      return mappedRows;
+    },
+    [allQuestions]
+  );
 
   return (
-    <Box className="flex flex-col h-full min-h-0">
-      <Box className="flex-1 min-h-0 p-2 md:p-4 bg-surface/30 rounded border border-subtle overflow-hidden">
-        <TrendsDataTable
-          data={mappedData}
-          selectedTrendIds={[]}
-          onToggleTrend={() => {}}
-          activePlatforms={["instagram", "linkedin"]}
-          showMomentumFilter={false}
-        />
-      </Box>
-    </Box>
+    <BrandInsightsDataTable
+      rows={rows}
+      density={density}
+      scrollWithinSection={scrollWithinSection}
+      countLabel="questions"
+      searchPlaceholder="Search audience questions"
+      secondaryHeaderLabel="Audience"
+      emptyTitle="No audience questions yet"
+      emptyDescription="Generate brand insights to surface audience questions by niche."
+    />
   );
 }

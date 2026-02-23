@@ -1,10 +1,12 @@
-import { Badge, Box, Flex, Heading, Separator, Text } from "@radix-ui/themes";
-import { CalendarIcon, ClockIcon, GlobeIcon, ReaderIcon } from "@radix-ui/react-icons";
+import { Calendar, Clock3, Globe2, LineChart } from "lucide-react";
 
-import { GlassPanel } from "@/components/ui/GlassPanel";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import type { BrandInsightsTrend, BrandInsightsEvent, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 import { BrandTrendsTabs } from "./BrandTrendsTabs";
-import { BrandTrendsPanelSkeleton } from "./BrandTrendsSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type BrandTrendsPanelProps = {
   trends: BrandInsightsTrend[];
@@ -31,7 +33,33 @@ function formatDate(value?: string) {
   });
 }
 
-import { cn } from "@/lib/utils";
+function BrandTrendsPanelSkeleton() {
+  return (
+    <Card className="h-full min-h-0 border shadow-none">
+      <CardHeader className="gap-2 border-b pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-6 w-64" />
+            <Skeleton className="h-4 w-80 max-w-full" />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-40" />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="min-h-0 flex-1 py-4">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function BrandTrendsPanel({
   trends,
@@ -55,67 +83,57 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <Box 
-      className={cn("p-4 md:p-6 space-y-4 bg-background border flex flex-col h-full min-h-0", className)}
-      style={{
-        color: "var(--foreground)",
-      }}
-    >
-      <Flex justify="between" align="start" wrap="wrap" gap="3" className="shrink-0">
-        <Box className="space-y-1">
-          <Flex align="center" gap="2">
-            <ReaderIcon className="h-3.5 w-3.5 md:h-4 md:w-4 text-[var(--accent-11)]" />
-            <Text size="1" color="gray" className="uppercase tracking-widest font-medium opacity-70">
-              Brand Insights · Trends
-            </Text>
-          </Flex>
-          <Heading size={{ initial: "4", md: "5" }} className="text-white tracking-tight">
-            Current trend signals
-          </Heading>
-          <Text size={{ initial: "1", md: "2" }} color="gray" className="max-w-md">
-            High-signal topics synthesized from the latest generation window.
-          </Text>
-        </Box>
+    <Card className={cn("h-full min-h-0 border shadow-none", className)}>
+      <CardHeader className="gap-2 border-b pb-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+              <LineChart className="h-3.5 w-3.5" />
+              Brand Insights
+            </p>
+            <CardTitle className="text-xl tracking-tight">Current trend signals</CardTitle>
+            <p className="text-muted-foreground max-w-xl text-sm">
+              High-signal trends, events, and audience questions from the latest generation window.
+            </p>
+          </div>
 
-        <Flex align="center" wrap="wrap" gap="2" justify="end">
-          {actionSlot}
-          {country && (
-            <Badge color="gray" variant="surface" size={{ initial: "1", md: "2" }}>
-              <GlobeIcon className="mr-1 h-3.5 w-3.5" />
-              {country}
-            </Badge>
-          )}
-          {weekLabel && (
-            <Badge color="indigo" variant="surface" size={{ initial: "1", md: "2" }}>
-              <CalendarIcon className="mr-1 h-3.5 w-3.5" />
-              {weekLabel}
-            </Badge>
-          )}
-          {generatedLabel && (
-            <Badge color="green" variant="surface" size={{ initial: "1", md: "2" }}>
-              <ClockIcon className="mr-1 h-3.5 w-3.5" />
-              {generatedLabel}
-            </Badge>
-          )}
-          {status && (
-            <Badge color="amber" variant="surface" size={{ initial: "1", md: "2" }}>
-              {status}
-            </Badge>
-          )}
-        </Flex>
-      </Flex>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {actionSlot}
+            {country ? (
+              <Badge variant="outline">
+                <Globe2 className="mr-1 h-3.5 w-3.5" />
+                {country}
+              </Badge>
+            ) : null}
+            {weekLabel ? (
+              <Badge variant="outline">
+                <Calendar className="mr-1 h-3.5 w-3.5" />
+                {weekLabel}
+              </Badge>
+            ) : null}
+            {generatedLabel ? (
+              <Badge variant="outline">
+                <Clock3 className="mr-1 h-3.5 w-3.5" />
+                {generatedLabel}
+              </Badge>
+            ) : null}
+            {status ? <Badge variant="secondary">{status}</Badge> : null}
+          </div>
+        </div>
+      </CardHeader>
 
-      <Separator size="4" className="shrink-0" />
-
-        <Box className="flex-1 min-h-0">
+      <CardContent className="min-h-0 flex-1 pt-1 pb-1">
+        <div className="h-full min-h-0">
           <BrandTrendsTabs
             trends={trends}
             events={events}
             questionsByNiche={questionsByNiche}
             brandId={brandId}
+            generatedAt={generatedAt}
           />
-        </Box>
-
-    </Box>
+        </div>
+      </CardContent>
+      <Separator />
+    </Card>
   );
 }

@@ -1,50 +1,47 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { Box, Callout } from "@radix-ui/themes";
-import { LightningBoltIcon } from "@radix-ui/react-icons";
-import type { BrandInsightsEvent } from "@/lib/schemas/brandInsights";
-import { TrendsDataTable } from "../organic/TrendsDataTable";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import { useMemo } from "react";
+
+import { BrandInsightsDataTable, type BrandInsightsTableRow } from "@/components/brand-insights/BrandInsightsDataTable";
+import { brandInsightsEventSchema, type BrandInsightsEvent } from "@/lib/schemas/brandInsights";
 
 type BrandEventsListProps = {
   events: BrandInsightsEvent[];
+  platforms?: string[];
 };
 
-export function BrandEventsList({ events }: BrandEventsListProps) {
-  const mappedData = useMemo(() => events.map(e => ({
-    id: e.id,
-    title: e.title,
-    summary: e.description ?? e.opportunity ?? "",
-    momentum: "rising" as const,
-    tags: ["event", e.date ?? ""],
-    platforms: ["instagram", "linkedin"] as OrganicPlatformKey[],
-  })), [events]);
+export function BrandEventsList({ events, platforms = [] }: BrandEventsListProps) {
+  const normalizedEvents = useMemo(() => {
+    const parsed = brandInsightsEventSchema.array().safeParse(events);
+    return parsed.success ? parsed.data : [];
+  }, [events]);
+
+  const rows = useMemo<BrandInsightsTableRow[]>(
+    () =>
+      normalizedEvents.map((event) => ({
+        id: event.id,
+        title: event.title,
+        subtitle: event.description ?? event.opportunity,
+        secondaryValue: event.date ?? "No date",
+        platforms: event.platforms?.length ? event.platforms : platforms,
+        tags: [],
+        details: [
+          { label: "Date", value: event.date },
+          { label: "Description", value: event.description },
+          { label: "Opportunity", value: event.opportunity },
+        ],
+      })),
+    [normalizedEvents, platforms]
+  );
 
   return (
-    <Box className="flex flex-col h-full min-h-0">
-      {events.length === 0 ? (
-        <Box className="flex-1 flex items-center justify-center p-8">
-          <Callout.Root color="gray" variant="surface">
-            <Callout.Icon>
-              <LightningBoltIcon />
-            </Callout.Icon>
-            <Callout.Text size="2">
-              We do not have any dated events for this generation yet. Regenerate insights or adjust your window.
-            </Callout.Text>
-          </Callout.Root>
-        </Box>
-      ) : (
-        <Box className="flex-1 min-h-0 p-2 md:p-4 bg-surface/30 rounded border border-subtle overflow-hidden">
-          <TrendsDataTable
-            data={mappedData}
-            selectedTrendIds={[]}
-            onToggleTrend={() => {}}
-            activePlatforms={["instagram", "linkedin"]}
-            showMomentumFilter={false}
-          />
-        </Box>
-      )}
-    </Box>
+    <BrandInsightsDataTable
+      rows={rows}
+      countLabel="events"
+      searchPlaceholder="Search events"
+      secondaryHeaderLabel="Date"
+      emptyTitle="No dated events yet"
+      emptyDescription="No event opportunities were found in this generation window."
+    />
   );
 }

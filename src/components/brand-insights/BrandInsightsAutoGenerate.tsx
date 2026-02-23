@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-import { generateBrandInsights } from "@/lib/api/brandInsights.client";
+import { generateBrandInsights, isTerminalBrandInsightsStatus, subscribeToBrandInsightsJob } from "@/lib/api/brandInsights.client";
 
 type BrandInsightsAutoGenerateProps = {
   brandId: string;
@@ -12,7 +12,6 @@ type BrandInsightsAutoGenerateProps = {
 
 const STORAGE_PREFIX = "continuum:auto-brand-insights";
 const COOLDOWN_MS = 15 * 60 * 1000;
-
 function getStorageKey(brandId: string) {
   return `${STORAGE_PREFIX}:${brandId}`;
 }
@@ -56,10 +55,33 @@ export function BrandInsightsAutoGenerate({
 
     markTriggered(brandId);
     let cancelled = false;
+    let stopTracking: (() => void) | null = null;
 
     const run = async () => {
       try {
-        await generateBrandInsights({ brandId });
+        const result = await generateBrandInsights({ brandId });
+        if (result.status === "processing" && result.generationId) {
+          const activeGenerationId = result.generationId;
+          await new Promise<void>((resolve) => {
+            stopTracking = subscribeToBrandInsightsJob({
+              generationId: activeGenerationId,
+              streamChannel: result.stream?.channel,
+              fallbackPollUrl: result.fallbackPollUrl,
+              onStatus: (next) => {
+                if (isTerminalBrandInsightsStatus(next.status)) {
+                  stopTracking?.();
+                  stopTracking = null;
+                  resolve();
+                }
+              },
+              onError: () => {
+                stopTracking?.();
+                stopTracking = null;
+                resolve();
+              },
+            });
+          });
+        }
       } catch {
         // Best-effort only.
       } finally {
@@ -73,6 +95,8 @@ export function BrandInsightsAutoGenerate({
 
     return () => {
       cancelled = true;
+      stopTracking?.();
+      stopTracking = null;
     };
   }, [brandId, shouldGenerate, router]);
 

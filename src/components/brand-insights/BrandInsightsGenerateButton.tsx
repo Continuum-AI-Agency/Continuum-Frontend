@@ -1,12 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { Button, Callout, Flex, Spinner } from "@radix-ui/themes";
-import { CounterClockwiseClockIcon, LightningBoltIcon, ReloadIcon, RocketIcon } from "@radix-ui/react-icons";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { fetchBrandInsightsStatus, generateBrandInsights } from "@/lib/api/brandInsights.client";
+import {
+  generateBrandInsights,
+  isTerminalBrandInsightsStatus,
+  subscribeToBrandInsightsJob,
+} from "@/lib/api/brandInsights.client";
+import { buildBrandInsightsProgressSteps } from "@/lib/brand-insights/progress";
 import { revalidateBrandInsights } from "@/lib/actions/brandInsights";
+import { ProgressSteps } from "@/components/brand-insights/ProgressSteps";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type Props = {
   brandId: string;
@@ -14,57 +22,117 @@ type Props = {
 
 export function BrandInsightsGenerateButton({ brandId }: Props) {
   const router = useRouter();
-  const [taskId, setTaskId] = useState<string | null>(null);
+  const { show } = useToast();
+  const [generationId, setGenerationId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [stage, setStage] = useState<string | null>(null);
+  const [progressPercent, setProgressPercent] = useState<number | null>(null);
+  const [stageMessage, setStageMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isRefreshing, startRefresh] = useTransition();
+  const stopTrackingRef = useRef<(() => void) | null>(null);
+  const completedToastGenerationRef = useRef<string | null>(null);
 
-  const isWorking = isPending || Boolean(taskId) || isRefreshing;
+  const isWorking = isPending || Boolean(generationId) || isRefreshing;
+  const isFailureStatus = status === "failed" || status === "error" || status === "not_found";
+  const isWorkflowRunning =
+    isPending || Boolean(generationId) || (status ? !isTerminalBrandInsightsStatus(status) : false);
+  const showStatusAlert = Boolean(error) || isWorkflowRunning || isFailureStatus;
 
   const buttonLabel = useMemo(() => {
-    if (taskId) return "Generating…";
+    if (generationId) return "Generating…";
     if (isPending) return "Starting…";
     return "Regenerate insights";
-  }, [isPending, taskId]);
+  }, [generationId, isPending]);
 
-  useEffect(() => {
-    if (!taskId) return;
-    let cancelled = false;
-    const interval = setInterval(async () => {
-      try {
-        const result = await fetchBrandInsightsStatus(taskId);
-        setStatus(result.status);
-        if (result.status === "completed" || result.status === "error" || result.status === "not_found") {
-          clearInterval(interval);
-          setTaskId(null);
-          if (!cancelled) {
-            router.refresh();
-          }
-        }
-      } catch (pollError) {
-        if (!cancelled) {
-          setError(pollError instanceof Error ? pollError.message : "Unable to poll status");
-          setTaskId(null);
-          clearInterval(interval);
-        }
+  const progressSteps = useMemo(() => {
+    const steps = buildBrandInsightsProgressSteps({ stage, status });
+    const showAwaitingStrategic = stage === "awaiting_strategic_analysis";
+    return steps.filter((step) => {
+      if (step.id === "awaiting_strategic_analysis" && !showAwaitingStrategic) {
+        return false;
       }
-    }, 3000);
+      if (step.id === "failed" && !isFailureStatus) {
+        return false;
+      }
+      return true;
+    });
+  }, [stage, status, isFailureStatus]);
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [taskId, router]);
+  useEffect(
+    () => () => {
+      stopTrackingRef.current?.();
+      stopTrackingRef.current = null;
+    },
+    []
+  );
 
   const handleRun = () => {
     setError(null);
+    setStatus(null);
+    setStage("queued");
+    setProgressPercent(null);
+    setStageMessage(null);
     startTransition(async () => {
       try {
         const result = await generateBrandInsights({ brandId });
-        if (result.status === "processing" && result.taskId) {
-          setTaskId(result.taskId);
-          setStatus("processing");
+        if (result.status === "processing" && result.generationId) {
+          const activeGenerationId = result.generationId;
+          setGenerationId(activeGenerationId);
+          setStatus(result.jobStatus ?? "running");
+          const awaitingStrategic =
+            result.jobStatus === "pending" &&
+            (result.dependencyStrategicAnalysis?.required === true ||
+              result.dependencyStrategicAnalysis?.status === "pending");
+          setStage(awaitingStrategic ? "awaiting_strategic_analysis" : "queued");
+          setStageMessage(result.message ?? null);
+          stopTrackingRef.current?.();
+          stopTrackingRef.current = subscribeToBrandInsightsJob({
+            generationId: activeGenerationId,
+            streamChannel: result.stream?.channel,
+            fallbackPollUrl: result.fallbackPollUrl,
+            onStatus: (next) => {
+              setStatus(next.status);
+              setStage((previous) => {
+                if (next.stage) return next.stage;
+                if (next.status === "completed") return "completed";
+                if (next.status === "failed" || next.status === "error" || next.status === "not_found") return "failed";
+                return previous;
+              });
+              setProgressPercent(next.progressPercent ?? null);
+              setStageMessage(next.stageMessage ?? null);
+              if (isTerminalBrandInsightsStatus(next.status)) {
+                if (next.status === "completed" && completedToastGenerationRef.current !== activeGenerationId) {
+                  completedToastGenerationRef.current = activeGenerationId;
+                  show({
+                    title: "Brand insights ready",
+                    description: "Trend generation completed successfully.",
+                    variant: "success",
+                  });
+                }
+                stopTrackingRef.current?.();
+                stopTrackingRef.current = null;
+                setGenerationId(null);
+                router.refresh();
+              }
+            },
+            onMessage: (message) => {
+              if (typeof message.progressPercent === "number") {
+                setProgressPercent(message.progressPercent);
+              }
+              if (message.stageMessage) {
+                setStageMessage(message.stageMessage);
+              }
+              if (message.stage) {
+                setStage(message.stage);
+                setStatus((current) => (isTerminalBrandInsightsStatus(current) ? current : "running"));
+              }
+            },
+            onError: (streamError) => {
+              setError(streamError.message);
+            },
+          });
         } else {
           router.refresh();
         }
@@ -88,27 +156,33 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
   };
 
   return (
-    <Flex direction="column" gap="2" align="end">
-      <Flex gap="2" wrap="wrap" justify="end">
-        <Button onClick={handleRefresh} disabled={isWorking} variant="outline" color="gray">
-          {isRefreshing ? <Spinner loading /> : <ReloadIcon />}
+    <div className="flex w-full flex-col items-end gap-3">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button onClick={handleRefresh} disabled={isWorking} variant="outline" size="sm">
+          {isRefreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
           Refresh data
         </Button>
-        <Button onClick={handleRun} disabled={isWorking} variant="solid" color="violet">
-          {isWorking ? <Spinner loading /> : <RocketIcon />}
+        <Button onClick={handleRun} disabled={isWorking} size="sm">
+          {isWorking ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
           {buttonLabel}
         </Button>
-      </Flex>
-      {(status || error) && (
-        <Callout.Root color={error ? "red" : "amber"} variant="surface">
-          <Callout.Icon>
-            {error ? <LightningBoltIcon /> : <CounterClockwiseClockIcon />}
-          </Callout.Icon>
-          <Callout.Text>
-            {error ? error : status === "processing" ? "Generating brand insights…" : `Status: ${status}`}
-          </Callout.Text>
-        </Callout.Root>
+      </div>
+      {showStatusAlert && (
+        <Alert variant={error ? "destructive" : "default"}>
+          {error || isFailureStatus ? <AlertTriangle /> : <Loader2 className="size-4 animate-spin" />}
+          <AlertTitle>{error || isFailureStatus ? "Generation failed" : "Generation in progress"}</AlertTitle>
+          <AlertDescription>
+            {error
+              ? error
+              : isFailureStatus
+                ? stageMessage ?? (status ? `Status: ${status}` : "Unable to complete generation")
+                : `${Math.round(progressPercent ?? 0)}%${stageMessage ? ` · ${stageMessage}` : status ? ` · Status: ${status}` : ""}`}
+          </AlertDescription>
+        </Alert>
       )}
-    </Flex>
+      {isWorkflowRunning && !error ? (
+        <ProgressSteps data={{ steps: progressSteps }} progressPercent={progressPercent ?? undefined} />
+      ) : null}
+    </div>
   );
 }

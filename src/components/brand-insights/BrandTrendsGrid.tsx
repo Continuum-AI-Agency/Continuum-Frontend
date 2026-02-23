@@ -1,53 +1,62 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { Box, Callout } from "@radix-ui/themes";
-import { LightningBoltIcon } from "@radix-ui/react-icons";
-import type { BrandInsightsTrend } from "@/lib/schemas/brandInsights";
-import { BrandTrendsGridSkeleton } from "./BrandTrendsSkeleton";
-import { TrendsDataTable } from "../organic/TrendsDataTable";
-import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import { useMemo } from "react";
+
+import { BrandInsightsDataTable, type BrandInsightsTableRow } from "@/components/brand-insights/BrandInsightsDataTable";
+import { brandInsightsTrendSchema, type BrandInsightsTrend } from "@/lib/schemas/brandInsights";
 
 type BrandTrendsGridProps = {
   trends: BrandInsightsTrend[];
+  platforms?: string[];
+  generatedAt?: string;
   isLoading?: boolean;
 };
 
-export function BrandTrendsGrid({ trends, isLoading = false }: BrandTrendsGridProps) {
-  const mappedData = useMemo(() => trends.map(t => ({
-    id: t.id,
-    title: t.title,
-    summary: t.description ?? t.relevanceToBrand ?? "",
-    momentum: "stable" as const,
-    tags: t.source ? [t.source] : [],
-    platforms: ["instagram", "linkedin"] as OrganicPlatformKey[],
-  })), [trends]);
+function formatDate(value?: string) {
+  if (!value) return "No date";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "No date";
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
-  if (isLoading) {
-    return <BrandTrendsGridSkeleton />;
-  }
+export function BrandTrendsGrid({ trends, platforms = [], generatedAt, isLoading = false }: BrandTrendsGridProps) {
+  const normalizedTrends = useMemo(() => {
+    const parsed = brandInsightsTrendSchema.array().safeParse(trends);
+    return parsed.success ? parsed.data : [];
+  }, [trends]);
 
-  if (trends.length === 0) {
-    return (
-      <Callout.Root color="gray" variant="surface">
-        <Callout.Icon>
-          <LightningBoltIcon />
-        </Callout.Icon>
-        <Callout.Text>
-          We have not generated any trends for this brand yet. Trigger a generation to populate this view.
-        </Callout.Text>
-      </Callout.Root>
-    );
-  }
+  const generatedAtLabel = useMemo(() => formatDate(generatedAt), [generatedAt]);
+
+  const rows = useMemo<BrandInsightsTableRow[]>(
+    () =>
+      normalizedTrends.map((trend) => ({
+        id: trend.id,
+        title: trend.title,
+        subtitle: trend.description ?? trend.relevanceToBrand,
+        secondaryValue: generatedAtLabel,
+        platforms: trend.platforms?.length ? trend.platforms : platforms,
+        tags: [],
+        details: [
+          { label: "Description", value: trend.description },
+          { label: "Relevance to brand", value: trend.relevanceToBrand },
+        ],
+      })),
+    [generatedAtLabel, normalizedTrends, platforms]
+  );
 
   return (
-    <Box className="h-full p-2 md:p-4 bg-surface/30 rounded border border-subtle overflow-hidden">
-      <TrendsDataTable
-        data={mappedData}
-        selectedTrendIds={[]} 
-        onToggleTrend={() => {}}
-        activePlatforms={["instagram", "linkedin"]}
-      />
-    </Box>
+    <BrandInsightsDataTable
+      rows={rows}
+      isLoading={isLoading}
+      countLabel="trends"
+      searchPlaceholder="Search trends"
+      secondaryHeaderLabel="Date"
+      emptyTitle="No trends yet"
+      emptyDescription="Generate brand insights to populate trend signals for this brand."
+    />
   );
 }

@@ -1,10 +1,10 @@
 import "server-only";
 
 import { mapBackendInsightsResponse, mapBackendProfileResponse } from "@/lib/brand-insights/backend";
-import { getBrandInsightsApiUrl } from "@/lib/api/config";
-import { assertOk } from "@/lib/api/errors";
+import { getApiBaseUrl } from "@/lib/api/config";
+import { ApiError, assertOk } from "@/lib/api/errors";
 import type { RequestOptions } from "@/lib/api/http.types";
-import type { BrandInsights, BrandInsightsProfile } from "@/lib/schemas/brandInsights";
+import { BRAND_TRENDS_SCHEMA, type BrandInsights, type BrandInsightsProfile } from "@/lib/schemas/brandInsights";
 
 type FetchOptions = {
   revalidateSeconds?: number;
@@ -25,13 +25,14 @@ async function getServerAccessToken(): Promise<string | undefined> {
 
 async function request<TResponse = unknown>(options: RequestOptions<TResponse>): Promise<TResponse> {
   const { path, method = "GET", body, headers = {}, schema, cache, next } = options;
-  const baseUrl = getBrandInsightsApiUrl();
+  const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
   const token = await getServerAccessToken();
   const finalHeaders: Record<string, string> = {
     ...(body ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "X-Supabase-Schema": BRAND_TRENDS_SCHEMA,
     ...headers,
   };
 
@@ -54,12 +55,50 @@ async function request<TResponse = unknown>(options: RequestOptions<TResponse>):
   return json as TResponse;
 }
 
+async function requestWithFallback<TResponse = unknown>(
+  primaryPath: string,
+  fallbackPath: string,
+  options?: Omit<RequestOptions<TResponse>, "path">
+) {
+  try {
+    return await request<TResponse>({ ...options, path: primaryPath });
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) {
+      throw error;
+    }
+
+    return request<TResponse>({ ...options, path: fallbackPath });
+  }
+}
+
 export async function fetchBrandInsights(brandId: string, options?: FetchOptions): Promise<BrandInsights> {
-  const response = await request({
-    path: `/api/brand-insights/${encodeURIComponent(brandId)}`,
-    method: "GET",
-    next: { revalidate: options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS },
-  });
+  const encodedBrandId = encodeURIComponent(brandId);
+  const revalidate = options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS;
+  let response: unknown;
+
+  try {
+    response = await request({
+      path: "/api/trends/read",
+      method: "POST",
+      body: {
+        brand_id: brandId,
+      },
+      next: { revalidate },
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 404) {
+      throw error;
+    }
+
+    response = await requestWithFallback(
+      `/api/trends/${encodedBrandId}`,
+      `/api/brand-insights/${encodedBrandId}`,
+      {
+        method: "GET",
+        next: { revalidate },
+      }
+    );
+  }
 
   return mapBackendInsightsResponse(response);
 }
@@ -68,11 +107,15 @@ export async function fetchBrandInsightsProfile(
   brandId: string,
   options?: FetchOptions
 ): Promise<BrandInsightsProfile> {
-  const response = await request({
-    path: `/api/brand-insights/profile/${encodeURIComponent(brandId)}`,
-    method: "GET",
-    next: { revalidate: options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS },
-  });
+  const encodedBrandId = encodeURIComponent(brandId);
+  const response = await requestWithFallback(
+    `/api/trends/profile/${encodedBrandId}`,
+    `/api/brand-insights/profile/${encodedBrandId}`,
+    {
+      method: "GET",
+      next: { revalidate: options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS },
+    }
+  );
 
   return mapBackendProfileResponse(response);
 }

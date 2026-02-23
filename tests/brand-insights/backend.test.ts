@@ -5,6 +5,7 @@ import {
   mapBackendGenerationResponse,
   mapBackendInsightsResponse,
   mapBackendProfileResponse,
+  mapBackendStatusMessage,
   mapBackendStatusResponse,
 } from "../../src/lib/brand-insights/backend.ts";
 
@@ -87,23 +88,156 @@ test("mapBackendInsightsResponse normalizes snake_case fields", () => {
   assert.deepEqual(result.data.selectedSocialPlatforms, ["instagram"]);
 });
 
-test("mapBackendGenerationResponse maps processing and success responses", () => {
+test("mapBackendInsightsResponse maps edge-backed /api/trends/read payload using the 7-day window", () => {
+  const payload = {
+    status: "success",
+    data: {
+      status: "success",
+      brand_id: "brand-123",
+      generation_id: "gen-edge-1",
+      anchor_ts: "2026-02-21T18:00:00.000Z",
+      windows_days: [7, 30],
+      windows: [
+        {
+          days: 30,
+          window_start: "2026-01-22T00:00:00.000Z",
+          window_end: "2026-02-21T00:00:00.000Z",
+          counts: { trends: 1, events: 0, questions: 1, generations: 1 },
+          trends: [],
+          events: [],
+          questions: [
+            {
+              id: "q-30",
+              question_text: "What long-term behavior changed?",
+              niche: "General",
+            },
+          ],
+          generations: [{ generation_id: "gen-older" }],
+        },
+        {
+          days: 7,
+          window_start: "2026-02-14T00:00:00.000Z",
+          window_end: "2026-02-21T00:00:00.000Z",
+          counts: { trends: 1, events: 1, questions: 1, generations: 1 },
+          trends: [
+            {
+              id: "trend-7",
+              title: "Intent-rich search spikes",
+              relevance_to_brand: "High fit",
+              is_selected: true,
+              times_used: 2,
+            },
+          ],
+          events: [
+            {
+              id: "event-7",
+              title: "Presidents Day",
+              event_date: "2026-02-16",
+              is_selected: false,
+            },
+          ],
+          questions: [
+            {
+              id: "q-7",
+              question_text: "How do we react this week?",
+              social_platform: "linkedin",
+              niche: "B2B",
+            },
+          ],
+          generations: [{ generation_id: "gen-edge-1" }],
+        },
+      ],
+    },
+  };
+
+  const result = mapBackendInsightsResponse(payload);
+
+  assert.equal(result.status, "success");
+  assert.equal(result.generatedAt, "2026-02-21T18:00:00.000Z");
+  assert.equal(result.data.generationId, "gen-edge-1");
+  assert.equal(result.data.weekStartDate, "2026-02-14");
+  assert.equal(result.data.trendsAndEvents.trends[0].id, "trend-7");
+  assert.equal(result.data.trendsAndEvents.events[0].date, "2026-02-16");
+  assert.equal(result.data.questionsByNiche.questionsByNiche.B2B.questions[0].socialPlatform, "linkedin");
+});
+
+test("mapBackendInsightsResponse falls back to generation_insights when read windows are empty", () => {
+  const payload = {
+    status: "success",
+    data: {
+      status: "success",
+      brand_id: "brand-123",
+      generation_id: "gen-legacy",
+      anchor_ts: "2026-02-21T18:00:00.000Z",
+      windows_days: [7, 30],
+      windows: [],
+      generation_insights: {
+        generation_id: "gen-legacy",
+        week_start_date: "2026-02-17",
+        trends_and_events: {
+          trends: [{ id: "t1", title: "UGC momentum" }],
+          events: [],
+        },
+        questions_by_niche: {
+          questions_by_niche: {
+            Retail: {
+              questions: [{ id: "q1", question_text: "What should we post tomorrow?" }],
+            },
+          },
+        },
+        from_cache: true,
+        selected_social_platforms: ["instagram"],
+      },
+    },
+  };
+
+  const result = mapBackendInsightsResponse(payload);
+
+  assert.equal(result.data.generationId, "gen-legacy");
+  assert.equal(result.data.weekStartDate, "2026-02-17");
+  assert.equal(result.data.fromCache, true);
+  assert.deepEqual(result.data.selectedSocialPlatforms, ["instagram"]);
+  assert.equal(result.data.trendsAndEvents.trends[0].title, "UGC momentum");
+  assert.equal(result.data.questionsByNiche.questionsByNiche.Retail.questions[0].question, "What should we post tomorrow?");
+});
+
+test("mapBackendGenerationResponse maps /api/trends processing and success responses", () => {
   const processing = mapBackendGenerationResponse({
     status: "processing",
-    data: { task_id: "task-1", brand_id: "brand-123" },
+    message: "Trends job started",
+    data: {
+      job_id: "job-1",
+      generation_id: "gen-1",
+      status: "running",
+      brand_id: "brand-123",
+      stream: {
+        transport: "sse",
+        channel: "/api/trends/jobs/gen-1/events",
+        queue_name: "brand_trends_generation_events",
+        latest_message_id: 42,
+      },
+      fallback_poll_url: "/api/trends/jobs/gen-1",
+    },
   });
 
   assert.equal(processing.status, "processing");
-  assert.equal(processing.taskId, "task-1");
+  assert.equal(processing.generationId, "gen-1");
+  assert.equal(processing.jobId, "job-1");
+  assert.equal(processing.jobStatus, "running");
   assert.equal(processing.brandId, "brand-123");
+  assert.equal(processing.stream?.channel, "/api/trends/jobs/gen-1/events");
+  assert.equal(processing.stream?.queueName, "brand_trends_generation_events");
+  assert.equal(processing.stream?.latestMessageId, 42);
+  assert.equal(processing.fallbackPollUrl, "/api/trends/jobs/gen-1");
 
   const success = mapBackendGenerationResponse({
     status: "success",
+    message: "Trends run completed",
     data: {
       brand_id: "brand-123",
       generation_id: "gen-999",
       from_cache: true,
-      counts: { trends: 4, events: 2, questions: 12 },
+      persisted: { trends: 4, events: 2, questions: 12 },
     },
   });
 
@@ -131,24 +265,113 @@ test("mapBackendGenerationResponse accepts legacy platform ids", () => {
   assert.equal(result.fromCache, false);
 });
 
-test("mapBackendStatusResponse normalizes known and unknown statuses", () => {
+test("mapBackendGenerationResponse supports pending/running start statuses with strategic dependency", () => {
+  const pending = mapBackendGenerationResponse({
+    status: "pending",
+    message: "Waiting for strategic analysis",
+    dependency: {
+      strategic_analysis: {
+        required: true,
+        status: "pending",
+        run_id: "run-123",
+      },
+    },
+    data: {
+      generation_id: "gen-pending",
+      job_id: "gen-pending",
+      status: "pending",
+    },
+  });
+
+  assert.equal(pending.status, "processing");
+  assert.equal(pending.generationId, "gen-pending");
+  assert.equal(pending.jobStatus, "pending");
+  assert.equal(pending.dependencyStrategicAnalysis?.required, true);
+  assert.equal(pending.dependencyStrategicAnalysis?.status, "pending");
+  assert.equal(pending.dependencyStrategicAnalysis?.runId, "run-123");
+});
+
+test("mapBackendStatusResponse normalizes /api/trends job payloads", () => {
   const running = mapBackendStatusResponse({
-    status: "running",
-    task_id: "task-1",
-    brand_id: "brand-123",
+    status: "success",
+    data: {
+      job_id: "job-1",
+      generation_id: "gen-1",
+      brand_id: "brand-123",
+      status: "running",
+      progress_percent: 58,
+      stage: "synthesis",
+      stage_message: "Running synthesis and platform agents",
+      totals: {
+        trends: 10,
+        events: 8,
+        questions: 35,
+      },
+      started_at: "2026-02-22T20:00:00.000Z",
+      completed_at: null,
+      week_start_date: "2026-02-17",
+      error_code: null,
+      error_detail: null,
+      warnings: { scrape_failures: [], warning_count: 0 },
+      competitor: {
+        status: "success",
+        source_run_id: "run-1",
+        competitor_count: 3,
+        total_ingested: 12,
+        reason: null,
+      },
+      stream: {
+        transport: "sse",
+        channel: "/api/trends/jobs/gen-1/events",
+        queue_name: "brand_trends_generation_events",
+        latest_message_id: 100,
+      },
+      error: null,
+      metadata: {},
+    },
   });
 
   assert.equal(running.status, "running");
-  assert.equal(running.taskId, "task-1");
+  assert.equal(running.generationId, "gen-1");
+  assert.equal(running.jobId, "job-1");
   assert.equal(running.brandId, "brand-123");
+  assert.equal(running.progressPercent, 58);
+  assert.equal(running.stage, "synthesis");
+  assert.equal(running.stageMessage, "Running synthesis and platform agents");
+  assert.equal(running.totals?.questions, 35);
+  assert.equal(running.weekStartDate, "2026-02-17");
+  assert.equal(running.stream?.channel, "/api/trends/jobs/gen-1/events");
+  assert.equal(running.stream?.latestMessageId, 100);
+  assert.equal(running.warnings?.warningCount, 0);
+  assert.equal(running.competitor?.totalIngested, 12);
 
   const unknown = mapBackendStatusResponse({
-    status: "bogus",
-    task_id: "task-2",
+    status: "success",
+    data: {
+      status: "bogus",
+      generation_id: "gen-2",
+    },
   });
 
   assert.equal(unknown.status, "error");
-  assert.equal(unknown.taskId, "task-2");
+  assert.equal(unknown.generationId, "gen-2");
+});
+
+test("mapBackendStatusMessage normalizes message event payloads", () => {
+  const result = mapBackendStatusMessage({
+    message_id: 88,
+    stage: "raw_search",
+    progress_percent: 34,
+    stage_message: "Collecting raw signals",
+    payload: { source_count: 14 },
+    created_at: "2026-02-22T20:00:00.000Z",
+  });
+
+  assert.equal(result.messageId, 88);
+  assert.equal(result.stage, "raw_search");
+  assert.equal(result.progressPercent, 34);
+  assert.equal(result.stageMessage, "Collecting raw signals");
+  assert.deepEqual(result.payload, { source_count: 14 });
 });
 
 test("mapBackendProfileResponse maps new strategic analysis fields", () => {
