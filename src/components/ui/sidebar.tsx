@@ -75,6 +75,13 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
+    const cssVars = (style ?? {}) as React.CSSProperties & {
+      "--sidebar-width"?: string
+      "--sidebar-width-icon"?: string
+    }
+    const providedSidebarWidth = cssVars["--sidebar-width"] ?? SIDEBAR_WIDTH
+    const providedSidebarWidthIcon =
+      cssVars["--sidebar-width-icon"] ?? SIDEBAR_WIDTH_ICON
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
@@ -121,6 +128,21 @@ const SidebarProvider = React.forwardRef<
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.
     const state = open ? "expanded" : "collapsed"
+
+    React.useEffect(() => {
+      const nextWidth = isMobile
+        ? "0px"
+        : open
+          ? providedSidebarWidth
+          : providedSidebarWidthIcon
+      document.documentElement.style.setProperty("--app-sidebar-width", nextWidth)
+    }, [isMobile, open, providedSidebarWidth, providedSidebarWidthIcon])
+
+    React.useEffect(() => {
+      return () => {
+        document.documentElement.style.removeProperty("--app-sidebar-width")
+      }
+    }, [])
 
     const contextValue = React.useMemo<SidebarContextProps>(
       () => ({

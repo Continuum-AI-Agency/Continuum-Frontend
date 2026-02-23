@@ -154,7 +154,7 @@ export default async function OrganicPage() {
   const showNoTrendsMessage = selectorTrends.length === 0;
 
   return (
-    <div className="-mx-2 flex h-[calc(100dvh-4.5rem)] min-h-[44rem] w-auto flex-col gap-3 overflow-hidden pb-2 sm:-mx-3 lg:-mx-4">
+    <div className="-mx-2 flex h-[calc(100dvh-4.5rem)] min-h-[var(--workspace-min-height)] w-auto flex-col gap-3 overflow-hidden pb-2 sm:-mx-3 lg:-mx-4">
       <div className="shrink-0 space-y-3 px-2 sm:px-3 lg:px-4">
         <BrandInsightsAutoGenerate
           brandId={brandProfileId}

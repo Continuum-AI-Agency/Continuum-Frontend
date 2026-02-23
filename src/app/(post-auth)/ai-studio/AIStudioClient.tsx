@@ -46,6 +46,16 @@ export default function AIStudioClient({
 
   const [templates, setTemplates] = React.useState(promptTemplates ?? []);
   const [templatesLoading, setTemplatesLoading] = React.useState(false);
+  const mainLayoutStyle =
+    activeTab === "canvas"
+      ? {
+          gap: "var(--app-shell-gap-compact)",
+          padding: "var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)",
+        }
+      : {
+          gap: "var(--app-shell-gap)",
+          padding: "var(--app-shell-pad-block) var(--app-shell-pad-inline)",
+        };
 
   const handleCreateTemplate = React.useCallback(
     async (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => {
@@ -107,18 +117,14 @@ export default function AIStudioClient({
   );
 
   return (
-    <div className="fixed inset-x-0 top-0 h-screen h-[100dvh] md:left-[var(--app-sidebar-width,88px)] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
+    <div className="fixed inset-x-0 top-0 h-screen h-[100dvh] md:left-[var(--app-sidebar-width,5.5rem)] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
       <main
-        className={cn(
-          "relative z-[1] flex min-h-0 flex-1 flex-col",
-          activeTab === "canvas"
-            ? "gap-2 px-2 pb-2 pt-2 sm:px-3 md:px-4"
-            : "gap-3 px-6 pb-6 pt-4 sm:px-10 md:px-16"
-        )}
+        className="relative z-[1] flex min-h-0 flex-1 flex-col"
+        style={mainLayoutStyle}
       >
-        <div className={cn("flex flex-wrap items-center justify-between", activeTab === "canvas" ? "gap-2 px-1" : "gap-3")}>
+        <div className={cn("flex flex-wrap items-center justify-between", activeTab === "canvas" ? "gap-2" : "gap-3")}>
           <div className="flex items-baseline gap-3">
             <Heading size="7" className="text-white">AI Studio</Heading>
             <Text color="gray">Build flows for {brandName}</Text>

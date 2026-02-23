@@ -99,15 +99,72 @@
   --bg-galaxy-c3-light: rgba(255,210,238,0.14);
   --bg-galaxy-vignette-light: rgba(255,255,255,0.06);
   --bg-galaxy-c1-overlay-light: rgba(255,210,238,0.10);
+
+  /* Layout and viewport density tokens */
+  --font-size-root: 16px;
+  --layout-density: 1;
+  --app-shell-gap: 1rem;
+  --app-shell-gap-compact: 0.75rem;
+  --app-shell-pad-inline: 1.5rem;
+  --app-shell-pad-block: 1rem;
+  --app-shell-pad-inline-compact: 0.75rem;
+  --app-shell-pad-block-compact: 0.75rem;
+  --ai-chat-shell-offset: 1.5rem;
+  --ai-chat-shell-min-height: 40rem;
+  --ai-chat-row-min-height: 30rem;
+  --ai-chat-panel-min-width: 24rem;
+  --ai-chat-preview-min-width: 28rem;
+  --workspace-min-height: 36rem;
+  --dashboard-min-panel-height: 32rem;
 }
 
-/* Fluid typography baseline with sensible bounds
-   Ensures the perceived UI scale stays consistent across screens */
-/* Fluid typography: 10px min, ~11px at 1440p, ~12px at 1920p, exactly 16px at 4K (3840p) */
 html {
-  font-size: clamp(10px, 0.21vw + 8px, 16px);
+  font-size: var(--font-size-root);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+@media (max-width: 1536px) {
+  :root {
+    --app-shell-pad-inline: 1.25rem;
+    --ai-chat-shell-offset: 1rem;
+    --ai-chat-shell-min-height: 36rem;
+    --ai-chat-row-min-height: 26rem;
+    --ai-chat-panel-min-width: 22rem;
+    --ai-chat-preview-min-width: 24rem;
+    --workspace-min-height: 32rem;
+    --dashboard-min-panel-height: 28rem;
+  }
+}
+
+@media (max-width: 1366px), (max-height: 820px) {
+  :root {
+    --layout-density: 0.92;
+    --app-shell-gap: 0.75rem;
+    --app-shell-pad-inline: 1rem;
+    --app-shell-pad-block: 0.75rem;
+    --ai-chat-shell-offset: 0.5rem;
+    --ai-chat-shell-min-height: 30rem;
+    --ai-chat-row-min-height: 22rem;
+    --ai-chat-panel-min-width: 18rem;
+    --ai-chat-preview-min-width: 20rem;
+    --workspace-min-height: 28rem;
+    --dashboard-min-panel-height: 24rem;
+  }
+}
+
+@media (max-height: 740px) {
+  :root {
+    --layout-density: 0.88;
+    --app-shell-pad-inline: 0.75rem;
+    --app-shell-pad-block: 0.625rem;
+    --app-shell-pad-inline-compact: 0.5rem;
+    --app-shell-pad-block-compact: 0.5rem;
+    --ai-chat-shell-min-height: 26rem;
+    --ai-chat-row-min-height: 18rem;
+    --workspace-min-height: 24rem;
+    --dashboard-min-panel-height: 20rem;
+  }
 }
 
 /* Semantic theme utilities (align with styleguide) */

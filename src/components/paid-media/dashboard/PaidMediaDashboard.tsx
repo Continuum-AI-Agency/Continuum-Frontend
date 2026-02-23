@@ -190,7 +190,7 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
           </Card>
         )}
 
-        <div className="h-[calc(100vh-280px)] min-h-[600px] overflow-hidden rounded-xl border bg-white/5">
+        <div className="h-[calc(100dvh-17.5rem)] min-h-[var(--dashboard-min-panel-height)] overflow-hidden rounded-xl border bg-white/5">
           <ResizablePanelGroup orientation="horizontal">
             <ResizablePanel defaultSize={65} minSize={30}>
               <Box className="h-full overflow-auto p-4">

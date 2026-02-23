@@ -387,11 +387,14 @@ export function ChatSurface({
   }, [streamState.currentBase64, streamState.posterBase64, streamState.videoUrl]);
 
   return (
-    <div className="relative ml-6 sm:ml-10 md:ml-[96px] flex h-full min-h-[720px] flex-col gap-4" style={{ color: "var(--gray-12)" }}>
-      <div className="flex min-h-[560px] flex-1 gap-6">
+    <div
+      className="relative ml-[var(--ai-chat-shell-offset)] flex h-full min-h-[var(--ai-chat-shell-min-height)] flex-col gap-[var(--app-shell-gap)]"
+      style={{ color: "var(--gray-12)" }}
+    >
+      <div className="flex min-h-[var(--ai-chat-row-min-height)] flex-1 gap-[var(--app-shell-gap)]">
         <Card
           size="3"
-          className="w-full basis-[40%] max-w-2xl min-w-[400px] space-y-4 overflow-auto pb-4 pr-1"
+          className="w-full basis-[40%] max-w-2xl min-w-[var(--ai-chat-panel-min-width)] space-y-4 overflow-auto pb-4 pr-1"
           style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--gray-6)" }}
         >
           <ChatPanel
@@ -438,7 +441,7 @@ export function ChatSurface({
 
         <Card
           size="3"
-          className="flex min-w-[520px] flex-1 overflow-hidden shadow-2xl"
+          className="flex min-w-[var(--ai-chat-preview-min-width)] flex-1 overflow-hidden shadow-2xl"
           style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--gray-6)" }}
         >
           <PreviewPane
