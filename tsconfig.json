@@ -39,6 +39,7 @@
   ],
   "exclude": [
     "node_modules",
+    "calendar/**",
     "supabase/functions/**",
     "tests/**",
     "**/__tests__/**",
