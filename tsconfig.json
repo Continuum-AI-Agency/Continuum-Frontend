@@ -44,6 +44,6 @@
     "**/__tests__/**",
     "**/*.test.*",
     "**/*.spec.*",
-    "calendar/**"
+    "./calendar/**"
   ]
 }
