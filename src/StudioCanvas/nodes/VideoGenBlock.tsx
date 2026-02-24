@@ -139,12 +139,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run video node", { nodeId: id });
-    await executeWorkflow(executionControls, {
-      targetNodeId: id,
-      clearDownstream: false,
-      scopeStrategy: 'target-only',
-      brandId,
-    });
+    await executeWorkflow(executionControls, { targetNodeId: id, brandId });
   }, [executionControls, id, brandId]);
 
   const fileBaseName = `video-${id}`;

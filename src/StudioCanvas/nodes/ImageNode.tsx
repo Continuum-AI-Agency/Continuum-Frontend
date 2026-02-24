@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer } from '@xyflow/react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ImageNodeData, ImageReferenceType } from '../types';
-import { Cross2Icon, ImageIcon, UploadIcon } from '@radix-ui/react-icons';
+import { ImageIcon, UploadIcon } from '@radix-ui/react-icons';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
@@ -74,13 +74,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
-
-  useEffect(() => {
-    setPreview(data.image);
-  }, [data.image]);
 
   const handleRefTypeChange = useCallback((value: string) => {
     setRefType(value);
@@ -147,24 +142,6 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
 
     triggerSave();
   }, [detectAspectRatioFromImage, id, snapNodeToAspectRatio, triggerSave, updateNodeData]);
-
-  useEffect(() => {
-    if (!preview) return;
-    const normalizedAspect = (data.aspectRatio ?? '').trim();
-    if (normalizedAspect && normalizedAspect !== '1:1') return;
-
-    let cancelled = false;
-    void detectAspectRatioFromImage(preview).then((detectedAspectRatio) => {
-      if (cancelled || !detectedAspectRatio) return;
-      if (detectedAspectRatio === normalizedAspect) return;
-      snapNodeToAspectRatio(detectedAspectRatio);
-      triggerSave();
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [data.aspectRatio, detectAspectRatioFromImage, preview, snapNodeToAspectRatio, triggerSave]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -248,20 +225,6 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     await applyPreviewImage(resolved.dataUrl, resolved.fileName);
   }, [applyPreviewImage, fileToDataUrl, show]);
 
-  const handleOpenFilePicker = useCallback((event?: React.MouseEvent) => {
-    event?.preventDefault();
-    event?.stopPropagation();
-    fileInputRef.current?.click();
-  }, []);
-
-  const handleClearImage = useCallback((event?: React.MouseEvent) => {
-    event?.preventDefault();
-    event?.stopPropagation();
-    setPreview(undefined);
-    updateNodeData(id, { image: undefined, fileName: undefined });
-    triggerSave();
-  }, [id, triggerSave, updateNodeData]);
-
   return (
     <TooltipProvider>
       <ContextMenu>
@@ -278,7 +241,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       <NodeResizer
         minWidth={200}
         minHeight={200}
-        keepAspectRatio
+        keepAspectRatio={false}
         isVisible={selected}
         lineClassName="border-brand-primary/60"
         handleClassName="h-3 w-3 bg-brand-primary border-2 border-background rounded-full"
@@ -288,7 +251,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
         selected={selected}
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
-        <NodeContent className={cn("relative flex-1 min-h-0 p-0 bg-muted/30 group/preview", !preview && "nodrag")}>
+        <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
             <div className="absolute right-2 top-2 z-20 nodrag opacity-0 transition-opacity group-hover/preview:opacity-100 focus-within:opacity-100" onMouseDown={(e) => e.stopPropagation()}>
               <Select value={refType} onValueChange={handleRefTypeChange}>
                   <SelectTrigger className="h-6 w-[94px] text-[10px] px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
@@ -302,58 +265,33 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   </SelectContent>
               </Select>
             </div>
-            {preview ? (
-              <div className="relative flex h-full w-full cursor-grab items-center justify-center overflow-hidden bg-default active:cursor-grabbing">
-                <img
-                  src={preview}
-                  alt="Preview"
-                  className="h-full w-full object-contain"
-                  draggable={false}
-                  onDragStart={(event) => event.preventDefault()}
-                />
-                <div className="absolute right-2 top-2 z-20 flex items-center gap-1 opacity-0 transition-opacity group-hover/preview:opacity-100">
-                  <button
-                    type="button"
-                    className="nodrag inline-flex h-6 w-6 items-center justify-center rounded bg-black/60 text-white shadow-sm transition hover:bg-black/75"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={handleOpenFilePicker}
-                    title="Replace image"
-                    aria-label="Replace image"
-                  >
-                    <UploadIcon className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    className="nodrag inline-flex h-6 w-6 items-center justify-center rounded bg-black/60 text-white shadow-sm transition hover:bg-black/75"
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={handleClearImage}
-                    title="Clear image"
-                    aria-label="Clear image"
-                  >
-                    <Cross2Icon className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <Label
-                htmlFor={`file-${id}`}
-                className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-              >
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <ImageIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>Upload Image</EmptyTitle>
-                    <EmptyDescription>Drag & drop or click</EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              </Label>
-            )}
+            <Label
+              htmlFor={`file-${id}`}
+              className="cursor-pointer flex h-full w-full items-center justify-center transition-colors hover:bg-muted/40"
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+                {preview ? (
+                    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
+                      <img src={preview} alt="Preview" className="h-full w-full object-contain" />
+                      <div className="pointer-events-none absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover/preview:opacity-100">
+                        <UploadIcon className="mr-1 inline-block h-3 w-3" />
+                        Replace
+                      </div>
+                    </div>
+                ) : (
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <ImageIcon />
+                        </EmptyMedia>
+                        <EmptyTitle>Upload Image</EmptyTitle>
+                        <EmptyDescription>Drag & drop or click</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                )}
+            </Label>
             <Input 
-                ref={fileInputRef}
                 id={`file-${id}`} 
                 type="file" 
                 accept="image/*" 
@@ -405,14 +343,8 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                 </ContextMenuCheckboxItem>
               ))}
             </ContextMenuSubContent>
-        </ContextMenuSub>
-        <ContextMenuSeparator />
-          {preview && (
-            <ContextMenuItem onClick={() => handleClearImage()}>
-              <Cross2Icon className="mr-2 h-4 w-4" />
-              Clear Image
-            </ContextMenuItem>
-          )}
+          </ContextMenuSub>
+          <ContextMenuSeparator />
           <ContextMenuItem onClick={() => duplicateNode(id)}>
             <Copy className="mr-2 h-4 w-4" />
             Duplicate

@@ -69,7 +69,6 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
       await executeWorkflow(executionControls, { 
         targetNodeId: id,
         clearDownstream: false,
-        scopeStrategy: 'target-only',
         brandId
       });
     } catch (err) {
