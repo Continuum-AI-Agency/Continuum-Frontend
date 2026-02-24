@@ -5,7 +5,6 @@ import { VideoGenNodeData } from '../types';
 import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon, VideoIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -36,6 +35,7 @@ import {
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
@@ -200,7 +200,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
             <AspectRatio ratio={(data.aspectRatio ?? '16:9') === '16:9' ? 16 / 9 : 9 / 16} className="h-full w-full overflow-hidden bg-muted">
             {data.isExecuting ? (
               <div className="w-full h-full flex items-center justify-center bg-muted p-4">
-                      <Skeleton className="w-full h-full bg-muted" />
+                      <GenerationPulseLoader />
               </div>
             ) : data.generatedVideo ? (
               <div className="relative w-full h-full flex items-center justify-center bg-black/85">

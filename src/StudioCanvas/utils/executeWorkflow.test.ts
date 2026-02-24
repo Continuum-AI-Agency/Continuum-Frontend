@@ -425,6 +425,76 @@ describe('executeWorkflow', () => {
     expect(updatedNode?.data.generatedVideo).toBe('data:video/mp4;base64,extended_video');
   });
 
+  it('should execute extend video nodes from upstream veo base64 output', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'veo-1',
+        position: { x: 0, y: 0 },
+        type: 'veoDirector',
+        data: {
+          model: 'veo-3.1',
+          generatedVideo: 'data:video/mp4;base64,veo_output_base64',
+        },
+      },
+      { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'veo-1', sourceHandle: 'video', target: 'extend-1', targetHandle: 'video' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => ({ success: true, output: { type: 'video', url: 'unused' } }));
+    const executeVideoExtension = mock(async () => ({
+      success: true,
+      output: { type: 'video', url: 'data:video/mp4;base64,extended_from_veo' },
+    }));
+    const controls = buildControls(executeGeneration, executeVideoExtension);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'extend-1', clearDownstream: false });
+
+    expect(executeVideoExtension).toHaveBeenCalledTimes(1);
+    const payload = executeVideoExtension.mock.calls[0][1];
+    expect(payload.video?.data).toBe('veo_output_base64');
+  });
+
+  it('should execute extend video nodes from upstream veo url output', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'veo-1',
+        position: { x: 0, y: 0 },
+        type: 'veoDirector',
+        data: {
+          model: 'veo-3.1',
+          generatedVideo: 'https://cdn.continuum.test/videos/veo-output.mp4',
+        },
+      },
+      { id: 'extend-1', position: { x: 0, y: 0 }, data: {}, type: 'extendVideo' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'veo-1', sourceHandle: 'video', target: 'extend-1', targetHandle: 'video' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => ({ success: true, output: { type: 'video', url: 'unused' } }));
+    const executeVideoExtension = mock(async () => ({
+      success: true,
+      output: { type: 'video', url: 'data:video/mp4;base64,extended_from_veo_uri' },
+    }));
+    const controls = buildControls(executeGeneration, executeVideoExtension);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'extend-1', clearDownstream: false });
+
+    expect(executeVideoExtension).toHaveBeenCalledTimes(1);
+    const payload = executeVideoExtension.mock.calls[0][1];
+    expect(payload.video?.uri).toBe('https://cdn.continuum.test/videos/veo-output.mp4');
+  });
+
   it('should parse fast enrichment SSE deltas across chunk boundaries', async () => {
     mock.module("@/lib/supabase/client", () => ({
       createSupabaseBrowserClient: () => ({

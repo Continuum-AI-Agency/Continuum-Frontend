@@ -216,6 +216,34 @@ describe('buildNodePayload', () => {
       const payload = buildExtendVideoPayload(node, new Map(), [], []);
       expect(payload).toBeNull();
     });
+
+    it('should build payload with video uri input from upstream output', () => {
+      const node: StudioNode = {
+        id: 'extend',
+        type: 'extendVideo',
+        position: { x: 0, y: 0 },
+        data: {},
+      };
+
+      const edges: Edge[] = [
+        {
+          id: 'e1',
+          source: 'veo1',
+          target: 'extend',
+          sourceHandle: 'video',
+          targetHandle: 'video',
+        },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('veo1', { type: 'video', url: 'https://cdn.continuum.test/videos/upstream.mp4' });
+
+      const payload = buildExtendVideoPayload(node, resolvedData, [], edges);
+
+      expect(payload).not.toBeNull();
+      expect('uri' in (payload?.video ?? {})).toBe(true);
+      expect((payload?.video as any).uri).toBe('https://cdn.continuum.test/videos/upstream.mp4');
+    });
   });
 
   describe('buildEnrichPayload', () => {

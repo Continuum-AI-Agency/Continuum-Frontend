@@ -57,6 +57,7 @@ import { ActiveUsersStack } from '@/components/presence/ActiveUsersStack';
 import { AIStudioChat } from '@/components/ai-studio/chat/AIStudioChat';
 import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
+import { CanvasMediaLoader } from '@/components/ai-studio/CanvasMediaLoader';
 import { StudioNode } from '../types';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
@@ -583,14 +584,7 @@ function Flow({
   );
 
   if (isLoading) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
-          <div className="animate-pulse text-sm font-medium text-slate-500">Syncing session...</div>
-        </div>
-      </div>
-    );
+    return <CanvasMediaLoader />;
   }
 
   return (

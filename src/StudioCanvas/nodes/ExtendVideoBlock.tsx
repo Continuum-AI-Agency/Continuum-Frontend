@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Skeleton } from '@/components/ui/skeleton';
 import { VideoIcon } from '@radix-ui/react-icons';
 import type { ExtendVideoNodeData } from '../types';
 import { useNodeSelection } from '../contexts/PresenceContext';
@@ -13,6 +12,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { downloadAsset } from '../utils/downloadAsset';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { Button } from '@/components/ui/button';
 import { CopyIcon, DownloadIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons';
 import { AspectRatio } from '@/components/ui/aspect-ratio';
@@ -99,7 +99,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
           <AspectRatio ratio={16 / 9} className="h-full w-full overflow-hidden bg-muted">
             {data.isExecuting ? (
               <div className="absolute inset-0 flex items-center justify-center bg-muted p-4">
-                <Skeleton className="h-full w-full bg-muted" />
+                <GenerationPulseLoader />
               </div>
             ) : data.generatedVideo ? (
               <div className="relative h-full w-full bg-black/85">

@@ -1,6 +1,6 @@
 import type { Edge } from '@xyflow/react';
 import { StudioNode } from '../types';
-import { EnrichPromptPayload, ExtendVideoPayload, GenerationPayload, NodeOutput } from '../types/execution';
+import { EnrichPromptPayload, ExtendVideoInput, ExtendVideoPayload, GenerationPayload, NodeOutput } from '../types/execution';
 import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from '@/lib/types/chatImage';
 import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData, StringNodeData, ImageNodeData } from '../types';
 import { parseDataUrl } from './dataUrl';
@@ -79,6 +79,62 @@ function resolveVideoInput(
         mimeType: parsed.mimeType,
         filename: (sourceNode.data as any).fileName,
       };
+    }
+  }
+
+  return undefined;
+}
+
+function resolveExtendVideoInput(
+  nodeId: string,
+  handleId: string,
+  resolvedData: Map<string, NodeOutput>,
+  nodes: StudioNode[],
+  edges: Edge[]
+): ExtendVideoInput | undefined {
+  const incomingEdge = edges.find(
+    (e) => e.target === nodeId && e.targetHandle === handleId
+  );
+
+  if (!incomingEdge) return undefined;
+
+  const sourceOutput = resolvedData.get(incomingEdge.source);
+  if (sourceOutput?.type === 'video') {
+    const parsed = parseDataUrl(sourceOutput.url);
+    if (parsed?.base64) {
+      return { data: parsed.base64, mimeType: parsed.mimeType };
+    }
+    if (typeof sourceOutput.url === 'string' && sourceOutput.url.trim()) {
+      return { uri: sourceOutput.url.trim() };
+    }
+    return undefined;
+  }
+
+  const sourceNode = nodes.find((n) => n.id === incomingEdge.source);
+  if (sourceNode?.type === 'video') {
+    const rawVideo = (sourceNode.data as any).video as string | undefined;
+    const parsed = parseDataUrl(rawVideo);
+    if (parsed?.base64) {
+      return {
+        data: parsed.base64,
+        mimeType: parsed.mimeType,
+        filename: (sourceNode.data as any).fileName,
+      };
+    }
+    if (typeof rawVideo === 'string' && rawVideo.trim()) {
+      return { uri: rawVideo.trim() };
+    }
+    return undefined;
+  }
+
+  if (sourceNode?.type === 'veoDirector' || sourceNode?.type === 'veoFast' || sourceNode?.type === 'extendVideo') {
+    const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
+    const parsed = parseDataUrl(generatedVideo);
+    if (parsed?.base64) {
+      return { data: parsed.base64, mimeType: parsed.mimeType };
+    }
+    if (typeof generatedVideo === 'string' && generatedVideo.trim()) {
+      return { uri: generatedVideo.trim() };
     }
   }
 
@@ -422,8 +478,8 @@ export function buildExtendVideoPayload(
   const promptInput = resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges);
   const prompt = (promptInput?.text ?? data.prompt ?? '').trim();
 
-  const videoInput = resolveVideoInput(node.id, 'video', resolvedData, allNodes, allEdges);
-  if (!videoInput?.data) {
+  const videoInput = resolveExtendVideoInput(node.id, 'video', resolvedData, allNodes, allEdges);
+  if (!videoInput) {
     return null;
   }
 
@@ -434,11 +490,7 @@ export function buildExtendVideoPayload(
     prompt,
     aspectRatio: '16:9',
     resolution: '720p',
-    video: {
-      data: videoInput.data,
-      mimeType: videoInput.mimeType,
-      filename: videoInput.filename,
-    },
+    video: videoInput,
   };
 }
 

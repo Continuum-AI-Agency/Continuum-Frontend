@@ -89,21 +89,41 @@ const resolveImageInput = (
 const resolveVideoInput = (
   edge: Edge,
   resolvedOutputs: Map<string, NodeOutput>,
-  nodeById: Map<string, StudioNode>
-): { base64: string; mimeType: string } | undefined => {
+  nodeById: Map<string, StudioNode>,
+  options?: { allowUri?: boolean }
+): { base64: string; mimeType: string } | { uri: string } | undefined => {
+  const allowUri = Boolean(options?.allowUri);
   const output = resolvedOutputs.get(edge.source);
   if (output?.type === 'video' && output.url) {
     const parsed = parseDataUrl(output.url);
     if (parsed?.base64) {
       return { base64: parsed.base64, mimeType: parsed.mimeType };
     }
+    if (allowUri && output.url.trim()) {
+      return { uri: output.url.trim() };
+    }
   }
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'video') {
-    const parsed = parseDataUrl((sourceNode.data as any).video as string | undefined);
+    const rawVideo = (sourceNode.data as any).video as string | undefined;
+    const parsed = parseDataUrl(rawVideo);
     if (parsed?.base64) {
       return { base64: parsed.base64, mimeType: parsed.mimeType };
+    }
+    if (allowUri && typeof rawVideo === 'string' && rawVideo.trim()) {
+      return { uri: rawVideo.trim() };
+    }
+  }
+
+  if (allowUri && (sourceNode?.type === 'veoDirector' || sourceNode?.type === 'veoFast' || sourceNode?.type === 'extendVideo')) {
+    const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
+    const parsed = parseDataUrl(generatedVideo);
+    if (parsed?.base64) {
+      return { base64: parsed.base64, mimeType: parsed.mimeType };
+    }
+    if (typeof generatedVideo === 'string' && generatedVideo.trim()) {
+      return { uri: generatedVideo.trim() };
     }
   }
 
@@ -235,7 +255,7 @@ const getNodeReadiness = (
           : targetHandle === 'audio'
             ? Boolean(resolveAudioInput(edge, nodeById))
             : targetHandle === 'video'
-              ? Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById))
+              ? Boolean(resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: false }))
               : targetHandle === 'document'
                 ? Boolean(resolveDocumentInput(edge, nodeById))
                 : false;
@@ -261,7 +281,7 @@ const getNodeReadiness = (
     if (videoEdges.length === 0) {
       return { ready: false, reason: 'Missing required video input' };
     }
-    const hasVideo = videoEdges.some((edge) => resolveVideoInput(edge, resolvedOutputs, nodeById));
+    const hasVideo = videoEdges.some((edge) => resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }));
     if (!hasVideo) {
       return { ready: false, reason: 'Missing connected input for video' };
     }

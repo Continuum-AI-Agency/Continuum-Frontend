@@ -4,7 +4,6 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { NanoGenNodeData } from '../types';
 import { ImageIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -36,6 +35,7 @@ import {
 import { useNodeSelection } from '../contexts/PresenceContext';
 import { Node as CanvasNode, NodeContent } from '@/components/ai-elements/node';
 import { Toolbar } from '@/components/ai-elements/toolbar';
+import { GenerationPulseLoader } from '../components/GenerationPulseLoader';
 import { getAspectRatioValue, snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 
 const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps & { maxConnections?: number }) => {
@@ -183,7 +183,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             {data.isExecuting ? (
               <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                   <AspectRatio ratio={ratio} className="w-full h-full">
-                      <Skeleton className="w-full h-full bg-muted" />
+                      <GenerationPulseLoader />
                   </AspectRatio>
               </div>
             ) : previewImage ? (
