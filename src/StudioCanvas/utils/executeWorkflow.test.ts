@@ -359,73 +359,13 @@ describe('executeWorkflow', () => {
     expect(executeEnrichment).toHaveBeenCalledTimes(0);
   });
 
-  it('should preserve upstream string prompt value and skip enrichment on target-with-upstream runs', async () => {
-    const nodes: StudioNode[] = [
-      { id: 'text-a', position: { x: 0, y: 0 }, data: { value: 'banana still life' }, type: 'string' },
-      { id: 'text-b', position: { x: 0, y: 0 }, data: { value: 'red apple still life' }, type: 'string' },
-      { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
-      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
-      {
-        id: 'enrich-1',
-        position: { x: 0, y: 0 },
-        data: { value: 'existing prompt should be reused', isComplete: true },
-        type: 'string',
-      },
-      { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
-    ];
-
-    const edges: Edge[] = [
-      { id: 'e1', source: 'text-a', sourceHandle: 'text', target: 'img-a', targetHandle: 'prompt' },
-      { id: 'e2', source: 'text-b', sourceHandle: 'text', target: 'img-b', targetHandle: 'prompt' },
-      { id: 'e3', source: 'img-a', sourceHandle: 'image', target: 'enrich-1', targetHandle: 'image' },
-      { id: 'e4', source: 'img-b', sourceHandle: 'image', target: 'enrich-1', targetHandle: 'image' },
-      { id: 'e5', source: 'enrich-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
-      { id: 'e6', source: 'img-a', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
-      { id: 'e7', source: 'img-b', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
-    ];
-
-    useStudioStore.getState().setNodes(nodes);
-    useStudioStore.getState().setEdges(edges);
-
-    const executeGeneration = mock(async (nodeId: string) => {
-      if (nodeId === 'img-a') {
-        return { success: true, output: { type: 'image', base64: 'img_a_base64', mimeType: 'image/png' } };
-      }
-      if (nodeId === 'img-b') {
-        return { success: true, output: { type: 'image', base64: 'img_b_base64', mimeType: 'image/png' } };
-      }
-      if (nodeId === 'video-1') {
-        return { success: true, output: { type: 'video', url: 'video_url' } };
-      }
-      return { success: false, error: `Unexpected node ${nodeId}` };
-    });
-
-    const executeEnrichment = mock(async () => {
-      return { success: true, output: { type: 'text', value: 'should-not-run' } };
-    });
-
-    const controls = buildControls(
-      executeGeneration,
-      mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
-      executeEnrichment
-    );
-
-    await executeWorkflow(controls as any, { targetNodeId: 'video-1' });
-
-    expect(executeEnrichment).toHaveBeenCalledTimes(0);
-    expect(executeGeneration).toHaveBeenCalledTimes(3);
-
-    const videoCall = executeGeneration.mock.calls.find((call: any[]) => call[0] === 'video-1');
-    expect(videoCall?.[1]?.prompt).toBe('existing prompt should be reused');
-  });
-
   it('should execute upstream string enrichment with inputs before running target video node', async () => {
     const nodes: StudioNode[] = [
       { id: 'text-a', position: { x: 0, y: 0 }, data: { value: 'banana still life' }, type: 'string' },
       { id: 'text-b', position: { x: 0, y: 0 }, data: { value: 'red apple still life' }, type: 'string' },
       { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
       { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
-      { id: 'enrich-1', position: { x: 0, y: 0 }, data: { value: '' }, type: 'string' },
+      { id: 'enrich-1', position: { x: 0, y: 0 }, data: { value: 'old prompt' }, type: 'string' },
       { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
     ];
 

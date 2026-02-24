@@ -142,7 +142,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
     await executeWorkflow(executionControls, {
       targetNodeId: id,
       clearDownstream: false,
-      scopeStrategy: 'target-with-upstream',
+      scopeStrategy: 'target-only',
       brandId,
     });
   }, [executionControls, id, brandId]);

@@ -120,7 +120,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     await executeWorkflow(executionControls, {
       targetNodeId: id,
       clearDownstream: false,
-      scopeStrategy: 'target-with-upstream',
+      scopeStrategy: 'target-only',
       brandId,
     });
   }, [executionControls, id, brandId]);
