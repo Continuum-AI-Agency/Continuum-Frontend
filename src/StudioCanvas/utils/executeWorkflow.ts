@@ -15,6 +15,9 @@ type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 const MAX_CONCURRENT_EXECUTIONS = 3;
 const MEDIA_NODE_TYPES = new Set(['nanoGen', 'veoDirector', 'veoFast', 'extendVideo']);
 
+const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
+  typeof nodeType === 'string' && MEDIA_NODE_TYPES.has(nodeType);
+
 type NodeReadiness = {
   ready: boolean;
   reason?: string;
@@ -310,10 +313,10 @@ export async function executeWorkflow(
   const targetNode = options.targetNodeId ? nodeById.get(options.targetNodeId) : undefined;
 
   const executableNodes = targetNode
-    ? (targetNode.type === 'string' || MEDIA_NODE_TYPES.has(targetNode.type)
+    ? (targetNode.type === 'string' || isMediaNodeType(targetNode.type)
         ? [targetNode]
         : [])
-    : nodes.filter((node) => MEDIA_NODE_TYPES.has(node.type));
+    : nodes.filter((node) => isMediaNodeType(node.type));
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
@@ -328,7 +331,7 @@ export async function executeWorkflow(
   const nodesToReset = new Set(executableNodeIds);
 
   const resetNodeIds = nodes
-    .filter((node) => (MEDIA_NODE_TYPES.has(node.type) || node.type === 'string') && nodesToReset.has(node.id))
+    .filter((node) => (node.type === 'string' || isMediaNodeType(node.type)) && nodesToReset.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
