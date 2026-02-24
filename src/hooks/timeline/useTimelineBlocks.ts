@@ -45,7 +45,7 @@ export function useTimelineBlocks({
             const supabase = createSupabaseBrowserClient();
             
             let query = supabase
-                .schema('DCO_Campaigns')
+                .schema('DCO_Campaigns' as any)
                 .from('timeline_blocks')
                 .select('*')
                 .eq('account_id', accountId)
@@ -64,7 +64,7 @@ export function useTimelineBlocks({
                 throw new Error(fetchError.message);
             }
 
-            const typedBlocks = (data || []) as TimelineBlock[];
+            const typedBlocks = (data || []) as unknown as TimelineBlock[];
             setBlocks(typedBlocks);
 
             // Merge campaigns and events across blocks

@@ -33,7 +33,7 @@ export function CampaignRow({
     // Simple status segment based on start/end dates
     const start = campaign.start_date || new Date(startDateMs).toISOString();
     const end = campaign.end_date || new Date(endDateMs).toISOString();
-    const campSegment = [{ start, end, status: campaign.status || 'ACTIVE' }];
+    const campSegment = [{ start, end, status: (campaign.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE') as 'ACTIVE' | 'PAUSED' }];
 
     return (
         <div className="flex flex-col border-b border-border w-full">
