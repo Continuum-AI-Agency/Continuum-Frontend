@@ -142,7 +142,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vid
     await executeWorkflow(executionControls, {
       targetNodeId: id,
       clearDownstream: false,
-      scopeStrategy: 'target-only',
+      scopeStrategy: 'target-with-upstream',
       brandId,
     });
   }, [executionControls, id, brandId]);

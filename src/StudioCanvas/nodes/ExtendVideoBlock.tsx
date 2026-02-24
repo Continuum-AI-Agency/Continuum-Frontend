@@ -40,7 +40,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
     await executeWorkflow(executionControls, {
       targetNodeId: id,
       clearDownstream: false,
-      scopeStrategy: 'target-only',
+      scopeStrategy: 'target-with-upstream',
       brandId,
     });
   }, [executionControls, id, brandId]);

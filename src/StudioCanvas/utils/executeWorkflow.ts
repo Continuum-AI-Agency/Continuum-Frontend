@@ -47,10 +47,6 @@ const resolveTextInput = (
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'string') {
-    const sourceRequiresExecution = getStringExternalInputEdges(allEdges, sourceNode.id).length > 0;
-    if (sourceRequiresExecution) {
-      return undefined;
-    }
     return normalizeText((sourceNode.data as any).value);
   }
 
@@ -435,17 +431,10 @@ export async function executeWorkflow(
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const resolvedOutputs = new Map<string, NodeOutput>();
   const failedNodes = new Set<string>();
-  const stringNodesWithExternalInputs = new Set(
-    executableNodes
-      .filter((node) => node.type === 'string')
-      .filter((node) => getStringExternalInputEdges(edges, node.id).length > 0)
-      .map((node) => node.id)
-  );
-
   for (const node of nodes) {
     if (node.type === 'string') {
       const value = normalizeText((node.data as any).value);
-      if (value && !stringNodesWithExternalInputs.has(node.id)) {
+      if (value) {
         resolvedOutputs.set(node.id, { type: 'text', value });
       }
     }
@@ -768,10 +757,6 @@ export async function executeWorkflow(
       const node = nodeById.get(id);
       if (node?.type === 'string' && options.targetNodeId === id) {
         console.info("[studio] forcing string node into pending", id);
-        return true;
-      }
-      if (node?.type === 'string' && stringNodesWithExternalInputs.has(id)) {
-        console.info("[studio] scheduling string node with external inputs", id);
         return true;
       }
       return !resolvedOutputs.has(id);
