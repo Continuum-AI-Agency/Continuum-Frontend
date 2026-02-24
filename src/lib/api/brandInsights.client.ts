@@ -88,7 +88,9 @@ async function getBrowserAccessToken(): Promise<string | undefined> {
 async function request<TResponse = unknown>(options: RequestOptions<TResponse>): Promise<TResponse> {
   const { path, method = "GET", body, headers = {}, schema, cache, next } = options;
   const baseUrl = getApiBaseUrl();
-  const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  const url = /^https?:\/\//i.test(path)
+    ? path
+    : `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
   const token = await getBrowserAccessToken();
   const finalHeaders: Record<string, string> = {
@@ -190,6 +192,16 @@ type BrandInsightsJobTrackerOptions = {
   onMessage?: (message: BrandInsightsStatusMessage) => void;
   onError?: (error: Error) => void;
 };
+
+function shouldUseEventSource(streamChannel?: string) {
+  if (!streamChannel || typeof window === "undefined") return false;
+  try {
+    const streamUrl = resolveBrandInsightsEventsUrl(streamChannel);
+    return new URL(streamUrl).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
 
 export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOptions): () => void {
   let stopped = false;
@@ -324,6 +336,10 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
   };
 
   if (options.streamChannel) {
+    if (!shouldUseEventSource(options.streamChannel)) {
+      startPollingFallback();
+      return stop;
+    }
     connectEventStream();
   } else {
     startPollingFallback();

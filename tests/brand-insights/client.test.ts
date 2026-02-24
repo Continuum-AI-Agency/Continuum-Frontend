@@ -5,6 +5,7 @@ import {
   generateBrandInsights,
   isTerminalBrandInsightsStatus,
   resolveBrandInsightsEventsUrl,
+  subscribeToBrandInsightsJob,
 } from "../../src/lib/api/brandInsights.client.ts";
 import { BRAND_TRENDS_SCHEMA } from "../../src/lib/schemas/brandInsights.ts";
 
@@ -95,4 +96,83 @@ test("isTerminalBrandInsightsStatus identifies terminal job states", () => {
   assert.equal(isTerminalBrandInsightsStatus("completed"), true);
   assert.equal(isTerminalBrandInsightsStatus("failed"), true);
   assert.equal(isTerminalBrandInsightsStatus("running"), false);
+});
+
+test("subscribeToBrandInsightsJob falls back to polling when stream origin differs", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEventSource = (globalThis as typeof globalThis & { EventSource?: unknown }).EventSource;
+  const originalWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+
+  let eventSourceCalls = 0;
+  class MockEventSource {
+    constructor() {
+      eventSourceCalls += 1;
+    }
+    close() {}
+    addEventListener() {}
+    onerror: ((this: EventSource, ev: Event) => unknown) | null = null;
+    onopen: ((this: EventSource, ev: Event) => unknown) | null = null;
+  }
+
+  (globalThis as typeof globalThis & { EventSource: unknown }).EventSource = MockEventSource as unknown;
+  (globalThis as typeof globalThis & { window: unknown }).window = {
+    location: { origin: "https://app.example.com" },
+  } as unknown;
+
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        status: "success",
+        data: {
+          generation_id: "gen-1",
+          status: "completed",
+        },
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    )) as typeof fetch;
+
+  try {
+    let observedStatus: string | null = null;
+    await new Promise<void>((resolve, reject) => {
+      const stop = subscribeToBrandInsightsJob({
+        generationId: "gen-1",
+        streamChannel: "/api/trends/jobs/gen-1/events",
+        fallbackPollUrl: "/api/trends/jobs/gen-1",
+        onStatus: (status) => {
+          observedStatus = status.status;
+          if (status.status === "completed") {
+            stop();
+            resolve();
+          }
+        },
+        onError: (error) => {
+          stop();
+          reject(error);
+        },
+      });
+
+      setTimeout(() => {
+        stop();
+        reject(new Error("Timed out waiting for polling status"));
+      }, 1500);
+    });
+
+    assert.equal(eventSourceCalls, 0);
+    assert.equal(observedStatus, "completed");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (typeof originalEventSource === "undefined") {
+      delete (globalThis as typeof globalThis & { EventSource?: unknown }).EventSource;
+    } else {
+      (globalThis as typeof globalThis & { EventSource: unknown }).EventSource = originalEventSource;
+    }
+    if (typeof originalWindow === "undefined") {
+      delete (globalThis as typeof globalThis & { window?: unknown }).window;
+    } else {
+      (globalThis as typeof globalThis & { window: unknown }).window = originalWindow;
+    }
+  }
 });

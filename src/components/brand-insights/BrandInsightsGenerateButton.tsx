@@ -101,7 +101,7 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
                 return previous;
               });
               setProgressPercent(next.progressPercent ?? null);
-              setStageMessage(next.stageMessage ?? null);
+              setStageMessage(next.stageMessage ?? next.errorDetail ?? next.message ?? null);
               if (isTerminalBrandInsightsStatus(next.status)) {
                 if (next.status === "completed" && completedToastGenerationRef.current !== activeGenerationId) {
                   completedToastGenerationRef.current = activeGenerationId;

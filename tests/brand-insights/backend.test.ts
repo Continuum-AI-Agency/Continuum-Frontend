@@ -357,6 +357,29 @@ test("mapBackendStatusResponse normalizes /api/trends job payloads", () => {
   assert.equal(unknown.generationId, "gen-2");
 });
 
+test("mapBackendStatusResponse tolerates structured error_detail payloads", () => {
+  const result = mapBackendStatusResponse({
+    status: "error",
+    message: "Authentication required",
+    data: {
+      generation_id: "gen-auth",
+      status: "error",
+      error_detail: {
+        message: "Authentication required",
+      },
+      error: {
+        message: "Authentication required",
+      },
+    },
+  });
+
+  assert.equal(result.status, "error");
+  assert.equal(result.generationId, "gen-auth");
+  assert.equal(result.errorDetail, "Authentication required");
+  assert.equal(result.error, "Authentication required");
+  assert.equal(result.message, "Authentication required");
+});
+
 test("mapBackendStatusMessage normalizes message event payloads", () => {
   const result = mapBackendStatusMessage({
     message_id: 88,

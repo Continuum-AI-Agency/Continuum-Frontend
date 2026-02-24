@@ -346,14 +346,14 @@ const backendStatusResponseSchema = z.object({
       weekStartDate: z.string().nullish(),
       error_code: z.string().nullish(),
       errorCode: z.string().nullish(),
-      error_detail: z.string().nullish(),
-      errorDetail: z.string().nullish(),
+      error_detail: z.unknown().nullish(),
+      errorDetail: z.unknown().nullish(),
       warnings: backendWarningsSchema.nullish(),
       competitor: backendCompetitorJobSchema.nullish(),
       stream: backendStreamSchema.nullish(),
       latest_message_id: z.number().int().nonnegative().nullish(),
       latestMessageId: z.number().int().nonnegative().nullish(),
-      error: z.string().nullish(),
+      error: z.unknown().nullish(),
       metadata: z.record(z.string(), z.unknown()).nullish(),
     })
     .passthrough()
@@ -363,7 +363,6 @@ const backendStatusResponseSchema = z.object({
   brand_id: z.string().nullish(),
   brandId: z.string().nullish(),
   platform_account_id: z.string().nullish(),
-  error: z.string().nullish(),
   generation_id: z.string().nullish(),
   generationId: z.string().nullish(),
   job_id: z.string().nullish(),
@@ -382,14 +381,15 @@ const backendStatusResponseSchema = z.object({
   weekStartDate: z.string().nullish(),
   error_code: z.string().nullish(),
   errorCode: z.string().nullish(),
-  error_detail: z.string().nullish(),
-  errorDetail: z.string().nullish(),
+  error_detail: z.unknown().nullish(),
+  errorDetail: z.unknown().nullish(),
   warnings: backendWarningsSchema.nullish(),
   competitor: backendCompetitorJobSchema.nullish(),
   stream: backendStreamSchema.nullish(),
   latest_message_id: z.number().int().nonnegative().nullish(),
   latestMessageId: z.number().int().nonnegative().nullish(),
   metadata: z.record(z.string(), z.unknown()).nullish(),
+  error: z.unknown().nullish(),
 });
 
 const backendStatusMessageSchema = z
@@ -490,6 +490,42 @@ function normalizeTimestamp(value?: string | null): string | undefined {
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return undefined;
   return normalized;
+}
+
+function normalizeUnknownMessage(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const pieces = value.map((entry) => normalizeUnknownMessage(entry)).filter((entry): entry is string => Boolean(entry));
+    if (pieces.length > 0) return pieces.join("; ");
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return undefined;
+    }
+  }
+  if (typeof value === "object") {
+    const asRecord = value as Record<string, unknown>;
+    const message = normalizeUnknownMessage(asRecord.message);
+    if (message) return message;
+    const detail = normalizeUnknownMessage(asRecord.detail);
+    if (detail) return detail;
+    const error = normalizeUnknownMessage(asRecord.error);
+    if (error) return error;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
 }
 
 function mapCounts(payload?: z.infer<typeof backendTotalsSchema> | null) {
@@ -911,8 +947,9 @@ export function mapBackendStatusResponse(payload: unknown) {
     parsed.latestMessageId ??
     undefined;
   const stream = mapStream(data?.stream ?? parsed.stream);
-  const message = parsed.message ?? stageMessage ?? undefined;
-  const error = data?.error ?? parsed.error ?? undefined;
+  const normalizedErrorDetail = normalizeUnknownMessage(errorDetail);
+  const message = parsed.message ?? stageMessage ?? normalizedErrorDetail ?? undefined;
+  const error = normalizeUnknownMessage(data?.error ?? parsed.error);
 
   return brandInsightsStatusResponseSchema.parse({
     status,
@@ -943,7 +980,7 @@ export function mapBackendStatusResponse(payload: unknown) {
     startedAt: normalizeTimestamp(startedAt),
     completedAt: normalizeTimestamp(completedAt),
     errorCode: errorCode ?? undefined,
-    errorDetail: errorDetail ?? undefined,
+    errorDetail: normalizedErrorDetail,
     warnings: warningPayload
       ? {
           scrapeFailures: warningPayload.scrape_failures ?? warningPayload.scrapeFailures ?? [],
