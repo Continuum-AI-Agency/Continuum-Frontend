@@ -6,6 +6,7 @@ import type { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload, 
 import type { NodeOutput } from "../types/execution";
 import { useToast } from "@/components/ui/ToastProvider";
 import { parseDataUrl } from "../utils/dataUrl";
+import { resolveWorkflowInitUrl } from "./resolveWorkflowInitUrl";
 
 type ExecutionStreamState = StreamState & {
   currentNodeId?: string;
@@ -25,23 +26,14 @@ export function useWorkflowExecution() {
   const { show } = useToast();
 
   const resolveInitUrl = useCallback((path: string) => {
-    const hasClientApiBase =
-      typeof window !== "undefined" &&
-      (process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL);
-
-    if (hasClientApiBase) {
-      const fullUrl = getApiUrl(path);
-      if (!fullUrl.includes('/api/')) {
-        return fullUrl.replace(/(https?:\/\/[^\/]+)/, '$1/api');
-      }
-      return fullUrl;
-    }
-
-    if (typeof window !== "undefined") {
-      return `/api${path.startsWith("/") ? path : `/${path}`}`;
-    }
-
-    return getApiUrl(path);
+    return resolveWorkflowInitUrl({
+      path,
+      hasWindow: typeof window !== "undefined",
+      windowOrigin: typeof window !== "undefined" ? window.location.origin : undefined,
+      clientApiBase:
+        process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL,
+      getApiUrl,
+    });
   }, []);
 
   const cancel = useCallback(() => {

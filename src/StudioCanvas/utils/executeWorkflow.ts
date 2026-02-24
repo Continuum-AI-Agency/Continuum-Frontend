@@ -53,6 +53,10 @@ const resolveTextInput = (
   if (sourceNode?.type === 'string') {
     const sourceRequiresExecution = getStringExternalInputEdges(allEdges, sourceNode.id).length > 0;
     if (sourceRequiresExecution) {
+      const existingValue = normalizeText((sourceNode.data as any).value);
+      if (existingValue) {
+        return existingValue;
+      }
       return undefined;
     }
     return normalizeText((sourceNode.data as any).value);

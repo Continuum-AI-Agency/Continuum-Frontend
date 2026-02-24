@@ -359,6 +359,36 @@ describe('executeWorkflow', () => {
     expect(stringNode?.data.value).toBe('persistent prompt');
   });
 
+  it('should execute targeted media nodes when upstream string node has inputs but already has text', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'image-input', position: { x: 0, y: 0 }, data: { image: 'data:image/png;base64,ref_input' }, type: 'image' },
+      { id: 'string-1', position: { x: 0, y: 0 }, data: { value: 'locked prompt text' }, type: 'string' },
+      { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'image-input', sourceHandle: 'image', target: 'string-1', targetHandle: 'image' },
+      { id: 'e2', source: 'string-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => ({
+      success: true,
+      output: { type: 'video', url: 'video_url' },
+      payload,
+    }));
+    const executeEnrichment = mock(async () => ({ success: true, output: { type: 'text', value: 'enriched' } }));
+    const controls = buildControls(executeGeneration, mock(async () => ({ success: true })), executeEnrichment);
+
+    await executeWorkflow(controls as any, { targetNodeId: 'video-1', clearDownstream: false });
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    expect(executeEnrichment).toHaveBeenCalledTimes(0);
+    expect(executeGeneration.mock.calls[0][1].prompt).toBe('locked prompt text');
+  });
+
   it('should execute extend video nodes with base64 input', async () => {
     const nodes: StudioNode[] = [
       { id: 'vid-1', position: { x: 0, y: 0 }, data: { video: 'data:video/mp4;base64,base64_video' }, type: 'video' },
