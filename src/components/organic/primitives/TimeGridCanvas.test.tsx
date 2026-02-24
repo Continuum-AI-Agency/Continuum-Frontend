@@ -1,0 +1,169 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+
+import { TimeGridCanvas } from "./TimeGridCanvas"
+import type { OrganicCalendarDay } from "./types"
+
+const store = {
+  ghosts: {},
+}
+
+vi.mock("@/lib/organic/store", () => ({
+  useCalendarStore: (selector: (state: typeof store) => unknown) => selector(store),
+}))
+
+vi.mock("@dnd-kit/core", () => ({
+  useDroppable: () => ({
+    setNodeRef: vi.fn(),
+    isOver: false,
+  }),
+}))
+
+function buildWeekDays(): OrganicCalendarDay[] {
+  return [
+    {
+      id: "2026-02-23",
+      label: "Mon",
+      dateLabel: "Feb 23",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+    {
+      id: "2026-02-24",
+      label: "Tue",
+      dateLabel: "Feb 24",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+    {
+      id: "2026-02-25",
+      label: "Wed",
+      dateLabel: "Feb 25",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+    {
+      id: "2026-02-26",
+      label: "Thu",
+      dateLabel: "Feb 26",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+    {
+      id: "2026-02-27",
+      label: "Fri",
+      dateLabel: "Feb 27",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+    {
+      id: "2026-02-28",
+      label: "Sat",
+      dateLabel: "Feb 28",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+    {
+      id: "2026-03-01",
+      label: "Sun",
+      dateLabel: "Mar 1",
+      suggestedTimes: ["9:00 AM"],
+      slots: [],
+    },
+  ]
+}
+
+describe("TimeGridCanvas", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it("calls onCreatePost from header button", () => {
+    const onCreatePost = vi.fn()
+
+    render(
+      <TimeGridCanvas
+        days={buildWeekDays()}
+        selectedDraftId={null}
+        selectedDraftIds={[]}
+        activePlatforms={["instagram", "linkedin"]}
+        rangeTitle="February 23 – March 1, 2026"
+        rangeSubtitle="Week 9"
+        viewMode="week"
+        onViewModeChange={vi.fn()}
+        onPreviousWeek={vi.fn()}
+        onNextWeek={vi.fn()}
+        onCreatePost={onCreatePost}
+        onSelectDraft={vi.fn()}
+        onToggleSelection={vi.fn()}
+        onRegenerate={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByText("Create Post"))
+
+    expect(onCreatePost).toHaveBeenCalledWith({ status: "draft" })
+  })
+
+  it("calls onCreatePost with day and platform when clicking an empty cell", () => {
+    const onCreatePost = vi.fn()
+
+    render(
+      <TimeGridCanvas
+        days={buildWeekDays()}
+        selectedDraftId={null}
+        selectedDraftIds={[]}
+        activePlatforms={["instagram", "linkedin"]}
+        rangeTitle="February 23 – March 1, 2026"
+        rangeSubtitle="Week 9"
+        viewMode="week"
+        onViewModeChange={vi.fn()}
+        onPreviousWeek={vi.fn()}
+        onNextWeek={vi.fn()}
+        onCreatePost={onCreatePost}
+        onSelectDraft={vi.fn()}
+        onToggleSelection={vi.fn()}
+        onRegenerate={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getAllByText("+ Add post")[0])
+
+    expect(onCreatePost).toHaveBeenCalledWith({
+      dayId: "2026-02-23",
+      platform: "instagram",
+      status: "draft",
+    })
+  })
+
+  it("updates planner view mode from the segmented controls", () => {
+    const onViewModeChange = vi.fn()
+
+    render(
+      <TimeGridCanvas
+        days={buildWeekDays()}
+        selectedDraftId={null}
+        selectedDraftIds={[]}
+        activePlatforms={["instagram", "linkedin"]}
+        rangeTitle="February 23 – March 1, 2026"
+        rangeSubtitle="Week 9"
+        viewMode="week"
+        onViewModeChange={onViewModeChange}
+        onPreviousWeek={vi.fn()}
+        onNextWeek={vi.fn()}
+        onCreatePost={vi.fn()}
+        onSelectDraft={vi.fn()}
+        onToggleSelection={vi.fn()}
+        onRegenerate={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Month" }))
+
+    expect(onViewModeChange).toHaveBeenCalledWith("month")
+  })
+})

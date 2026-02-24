@@ -1,6 +1,8 @@
 import { Callout, Heading } from "@radix-ui/themes";
 import { LightningBoltIcon } from "@radix-ui/react-icons";
 
+import { OrganicMetricsDashboard } from "@/components/organic/OrganicMetricsDashboard";
+import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
 import { OrganicCalendarWorkspace } from "@/components/organic/primitives/OrganicCalendarWorkspace";
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import {
@@ -12,6 +14,8 @@ import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import type { Trend } from "@/lib/organic/trends";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { deriveMetricAccountsByPlatform } from "@/lib/organic/metricAccounts";
 import { redirect } from "next/navigation";
 import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
 import type { OrganicTrendGroup, OrganicTrendType } from "@/components/organic/primitives/types";
@@ -109,6 +113,8 @@ export default async function OrganicPage() {
       tags: ["event", e.date ?? ""],
     }));
 
+    selectorTrends = [...selectorTrends, ...mappedEvents];
+
     trendTypes = [
       ...(trendGroups.length > 0 
         ? [{
@@ -151,7 +157,23 @@ export default async function OrganicPage() {
     errorMessage: insightsError,
   });
 
+  let integrationSummary: Awaited<ReturnType<typeof fetchBrandIntegrationSummary>> | null = null;
+  try {
+    integrationSummary = await fetchBrandIntegrationSummary(brandProfileId);
+  } catch (error) {
+    console.error("[OrganicPage] Failed to load integration account summary for metrics", error);
+  }
+
   const showNoTrendsMessage = selectorTrends.length === 0;
+  const metricAccountsByPlatform = deriveMetricAccountsByPlatform({
+    integrationSummary,
+    onboardingConnections: {
+      instagram: onboarding.connections.instagram,
+      facebook: onboarding.connections.facebook,
+    },
+  });
+  const initialMetricsPlatform: "instagram" | "facebook" =
+    metricAccountsByPlatform.instagram.length > 0 ? "instagram" : "facebook";
 
   return (
     <div className="-mx-2 flex h-[calc(100dvh-4.5rem)] min-h-[var(--workspace-min-height)] w-auto flex-col gap-3 overflow-hidden pb-2 sm:-mx-3 lg:-mx-4">
@@ -181,13 +203,24 @@ export default async function OrganicPage() {
         ) : null}
       </div>
       <div className="min-h-0 flex-1 px-2 sm:px-3 lg:px-4">
-        <OrganicCalendarWorkspace
-          trendTypes={trendTypes}
-          trends={selectorTrends}
-          activePlatforms={fallbackPlatforms}
-          platformAccountIds={platformAccountIds}
-          maxTrendSelections={5}
-          brandProfileId={brandProfileId}
+        <OrganicWorkspaceTabs
+          plannerSlot={(
+            <OrganicCalendarWorkspace
+              trendTypes={trendTypes}
+              trends={selectorTrends}
+              activePlatforms={fallbackPlatforms}
+              platformAccountIds={platformAccountIds}
+              maxTrendSelections={5}
+              brandProfileId={brandProfileId}
+            />
+          )}
+          metricsSlot={(
+            <OrganicMetricsDashboard
+              brandId={brandProfileId}
+              accountsByPlatform={metricAccountsByPlatform}
+              initialPlatform={initialMetricsPlatform}
+            />
+          )}
         />
       </div>
     </div>

@@ -148,6 +148,31 @@ describe("CalendarDraftCard", () => {
     expect(onSelect).toHaveBeenCalledWith("draft-1");
   });
 
+  it("allows custom posting time edits from quick actions", () => {
+    const onSelect = vi.fn();
+    const originalPrompt = (window as unknown as { prompt?: unknown }).prompt;
+    (window as unknown as { prompt: () => string }).prompt = vi.fn(() => "11:15 AM");
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={onSelect}
+        onToggleSelection={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByText("Time: Custom...")[0]);
+
+    expect(store.updateDraft).toHaveBeenCalledTimes(1);
+    const updater = store.updateDraft.mock.calls[0]?.[1] as (
+      currentDraft: OrganicCalendarDraft
+    ) => OrganicCalendarDraft;
+    expect(updater(draft).timeLabel).toBe("11:15 AM");
+    expect(onSelect).toHaveBeenCalledWith("draft-1");
+    (window as unknown as { prompt?: unknown }).prompt = originalPrompt;
+  });
+
   it("mouseover expands card into a quick preview state", () => {
     const { container } = render(
       <CalendarDraftCard

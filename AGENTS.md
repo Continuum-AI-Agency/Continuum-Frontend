@@ -138,3 +138,7 @@ Do NOT write comments every line. Write comments at the top of the file if neces
 Use skills aggressively.
 
 When you learn something, place a note of it here:
+- If a rebase regresses the planner UI, restore `OrganicCalendarWorkspaceClient` + `TimeGridCanvas` to the `PlannerHeader/PlannerMatrix` path and keep DnD targets in the `planner-cell::day::platform` format.
+- Keep trends UI minimal: use `TrendWorkbench` (no momentum chart/filter chips) and keep seeded/quick drafts tag-free (`tags: []`) while relying on `seedTrendId`.
+- Coming-soon platform rows in the planner should render in compact/collapsed density so they consume minimal vertical space versus active scheduling rows.
+- Planner cells should display all same-day posts (scrollable stack) and support posting-time edits via card quick actions (`Time: ...` presets + `Time: Custom...`).

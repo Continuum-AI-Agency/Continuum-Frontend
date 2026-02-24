@@ -57,6 +57,10 @@ type GridPlacement = {
   draft: OrganicCalendarDraft;
 };
 
+function resolvePlacementScheduledAt(dayId: string, timeLabel: string) {
+  return buildScheduledAt(dayId, timeLabel) ?? `${dayId}T09:00:00.000Z`;
+}
+
 function normalizeDayToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -152,7 +156,7 @@ export function mapWeeklyGridToCalendarPlacements({
           row.cta?.trim().length
             ? `${title}\n\nCTA: ${row.cta}`
             : "Generated from weekly grid. Refine copy before publishing.",
-        tags: trendId ? [trendId] : [],
+        tags: [],
         mediaCount: row.num_slides ?? 1,
         seedTrendId: trendId,
         targetAccountId: platformAccountIds[platform],
@@ -297,8 +301,6 @@ export function useDraftGeneration({
         formatTimeLabelFromIso(placement.schedule.scheduledAt) ??
         resolveTimeLabel(placement.schedule.timeOfDay ?? null, day?.suggestedTimes ?? []);
       const content = placement.content ?? {};
-      const seedTrendId = placement.seed?.trendId ?? null;
-      const tags = seedTrendId ? [seedTrendId] : existing?.tags ?? [];
       const title = content.titleTopic ?? existing?.title ?? "Planned draft";
       const summary =
         placement.creative?.creativeIdea ?? content.objective ?? existing?.summary ?? "Planned draft";
@@ -324,7 +326,7 @@ export function useDraftGeneration({
         format: content.format ?? content.type ?? existing?.format ?? "Post",
         objective: content.objective ?? existing?.objective ?? "Draft",
         captionPreview: finalCaption,
-        tags,
+        tags: [],
         mediaCount: content.numSlides ?? existing?.mediaCount ?? 1,
         adjusted: placement.schedule.adjusted,
         titleTopic: content.titleTopic ?? undefined,
@@ -401,7 +403,7 @@ export function useDraftGeneration({
             format: ORGANIC_NEWSLETTER_DEFAULT.format,
             objective: "Retention",
             captionPreview: "Drafting your weekly recap...",
-            tags: ["newsletter"],
+            tags: [],
             mediaCount: 1,
           });
         }
@@ -414,12 +416,6 @@ export function useDraftGeneration({
 
       if (platform && trendId) {
         const accountId = platformAccountIds[platform as OrganicPlatformKey];
-        const trend = trends.find((item) => item.id === trendId);
-        const tags = trend?.tags?.includes("question")
-          ? [trendId, "question"]
-          : trend?.tags?.includes("event")
-            ? [trendId, "event"]
-            : [trendId];
         const seedId = `seed-${day.id}-${trendId}`;
         const alreadyExists = day.slots.some((slot) => slot.id === seedId);
         if (!alreadyExists) {
@@ -434,7 +430,7 @@ export function useDraftGeneration({
             format: "Post",
             objective: "Generation Seed",
             captionPreview: "Click Generate to construct this post.",
-            tags,
+            tags: [],
             mediaCount: 1,
             seedTrendId: trendId,
             targetAccountId: accountId,
@@ -459,26 +455,30 @@ export function useDraftGeneration({
 
     const seeds = calendarDays.flatMap((day) =>
       day.slots
-        .filter((draft) => draft.status === "placeholder" && (draft.seedTrendId || draft.tags.length > 0))
+        .filter((draft) => draft.status === "placeholder" && Boolean(draft.seedTrendId))
         .map((draft) => {
-          const trendId = draft.seedTrendId ?? draft.tags[0];
+          const trendId = draft.seedTrendId;
           if (!trendId) return null;
-          const seedSource = draft.tags.includes("question")
-            ? "question"
-            : draft.tags.includes("event")
-              ? "event"
-              : "trend";
 
           return {
             placementId: draft.id,
-            trendId,
-            dayId: day.id,
-            scheduledAt: buildScheduledAt(day.id, draft.timeLabel) ?? day.id,
-            timeLabel: draft.timeLabel,
-            platform: draft.platforms[0] ?? "instagram",
-            accountId: draft.targetAccountId ?? platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
-            seedSource,
-            desiredFormat: draft.format,
+            schedule: {
+              dayId: day.id,
+              scheduledAt: resolvePlacementScheduledAt(day.id, draft.timeLabel),
+              timeLabel: draft.timeLabel,
+            },
+            platform: {
+              name: draft.platforms[0] ?? "instagram",
+              accountId:
+                draft.targetAccountId ?? platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
+            },
+            seed: {
+              source: "trend" as const,
+              trendId,
+            },
+            content: {
+              format: draft.format,
+            },
           };
         })
         .filter(Boolean)
@@ -717,13 +717,8 @@ export function useDraftGeneration({
       const dayId = calendarDays.find((day) => day.slots.some((slot) => slot.id === draftId))?.id;
       if (!dayId) return;
 
-      const trendId = draft.seedTrendId ?? draft.tags[0];
+      const trendId = draft.seedTrendId;
       if (!trendId) return;
-      const seedSource = draft.tags.includes("question")
-        ? "question"
-        : draft.tags.includes("event")
-          ? "event"
-          : "trend";
 
       updateDraftById(draftId, (current) => ({ ...current, status: "streaming" }));
 
@@ -738,16 +733,24 @@ export function useDraftGeneration({
             placements: [
               {
                 placementId: draft.id,
-                trendId,
-                dayId,
-                scheduledAt: buildScheduledAt(dayId, draft.timeLabel) ?? dayId,
-                timeLabel: draft.timeLabel,
-                platform: draft.platforms[0] ?? "instagram",
-                accountId:
-                  draft.targetAccountId ??
-                  platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
-                seedSource,
-                desiredFormat: draft.format,
+                schedule: {
+                  dayId,
+                  scheduledAt: resolvePlacementScheduledAt(dayId, draft.timeLabel),
+                  timeLabel: draft.timeLabel,
+                },
+                platform: {
+                  name: draft.platforms[0] ?? "instagram",
+                  accountId:
+                    draft.targetAccountId ??
+                    platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
+                },
+                seed: {
+                  source: "trend" as const,
+                  trendId,
+                },
+                content: {
+                  format: draft.format,
+                },
               },
             ],
             platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,

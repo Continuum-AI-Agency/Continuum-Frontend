@@ -98,3 +98,73 @@ test("normalizes reporting api organic metrics response with pctChange", () => {
   assert.equal(normalized.comparison?.reach?.percentageChange, 25);
   assert.equal(normalized.comparison?.newFollowers?.percentageChange, 100);
 });
+
+test("keeps extended organic analytics payload fields", () => {
+  const payload = {
+    platform: "instagram",
+    accountId: "ig-3",
+    range: {
+      preset: "last_7d",
+      since: "2026-02-01",
+      until: "2026-02-08",
+    },
+    metrics: {
+      reach: 120,
+      views: 230,
+      accountsEngaged: 50,
+      reelsViews: 80,
+      postViews: 90,
+      storiesViews: 60,
+      newFollowers: 12,
+      profileVisits24h: 15,
+      profileVisitsYesterday: 15,
+      nonFollowerReach: 77,
+      followerReach: 43,
+      comments: 18,
+      likes: 55,
+      shares: 9,
+      saved: 14,
+      totalInteractions: 96,
+    },
+    trends: [
+      { date: "2026-02-01", reach: 20, views: 32, boosted: false },
+      { date: "2026-02-02", reach: 24, views: 35, boosted: true, boostedAt: "2026-02-02T10:00:00.000Z" },
+    ],
+    boostedEvents: [
+      { id: "boost-1", date: "2026-02-02", postId: "post-1", label: "Boost started", boostedAt: "2026-02-02T10:00:00.000Z" },
+    ],
+    audienceBreakdown: {
+      followers: 43,
+      nonFollowers: 77,
+    },
+    contentTypePerformance: [
+      { contentType: "REEL", reach: 40, views: 80, engagement: 22, comments: 5, posts: 2 },
+    ],
+    posts: [
+      {
+        id: "post-1",
+        caption: "hello",
+        timestamp: "2026-02-02T10:00:00.000Z",
+        mediaType: "CAROUSEL_ALBUM",
+        mediaUrl: "https://example.com/cover.jpg",
+        isBoosted: true,
+        boostedAt: "2026-02-02T10:00:00.000Z",
+        carouselMedia: [{ id: "m-1", mediaType: "IMAGE", mediaUrl: "https://example.com/1.jpg" }],
+        comments: [{ id: "c-1", username: "ana", text: "Great", likeCount: 3 }],
+        breakdown24h: [{ hour: 1, views: 10, reach: 9, engagement: 2 }],
+        breakdown7d: [{ date: "2026-02-02", views: 10, reach: 9, engagement: 2 }],
+        breakdown30d: [{ date: "2026-02-02", views: 10, reach: 9, engagement: 2 }],
+      },
+    ],
+    recentComments: [{ id: "c-1", username: "ana", text: "Great", likeCount: 3 }],
+  } as const;
+
+  const normalized = normalizeInstagramOrganicMetricsResponse(payload);
+  assert.equal(normalized.metrics.profileVisits24h, 15);
+  assert.equal(normalized.trends?.length, 2);
+  assert.equal(normalized.boostedEvents?.[0]?.postId, "post-1");
+  assert.equal(normalized.audienceBreakdown?.followers, 43);
+  assert.equal(normalized.posts?.[0]?.breakdown24h?.[0]?.views, 10);
+  assert.equal(normalized.posts?.[0]?.breakdown30d?.[0]?.views, 10);
+  assert.equal(normalized.recentComments?.[0]?.id, "c-1");
+});

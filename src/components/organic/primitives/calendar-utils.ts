@@ -25,6 +25,21 @@ export function formatWeekRange(weekStart: Date): string {
   return `${formatter.format(weekStart)} – ${formatter.format(end)}`
 }
 
+export function formatWeekHeading(weekStart: Date): string {
+  const end = new Date(weekStart)
+  end.setDate(weekStart.getDate() + 6)
+
+  const startMonth = weekStart.toLocaleString("en-US", { month: "long" })
+  const endMonth = end.toLocaleString("en-US", { month: "long" })
+  const year = weekStart.getFullYear()
+
+  if (startMonth === endMonth) {
+    return `${startMonth} ${weekStart.getDate()} – ${end.getDate()}, ${year}`
+  }
+
+  return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`
+}
+
 export function buildWeekDays(weekStart: Date): OrganicCalendarDay[] {
   const days: OrganicCalendarDay[] = []
   const base = startOfWeek(weekStart)

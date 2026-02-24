@@ -103,6 +103,20 @@ export function CalendarDraftCard({
     focusEditor(nextId);
   }, [addDraft, draft, focusEditor]);
 
+  const setCustomTime = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+    const nextTime = window.prompt("Set posting time (e.g. 11:15 AM)", draft.timeLabel);
+    if (!nextTime) return;
+
+    const trimmed = nextTime.trim();
+    if (!trimmed) return;
+
+    applyQuickEdit((currentDraft) => ({
+      ...currentDraft,
+      timeLabel: trimmed,
+    }));
+  }, [applyQuickEdit, draft.timeLabel]);
+
   return (
     <HoverCard openDelay={250} closeDelay={120}>
       <ContextMenu>
@@ -290,6 +304,9 @@ export function CalendarDraftCard({
               Time: {time}
             </ContextMenuItem>
           ))}
+          <ContextMenuItem onSelect={setCustomTime}>
+            Time: Custom...
+          </ContextMenuItem>
           <ContextMenuItem
             onSelect={() =>
               applyQuickEdit((currentDraft) => ({

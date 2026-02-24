@@ -5,70 +5,29 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiUrl } from "@/lib/api/config";
 import {
   calendarGenerationRequestSchema,
-  type CalendarGenerationRequest,
+  toBackendCalendarGenerationRequest,
 } from "@/lib/organic/calendar-generation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function toBackendPayload(payload: any) {
-  const cleanOptions: any = {};
-  if (payload.options) {
-    if (payload.options.schedulePreset) cleanOptions.schedulePreset = payload.options.schedulePreset;
-    if (payload.options.includeNewsletter !== undefined) cleanOptions.includeNewsletter = payload.options.includeNewsletter;
-    if (payload.options.newsletterDayId && payload.options.newsletterDayId.trim() !== "") cleanOptions.newsletterDayId = payload.options.newsletterDayId;
-    if (payload.options.guidancePrompt && payload.options.guidancePrompt.trim() !== "") cleanOptions.guidancePrompt = payload.options.guidancePrompt;
-    if (payload.options.language && payload.options.language.trim() !== "") cleanOptions.language = payload.options.language;
-    if (payload.options.preferredPlatforms) {
-      if (Array.isArray(payload.options.preferredPlatforms)) {
-        cleanOptions.preferredPlatforms = payload.options.preferredPlatforms
-          .filter((p: any) => typeof p === "string" || typeof p === "number")
-          .map((p: any) => String(p));
-      } else if (typeof payload.options.preferredPlatforms === "string") {
-        cleanOptions.preferredPlatforms = [payload.options.preferredPlatforms];
-      }
-    }
-  }
-
-  return {
-    brandProfileId: payload.brandProfileId,
-    weekStart: payload.weekStart,
-    timezone: payload.timezone,
-    platformAccountIds: payload.platformAccountIds ?? {},
-    placements: (payload.placements || []).map((placement: any) => {
-      let format = placement.desiredFormat ? String(placement.desiredFormat).toLowerCase() : null;
-      
-      if (format && format.includes("newsletter")) {
-        format = "newsletter";
-      }
-      
-      if (format === "static") {
-        format = "post";
-      }
-
-      return {
-        placementId: placement.placementId,
-        trendId: placement.trendId ?? null,
-        dayId: placement.dayId,
-        scheduledAt: placement.scheduledAt,
-        timeLabel: placement.timeLabel ?? null,
-        platform: placement.platform,
-        accountId: placement.accountId ?? null,
-        seedSource: placement.seedSource ?? null,
-        desiredFormat: format,
-        metadata: placement.metadata ?? null,
-      };
-    }),
-    options: Object.keys(cleanOptions).length > 0 ? cleanOptions : null,
-  };
-}
-
 export async function POST(request: NextRequest) {
-  let json: any;
+  let json: unknown;
   try {
     json = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+  }
+
+  const parsedRequest = calendarGenerationRequestSchema.safeParse(json);
+  if (!parsedRequest.success) {
+    return NextResponse.json(
+      {
+        error: "Invalid calendar generation payload",
+        detail: parsedRequest.error.flatten(),
+      },
+      { status: 400 }
+    );
   }
 
   const supabase = await createSupabaseServerClient();
@@ -82,7 +41,7 @@ export async function POST(request: NextRequest) {
   const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 
   const backendUrl = getApiUrl("/api/organic/generate-calendar");
-  const payload = toBackendPayload(json);
+  const payload = toBackendCalendarGenerationRequest(parsedRequest.data);
   
   const fetchHeaders: Record<string, string> = {
     "Content-Type": "application/json",
