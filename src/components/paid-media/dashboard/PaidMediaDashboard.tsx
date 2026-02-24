@@ -13,6 +13,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { CampaignAccordion } from "./CampaignAccordion";
+import { TimelineContainer } from "@/components/paid-media/timeline/TimelineContainer";
 
 type Campaign = {
   id: string;
@@ -188,6 +189,12 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
               <Text color="red">{loadState.message}</Text>
             </Flex>
           </Card>
+        )}
+
+        {adAccountId && (
+          <Box className="w-full mb-4">
+            <TimelineContainer accountId={adAccountId} />
+          </Box>
         )}
 
         <div className="h-[calc(100dvh-17.5rem)] min-h-[var(--dashboard-min-panel-height)] overflow-hidden rounded-xl border bg-white/5">
