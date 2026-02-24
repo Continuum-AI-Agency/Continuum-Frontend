@@ -271,47 +271,34 @@ describe('executeWorkflow', () => {
     expect(executeGeneration.mock.calls[0][0]).toBe('nano-2');
   });
 
-  it('should execute upstream string enrichment with inputs before running target video node', async () => {
+  it('should run only the targeted media node and reuse upstream values', async () => {
     const nodes: StudioNode[] = [
-      { id: 'text-a', position: { x: 0, y: 0 }, data: { value: 'banana still life' }, type: 'string' },
-      { id: 'text-b', position: { x: 0, y: 0 }, data: { value: 'red apple still life' }, type: 'string' },
-      { id: 'img-a', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
-      { id: 'img-b', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
-      { id: 'enrich-1', position: { x: 0, y: 0 }, data: { value: 'old prompt' }, type: 'string' },
+      { id: 'prompt-1', position: { x: 0, y: 0 }, data: { value: 'keep this prompt' }, type: 'string' },
+      {
+        id: 'img-a',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', generatedImage: 'data:image/png;base64,img_a_base64', isComplete: true },
+        type: 'nanoGen',
+      },
       { id: 'video-1', position: { x: 0, y: 0 }, data: { model: 'veo-3.1', prompt: '' }, type: 'veoDirector' },
     ];
 
     const edges: Edge[] = [
-      { id: 'e1', source: 'text-a', sourceHandle: 'text', target: 'img-a', targetHandle: 'prompt' },
-      { id: 'e2', source: 'text-b', sourceHandle: 'text', target: 'img-b', targetHandle: 'prompt' },
-      { id: 'e3', source: 'img-a', sourceHandle: 'image', target: 'enrich-1', targetHandle: 'image' },
-      { id: 'e4', source: 'img-b', sourceHandle: 'image', target: 'enrich-1', targetHandle: 'image' },
-      { id: 'e5', source: 'enrich-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
-      { id: 'e6', source: 'img-a', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
-      { id: 'e7', source: 'img-b', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
+      { id: 'e1', source: 'prompt-1', sourceHandle: 'text', target: 'video-1', targetHandle: 'prompt-in' },
+      { id: 'e2', source: 'img-a', sourceHandle: 'image', target: 'video-1', targetHandle: 'ref-images' },
     ];
 
     useStudioStore.getState().setNodes(nodes);
     useStudioStore.getState().setEdges(edges);
 
     const executeGeneration = mock(async (nodeId: string) => {
-      if (nodeId === 'img-a') {
-        return { success: true, output: { type: 'image', base64: 'img_a_base64', mimeType: 'image/png' } };
-      }
-      if (nodeId === 'img-b') {
-        return { success: true, output: { type: 'image', base64: 'img_b_base64', mimeType: 'image/png' } };
-      }
       if (nodeId === 'video-1') {
         return { success: true, output: { type: 'video', url: 'video_url' } };
       }
       return { success: false, error: `Unexpected node ${nodeId}` };
     });
 
-    const executeEnrichment = mock(async (nodeId: string, payload: any) => {
-      expect(nodeId).toBe('enrich-1');
-      expect(payload?.context?.images).toHaveLength(2);
-      return { success: true, output: { type: 'text', value: 'enriched combined prompt' } };
-    });
+    const executeEnrichment = mock(async () => ({ success: true }));
 
     const controls = buildControls(
       executeGeneration,
@@ -319,22 +306,57 @@ describe('executeWorkflow', () => {
       executeEnrichment
     );
 
-    await executeWorkflow(controls as any, { targetNodeId: 'video-1' });
+    await executeWorkflow(controls as any, { targetNodeId: 'video-1', clearDownstream: false });
 
-    expect(executeEnrichment).toHaveBeenCalledTimes(1);
-    expect(executeGeneration).toHaveBeenCalledTimes(3);
-    expect(executeGeneration.mock.calls.some((call: any[]) => call[0] === 'video-1')).toBe(true);
+    expect(executeEnrichment).toHaveBeenCalledTimes(0);
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    expect(executeGeneration.mock.calls[0][0]).toBe('video-1');
 
-    const videoCall = executeGeneration.mock.calls.find((call: any[]) => call[0] === 'video-1');
-    expect(videoCall?.[1]?.prompt).toBe('enriched combined prompt');
-    expect(videoCall?.[1]?.reference_images).toHaveLength(2);
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.prompt).toBe('keep this prompt');
+    expect(payload.reference_images).toHaveLength(1);
+    expect(payload.reference_images?.[0]).toEqual(expect.objectContaining({ data: 'img_a_base64' }));
 
     const finalNodes = useStudioStore.getState().nodes;
-    const enrichNode = finalNodes.find((node) => node.id === 'enrich-1');
+    const promptNode = finalNodes.find((node) => node.id === 'prompt-1');
     const videoNode = finalNodes.find((node) => node.id === 'video-1');
-    expect(enrichNode?.data.value).toBe('enriched combined prompt');
-    expect(enrichNode?.data.isComplete).toBe(true);
+    expect(promptNode?.data.value).toBe('keep this prompt');
     expect(videoNode?.data.generatedVideo).toBe('video_url');
+  });
+
+  it('should keep string node content untouched during workflow runs', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'string-1', position: { x: 0, y: 0 }, data: { value: 'persistent prompt' }, type: 'string' },
+      { id: 'nano-1', position: { x: 0, y: 0 }, data: { model: 'nano-banana' }, type: 'nanoGen' },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'string-1', sourceHandle: 'text', target: 'nano-1', targetHandle: 'prompt' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async () => {
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      };
+    });
+    const executeEnrichment = mock(async () => ({ success: true }));
+    const controls = buildControls(
+      executeGeneration,
+      mock(async () => ({ success: true, output: { type: 'video', url: 'video_url' } })),
+      executeEnrichment
+    );
+
+    await executeWorkflow(controls as any);
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    expect(executeEnrichment).toHaveBeenCalledTimes(0);
+    const finalNodes = useStudioStore.getState().nodes;
+    const stringNode = finalNodes.find((node) => node.id === 'string-1');
+    expect(stringNode?.data.value).toBe('persistent prompt');
   });
 
   it('should execute extend video nodes with base64 input', async () => {

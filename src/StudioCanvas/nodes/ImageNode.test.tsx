@@ -103,4 +103,32 @@ describe('ImageNode', () => {
       expect(updateNodeData).toHaveBeenCalledWith('1', { image: dataUrl, fileName: undefined });
     });
   });
+
+  it('should clear a reference image from the quick action button', async () => {
+    const propsWithImage = {
+      ...defaultProps,
+      data: {
+        image: 'data:image/png;base64,clear_me',
+        fileName: 'clear-me.png',
+      },
+    };
+
+    render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...propsWithImage} />
+        </ReactFlowProvider>
+      </ToastProvider>
+    );
+
+    fireEvent.click(screen.getByLabelText('Clear image'));
+
+    await waitFor(() => {
+      expect(updateNodeData).toHaveBeenCalledWith('1', {
+        image: undefined,
+        fileName: undefined,
+        aspectRatio: '1:1',
+      });
+    });
+  });
 });

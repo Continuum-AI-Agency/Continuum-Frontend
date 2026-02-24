@@ -13,6 +13,7 @@ import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
 const MAX_CONCURRENT_EXECUTIONS = 3;
+const MEDIA_NODE_TYPES = new Set(['nanoGen', 'veoDirector', 'veoFast', 'extendVideo']);
 
 type NodeReadiness = {
   ready: boolean;
@@ -207,13 +208,8 @@ const getNodeReadiness = (
   edges: Edge[],
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>,
-  failedNodes: Set<string>,
-  targetNodeId?: string
+  failedNodes: Set<string>
 ): NodeReadiness => {
-  if (node.type === 'string' && targetNodeId === node.id) {
-    return { ready: true };
-  }
-
   const incomingEdges = getIncomingEdges(edges, node.id);
 
   if (node.type === 'string') {
@@ -298,56 +294,6 @@ type ExecuteWorkflowOptions = {
   brandId?: string;
 };
 
-const buildUpstreamScope = (nodes: StudioNode[], edges: Edge[], targetNodeId: string): Set<string> => {
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const scope = new Set<string>();
-  const queue: string[] = [];
-
-  if (!nodeIds.has(targetNodeId)) return scope;
-
-  scope.add(targetNodeId);
-  queue.push(targetNodeId);
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const incoming = edges.filter((edge) => edge.target === current);
-    for (const edge of incoming) {
-      if (!nodeIds.has(edge.source)) continue;
-      if (scope.has(edge.source)) continue;
-      scope.add(edge.source);
-      queue.push(edge.source);
-    }
-  }
-
-  return scope;
-};
-
-const buildDownstreamScope = (nodes: StudioNode[], edges: Edge[], sourceIds: Set<string>): Set<string> => {
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const scope = new Set<string>();
-  const queue: string[] = [];
-
-  for (const id of sourceIds) {
-    if (nodeIds.has(id)) {
-      queue.push(id);
-      scope.add(id);
-    }
-  }
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    const outgoing = edges.filter((edge) => edge.source === current);
-    for (const edge of outgoing) {
-      if (!nodeIds.has(edge.target)) continue;
-      if (scope.has(edge.target)) continue;
-      scope.add(edge.target);
-      queue.push(edge.target);
-    }
-  }
-
-  return scope;
-};
-
 export async function executeWorkflow(
   controls: ExecutorControls,
   options: ExecuteWorkflowOptions = {}
@@ -360,13 +306,14 @@ export async function executeWorkflow(
     edgeCount: edges.length,
   });
 
-  const executionScope = options.targetNodeId
-    ? buildUpstreamScope(nodes, edges, options.targetNodeId)
-    : new Set(nodes.map((node) => node.id));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const targetNode = options.targetNodeId ? nodeById.get(options.targetNodeId) : undefined;
 
-  const executableNodes = nodes.filter(
-    (n) => (n.type === 'nanoGen' || n.type === 'veoDirector' || n.type === 'veoFast' || n.type === 'extendVideo' || n.type === 'string') && executionScope.has(n.id)
-  );
+  const executableNodes = targetNode
+    ? (targetNode.type === 'string' || MEDIA_NODE_TYPES.has(targetNode.type)
+        ? [targetNode]
+        : [])
+    : nodes.filter((node) => MEDIA_NODE_TYPES.has(node.type));
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
@@ -378,24 +325,10 @@ export async function executeWorkflow(
     executableNodeIds,
   });
 
-  const clearDownstream = options.clearDownstream ?? true;
-  
-  let nodesToReset = new Set<string>();
-  if (options.targetNodeId) {
-    if (clearDownstream) {
-      nodesToReset = buildDownstreamScope(nodes, edges, new Set([options.targetNodeId]));
-    } else {
-      nodesToReset = new Set([options.targetNodeId]);
-    }
-  } else {
-    // Global run - reset everything in executable scope
-    nodesToReset = clearDownstream
-      ? buildDownstreamScope(nodes, edges, new Set(executableNodeIds))
-      : new Set(executableNodeIds);
-  }
+  const nodesToReset = new Set(executableNodeIds);
 
   const resetNodeIds = nodes
-    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector' || node.type === 'veoFast' || node.type === 'extendVideo' || node.type === 'string') && nodesToReset.has(node.id))
+    .filter((node) => (MEDIA_NODE_TYPES.has(node.type) || node.type === 'string') && nodesToReset.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
@@ -408,20 +341,13 @@ export async function executeWorkflow(
     });
   }
 
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const resolvedOutputs = new Map<string, NodeOutput>();
   const failedNodes = new Set<string>();
-  const stringNodesWithExternalInputs = new Set(
-    executableNodes
-      .filter((node) => node.type === 'string')
-      .filter((node) => getStringExternalInputEdges(edges, node.id).length > 0)
-      .map((node) => node.id)
-  );
 
   for (const node of nodes) {
     if (node.type === 'string') {
       const value = normalizeText((node.data as any).value);
-      if (value && !stringNodesWithExternalInputs.has(node.id)) {
+      if (value) {
         resolvedOutputs.set(node.id, { type: 'text', value });
       }
     }
@@ -539,14 +465,16 @@ export async function executeWorkflow(
              return false;
         }
 
-        useStudioStore.getState().updateNodeData(nodeId, { value: "" });
+        let hasReceivedPartialUpdate = false;
 
         const onPartialUpdate = (data: { delta: string }) => {
              if (!data.delta) return;
              const currentNodes = useStudioStore.getState().nodes;
              const node = currentNodes.find(n => n.id === nodeId);
              const currentVal = (node?.data as any).value || "";
-             useStudioStore.getState().updateNodeData(nodeId, { value: currentVal + data.delta });
+             const nextValue = hasReceivedPartialUpdate ? `${currentVal}${data.delta}` : data.delta;
+             hasReceivedPartialUpdate = true;
+             useStudioStore.getState().updateNodeData(nodeId, { value: nextValue });
         };
 
         let result;
@@ -741,13 +669,8 @@ export async function executeWorkflow(
 
   const pendingNodes = new Set(
     executableNodeIds.filter(id => {
-      const node = nodeById.get(id);
-      if (node?.type === 'string' && options.targetNodeId === id) {
-        console.info("[studio] forcing string node into pending", id);
-        return true;
-      }
-      if (node?.type === 'string' && stringNodesWithExternalInputs.has(id)) {
-        console.info("[studio] scheduling string node with external inputs", id);
+      if (options.targetNodeId === id) {
+        console.info("[studio] forcing target node into pending", id);
         return true;
       }
       return !resolvedOutputs.has(id);
@@ -760,7 +683,7 @@ export async function executeWorkflow(
     const readyNodes = Array.from(pendingNodes).filter((nodeId) => {
       const node = nodeById.get(nodeId);
       if (!node) return false;
-      const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, options.targetNodeId);
+      const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes);
       console.info("[studio] checking readiness", { nodeId, type: node.type, ready: readiness.ready, reason: readiness.reason });
       return readiness.ready;
     });
@@ -776,7 +699,7 @@ export async function executeWorkflow(
       for (const nodeId of pendingNodes) {
         const node = nodeById.get(nodeId);
         if (!node) continue;
-        const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes, options.targetNodeId);
+        const readiness = getNodeReadiness(node, edges, resolvedOutputs, nodeById, failedNodes);
         updateNodeStatus(nodeId, 'failed', readiness.reason ?? 'Missing required inputs or prompt');
         failedNodes.add(nodeId);
       }

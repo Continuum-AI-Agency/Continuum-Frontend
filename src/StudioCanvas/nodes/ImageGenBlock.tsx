@@ -117,7 +117,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
 
   const handleRun = useCallback(async () => {
     console.info("[studio] run image node", { nodeId: id });
-    await executeWorkflow(executionControls, { targetNodeId: id, brandId });
+    await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
   const previewImage = data.generatedImage;
