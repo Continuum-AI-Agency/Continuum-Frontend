@@ -296,7 +296,23 @@ type ExecuteWorkflowOptions = {
   targetNodeId?: string;
   clearDownstream?: boolean;
   brandId?: string;
+  scopeStrategy?: 'full' | 'target-with-upstream' | 'target-only' | 'all-media';
 };
+
+const MEDIA_EXECUTION_NODE_TYPES = new Set<StudioNode['type']>([
+  'nanoGen',
+  'veoDirector',
+  'veoFast',
+  'extendVideo',
+]);
+
+const EXECUTION_NODE_TYPES = new Set<StudioNode['type']>([
+  ...MEDIA_EXECUTION_NODE_TYPES,
+  'string',
+]);
+
+const isExecutionNode = (node: StudioNode) => EXECUTION_NODE_TYPES.has(node.type);
+const isMediaExecutionNode = (node: StudioNode) => MEDIA_EXECUTION_NODE_TYPES.has(node.type);
 
 const buildUpstreamScope = (nodes: StudioNode[], edges: Edge[], targetNodeId: string): Set<string> => {
   const nodeIds = new Set(nodes.map((node) => node.id));
@@ -354,19 +370,27 @@ export async function executeWorkflow(
 ) {
   const { nodes, edges } = useStudioStore.getState();
   const { executeGeneration, executeEnrichment } = controls;
+  const scopeStrategy = options.scopeStrategy ?? (options.targetNodeId ? 'target-with-upstream' : 'full');
   console.info("[studio] executeWorkflow start", {
     targetNodeId: options.targetNodeId,
+    scopeStrategy,
     nodeCount: nodes.length,
     edgeCount: edges.length,
   });
 
-  const executionScope = options.targetNodeId
-    ? buildUpstreamScope(nodes, edges, options.targetNodeId)
-    : new Set(nodes.map((node) => node.id));
+  const executionScope =
+    scopeStrategy === 'target-only' && options.targetNodeId
+      ? new Set([options.targetNodeId])
+      : options.targetNodeId
+        ? buildUpstreamScope(nodes, edges, options.targetNodeId)
+        : new Set(nodes.map((node) => node.id));
 
-  const executableNodes = nodes.filter(
-    (n) => (n.type === 'nanoGen' || n.type === 'veoDirector' || n.type === 'veoFast' || n.type === 'extendVideo' || n.type === 'string') && executionScope.has(n.id)
-  );
+  const shouldExecuteNode =
+    scopeStrategy === 'all-media'
+      ? isMediaExecutionNode
+      : isExecutionNode;
+
+  const executableNodes = nodes.filter((node) => shouldExecuteNode(node) && executionScope.has(node.id));
   const executableNodeIds = executableNodes.map((n) => n.id);
 
   if (executableNodeIds.length === 0) {
@@ -395,7 +419,7 @@ export async function executeWorkflow(
   }
 
   const resetNodeIds = nodes
-    .filter((node) => (node.type === 'nanoGen' || node.type === 'veoDirector' || node.type === 'veoFast' || node.type === 'extendVideo' || node.type === 'string') && nodesToReset.has(node.id))
+    .filter((node) => shouldExecuteNode(node) && nodesToReset.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {

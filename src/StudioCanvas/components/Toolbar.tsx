@@ -29,7 +29,10 @@ export function Toolbar() {
   const handleRun = async () => {
       setIsRunning(true);
       try {
-        await executeWorkflow(executionControls, { brandId });
+        await executeWorkflow(executionControls, {
+          brandId,
+          scopeStrategy: 'all-media',
+        });
       } finally {
         setIsRunning(false);
       }
