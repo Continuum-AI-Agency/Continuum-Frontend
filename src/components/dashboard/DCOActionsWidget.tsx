@@ -73,6 +73,7 @@ function formatTimestamp(isoString: string): string {
 
 const getStatusVariant = (status: ActionStatus): "default" | "secondary" | "destructive" | "outline" => {
   switch (status) {
+    case "APPROVED": return "default";
     case "SUCCESS": return "default";
     case "FAILED": return "destructive";
     case "PENDING": return "secondary";
@@ -82,7 +83,7 @@ const getStatusVariant = (status: ActionStatus): "default" | "secondary" | "dest
 
 const getActionTypeColor = (actionType: ActionType): "default" | "secondary" | "destructive" | "outline" => {
   if (actionType.includes("PAUSE") || actionType.includes("ARCHIVE")) return "destructive";
-  if (actionType.includes("CREATE") || actionType.includes("SCALE")) return "default";
+  if (actionType.includes("CREATE") || actionType.includes("SCALE") || actionType.includes("ALERT")) return "default";
   return "secondary";
 };
 
@@ -404,6 +405,7 @@ function FilterControls({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Status</SelectItem>
+          <SelectItem value="APPROVED">Approved</SelectItem>
           <SelectItem value="SUCCESS">Success</SelectItem>
           <SelectItem value="FAILED">Failed</SelectItem>
           <SelectItem value="PENDING">Pending</SelectItem>
@@ -419,7 +421,9 @@ function FilterControls({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Actions</SelectItem>
-          <SelectItem value="PAUSE_ENTITY">Pause Entity</SelectItem>
+          <SelectItem value="PAUSE_CAMPAIGN">Pause Campaign</SelectItem>
+          <SelectItem value="ALERT_ACCOUNT">Alert Account</SelectItem>
+          <SelectItem value="NOOP">No-op</SelectItem>
           <SelectItem value="SWITCH_CREATIVE">Switch Creative</SelectItem>
           <SelectItem value="ADJUST_BUDGET">Adjust Budget</SelectItem>
           <SelectItem value="SCALE_BUDGET">Scale Budget</SelectItem>
@@ -437,9 +441,11 @@ function FilterControls({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Scopes</SelectItem>
-          <SelectItem value="campaign">Campaign</SelectItem>
-          <SelectItem value="adset">Ad Set</SelectItem>
-          <SelectItem value="ad">Ad</SelectItem>
+          <SelectItem value="GLOBAL">Global</SelectItem>
+          <SelectItem value="ACCOUNT">Account</SelectItem>
+          <SelectItem value="CAMPAIGN">Campaign</SelectItem>
+          <SelectItem value="ADSET">Ad Set</SelectItem>
+          <SelectItem value="AD">Ad</SelectItem>
         </SelectContent>
       </Select>
     </Flex>
@@ -449,12 +455,14 @@ function FilterControls({
 interface DCOActionsWidgetProps {
   brandId: string;
   metaAccountId?: string;
+  campaignId?: string;
   className?: string;
 }
 
 export function DCOActionsWidget({ 
   brandId, 
   metaAccountId,
+  campaignId,
   className 
 }: DCOActionsWidgetProps) {
   const {
@@ -481,7 +489,7 @@ export function DCOActionsWidget({
     status: filters.status,
     actionType: filters.actionType,
     scopeType: filters.scopeType,
-    campaignId: filters.campaignId,
+    campaignId: campaignId ?? filters.campaignId,
     metaAccountId: filters.metaAccountId,
   });
 
@@ -512,6 +520,14 @@ export function DCOActionsWidget({
     const { dateFrom, dateTo } = getDateRangeFromDays(days);
     setFilters({ dateFrom, dateTo });
   }, [setFilters]);
+
+  React.useEffect(() => {
+    setFilterState((prev) => ({
+      ...prev,
+      campaignId,
+    }));
+    setFilters({ campaignId });
+  }, [campaignId, setFilters]);
 
   return (
     <TooltipProvider>
@@ -630,13 +646,13 @@ export function DCOActionsWidget({
                             </ShadcnBadge>
                           </TableCell>
                           <TableCell>
-                            <Text weight="medium">
+                            <ShadcnBadge variant={getActionTypeColor(log.actionType)}>
                               {log.actionType.replace(/_/g, " ")}
-                            </Text>
+                            </ShadcnBadge>
                           </TableCell>
                           <TableCell>
                             <ShadcnBadge variant="outline">
-                              {log.scopeType.toUpperCase()}
+                              {log.scopeType}
                             </ShadcnBadge>
                           </TableCell>
                           <TableCell>

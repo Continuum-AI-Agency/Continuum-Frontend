@@ -12,6 +12,7 @@ type TimelineBlocksRequest = {
   accountId?: string;
   startDate?: string;
   endDate?: string;
+  resolution?: "daily" | "hourly";
 };
 
 type TimelineSegmentLike = {
@@ -180,6 +181,7 @@ serve(async (req: Request) => {
     const accountId = body.accountId?.trim();
     const startDate = body.startDate?.trim();
     const endDate = body.endDate?.trim();
+    const resolution = body.resolution;
 
     if (!brandId || !accountId) {
       return jsonResponse({ error: "brandId and accountId are required" }, 400);
@@ -255,6 +257,10 @@ serve(async (req: Request) => {
       .eq("brand_id", brandId)
       .eq("account_id", accountId)
       .order("block_start", { ascending: true });
+
+    if (resolution === "daily" || resolution === "hourly") {
+      query = query.eq("resolution", resolution);
+    }
 
     if (startDate) {
       query = query.gte("block_end", startDate);

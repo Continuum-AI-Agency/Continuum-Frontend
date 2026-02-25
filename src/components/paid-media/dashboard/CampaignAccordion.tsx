@@ -38,6 +38,10 @@ type CampaignAccordionProps = {
   brandId: string;
   accountId: string;
   timeRange: { preset: string };
+  resolution: "daily" | "hourly";
+  activeOnly?: boolean;
+  dcoManagedCampaignIds?: string[];
+  onSelectedCampaignChange?: (campaignId: string | undefined) => void;
 };
 
 type AdSetLoadState = {
@@ -47,6 +51,8 @@ type AdSetLoadState = {
     errorMessage?: string;
   };
 };
+
+const META_RATE_LIMIT_COOLDOWN_MS = 60000;
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -70,9 +76,101 @@ function getStatusColor(status: string): "default" | "secondary" | "destructive"
   }
 }
 
-export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: CampaignAccordionProps) {
+function getCampaignSeverityScore(campaign: Campaign): number {
+  if (!campaign.comparison) return 0;
+
+  return Object.values(campaign.comparison).reduce((max, item) => {
+    const score = Math.abs(item.percentageChange);
+    return score > max ? score : max;
+  }, 0);
+}
+
+function isMetaRateLimitMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("user request limit reached") ||
+    normalized.includes("code 17") ||
+    normalized.includes("error_subcode: 2446079") ||
+    normalized.includes("2446079")
+  );
+}
+
+async function extractInvokeErrorMessage(error: unknown): Promise<string> {
+  if (!(error instanceof Error)) {
+    return "Edge function request failed";
+  }
+
+  const baseMessage = error.message;
+  const maybeContext = (error as { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }).context;
+  if (!maybeContext) {
+    return baseMessage;
+  }
+
+  try {
+    if (typeof maybeContext.json === "function") {
+      const payload = (await maybeContext.json()) as { error?: string };
+      if (payload?.error) {
+        return payload.error;
+      }
+    }
+  } catch {
+    // Ignore and fallback.
+  }
+
+  try {
+    if (typeof maybeContext.text === "function") {
+      const text = await maybeContext.text();
+      if (text) {
+        return text;
+      }
+    }
+  } catch {
+    // Ignore and return base message.
+  }
+
+  return baseMessage;
+}
+
+export function CampaignAccordion({
+  campaigns,
+  brandId,
+  accountId,
+  timeRange,
+  resolution,
+  activeOnly = false,
+  dcoManagedCampaignIds = [],
+  onSelectedCampaignChange,
+}: CampaignAccordionProps) {
   const [adSetState, setAdSetState] = React.useState<AdSetLoadState>({});
   const [adStateByAdSet, setAdStateByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
+  const [openCampaignId, setOpenCampaignId] = React.useState<string | undefined>();
+  const rateLimitedUntilRef = React.useRef<number>(0);
+
+  const filteredCampaigns = React.useMemo(() => {
+    const dcoManagedIdSet = new Set(dcoManagedCampaignIds);
+    const candidates = campaigns.filter((campaign) => {
+      if (activeOnly && campaign.status.toUpperCase() !== "ACTIVE") {
+        return false;
+      }
+
+      if (resolution === "hourly" && !dcoManagedIdSet.has(campaign.id)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return candidates.sort((left, right) => {
+      const severityDiff = getCampaignSeverityScore(right) - getCampaignSeverityScore(left);
+      if (severityDiff !== 0) {
+        return severityDiff;
+      }
+
+      const rightSpend = right.metrics?.spend ?? 0;
+      const leftSpend = left.metrics?.spend ?? 0;
+      return rightSpend - leftSpend;
+    });
+  }, [activeOnly, campaigns, dcoManagedCampaignIds, resolution]);
 
   React.useEffect(() => {
     setAdSetState({});
@@ -82,6 +180,19 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
   const loadAdSets = React.useCallback(
     async (campaignId: string) => {
       if (adSetState[campaignId]?.status === "loading" || adSetState[campaignId]?.status === "success") {
+        return;
+      }
+
+      if (Date.now() < rateLimitedUntilRef.current) {
+        const secondsLeft = Math.ceil((rateLimitedUntilRef.current - Date.now()) / 1000);
+        setAdSetState((prev) => ({
+          ...prev,
+          [campaignId]: {
+            status: "error",
+            adSets: prev[campaignId]?.adSets ?? [],
+            errorMessage: `Meta API rate limit active. Retry in ~${secondsLeft}s.`,
+          },
+        }));
         return;
       }
 
@@ -106,7 +217,8 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
         );
 
         if (fetchError) {
-          throw new Error(`Failed to fetch ad sets: ${fetchError.message}`);
+          const message = await extractInvokeErrorMessage(fetchError);
+          throw new Error(`Failed to fetch ad sets: ${message}`);
         }
 
         const rawAdSets = data?.adsets ?? [];
@@ -148,13 +260,18 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
           [campaignId]: { status: "success", adSets: adSetsWithMetrics },
         }));
       } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error";
+        if (isMetaRateLimitMessage(message)) {
+          rateLimitedUntilRef.current = Date.now() + META_RATE_LIMIT_COOLDOWN_MS;
+        }
+
         console.error("Failed to load ad sets:", error);
         setAdSetState((prev) => ({
           ...prev,
           [campaignId]: {
             status: "error",
             adSets: [],
-            errorMessage: error instanceof Error ? error.message : "Unknown error",
+            errorMessage: message,
           },
         }));
       }
@@ -163,12 +280,26 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
   );
 
   React.useEffect(() => {
-    if (campaigns.length === 0) {
+    if (filteredCampaigns.length === 0) {
+      setOpenCampaignId(undefined);
+      onSelectedCampaignChange?.(undefined);
       return;
     }
 
-    void loadAdSets(campaigns[0].id);
-  }, [campaigns, loadAdSets]);
+    const isOpenCampaignValid = openCampaignId
+      ? filteredCampaigns.some((campaign) => campaign.id === openCampaignId)
+      : false;
+
+    if (!isOpenCampaignValid) {
+      const nextCampaignId = filteredCampaigns[0].id;
+      setOpenCampaignId(nextCampaignId);
+      onSelectedCampaignChange?.(nextCampaignId);
+      void loadAdSets(nextCampaignId);
+      return;
+    }
+
+    onSelectedCampaignChange?.(openCampaignId);
+  }, [filteredCampaigns, loadAdSets, onSelectedCampaignChange, openCampaignId]);
 
   const loadAdsForAdSet = React.useCallback(
     async (adSetId: string) => {
@@ -234,28 +365,33 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
     [accountId, brandId, timeRange.preset]
   );
 
-  if (campaigns.length === 0) {
+  if (filteredCampaigns.length === 0) {
     return <div className="py-8 text-center text-muted-foreground">No campaigns found.</div>;
   }
 
   return (
     <Accordion
-      key={`${accountId}-${timeRange.preset}`}
-      type="multiple"
-      defaultValue={campaigns[0] ? [campaigns[0].id] : undefined}
+      key={`${accountId}-${timeRange.preset}-${resolution}-${activeOnly ? "active" : "all"}`}
+      type="single"
+      value={openCampaignId ?? ""}
+      collapsible
+      onValueChange={(value) => {
+        const nextValue = value || undefined;
+        setOpenCampaignId(nextValue);
+        onSelectedCampaignChange?.(nextValue);
+
+        if (nextValue) {
+          void loadAdSets(nextValue);
+        }
+      }}
       className="w-full"
     >
-      {campaigns.map((campaign) => {
+      {filteredCampaigns.map((campaign) => {
         const state = adSetState[campaign.id] || { status: "idle", adSets: [] };
 
         return (
           <AccordionItem key={campaign.id} value={campaign.id}>
-            <AccordionTrigger
-              className="hover:no-underline"
-              onClick={() => {
-                void loadAdSets(campaign.id);
-              }}
-            >
+            <AccordionTrigger className="hover:no-underline">
               <div className="flex w-full items-center justify-between pr-4">
                 <div className="flex items-center gap-3">
                   <span className="font-medium">{campaign.name}</span>

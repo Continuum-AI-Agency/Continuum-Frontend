@@ -7,6 +7,7 @@ interface UseTimelineBlocksOptions {
     startDate?: string;
     endDate?: string;
     campaignIds?: string[];
+    resolution?: "daily" | "hourly";
 }
 
 interface UseTimelineBlocksReturn {
@@ -24,6 +25,7 @@ export function useTimelineBlocks({
     startDate,
     endDate,
     campaignIds,
+    resolution = "daily",
 }: UseTimelineBlocksOptions): UseTimelineBlocksReturn {
     const [blocks, setBlocks] = useState<TimelineBlock[]>([]);
     const [campaigns, setCampaigns] = useState<TimelineCampaign[]>([]);
@@ -54,6 +56,7 @@ export function useTimelineBlocks({
                     startDate,
                     endDate,
                     campaignIds,
+                    resolution,
                 }),
                 cache: 'no-store',
             });
@@ -183,7 +186,7 @@ export function useTimelineBlocks({
         } finally {
             setLoading(false);
         }
-    }, [brandId, accountId, startDate, endDate, campaignIds]);
+    }, [brandId, accountId, startDate, endDate, campaignIds, resolution]);
 
     useEffect(() => {
         void fetchBlocks();

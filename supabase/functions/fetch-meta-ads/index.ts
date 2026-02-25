@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import {
+  buildMetaEdgeCacheKey,
+  readMetaEdgeCache,
+  writeMetaEdgeCache,
+} from "../_shared/meta-edge-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -124,6 +129,25 @@ serve(async (req: Request) => {
 
     log("Looking for access token for ad account:", adAccountId);
 
+    const cacheScopeSuffix = datePreset || timeRange ? `${datePreset ?? "none"}:${timeRange ?? "none"}` : "default";
+    const cacheKey = buildMetaEdgeCacheKey({
+      resource: "ads",
+      adAccountId,
+      scopeId: `${adSetId}:${cacheScopeSuffix}`,
+    });
+
+    const cacheHit = await readMetaEdgeCache({
+      supabase: supabase as any,
+      cacheKey,
+      log,
+    });
+
+    if (cacheHit) {
+      return new Response(JSON.stringify(cacheHit.payload), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+
     const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
       p_ad_account_id: adAccountId,
     });
@@ -238,8 +262,21 @@ serve(async (req: Request) => {
       adAccountId,
     });
 
-    return new Response(JSON.stringify({ ads: hydratedAds }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const responsePayload = { ads: hydratedAds };
+
+    await writeMetaEdgeCache({
+      supabase: supabase as any,
+      cacheKey,
+      accountId: adAccountId,
+      scopeType: "meta_ads",
+      scopeId: `${adSetId}:${cacheScopeSuffix}`,
+      rangePreset: datePreset ?? "edge_1h",
+      payload: responsePayload,
+      log,
+    });
+
+    return new Response(JSON.stringify(responsePayload), {
+      headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });
   } catch (error) {
     console.error("[fetch-meta-ads] unhandled error:", error);

@@ -1,6 +1,9 @@
-export type ActionStatus = "SUCCESS" | "FAILED" | "PENDING";
+export type ActionStatus = "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
 
 export type ActionType = 
+  | "PAUSE_CAMPAIGN"
+  | "ALERT_ACCOUNT"
+  | "NOOP"
   | "PAUSE_ENTITY"
   | "SWITCH_CREATIVE"
   | "UPDATE_COPY"
@@ -9,7 +12,7 @@ export type ActionType =
   | "CREATE_VARIANT"
   | "ARCHIVE_ENTITY";
 
-export type ScopeType = "campaign" | "adset" | "ad";
+export type ScopeType = "GLOBAL" | "ACCOUNT" | "CAMPAIGN" | "ADSET" | "AD";
 
 export interface ActionLog {
   id: string;

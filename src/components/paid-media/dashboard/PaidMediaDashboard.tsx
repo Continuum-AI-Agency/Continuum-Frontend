@@ -6,14 +6,7 @@ import { Box, Card, Flex, Heading, IconButton, Select, Text } from "@radix-ui/th
 
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import { CampaignAccordion } from "./CampaignAccordion";
-import { TimelineContainer } from "@/components/paid-media/timeline/TimelineContainer";
+import { CampaignTimelineWorkspace } from "./CampaignTimelineWorkspace";
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 
 type Campaign = {
@@ -37,6 +30,7 @@ type Campaign = {
 
 type Platform = "meta" | "google-ads" | "dv360";
 type TimePreset = "last_7d" | "last_14d" | "last_30d";
+type TimelineResolution = "daily" | "hourly";
 
 type PaidMediaDashboardProps = {
   brandId: string;
@@ -45,7 +39,6 @@ type PaidMediaDashboardProps = {
 
 type LoadState =
   | { status: "idle" }
-  | { status: "loading-accounts" }
   | { status: "loading-campaigns" }
   | { status: "error"; message: string }
   | { status: "success" };
@@ -53,9 +46,12 @@ type LoadState =
 export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardProps) {
   const [platform, setPlatform] = React.useState<Platform>("meta");
   const [timeRange, setTimeRange] = React.useState<TimePreset>("last_7d");
+  const [timelineResolution, setTimelineResolution] = React.useState<TimelineResolution>("daily");
+  const [activeOnly, setActiveOnly] = React.useState(true);
   const [loadState, setLoadState] = React.useState<LoadState>({ status: "idle" });
 
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | undefined>();
 
   const loadCampaigns = React.useCallback(async () => {
     if (!adAccountId) {
@@ -196,47 +192,39 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
           </Card>
         )}
 
-        {adAccountId && (
-          <Box className="w-full mb-4">
-            <TimelineContainer brandId={brandId} accountId={adAccountId} />
-          </Box>
+        {adAccountId ? (
+          <CampaignTimelineWorkspace
+            brandId={brandId}
+            accountId={adAccountId}
+            campaigns={campaigns}
+            isLoadingCampaigns={loadState.status === "loading-campaigns"}
+            timeRangePreset={timeRange}
+            resolution={timelineResolution}
+            onResolutionChange={setTimelineResolution}
+            activeOnly={activeOnly}
+            onActiveOnlyChange={setActiveOnly}
+            onSelectedCampaignChange={setSelectedCampaignId}
+          />
+        ) : (
+          <Card>
+            <Box className="p-8 text-center text-muted-foreground">
+              Select an ad account from the top-left selector to view campaigns.
+            </Box>
+          </Card>
         )}
 
-        <div className="h-[calc(100dvh-17.5rem)] min-h-[var(--dashboard-min-panel-height)] overflow-hidden rounded-xl border bg-white/5">
-          <ResizablePanelGroup orientation="horizontal">
-            <ResizablePanel defaultSize={65} minSize={30}>
-              <Box className="h-full overflow-auto p-4">
-                {loadState.status === "loading-campaigns" ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : adAccountId ? (
-                  <CampaignAccordion
-                    campaigns={campaigns}
-                    brandId={brandId}
-                    accountId={adAccountId}
-                    timeRange={{ preset: timeRange }}
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-muted-foreground">
-                    Select an ad account from the top-left selector to view campaigns.
-                  </div>
-                )}
-              </Box>
-            </ResizablePanel>
-
-            <ResizableHandle withHandle className="bg-white/10" />
-
-            <ResizablePanel defaultSize={35} minSize={20}>
-              <Box className="h-full overflow-auto bg-black/20 p-4">
-                <DCOActionsWidget brandId={brandId} metaAccountId={adAccountId ?? undefined} />
-              </Box>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </div>
+        <Card className="overflow-hidden">
+          <div className="border-b px-4 py-3">
+            <Heading size="4">DCO Action Log</Heading>
+          </div>
+          <Box className="p-4">
+            <DCOActionsWidget
+              brandId={brandId}
+              metaAccountId={adAccountId ?? undefined}
+              campaignId={selectedCampaignId}
+            />
+          </Box>
+        </Card>
       </Flex>
     </Box>
   );

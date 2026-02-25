@@ -11,6 +11,7 @@ const requestSchema = z.object({
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   campaignIds: z.array(z.string().min(1)).optional(),
+  resolution: z.enum(["daily", "hourly"]).optional(),
 });
 
 const responseSchema = z.object({

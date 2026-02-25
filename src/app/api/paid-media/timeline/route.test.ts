@@ -91,6 +91,7 @@ describe("POST /api/paid-media/timeline", () => {
         accountId: "act_123",
         startDate: "2026-01-01T00:00:00.000Z",
         endDate: "2026-01-31T23:59:59.999Z",
+        resolution: "daily",
       }),
     });
 
@@ -104,6 +105,11 @@ describe("POST /api/paid-media/timeline", () => {
       "Content-Type": "application/json",
       Authorization: "Bearer session-token",
       apikey: "publishable-key",
+    });
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      brandId: "brand-1",
+      accountId: "act_123",
+      resolution: "daily",
     });
 
     expect(response.status).toBe(200);

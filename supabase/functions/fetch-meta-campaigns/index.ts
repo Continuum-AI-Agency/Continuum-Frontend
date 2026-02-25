@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import {
+  buildMetaEdgeCacheKey,
+  readMetaEdgeCache,
+  writeMetaEdgeCache,
+} from "../_shared/meta-edge-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +69,23 @@ serve(async (req: Request) => {
 
     log("Looking for access token for ad account:", adAccountId);
 
+    const cacheKey = buildMetaEdgeCacheKey({
+      resource: "campaigns",
+      adAccountId,
+    });
+
+    const cacheHit = await readMetaEdgeCache({
+      supabase: supabase as any,
+      cacheKey,
+      log,
+    });
+
+    if (cacheHit) {
+      return new Response(JSON.stringify(cacheHit.payload), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+
     const { data: accessToken, error: tokenError } = await supabase
       .rpc("get_meta_access_token", { p_ad_account_id: adAccountId });
 
@@ -110,8 +132,20 @@ serve(async (req: Request) => {
 
     log("success", { count: campaigns.length });
 
-    return new Response(JSON.stringify({ campaigns }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const responsePayload = { campaigns };
+
+    await writeMetaEdgeCache({
+      supabase: supabase as any,
+      cacheKey,
+      accountId: adAccountId,
+      scopeType: "meta_campaigns",
+      scopeId: adAccountId,
+      payload: responsePayload,
+      log,
+    });
+
+    return new Response(JSON.stringify(responsePayload), {
+      headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });
   } catch (error) {
     console.error("[fetch-meta-campaigns] unhandled error:", error);
