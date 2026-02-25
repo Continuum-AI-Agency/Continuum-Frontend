@@ -1,5 +1,7 @@
 # Paid Media Observability MVP Plan
 
+Reference implementation guide: `docs/paid-media-observability-module.md`
+
 ## Goal
 Deliver an observability-first paid media dashboard/timeline MVP that keeps current data contracts intact while improving clarity, filtering, and operational triage.
 

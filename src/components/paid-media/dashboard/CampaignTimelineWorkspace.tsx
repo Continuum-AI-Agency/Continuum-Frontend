@@ -10,6 +10,7 @@ import {
   PolarRadiusAxis,
   Radar,
   RadarChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
@@ -91,6 +92,35 @@ type TopChartLine = {
   filled?: boolean;
 };
 
+type ActionScopeType = "CAMPAIGN" | "ADSET" | "AD" | "ACCOUNT" | "GLOBAL";
+
+type ActionLogMarker = {
+  id: string;
+  actionType: string;
+  status: string;
+  scopeType: ActionScopeType | string;
+  scopeId: string;
+  occurredAt: string;
+  metaCampaignId?: string | null;
+  metaAdsetId?: string | null;
+  metaAdId?: string | null;
+  actionPayload?: Record<string, unknown> | null;
+  paramsChanged?: Record<string, unknown> | null;
+  result?: Record<string, unknown> | null;
+  decisionNote?: string | null;
+  error?: string | null;
+};
+
+type MarkerPoint = {
+  id: string;
+  x: string;
+  y: number;
+  color: string;
+  scopeLabel: string;
+  count: number;
+  tooltip: string;
+};
+
 const KPI_COLUMNS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"];
 
 const radarConfig = {
@@ -108,6 +138,16 @@ const LINE_COLORS = ["#34d399", "#60a5fa", "#f59e0b", "#f472b6", "#a78bfa", "#22
 const DELTA_TARGET_COLOR = "#ef4444";
 const AD_SET_LOADING_STALE_MS = 25000;
 const META_RATE_LIMIT_COOLDOWN_MS = 60000;
+const IRIDESCENT_BADGE_CLASS =
+  "border-cyan-300/70 bg-[linear-gradient(120deg,rgba(56,189,248,0.24),rgba(192,132,252,0.28),rgba(251,191,36,0.22))] text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.18)_inset,0_4px_16px_rgba(56,189,248,0.22)] backdrop-blur-sm";
+const LIVE_BADGE_CLASS = "border-border/70 bg-background/70 text-muted-foreground";
+const SCOPE_SIGNPOST_STYLES: Record<ActionScopeType, { color: string; label: string }> = {
+  CAMPAIGN: { color: "#38bdf8", label: "Campaign" },
+  ADSET: { color: "#f59e0b", label: "Ad Set" },
+  AD: { color: "#f43f5e", label: "Ad" },
+  ACCOUNT: { color: "#a78bfa", label: "Account" },
+  GLOBAL: { color: "#94a3b8", label: "Global" },
+};
 
 function daysForPreset(preset: TimePreset): number {
   switch (preset) {
@@ -176,6 +216,146 @@ function getCampaignMetricValue(campaign: Campaign, metric: MetricKey): number {
   return campaign.metrics?.[metric] ?? 0;
 }
 
+function toActionScope(value: string | undefined): ActionScopeType {
+  const normalized = (value ?? "").toUpperCase();
+  if (normalized === "CAMPAIGN") return "CAMPAIGN";
+  if (normalized === "ADSET") return "ADSET";
+  if (normalized === "AD") return "AD";
+  if (normalized === "ACCOUNT") return "ACCOUNT";
+  return "GLOBAL";
+}
+
+function toResolutionBucket(timestamp: string, resolution: TimelineResolution): string | null {
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  if (resolution === "daily") {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  parsed.setMinutes(0, 0, 0);
+  return parsed.toISOString();
+}
+
+function rowBucketKey(rowTimestamp: string, resolution: TimelineResolution): string {
+  if (resolution === "daily") {
+    return rowTimestamp.slice(0, 10);
+  }
+
+  const parsed = new Date(rowTimestamp);
+  if (Number.isNaN(parsed.getTime())) return rowTimestamp;
+  parsed.setMinutes(0, 0, 0);
+  return parsed.toISOString();
+}
+
+function parseNumericRowValue(row: Record<string, unknown>, key: string | undefined): number | null {
+  if (!key) return null;
+  const raw = row[key];
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function readString(values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function resolveAdSetIdFromAction(log: ActionLogMarker): string | null {
+  if (log.metaAdsetId) return log.metaAdsetId;
+
+  const candidates = [log.actionPayload, log.paramsChanged, log.result];
+  for (const source of candidates) {
+    if (!source || typeof source !== "object") continue;
+    const record = source as Record<string, unknown>;
+    const raw =
+      record.meta_adset_id ??
+      record.metaAdsetId ??
+      record.adset_id ??
+      record.adSetId;
+    if (typeof raw === "string" && raw.length > 0) {
+      return raw;
+    }
+  }
+
+  return null;
+}
+
+function resolveCampaignIdFromAction(log: ActionLogMarker): string | null {
+  if (log.metaCampaignId) return log.metaCampaignId;
+
+  const candidates = [log.actionPayload, log.paramsChanged, log.result];
+  for (const source of candidates) {
+    if (!source || typeof source !== "object") continue;
+    const record = source as Record<string, unknown>;
+    const raw =
+      record.meta_campaign_id ??
+      record.metaCampaignId ??
+      record.campaign_id ??
+      record.campaignId;
+    if (typeof raw === "string" && raw.length > 0) {
+      return raw;
+    }
+  }
+
+  return null;
+}
+
+function normalizeActionLogRow(input: unknown): ActionLogMarker | null {
+  if (!input || typeof input !== "object") return null;
+  const row = input as Record<string, unknown>;
+
+  const id = readString([row.id]);
+  const actionType = readString([row.actionType, row.action_type]) ?? "UNKNOWN";
+  const status = readString([row.status]) ?? "UNKNOWN";
+  const scopeType = readString([row.scopeType, row.scope_type]) ?? "GLOBAL";
+  const scopeId = readString([row.scopeId, row.scope_id]) ?? "";
+  const occurredAt = readString([row.occurredAt, row.occurred_at]) ?? "";
+
+  if (!id || !occurredAt) return null;
+
+  const actionPayload =
+    row.actionPayload && typeof row.actionPayload === "object"
+      ? (row.actionPayload as Record<string, unknown>)
+      : row.action_payload && typeof row.action_payload === "object"
+        ? (row.action_payload as Record<string, unknown>)
+        : null;
+  const paramsChanged =
+    row.paramsChanged && typeof row.paramsChanged === "object"
+      ? (row.paramsChanged as Record<string, unknown>)
+      : row.params_changed && typeof row.params_changed === "object"
+        ? (row.params_changed as Record<string, unknown>)
+        : null;
+  const result =
+    row.result && typeof row.result === "object"
+      ? (row.result as Record<string, unknown>)
+      : null;
+
+  return {
+    id,
+    actionType,
+    status,
+    scopeType,
+    scopeId,
+    occurredAt,
+    metaCampaignId: readString([row.metaCampaignId, row.meta_campaign_id]),
+    metaAdsetId: readString([row.metaAdsetId, row.meta_adset_id]),
+    metaAdId: readString([row.metaAdId, row.meta_ad_id]),
+    actionPayload,
+    paramsChanged,
+    result,
+    decisionNote: readString([row.decisionNote, row.decision_note]),
+    error: readString([row.error]),
+  };
+}
+
 function isActiveStatus(status: string | undefined): boolean {
   return (status ?? "").toUpperCase() === "ACTIVE";
 }
@@ -204,9 +384,17 @@ function getTrendMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): n
 }
 
 function getDcoManagedCampaignIds(timelineCampaigns: Array<{ id: string; ad_sets?: Array<{ ads?: unknown[] }> }>): string[] {
-  return timelineCampaigns
+  const explicitManagedIds = timelineCampaigns
     .filter((campaign) => campaign.ad_sets?.some((adSet) => Array.isArray(adSet.ads) && adSet.ads.length > 0))
     .map((campaign) => campaign.id);
+
+  if (explicitManagedIds.length > 0) {
+    return explicitManagedIds;
+  }
+
+  // Some timeline payloads do not include nested ad arrays. In that case,
+  // presence in DCO timeline blocks is treated as DCO-managed for target overlays.
+  return Array.from(new Set(timelineCampaigns.map((campaign) => campaign.id)));
 }
 
 function normalizeRadarValue(deltaPct: number): number {
@@ -245,12 +433,15 @@ function buildSeriesFromTrends(
     return [];
   }
 
+  const latestActual = getTrendMetricValue(trends[trends.length - 1], metric);
+  const derivedTarget = showTarget ? computeTargetValue(latestActual, deltaPct) : null;
+
   return trends.map((point) => {
     const actual = getTrendMetricValue(point, metric);
     return {
       timestamp: point.date,
       actual,
-      target: showTarget ? computeTargetValue(actual, deltaPct) : null,
+      target: derivedTarget,
     };
   });
 }
@@ -272,6 +463,37 @@ function getLatestSeriesValue(
       if (Number.isFinite(parsed)) {
         return parsed;
       }
+    }
+  }
+
+  return null;
+}
+
+function getLatestSeriesPoint(
+  rows: Array<object>,
+  xKey: string,
+  yKey: string | undefined
+): { x: string | number; y: number } | null {
+  if (!yKey) return null;
+
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index] as Record<string, unknown>;
+    const yValue = row[yKey];
+    const xValue = row[xKey];
+
+    const yParsed =
+      typeof yValue === "number"
+        ? yValue
+        : typeof yValue === "string"
+          ? Number(yValue)
+          : NaN;
+
+    if (!Number.isFinite(yParsed)) {
+      continue;
+    }
+
+    if (typeof xValue === "string" || typeof xValue === "number") {
+      return { x: xValue, y: yParsed };
     }
   }
 
@@ -463,9 +685,48 @@ type MetricSparkCellProps = {
   onClick: () => void;
 };
 
+function SignpostShape({
+  cx,
+  cy,
+  color,
+  tooltip,
+  count,
+}: {
+  cx?: number;
+  cy?: number;
+  color: string;
+  tooltip: string;
+  count: number;
+}) {
+  if (typeof cx !== "number" || typeof cy !== "number") return null;
+  const top = cy - 12;
+
+  return (
+    <g>
+      <title>{tooltip}</title>
+      <line x1={cx} y1={cy} x2={cx} y2={top} stroke={color} strokeWidth={1.4} />
+      <path d={`M ${cx} ${top} L ${cx + 7} ${top + 3} L ${cx} ${top + 6} Z`} fill={color} />
+      {count > 1 ? (
+        <text x={cx + 8} y={top + 4} fill={color} fontSize={9} fontWeight={700}>
+          {count}
+        </text>
+      ) : null}
+    </g>
+  );
+}
+
 function MetricSparkCell({ metric, series, isSelected, showTarget, onClick }: MetricSparkCellProps) {
   const currentValue = series.length > 0 ? series[series.length - 1].actual : 0;
   const areaGradientId = React.useMemo(() => `spark-area-${metric}-${Math.random().toString(36).slice(2, 8)}`, [metric]);
+  const latestTargetPoint = React.useMemo(() => {
+    for (let index = series.length - 1; index >= 0; index -= 1) {
+      const target = series[index]?.target;
+      if (typeof target === "number" && Number.isFinite(target)) {
+        return { x: series[index].timestamp, y: target };
+      }
+    }
+    return null;
+  }, [series]);
 
   return (
     <button
@@ -512,6 +773,18 @@ function MetricSparkCell({ metric, series, isSelected, showTarget, onClick }: Me
                   isAnimationActive={false}
                 />
               ) : null}
+              {showTarget && latestTargetPoint ? (
+                <ReferenceDot
+                  x={latestTargetPoint.x}
+                  y={latestTargetPoint.y}
+                  r={2.8}
+                  fill="white"
+                  stroke={DELTA_TARGET_COLOR}
+                  strokeWidth={1.3}
+                  ifOverflow="extendDomain"
+                  isFront
+                />
+              ) : null}
             </AreaChart>
           </ResponsiveContainer>
         ) : (
@@ -542,6 +815,7 @@ export function CampaignTimelineWorkspace({
   const [focusedCampaignId, setFocusedCampaignId] = React.useState<string | undefined>();
   const [focusedAdSet, setFocusedAdSet] = React.useState<{ campaignId: string; adSetId: string } | undefined>();
   const [adSetState, setAdSetState] = React.useState<Record<string, AdSetLoadState>>({});
+  const [timelineActionLogs, setTimelineActionLogs] = React.useState<ActionLogMarker[]>([]);
 
   const adSetStateRef = React.useRef(adSetState);
   const inFlightAdSetLoads = React.useRef<Set<string>>(new Set());
@@ -552,6 +826,7 @@ export function CampaignTimelineWorkspace({
   }, [adSetState]);
 
   const now = React.useMemo(() => new Date(), []);
+  const endDateIso = React.useMemo(() => now.toISOString(), [now]);
   const startDate = React.useMemo(() => {
     const date = new Date(now);
     date.setDate(date.getDate() - daysForPreset(timeRangePreset));
@@ -562,9 +837,90 @@ export function CampaignTimelineWorkspace({
     brandId,
     accountId,
     startDate,
-    endDate: now.toISOString(),
+    endDate: endDateIso,
     resolution,
   });
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadActionLogs() {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const accessToken = session?.access_token;
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!accessToken || !supabaseUrl) {
+          if (!cancelled) setTimelineActionLogs([]);
+          return;
+        }
+
+        const allRows: unknown[] = [];
+        let page = 1;
+        let hasNextPage = true;
+
+        while (!cancelled && hasNextPage && page <= 50) {
+          const params = new URLSearchParams({
+            brandId,
+            metaAccountId: accountId,
+            dateFrom: startDate,
+            dateTo: endDateIso,
+            sortBy: "occurred_at",
+            sortOrder: "desc",
+            page: String(page),
+            pageSize: "100",
+          });
+
+          const response = await fetch(`${supabaseUrl}/functions/v1/fetch-rule-action-logs?${params.toString()}`, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch action logs");
+          }
+
+          const payload = (await response.json()) as {
+            data?: unknown[];
+            pagination?: { hasNextPage?: boolean; totalPages?: number; page?: number };
+          };
+
+          if (Array.isArray(payload.data)) {
+            allRows.push(...payload.data);
+          }
+
+          hasNextPage = Boolean(payload.pagination?.hasNextPage);
+          page += 1;
+        }
+
+        if (!cancelled) {
+          const deduped = new Map<string, ActionLogMarker>();
+          allRows.forEach((row) => {
+            const normalized = normalizeActionLogRow(row);
+            if (!normalized) return;
+            deduped.set(normalized.id, normalized);
+          });
+
+          const sorted = Array.from(deduped.values()).sort(
+            (left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime()
+          );
+          setTimelineActionLogs(sorted);
+        }
+      } catch {
+        if (!cancelled) setTimelineActionLogs([]);
+      }
+    }
+
+    void loadActionLogs();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, brandId, endDateIso, startDate]);
 
   const latestDcoDeltas = React.useMemo(() => {
     const latestBlock = blocks[blocks.length - 1];
@@ -816,7 +1172,8 @@ export function CampaignTimelineWorkspace({
 
   const focusedComparison = focusedCampaign?.comparison;
   const focusedDeltaPct = getEntityDeltaPct(selectedMetric, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas);
-  const focusedShowTarget = focusedIsDcoEnabled && (selectedMetric === "spend" || selectedMetric === "roas" || selectedMetric === "ctr");
+  // Campaign-level target overlays are intentionally hidden; DCO state is signaled via badges.
+  const focusedShowTarget = false;
 
   const focusMetrics = focusedCampaign?.metrics ?? latestSummaryMetrics;
   const focusLabel = focusedCampaign ? `Campaign: ${focusedCampaign.name}` : "Account Context";
@@ -928,6 +1285,180 @@ export function CampaignTimelineWorkspace({
     return topChartModel.lines.find((line) => !line.dashed)?.key;
   }, [topChartModel.lines]);
 
+  const focusedKnownAdSetIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    if (!focusedCampaignId) return ids;
+
+    const loaded = adSetState[focusedCampaignId]?.adSets ?? [];
+    loaded.forEach((adSet) => {
+      if (adSet.id) ids.add(adSet.id);
+    });
+
+    const fallback = timelineAdSetFallbackByCampaignId[focusedCampaignId] ?? [];
+    fallback.forEach((adSet) => {
+      if (adSet.id) ids.add(adSet.id);
+    });
+
+    return ids;
+  }, [adSetState, focusedCampaignId, timelineAdSetFallbackByCampaignId]);
+
+  const scopedTimelineActionLogs = React.useMemo(() => {
+    if (!focusedCampaignId) return [] as ActionLogMarker[];
+
+    return timelineActionLogs.filter((log) => {
+      const scope = toActionScope(log.scopeType);
+      if (scope !== "CAMPAIGN" && scope !== "ADSET" && scope !== "AD") {
+        return false;
+      }
+
+      const scopeId = log.scopeId;
+      const campaignId = resolveCampaignIdFromAction(log) ?? (scope === "CAMPAIGN" ? scopeId : null);
+      const adSetId = resolveAdSetIdFromAction(log) ?? (scope === "ADSET" ? scopeId : null);
+
+      const campaignMatch = campaignId === focusedCampaignId || (scope === "CAMPAIGN" && scopeId === focusedCampaignId);
+      const adSetMatch = Boolean(adSetId && focusedKnownAdSetIds.has(adSetId));
+
+      if (scope === "CAMPAIGN") {
+        return campaignMatch;
+      }
+
+      return adSetMatch || campaignMatch;
+    });
+  }, [focusedCampaignId, focusedKnownAdSetIds, timelineActionLogs]);
+
+  const topSignposts = React.useMemo<MarkerPoint[]>(() => {
+    if (!topPrimaryLineKey || scopedTimelineActionLogs.length === 0) {
+      return [];
+    }
+
+    const rowByBucket = new Map<string, { timestamp: string; y: number }>();
+    topChartModel.data.forEach((rawRow) => {
+      const row = rawRow as Record<string, unknown>;
+      const timestamp = String(row.timestamp ?? "");
+      const bucket = rowBucketKey(timestamp, resolution);
+      const y = parseNumericRowValue(row, topPrimaryLineKey);
+      if (!timestamp || y === null) return;
+      rowByBucket.set(bucket, { timestamp, y });
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        bucket: string;
+        scope: ActionScopeType;
+        count: number;
+        actionTypes: Set<string>;
+        statuses: Set<string>;
+        latestAt: string;
+      }
+    >();
+
+    scopedTimelineActionLogs.forEach((log) => {
+      const scope = toActionScope(log.scopeType);
+      if (scope !== "CAMPAIGN" && scope !== "ADSET" && scope !== "AD") return;
+      const bucket = toResolutionBucket(log.occurredAt, resolution);
+      if (!bucket || !rowByBucket.has(bucket)) return;
+
+      const key = `${bucket}:${scope}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.actionTypes.add(log.actionType);
+        existing.statuses.add(log.status);
+        if (new Date(log.occurredAt).getTime() > new Date(existing.latestAt).getTime()) {
+          existing.latestAt = log.occurredAt;
+        }
+        return;
+      }
+
+      grouped.set(key, {
+        bucket,
+        scope,
+        count: 1,
+        actionTypes: new Set([log.actionType]),
+        statuses: new Set([log.status]),
+        latestAt: log.occurredAt,
+      });
+    });
+
+    return Array.from(grouped.entries())
+      .map(([id, group]) => {
+        const row = rowByBucket.get(group.bucket);
+        if (!row) return null;
+        const style = SCOPE_SIGNPOST_STYLES[group.scope];
+        const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
+        const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
+        const statusLabel = Array.from(group.statuses).join(", ");
+        return {
+          id,
+          x: row.timestamp,
+          y: row.y,
+          color: style.color,
+          scopeLabel: style.label,
+          count: group.count,
+          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\nLatest: ${timestampLabel}`,
+        };
+      })
+      .filter((marker): marker is MarkerPoint => marker !== null);
+  }, [resolution, scopedTimelineActionLogs, topChartModel.data, topPrimaryLineKey]);
+
+  const adSetSignpostGroupsById = React.useMemo(() => {
+    const groupedByAdSet = new Map<
+      string,
+      Map<
+        string,
+        {
+          bucket: string;
+          scope: ActionScopeType;
+          count: number;
+          actionTypes: Set<string>;
+          statuses: Set<string>;
+          latestAt: string;
+        }
+      >
+    >();
+
+    scopedTimelineActionLogs.forEach((log) => {
+      const scope = toActionScope(log.scopeType);
+      if (scope !== "ADSET" && scope !== "AD") return;
+      const bucket = toResolutionBucket(log.occurredAt, resolution);
+      if (!bucket) return;
+
+      const adSetId =
+        resolveAdSetIdFromAction(log) ??
+        (scope === "ADSET" ? log.scopeId : null);
+      if (!adSetId || !focusedKnownAdSetIds.has(adSetId)) return;
+
+      if (!groupedByAdSet.has(adSetId)) {
+        groupedByAdSet.set(adSetId, new Map());
+      }
+
+      const perAdSet = groupedByAdSet.get(adSetId)!;
+      const key = `${bucket}:${scope}`;
+      const existing = perAdSet.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.actionTypes.add(log.actionType);
+        existing.statuses.add(log.status);
+        if (new Date(log.occurredAt).getTime() > new Date(existing.latestAt).getTime()) {
+          existing.latestAt = log.occurredAt;
+        }
+        return;
+      }
+
+      perAdSet.set(key, {
+        bucket,
+        scope,
+        count: 1,
+        actionTypes: new Set([log.actionType]),
+        statuses: new Set([log.status]),
+        latestAt: log.occurredAt,
+      });
+    });
+
+    return groupedByAdSet;
+  }, [focusedKnownAdSetIds, resolution, scopedTimelineActionLogs]);
+
   const topAreaGradientId = React.useMemo(
     () => `top-area-${selectedMetric}-${Math.random().toString(36).slice(2, 8)}`,
     [selectedMetric]
@@ -936,9 +1467,13 @@ export function CampaignTimelineWorkspace({
     () => topChartModel.lines.find((line) => line.dashed && line.label === "Target")?.key,
     [topChartModel.lines]
   );
-  const topTargetValue = React.useMemo(
-    () => getLatestSeriesValue(topChartModel.data, topTargetLineKey),
+  const topTargetPoint = React.useMemo(
+    () => getLatestSeriesPoint(topChartModel.data, "timestamp", topTargetLineKey),
     [topChartModel.data, topTargetLineKey]
+  );
+  const topTargetValue = React.useMemo(
+    () => topTargetPoint?.y ?? null,
+    [topTargetPoint]
   );
   const topActualValue = React.useMemo(
     () => getLatestSeriesValue(topChartModel.data, topPrimaryLineKey),
@@ -1002,7 +1537,17 @@ export function CampaignTimelineWorkspace({
         <CardContent className="flex h-[calc(70dvh-4.5rem)] flex-col gap-3 overflow-hidden p-3">
           <div className="rounded-md border bg-card p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{focusLabel}</div>
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                <span>{focusLabel}</span>
+                {focusedCampaign ? (
+                  <Badge
+                    variant="outline"
+                    className={focusedIsDcoEnabled ? IRIDESCENT_BADGE_CLASS : LIVE_BADGE_CLASS}
+                  >
+                    {focusedIsDcoEnabled ? "DCO" : "Live"}
+                  </Badge>
+                ) : null}
+              </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 {topDenominatorSummary ? (
                   <span className="rounded border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-red-500">
@@ -1068,6 +1613,24 @@ export function CampaignTimelineWorkspace({
                       connectNulls
                     />
                   ))}
+                  {topSignposts.map((marker) => (
+                    <ReferenceDot
+                      key={`top-signpost-${marker.id}`}
+                      x={marker.x}
+                      y={marker.y}
+                      ifOverflow="extendDomain"
+                      isFront
+                      shape={(props) => (
+                        <SignpostShape
+                          cx={props.cx}
+                          cy={props.cy}
+                          color={marker.color}
+                          tooltip={marker.tooltip}
+                          count={marker.count}
+                        />
+                      )}
+                    />
+                  ))}
                   {topTargetValue !== null ? (
                     <ReferenceLine
                       y={topTargetValue}
@@ -1081,6 +1644,25 @@ export function CampaignTimelineWorkspace({
                         fill: DELTA_TARGET_COLOR,
                         fontSize: 10,
                       }}
+                    />
+                  ) : null}
+                  {topTargetPoint ? (
+                    <ReferenceDot
+                      x={topTargetPoint.x}
+                      y={topTargetPoint.y}
+                      r={4.8}
+                      fill="white"
+                      stroke={DELTA_TARGET_COLOR}
+                      strokeWidth={2}
+                      label={{
+                        value: "T",
+                        position: "top",
+                        fill: DELTA_TARGET_COLOR,
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                      ifOverflow="extendDomain"
+                      isFront
                     />
                   ) : null}
                 </AreaChart>
@@ -1179,12 +1761,17 @@ export function CampaignTimelineWorkspace({
 
                           <div className="ml-8 mt-1 flex items-center gap-2">
                             <Badge variant={campaign.status.toUpperCase() === "ACTIVE" ? "default" : "secondary"}>{campaign.status}</Badge>
-                            <Badge variant={isDcoManaged ? "default" : "outline"}>{isDcoManaged ? "DCO" : "Live"}</Badge>
+                            <Badge
+                              variant="outline"
+                              className={isDcoManaged ? IRIDESCENT_BADGE_CLASS : LIVE_BADGE_CLASS}
+                            >
+                              {isDcoManaged ? "DCO" : "Live"}
+                            </Badge>
                           </div>
                         </div>
 
                         {KPI_COLUMNS.map((metric) => {
-                          const showTarget = isDcoManaged && (metric === "spend" || metric === "roas" || metric === "ctr");
+                          const showTarget = false;
 
                           return (
                             <MetricSparkCell
@@ -1268,6 +1855,39 @@ export function CampaignTimelineWorkspace({
                                   const selectedSeries = adSetSeriesByMetric[selectedMetric];
                                   const adSetTargetValue = getLatestSeriesValue(selectedSeries, "target");
                                   const adSetActualValue = getLatestSeriesValue(selectedSeries, "actual");
+                                  const adSetTargetPoint = getLatestSeriesPoint(selectedSeries, "timestamp", "target");
+                                  const adSetSignposts = (() => {
+                                    const grouped = adSetSignpostGroupsById.get(adSet.id);
+                                    if (!grouped || selectedSeries.length === 0) return [] as MarkerPoint[];
+
+                                    const rowByBucket = new Map<string, { timestamp: string; y: number }>();
+                                    selectedSeries.forEach((point) => {
+                                      const bucket = rowBucketKey(point.timestamp, resolution);
+                                      if (typeof point.actual === "number" && Number.isFinite(point.actual)) {
+                                        rowByBucket.set(bucket, { timestamp: point.timestamp, y: point.actual });
+                                      }
+                                    });
+
+                                    return Array.from(grouped.entries())
+                                      .map(([id, group]) => {
+                                        const row = rowByBucket.get(group.bucket);
+                                        if (!row) return null;
+                                        const style = SCOPE_SIGNPOST_STYLES[group.scope];
+                                        const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
+                                        const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
+                                        const statusLabel = Array.from(group.statuses).join(", ");
+                                        return {
+                                          id,
+                                          x: row.timestamp,
+                                          y: row.y,
+                                          color: style.color,
+                                          scopeLabel: style.label,
+                                          count: group.count,
+                                          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\nLatest: ${timestampLabel}`,
+                                        };
+                                      })
+                                      .filter((marker): marker is MarkerPoint => marker !== null);
+                                  })();
                                   const adSetDenominatorSummary = formatDenominatorSummary(
                                     selectedMetric,
                                     adSetActualValue,
@@ -1399,6 +2019,24 @@ export function CampaignTimelineWorkspace({
                                                   dot={false}
                                                   isAnimationActive={false}
                                                 />
+                                                {adSetSignposts.map((marker) => (
+                                                  <ReferenceDot
+                                                    key={`adset-signpost-${adSet.id}-${marker.id}`}
+                                                    x={marker.x}
+                                                    y={marker.y}
+                                                    ifOverflow="extendDomain"
+                                                    isFront
+                                                    shape={(props) => (
+                                                      <SignpostShape
+                                                        cx={props.cx}
+                                                        cy={props.cy}
+                                                        color={marker.color}
+                                                        tooltip={marker.tooltip}
+                                                        count={marker.count}
+                                                      />
+                                                    )}
+                                                  />
+                                                ))}
                                                 {isDcoManaged && (selectedMetric === "spend" || selectedMetric === "roas" || selectedMetric === "ctr") ? (
                                                   <Area
                                                     type="stepAfter"
@@ -1425,6 +2063,25 @@ export function CampaignTimelineWorkspace({
                                                       fill: DELTA_TARGET_COLOR,
                                                       fontSize: 10,
                                                     }}
+                                                  />
+                                                ) : null}
+                                                {adSetTargetPoint ? (
+                                                  <ReferenceDot
+                                                    x={adSetTargetPoint.x}
+                                                    y={adSetTargetPoint.y}
+                                                    r={4.2}
+                                                    fill="white"
+                                                    stroke={DELTA_TARGET_COLOR}
+                                                    strokeWidth={1.8}
+                                                    label={{
+                                                      value: "T",
+                                                      position: "top",
+                                                      fill: DELTA_TARGET_COLOR,
+                                                      fontSize: 10,
+                                                      fontWeight: 700,
+                                                    }}
+                                                    ifOverflow="extendDomain"
+                                                    isFront
                                                   />
                                                 ) : null}
                                               </AreaChart>

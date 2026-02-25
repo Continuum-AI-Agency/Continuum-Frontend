@@ -156,21 +156,24 @@ serve(async (req: Request) => {
     // Map snake_case DB fields to camelCase response if needed, 
     // but typically we keep DB shape or transform. 
     // The frontend hook currently expects camelCase. Let's transform.
-    const transformedLogs = (logs ?? []).map((log: any) => ({
-      id: log.id,
-      brandId: log.brand_id,
-      metaAccountId: log.meta_account_id,
-      actionType: log.action_type,
-      status: log.status,
-      scopeType: log.scope_type,
-      scopeId: log.scope_id,
-      occurredAt: log.occurred_at,
-      actionPayload: log.action_payload,
-      paramsChanged: log.params_changed,
-      result: log.result,
-      decisionNote: log.decision_note,
-      error: log.error,
-    }));
+    const transformedLogs = (logs ?? []).map((log) => {
+      const row = log as Record<string, unknown>;
+      return {
+        id: row.id,
+        brandId: row.brand_id,
+        metaAccountId: row.meta_account_id,
+        actionType: row.action_type,
+        status: row.status,
+        scopeType: row.scope_type,
+        scopeId: row.scope_id,
+        occurredAt: row.occurred_at,
+        actionPayload: row.action_payload,
+        paramsChanged: row.params_changed,
+        result: row.result,
+        decisionNote: row.decision_note,
+        error: row.error,
+      };
+    });
 
     const responseBody: ResponseBody = {
       data: transformedLogs,

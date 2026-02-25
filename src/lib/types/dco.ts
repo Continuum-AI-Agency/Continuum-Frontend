@@ -18,6 +18,9 @@ export interface ActionLog {
   id: string;
   brandId: string;
   metaAccountId: string;
+  metaCampaignId?: string | null;
+  metaAdsetId?: string | null;
+  metaAdId?: string | null;
   actionType: ActionType;
   status: ActionStatus;
   scopeType: ScopeType;
