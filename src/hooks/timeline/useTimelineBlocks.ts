@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { TimelineBlock, TimelineCampaign, TimelineEvent } from '@/types/timeline';
 
 interface UseTimelineBlocksOptions {
+    brandId: string;
     accountId: string | null;
     startDate?: string;
     endDate?: string;
@@ -19,6 +19,7 @@ interface UseTimelineBlocksReturn {
 }
 
 export function useTimelineBlocks({
+    brandId,
     accountId,
     startDate,
     endDate,
@@ -31,7 +32,7 @@ export function useTimelineBlocks({
     const [error, setError] = useState<Error | null>(null);
 
     const fetchBlocks = useCallback(async () => {
-        if (!accountId) {
+        if (!brandId || !accountId) {
             setBlocks([]);
             setCampaigns([]);
             setEvents([]);
@@ -42,29 +43,28 @@ export function useTimelineBlocks({
         setError(null);
 
         try {
-            const supabase = createSupabaseBrowserClient();
-            
-            let query = supabase
-                .schema('DCO_Campaigns' as any)
-                .from('timeline_blocks')
-                .select('*')
-                .eq('account_id', accountId)
-                .order('block_start', { ascending: true });
+            const response = await fetch('/api/paid-media/timeline', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    brandId,
+                    accountId,
+                    startDate,
+                    endDate,
+                    campaignIds,
+                }),
+                cache: 'no-store',
+            });
 
-            if (startDate) {
-                query = query.gte('block_end', startDate);
-            }
-            if (endDate) {
-                query = query.lte('block_start', endDate);
-            }
-
-            const { data, error: fetchError } = await query;
-
-            if (fetchError) {
-                throw new Error(fetchError.message);
+            if (!response.ok) {
+                const errorPayload = (await response.json().catch(() => ({}))) as { error?: string };
+                throw new Error(errorPayload.error ?? 'Failed to fetch timeline blocks');
             }
 
-            const typedBlocks = (data || []) as unknown as TimelineBlock[];
+            const payload = (await response.json()) as { blocks?: unknown };
+            const typedBlocks = (payload.blocks || []) as unknown as TimelineBlock[];
             setBlocks(typedBlocks);
 
             // Merge campaigns and events across blocks
@@ -91,6 +91,20 @@ export function useTimelineBlocks({
                             campaignMap.set(camp.id, JSON.parse(JSON.stringify(camp)));
                         } else {
                             const existing = campaignMap.get(camp.id)!;
+                            // Merge daily metrics across blocks and dedupe by date.
+                            if (camp.metrics_daily && camp.metrics_daily.length > 0) {
+                                const mergedMetrics = [
+                                    ...(existing.metrics_daily ?? []),
+                                    ...camp.metrics_daily,
+                                ];
+                                const dedupedByDate = new Map(
+                                    mergedMetrics.map(metric => [metric.date, metric])
+                                );
+                                existing.metrics_daily = Array.from(dedupedByDate.values()).sort(
+                                    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+                                );
+                            }
+
                             // Merge AdSets and Ads segments here (simplified for now,
                             // ideal implementation requires a deep merge of `segments` arrays).
                             camp.ad_sets?.forEach(adSet => {
@@ -169,7 +183,7 @@ export function useTimelineBlocks({
         } finally {
             setLoading(false);
         }
-    }, [accountId, startDate, endDate, campaignIds]);
+    }, [brandId, accountId, startDate, endDate, campaignIds]);
 
     useEffect(() => {
         void fetchBlocks();

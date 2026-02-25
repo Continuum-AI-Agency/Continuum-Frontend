@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/resizable";
 import { CampaignAccordion } from "./CampaignAccordion";
 import { TimelineContainer } from "@/components/paid-media/timeline/TimelineContainer";
+import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 
 type Campaign = {
   id: string;
@@ -30,6 +31,8 @@ type Campaign = {
     impressions: number;
     clicks: number;
   };
+  comparison?: PaidMetricsComparison;
+  trends?: PaidMetricsTrendPoint[];
 };
 
 type Platform = "meta" | "google-ads" | "dv360";
@@ -86,23 +89,25 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
       const campaignsWithMetrics = await Promise.all(
         rawCampaigns.map(async (campaign: Campaign) => {
           try {
-            const { data: metricsData, error: metricsError } = await supabase.functions.invoke(
-              `paid-media-metrics?platform=${platform}&brandId=${brandId}&accountId=${adAccountId}&campaignId=${campaign.id}`,
-              {
-                body: {
-                  platform,
-                  brandId,
-                  accountId: adAccountId,
-                  campaignId: campaign.id,
-                  range: { preset: timeRange },
-                },
-              }
-            );
+            const metricsResponse = await fetch("/api/paid-metrics", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                platform,
+                brandId,
+                accountId: adAccountId,
+                campaignId: campaign.id,
+                range: { preset: timeRange },
+              }),
+            });
 
-            if (!metricsError && metricsData?.metrics) {
+            if (metricsResponse.ok) {
+              const metricsData = await metricsResponse.json();
               return {
                 ...campaign,
                 metrics: metricsData.metrics,
+                comparison: metricsData.comparison,
+                trends: metricsData.trends,
               };
             }
           } catch (err) {
@@ -193,7 +198,7 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
 
         {adAccountId && (
           <Box className="w-full mb-4">
-            <TimelineContainer accountId={adAccountId} />
+            <TimelineContainer brandId={brandId} accountId={adAccountId} />
           </Box>
         )}
 

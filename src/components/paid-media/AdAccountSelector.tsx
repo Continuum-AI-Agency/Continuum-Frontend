@@ -2,8 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { Select, Callout, Text, Flex } from "@radix-ui/themes";
-import { useToast } from "@/components/ui/ToastProvider";
+import { Select, Callout } from "@radix-ui/themes";
 import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 
 type AdAccount = {
@@ -23,22 +22,85 @@ export function AdAccountSelector({
   onSelect,
 }: AdAccountSelectorProps) {
   const { integrations, isLoading, isError } = useBrandIntegrations(brandId);
+  const [timelineAccounts, setTimelineAccounts] = React.useState<AdAccount[]>([]);
+  const [timelineAccountsLoaded, setTimelineAccountsLoaded] = React.useState(false);
 
   const adAccounts = React.useMemo(() => {
-    if (!integrations) return [];
+    const seen = new Set<string>();
+    const merged: AdAccount[] = [];
+
+    timelineAccounts.forEach((account) => {
+      if (seen.has(account.id)) return;
+      seen.add(account.id);
+      merged.push(account);
+    });
+
+    if (!integrations) return merged;
     const facebookAccounts = integrations.facebook?.accounts ?? [];
-    return facebookAccounts.map((acc) => ({
-      id: acc.externalAccountId ?? acc.integrationAccountId,
-      name: acc.name,
-    }));
-  }, [integrations]);
+    facebookAccounts.forEach((account) => {
+      const id = account.externalAccountId ?? account.integrationAccountId;
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      merged.push({
+        id,
+        name: account.name,
+      });
+    });
+
+    return merged;
+  }, [integrations, timelineAccounts]);
+
+  React.useEffect(() => {
+    let isCancelled = false;
+    setTimelineAccountsLoaded(false);
+    setTimelineAccounts([]);
+
+    const fetchTimelineAccounts = async () => {
+      try {
+        const response = await fetch("/api/paid-media/timeline/accounts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ brandId }),
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!isCancelled) {
+            setTimelineAccountsLoaded(true);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as { accounts?: AdAccount[] };
+        const accounts = Array.isArray(payload.accounts) ? payload.accounts : [];
+        if (!isCancelled) {
+          setTimelineAccounts(accounts);
+          setTimelineAccountsLoaded(true);
+        }
+      } catch {
+        if (!isCancelled) {
+          setTimelineAccounts([]);
+          setTimelineAccountsLoaded(true);
+        }
+      }
+    };
+
+    void fetchTimelineAccounts();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [brandId]);
 
   // Auto-select first account if none selected
   React.useEffect(() => {
+    if (!timelineAccountsLoaded) return;
     if (!selectedAccountId && adAccounts.length > 0) {
       onSelect(adAccounts[0].id);
     }
-  }, [selectedAccountId, adAccounts, onSelect]);
+  }, [timelineAccountsLoaded, selectedAccountId, adAccounts, onSelect]);
 
   if (isError) {
     return (

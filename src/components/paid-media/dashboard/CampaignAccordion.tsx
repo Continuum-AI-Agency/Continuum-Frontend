@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdSetTable, type AdSet, type AdSetAdsLoadState } from "./AdSetTable";
+import { PerformanceDetails, type PaidMetricsComparison, type PaidMetricsTrendPoint } from "./PerformanceDetails";
 
 type Campaign = {
   id: string;
@@ -28,6 +29,8 @@ type Campaign = {
     impressions: number;
     clicks: number;
   };
+  comparison?: PaidMetricsComparison;
+  trends?: PaidMetricsTrendPoint[];
 };
 
 type CampaignAccordionProps = {
@@ -70,12 +73,10 @@ function getStatusColor(status: string): "default" | "secondary" | "destructive"
 export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: CampaignAccordionProps) {
   const [adSetState, setAdSetState] = React.useState<AdSetLoadState>({});
   const [adStateByAdSet, setAdStateByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
-  const [expandedCampaigns, setExpandedCampaigns] = React.useState<Set<string>>(new Set());
 
   React.useEffect(() => {
     setAdSetState({});
     setAdStateByAdSet({});
-    setExpandedCampaigns(new Set());
   }, [accountId, timeRange.preset]);
 
   const loadAdSets = React.useCallback(
@@ -113,23 +114,25 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
         const adSetsWithMetrics = await Promise.all(
           rawAdSets.map(async (adSet: AdSet) => {
             try {
-              const { data: metricsData, error: metricsError } = await supabase.functions.invoke(
-                `paid-media-metrics?platform=meta&brandId=${brandId}&accountId=${accountId}&adsetId=${adSet.id}`,
-                {
-                  body: {
-                    platform: "meta",
-                    brandId,
-                    accountId,
-                    adsetId: adSet.id,
-                    range: timeRange,
-                  },
-                }
-              );
+              const metricsResponse = await fetch("/api/paid-metrics", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  platform: "meta",
+                  brandId,
+                  accountId,
+                  adsetId: adSet.id,
+                  range: timeRange,
+                }),
+              });
 
-              if (!metricsError && metricsData?.metrics) {
+              if (metricsResponse.ok) {
+                const metricsData = await metricsResponse.json();
                 return {
                   ...adSet,
                   metrics: metricsData.metrics,
+                  comparison: metricsData.comparison,
+                  trends: metricsData.trends,
                 };
               }
             } catch (err) {
@@ -158,6 +161,14 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
     },
     [accountId, adSetState, brandId, timeRange]
   );
+
+  React.useEffect(() => {
+    if (campaigns.length === 0) {
+      return;
+    }
+
+    void loadAdSets(campaigns[0].id);
+  }, [campaigns, loadAdSets]);
 
   const loadAdsForAdSet = React.useCallback(
     async (adSetId: string) => {
@@ -223,29 +234,15 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
     [accountId, brandId, timeRange.preset]
   );
 
-  const handleValueChange = React.useCallback(
-    (value: string[]) => {
-      const newExpanded = new Set(value);
-      const added = value.find((item) => !expandedCampaigns.has(item));
-
-      if (added) {
-        void loadAdSets(added);
-      }
-
-      setExpandedCampaigns(newExpanded);
-    },
-    [expandedCampaigns, loadAdSets]
-  );
-
   if (campaigns.length === 0) {
     return <div className="py-8 text-center text-muted-foreground">No campaigns found.</div>;
   }
 
   return (
     <Accordion
+      key={`${accountId}-${timeRange.preset}`}
       type="multiple"
-      value={Array.from(expandedCampaigns)}
-      onValueChange={handleValueChange}
+      defaultValue={campaigns[0] ? [campaigns[0].id] : undefined}
       className="w-full"
     >
       {campaigns.map((campaign) => {
@@ -253,7 +250,12 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
 
         return (
           <AccordionItem key={campaign.id} value={campaign.id}>
-            <AccordionTrigger className="hover:no-underline">
+            <AccordionTrigger
+              className="hover:no-underline"
+              onClick={() => {
+                void loadAdSets(campaign.id);
+              }}
+            >
               <div className="flex w-full items-center justify-between pr-4">
                 <div className="flex items-center gap-3">
                   <span className="font-medium">{campaign.name}</span>
@@ -271,6 +273,11 @@ export function CampaignAccordion({ campaigns, brandId, accountId, timeRange }: 
             </AccordionTrigger>
             <AccordionContent>
               <div className="px-2 pt-4">
+                <PerformanceDetails
+                  comparison={campaign.comparison}
+                  trends={campaign.trends}
+                  className="mb-4"
+                />
                 {state.status === "loading" ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
                     <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />

@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { PerformanceDetails, type PaidMetricsComparison, type PaidMetricsTrendPoint } from "./PerformanceDetails";
 
 export type AdSet = {
   id: string;
@@ -31,6 +32,8 @@ export type AdSet = {
     impressions: number;
     clicks: number;
   };
+  comparison?: PaidMetricsComparison;
+  trends?: PaidMetricsTrendPoint[];
 };
 
 export type MetaAd = {
@@ -258,6 +261,12 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
                 {isExpanded ? (
                   <TableRow className="bg-muted/25 hover:bg-muted/25">
                     <TableCell colSpan={8} className="p-4">
+                      <PerformanceDetails
+                        comparison={adSet.comparison}
+                        trends={adSet.trends}
+                        className="mb-3"
+                      />
+
                       {adsState?.status === "loading" ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <ReloadIcon className="h-4 w-4 animate-spin" />

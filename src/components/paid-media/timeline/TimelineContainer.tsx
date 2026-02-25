@@ -12,10 +12,11 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface TimelineContainerProps {
+    brandId: string;
     accountId: string | null;
 }
 
-export function TimelineContainer({ accountId }: TimelineContainerProps) {
+export function TimelineContainer({ brandId, accountId }: TimelineContainerProps) {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showSidebar, setShowSidebar] = useState(false);
     const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
@@ -30,6 +31,7 @@ export function TimelineContainer({ accountId }: TimelineContainerProps) {
     const endDate = date?.to?.toISOString();
 
     const { campaigns, events, loading, error } = useTimelineBlocks({
+        brandId,
         accountId,
         startDate,
         endDate

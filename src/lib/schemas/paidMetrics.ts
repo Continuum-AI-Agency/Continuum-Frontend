@@ -40,6 +40,7 @@ export type PaidMetricsRequest = {
     platform?: "meta" | "google-ads" | "dv360";
     accountId?: string;
     campaignId?: string;
+    adsetId?: string;
     range: {
         preset: string;
         since?: string;

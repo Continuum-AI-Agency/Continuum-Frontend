@@ -9,6 +9,7 @@ const requestSchema = z.object({
   platform: z.enum(["meta", "google-ads", "dv360"]).optional().default("meta"),
   accountId: z.string().optional(),
   campaignId: z.string().optional(),
+  adsetId: z.string().optional(),
   range: z.object({
     preset: z.string(),
     since: z.string().optional(),
