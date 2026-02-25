@@ -87,6 +87,41 @@ export function parseInsightsSeries(
     .filter((entry) => entry.date.length > 0);
 }
 
+export function parseBreakdownDailySeries(
+  payload: Record<string, unknown> | null | undefined,
+  metricName: string
+): Array<{ date: string; dimension: string; value: number }> {
+  const metric = extractMetricByName(payload, metricName);
+  if (!metric) return [];
+
+  const values = (metric.values as Array<Record<string, unknown>> | undefined) ?? [];
+  return values.flatMap((item) => {
+    const date = typeof item.end_time === "string" ? item.end_time.slice(0, 10) : "";
+    if (!date) return [];
+
+    const rawValue = item.value;
+    if (typeof rawValue !== "object" || rawValue === null) return [];
+
+    const breakdowns =
+      (rawValue as Record<string, unknown>).breakdowns as Array<Record<string, unknown>> | undefined;
+    if (!breakdowns || breakdowns.length === 0) return [];
+
+    return breakdowns.flatMap((breakdown) => {
+      const results = (breakdown.results as Array<Record<string, unknown>> | undefined) ?? [];
+      return results.map((result) => {
+        const dimensionValues =
+          (result.dimension_values as Array<string> | undefined) ?? [];
+        const dimension = dimensionValues[0] ?? "UNKNOWN";
+        return {
+          date,
+          dimension,
+          value: asNumber(result.value),
+        };
+      });
+    });
+  });
+}
+
 type MetricValuePoint = {
   date: string;
   value: number;

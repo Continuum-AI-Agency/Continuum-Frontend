@@ -9,6 +9,7 @@ import {
   metaFetchJson,
   metricTotal,
   normalizePermalink,
+  parseBreakdownDailySeries,
   parseInsightsSeries,
   sumMetricValues,
   trendComparison,
@@ -308,6 +309,7 @@ export async function fetchInstagramAnalytics(params: {
   const includePosts = scope !== "account";
   const includePostDetails = scope === "all" || (scope === "posts" && Boolean(selectedPostId));
   const comparisonSince = dayBefore(range.since);
+  const emptyPayload = Promise.resolve({ data: [] as Array<Record<string, unknown>> });
 
   const [
     coreTotals,
@@ -317,6 +319,8 @@ export async function fetchInstagramAnalytics(params: {
     timeSeriesCore,
     timeSeriesComments,
     followerComparisonTotals,
+    viewsBreakdownSeries,
+    reachBreakdownSeries,
     mediaPayload,
   ] = await Promise.all([
     includeAccount
@@ -331,7 +335,7 @@ export async function fetchInstagramAnalytics(params: {
       warnings.push(`Instagram core insights failed: ${error instanceof Error ? error.message : "Unknown"}`);
       return { data: [] };
     })
-      : Promise.resolve({ data: [] }),
+      : emptyPayload,
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "follower_count,profile_views",
@@ -394,10 +398,30 @@ export async function fetchInstagramAnalytics(params: {
       access_token: token,
     }).catch(() => null)
       : Promise.resolve(null),
+    includeAccount
+      ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
+      metric: "views",
+      breakdown: "media_product_type",
+      period: "day",
+      since: comparisonSince,
+      until: range.untilExclusive,
+      access_token: token,
+    }).catch(() => null)
+      : Promise.resolve(null),
+    includeAccount
+      ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
+      metric: "reach",
+      breakdown: "follow_type",
+      period: "day",
+      since: comparisonSince,
+      until: range.untilExclusive,
+      access_token: token,
+    }).catch(() => null)
+      : Promise.resolve(null),
     includePosts
       ? (scope === "posts"
           ? selectedPostId
-            ? Promise.resolve({ data: [] as Array<Record<string, unknown>> })
+            ? emptyPayload
             : fetchInstagramMediaForRange({
                 accountId: account.external_account_id,
                 accessToken: token,
@@ -415,7 +439,7 @@ export async function fetchInstagramAnalytics(params: {
               );
               return { data: [] };
             }))
-      : Promise.resolve({ data: [] }),
+      : emptyPayload,
   ]);
 
   const reach = metricTotal(extractMetricByName(coreTotals ?? undefined, "reach"));
@@ -456,10 +480,10 @@ export async function fetchInstagramAnalytics(params: {
   let storiesViews = 0;
   const viewResults = (viewBreakdownResults?.[0]?.results as Array<Record<string, unknown>> | undefined) ?? [];
   viewResults.forEach((entry) => {
-    const type = ((entry.dimension_values as Array<string> | undefined) ?? [""])[0];
+    const type = String(((entry.dimension_values as Array<string> | undefined) ?? [""])[0] ?? "").toUpperCase();
     const value = asNumber(entry.value);
-    if (type === "REEL") reelsViews += value;
-    else if (type === "STORY") storiesViews += value;
+    if (type === "REEL" || type === "REELS") reelsViews += value;
+    else if (type === "STORY" || type === "STORIES") storiesViews += value;
     else postViews += value;
   });
 
@@ -467,10 +491,10 @@ export async function fetchInstagramAnalytics(params: {
   let nonFollowerReach = 0;
   const followerResults = (reachBreakdownResults?.[0]?.results as Array<Record<string, unknown>> | undefined) ?? [];
   followerResults.forEach((entry) => {
-    const type = ((entry.dimension_values as Array<string> | undefined) ?? [""])[0];
+    const type = String(((entry.dimension_values as Array<string> | undefined) ?? [""])[0] ?? "").toUpperCase();
     const value = asNumber(entry.value);
     if (type === "FOLLOWER") followerReach += value;
-    if (type === "NON_FOLLOWER") nonFollowerReach += value;
+    if (type === "NON_FOLLOWER" || type === "NONFOLLOWER") nonFollowerReach += value;
   });
 
   const reachSeries = parseInsightsSeries(timeSeriesCore ?? undefined, "reach");
@@ -479,6 +503,8 @@ export async function fetchInstagramAnalytics(params: {
   const commentsSeries = parseInsightsSeries(timeSeriesComments ?? undefined, "comments");
   const followerSeries = parseInsightsSeries(followerComparisonTotals ?? undefined, "follower_count");
   const profileViewsSeries = parseInsightsSeries(followerComparisonTotals ?? undefined, "profile_views");
+  const viewsBreakdownDaily = parseBreakdownDailySeries(viewsBreakdownSeries ?? undefined, "views");
+  const reachBreakdownDaily = parseBreakdownDailySeries(reachBreakdownSeries ?? undefined, "reach");
 
   const trendMap = new Map<string, Record<string, string | number | boolean | undefined>>();
   [reachSeries, viewsSeries, engagedSeries, commentsSeries].forEach((series, index) => {
@@ -490,6 +516,11 @@ export async function fetchInstagramAnalytics(params: {
           reach: 0,
           views: 0,
           accountsEngaged: 0,
+          reelsViews: 0,
+          postViews: 0,
+          storiesViews: 0,
+          followerReach: 0,
+          nonFollowerReach: 0,
           comments: 0,
           newFollowers: 0,
           profileVisits24h: 0,
@@ -511,6 +542,11 @@ export async function fetchInstagramAnalytics(params: {
         reach: 0,
         views: 0,
         accountsEngaged: 0,
+        reelsViews: 0,
+        postViews: 0,
+        storiesViews: 0,
+        followerReach: 0,
+        nonFollowerReach: 0,
         comments: 0,
         newFollowers: 0,
         profileVisits24h: 0,
@@ -528,12 +564,66 @@ export async function fetchInstagramAnalytics(params: {
         reach: 0,
         views: 0,
         accountsEngaged: 0,
+        reelsViews: 0,
+        postViews: 0,
+        storiesViews: 0,
+        followerReach: 0,
+        nonFollowerReach: 0,
         comments: 0,
         newFollowers: 0,
         profileVisits24h: 0,
         boosted: false,
       };
     current.profileVisits24h = point.value;
+    trendMap.set(point.date, current);
+  });
+
+  viewsBreakdownDaily.forEach((point) => {
+    if (point.date > range.until) return;
+    const current =
+      trendMap.get(point.date) ?? {
+        date: point.date,
+        reach: 0,
+        views: 0,
+        accountsEngaged: 0,
+        reelsViews: 0,
+        postViews: 0,
+        storiesViews: 0,
+        followerReach: 0,
+        nonFollowerReach: 0,
+        comments: 0,
+        newFollowers: 0,
+        profileVisits24h: 0,
+        boosted: false,
+      };
+    const type = point.dimension.toUpperCase();
+    if (type === "REEL" || type === "REELS") current.reelsViews = asNumber(current.reelsViews) + point.value;
+    else if (type === "STORY" || type === "STORIES") current.storiesViews = asNumber(current.storiesViews) + point.value;
+    else current.postViews = asNumber(current.postViews) + point.value;
+    trendMap.set(point.date, current);
+  });
+
+  reachBreakdownDaily.forEach((point) => {
+    if (point.date > range.until) return;
+    const current =
+      trendMap.get(point.date) ?? {
+        date: point.date,
+        reach: 0,
+        views: 0,
+        accountsEngaged: 0,
+        reelsViews: 0,
+        postViews: 0,
+        storiesViews: 0,
+        followerReach: 0,
+        nonFollowerReach: 0,
+        comments: 0,
+        newFollowers: 0,
+        profileVisits24h: 0,
+        boosted: false,
+      };
+    const type = point.dimension.toUpperCase();
+    if (type === "FOLLOWER") current.followerReach = point.value;
+    if (type === "NON_FOLLOWER" || type === "NONFOLLOWER") current.nonFollowerReach = point.value;
     trendMap.set(point.date, current);
   });
 
@@ -653,6 +743,11 @@ export async function fetchInstagramAnalytics(params: {
   assignComparison(comparison, "reach", trendComparison(comparisonTrends, "reach"));
   assignComparison(comparison, "views", trendComparison(comparisonTrends, "views"));
   assignComparison(comparison, "accountsEngaged", trendComparison(comparisonTrends, "accountsEngaged"));
+  assignComparison(comparison, "reelsViews", trendComparison(comparisonTrends, "reelsViews"));
+  assignComparison(comparison, "postViews", trendComparison(comparisonTrends, "postViews"));
+  assignComparison(comparison, "storiesViews", trendComparison(comparisonTrends, "storiesViews"));
+  assignComparison(comparison, "followerReach", trendComparison(comparisonTrends, "followerReach"));
+  assignComparison(comparison, "nonFollowerReach", trendComparison(comparisonTrends, "nonFollowerReach"));
   assignComparison(comparison, "comments", trendComparison(comparisonTrends, "comments"));
   assignComparison(
     comparison,

@@ -16,8 +16,6 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  Area,
-  AreaChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -124,11 +122,26 @@ const drilldownChartConfig = {
 
 const ACCOUNT_TREND_MAP: Partial<Record<
   keyof OrganicMetrics,
-  "reach" | "views" | "accountsEngaged" | "comments" | "newFollowers" | "profileVisits24h"
+  | "reach"
+  | "views"
+  | "accountsEngaged"
+  | "comments"
+  | "newFollowers"
+  | "profileVisits24h"
+  | "reelsViews"
+  | "postViews"
+  | "storiesViews"
+  | "followerReach"
+  | "nonFollowerReach"
 >> = {
   accountsEngaged: "accountsEngaged",
   reach: "reach",
   views: "views",
+  reelsViews: "reelsViews",
+  postViews: "postViews",
+  storiesViews: "storiesViews",
+  followerReach: "followerReach",
+  nonFollowerReach: "nonFollowerReach",
   comments: "comments",
   newFollowers: "newFollowers",
   profileVisits24h: "profileVisits24h",
@@ -241,12 +254,14 @@ function fallbackComparisonFromTrends(
   if (!trendKey) return undefined;
 
   const trends = (data.trends ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
-  if (trends.length === 0) return undefined;
+  const numericPoints = trends
+    .map((trend) => trend[trendKey])
+    .filter((value): value is number => typeof value === "number");
+  if (numericPoints.length < 2) return undefined;
 
-  const currentValue = trends[trends.length - 1]?.[trendKey];
-  const previousValue = trends[Math.max(0, trends.length - 2)]?.[trendKey];
-  const current = typeof currentValue === "number" ? currentValue : 0;
-  const previous = typeof previousValue === "number" ? previousValue : current;
+  const current = numericPoints[numericPoints.length - 1];
+  const previous = numericPoints[numericPoints.length - 2];
+  if (current === undefined || previous === undefined) return undefined;
 
   return {
     current,
@@ -289,13 +304,23 @@ function buildAccountMetricSeries(params: {
   const trendKey = ACCOUNT_TREND_MAP[metricKey];
 
   if (trendKey) {
-    return trends
+    const points = trends
       .map((trend) => ({
         date: trend.date,
-        value: typeof trend[trendKey] === "number" ? trend[trendKey] : 0,
+        value: trend[trendKey],
         boosted: Boolean(trend.boosted),
       }))
-      .slice(Math.max(0, trends.length - days));
+      .filter((trend): trend is { date: string; value: number; boosted: boolean } => typeof trend.value === "number");
+
+    if (points.length === 0) return [];
+
+    return points
+      .map((trend) => ({
+        date: trend.date,
+        value: trend.value,
+        boosted: trend.boosted,
+      }))
+      .slice(Math.max(0, points.length - days));
   }
 
   return [];
@@ -958,19 +983,12 @@ function Dashboard({
                 <Text size="2" color="gray">No trend data available for this metric and window.</Text>
               ) : (
                 <ChartContainer config={drilldownChartConfig} className="h-56 w-full">
-                  <AreaChart data={accountSeries}>
+                  <LineChart data={accountSeries}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="date" tickFormatter={(value) => formatShortDate(value)} minTickGap={20} />
                     <YAxis />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="var(--color-value)"
-                      fill="var(--color-value)"
-                      fillOpacity={0.22}
-                      strokeWidth={2}
-                    />
+                    <Line type="monotone" dataKey="value" stroke="var(--color-value)" strokeWidth={2} dot={false} />
                     {(data.boostedEvents ?? []).map((event) => (
                       <ReferenceLine
                         key={event.id}
@@ -980,7 +998,7 @@ function Dashboard({
                         label={{ value: "Boost", position: "top", fill: "#ef4444", fontSize: 10 }}
                       />
                     ))}
-                  </AreaChart>
+                  </LineChart>
                 </ChartContainer>
               )}
             </Box>
