@@ -218,11 +218,6 @@ function inRange(timestamp: number, range: DateRange) {
   return timestamp >= since && timestamp < untilExclusive;
 }
 
-function beforeRange(timestamp: number, range: DateRange) {
-  const since = Date.parse(`${range.since}T00:00:00.000Z`);
-  return timestamp < since;
-}
-
 async function fetchInstagramMediaForRange(params: {
   accountId: string;
   accessToken: string;
@@ -233,6 +228,8 @@ async function fetchInstagramMediaForRange(params: {
   let cursor: string | null = null;
   let hasMore = true;
   let pageCount = 0;
+  let consecutivePagesBeforeRange = 0;
+  const rangeSinceTimestamp = Date.parse(`${params.range.since}T00:00:00.000Z`);
 
   while (hasMore && pageCount < 20) {
     const payload = await metaFetchJson(
@@ -257,18 +254,33 @@ async function fetchInstagramMediaForRange(params: {
     const posts = (payload.data as Array<Record<string, unknown>> | undefined) ?? [];
     if (posts.length === 0) break;
 
-    let reachedOlderThanRange = false;
+    let pageHasInRange = false;
+    let pageNewestTimestamp = Number.NEGATIVE_INFINITY;
+    let pageOldestTimestamp = Number.POSITIVE_INFINITY;
     for (const post of posts) {
       const timestamp = toTimestamp(post.timestamp);
       if (timestamp === null) continue;
+      if (timestamp > pageNewestTimestamp) pageNewestTimestamp = timestamp;
+      if (timestamp < pageOldestTimestamp) pageOldestTimestamp = timestamp;
       if (inRange(timestamp, params.range)) {
         mediaInRange.push(post);
-      } else if (beforeRange(timestamp, params.range)) {
-        reachedOlderThanRange = true;
+        pageHasInRange = true;
       }
     }
 
-    if (reachedOlderThanRange) break;
+    const pageEntirelyBeforeRange =
+      Number.isFinite(pageOldestTimestamp) &&
+      Number.isFinite(pageNewestTimestamp) &&
+      pageNewestTimestamp < rangeSinceTimestamp;
+
+    if (pageEntirelyBeforeRange && !pageHasInRange) {
+      consecutivePagesBeforeRange += 1;
+    } else {
+      consecutivePagesBeforeRange = 0;
+    }
+
+    if (consecutivePagesBeforeRange >= 2) break;
+
     const nextCursor =
       (payload.paging as { cursors?: { after?: string } } | undefined)?.cursors?.after ?? null;
     if (!nextCursor) {

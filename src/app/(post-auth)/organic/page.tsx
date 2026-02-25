@@ -176,13 +176,13 @@ export default async function OrganicPage() {
     metricAccountsByPlatform.instagram.length > 0 ? "instagram" : "facebook";
 
   return (
-    <div className="-mx-2 flex h-[calc(100dvh-4.5rem)] min-h-[var(--workspace-min-height)] w-auto flex-col gap-3 overflow-hidden pb-2 sm:-mx-3 lg:-mx-4">
-      <div className="shrink-0 space-y-3 px-2 sm:px-3 lg:px-4">
+    <div className="flex h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full flex-col gap-2 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+      <div className="shrink-0 space-y-2">
         <BrandInsightsAutoGenerate
           brandId={brandProfileId}
           shouldGenerate={shouldAutoGenerateInsights}
         />
-        <Heading size="6" className="text-white">
+        <Heading size="5" className="text-white">
           Organic Planner
         </Heading>
         {insightsError ? (
@@ -202,7 +202,7 @@ export default async function OrganicPage() {
           </Callout.Root>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 px-2 sm:px-3 lg:px-4">
+      <div className="min-h-0 flex-1">
         <OrganicWorkspaceTabs
           plannerSlot={(
             <OrganicCalendarWorkspace

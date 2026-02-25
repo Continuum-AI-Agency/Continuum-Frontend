@@ -45,7 +45,7 @@ function DayHeader({
   const dayNumber = dateLabel.split(" ").at(-1) ?? dateLabel
 
   return (
-    <div className="sticky top-0 z-20 border-r border-b border-border/70 bg-background/95 px-2 py-2 text-center backdrop-blur last:border-r-0">
+    <div className="sticky top-0 z-20 border-r border-b border-border/50 bg-background/95 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
@@ -73,10 +73,10 @@ export function PlannerMatrix({
   onCreatePost,
 }: PlannerMatrixProps) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-background">
-      <div className="min-w-[960px]">
-        <div className="grid grid-cols-[112px_repeat(7,minmax(120px,1fr))] bg-[radial-gradient(color-mix(in_srgb,var(--border)_50%,transparent)_1px,transparent_1px)] [background-size:16px_16px]">
-          <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/70 bg-background/95 px-3 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
+    <div className="min-h-0 flex-1 overflow-auto rounded-lg ring-1 ring-border/45 bg-background/90">
+      <div className="min-w-[880px]">
+        <div className="grid grid-cols-[96px_repeat(7,minmax(110px,1fr))]">
+          <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
             Platform
           </div>
 
@@ -93,7 +93,7 @@ export function PlannerMatrix({
             <React.Fragment key={platform.key}>
               <div
                 className={cn(
-                  "sticky left-0 z-10 flex flex-col items-center justify-center border-r border-b border-border/70 bg-background/95 px-2 backdrop-blur",
+                  "sticky left-0 z-10 flex flex-col items-center justify-center border-r border-b border-border/50 bg-background/95 px-1.5 backdrop-blur",
                   platform.comingSoon ? "gap-0.5 py-1.5" : "gap-1 py-3"
                 )}
               >

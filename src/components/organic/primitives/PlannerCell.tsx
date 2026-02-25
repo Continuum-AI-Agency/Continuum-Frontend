@@ -107,8 +107,8 @@ export function PlannerCell({
       ref={setNodeRef}
       className={cn(
         "relative align-top",
-        compact ? "min-h-[56px] p-1.5" : "min-h-[118px] p-2",
-        "border-r border-b border-border/70",
+        compact ? "min-h-[50px] p-1" : "min-h-[102px] p-1.5",
+        "border-r border-b border-border/50",
         !isLastColumn && "border-r",
         isLastColumn && "border-r-0",
         isLastRow && "border-b-0",
@@ -124,7 +124,7 @@ export function PlannerCell({
       <div
         className={cn(
           "relative z-10 flex flex-col gap-2",
-          !compact && !isComingSoon && "max-h-[260px] overflow-y-auto pr-1"
+          !compact && !isComingSoon && "max-h-[228px] overflow-y-auto pr-1"
         )}
       >
         {visibleDrafts.map((draft) => (

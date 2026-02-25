@@ -409,15 +409,15 @@ function PostGalleryCard({
   const carousel = isCarouselPost(post);
   const mediaHeightClass = selected
     ? video
-      ? "h-[420px] sm:h-[500px]"
+      ? "h-[400px] sm:h-[460px]"
       : carousel
-        ? "h-[360px] sm:h-[440px]"
-        : "h-[390px] sm:h-[460px]"
+        ? "h-[360px] sm:h-[420px]"
+        : "h-[380px] sm:h-[440px]"
     : video
-      ? "h-[320px] sm:h-[390px]"
+      ? "h-[320px] sm:h-[380px]"
       : carousel
-        ? "h-[260px] sm:h-[320px]"
-        : "h-[300px] sm:h-[360px]";
+        ? "h-[280px] sm:h-[320px]"
+        : "h-[300px] sm:h-[340px]";
   const reelData: ReelItem[] = preview
     ? [
         {
@@ -1030,18 +1030,23 @@ function Dashboard({
               {(data.posts ?? []).length === 0 ? (
                 <Text size="2" color="gray">No posts were returned for this account.</Text>
               ) : (
-                <div className="mx-auto w-full max-w-[1780px]">
+                <div className="mx-auto w-full">
                   <motion.div
                     layout
                     transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
                     className={cn(
-                      "grid grid-cols-1 gap-3 lg:items-start",
+                      "grid grid-cols-1 gap-4 lg:items-start",
                       selectedPost ? "lg:grid-cols-[minmax(0,1fr)_420px]" : "lg:grid-cols-1"
                     )}
                   >
                     <motion.div layout className="min-w-0">
                       <div className="mx-auto max-h-[74vh] w-full overflow-y-auto px-1" onScroll={handlePostsScroll}>
-                        <div className="columns-1 sm:columns-2 lg:columns-3 2xl:columns-4 [column-gap:0.75rem]">
+                        <div
+                          className={cn(
+                            "mx-auto grid gap-3 sm:gap-4",
+                            "[grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]"
+                          )}
+                        >
                           {(data.posts ?? []).map((post) => (
                             <motion.div
                               layout
@@ -1049,7 +1054,7 @@ function Dashboard({
                               ref={(node) => {
                                 postCardRefs.current[post.id] = node;
                               }}
-                              className="mb-3 break-inside-avoid"
+                              className="min-w-0"
                             >
                               <PostGalleryCard
                                 post={post}
@@ -1062,7 +1067,7 @@ function Dashboard({
                             </motion.div>
                           ))}
                         </div>
-                        <div className="flex items-center justify-center py-3">
+                        <div className="flex items-center justify-center py-4">
                           {loadingMorePosts ? (
                             <Text size="1" color="gray">Loading previous 7d...</Text>
                           ) : hasMorePosts ? (
@@ -1290,7 +1295,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           const postsData = await fetchPostsWindow({
             accountId,
             weekOffset: 0,
-            forceRefresh,
+            forceRefresh: true,
           });
           if (!postsData) {
             setState({ status: "error", message: "Unable to load post windows for the selected range." });

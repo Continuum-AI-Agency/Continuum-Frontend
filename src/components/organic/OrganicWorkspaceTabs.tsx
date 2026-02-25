@@ -12,8 +12,8 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
   const [activeView, setActiveView] = React.useState<"planner" | "metrics">("planner");
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-subtle bg-background/40">
-      <div className="shrink-0 border-b px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <div className="shrink-0 px-1 pb-1">
         <Tabs.Root value={activeView} onValueChange={(value) => setActiveView(value as "planner" | "metrics")}>
           <Tabs.List>
             <Tabs.Trigger value="planner">Planner</Tabs.Trigger>

@@ -405,17 +405,17 @@ export function OrganicCalendarWorkspaceClient({
         <motion.div
           layout
           transition={layoutTransition}
-          className="flex h-full min-h-0 w-full flex-col gap-3 lg:flex-row"
+          className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row"
         >
           <motion.section
             layout
             transition={layoutTransition}
-            className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden"
+            className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
           >
             <motion.div layout transition={layoutTransition}>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                         {selectedTrendIds.length}
@@ -518,7 +518,7 @@ export function OrganicCalendarWorkspaceClient({
                   </div>
                 </ResizablePanel>
 
-                <ResizableHandle withHandle className="my-2 h-1 cursor-row-resize rounded-md" />
+                <ResizableHandle withHandle className="my-1 h-1 cursor-row-resize rounded-md" />
 
                 <ResizablePanel defaultSize={26} minSize={18}>
                   <div className="h-full min-h-0 overflow-hidden">
@@ -555,9 +555,9 @@ export function OrganicCalendarWorkspaceClient({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}
                 transition={previewTransition}
-                className="h-[52dvh] min-h-[22rem] overflow-hidden rounded-xl border border-border bg-card p-3 lg:h-full lg:w-[32rem] lg:shrink-0"
+                className="h-[50dvh] min-h-[20rem] overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[28rem] lg:shrink-0"
               >
-                <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+                <div className="mb-2 flex items-center justify-between pb-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Post Preview
                   </p>
@@ -571,7 +571,7 @@ export function OrganicCalendarWorkspaceClient({
                     <Cross2Icon className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                <div className="h-[calc(100%-2.25rem)] overflow-hidden rounded-lg border border-border bg-background">
+                <div className="h-[calc(100%-2rem)] overflow-hidden rounded-md bg-background/85">
                   <OrganicDraftPreview draft={selectedDraft} />
                 </div>
               </motion.aside>

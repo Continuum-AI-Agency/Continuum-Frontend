@@ -79,8 +79,8 @@ export function TrendWorkbench({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <section className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card p-3">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <section className="flex h-full min-h-0 flex-col rounded-lg bg-card/70 p-2.5 ring-1 ring-border/40">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Trends Workbench
@@ -134,7 +134,7 @@ export function TrendWorkbench({
               />
             </div>
 
-            <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border bg-background/40">
+            <ScrollArea className="min-h-0 flex-1 rounded-md bg-background/45 ring-1 ring-border/35">
               <div className="space-y-2 p-2">
                 {filteredTrends.map((trend) => {
                   const isSelected = selectedTrendIds.includes(trend.id)

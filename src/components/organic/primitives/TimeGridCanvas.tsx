@@ -68,7 +68,7 @@ export function TimeGridCanvas({
   const todayId = React.useMemo(() => formatDayId(new Date()), [])
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-4 rounded-xl border border-border bg-card p-4">
+    <section className="flex h-full min-h-0 flex-col gap-2 rounded-lg bg-card/50 p-2">
       <PlannerHeader
         title={rangeTitle}
         subtitle={rangeSubtitle}

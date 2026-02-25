@@ -39,9 +39,9 @@ export function PlannerHeader({
   onCreatePost,
 }: PlannerHeaderProps) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
+    <header className="flex flex-wrap items-start justify-between gap-3 pb-1">
       <div className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
         {subtitle ? (
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         ) : null}
