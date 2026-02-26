@@ -203,23 +203,26 @@ function ActionItemContent({ log }: { log: ActionLog }) {
 
 function LoadingSkeleton() {
   return (
-    <Flex direction="column" gap="3">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <Box key={i}>
-          <Flex align="center" justify="between" gap="4">
-            <Flex align="center" gap="3">
-              <Skeleton className="h-10 w-10 rounded-full" />
-              <Box>
-                <Skeleton className="h-4 w-32 mb-2" />
-                <Skeleton className="h-3 w-48" />
-              </Box>
-            </Flex>
-            <Skeleton className="h-6 w-20" />
-          </Flex>
-          {i < 2 && <Separator my="3" />}
-        </Box>
-      ))}
-    </Flex>
+    <Box className="space-y-3">
+      <div className="rounded-md border overflow-hidden">
+        <div className="grid grid-cols-[50px_1fr_1.2fr_1fr_1fr] gap-2 border-b bg-muted/20 px-3 py-2">
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <Skeleton key={`dco-head-${idx}`} className="h-4 w-full" />
+          ))}
+        </div>
+        <div className="space-y-2 p-3">
+          {Array.from({ length: 4 }).map((_, rowIdx) => (
+            <div key={`dco-row-${rowIdx}`} className="grid grid-cols-[50px_1fr_1.2fr_1fr_1fr] gap-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full rounded-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Box>
   );
 }
 

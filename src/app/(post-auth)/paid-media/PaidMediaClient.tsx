@@ -12,6 +12,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { useCampaignStore } from "@/CampaignCanvas/stores/useCampaignStore";
 import { buildCampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 import { useSession } from "@/hooks/useSession";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type PaidMediaClientPageProps = {
   brandProfileId: string;
@@ -70,9 +71,16 @@ export default function PaidMediaClientPage({
     return (
       <div className="box-border flex h-full min-h-0 w-full max-w-none flex-col gap-4 px-3 py-6 sm:px-4 lg:px-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="h-10 w-48 animate-pulse rounded-md bg-white/5" />
+          <Skeleton className="h-10 w-56 rounded-md" />
         </div>
-        <div className="flex-1 animate-pulse rounded-xl bg-white/5" />
+        <div className="rounded-lg border bg-card p-2">
+          <Skeleton className="h-9 w-56 rounded-md" />
+        </div>
+        <div className="flex-1 min-h-0 rounded-xl border bg-card p-4 space-y-3">
+          <Skeleton className="h-[38%] w-full rounded-lg" />
+          <Skeleton className="h-1 w-full rounded" />
+          <Skeleton className="h-[58%] w-full rounded-lg" />
+        </div>
       </div>
     );
   }

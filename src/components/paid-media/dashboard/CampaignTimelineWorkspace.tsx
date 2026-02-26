@@ -2206,9 +2206,17 @@ export function CampaignTimelineWorkspace({
 
             {isLoadingCampaigns ? (
               <div className="space-y-2 p-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
+                {Array.from({ length: 4 }).map((_, rowIdx) => (
+                  <div
+                    key={`campaign-timeline-skeleton-row-${rowIdx}`}
+                    className="grid grid-cols-[minmax(220px,1.12fr)_repeat(6,minmax(112px,1fr))] gap-2"
+                  >
+                    <Skeleton className="h-14 w-full" />
+                    {Array.from({ length: 6 }).map((_, colIdx) => (
+                      <Skeleton key={`campaign-timeline-skeleton-cell-${rowIdx}-${colIdx}`} className="h-14 w-full" />
+                    ))}
+                  </div>
+                ))}
               </div>
             ) : filteredCampaigns.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">No campaigns match this filter.</div>

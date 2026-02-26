@@ -2,12 +2,11 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Theme } from "@radix-ui/themes";
-
-type ThemeMode = "light" | "dark" | "system";
+import { applyThemeAppearanceToRoot, type ThemeAppearance, type ThemeMode } from "@/lib/theme/themeDom";
 
 type ThemeContextValue = {
   mode: ThemeMode;
-  appearance: "light" | "dark";
+  appearance: ThemeAppearance;
   setMode: (mode: ThemeMode) => void;
   toggle: () => void;
 };
@@ -21,16 +20,10 @@ function getStoredMode(): ThemeMode | null {
   return null;
 }
 
-function applyDomTheme(appearance: "light" | "dark") {
+function applyDomTheme(appearance: ThemeAppearance) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  if (appearance === "dark") {
-    root.setAttribute("data-theme", "dark");
-    root.style.colorScheme = "dark";
-  } else {
-    root.setAttribute("data-theme", "light");
-    root.style.colorScheme = "light";
-  }
+  applyThemeAppearanceToRoot(root, appearance);
 
   // Ensure background/foreground take effect even when legacy utility classes linger.
   const computed = getComputedStyle(root);
@@ -40,9 +33,9 @@ function applyDomTheme(appearance: "light" | "dark") {
   document.body.style.color = fg.trim();
 }
 
-export function ThemeProvider({ children, initialAppearance }: { children: React.ReactNode; initialAppearance?: "light" | "dark" }) {
-  const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "light");
-  const [appearance, setAppearance] = useState<"light" | "dark">(initialAppearance ?? "light");
+export function ThemeProvider({ children, initialAppearance }: { children: React.ReactNode; initialAppearance?: ThemeAppearance }) {
+  const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "system");
+  const [appearance, setAppearance] = useState<ThemeAppearance>(initialAppearance ?? "light");
 
   // Sync appearance with mode and system preference
   useEffect(() => {
@@ -50,7 +43,7 @@ export function ThemeProvider({ children, initialAppearance }: { children: React
 
     const compute = () => {
       const resolvedDark = mode === "dark" || (mode === "system" && (media?.matches ?? false));
-      const nextAppearance: "light" | "dark" = resolvedDark ? "dark" : "light";
+      const nextAppearance: ThemeAppearance = resolvedDark ? "dark" : "light";
       setAppearance(nextAppearance);
       applyDomTheme(nextAppearance);
       try {

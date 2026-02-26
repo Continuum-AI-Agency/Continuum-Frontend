@@ -165,11 +165,26 @@ export function AdSetTable({ adSets, isLoading, adsByAdSet, onAdSetToggle }: AdS
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
+      <div className="rounded-md border overflow-hidden">
+        <div className="grid grid-cols-[40px_minmax(180px,1.4fr)_120px_repeat(5,minmax(88px,1fr))] gap-2 border-b bg-muted/20 px-3 py-2">
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <Skeleton key={`adset-head-${idx}`} className="h-4 w-full" />
+          ))}
+        </div>
+        <div className="space-y-2 p-3">
+          {Array.from({ length: 4 }).map((_, rowIdx) => (
+            <div key={`adset-row-${rowIdx}`} className="grid grid-cols-[40px_minmax(180px,1.4fr)_120px_repeat(5,minmax(88px,1fr))] gap-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full rounded-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { readThemeAppearanceFromRoot } from "@/lib/theme/themeDom";
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
@@ -27,12 +28,10 @@ const defaultStyles = {
 
 type Theme = "light" | "dark";
 
-// Check document class for theme (works with next-themes, etc.)
+// Read theme from the root element (`data-theme` and fallback classes).
 function getDocumentTheme(): Theme | null {
   if (typeof document === "undefined") return null;
-  if (document.documentElement.classList.contains("dark")) return "dark";
-  if (document.documentElement.classList.contains("light")) return "light";
-  return null;
+  return readThemeAppearanceFromRoot(document.documentElement);
 }
 
 // Get system preference
@@ -51,7 +50,7 @@ function useResolvedTheme(themeProp?: "light" | "dark"): Theme {
   useEffect(() => {
     if (themeProp) return; // Skip detection if theme is provided via prop
 
-    // Watch for document class changes (e.g., next-themes toggling dark class)
+    // Watch for root attribute/class changes.
     const observer = new MutationObserver(() => {
       const docTheme = getDocumentTheme();
       if (docTheme) {
@@ -60,7 +59,7 @@ function useResolvedTheme(themeProp?: "light" | "dark"): Theme {
     });
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "data-theme"],
     });
 
     // Also watch for system preference changes

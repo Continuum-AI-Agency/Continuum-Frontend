@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import { Badge } from "@radix-ui/themes";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Calendar,
   ChevronLeft,
@@ -272,18 +273,23 @@ const PostCard = ({ post }: PostCardProps) => {
 };
 
 const PostSkeleton = () => (
-  <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5">
-    <div className="aspect-square animate-pulse bg-slate-800" />
+  <div className="overflow-hidden rounded-lg border bg-card">
+    <Skeleton className="aspect-square w-full rounded-none" />
     <div className="p-4 space-y-3">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="h-4 w-16 animate-pulse bg-slate-800 rounded" />
-        <div className="h-4 w-16 animate-pulse bg-slate-800 rounded" />
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-4 w-16" />
       </div>
-      <div className="h-16 w-full animate-pulse bg-slate-800 rounded" />
+      <Skeleton className="h-4 w-4/5" />
+      <Skeleton className="h-4 w-3/5" />
       <div className="flex space-x-1">
-        <div className="h-6 w-12 animate-pulse bg-slate-800 rounded" />
-        <div className="h-6 w-12 animate-pulse bg-slate-800 rounded" />
-        <div className="h-6 w-12 animate-pulse bg-slate-800 rounded" />
+        <Skeleton className="h-6 w-14 rounded-full" />
+        <Skeleton className="h-6 w-14 rounded-full" />
+        <Skeleton className="h-6 w-14 rounded-full" />
+      </div>
+      <div className="flex items-center justify-between pt-1">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-20" />
       </div>
     </div>
   </div>

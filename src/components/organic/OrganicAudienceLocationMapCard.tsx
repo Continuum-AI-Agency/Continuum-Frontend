@@ -323,21 +323,21 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
   }, [cityPoints.length, cityZoomThreshold, mode]);
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface text-white">
+    <Card variant="surface" className="border border-subtle bg-surface">
       <Box p="3">
         <Flex align="center" justify="between" gap="2" wrap="wrap" mb="2">
           <Box>
             <Heading size="3">Audience Location</Heading>
-            <Text size="1" className="text-white/75">Followers by {viewMode} ({timeframeLabel(timeframe)})</Text>
+            <Text size="1" color="gray">Followers by {viewMode} ({timeframeLabel(timeframe)})</Text>
           </Box>
           <Flex gap="2" align="center">
-            <Badge variant="soft" color="gray" className="text-white/85">{timeframeLabel(timeframe)}</Badge>
+            <Badge variant="soft" color="gray">{timeframeLabel(timeframe)}</Badge>
             <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
               <button
                 type="button"
                 className={cn(
                   "min-h-10 rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
-                  mode === "country" ? "bg-accent/20 text-white" : "text-white/60"
+                  mode === "country" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                 )}
                 onClick={() => {
                   setMode("country");
@@ -352,7 +352,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 type="button"
                 className={cn(
                   "min-h-10 rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
-                  mode === "city" ? "bg-accent/20 text-white" : "text-white/60"
+                  mode === "city" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                 )}
                 onClick={() => {
                   setMode("city");
@@ -371,7 +371,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           <div className="relative h-[620px] xl:h-[720px] overflow-hidden rounded-lg border border-subtle">
             {renderPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
-                <Text size="2" className="text-white/70">
+                <Text size="2" color="gray">
                   {viewMode === "country" ? "Country breakdown unavailable." : "City breakdown unavailable."}
                 </Text>
               </div>
@@ -380,6 +380,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 ref={mapRef}
                 key={`audience-map-${mode}`}
                 className="h-full w-full"
+                theme="light"
                 center={mapCenter}
                 zoom={initialZoom}
                 minZoom={0.7}
@@ -433,20 +434,20 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
               </Map>
             )}
 
-            <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-subtle bg-background/80 px-2 py-1.5 backdrop-blur">
+            <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
               <Flex gap="2" align="center">
-                <Text size="1" className="text-white/90">High</Text>
+                <Text size="1">High</Text>
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                <Text size="1" className="text-white/90">Medium</Text>
+                <Text size="1">Medium</Text>
                 <span className="h-2.5 w-2.5 rounded-full bg-teal-400" />
-                <Text size="1" className="text-white/90">Low</Text>
+                <Text size="1">Low</Text>
                 <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
               </Flex>
             </div>
 
             {mode === "country" && cityPoints.length > 0 ? (
-              <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-subtle bg-background/80 px-2 py-1.5 backdrop-blur">
-                <Text size="1" className="text-white/80">
+              <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
+                <Text size="1" color="gray">
                   {autoCityMode
                     ? selectedCountryCode
                       ? `City layer: ${selectedCountryCode} (zoom ${mapZoom.toFixed(1)}x)`
@@ -457,24 +458,24 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
             ) : null}
           </div>
 
-          <div className="rounded-lg border border-subtle bg-muted/15 p-3">
+          <div className="rounded-lg border border-subtle bg-white/70 p-3">
             <Heading size="2" mb="2">Top {viewMode === "country" ? "countries" : "cities"}</Heading>
             <div className="space-y-2">
               {topEntries.length === 0 ? (
-                <Text size="2" className="text-white/70">No entries available.</Text>
+                <Text size="2" color="gray">No entries available.</Text>
               ) : (
                 topEntries.map((entry, index) => (
                   <Flex key={`${viewMode}-${entry.key}-${index}`} justify="between" align="center">
-                    <Text size="2" className="truncate pr-2 text-white/80">
+                    <Text size="2" color="gray" className="truncate pr-2">
                       {viewMode === "country" ? resolveCountryLabel(entry.label || entry.key) : entry.label}
                     </Text>
-                    <Text size="2" weight="medium" className="text-white">{entry.value.toLocaleString()}</Text>
+                    <Text size="2" weight="medium">{entry.value.toLocaleString()}</Text>
                   </Flex>
                 ))
               )}
             </div>
             {viewMode === "city" && activeEntries.length > renderPoints.length ? (
-              <Text size="1" className="text-white/65" mt="3">
+              <Text size="1" color="gray" mt="3">
                 Mapped {renderPoints.length}/{activeEntries.length} cities with known coordinates.
               </Text>
             ) : null}

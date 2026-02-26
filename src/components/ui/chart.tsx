@@ -5,7 +5,7 @@ import * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
 
-const THEMES = { light: "", dark: ".dark" } as const;
+const THEMES = { light: "", dark: ':is(.dark, [data-theme="dark"])' } as const;
 
 export type ChartConfig = {
   [k in string]: {

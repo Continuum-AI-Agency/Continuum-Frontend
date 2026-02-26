@@ -11,6 +11,7 @@ import { ToastProvider } from "@/components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";
 import { VersionBanner } from "@/components/version-banner";
 import { MixpanelInit } from "@/components/analytics/MixpanelInit";
+import type { ThemeAppearance } from "@/lib/theme/themeDom";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,14 +48,18 @@ function NoFlashScript() {
             ? 'dark'
             : stored === 'system'
               ? (prefersDark ? 'dark' : 'light')
-              : 'light');
+              : (prefersDark ? 'dark' : 'light'));
         var root = document.documentElement;
         if (appearance === 'dark') {
           root.setAttribute('data-theme', 'dark');
           root.style.colorScheme = 'dark';
+          root.classList.remove('light');
+          root.classList.add('dark');
         } else {
           root.setAttribute('data-theme', 'light');
           root.style.colorScheme = 'light';
+          root.classList.remove('dark');
+          root.classList.add('light');
         }
       } catch (_) {}
     })();
@@ -69,12 +74,13 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const cookieAppearance = cookieStore.get("appearance")?.value;
-  const initialAppearance = cookieAppearance === "dark" ? "dark" : "light";
+  const initialAppearance: ThemeAppearance = cookieAppearance === "dark" ? "dark" : "light";
 
   return (
     <html
       lang="en"
       suppressHydrationWarning
+      className={initialAppearance}
       data-theme={initialAppearance === "dark" ? "dark" : "light"}
       style={{ colorScheme: initialAppearance === "dark" ? "dark" : "light" }}
     >

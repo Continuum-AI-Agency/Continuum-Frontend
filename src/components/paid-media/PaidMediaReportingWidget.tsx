@@ -57,6 +57,12 @@ type Campaign = {
   dailyBudget?: string;
 };
 
+type IntegrationAccountCandidate = {
+  externalAccountId?: string | null;
+  integrationAccountId?: string | null;
+  name?: string | null;
+};
+
 type LoadState =
   | { status: "idle" }
   | { status: "loading-ad-accounts" }
@@ -187,6 +193,57 @@ function PaidTrendsPanel({ data }: { data: PaidMetricsResponse }) {
   );
 }
 
+function PaidReportingLoadingSkeleton({ viewMode, message }: { viewMode: ViewMode; message: string }) {
+  if (viewMode === "trends") {
+    return (
+      <Flex direction="column" gap="3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card variant="surface" className="border border-subtle bg-surface">
+            <Box p="3">
+              <Skeleton className="mb-3 h-4 w-40" />
+              <Skeleton className="h-[200px] w-full" />
+            </Box>
+          </Card>
+          <Card variant="surface" className="border border-subtle bg-surface">
+            <Box p="3">
+              <Skeleton className="mb-3 h-4 w-44" />
+              <Skeleton className="h-[200px] w-full" />
+            </Box>
+          </Card>
+        </div>
+        <Text size="2" color="gray" align="center">
+          {message}
+        </Text>
+      </Flex>
+    );
+  }
+
+  return (
+    <Flex direction="column" gap="3">
+      <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Card key={`paid-metric-skeleton-${index}`} variant="surface" className="border border-subtle bg-surface">
+            <Box p="3">
+              <Skeleton className="mb-2 h-3 w-16" />
+              <Skeleton className="mb-2 h-6 w-20" />
+              <Skeleton className="h-3 w-12" />
+            </Box>
+          </Card>
+        ))}
+      </Grid>
+      <Card variant="surface" className="border border-subtle bg-surface">
+        <Box p="3">
+          <Skeleton className="mb-3 h-4 w-52" />
+          <Skeleton className="h-[220px] w-full" />
+        </Box>
+      </Card>
+      <Text size="2" color="gray" align="center">
+        {message}
+      </Text>
+    </Flex>
+  );
+}
+
 export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
   const [platform, setPlatform] = useState<Platform>("meta");
   const [viewMode, setViewMode] = React.useState<ViewMode>("overview");
@@ -204,7 +261,7 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
   const adAccounts = React.useMemo(() => {
     if (!integrations) return [];
     
-    let platformAccounts: any[] = [];
+    let platformAccounts: IntegrationAccountCandidate[] = [];
     if (platform === "meta") {
       platformAccounts = integrations.facebook?.accounts ?? [];
     } else if (platform === "google-ads") {
@@ -213,10 +270,12 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
       platformAccounts = integrations.dv360?.accounts ?? [];
     }
     
-    return platformAccounts.map((acc) => ({
-      id: acc.externalAccountId ?? acc.integrationAccountId,
-      name: acc.name,
-    }));
+    return platformAccounts
+      .map((acc) => ({
+        id: acc.externalAccountId ?? acc.integrationAccountId ?? "",
+        name: acc.name ?? "Unnamed account",
+      }))
+      .filter((acc) => acc.id.length > 0);
   }, [integrations, platform]);
 
   // Auto-select first account if none selected
@@ -477,16 +536,17 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
           ) : (isLoadingAccounts ||
                state.status === "loading-campaigns" ||
                state.status === "loading-metrics") ? (
-             <Flex direction="column" gap="3">
-                 <Skeleton className="h-24 w-full" />
-                 <Skeleton className="h-24 w-full" />
-                 <Text size="2" color="gray" align="center">
-                   {isLoadingAccounts && "Loading ad accounts..."}
-                   {state.status === "loading-campaigns" && "Loading campaigns..."}
-                   {state.status === "loading-metrics" && "Loading metrics..."}
-                 </Text>
-             </Flex>
-           ) : adAccounts.length === 0 ? (
+            <PaidReportingLoadingSkeleton
+              viewMode={viewMode}
+              message={
+                isLoadingAccounts
+                  ? "Loading ad accounts..."
+                  : state.status === "loading-campaigns"
+                    ? "Loading campaigns..."
+                    : "Loading metrics..."
+              }
+            />
+          ) : adAccounts.length === 0 ? (
              <Flex direction="column" align="center" justify="center" gap="3" className="h-full min-h-[200px]">
                <Text size="3" color="gray" align="center">
                  No Ad Accounts Available

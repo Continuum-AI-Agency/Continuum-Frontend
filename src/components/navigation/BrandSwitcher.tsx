@@ -39,7 +39,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider"
-import { useTheme } from "next-themes"
 import { useRouter } from "next/navigation"
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions"
 import { getBrandMenuItemLabel } from "@/lib/brands/brand-switcher-utils"
@@ -50,7 +49,6 @@ import { useOnboarding } from "@/components/onboarding/providers/OnboardingConte
 export function BrandSwitcher() {
   const { isMobile } = useSidebar()
   const { activeBrandId, brandSummaries, selectBrand } = useActiveBrandContext()
-  const { setTheme, theme } = useTheme()
   const router = useRouter()
   const [isCreating, startCreate] = React.useTransition()
   const [menuOpen, setMenuOpen] = React.useState(false)

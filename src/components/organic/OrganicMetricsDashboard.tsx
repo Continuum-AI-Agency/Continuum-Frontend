@@ -863,7 +863,7 @@ function Dashboard({
     <Flex
       direction="column"
       gap="3"
-      className="min-h-0 rounded-xl border border-blue-200/40 bg-[linear-gradient(160deg,rgba(30,64,175,0.05)_0%,rgba(59,130,246,0.04)_45%,rgba(245,158,11,0.04)_100%)] p-2"
+      className="min-h-0 rounded-xl border border-subtle bg-[linear-gradient(160deg,rgba(59,130,246,0.04)_0%,rgba(14,165,233,0.03)_48%,rgba(255,255,255,0.92)_100%)] p-2 shadow-sm"
     >
       <Flex align="center" justify="between" wrap="wrap" gap="2">
         <Box>
@@ -874,7 +874,7 @@ function Dashboard({
             <Text size="1" color="gray">At-a-glance metrics with last 24h delta</Text>
           ) : null}
         </Box>
-        <Text size="1" color="gray" className="font-mono">
+        <Text size="1" color="gray" className="font-mono tracking-tight">
           {data.range.since} - {data.range.until}
         </Text>
       </Flex>
@@ -1454,7 +1454,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               <Text weight="medium" style={{ textTransform: "capitalize" }}>
                 {platform} organic reporting
               </Text>
-              <Text color="gray" size="2">
+              <Text color="gray" size="2" className="tracking-tight">
                 {viewMode === "posts"
                   ? `Rolling ${POST_GALLERY_WINDOW_DAYS}d windows (up to 3 months)`
                   : rangeLabel(rangePreset)}

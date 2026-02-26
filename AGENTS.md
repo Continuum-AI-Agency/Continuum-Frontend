@@ -142,3 +142,6 @@ When you learn something, place a note of it here:
 - Keep trends UI minimal: use `TrendWorkbench` (no momentum chart/filter chips) and keep seeded/quick drafts tag-free (`tags: []`) while relying on `seedTrendId`.
 - Coming-soon platform rows in the planner should render in compact/collapsed density so they consume minimal vertical space versus active scheduling rows.
 - Planner cells should display all same-day posts (scrollable stack) and support posting-time edits via card quick actions (`Time: ...` presets + `Time: Custom...`).
+- Keep theming synchronized via both `data-theme` and `html.dark/html.light` so Tailwind `dark:` utilities, CSS variables, and chart/map theme detection stay consistent.
+- Keep skeleton loaders neutral (`bg-muted/70`), and shape each skeleton to match real page structure (headers, controls, cards, tables) instead of generic full-bleed blocks.
+- `StringNode` enrichment payload sends uploads under `context.images`; the `/api/ai-studio/enrich` route should parse `context.*` and stream SSE (`text` + `complete`) for `useWorkflowExecution`.
