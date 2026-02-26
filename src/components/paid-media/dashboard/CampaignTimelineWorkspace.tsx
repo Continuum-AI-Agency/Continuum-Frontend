@@ -858,7 +858,6 @@ function MetricSparkCell({ metric, series, isSelected, showTarget, onClick }: Me
                   stroke={DELTA_TARGET_COLOR}
                   strokeWidth={1.3}
                   ifOverflow="extendDomain"
-                  isFront
                 />
               ) : null}
             </AreaChart>
@@ -1172,6 +1171,7 @@ export function CampaignTimelineWorkspace({
           label,
           campaigns: groupCampaigns,
           count: groupCampaigns.length,
+          isSelectedIndex: false,
         }))
         .sort((left, right) => {
           if (right.count !== left.count) return right.count - left.count;
@@ -1205,6 +1205,7 @@ export function CampaignTimelineWorkspace({
         label: "Unindexed",
         campaigns: unindexed,
         count: unindexed.length,
+        isSelectedIndex: false,
       });
     }
 
@@ -1214,6 +1215,7 @@ export function CampaignTimelineWorkspace({
         label: "All campaigns",
         campaigns: watchlistCampaigns,
         count: watchlistCampaigns.length,
+        isSelectedIndex: false,
       });
     }
 
@@ -1788,31 +1790,33 @@ export function CampaignTimelineWorkspace({
       });
     });
 
-    return Array.from(grouped.entries())
-      .map(([id, group]) => {
-        const row = rowByBucket.get(group.bucket);
-        if (!row) return null;
-        const style = SCOPE_SIGNPOST_STYLES[group.scope];
-        const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
-        const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
-        const statusLabel = Array.from(group.statuses).join(", ");
-        const kpiShiftPct = calculateImmediateKpiShiftPct(orderedRows, resolution, group.bucket);
-        const shiftLabel =
-          kpiShiftPct === null
-            ? "Next KPI shift: n/a"
-            : `Next KPI shift: ${kpiShiftPct >= 0 ? "+" : ""}${kpiShiftPct.toFixed(2)}%`;
-        return {
-          id,
-          x: row.timestamp,
-          y: row.y,
-          color: style.color,
-          scopeLabel: style.label,
-          count: group.count,
-          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
-          kpiShiftPct,
-        };
-      })
-      .filter((marker): marker is MarkerPoint => marker !== null);
+    const markers: MarkerPoint[] = [];
+
+    Array.from(grouped.entries()).forEach(([id, group]) => {
+      const row = rowByBucket.get(group.bucket);
+      if (!row) return;
+      const style = SCOPE_SIGNPOST_STYLES[group.scope];
+      const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
+      const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
+      const statusLabel = Array.from(group.statuses).join(", ");
+      const kpiShiftPct = calculateImmediateKpiShiftPct(orderedRows, resolution, group.bucket);
+      const shiftLabel =
+        kpiShiftPct === null
+          ? "Next KPI shift: n/a"
+          : `Next KPI shift: ${kpiShiftPct >= 0 ? "+" : ""}${kpiShiftPct.toFixed(2)}%`;
+      markers.push({
+        id,
+        x: row.timestamp,
+        y: row.y,
+        color: style.color,
+        scopeLabel: style.label,
+        count: group.count,
+        tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
+        kpiShiftPct,
+      });
+    });
+
+    return markers;
   }, [resolution, scopedTimelineActionLogs, topChartModel.data, topPrimaryLineKey]);
 
   const actionScopeSummary = React.useMemo(() => {
@@ -2141,7 +2145,6 @@ export function CampaignTimelineWorkspace({
                           x={marker.x}
                           y={marker.y}
                           ifOverflow="extendDomain"
-                          isFront
                           shape={(props) => (
                             <SignpostShape
                               cx={props.cx}
@@ -2184,7 +2187,6 @@ export function CampaignTimelineWorkspace({
                             fontWeight: 700,
                           }}
                           ifOverflow="extendDomain"
-                          isFront
                         />
                       ) : null}
                     </AreaChart>
@@ -2407,34 +2409,34 @@ export function CampaignTimelineWorkspace({
                                       }
                                     });
 
-                                    return Array.from(grouped.entries())
-                                      .map(([id, group]) => {
-                                        const row = rowByBucket.get(group.bucket);
-                                        if (!row) return null;
-                                        const style = SCOPE_SIGNPOST_STYLES[group.scope];
-                                        const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
-                                        const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
-                                        const statusLabel = Array.from(group.statuses).join(", ");
-                                        const rowSeries = selectedSeries
-                                          .map((point) => ({ timestamp: point.timestamp, value: point.actual }))
-                                          .filter((point) => Number.isFinite(point.value));
-                                        const kpiShiftPct = calculateImmediateKpiShiftPct(rowSeries, resolution, group.bucket);
-                                        const shiftLabel =
-                                          kpiShiftPct === null
-                                            ? "Next KPI shift: n/a"
-                                            : `Next KPI shift: ${kpiShiftPct >= 0 ? "+" : ""}${kpiShiftPct.toFixed(2)}%`;
-                                        return {
-                                          id,
-                                          x: row.timestamp,
-                                          y: row.y,
-                                          color: style.color,
-                                          scopeLabel: style.label,
-                                          count: group.count,
-                                          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
-                                          kpiShiftPct,
-                                        };
-                                      })
-                                      .filter((marker): marker is MarkerPoint => marker !== null);
+                                    const markers: MarkerPoint[] = [];
+                                    Array.from(grouped.entries()).forEach(([id, group]) => {
+                                      const row = rowByBucket.get(group.bucket);
+                                      if (!row) return;
+                                      const style = SCOPE_SIGNPOST_STYLES[group.scope];
+                                      const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
+                                      const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
+                                      const statusLabel = Array.from(group.statuses).join(", ");
+                                      const rowSeries = selectedSeries
+                                        .map((point) => ({ timestamp: point.timestamp, value: point.actual }))
+                                        .filter((point) => Number.isFinite(point.value));
+                                      const kpiShiftPct = calculateImmediateKpiShiftPct(rowSeries, resolution, group.bucket);
+                                      const shiftLabel =
+                                        kpiShiftPct === null
+                                          ? "Next KPI shift: n/a"
+                                          : `Next KPI shift: ${kpiShiftPct >= 0 ? "+" : ""}${kpiShiftPct.toFixed(2)}%`;
+                                      markers.push({
+                                        id,
+                                        x: row.timestamp,
+                                        y: row.y,
+                                        color: style.color,
+                                        scopeLabel: style.label,
+                                        count: group.count,
+                                        tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
+                                        kpiShiftPct,
+                                      });
+                                    });
+                                    return markers;
                                   })();
                                   const adSetDenominatorSummary = formatDenominatorSummary(
                                     selectedMetric,
@@ -2579,7 +2581,6 @@ export function CampaignTimelineWorkspace({
                                                     x={marker.x}
                                                     y={marker.y}
                                                     ifOverflow="extendDomain"
-                                                    isFront
                                                     shape={(props) => (
                                                       <SignpostShape
                                                         cx={props.cx}
@@ -2635,7 +2636,6 @@ export function CampaignTimelineWorkspace({
                                                       fontWeight: 700,
                                                     }}
                                                     ifOverflow="extendDomain"
-                                                    isFront
                                                   />
                                                 ) : null}
                                               </AreaChart>

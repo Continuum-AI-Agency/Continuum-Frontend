@@ -18,6 +18,11 @@ type CampaignIndexRow = {
   updated_at: string;
 };
 
+type CampaignIndexInsertPayload = Pick<
+  CampaignIndexRow,
+  "brand_id" | "meta_account_id" | "name" | "campaign_ids"
+>;
+
 function normalizeCampaignIndexRow(input: unknown): CampaignIndexRecord | null {
   if (!input || typeof input !== "object") return null;
   const row = input as Record<string, unknown>;
@@ -113,7 +118,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const payload = {
+    const payload: CampaignIndexInsertPayload = {
       brand_id: parsed.data.brandId,
       meta_account_id: parsed.data.metaAccountId,
       name: parsed.data.name.trim(),
@@ -123,7 +128,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .schema("brand_profiles")
       .from(CAMPAIGN_INDEX_TABLE)
-      .insert(payload)
+      .insert(payload as never)
       .select("id, brand_id, meta_account_id, name, campaign_ids, created_at, updated_at")
       .single();
 

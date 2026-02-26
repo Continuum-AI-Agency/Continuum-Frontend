@@ -23,6 +23,8 @@ type CampaignIndexRow = {
   updated_at: string;
 };
 
+type CampaignIndexUpdatePayload = Partial<Pick<CampaignIndexRow, "name" | "campaign_ids">>;
+
 function normalizeCampaignIndexRow(input: unknown): CampaignIndexRecord | null {
   if (!input || typeof input !== "object") return null;
   const row = input as Record<string, unknown>;
@@ -81,7 +83,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ ind
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const updates: Record<string, unknown> = {};
+    const updates: CampaignIndexUpdatePayload = {};
     if (parsed.data.name !== undefined) {
       updates.name = parsed.data.name.trim();
     }
@@ -92,7 +94,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ ind
     const { data, error } = await supabase
       .schema("brand_profiles")
       .from(CAMPAIGN_INDEX_TABLE)
-      .update(updates)
+      .update(updates as never)
       .eq("id", params.data.indexId)
       .select("id, brand_id, meta_account_id, name, campaign_ids, created_at, updated_at")
       .single();
