@@ -20,6 +20,7 @@
   },
   "registries": {
     "@supabase": "https://supabase.com/ui/r/{name}.json",
-    "@kibo-ui": "https://www.kibo-ui.com/r/{name}.json"
+    "@kibo-ui": "https://www.kibo-ui.com/r/{name}.json",
+    "@mapcn": "https://mapcn.dev/r/{name}.json"
   }
 }

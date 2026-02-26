@@ -139,6 +139,27 @@ export const audienceBreakdownSchema = z.object({
 
 export type AudienceBreakdown = z.infer<typeof audienceBreakdownSchema>;
 
+export const audienceDemographicEntrySchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.number(),
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  countryCode: z.string().optional(),
+});
+
+export type AudienceDemographicEntry = z.infer<typeof audienceDemographicEntrySchema>;
+
+export const audienceDemographicsSchema = z.object({
+  gender: z.array(audienceDemographicEntrySchema).default([]),
+  age: z.array(audienceDemographicEntrySchema).default([]),
+  country: z.array(audienceDemographicEntrySchema).default([]),
+  city: z.array(audienceDemographicEntrySchema).default([]),
+  timeframe: z.string().optional(),
+});
+
+export type AudienceDemographics = z.infer<typeof audienceDemographicsSchema>;
+
 export const contentTypePerformanceSchema = z.object({
   contentType: z.string(),
   posts: z.number().optional(),
@@ -240,6 +261,7 @@ const organicMetricsResponseBaseSchema = z.object({
   trends: z.array(organicTrendPointSchema).optional(),
   boostedEvents: z.array(boostedEventSchema).optional(),
   audienceBreakdown: audienceBreakdownSchema.optional(),
+  audienceDemographics: audienceDemographicsSchema.optional(),
   contentTypePerformance: z.array(contentTypePerformanceSchema).optional(),
   recentComments: z.array(organicCommentSchema).optional(),
 });

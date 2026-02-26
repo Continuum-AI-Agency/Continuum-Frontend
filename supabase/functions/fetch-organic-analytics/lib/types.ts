@@ -1,4 +1,4 @@
-export const CACHE_TTL_MS = 60 * 60 * 1000;
+export const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 export const META_API_VERSION = "v23.0";
 
 export type OrganicPlatform = "instagram" | "facebook";
@@ -66,6 +66,13 @@ export type OrganicResponse = {
     followers: number;
     nonFollowers: number;
   };
+  audienceDemographics?: {
+    gender: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    age: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    country?: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    city?: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    timeframe?: string;
+  };
   contentTypePerformance?: Array<{
     contentType: string;
     posts?: number;
@@ -86,6 +93,13 @@ export type PlatformAnalyticsResult = {
   audienceBreakdown?: {
     followers: number;
     nonFollowers: number;
+  };
+  audienceDemographics?: {
+    gender: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    age: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    country?: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    city?: Array<{ key: string; label: string; value: number; lat?: number; lng?: number; countryCode?: string }>;
+    timeframe?: string;
   };
   contentTypePerformance?: Array<{
     contentType: string;

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
 import { parseDateRange } from "./lib/date.ts";
 import { fetchFacebookAnalytics } from "./lib/facebook.ts";
+import { enrichCityDemographicsWithGoogleGeocoding } from "./lib/geocoding.ts";
 import { fetchInstagramAnalytics } from "./lib/instagram.ts";
 import type {
   AnalyticsScope,
@@ -266,6 +267,17 @@ serve(async (req) => {
       warnings,
     });
 
+    if (body.platform === "instagram" && analytics.audienceDemographics?.city?.length) {
+      analytics.audienceDemographics.city = await enrichCityDemographicsWithGoogleGeocoding({
+        supabase,
+        integrationAccountId: body.integrationAccountId,
+        externalAccountId: account.external_account_id,
+        cityEntries: analytics.audienceDemographics.city,
+        countryEntries: analytics.audienceDemographics.country ?? [],
+        warnings,
+      });
+    }
+
     const response: OrganicResponse = {
       platform: body.platform,
       scope,
@@ -284,6 +296,7 @@ serve(async (req) => {
       trends: analytics.trends,
       boostedEvents: analytics.boostedEvents,
       audienceBreakdown: analytics.audienceBreakdown,
+      audienceDemographics: analytics.audienceDemographics,
       contentTypePerformance: analytics.contentTypePerformance,
       posts: analytics.posts,
       recentComments: analytics.recentComments,

@@ -74,14 +74,9 @@ export function parseInsightsSeries(
   return values
     .map((item) => {
       const endTime = typeof item.end_time === "string" ? item.end_time.slice(0, 10) : "";
-      const raw = item.value;
-      const parsedValue =
-        typeof raw === "object" && raw !== null && "value" in raw
-          ? asNumber((raw as Record<string, unknown>).value)
-          : asNumber(raw);
       return {
         date: endTime,
-        value: parsedValue,
+        value: coerceMetricPointValue(item.value),
       };
     })
     .filter((entry) => entry.date.length > 0);
@@ -127,16 +122,32 @@ type MetricValuePoint = {
   value: number;
 };
 
+function coerceMetricPointValue(raw: unknown) {
+  if (typeof raw === "object" && raw !== null) {
+    const record = raw as Record<string, unknown>;
+    if ("value" in record) {
+      return asNumber(record.value);
+    }
+
+    const breakdowns = record.breakdowns as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(breakdowns)) {
+      return breakdowns.reduce((sum, breakdown) => {
+        const results = (breakdown.results as Array<Record<string, unknown>> | undefined) ?? [];
+        return sum + results.reduce((resultSum, result) => resultSum + asNumber(result.value), 0);
+      }, 0);
+    }
+  }
+
+  return asNumber(raw);
+}
+
 function parseMetricValues(metric: Record<string, unknown> | undefined): MetricValuePoint[] {
   if (!metric) return [];
   const values = (metric.values as Array<Record<string, unknown>> | undefined) ?? [];
   return values
     .map((item) => ({
       date: typeof item.end_time === "string" ? item.end_time.slice(0, 10) : "",
-      value:
-        typeof item.value === "object" && item.value !== null && "value" in item.value
-          ? asNumber((item.value as Record<string, unknown>).value)
-          : asNumber(item.value),
+      value: coerceMetricPointValue(item.value),
     }))
     .filter((point) => point.date.length > 0)
     .sort((a, b) => a.date.localeCompare(b.date));

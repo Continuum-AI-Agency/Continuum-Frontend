@@ -3,7 +3,6 @@ import {
   asNumber,
   assignComparison,
   buildContentTypePerformanceFromPosts,
-  dayBefore,
   extractMetricByName,
   lastTwoMetricValuesUntil,
   metaFetchJson,
@@ -21,6 +20,247 @@ import {
   type IntegrationAccountRow,
   type PlatformAnalyticsResult,
 } from "./types.ts";
+
+type AudienceDemographicEntry = {
+  key: string;
+  label: string;
+  value: number;
+};
+
+type AudienceDemographicDimension = "age" | "gender" | "country" | "city";
+type DemographicTimeframe = "this_week" | "this_month" | "prev_month";
+type TrendPoint = Record<string, string | number | boolean | undefined>;
+type InstagramDailyAccountSnapshot = {
+  date: string;
+  reach: number;
+  views: number;
+  accountsEngaged: number;
+  comments: number;
+  newFollowers: number;
+  profileVisits24h: number;
+};
+
+function demographicTimeframeForRange(range: DateRange): DemographicTimeframe {
+  if (range.preset === "last_month") return "prev_month";
+  if (range.preset === "yesterday" || range.preset === "previous_day" || range.preset === "last_7d") {
+    return "this_week";
+  }
+  if (range.preset === "custom") {
+    const sinceTs = Date.parse(`${range.since}T00:00:00.000Z`);
+    const untilTs = Date.parse(`${range.until}T00:00:00.000Z`);
+    if (!Number.isNaN(sinceTs) && !Number.isNaN(untilTs)) {
+      const days = Math.max(1, Math.floor((untilTs - sinceTs) / 86_400_000) + 1);
+      return days <= 7 ? "this_week" : "this_month";
+    }
+  }
+  return "this_month";
+}
+
+function normalizeDemographicLabel(kind: AudienceDemographicDimension, rawValue: string) {
+  if (kind === "gender") {
+    const normalized = rawValue.trim().toUpperCase();
+    if (normalized === "F" || normalized === "FEMALE") return "Female";
+    if (normalized === "M" || normalized === "MALE") return "Male";
+    if (normalized === "U" || normalized === "UNKNOWN") return "Unknown";
+    return rawValue;
+  }
+  if (kind === "country") {
+    return rawValue.trim().toUpperCase();
+  }
+  return rawValue;
+}
+
+function parseDemographicBreakdown(params: {
+  payload: Record<string, unknown> | null;
+  metricName: string;
+  dimension: AudienceDemographicDimension;
+}): AudienceDemographicEntry[] {
+  const { payload, metricName, dimension } = params;
+  const metric = extractMetricByName(payload ?? undefined, metricName);
+  if (!metric) return [];
+
+  const totalValue = metric.total_value as Record<string, unknown> | undefined;
+  const breakdowns = (totalValue?.breakdowns as Array<Record<string, unknown>> | undefined) ?? [];
+  const map = new Map<string, number>();
+
+  breakdowns.forEach((breakdown) => {
+    const dimensionKeys = (breakdown.dimension_keys as Array<string> | undefined) ?? [];
+    const targetIndex = dimensionKeys.findIndex((key) => key.toLowerCase() === dimension);
+    if (targetIndex < 0) return;
+
+    const results = (breakdown.results as Array<Record<string, unknown>> | undefined) ?? [];
+    results.forEach((result) => {
+      const dimensionValues = (result.dimension_values as Array<string> | undefined) ?? [];
+      const key = dimensionValues[targetIndex];
+      if (!key || key.length === 0) return;
+
+      const current = map.get(key) ?? 0;
+      map.set(key, current + asNumber(result.value));
+    });
+  });
+
+  const entries = Array.from(map.entries()).map(([key, value]) => ({
+    key,
+    label: normalizeDemographicLabel(dimension, key),
+    value,
+  }));
+
+  if (dimension === "age") {
+    return entries.sort((a, b) => {
+      const aStart = Number.parseInt(a.key, 10);
+      const bStart = Number.parseInt(b.key, 10);
+      if (!Number.isNaN(aStart) && !Number.isNaN(bStart)) return aStart - bStart;
+      return a.key.localeCompare(b.key);
+    });
+  }
+
+  if (dimension === "gender") {
+    const order = new Map([
+      ["Female", 0],
+      ["Male", 1],
+      ["Unknown", 2],
+    ]);
+    return entries.sort((a, b) => {
+      const aOrder = order.get(a.label) ?? 99;
+      const bOrder = order.get(b.label) ?? 99;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return b.value - a.value;
+    });
+  }
+
+  return entries.sort((a, b) => b.value - a.value);
+}
+
+function createTrendSeed(date: string): TrendPoint {
+  return {
+    date,
+    reach: 0,
+    views: 0,
+    accountsEngaged: 0,
+    reelsViews: 0,
+    postViews: 0,
+    storiesViews: 0,
+    followerReach: 0,
+    nonFollowerReach: 0,
+    comments: 0,
+    newFollowers: 0,
+    profileVisits24h: 0,
+    boosted: false,
+  };
+}
+
+function getOrCreateTrendPoint(
+  trendMap: Map<string, TrendPoint>,
+  date: string
+): TrendPoint {
+  const existing = trendMap.get(date);
+  if (existing) return existing;
+  const next = createTrendSeed(date);
+  trendMap.set(date, next);
+  return next;
+}
+
+function pairFromSnapshots(
+  snapshots: InstagramDailyAccountSnapshot[],
+  key: keyof InstagramDailyAccountSnapshot
+) {
+  if (snapshots.length === 0) return null;
+  const latest = snapshots[snapshots.length - 1];
+  const previous = snapshots[Math.max(0, snapshots.length - 2)] ?? latest;
+  return {
+    current: asNumber(latest?.[key]),
+    previous: asNumber(previous?.[key]),
+  };
+}
+
+export async function fetchInstagramAccountDailySnapshots(params: {
+  accountId: string;
+  accessToken: string;
+  until: string;
+  days?: number;
+  warnings: string[];
+}): Promise<InstagramDailyAccountSnapshot[]> {
+  const days = Math.max(1, Math.min(14, params.days ?? 7));
+  const untilDate = new Date(`${params.until}T00:00:00.000Z`);
+  const startDate = addDays(untilDate, -(days - 1));
+  const snapshots: InstagramDailyAccountSnapshot[] = [];
+
+  for (let offset = 0; offset < days; offset += 1) {
+    const dayStart = addDays(startDate, offset);
+    const daySince = toYmd(dayStart);
+    const dayUntil = toYmd(addDays(dayStart, 1));
+
+    const coreDailyPayload = await metaFetchJson(
+      `https://graph.facebook.com/${META_API_VERSION}/${params.accountId}/insights`,
+      {
+        metric: "reach,views,accounts_engaged,comments",
+        period: "day",
+        metric_type: "total_value",
+        since: daySince,
+        until: dayUntil,
+        access_token: params.accessToken,
+      }
+    ).catch((error) => {
+      params.warnings.push(
+        `Instagram daily snapshot fetch failed for ${daySince}: ${error instanceof Error ? error.message : "Unknown"}`
+      );
+      return null;
+    });
+
+    const profileViewsDailyPayload = await metaFetchJson(
+      `https://graph.facebook.com/${META_API_VERSION}/${params.accountId}/insights`,
+      {
+        metric: "profile_views",
+        period: "day",
+        metric_type: "total_value",
+        since: daySince,
+        until: dayUntil,
+        access_token: params.accessToken,
+      }
+    ).catch((error) => {
+      params.warnings.push(
+        `Instagram daily profile views fetch failed for ${daySince}: ${error instanceof Error ? error.message : "Unknown"}`
+      );
+      return null;
+    });
+
+    const followerDailyPayload = await metaFetchJson(
+      `https://graph.facebook.com/${META_API_VERSION}/${params.accountId}/insights`,
+      {
+        metric: "follower_count",
+        period: "day",
+        since: daySince,
+        until: dayUntil,
+        access_token: params.accessToken,
+      }
+    ).catch((error) => {
+      params.warnings.push(
+        `Instagram daily follower fetch failed for ${daySince}: ${error instanceof Error ? error.message : "Unknown"}`
+      );
+      return null;
+    });
+
+    if (!coreDailyPayload) continue;
+
+    snapshots.push({
+      date: daySince,
+      reach: metricTotal(extractMetricByName(coreDailyPayload, "reach")),
+      views: metricTotal(extractMetricByName(coreDailyPayload, "views")),
+      accountsEngaged: metricTotal(
+        extractMetricByName(coreDailyPayload, "accounts_engaged")
+      ),
+      comments: metricTotal(extractMetricByName(coreDailyPayload, "comments")),
+      newFollowers: metricTotal(
+        extractMetricByName(followerDailyPayload ?? undefined, "follower_count")
+      ),
+      profileVisits24h: metricTotal(
+        extractMetricByName(profileViewsDailyPayload ?? undefined, "profile_views")
+      ),
+    });
+  }
+
+  return snapshots.sort((a, b) => a.date.localeCompare(b.date));
+}
 
 async function fetchInstagramBoostedSignals(
   adAccountId: string | null,
@@ -154,7 +394,7 @@ async function fetchInstagramPostDetails(params: {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 30);
 
-  const breakdown7d = breakdown30d.slice(0, 7);
+  const breakdown7d = breakdown30d.slice(-7);
   const breakdown24h: Array<{
     hour: number;
     views: number;
@@ -308,12 +548,13 @@ export async function fetchInstagramAnalytics(params: {
   const includeAccount = scope !== "posts";
   const includePosts = scope !== "account";
   const includePostDetails = scope === "all" || (scope === "posts" && Boolean(selectedPostId));
-  const comparisonSince = dayBefore(range.since);
+  const demographicTimeframe = demographicTimeframeForRange(range);
   const emptyPayload = Promise.resolve({ data: [] as Array<Record<string, unknown>> });
 
   const [
     coreTotals,
     followerTotals,
+    profileViewsTotals,
     viewsBreakdown,
     reachBreakdown,
     timeSeriesCore,
@@ -321,6 +562,10 @@ export async function fetchInstagramAnalytics(params: {
     followerComparisonTotals,
     viewsBreakdownSeries,
     reachBreakdownSeries,
+    followerDemographicsAge,
+    followerDemographicsGender,
+    followerDemographicsCountry,
+    followerDemographicsCity,
     mediaPayload,
   ] = await Promise.all([
     includeAccount
@@ -338,14 +583,28 @@ export async function fetchInstagramAnalytics(params: {
       : emptyPayload,
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
-      metric: "follower_count,profile_views",
+      metric: "follower_count",
       period: "day",
-      breakdown: "follow_type",
-      metric_type: "total_value",
       since: range.since,
       until: range.untilExclusive,
       access_token: token,
-    }).catch(() => null)
+    }).catch((error) => {
+      warnings.push(`Instagram follower totals failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
+      : Promise.resolve(null),
+    includeAccount
+      ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
+      metric: "profile_views",
+      metric_type: "total_value",
+      period: "day",
+      since: range.since,
+      until: range.untilExclusive,
+      access_token: token,
+    }).catch((error) => {
+      warnings.push(`Instagram profile views totals failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
       : Promise.resolve(null),
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
@@ -356,7 +615,10 @@ export async function fetchInstagramAnalytics(params: {
       since: range.since,
       until: range.untilExclusive,
       access_token: token,
-    }).catch(() => null)
+    }).catch((error) => {
+      warnings.push(`Instagram views breakdown failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
       : Promise.resolve(null),
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
@@ -367,56 +629,67 @@ export async function fetchInstagramAnalytics(params: {
       since: range.since,
       until: range.untilExclusive,
       access_token: token,
-    }).catch(() => null)
+    }).catch((error) => {
+      warnings.push(`Instagram reach breakdown failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
       : Promise.resolve(null),
+    Promise.resolve(null),
+    Promise.resolve(null),
+    Promise.resolve(null),
+    Promise.resolve(null),
+    Promise.resolve(null),
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
-      metric: "reach,views,accounts_engaged",
-      period: "day",
-      since: comparisonSince,
-      until: range.untilExclusive,
-      access_token: token,
-    }).catch(() => null)
-      : Promise.resolve(null),
-    includeAccount
-      ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
-      metric: "comments",
-      period: "day",
-      since: comparisonSince,
-      until: range.untilExclusive,
-      access_token: token,
-    }).catch(() => null)
-      : Promise.resolve(null),
-    includeAccount
-      ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
-      metric: "follower_count,profile_views",
-      period: "day",
-      breakdown: "follow_type",
+      metric: "follower_demographics",
+      period: "lifetime",
       metric_type: "total_value",
-      since: comparisonSince,
-      until: range.untilExclusive,
+      timeframe: demographicTimeframe,
+      breakdown: "age",
       access_token: token,
-    }).catch(() => null)
+    }).catch((error) => {
+      warnings.push(`Instagram follower demographics age failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
       : Promise.resolve(null),
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
-      metric: "views",
-      breakdown: "media_product_type",
-      period: "day",
-      since: comparisonSince,
-      until: range.untilExclusive,
+      metric: "follower_demographics",
+      period: "lifetime",
+      metric_type: "total_value",
+      timeframe: demographicTimeframe,
+      breakdown: "gender",
       access_token: token,
-    }).catch(() => null)
+    }).catch((error) => {
+      warnings.push(`Instagram follower demographics gender failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
       : Promise.resolve(null),
     includeAccount
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
-      metric: "reach",
-      breakdown: "follow_type",
-      period: "day",
-      since: comparisonSince,
-      until: range.untilExclusive,
+      metric: "follower_demographics",
+      period: "lifetime",
+      metric_type: "total_value",
+      timeframe: demographicTimeframe,
+      breakdown: "country",
       access_token: token,
-    }).catch(() => null)
+    }).catch((error) => {
+      warnings.push(`Instagram follower demographics country failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
+      : Promise.resolve(null),
+    includeAccount
+      ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
+      metric: "follower_demographics",
+      period: "lifetime",
+      metric_type: "total_value",
+      timeframe: demographicTimeframe,
+      breakdown: "city",
+      access_token: token,
+    }).catch((error) => {
+      warnings.push(`Instagram follower demographics city failed: ${error instanceof Error ? error.message : "Unknown"}`);
+      return null;
+    })
       : Promise.resolve(null),
     includePosts
       ? (scope === "posts"
@@ -452,21 +725,16 @@ export async function fetchInstagramAnalytics(params: {
   const totalInteractions = metricTotal(extractMetricByName(coreTotals ?? undefined, "total_interactions"));
 
   const followerMetric = extractMetricByName(followerTotals ?? undefined, "follower_count");
-  const profileViewsMetric = extractMetricByName(followerTotals ?? undefined, "profile_views");
+  const profileViewsMetric = extractMetricByName(profileViewsTotals ?? undefined, "profile_views");
   const followerValues = (followerMetric?.values as Array<{ value?: unknown }> | undefined) ?? [];
   const profileViewsValues = (profileViewsMetric?.values as Array<{ value?: unknown }> | undefined) ?? [];
   const newFollowers = sumMetricValues(followerValues);
-  const profileVisits24h = profileViewsValues.length > 0
+  let profileVisits24h = profileViewsValues.length > 0
     ? asNumber(profileViewsValues[profileViewsValues.length - 1]?.value)
     : metricTotal(profileViewsMetric);
-  const followerComparisonMetric = extractMetricByName(
-    followerComparisonTotals ?? undefined,
-    "follower_count"
-  );
-  const profileViewsComparisonMetric = extractMetricByName(
-    followerComparisonTotals ?? undefined,
-    "profile_views"
-  );
+  let profileVisitsYesterday = profileVisits24h;
+  const followerComparisonMetric = extractMetricByName(followerComparisonTotals ?? undefined, "follower_count");
+  const profileViewsComparisonMetric = extractMetricByName(followerComparisonTotals ?? undefined, "profile_views");
 
   const viewBreakdownResults =
     ((viewsBreakdown?.data as Array<Record<string, unknown>> | undefined)?.[0]?.total_value as Record<string, unknown> | undefined)
@@ -497,35 +765,73 @@ export async function fetchInstagramAnalytics(params: {
     if (type === "NON_FOLLOWER" || type === "NONFOLLOWER") nonFollowerReach += value;
   });
 
-  const reachSeries = parseInsightsSeries(timeSeriesCore ?? undefined, "reach");
-  const viewsSeries = parseInsightsSeries(timeSeriesCore ?? undefined, "views");
-  const engagedSeries = parseInsightsSeries(timeSeriesCore ?? undefined, "accounts_engaged");
-  const commentsSeries = parseInsightsSeries(timeSeriesComments ?? undefined, "comments");
-  const followerSeries = parseInsightsSeries(followerComparisonTotals ?? undefined, "follower_count");
-  const profileViewsSeries = parseInsightsSeries(followerComparisonTotals ?? undefined, "profile_views");
+  const reachSeries = (() => {
+    const primary = parseInsightsSeries(timeSeriesCore ?? undefined, "reach");
+    return primary.length > 0 ? primary : parseInsightsSeries(coreTotals ?? undefined, "reach");
+  })();
+  const viewsSeries = (() => {
+    const primary = parseInsightsSeries(timeSeriesCore ?? undefined, "views");
+    return primary.length > 0 ? primary : parseInsightsSeries(coreTotals ?? undefined, "views");
+  })();
+  const engagedSeries = (() => {
+    const primary = parseInsightsSeries(timeSeriesCore ?? undefined, "accounts_engaged");
+    return primary.length > 0 ? primary : parseInsightsSeries(coreTotals ?? undefined, "accounts_engaged");
+  })();
+  const commentsSeries = (() => {
+    const primary = parseInsightsSeries(timeSeriesComments ?? undefined, "comments");
+    return primary.length > 0 ? primary : parseInsightsSeries(coreTotals ?? undefined, "comments");
+  })();
+  const followerSeries = (() => {
+    const primary = parseInsightsSeries(followerComparisonTotals ?? undefined, "follower_count");
+    return primary.length > 0 ? primary : parseInsightsSeries(followerTotals ?? undefined, "follower_count");
+  })();
+  const profileViewsSeries = (() => {
+    const primary = parseInsightsSeries(followerComparisonTotals ?? undefined, "profile_views");
+    return primary.length > 0 ? primary : parseInsightsSeries(profileViewsTotals ?? undefined, "profile_views");
+  })();
   const viewsBreakdownDaily = parseBreakdownDailySeries(viewsBreakdownSeries ?? undefined, "views");
   const reachBreakdownDaily = parseBreakdownDailySeries(reachBreakdownSeries ?? undefined, "reach");
+  const genderDemographics = parseDemographicBreakdown({
+    payload: followerDemographicsGender,
+    metricName: "follower_demographics",
+    dimension: "gender",
+  });
+  const ageDemographics = parseDemographicBreakdown({
+    payload: followerDemographicsAge,
+    metricName: "follower_demographics",
+    dimension: "age",
+  });
+  const countryDemographics = parseDemographicBreakdown({
+    payload: followerDemographicsCountry,
+    metricName: "follower_demographics",
+    dimension: "country",
+  });
+  const cityDemographics = parseDemographicBreakdown({
+    payload: followerDemographicsCity,
+    metricName: "follower_demographics",
+    dimension: "city",
+  });
+  const dailySnapshots = includeAccount
+    ? await fetchInstagramAccountDailySnapshots({
+      accountId: account.external_account_id,
+      accessToken: token,
+      until: range.until,
+      days: 7,
+      warnings,
+    })
+    : [];
+  if (dailySnapshots.length > 0) {
+    const latestSnapshot = dailySnapshots[dailySnapshots.length - 1];
+    const previousSnapshot = dailySnapshots[Math.max(0, dailySnapshots.length - 2)] ?? latestSnapshot;
+    profileVisits24h = latestSnapshot.profileVisits24h;
+    profileVisitsYesterday = previousSnapshot.profileVisits24h;
+  }
 
-  const trendMap = new Map<string, Record<string, string | number | boolean | undefined>>();
+  const trendMap = new Map<string, TrendPoint>();
   [reachSeries, viewsSeries, engagedSeries, commentsSeries].forEach((series, index) => {
     series.forEach((point) => {
       if (point.date > range.until) return;
-      const current =
-        trendMap.get(point.date) ?? {
-          date: point.date,
-          reach: 0,
-          views: 0,
-          accountsEngaged: 0,
-          reelsViews: 0,
-          postViews: 0,
-          storiesViews: 0,
-          followerReach: 0,
-          nonFollowerReach: 0,
-          comments: 0,
-          newFollowers: 0,
-          profileVisits24h: 0,
-          boosted: false,
-        };
+      const current = getOrCreateTrendPoint(trendMap, point.date);
       if (index === 0) current.reach = point.value;
       if (index === 1) current.views = point.value;
       if (index === 2) current.accountsEngaged = point.value;
@@ -536,66 +842,21 @@ export async function fetchInstagramAnalytics(params: {
 
   followerSeries.forEach((point) => {
     if (point.date > range.until) return;
-    const current =
-      trendMap.get(point.date) ?? {
-        date: point.date,
-        reach: 0,
-        views: 0,
-        accountsEngaged: 0,
-        reelsViews: 0,
-        postViews: 0,
-        storiesViews: 0,
-        followerReach: 0,
-        nonFollowerReach: 0,
-        comments: 0,
-        newFollowers: 0,
-        profileVisits24h: 0,
-        boosted: false,
-      };
+    const current = getOrCreateTrendPoint(trendMap, point.date);
     current.newFollowers = point.value;
     trendMap.set(point.date, current);
   });
 
   profileViewsSeries.forEach((point) => {
     if (point.date > range.until) return;
-    const current =
-      trendMap.get(point.date) ?? {
-        date: point.date,
-        reach: 0,
-        views: 0,
-        accountsEngaged: 0,
-        reelsViews: 0,
-        postViews: 0,
-        storiesViews: 0,
-        followerReach: 0,
-        nonFollowerReach: 0,
-        comments: 0,
-        newFollowers: 0,
-        profileVisits24h: 0,
-        boosted: false,
-      };
+    const current = getOrCreateTrendPoint(trendMap, point.date);
     current.profileVisits24h = point.value;
     trendMap.set(point.date, current);
   });
 
   viewsBreakdownDaily.forEach((point) => {
     if (point.date > range.until) return;
-    const current =
-      trendMap.get(point.date) ?? {
-        date: point.date,
-        reach: 0,
-        views: 0,
-        accountsEngaged: 0,
-        reelsViews: 0,
-        postViews: 0,
-        storiesViews: 0,
-        followerReach: 0,
-        nonFollowerReach: 0,
-        comments: 0,
-        newFollowers: 0,
-        profileVisits24h: 0,
-        boosted: false,
-      };
+    const current = getOrCreateTrendPoint(trendMap, point.date);
     const type = point.dimension.toUpperCase();
     if (type === "REEL" || type === "REELS") current.reelsViews = asNumber(current.reelsViews) + point.value;
     else if (type === "STORY" || type === "STORIES") current.storiesViews = asNumber(current.storiesViews) + point.value;
@@ -605,26 +866,23 @@ export async function fetchInstagramAnalytics(params: {
 
   reachBreakdownDaily.forEach((point) => {
     if (point.date > range.until) return;
-    const current =
-      trendMap.get(point.date) ?? {
-        date: point.date,
-        reach: 0,
-        views: 0,
-        accountsEngaged: 0,
-        reelsViews: 0,
-        postViews: 0,
-        storiesViews: 0,
-        followerReach: 0,
-        nonFollowerReach: 0,
-        comments: 0,
-        newFollowers: 0,
-        profileVisits24h: 0,
-        boosted: false,
-      };
+    const current = getOrCreateTrendPoint(trendMap, point.date);
     const type = point.dimension.toUpperCase();
     if (type === "FOLLOWER") current.followerReach = point.value;
     if (type === "NON_FOLLOWER" || type === "NONFOLLOWER") current.nonFollowerReach = point.value;
     trendMap.set(point.date, current);
+  });
+
+  dailySnapshots.forEach((snapshot) => {
+    if (snapshot.date > range.until) return;
+    const current = getOrCreateTrendPoint(trendMap, snapshot.date);
+    current.reach = snapshot.reach;
+    current.views = snapshot.views;
+    current.accountsEngaged = snapshot.accountsEngaged;
+    current.comments = snapshot.comments;
+    current.newFollowers = snapshot.newFollowers;
+    current.profileVisits24h = snapshot.profileVisits24h;
+    trendMap.set(snapshot.date, current);
   });
 
   const media = includePosts
@@ -737,6 +995,18 @@ export async function fetchInstagramAnalytics(params: {
     String(a.date).localeCompare(String(b.date))
   );
   const trends = comparisonTrends.filter((trend) => String(trend.date) >= range.since);
+  if (includeAccount && trends.length === 0) {
+    warnings.push("Instagram trends are empty for the selected range.");
+  }
+  if (
+    includeAccount &&
+    genderDemographics.length === 0 &&
+    ageDemographics.length === 0 &&
+    countryDemographics.length === 0 &&
+    cityDemographics.length === 0
+  ) {
+    warnings.push("Instagram demographics unavailable for this account and timeframe.");
+  }
   const contentTypePerformance = buildContentTypePerformanceFromPosts(posts as Array<Record<string, unknown>>);
   const comparison: Record<string, { current: number; previous: number; percentageChange: number }> = {};
 
@@ -752,12 +1022,30 @@ export async function fetchInstagramAnalytics(params: {
   assignComparison(
     comparison,
     "newFollowers",
-    lastTwoMetricValuesUntil(followerComparisonMetric ?? undefined, range.until)
+    lastTwoMetricValuesUntil(followerComparisonMetric ?? followerMetric ?? undefined, range.until)
   );
   assignComparison(
     comparison,
     "profileVisits24h",
-    lastTwoMetricValuesUntil(profileViewsComparisonMetric ?? undefined, range.until)
+    lastTwoMetricValuesUntil(profileViewsComparisonMetric ?? profileViewsMetric ?? undefined, range.until)
+  );
+  assignComparison(comparison, "reach", pairFromSnapshots(dailySnapshots, "reach"));
+  assignComparison(comparison, "views", pairFromSnapshots(dailySnapshots, "views"));
+  assignComparison(
+    comparison,
+    "accountsEngaged",
+    pairFromSnapshots(dailySnapshots, "accountsEngaged")
+  );
+  assignComparison(comparison, "comments", pairFromSnapshots(dailySnapshots, "comments"));
+  assignComparison(
+    comparison,
+    "newFollowers",
+    pairFromSnapshots(dailySnapshots, "newFollowers")
+  );
+  assignComparison(
+    comparison,
+    "profileVisits24h",
+    pairFromSnapshots(dailySnapshots, "profileVisits24h")
   );
 
   const recentComments = posts
@@ -779,7 +1067,7 @@ export async function fetchInstagramAnalytics(params: {
         postViews,
         storiesViews,
         profileVisits24h,
-        profileVisitsYesterday: profileVisits24h,
+        profileVisitsYesterday,
         nonFollowerReach,
         followerReach,
         comments,
@@ -799,6 +1087,15 @@ export async function fetchInstagramAnalytics(params: {
       ? {
           followers: followerReach,
           nonFollowers: nonFollowerReach,
+        }
+      : undefined,
+    audienceDemographics: includeAccount
+      ? {
+          gender: genderDemographics,
+          age: ageDemographics,
+          country: countryDemographics,
+          city: cityDemographics,
+          timeframe: demographicTimeframe,
         }
       : undefined,
     contentTypePerformance: includePosts ? contentTypePerformance : undefined,

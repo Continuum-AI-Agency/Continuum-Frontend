@@ -9,7 +9,7 @@ import { fetchFacebookMetrics } from "./facebook-metrics.ts";
 import { fetchInstagramMetrics } from "./instagram-metrics.ts";
 import { PlatformType, RequestParams } from "./types.ts";
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 type CachePayload = Record<string, unknown>;
 

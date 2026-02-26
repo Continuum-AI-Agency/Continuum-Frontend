@@ -1,4 +1,4 @@
-const META_EDGE_CACHE_TTL_MS = 60 * 60 * 1000;
+const META_EDGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 type SupabaseLike = {
   schema: (schema: string) => {
@@ -125,4 +125,3 @@ export async function writeMetaEdgeCache({
     log?.("cache write failed", error);
   }
 }
-

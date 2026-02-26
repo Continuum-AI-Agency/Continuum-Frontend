@@ -152,7 +152,7 @@ async function fetchFacebookPostDetails(params: {
     .filter((point) => point.date >= createdDate && point.date <= dailyUntil)
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 30);
-  const breakdown7d = breakdown30d.slice(0, 7);
+  const breakdown7d = breakdown30d.slice(-7);
 
   return {
     id: postId,

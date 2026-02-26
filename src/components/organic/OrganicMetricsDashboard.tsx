@@ -16,10 +16,15 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
+  Cell,
+  Label,
   Line,
   LineChart,
-  PolarAngleAxis,
+  Pie,
+  PieChart,
   PolarRadiusAxis,
   RadialBar,
   RadialBarChart,
@@ -29,6 +34,7 @@ import {
 } from "recharts";
 
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
+import { OrganicAudienceLocationMapCard } from "@/components/organic/OrganicAudienceLocationMapCard";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 import {
   ChartContainer,
@@ -45,7 +51,6 @@ import {
 } from "@/components/kibo-ui/reel";
 import {
   fetchOrganicAnalytics,
-  type OrganicAnalyticsRequest,
 } from "@/lib/api/organicAnalytics.client";
 import type {
   MetricComparison,
@@ -53,9 +58,17 @@ import type {
   OrganicMetrics,
   OrganicMetricsResponse,
   OrganicPost,
-  OrganicPostBreakdownPoint,
 } from "@/lib/schemas/organicMetrics";
 import { cn } from "@/lib/utils";
+import {
+  buildPostMetricSeries,
+  post24hComparisons,
+  postWindowRange,
+  POST_GALLERY_WINDOW_DAYS,
+  summarizePost7dMetrics,
+  type DrilldownWindow,
+  type PostMetricKey,
+} from "@/components/organic/organic-metrics-utils";
 
 export type OrganicAccountOption = {
   integrationAccountId: string;
@@ -83,12 +96,7 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "success"; data: OrganicMetricsResponse };
 
-type DrilldownWindow = "7d" | "30d";
-type PostMetricKey = "reach" | "views" | "engagement" | "comments";
-
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
-const POST_GALLERY_WINDOW_DAYS = 7;
-const POST_GALLERY_MAX_DAYS = 90;
 
 const RANGE_OPTIONS: OrganicDateRangePreset[] = [
   "yesterday",
@@ -114,6 +122,10 @@ const KPI_CONFIG: Array<{ key: keyof OrganicMetrics; label: string }> = [
 const audienceChartConfig = {
   followers: { label: "Followers", color: "#0284c7" },
   nonFollowers: { label: "Non-followers", color: "#f59e0b" },
+} satisfies ChartConfig;
+
+const demographicChartConfig = {
+  value: { label: "Followers", color: "#0284c7" },
 } satisfies ChartConfig;
 
 const drilldownChartConfig = {
@@ -175,36 +187,6 @@ function rangeLabel(preset: OrganicDateRangePreset) {
   return preset.replaceAll("_", " ");
 }
 
-function toYmd(date: Date) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    date.getUTCDate()
-  ).padStart(2, "0")}`;
-}
-
-function postWindowRange(weekOffset: number) {
-  const today = new Date();
-  const utcToday = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-  const capSince = new Date(utcToday);
-  capSince.setUTCDate(capSince.getUTCDate() - POST_GALLERY_MAX_DAYS);
-
-  const until = new Date(utcToday);
-  until.setUTCDate(until.getUTCDate() - weekOffset * POST_GALLERY_WINDOW_DAYS);
-  if (until.getTime() < capSince.getTime()) {
-    return null;
-  }
-
-  const since = new Date(until);
-  since.setUTCDate(since.getUTCDate() - (POST_GALLERY_WINDOW_DAYS - 1));
-  if (since.getTime() < capSince.getTime()) {
-    since.setTime(capSince.getTime());
-  }
-
-  return {
-    from: toYmd(since),
-    to: toYmd(until),
-  };
-}
-
 function mergePosts(existing: OrganicPost[], incoming: OrganicPost[]) {
   const map = new Map(existing.map((post) => [post.id, post]));
   incoming.forEach((post) => {
@@ -235,6 +217,14 @@ function formatDateTime(value: string | undefined) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function demographicColor(label: string) {
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "female") return "#10b981";
+  if (normalized === "male") return "#0284c7";
+  if (normalized === "unknown") return "#94a3b8";
+  return "#64748b";
 }
 
 function resolveProfileVisits(metrics: OrganicMetrics) {
@@ -280,19 +270,6 @@ function metricComparisonFor(
   return data.comparison?.[metricKey] ?? fallbackComparisonFromTrends(data, metricKey);
 }
 
-function normalizeDailyBreakdown(points: OrganicPostBreakdownPoint[] | undefined) {
-  return (points ?? [])
-    .map((point) => ({
-      date: point.date ?? (point.timestamp ? point.timestamp.slice(0, 10) : ""),
-      reach: point.reach ?? 0,
-      views: point.views ?? 0,
-      engagement: point.engagement ?? 0,
-      comments: point.comments ?? 0,
-    }))
-    .filter((point) => point.date.length > 0)
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
 function buildAccountMetricSeries(params: {
   data: OrganicMetricsResponse;
   metricKey: keyof OrganicMetrics;
@@ -324,77 +301,6 @@ function buildAccountMetricSeries(params: {
   }
 
   return [];
-}
-
-function buildPostMetricSeries(params: {
-  post: OrganicPost | null;
-  metricKey: PostMetricKey;
-  window: DrilldownWindow;
-}) {
-  const { post, metricKey, window } = params;
-  if (!post) return [];
-
-  const sourcePoints =
-    window === "30d"
-      ? post.breakdown30d ?? post.breakdown7d
-      : post.breakdown7d;
-
-  const today = toYmd(new Date());
-  const breakdown = normalizeDailyBreakdown(sourcePoints);
-  return breakdown
-    .filter((point) => point.date <= today)
-    .map((point) => ({
-      date: point.date,
-      value:
-        metricKey === "reach"
-          ? point.reach
-          : metricKey === "views"
-            ? point.views
-            : metricKey === "engagement"
-              ? point.engagement
-              : point.comments,
-    }))
-    .slice(-(window === "30d" ? 30 : 7));
-}
-
-function metricValueFromBreakdownPoint(point: {
-  reach?: number;
-  views?: number;
-  engagement?: number;
-  comments?: number;
-}, metricKey: PostMetricKey) {
-  if (metricKey === "reach") return point.reach ?? 0;
-  if (metricKey === "views") return point.views ?? 0;
-  if (metricKey === "engagement") return point.engagement ?? 0;
-  return point.comments ?? 0;
-}
-
-function post24hComparisons(post: OrganicPost | null): Partial<Record<PostMetricKey, MetricComparison>> {
-  if (!post) return {};
-  const today = toYmd(new Date());
-  const daily = normalizeDailyBreakdown(post.breakdown7d).filter((point) => point.date <= today);
-  if (daily.length < 2) return {};
-
-  const sorted = daily.slice().sort((a, b) => a.date.localeCompare(b.date));
-  const currentDay = sorted[sorted.length - 1];
-  const previousDay = sorted[sorted.length - 2];
-  if (!currentDay || !previousDay) return {};
-
-  const keys: PostMetricKey[] = ["reach", "views", "engagement", "comments"];
-  const entries = keys.map((key) => {
-    const current = metricValueFromBreakdownPoint(currentDay, key);
-    const previous = metricValueFromBreakdownPoint(previousDay, key);
-    return [
-      key,
-      {
-        current,
-        previous,
-        percentageChange: percentageChange(current, previous),
-      } satisfies MetricComparison,
-    ] as const;
-  });
-
-  return Object.fromEntries(entries);
 }
 
 function isVideoPost(post: OrganicPost) {
@@ -432,6 +338,8 @@ function PostGalleryCard({
   const preview = getPostPreviewUrl(post);
   const video = isVideoPost(post);
   const carousel = isCarouselPost(post);
+  const recent7dMetrics = summarizePost7dMetrics(post);
+  const previewViews = recent7dMetrics.views ?? post.metrics?.views ?? post.metrics?.reach;
   const mediaHeightClass = selected
     ? video
       ? "h-[400px] sm:h-[460px]"
@@ -471,7 +379,7 @@ function PostGalleryCard({
           : "hover:-translate-y-0.5 hover:shadow-md"
       )}
     >
-      <Box className={cn("relative w-full overflow-hidden bg-muted/10", mediaHeightClass)}>
+      <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90", mediaHeightClass)}>
         {preview ? (
           video ? (
             <Reel className="h-full w-full" data={reelData} defaultMuted>
@@ -479,7 +387,7 @@ function PostGalleryCard({
                 {(item) => (
                   <ReelVideo
                     src={item.src}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     playsInline
                     muted
                     loop
@@ -492,7 +400,7 @@ function PostGalleryCard({
             <img
               src={preview}
               alt={post.title ?? post.caption ?? "Post media"}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-contain"
             />
           )
         ) : (
@@ -509,7 +417,7 @@ function PostGalleryCard({
             <Flex align="center" justify="between" mt="2">
               <Text size="1" className="text-white/85">{formatDateTime(post.timestamp)}</Text>
               <Text size="1" className="text-white/85">
-                {formatNumber(post.metrics?.views ?? post.metrics?.reach)} views
+                {formatNumber(previewViews)} 7d views
               </Text>
             </Flex>
           </div>
@@ -560,6 +468,7 @@ function PostSnapshotPanel({
   const preview = getPostPreviewUrl(post);
   const video = isVideoPost(post);
   const metricComparisons = post24hComparisons(post);
+  const recent7dMetrics = summarizePost7dMetrics(post);
 
   return (
     <motion.aside
@@ -583,11 +492,11 @@ function PostSnapshotPanel({
             </Flex>
           </Flex>
 
-          <Box className="mb-3 overflow-hidden rounded-lg border border-subtle bg-muted/10">
+          <Box className="mb-3 overflow-hidden rounded-lg border border-subtle bg-black/90">
             {preview ? (
               video ? (
                 <Reel
-                  className="h-[260px] w-full"
+                  className="max-h-[460px] min-h-[260px] w-full"
                   data={[
                     {
                       id: `${post.id}-snapshot`,
@@ -604,7 +513,7 @@ function PostSnapshotPanel({
                     {(item) => (
                       <ReelVideo
                         src={item.src}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                         playsInline
                         muted
                         loop
@@ -617,21 +526,41 @@ function PostSnapshotPanel({
                 <img
                   src={preview}
                   alt={post.title ?? post.caption ?? "Selected post"}
-                  className="h-[260px] w-full object-cover"
+                  className="max-h-[460px] min-h-[260px] w-full object-contain"
                 />
               )
             ) : (
-              <Box className="flex h-[260px] items-center justify-center">
+              <Box className="flex min-h-[260px] items-center justify-center">
                 <Text size="1" color="gray">No preview available</Text>
               </Box>
             )}
           </Box>
 
           <div className="mb-3 grid grid-cols-2 gap-1.5">
-            <MetricCard label="Reach" value={post.metrics?.reach} comparison={metricComparisons.reach} compact />
-            <MetricCard label="Views" value={post.metrics?.views} comparison={metricComparisons.views} compact />
-            <MetricCard label="Engagement" value={post.metrics?.totalInteractions} comparison={metricComparisons.engagement} compact />
-            <MetricCard label="Comments" value={post.metrics?.comments} comparison={metricComparisons.comments} compact />
+            <MetricCard
+              label="Reach (7d)"
+              value={recent7dMetrics.reach ?? post.metrics?.reach}
+              comparison={metricComparisons.reach}
+              compact
+            />
+            <MetricCard
+              label="Views (7d)"
+              value={recent7dMetrics.views ?? post.metrics?.views}
+              comparison={metricComparisons.views}
+              compact
+            />
+            <MetricCard
+              label="Engagement (7d)"
+              value={recent7dMetrics.engagement ?? post.metrics?.totalInteractions}
+              comparison={metricComparisons.engagement}
+              compact
+            />
+            <MetricCard
+              label="Comments (7d)"
+              value={recent7dMetrics.comments ?? post.metrics?.comments}
+              comparison={metricComparisons.comments}
+              compact
+            />
           </div>
 
           <Box className="mb-3">
@@ -859,6 +788,8 @@ function Dashboard({
     selectedPostBase ??
     null;
   const postCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const postsScrollerRef = React.useRef<HTMLDivElement | null>(null);
+  const postsLoadSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const accountSeries = buildAccountMetricSeries({
     data,
     metricKey: selectedAccountMetric,
@@ -874,10 +805,22 @@ function Dashboard({
   const isAccountView = viewMode === "account";
   const isPostsView = viewMode === "posts";
 
+  const audienceTotal = Math.max(0, audienceBreakdown.followers + audienceBreakdown.nonFollowers);
   const audienceRadialData = [
-    { name: "followers", value: audienceBreakdown.followers, fill: "var(--color-followers)" },
-    { name: "nonFollowers", value: audienceBreakdown.nonFollowers, fill: "var(--color-nonFollowers)" },
+    {
+      audience: "reach",
+      followers: audienceBreakdown.followers,
+      nonFollowers: audienceBreakdown.nonFollowers,
+    },
   ];
+  const genderDemographics = (data.audienceDemographics?.gender ?? []).map((entry) => ({
+    ...entry,
+    fill: demographicColor(entry.label),
+  }));
+  const ageDemographics = data.audienceDemographics?.age ?? [];
+  const countryDemographics = data.audienceDemographics?.country ?? [];
+  const cityDemographics = data.audienceDemographics?.city ?? [];
+  const demographicTimeframe = data.audienceDemographics?.timeframe;
   React.useEffect(() => {
     if (viewMode !== "posts") return;
     if (!selectedPostId) return;
@@ -892,17 +835,29 @@ function Dashboard({
     card.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
   }, [selectedPostId, viewMode]);
 
-  const handlePostsScroll = React.useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      if (viewMode !== "posts" || !hasMorePosts || loadingMorePosts) return;
-      const target = event.currentTarget;
-      const reachedBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 180;
-      if (reachedBottom) {
-        onLoadMorePosts?.();
+  React.useEffect(() => {
+    if (!isPostsView || !hasMorePosts || loadingMorePosts || !onLoadMorePosts) return;
+    const root = postsScrollerRef.current;
+    const target = postsLoadSentinelRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting) {
+          onLoadMorePosts();
+        }
+      },
+      {
+        root,
+        rootMargin: "220px 0px 220px 0px",
+        threshold: 0.01,
       }
-    },
-    [hasMorePosts, loadingMorePosts, onLoadMorePosts, viewMode]
-  );
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMorePosts, isPostsView, loadingMorePosts, onLoadMorePosts]);
 
   return (
     <Flex
@@ -943,7 +898,7 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
           <Card variant="surface" className="border border-subtle bg-surface xl:col-span-2">
             <Box p="3">
               <Flex align="center" justify="between" mb="2" wrap="wrap" gap="2">
@@ -1010,14 +965,53 @@ function Dashboard({
               <ChartContainer config={audienceChartConfig} className="h-52 w-full">
                 <RadialBarChart
                   data={audienceRadialData}
-                  innerRadius={34}
-                  outerRadius={88}
-                  startAngle={90}
-                  endAngle={-270}
+                  endAngle={180}
+                  innerRadius={48}
+                  outerRadius={90}
                 >
-                  <PolarAngleAxis type="number" domain={[0, Math.max(audienceBreakdown.followers, audienceBreakdown.nonFollowers, 1)]} tick={false} />
-                  <RadialBar dataKey="value" cornerRadius={6} background />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                  <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+                    <Label
+                      content={({ viewBox }) => {
+                        if (!viewBox || !("cx" in viewBox) || !("cy" in viewBox)) {
+                          return null;
+                        }
+
+                        return (
+                          <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle">
+                            <tspan
+                              x={viewBox.cx}
+                              y={(viewBox.cy ?? 0) - 12}
+                              className="fill-foreground text-xl font-semibold"
+                            >
+                              {formatNumber(audienceTotal)}
+                            </tspan>
+                            <tspan
+                              x={viewBox.cx}
+                              y={(viewBox.cy ?? 0) + 8}
+                              className="fill-muted-foreground text-xs"
+                            >
+                              Audience
+                            </tspan>
+                          </text>
+                        );
+                      }}
+                    />
+                  </PolarRadiusAxis>
+                  <RadialBar
+                    dataKey="followers"
+                    stackId="audience"
+                    cornerRadius={6}
+                    fill="var(--color-followers)"
+                    className="stroke-transparent stroke-2"
+                  />
+                  <RadialBar
+                    dataKey="nonFollowers"
+                    stackId="audience"
+                    cornerRadius={6}
+                    fill="var(--color-nonFollowers)"
+                    className="stroke-transparent stroke-2"
+                  />
                 </RadialBarChart>
               </ChartContainer>
               <Separator my="2" size="4" />
@@ -1031,7 +1025,70 @@ function Dashboard({
               </Flex>
             </Box>
           </Card>
+
+          <Card variant="surface" className="border border-subtle bg-surface">
+            <Box p="3">
+              <Heading size="3" mb="2">Audience Demographics</Heading>
+
+              <Text size="1" color="gray" mb="1">Gender</Text>
+              {genderDemographics.length === 0 ? (
+                <Text size="1" color="gray">Gender breakdown unavailable.</Text>
+              ) : (
+                <>
+                  <ChartContainer config={demographicChartConfig} className="h-28 w-full">
+                    <PieChart>
+                      <Pie
+                        data={genderDemographics}
+                        dataKey="value"
+                        nameKey="label"
+                        innerRadius={26}
+                        outerRadius={46}
+                        strokeWidth={2}
+                      >
+                        {genderDemographics.map((entry) => (
+                          <Cell key={entry.key} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                    </PieChart>
+                  </ChartContainer>
+                  <div className="grid grid-cols-2 gap-1">
+                    {genderDemographics.map((entry) => (
+                      <Flex key={entry.key} justify="between" align="center">
+                        <Text size="1" color="gray">{entry.label}</Text>
+                        <Text size="1" weight="medium">{formatNumber(entry.value)}</Text>
+                      </Flex>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <Separator my="2" size="4" />
+              <Text size="1" color="gray" mb="1">Age</Text>
+              {ageDemographics.length === 0 ? (
+                <Text size="1" color="gray">Age breakdown unavailable.</Text>
+              ) : (
+                <ChartContainer config={demographicChartConfig} className="h-28 w-full">
+                  <BarChart data={ageDemographics} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={12} />
+                    <YAxis hide />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} fill="var(--color-value)" />
+                  </BarChart>
+                </ChartContainer>
+              )}
+            </Box>
+          </Card>
         </div>
+      ) : null}
+
+      {isAccountView ? (
+        <OrganicAudienceLocationMapCard
+          countryEntries={countryDemographics}
+          cityEntries={cityDemographics}
+          timeframe={demographicTimeframe}
+        />
       ) : null}
 
       {isPostsView ? (
@@ -1058,7 +1115,7 @@ function Dashboard({
                     )}
                   >
                     <motion.div layout className="min-w-0">
-                      <div className="mx-auto max-h-[74vh] w-full overflow-y-auto px-1" onScroll={handlePostsScroll}>
+                      <div ref={postsScrollerRef} className="mx-auto max-h-[74vh] w-full overflow-y-auto px-1">
                         <div
                           className={cn(
                             "mx-auto grid gap-3 sm:gap-4",
@@ -1085,11 +1142,12 @@ function Dashboard({
                             </motion.div>
                           ))}
                         </div>
+                        <div ref={postsLoadSentinelRef} className="h-2 w-full" aria-hidden />
                         <div className="flex items-center justify-center py-4">
                           {loadingMorePosts ? (
-                            <Text size="1" color="gray">Loading previous 7d...</Text>
+                            <Text size="1" color="gray">Loading previous {POST_GALLERY_WINDOW_DAYS}d...</Text>
                           ) : hasMorePosts ? (
-                            <Text size="1" color="gray">Scroll for previous 7d</Text>
+                            <Text size="1" color="gray">Scroll for previous {POST_GALLERY_WINDOW_DAYS}d</Text>
                           ) : (
                             <Text size="1" color="gray">Reached 3-month history cap.</Text>
                           )}
@@ -1156,9 +1214,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
 
   const fetchPostsWindow = React.useCallback(
-    async (params: { accountId: string; weekOffset: number; forceRefresh: boolean }) => {
-      const { accountId, weekOffset, forceRefresh } = params;
-      const window = postWindowRange(weekOffset);
+    async (params: { accountId: string; windowOffset: number; forceRefresh: boolean }) => {
+      const { accountId, windowOffset, forceRefresh } = params;
+      const window = postWindowRange(windowOffset);
       if (!window) return null;
       return fetchOrganicAnalytics({
         brandId,
@@ -1212,6 +1270,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
             ...current,
             [postId]: detailedPost,
           }));
+          setPostGalleryPosts((current) => mergePosts(current, [detailedPost]));
         }
       } catch (error) {
         console.error("[OrganicMetricsDashboard] Failed to load post details", error);
@@ -1238,7 +1297,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     try {
       const data = await fetchPostsWindow({
         accountId: selectedAccountId,
-        weekOffset: nextOffset,
+        windowOffset: nextOffset,
         forceRefresh: false,
       });
       if (!data) {
@@ -1312,8 +1371,8 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         if (viewMode === "posts") {
           const postsData = await fetchPostsWindow({
             accountId,
-            weekOffset: 0,
-            forceRefresh: true,
+            windowOffset: 0,
+            forceRefresh,
           });
           if (!postsData) {
             setState({ status: "error", message: "Unable to load post windows for the selected range." });
@@ -1329,6 +1388,27 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
             scope: "account",
             forceRefresh,
           });
+
+          if ((data.trends?.length ?? 0) < 30) {
+            try {
+              const trendData = await fetchOrganicAnalytics({
+                brandId,
+                integrationAccountId: accountId,
+                platform,
+                range: { preset: "last_30d" },
+                scope: "account",
+                forceRefresh: false,
+              });
+              if ((trendData.trends?.length ?? 0) > (data.trends?.length ?? 0)) {
+                data = {
+                  ...data,
+                  trends: trendData.trends,
+                };
+              }
+            } catch (trendError) {
+              console.warn("[OrganicMetricsDashboard] Unable to hydrate 30d account trends", trendError);
+            }
+          }
         }
 
         if (cancelled) return;
@@ -1375,7 +1455,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 {platform} organic reporting
               </Text>
               <Text color="gray" size="2">
-                {viewMode === "posts" ? "Rolling 7d windows (up to 3 months)" : rangeLabel(rangePreset)}
+                {viewMode === "posts"
+                  ? `Rolling ${POST_GALLERY_WINDOW_DAYS}d windows (up to 3 months)`
+                  : rangeLabel(rangePreset)}
               </Text>
             </Box>
           </Flex>
