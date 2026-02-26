@@ -350,7 +350,7 @@ export function useWorkflowExecution() {
       payload: any,
       onPartialUpdate?: (data: any) => void
     ): Promise<ExecutionResult> => {
-      const initUrl = resolveInitUrl("/ai-studio/enrich");
+      const initUrl = resolveInitUrl("/api/ai-studio/enrich");
       return executeStreamRequest(nodeId, payload, initUrl, "text", onPartialUpdate);
     },
     [resolveInitUrl, executeStreamRequest]
