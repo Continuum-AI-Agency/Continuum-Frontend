@@ -42,6 +42,14 @@ export type MetaAd = {
   status: string;
   effectiveStatus: string;
   previewShareableLink?: string | null;
+  metrics?: {
+    spend: number;
+    roas: number;
+    ctr: number;
+    cpc: number;
+    impressions: number;
+    clicks: number;
+  } | null;
   creative?: {
     id: string;
     name?: string | null;

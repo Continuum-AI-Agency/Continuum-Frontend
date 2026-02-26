@@ -35,6 +35,39 @@ type MetaCreative = {
   call_to_action_type?: string;
 };
 
+type MetaActionValue = {
+  action_type?: string;
+  value?: string;
+};
+
+type MetaAdInsight = {
+  ad_id?: string;
+  spend?: string;
+  impressions?: string;
+  clicks?: string;
+  cpc?: string;
+  ctr?: string;
+  actions?: MetaActionValue[];
+  action_values?: MetaActionValue[];
+};
+
+function toNumber(value: unknown): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function readActionValue(values: MetaActionValue[] | undefined, actionTypes: string[]): number {
+  if (!Array.isArray(values)) return 0;
+  const action = values.find((item) => item.action_type && actionTypes.includes(item.action_type));
+  return toNumber(action?.value);
+}
+
 serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
@@ -135,9 +168,10 @@ serve(async (req: Request) => {
       adAccountId,
       scopeId: `${adSetId}:${cacheScopeSuffix}`,
     });
+    const cacheClient = supabase as unknown as Parameters<typeof readMetaEdgeCache>[0]["supabase"];
 
     const cacheHit = await readMetaEdgeCache({
-      supabase: supabase as any,
+      supabase: cacheClient,
       cacheKey,
       log,
     });
@@ -193,6 +227,69 @@ serve(async (req: Request) => {
     const adsPayload = await adsResponse.json();
     const ads: MetaAd[] = adsPayload.data || [];
 
+    const adMetricsById = new Map<
+      string,
+      {
+        spend: number;
+        roas: number;
+        ctr: number;
+        cpc: number;
+        impressions: number;
+        clicks: number;
+      }
+    >();
+
+    try {
+      const insightsParams = new URLSearchParams({
+        fields: "ad_id,spend,impressions,clicks,cpc,ctr,actions,action_values",
+        level: "ad",
+        limit: "200",
+        access_token: accessToken,
+      });
+
+      if (datePreset) {
+        insightsParams.set("date_preset", datePreset);
+      }
+
+      if (timeRange) {
+        insightsParams.set("time_range", timeRange);
+      }
+
+      const insightsEndpoint = `https://graph.facebook.com/v23.0/${adSetId}/insights`;
+      const insightsResponse = await fetch(`${insightsEndpoint}?${insightsParams.toString()}`);
+      if (insightsResponse.ok) {
+        const insightsPayload = await insightsResponse.json();
+        const insightsRows: MetaAdInsight[] = Array.isArray(insightsPayload?.data) ? insightsPayload.data : [];
+
+        insightsRows.forEach((row) => {
+          const adId = row.ad_id;
+          if (!adId) return;
+
+          const spend = toNumber(row.spend);
+          const clicks = toNumber(row.clicks);
+          const impressions = toNumber(row.impressions);
+          const ctr = toNumber(row.ctr);
+          const cpc = toNumber(row.cpc);
+          const purchaseValue = readActionValue(row.action_values, ["purchase", "omni_purchase"]);
+          const roas = spend > 0 ? purchaseValue / spend : 0;
+
+          adMetricsById.set(adId, {
+            spend,
+            roas,
+            ctr,
+            cpc,
+            impressions,
+            clicks,
+          });
+        });
+      } else {
+        const insightsError = await insightsResponse.json();
+        log("Meta ad insights API error", { status: insightsResponse.status, error: insightsError });
+      }
+    } catch (insightsError) {
+      log("Failed to load ad insights", insightsError);
+    }
+
     const uniqueCreativeIds = Array.from(
       new Set(ads.map((ad) => ad.creative?.id).filter((id): id is string => Boolean(id)))
     );
@@ -241,6 +338,7 @@ serve(async (req: Request) => {
         createdTime: ad.created_time ?? null,
         updatedTime: ad.updated_time ?? null,
         creativeId: creativeId ?? null,
+        metrics: adMetricsById.get(ad.id) ?? null,
         creative: creative
           ? {
               id: creative.id,
@@ -258,6 +356,7 @@ serve(async (req: Request) => {
     log("success", {
       adCount: hydratedAds.length,
       creativeCount: uniqueCreativeIds.length,
+      metricsCount: adMetricsById.size,
       adSetId,
       adAccountId,
     });
@@ -265,7 +364,7 @@ serve(async (req: Request) => {
     const responsePayload = { ads: hydratedAds };
 
     await writeMetaEdgeCache({
-      supabase: supabase as any,
+      supabase: cacheClient,
       cacheKey,
       accountId: adAccountId,
       scopeType: "meta_ads",

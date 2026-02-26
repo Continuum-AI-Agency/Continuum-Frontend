@@ -5,7 +5,13 @@ import { ReloadIcon } from "@radix-ui/react-icons";
 import { Box, Card, Flex, Heading, IconButton, Select, Text } from "@radix-ui/themes";
 
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
+import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  buildCampaignIndexAggregate,
+  type CampaignIndexRecord,
+} from "@/lib/paid-media/campaign-indexes";
+import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
 import { CampaignTimelineWorkspace } from "./CampaignTimelineWorkspace";
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 
@@ -43,6 +49,12 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "success" };
 
+type IndexSaveDraft = {
+  id?: string;
+  name: string;
+  campaignIds: string[];
+};
+
 export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardProps) {
   const [platform, setPlatform] = React.useState<Platform>("meta");
   const [timeRange, setTimeRange] = React.useState<TimePreset>("last_7d");
@@ -52,6 +64,10 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
 
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | undefined>();
+  const [campaignIndexes, setCampaignIndexes] = React.useState<CampaignIndexRecord[]>([]);
+  const [selectedCampaignIndexId, setSelectedCampaignIndexId] = React.useState<string>("all");
+  const [indexDialogOpen, setIndexDialogOpen] = React.useState(false);
+  const [savingIndex, setSavingIndex] = React.useState(false);
 
   const loadCampaigns = React.useCallback(async () => {
     if (!adAccountId) {
@@ -125,9 +141,46 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
     }
   }, [adAccountId, brandId, platform, timeRange]);
 
+  const loadCampaignIndexes = React.useCallback(async () => {
+    if (!adAccountId) {
+      setCampaignIndexes([]);
+      setSelectedCampaignIndexId("all");
+      return;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        brandId,
+        metaAccountId: adAccountId,
+      });
+
+      const response = await fetch(`/api/paid-media/campaign-indexes?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error("Failed to load campaign indexes");
+      }
+
+      const payload = (await response.json()) as { indexes?: CampaignIndexRecord[] };
+      const indexes = Array.isArray(payload.indexes) ? payload.indexes : [];
+      setCampaignIndexes(indexes);
+
+      setSelectedCampaignIndexId((current) => {
+        if (current === "all") return current;
+        return indexes.some((index) => index.id === current) ? current : "all";
+      });
+    } catch (error) {
+      console.error("Failed to load campaign indexes", error);
+      setCampaignIndexes([]);
+      setSelectedCampaignIndexId("all");
+    }
+  }, [adAccountId, brandId]);
+
   React.useEffect(() => {
     void loadCampaigns();
   }, [loadCampaigns]);
+
+  React.useEffect(() => {
+    void loadCampaignIndexes();
+  }, [loadCampaignIndexes]);
 
   const handleRefresh = () => {
     void loadCampaigns();
@@ -141,6 +194,118 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
   const handleTimeRangeChange = (value: TimePreset) => {
     setTimeRange(value);
   };
+
+  const selectedCampaignIndex = React.useMemo(
+    () => campaignIndexes.find((index) => index.id === selectedCampaignIndexId),
+    [campaignIndexes, selectedCampaignIndexId]
+  );
+
+  const indexCampaignSet = React.useMemo(() => {
+    if (!selectedCampaignIndex) return null;
+    return new Set(selectedCampaignIndex.campaignIds);
+  }, [selectedCampaignIndex]);
+
+  const indexedCampaigns = React.useMemo(() => {
+    if (!indexCampaignSet) return campaigns;
+    return campaigns.filter((campaign) => indexCampaignSet.has(campaign.id));
+  }, [campaigns, indexCampaignSet]);
+
+  const campaignGroupContext = React.useMemo(() => {
+    if (!selectedCampaignIndex) return undefined;
+
+    const aggregate = buildCampaignIndexAggregate(indexedCampaigns);
+    return {
+      id: `index:${selectedCampaignIndex.id}`,
+      label: selectedCampaignIndex.name,
+      campaignIds: selectedCampaignIndex.campaignIds,
+      metrics: aggregate.metrics,
+      comparison: aggregate.comparison,
+      trends: aggregate.trends,
+    };
+  }, [indexedCampaigns, selectedCampaignIndex]);
+
+  const dialogInitialValue = React.useMemo<IndexSaveDraft | undefined>(() => {
+    if (!selectedCampaignIndex || selectedCampaignIndexId === "all") return undefined;
+    return {
+      id: selectedCampaignIndex.id,
+      name: selectedCampaignIndex.name,
+      campaignIds: selectedCampaignIndex.campaignIds,
+    };
+  }, [selectedCampaignIndex, selectedCampaignIndexId]);
+
+  const saveCampaignIndex = React.useCallback(
+    async (draft: IndexSaveDraft) => {
+      if (!adAccountId) return;
+
+      setSavingIndex(true);
+      try {
+        if (draft.id) {
+          const updateResponse = await fetch(`/api/paid-media/campaign-indexes/${draft.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: draft.name,
+              campaignIds: draft.campaignIds,
+            }),
+          });
+
+          if (!updateResponse.ok) {
+            throw new Error("Failed to update campaign index");
+          }
+        } else {
+          const createResponse = await fetch("/api/paid-media/campaign-indexes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              brandId,
+              metaAccountId: adAccountId,
+              name: draft.name,
+              campaignIds: draft.campaignIds,
+            }),
+          });
+
+          if (!createResponse.ok) {
+            throw new Error("Failed to create campaign index");
+          }
+
+          const payload = (await createResponse.json()) as { index?: CampaignIndexRecord };
+          if (payload.index?.id) {
+            setSelectedCampaignIndexId(payload.index.id);
+          }
+        }
+
+        await loadCampaignIndexes();
+        setIndexDialogOpen(false);
+      } catch (error) {
+        console.error("Failed to save campaign index", error);
+      } finally {
+        setSavingIndex(false);
+      }
+    },
+    [adAccountId, brandId, loadCampaignIndexes]
+  );
+
+  const deleteSelectedCampaignIndex = React.useCallback(async () => {
+    if (!selectedCampaignIndex || selectedCampaignIndexId === "all") return;
+
+    setSavingIndex(true);
+    try {
+      const response = await fetch(`/api/paid-media/campaign-indexes/${selectedCampaignIndex.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete campaign index");
+      }
+
+      setSelectedCampaignIndexId("all");
+      await loadCampaignIndexes();
+    } catch (error) {
+      console.error("Failed to delete campaign index", error);
+    } finally {
+      setSavingIndex(false);
+    }
+  }, [loadCampaignIndexes, selectedCampaignIndex, selectedCampaignIndexId]);
 
   return (
     <Box className="w-full">
@@ -170,6 +335,42 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
               </Select.Content>
             </Select.Root>
 
+            <Select.Root value={selectedCampaignIndexId} onValueChange={setSelectedCampaignIndexId}>
+              <Select.Trigger placeholder="Campaign index" className="min-w-[170px]" />
+              <Select.Content>
+                <Select.Item value="all">All campaigns</Select.Item>
+                {campaignIndexes.map((index) => (
+                  <Select.Item key={index.id} value={index.id}>
+                    {index.name}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
+
+            <Button
+              variant="outline"
+              className="h-10"
+              onClick={() => {
+                if (selectedCampaignIndexId === "all") {
+                  setSelectedCampaignIndexId("all");
+                }
+                setIndexDialogOpen(true);
+              }}
+            >
+              {selectedCampaignIndexId === "all" ? "New index" : "Edit index"}
+            </Button>
+
+            {selectedCampaignIndex && selectedCampaignIndexId !== "all" ? (
+              <Button
+                variant="outline"
+                className="h-10 text-destructive"
+                onClick={() => void deleteSelectedCampaignIndex()}
+                disabled={savingIndex}
+              >
+                Delete index
+              </Button>
+            ) : null}
+
             <IconButton
               variant="soft"
               onClick={handleRefresh}
@@ -197,6 +398,13 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
             brandId={brandId}
             accountId={adAccountId}
             campaigns={campaigns}
+            indexGroups={campaignIndexes.map((index) => ({
+              id: index.id,
+              name: index.name,
+              campaignIds: index.campaignIds,
+            }))}
+            selectedIndexGroupId={selectedCampaignIndexId}
+            groupContext={campaignGroupContext}
             isLoadingCampaigns={loadState.status === "loading-campaigns"}
             timeRangePreset={timeRange}
             resolution={timelineResolution}
@@ -225,6 +433,19 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
             />
           </Box>
         </Card>
+
+        <CampaignIndexManagerDialog
+          open={indexDialogOpen}
+          onOpenChange={setIndexDialogOpen}
+          campaigns={campaigns.map((campaign) => ({
+            id: campaign.id,
+            name: campaign.name,
+            status: campaign.status,
+          }))}
+          initialValue={dialogInitialValue}
+          saving={savingIndex}
+          onSave={(draft) => void saveCampaignIndex(draft)}
+        />
       </Flex>
     </Box>
   );

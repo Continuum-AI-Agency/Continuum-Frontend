@@ -17,13 +17,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ChevronDownIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { ChevronDownIcon, MagnifyingGlassIcon, OpenInNewWindowIcon, ReloadIcon } from "@radix-ui/react-icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -31,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { useTimelineBlocks } from "@/hooks/timeline/useTimelineBlocks";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AdSet } from "./AdSetTable";
+import { calculateImmediateKpiShiftPct } from "./actionMarkers";
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 
 type TimelineResolution = "daily" | "hourly";
@@ -65,10 +65,53 @@ type AdSetLoadState = {
   loadingStartedAt?: number;
 };
 
+type AdMetrics = {
+  spend: number;
+  roas: number;
+  ctr: number;
+  cpc: number;
+  impressions: number;
+  clicks: number;
+};
+
+type MetaAd = {
+  id: string;
+  name: string;
+  status: string;
+  effectiveStatus?: string;
+  previewShareableLink?: string | null;
+  creative?: {
+    id: string;
+    name?: string | null;
+    title?: string | null;
+    body?: string | null;
+    thumbnailUrl?: string | null;
+    imageUrl?: string | null;
+    callToActionType?: string | null;
+  } | null;
+  metrics?: AdMetrics | null;
+};
+
+type AdSetAdsLoadState = {
+  status: "idle" | "loading" | "success" | "error";
+  ads: MetaAd[];
+  errorMessage?: string;
+};
+
 type CampaignTimelineWorkspaceProps = {
   brandId: string;
   accountId: string;
   campaigns: Campaign[];
+  indexGroups?: Array<{ id: string; name: string; campaignIds: string[] }>;
+  selectedIndexGroupId?: string;
+  groupContext?: {
+    id: string;
+    label: string;
+    campaignIds: string[];
+    metrics?: Campaign["metrics"];
+    comparison?: PaidMetricsComparison;
+    trends?: PaidMetricsTrendPoint[];
+  };
   isLoadingCampaigns: boolean;
   timeRangePreset: TimePreset;
   resolution: TimelineResolution;
@@ -119,6 +162,7 @@ type MarkerPoint = {
   scopeLabel: string;
   count: number;
   tooltip: string;
+  kpiShiftPct?: number | null;
 };
 
 const KPI_COLUMNS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"];
@@ -184,6 +228,19 @@ function formatNumber(value: number): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
+}
+
+function formatRelativeTime(timestamp: string): string {
+  const diffMs = Date.now() - new Date(timestamp).getTime();
+  if (!Number.isFinite(diffMs) || diffMs < 0) return "just now";
+
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function formatMetricValue(metric: MetricKey, value: number): string {
@@ -257,6 +314,14 @@ function parseNumericRowValue(row: Record<string, unknown>, key: string | undefi
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function formatAdMetricValue(metric: keyof AdMetrics, value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "--";
+  if (metric === "spend" || metric === "cpc") return formatCurrency(value);
+  if (metric === "ctr") return formatPercent(value);
+  if (metric === "roas") return value.toFixed(2);
+  return formatNumber(value);
 }
 
 function readString(values: unknown[]): string | null {
@@ -612,18 +677,29 @@ type ContextMetricCardProps = {
 };
 
 function ContextMetricCard({ metric, value, delta, selected, onClick }: ContextMetricCardProps) {
+  const isPositive = delta >= 0;
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded border px-3 py-2 text-left transition-colors",
-        selected ? "border-emerald-400 bg-emerald-500/10" : "border-border bg-background hover:bg-muted/40"
+        "group rounded-lg border px-3 py-2.5 text-left transition-all",
+        selected
+          ? "border-primary/60 bg-primary/[0.08] shadow-[0_0_0_1px_hsl(var(--primary)/0.18)_inset]"
+          : "border-border/80 bg-card hover:border-primary/35 hover:bg-muted/40"
       )}
     >
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{labelForMetric(metric)}</div>
-      <div className="mt-1 text-sm font-semibold">{formatMetricValue(metric, value)}</div>
-      <div className={cn("text-xs", delta >= 0 ? "text-emerald-500" : "text-red-500")}>{delta.toFixed(2)}%</div>
+      <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{labelForMetric(metric)}</div>
+      <div className="mt-1 text-base font-semibold">{formatMetricValue(metric, value)}</div>
+      <div
+        className={cn(
+          "mt-1 inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-medium",
+          isPositive ? "bg-emerald-500/12 text-emerald-600" : "bg-rose-500/12 text-rose-600"
+        )}
+      >
+        {isPositive ? "+" : ""}
+        {delta.toFixed(2)}%
+      </div>
     </button>
   );
 }
@@ -699,15 +775,15 @@ function SignpostShape({
   count: number;
 }) {
   if (typeof cx !== "number" || typeof cy !== "number") return null;
-  const top = cy - 12;
+  const top = cy - 16;
 
   return (
     <g>
       <title>{tooltip}</title>
-      <line x1={cx} y1={cy} x2={cx} y2={top} stroke={color} strokeWidth={1.4} />
-      <path d={`M ${cx} ${top} L ${cx + 7} ${top + 3} L ${cx} ${top + 6} Z`} fill={color} />
+      <line x1={cx} y1={cy} x2={cx} y2={top + 4} stroke={color} strokeWidth={1.2} strokeOpacity={0.7} />
+      <circle cx={cx} cy={top} r={4.5} fill="white" stroke={color} strokeWidth={2} />
       {count > 1 ? (
-        <text x={cx + 8} y={top + 4} fill={color} fontSize={9} fontWeight={700}>
+        <text x={cx + 7} y={top + 3} fill={color} fontSize={9} fontWeight={700}>
           {count}
         </text>
       ) : null}
@@ -795,10 +871,88 @@ function MetricSparkCell({ metric, series, isSelected, showTarget, onClick }: Me
   );
 }
 
+function AdPreviewCard({
+  ad,
+  isFocused,
+  onClick,
+}: {
+  ad: MetaAd;
+  isFocused: boolean;
+  onClick: () => void;
+}) {
+  const thumbnail = ad.creative?.thumbnailUrl || ad.creative?.imageUrl;
+  const adTitle = ad.creative?.title || ad.name || "Untitled ad";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-md border p-2 text-left transition-colors",
+        isFocused ? "border-primary/60 bg-primary/[0.08]" : "border-border/70 bg-card hover:bg-muted/40"
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="truncate text-xs font-semibold text-foreground">{adTitle}</div>
+        <Badge variant={ad.effectiveStatus?.toUpperCase() === "ACTIVE" ? "default" : "secondary"} className="text-[10px]">
+          {ad.effectiveStatus ?? ad.status ?? "UNKNOWN"}
+        </Badge>
+      </div>
+
+      <div className="relative mb-2 aspect-[16/9] overflow-hidden rounded border bg-muted/30">
+        {thumbnail ? (
+          // Meta preview URLs are dynamic/external, so we avoid Next image optimization here.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumbnail} alt={ad.name} className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">No preview image</div>
+        )}
+      </div>
+
+      <div className="mb-2 grid grid-cols-2 gap-1.5">
+        <div className="rounded border border-border/60 px-2 py-1">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Spend</div>
+          <div className="text-[11px] font-semibold">{formatAdMetricValue("spend", ad.metrics?.spend ?? null)}</div>
+        </div>
+        <div className="rounded border border-border/60 px-2 py-1">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">ROAS</div>
+          <div className="text-[11px] font-semibold">{formatAdMetricValue("roas", ad.metrics?.roas ?? null)}</div>
+        </div>
+        <div className="rounded border border-border/60 px-2 py-1">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">CTR</div>
+          <div className="text-[11px] font-semibold">{formatAdMetricValue("ctr", ad.metrics?.ctr ?? null)}</div>
+        </div>
+        <div className="rounded border border-border/60 px-2 py-1">
+          <div className="text-[9px] uppercase tracking-wide text-muted-foreground">Clicks</div>
+          <div className="text-[11px] font-semibold">{formatAdMetricValue("clicks", ad.metrics?.clicks ?? null)}</div>
+        </div>
+      </div>
+
+      {ad.previewShareableLink ? (
+        <a
+          href={ad.previewShareableLink}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Preview
+          <OpenInNewWindowIcon className="h-3 w-3" />
+        </a>
+      ) : (
+        <span className="text-[11px] text-muted-foreground">Preview unavailable</span>
+      )}
+    </button>
+  );
+}
+
 export function CampaignTimelineWorkspace({
   brandId,
   accountId,
   campaigns,
+  indexGroups = [],
+  selectedIndexGroupId = "all",
+  groupContext,
   isLoadingCampaigns,
   timeRangePreset,
   resolution,
@@ -810,20 +964,30 @@ export function CampaignTimelineWorkspace({
   const [sortMetric, setSortMetric] = React.useState<MetricKey>("spend");
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc");
   const [selectedMetric, setSelectedMetric] = React.useState<MetricKey>("spend");
+  const [campaignQuery, setCampaignQuery] = React.useState("");
+  const [watchlistGroupMode, setWatchlistGroupMode] = React.useState<"index" | "objective">("index");
   const [expandedCampaignId, setExpandedCampaignId] = React.useState<string | undefined>();
   const [expandedAdSetChartId, setExpandedAdSetChartId] = React.useState<string | undefined>();
   const [focusedCampaignId, setFocusedCampaignId] = React.useState<string | undefined>();
   const [focusedAdSet, setFocusedAdSet] = React.useState<{ campaignId: string; adSetId: string } | undefined>();
+  const [focusedAdId, setFocusedAdId] = React.useState<string | undefined>();
   const [adSetState, setAdSetState] = React.useState<Record<string, AdSetLoadState>>({});
+  const [adsByAdSet, setAdsByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
   const [timelineActionLogs, setTimelineActionLogs] = React.useState<ActionLogMarker[]>([]);
 
   const adSetStateRef = React.useRef(adSetState);
+  const adsByAdSetRef = React.useRef(adsByAdSet);
   const inFlightAdSetLoads = React.useRef<Set<string>>(new Set());
+  const inFlightAdLoads = React.useRef<Set<string>>(new Set());
   const rateLimitedUntilRef = React.useRef<number>(0);
 
   React.useEffect(() => {
     adSetStateRef.current = adSetState;
   }, [adSetState]);
+
+  React.useEffect(() => {
+    adsByAdSetRef.current = adsByAdSet;
+  }, [adsByAdSet]);
 
   const now = React.useMemo(() => new Date(), []);
   const endDateIso = React.useMemo(() => now.toISOString(), [now]);
@@ -974,6 +1138,93 @@ export function CampaignTimelineWorkspace({
       });
   }, [activeOnly, campaigns, dcoManagedCampaignIds, resolution, sortDirection, sortMetric]);
 
+  const watchlistCampaigns = React.useMemo(() => {
+    const normalizedQuery = campaignQuery.trim().toLowerCase();
+    if (!normalizedQuery) return filteredCampaigns;
+    return filteredCampaigns.filter((campaign) => campaign.name.toLowerCase().includes(normalizedQuery));
+  }, [campaignQuery, filteredCampaigns]);
+
+  const watchlistGroups = React.useMemo(() => {
+    type WatchlistGroup = {
+      id: string;
+      label: string;
+      campaigns: Campaign[];
+      count: number;
+      isSelectedIndex?: boolean;
+    };
+
+    if (watchlistCampaigns.length === 0) {
+      return [] as WatchlistGroup[];
+    }
+
+    if (watchlistGroupMode === "objective") {
+      const byObjective = new Map<string, Campaign[]>();
+      watchlistCampaigns.forEach((campaign) => {
+        const label = campaign.objective?.trim() || "Unspecified";
+        const current = byObjective.get(label) ?? [];
+        current.push(campaign);
+        byObjective.set(label, current);
+      });
+
+      return Array.from(byObjective.entries())
+        .map(([label, groupCampaigns]) => ({
+          id: `objective:${label}`,
+          label,
+          campaigns: groupCampaigns,
+          count: groupCampaigns.length,
+        }))
+        .sort((left, right) => {
+          if (right.count !== left.count) return right.count - left.count;
+          return left.label.localeCompare(right.label);
+        });
+    }
+
+    const groups: WatchlistGroup[] = [];
+    const indexedCampaignIds = new Set<string>();
+    const sortedIndexGroups = [...indexGroups].sort((left, right) => left.name.localeCompare(right.name));
+
+    sortedIndexGroups.forEach((indexGroup) => {
+      const campaignIdSet = new Set(indexGroup.campaignIds);
+      const groupCampaigns = watchlistCampaigns.filter((campaign) => campaignIdSet.has(campaign.id));
+      if (groupCampaigns.length === 0) return;
+
+      groupCampaigns.forEach((campaign) => indexedCampaignIds.add(campaign.id));
+      groups.push({
+        id: `index:${indexGroup.id}`,
+        label: indexGroup.name,
+        campaigns: groupCampaigns,
+        count: groupCampaigns.length,
+        isSelectedIndex: selectedIndexGroupId !== "all" && indexGroup.id === selectedIndexGroupId,
+      });
+    });
+
+    const unindexed = watchlistCampaigns.filter((campaign) => !indexedCampaignIds.has(campaign.id));
+    if (unindexed.length > 0) {
+      groups.push({
+        id: "index:unindexed",
+        label: "Unindexed",
+        campaigns: unindexed,
+        count: unindexed.length,
+      });
+    }
+
+    if (groups.length === 0) {
+      groups.push({
+        id: "index:all",
+        label: "All campaigns",
+        campaigns: watchlistCampaigns,
+        count: watchlistCampaigns.length,
+      });
+    }
+
+    return groups.sort((left, right) => {
+      const leftSelected = left.isSelectedIndex ? 0 : 1;
+      const rightSelected = right.isSelectedIndex ? 0 : 1;
+      if (leftSelected !== rightSelected) return leftSelected - rightSelected;
+      return left.label.localeCompare(right.label);
+    });
+  }, [indexGroups, selectedIndexGroupId, watchlistCampaigns, watchlistGroupMode]);
+
   const loadAdSets = React.useCallback(
     async (campaignId: string) => {
       const current = adSetStateRef.current[campaignId];
@@ -1112,11 +1363,79 @@ export function CampaignTimelineWorkspace({
     [accountId, brandId, timeRangePreset, timelineAdSetFallbackByCampaignId]
   );
 
+  const loadAdsForAdSet = React.useCallback(
+    async (adSetId: string) => {
+      if (!adSetId) return;
+
+      const current = adsByAdSetRef.current[adSetId];
+      if (current?.status === "loading" || current?.status === "success") {
+        return;
+      }
+
+      if (inFlightAdLoads.current.has(adSetId)) {
+        return;
+      }
+
+      inFlightAdLoads.current.add(adSetId);
+      setAdsByAdSet((prev) => ({
+        ...prev,
+        [adSetId]: { status: "loading", ads: prev[adSetId]?.ads ?? [] },
+      }));
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const invokePromise = supabase.functions.invoke(
+          `fetch-meta-ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRangePreset}`,
+          {
+            method: "POST",
+            body: {
+              brandId,
+              adAccountId: accountId,
+              adSetId,
+              datePreset: timeRangePreset,
+            },
+          }
+        );
+
+        const { data, error } = await withTimeout(invokePromise, 15000, "Ad fetch");
+        if (error) {
+          const message = await extractInvokeErrorMessage(error);
+          throw new Error(message);
+        }
+
+        const ads = Array.isArray(data?.ads) ? (data.ads as MetaAd[]) : [];
+        setAdsByAdSet((prev) => ({
+          ...prev,
+          [adSetId]: {
+            status: "success",
+            ads,
+          },
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load ads";
+        setAdsByAdSet((prev) => ({
+          ...prev,
+          [adSetId]: {
+            status: "error",
+            ads: prev[adSetId]?.ads ?? [],
+            errorMessage: message,
+          },
+        }));
+      } finally {
+        inFlightAdLoads.current.delete(adSetId);
+      }
+    },
+    [accountId, brandId, timeRangePreset]
+  );
+
   React.useEffect(() => {
     setAdSetState({});
+    setAdsByAdSet({});
     setExpandedAdSetChartId(undefined);
     setFocusedAdSet(undefined);
+    setFocusedAdId(undefined);
     inFlightAdSetLoads.current.clear();
+    inFlightAdLoads.current.clear();
   }, [accountId, brandId, resolution, timeRangePreset]);
 
   React.useEffect(() => {
@@ -1157,26 +1476,88 @@ export function CampaignTimelineWorkspace({
     void loadAdSets(focusedCampaignId);
   }, [focusedCampaignId, loadAdSets]);
 
+  React.useEffect(() => {
+    if (!focusedAdSet?.adSetId) {
+      setFocusedAdId(undefined);
+      return;
+    }
+    void loadAdsForAdSet(focusedAdSet.adSetId);
+  }, [focusedAdSet?.adSetId, loadAdsForAdSet]);
+
+  React.useEffect(() => {
+    if (!focusedAdSet?.adSetId) {
+      setFocusedAdId(undefined);
+      return;
+    }
+
+    const availableAds = adsByAdSet[focusedAdSet.adSetId]?.ads ?? [];
+    if (availableAds.length === 0) {
+      setFocusedAdId(undefined);
+      return;
+    }
+
+    setFocusedAdId((current) =>
+      current && availableAds.some((ad) => ad.id === current) ? current : availableAds[0]?.id
+    );
+  }, [adsByAdSet, focusedAdSet?.adSetId]);
+
   const focusedCampaign = React.useMemo(
     () => campaigns.find((campaign) => campaign.id === focusedCampaignId),
     [campaigns, focusedCampaignId]
   );
 
+  const focusedCampaignAdSets = React.useMemo(() => {
+    if (!focusedCampaignId) return [] as AdSet[];
+    const loaded = adSetState[focusedCampaignId]?.adSets;
+    if (loaded && loaded.length > 0) return loaded;
+    return timelineAdSetFallbackByCampaignId[focusedCampaignId] ?? [];
+  }, [adSetState, focusedCampaignId, timelineAdSetFallbackByCampaignId]);
+
+  const focusedAdSetAdsState = React.useMemo(() => {
+    if (!focusedAdSet?.adSetId) return undefined;
+    return adsByAdSet[focusedAdSet.adSetId];
+  }, [adsByAdSet, focusedAdSet?.adSetId]);
+
+  const focusedAdSetAds = React.useMemo(() => {
+    if (!focusedAdSet?.adSetId) return [] as MetaAd[];
+    return focusedAdSetAdsState?.ads ?? [];
+  }, [focusedAdSet?.adSetId, focusedAdSetAdsState?.ads]);
+
+  const focusedAd = React.useMemo(() => {
+    if (!focusedAdId) return undefined;
+    return focusedAdSetAds.find((ad) => ad.id === focusedAdId);
+  }, [focusedAdId, focusedAdSetAds]);
+
+  const markerCampaignScopeIds = React.useMemo(() => {
+    if (groupContext?.campaignIds && groupContext.campaignIds.length > 0) {
+      return groupContext.campaignIds;
+    }
+    return focusedCampaignId ? [focusedCampaignId] : [];
+  }, [focusedCampaignId, groupContext?.campaignIds]);
+
   const focusedIsDcoEnabled = React.useMemo(() => {
+    if (groupContext) {
+      return false;
+    }
+
     if (focusedCampaign) {
       return dcoManagedCampaignIds.includes(focusedCampaign.id);
     }
 
     return true;
-  }, [dcoManagedCampaignIds, focusedCampaign]);
+  }, [dcoManagedCampaignIds, focusedCampaign, groupContext]);
 
-  const focusedComparison = focusedCampaign?.comparison;
+  const focusedComparison = groupContext?.comparison ?? focusedCampaign?.comparison;
   const focusedDeltaPct = getEntityDeltaPct(selectedMetric, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas);
   // Campaign-level target overlays are intentionally hidden; DCO state is signaled via badges.
   const focusedShowTarget = false;
 
-  const focusMetrics = focusedCampaign?.metrics ?? latestSummaryMetrics;
-  const focusLabel = focusedCampaign ? `Campaign: ${focusedCampaign.name}` : "Account Context";
+  const focusMetrics = groupContext?.metrics ?? focusedCampaign?.metrics ?? latestSummaryMetrics;
+  const focusLabel = groupContext
+    ? `Campaign Index: ${groupContext.label}`
+    : focusedCampaign
+      ? `Campaign: ${focusedCampaign.name}`
+      : "Account Context";
 
   const topChartModel = React.useMemo(() => {
     const rowsByTime = new Map<string, Record<string, unknown>>();
@@ -1189,7 +1570,20 @@ export function CampaignTimelineWorkspace({
       return rowsByTime.get(timestamp)!;
     };
 
-    if (focusedCampaign?.trends?.length) {
+    if (groupContext?.trends?.length) {
+      const aggregateSeries = buildSeriesFromTrends(
+        groupContext.trends,
+        selectedMetric,
+        focusedDeltaPct,
+        false
+      );
+
+      lines.push({ key: "group_actual", label: groupContext.label, color: LINE_COLORS[0] });
+      aggregateSeries.forEach((point) => {
+        const row = ensureRow(point.timestamp);
+        row.group_actual = point.actual;
+      });
+    } else if (focusedCampaign?.trends?.length) {
       const campaignSeries = buildSeriesFromTrends(
         focusedCampaign.trends,
         selectedMetric,
@@ -1210,29 +1604,31 @@ export function CampaignTimelineWorkspace({
         lines.push({ key: "campaign_target", label: "Target", color: DELTA_TARGET_COLOR, dashed: true });
       }
 
-      const adSets = (adSetState[focusedCampaign.id]?.adSets ?? []).filter((adSet) =>
-        activeOnly ? isActiveStatus(adSet.status) : true
-      );
-      adSets.forEach((adSet, index) => {
-        const series = buildSeriesFromTrends(
-          adSet.trends,
-          selectedMetric,
-          getEntityDeltaPct(selectedMetric, adSet.comparison, dcoManagedCampaignIds.includes(focusedCampaign.id), latestDcoDeltas),
-          false
+      if (!groupContext) {
+        const adSets = (adSetState[focusedCampaign.id]?.adSets ?? []).filter((adSet) =>
+          activeOnly ? isActiveStatus(adSet.status) : true
         );
+        adSets.forEach((adSet, index) => {
+          const series = buildSeriesFromTrends(
+            adSet.trends,
+            selectedMetric,
+            getEntityDeltaPct(selectedMetric, adSet.comparison, dcoManagedCampaignIds.includes(focusedCampaign.id), latestDcoDeltas),
+            false
+          );
 
-        if (series.length === 0) {
-          return;
-        }
+          if (series.length === 0) {
+            return;
+          }
 
-        const key = `adset_${index}`;
-        lines.push({ key, label: adSet.name, color: LINE_COLORS[(index + 1) % LINE_COLORS.length] });
+          const key = `adset_${index}`;
+          lines.push({ key, label: adSet.name, color: LINE_COLORS[(index + 1) % LINE_COLORS.length] });
 
-        series.forEach((point) => {
-          const row = ensureRow(point.timestamp);
-          row[key] = point.actual;
+          series.forEach((point) => {
+            const row = ensureRow(point.timestamp);
+            row[key] = point.actual;
+          });
         });
-      });
+      }
     } else {
       const accountSeries = blocks.map((block) => {
         const summary = (block.summary ?? {}) as Record<string, unknown>;
@@ -1271,15 +1667,17 @@ export function CampaignTimelineWorkspace({
     });
 
     return { data, lines };
-  }, [activeOnly, adSetState, blocks, dcoManagedCampaignIds, focusedCampaign, focusedDeltaPct, focusedShowTarget, latestDcoDeltas, selectedMetric]);
+  }, [activeOnly, adSetState, blocks, dcoManagedCampaignIds, focusedCampaign, focusedDeltaPct, focusedShowTarget, groupContext, latestDcoDeltas, selectedMetric]);
 
-  const graphTitle = focusedCampaign
-    ? `${focusedCampaign.name} - ${labelForMetric(selectedMetric)}`
-    : `Account - ${labelForMetric(selectedMetric)}`;
+  const graphTitle = groupContext
+    ? `${groupContext.label} - ${labelForMetric(selectedMetric)}`
+    : focusedCampaign
+      ? `${focusedCampaign.name} - ${labelForMetric(selectedMetric)}`
+      : `Account - ${labelForMetric(selectedMetric)}`;
 
   const topPrimaryLineKey = React.useMemo(() => {
     const preferred = topChartModel.lines.find(
-      (line) => line.key === "campaign_actual" || line.key === "account_actual"
+      (line) => line.key === "group_actual" || line.key === "campaign_actual" || line.key === "account_actual"
     );
     if (preferred) return preferred.key;
     return topChartModel.lines.find((line) => !line.dashed)?.key;
@@ -1303,7 +1701,8 @@ export function CampaignTimelineWorkspace({
   }, [adSetState, focusedCampaignId, timelineAdSetFallbackByCampaignId]);
 
   const scopedTimelineActionLogs = React.useMemo(() => {
-    if (!focusedCampaignId) return [] as ActionLogMarker[];
+    if (markerCampaignScopeIds.length === 0) return [] as ActionLogMarker[];
+    const markerCampaignScopeSet = new Set(markerCampaignScopeIds);
 
     return timelineActionLogs.filter((log) => {
       const scope = toActionScope(log.scopeType);
@@ -1315,7 +1714,9 @@ export function CampaignTimelineWorkspace({
       const campaignId = resolveCampaignIdFromAction(log) ?? (scope === "CAMPAIGN" ? scopeId : null);
       const adSetId = resolveAdSetIdFromAction(log) ?? (scope === "ADSET" ? scopeId : null);
 
-      const campaignMatch = campaignId === focusedCampaignId || (scope === "CAMPAIGN" && scopeId === focusedCampaignId);
+      const campaignMatch =
+        (campaignId !== null && markerCampaignScopeSet.has(campaignId)) ||
+        (scope === "CAMPAIGN" && markerCampaignScopeSet.has(scopeId));
       const adSetMatch = Boolean(adSetId && focusedKnownAdSetIds.has(adSetId));
 
       if (scope === "CAMPAIGN") {
@@ -1324,21 +1725,27 @@ export function CampaignTimelineWorkspace({
 
       return adSetMatch || campaignMatch;
     });
-  }, [focusedCampaignId, focusedKnownAdSetIds, timelineActionLogs]);
+  }, [focusedKnownAdSetIds, markerCampaignScopeIds, timelineActionLogs]);
 
   const topSignposts = React.useMemo<MarkerPoint[]>(() => {
     if (!topPrimaryLineKey || scopedTimelineActionLogs.length === 0) {
       return [];
     }
 
+    const orderedRows = topChartModel.data
+      .map((rawRow) => {
+        const row = rawRow as Record<string, unknown>;
+        const timestamp = String(row.timestamp ?? "");
+        const value = parseNumericRowValue(row, topPrimaryLineKey);
+        if (!timestamp || value === null) return null;
+        return { timestamp, value };
+      })
+      .filter((row): row is { timestamp: string; value: number } => row !== null);
+
     const rowByBucket = new Map<string, { timestamp: string; y: number }>();
-    topChartModel.data.forEach((rawRow) => {
-      const row = rawRow as Record<string, unknown>;
-      const timestamp = String(row.timestamp ?? "");
-      const bucket = rowBucketKey(timestamp, resolution);
-      const y = parseNumericRowValue(row, topPrimaryLineKey);
-      if (!timestamp || y === null) return;
-      rowByBucket.set(bucket, { timestamp, y });
+    orderedRows.forEach((row) => {
+      const bucket = rowBucketKey(row.timestamp, resolution);
+      rowByBucket.set(bucket, { timestamp: row.timestamp, y: row.value });
     });
 
     const grouped = new Map<
@@ -1389,6 +1796,11 @@ export function CampaignTimelineWorkspace({
         const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
         const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
         const statusLabel = Array.from(group.statuses).join(", ");
+        const kpiShiftPct = calculateImmediateKpiShiftPct(orderedRows, resolution, group.bucket);
+        const shiftLabel =
+          kpiShiftPct === null
+            ? "Next KPI shift: n/a"
+            : `Next KPI shift: ${kpiShiftPct >= 0 ? "+" : ""}${kpiShiftPct.toFixed(2)}%`;
         return {
           id,
           x: row.timestamp,
@@ -1396,11 +1808,29 @@ export function CampaignTimelineWorkspace({
           color: style.color,
           scopeLabel: style.label,
           count: group.count,
-          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\nLatest: ${timestampLabel}`,
+          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
+          kpiShiftPct,
         };
       })
       .filter((marker): marker is MarkerPoint => marker !== null);
   }, [resolution, scopedTimelineActionLogs, topChartModel.data, topPrimaryLineKey]);
+
+  const actionScopeSummary = React.useMemo(() => {
+    const summary = {
+      CAMPAIGN: 0,
+      ADSET: 0,
+      AD: 0,
+    };
+
+    scopedTimelineActionLogs.forEach((log) => {
+      const scope = toActionScope(log.scopeType);
+      if (scope === "CAMPAIGN" || scope === "ADSET" || scope === "AD") {
+        summary[scope] += 1;
+      }
+    });
+
+    return summary;
+  }, [scopedTimelineActionLogs]);
 
   const adSetSignpostGroupsById = React.useMemo(() => {
     const groupedByAdSet = new Map<
@@ -1483,63 +1913,130 @@ export function CampaignTimelineWorkspace({
     () => formatDenominatorSummary(selectedMetric, topActualValue, topTargetValue),
     [selectedMetric, topActualValue, topTargetValue]
   );
+  const totalScopedActionCount = actionScopeSummary.CAMPAIGN + actionScopeSummary.ADSET + actionScopeSummary.AD;
+  const briefingMetrics = React.useMemo(
+    () =>
+      [
+        { metric: "spend" as const, label: "Spend" },
+        { metric: "roas" as const, label: "ROAS" },
+        { metric: "ctr" as const, label: "CTR" },
+        { metric: "clicks" as const, label: "Clicks" },
+      ].map((item) => ({
+        ...item,
+        value: focusMetrics?.[item.metric] ?? 0,
+        delta: getEntityDeltaPct(item.metric, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas),
+      })),
+    [focusMetrics, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas]
+  );
+  const briefingLineData = React.useMemo(() => {
+    if (!topPrimaryLineKey) return [] as Array<{ timestamp: string; value: number }>;
+    return topChartModel.data
+      .map((rawRow) => {
+        const row = rawRow as Record<string, unknown>;
+        const timestamp = String(row.timestamp ?? "");
+        const value = parseNumericRowValue(row, topPrimaryLineKey);
+        if (!timestamp || value === null) return null;
+        return { timestamp, value };
+      })
+      .filter((row): row is { timestamp: string; value: number } => row !== null);
+  }, [topChartModel.data, topPrimaryLineKey]);
+  const recentActionMessages = React.useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    return scopedTimelineActionLogs
+      .filter((log) => new Date(log.occurredAt).getTime() >= cutoff)
+      .slice(0, 14)
+      .map((log) => {
+        const scope = toActionScope(log.scopeType);
+        const scopeLabel = SCOPE_SIGNPOST_STYLES[scope]?.label ?? "Global";
+        return {
+          id: log.id,
+          at: log.occurredAt,
+          text: `${scopeLabel} • ${log.actionType.replaceAll("_", " ")} • ${log.status}`,
+          detail: log.decisionNote ?? log.error ?? "",
+        };
+      });
+  }, [scopedTimelineActionLogs]);
 
   return (
     <TooltipProvider>
-      <Card className="h-[70dvh] overflow-hidden">
-        <CardHeader className="border-b pb-3">
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b pb-2 pt-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle className="text-lg">Campaign Timeline Workspace</CardTitle>
+            <CardTitle className="text-base">Campaign Timeline Workspace</CardTitle>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={resolution} onValueChange={(value) => onResolutionChange(value as TimelineResolution)}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily</SelectItem>
-                  <SelectItem value="hourly">Hourly</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="inline-flex items-center rounded-md border border-border/70 p-0.5">
+                <Button
+                  size="sm"
+                  variant={resolution === "daily" ? "secondary" : "ghost"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => onResolutionChange("daily")}
+                >
+                  Daily
+                </Button>
+                <Button
+                  size="sm"
+                  variant={resolution === "hourly" ? "secondary" : "ghost"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => onResolutionChange("hourly")}
+                >
+                  Hourly
+                </Button>
+              </div>
 
-              <Select value={sortMetric} onValueChange={(value) => setSortMetric(value as MetricKey)}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="spend">Sort: Spend</SelectItem>
-                  <SelectItem value="roas">Sort: ROAS</SelectItem>
-                  <SelectItem value="ctr">Sort: CTR</SelectItem>
-                  <SelectItem value="cpc">Sort: CPC</SelectItem>
-                  <SelectItem value="impressions">Sort: Impr.</SelectItem>
-                  <SelectItem value="clicks">Sort: Clicks</SelectItem>
-                </SelectContent>
-              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() =>
+                  setSortMetric((current) => {
+                    const index = KPI_COLUMNS.indexOf(current);
+                    return KPI_COLUMNS[(index + 1) % KPI_COLUMNS.length];
+                  })
+                }
+              >
+                Sort: {labelForMetric(sortMetric)}
+              </Button>
 
-              <Select value={sortDirection} onValueChange={(value) => setSortDirection(value as SortDirection)}>
-                <SelectTrigger className="w-[120px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="desc">Highest</SelectItem>
-                  <SelectItem value="asc">Lowest</SelectItem>
-                </SelectContent>
-              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setSortDirection((current) => (current === "desc" ? "asc" : "desc"))}
+              >
+                {sortDirection === "desc" ? "Highest" : "Lowest"}
+              </Button>
 
-              <div className="flex items-center gap-2 rounded border px-2 py-1 text-sm">
+              <div className="flex h-8 items-center gap-2 rounded border px-2 text-xs">
                 <span>Active only</span>
                 <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
               </div>
             </div>
           </div>
+
         </CardHeader>
 
-        <CardContent className="flex h-[calc(70dvh-4.5rem)] flex-col gap-3 overflow-hidden p-3">
-          <div className="rounded-md border bg-card p-3">
+        <CardContent className="grid min-h-[72vh] grid-cols-1 gap-2 overflow-hidden p-2.5 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
+          <div className="rounded-md border bg-card p-2.5">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                 <span>{focusLabel}</span>
-                {focusedCampaign ? (
+                {focusedAdSet ? (
+                  <span className="rounded border border-border/70 px-2 py-0.5 normal-case tracking-normal text-foreground">
+                    Ad set: {focusedCampaignAdSets.find((adSet) => adSet.id === focusedAdSet.adSetId)?.name ?? focusedAdSet.adSetId}
+                  </span>
+                ) : null}
+                {focusedAd ? (
+                  <span className="rounded border border-border/70 px-2 py-0.5 normal-case tracking-normal text-foreground">
+                    Ad: {focusedAd.name}
+                  </span>
+                ) : null}
+                {groupContext ? (
+                  <Badge variant="outline" className="border-blue-400/50 bg-blue-500/10 text-blue-500">
+                    Index
+                  </Badge>
+                ) : focusedCampaign ? (
                   <Badge
                     variant="outline"
                     className={focusedIsDcoEnabled ? IRIDESCENT_BADGE_CLASS : LIVE_BADGE_CLASS}
@@ -1558,120 +2055,147 @@ export function CampaignTimelineWorkspace({
               </div>
             </div>
 
-            <div className="mb-3 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
-              {KPI_COLUMNS.map((metric) => {
-                const delta = getEntityDeltaPct(metric, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas);
-                return (
-                  <ContextMetricCard
-                    key={`ctx-${metric}`}
-                    metric={metric}
-                    value={focusMetrics?.[metric] ?? 0}
-                    delta={delta}
-                    selected={selectedMetric === metric}
-                    onClick={() => setSelectedMetric(metric)}
-                  />
-                );
-              })}
-            </div>
+            <div className="grid gap-2 xl:grid-cols-[320px_minmax(0,1fr)]">
+              <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-2">
+                {KPI_COLUMNS.map((metric) => {
+                  const delta = getEntityDeltaPct(metric, focusedComparison, focusedIsDcoEnabled, latestDcoDeltas);
+                  return (
+                    <ContextMetricCard
+                      key={`ctx-${metric}`}
+                      metric={metric}
+                      value={focusMetrics?.[metric] ?? 0}
+                      delta={delta}
+                      selected={selectedMetric === metric}
+                      onClick={() => setSelectedMetric(metric)}
+                    />
+                  );
+                })}
+              </div>
 
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={topChartModel.data} margin={{ top: 8, right: 8, left: 2, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id={topAreaGradientId} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#34d399" stopOpacity={0.24} />
-                      <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="2 3" strokeOpacity={0.08} />
-                  <XAxis dataKey="timestamp" hide />
-                  <YAxis
-                    tickFormatter={(value) => formatMetricValue(selectedMetric, Number(value))}
-                    width={90}
-                    tickCount={4}
-                    tick={{ fontSize: 11 }}
-                  />
-                  <RechartsTooltip
-                    labelFormatter={(value) => new Date(String(value)).toLocaleString("en-US")}
-                    formatter={(value, name) => {
-                      const lineMeta = topChartModel.lines.find((line) => line.key === name);
-                      return [formatMetricValue(selectedMetric, Number(value)), lineMeta?.label ?? String(name)];
-                    }}
-                  />
-                  {topChartModel.lines.map((line) => (
-                    <Area
-                      key={line.key}
-                      type="stepAfter"
-                      dataKey={line.key}
-                      stroke={line.color}
-                      strokeWidth={line.dashed ? 1.5 : 2}
-                      strokeDasharray={line.dashed ? "4 4" : undefined}
-                      fill={line.key === topPrimaryLineKey ? `url(#${topAreaGradientId})` : "transparent"}
-                      fillOpacity={line.key === topPrimaryLineKey ? 1 : 0}
-                      isAnimationActive={false}
-                      dot={false}
-                      connectNulls
-                    />
-                  ))}
-                  {topSignposts.map((marker) => (
-                    <ReferenceDot
-                      key={`top-signpost-${marker.id}`}
-                      x={marker.x}
-                      y={marker.y}
-                      ifOverflow="extendDomain"
-                      isFront
-                      shape={(props) => (
-                        <SignpostShape
-                          cx={props.cx}
-                          cy={props.cy}
-                          color={marker.color}
-                          tooltip={marker.tooltip}
-                          count={marker.count}
+              <div className="rounded-md border border-border/70 bg-background/60 p-2">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(["CAMPAIGN", "ADSET", "AD"] as const).map((scope) => {
+                      const style = SCOPE_SIGNPOST_STYLES[scope];
+                      const count = actionScopeSummary[scope];
+                      return (
+                        <span
+                          key={`scope-summary-${scope}`}
+                          className="inline-flex items-center gap-1 rounded border px-2 py-0.5"
+                          style={{ borderColor: `${style.color}66`, color: style.color }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: style.color }} />
+                          {style.label}: {count}
+                        </span>
+                      );
+                    })}
+                    <span className="rounded border border-border/70 px-2 py-0.5 text-muted-foreground">
+                      Total markers: {totalScopedActionCount}
+                    </span>
+                  </div>
+                  <span className="text-muted-foreground">Tooltips include next-bucket KPI shift after each action.</span>
+                </div>
+
+                <div className="h-[228px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={topChartModel.data} margin={{ top: 8, right: 8, left: 2, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id={topAreaGradientId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#34d399" stopOpacity={0.24} />
+                          <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} strokeDasharray="2 3" strokeOpacity={0.08} />
+                      <XAxis dataKey="timestamp" hide />
+                      <YAxis
+                        tickFormatter={(value) => formatMetricValue(selectedMetric, Number(value))}
+                        width={90}
+                        tickCount={4}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <RechartsTooltip
+                        labelFormatter={(value) => new Date(String(value)).toLocaleString("en-US")}
+                        formatter={(value, name) => {
+                          const lineMeta = topChartModel.lines.find((line) => line.key === name);
+                          return [formatMetricValue(selectedMetric, Number(value)), lineMeta?.label ?? String(name)];
+                        }}
+                      />
+                      {topChartModel.lines.map((line) => (
+                        <Area
+                          key={line.key}
+                          type="stepAfter"
+                          dataKey={line.key}
+                          stroke={line.color}
+                          strokeWidth={line.dashed ? 1.5 : 2}
+                          strokeDasharray={line.dashed ? "4 4" : undefined}
+                          fill={line.key === topPrimaryLineKey ? `url(#${topAreaGradientId})` : "transparent"}
+                          fillOpacity={line.key === topPrimaryLineKey ? 1 : 0}
+                          isAnimationActive={false}
+                          dot={false}
+                          connectNulls
                         />
-                      )}
-                    />
-                  ))}
-                  {topTargetValue !== null ? (
-                    <ReferenceLine
-                      y={topTargetValue}
-                      stroke={DELTA_TARGET_COLOR}
-                      strokeDasharray="2 3"
-                      strokeOpacity={0.45}
-                      ifOverflow="extendDomain"
-                      label={{
-                        value: `Target ${formatMetricValue(selectedMetric, topTargetValue)}`,
-                        position: "insideTopRight",
-                        fill: DELTA_TARGET_COLOR,
-                        fontSize: 10,
-                      }}
-                    />
-                  ) : null}
-                  {topTargetPoint ? (
-                    <ReferenceDot
-                      x={topTargetPoint.x}
-                      y={topTargetPoint.y}
-                      r={4.8}
-                      fill="white"
-                      stroke={DELTA_TARGET_COLOR}
-                      strokeWidth={2}
-                      label={{
-                        value: "T",
-                        position: "top",
-                        fill: DELTA_TARGET_COLOR,
-                        fontSize: 10,
-                        fontWeight: 700,
-                      }}
-                      ifOverflow="extendDomain"
-                      isFront
-                    />
-                  ) : null}
-                </AreaChart>
-              </ResponsiveContainer>
+                      ))}
+                      {topSignposts.map((marker) => (
+                        <ReferenceDot
+                          key={`top-signpost-${marker.id}`}
+                          x={marker.x}
+                          y={marker.y}
+                          ifOverflow="extendDomain"
+                          isFront
+                          shape={(props) => (
+                            <SignpostShape
+                              cx={props.cx}
+                              cy={props.cy}
+                              color={marker.color}
+                              tooltip={marker.tooltip}
+                              count={marker.count}
+                            />
+                          )}
+                        />
+                      ))}
+                      {topTargetValue !== null ? (
+                        <ReferenceLine
+                          y={topTargetValue}
+                          stroke={DELTA_TARGET_COLOR}
+                          strokeDasharray="2 3"
+                          strokeOpacity={0.45}
+                          ifOverflow="extendDomain"
+                          label={{
+                            value: `Target ${formatMetricValue(selectedMetric, topTargetValue)}`,
+                            position: "insideTopRight",
+                            fill: DELTA_TARGET_COLOR,
+                            fontSize: 10,
+                          }}
+                        />
+                      ) : null}
+                      {topTargetPoint ? (
+                        <ReferenceDot
+                          x={topTargetPoint.x}
+                          y={topTargetPoint.y}
+                          r={4.8}
+                          fill="white"
+                          stroke={DELTA_TARGET_COLOR}
+                          strokeWidth={2}
+                          label={{
+                            value: "T",
+                            position: "top",
+                            fill: DELTA_TARGET_COLOR,
+                            fontSize: 10,
+                            fontWeight: 700,
+                          }}
+                          ifOverflow="extendDomain"
+                          isFront
+                        />
+                      ) : null}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="flex-1 overflow-auto rounded-md border">
-            <div className="grid grid-cols-[minmax(260px,1.2fr)_repeat(6,minmax(130px,1fr))] gap-2 border-b bg-muted/20 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <div className="grid grid-cols-[minmax(220px,1.12fr)_repeat(6,minmax(112px,1fr))] gap-2 border-b bg-muted/20 px-2.5 py-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
               <div>Campaign / Ad Set</div>
               {KPI_COLUMNS.map((metric) => (
                 <div key={metric}>{labelForMetric(metric)}</div>
@@ -1714,8 +2238,8 @@ export function CampaignTimelineWorkspace({
                   ) as Record<MetricKey, TrendSeriesPoint[]>;
 
                   return (
-                    <div key={campaign.id} className="p-3">
-                      <div className="grid grid-cols-[minmax(260px,1.2fr)_repeat(6,minmax(130px,1fr))] gap-2">
+                    <div key={campaign.id} className="p-2.5">
+                      <div className="grid grid-cols-[minmax(220px,1.12fr)_repeat(6,minmax(112px,1fr))] gap-1.5">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1">
                             <Button
@@ -1729,6 +2253,8 @@ export function CampaignTimelineWorkspace({
                                   setFocusedCampaignId(campaign.id);
                                   setFocusedAdSet(undefined);
                                   setExpandedAdSetChartId(undefined);
+                                  setFocusedAdId(undefined);
+                                  void loadAdSets(campaign.id);
                                 }
                                 onSelectedCampaignChange?.(next);
                               }}
@@ -1744,7 +2270,9 @@ export function CampaignTimelineWorkspace({
                                   onClick={() => {
                                     setFocusedCampaignId(campaign.id);
                                     setFocusedAdSet(undefined);
+                                    setFocusedAdId(undefined);
                                     onSelectedCampaignChange?.(campaign.id);
+                                    void loadAdSets(campaign.id);
                                   }}
                                 >
                                   {campaign.name}
@@ -1759,7 +2287,7 @@ export function CampaignTimelineWorkspace({
                             </UiTooltip>
                           </div>
 
-                          <div className="ml-8 mt-1 flex items-center gap-2">
+                          <div className="ml-7 mt-1 flex items-center gap-2">
                             <Badge variant={campaign.status.toUpperCase() === "ACTIVE" ? "default" : "secondary"}>{campaign.status}</Badge>
                             <Badge
                               variant="outline"
@@ -1784,7 +2312,9 @@ export function CampaignTimelineWorkspace({
                                 setSelectedMetric(metric);
                                 setFocusedCampaignId(campaign.id);
                                 setFocusedAdSet(undefined);
+                                setFocusedAdId(undefined);
                                 onSelectedCampaignChange?.(campaign.id);
+                                void loadAdSets(campaign.id);
                               }}
                             />
                           );
@@ -1792,7 +2322,7 @@ export function CampaignTimelineWorkspace({
                       </div>
 
                       {isExpanded ? (
-                        <div className="mt-2 ml-8 rounded border bg-muted/10 p-2">
+                        <div className="mt-2 ml-7 rounded border bg-muted/10 p-2">
                           {adSetLoad.status === "loading" ? (
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <ReloadIcon className="h-3 w-3 animate-spin" />
@@ -1837,6 +2367,15 @@ export function CampaignTimelineWorkspace({
                                 .map((adSet) => {
                                   const adSetChartId = `${campaign.id}::${adSet.id}`;
                                   const adSetExpanded = expandedAdSetChartId === adSetChartId;
+                                  const adSetAdsState = adsByAdSet[adSet.id] ?? { status: "idle", ads: [] };
+                                  const adSetVisibleAds =
+                                    focusedAdSet?.adSetId === adSet.id && focusedAdId
+                                      ? [...adSetAdsState.ads].sort((left, right) => {
+                                          if (left.id === focusedAdId) return -1;
+                                          if (right.id === focusedAdId) return 1;
+                                          return 0;
+                                        })
+                                      : adSetAdsState.ads;
 
                                   const adSetSeriesByMetric = Object.fromEntries(
                                     KPI_COLUMNS.map((metric) => {
@@ -1876,6 +2415,14 @@ export function CampaignTimelineWorkspace({
                                         const timestampLabel = new Date(group.latestAt).toLocaleString("en-US");
                                         const actionLabel = Array.from(group.actionTypes).slice(0, 2).join(", ");
                                         const statusLabel = Array.from(group.statuses).join(", ");
+                                        const rowSeries = selectedSeries
+                                          .map((point) => ({ timestamp: point.timestamp, value: point.actual }))
+                                          .filter((point) => Number.isFinite(point.value));
+                                        const kpiShiftPct = calculateImmediateKpiShiftPct(rowSeries, resolution, group.bucket);
+                                        const shiftLabel =
+                                          kpiShiftPct === null
+                                            ? "Next KPI shift: n/a"
+                                            : `Next KPI shift: ${kpiShiftPct >= 0 ? "+" : ""}${kpiShiftPct.toFixed(2)}%`;
                                         return {
                                           id,
                                           x: row.timestamp,
@@ -1883,7 +2430,8 @@ export function CampaignTimelineWorkspace({
                                           color: style.color,
                                           scopeLabel: style.label,
                                           count: group.count,
-                                          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\nLatest: ${timestampLabel}`,
+                                          tooltip: `${style.label} action${group.count > 1 ? "s" : ""} (${group.count})\n${actionLabel}\nStatus: ${statusLabel}\n${shiftLabel}\nLatest: ${timestampLabel}`,
+                                          kpiShiftPct,
                                         };
                                       })
                                       .filter((marker): marker is MarkerPoint => marker !== null);
@@ -1896,7 +2444,7 @@ export function CampaignTimelineWorkspace({
 
                                   return (
                                     <div key={adSet.id} className="rounded border bg-background p-2">
-                                      <div className="grid grid-cols-[minmax(220px,1.1fr)_repeat(6,minmax(120px,1fr))] gap-2">
+                                      <div className="grid grid-cols-[minmax(210px,1.08fr)_repeat(6,minmax(110px,1fr))] gap-1.5">
                                         <div className="min-w-0">
                                           <div className="flex items-center gap-2">
                                             <Button
@@ -1908,7 +2456,9 @@ export function CampaignTimelineWorkspace({
                                                 setExpandedAdSetChartId(next);
                                                 setFocusedCampaignId(campaign.id);
                                                 setFocusedAdSet({ campaignId: campaign.id, adSetId: adSet.id });
+                                                setFocusedAdId(undefined);
                                                 onSelectedCampaignChange?.(campaign.id);
+                                                void loadAdsForAdSet(adSet.id);
                                               }}
                                             >
                                               <ChevronDownIcon className={cn("h-3 w-3 transition-transform", adSetExpanded ? "rotate-180" : "")} />
@@ -1922,7 +2472,9 @@ export function CampaignTimelineWorkspace({
                                                   onClick={() => {
                                                     setFocusedCampaignId(campaign.id);
                                                     setFocusedAdSet({ campaignId: campaign.id, adSetId: adSet.id });
+                                                    setFocusedAdId(undefined);
                                                     onSelectedCampaignChange?.(campaign.id);
+                                                    void loadAdsForAdSet(adSet.id);
                                                   }}
                                                 >
                                                   {adSet.name}
@@ -1958,7 +2510,9 @@ export function CampaignTimelineWorkspace({
                                                 setSelectedMetric(metric);
                                                 setFocusedCampaignId(campaign.id);
                                                 setFocusedAdSet({ campaignId: campaign.id, adSetId: adSet.id });
+                                                setFocusedAdId(undefined);
                                                 onSelectedCampaignChange?.(campaign.id);
+                                                void loadAdsForAdSet(adSet.id);
                                               }}
                                             />
                                           );
@@ -2087,6 +2641,64 @@ export function CampaignTimelineWorkspace({
                                               </AreaChart>
                                             </ResponsiveContainer>
                                           </div>
+
+                                          <div className="mt-2 rounded border border-border/70 bg-background/70 p-2">
+                                            <div className="mb-2 flex items-center justify-between text-[11px]">
+                                              <span className="text-muted-foreground">Ads in {adSet.name}</span>
+                                              <span className="rounded border border-border/70 px-1.5 py-0.5 text-muted-foreground">
+                                                {adSetAdsState.ads.length} loaded
+                                              </span>
+                                            </div>
+
+                                            {adSetAdsState.status === "loading" ? (
+                                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <ReloadIcon className="h-3 w-3 animate-spin" />
+                                                Loading ads and previews...
+                                              </div>
+                                            ) : null}
+
+                                            {adSetAdsState.status === "error" ? (
+                                              <div className="flex items-center gap-2 text-xs text-destructive">
+                                                <span>{adSetAdsState.errorMessage ?? "Failed to load ads"}</span>
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="h-6 px-2 text-[10px]"
+                                                  onClick={() => {
+                                                    setAdsByAdSet((prev) => ({
+                                                      ...prev,
+                                                      [adSet.id]: { status: "idle", ads: [] },
+                                                    }));
+                                                    void loadAdsForAdSet(adSet.id);
+                                                  }}
+                                                >
+                                                  Retry
+                                                </Button>
+                                              </div>
+                                            ) : null}
+
+                                            {adSetAdsState.status === "success" && adSetVisibleAds.length === 0 ? (
+                                              <div className="text-xs text-muted-foreground">No ads returned for this ad set.</div>
+                                            ) : null}
+
+                                            {adSetVisibleAds.length > 0 ? (
+                                              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                                {adSetVisibleAds.map((ad) => (
+                                                  <AdPreviewCard
+                                                    key={`${adSet.id}-${ad.id}`}
+                                                    ad={ad}
+                                                    isFocused={focusedAdId === ad.id}
+                                                    onClick={() => {
+                                                      setFocusedCampaignId(campaign.id);
+                                                      setFocusedAdSet({ campaignId: campaign.id, adSetId: adSet.id });
+                                                      setFocusedAdId(ad.id);
+                                                      onSelectedCampaignChange?.(campaign.id);
+                                                    }}
+                                                  />
+                                                ))}
+                                              </div>
+                                            ) : null}
+                                          </div>
                                         </div>
                                       ) : null}
                                     </div>
@@ -2102,6 +2714,157 @@ export function CampaignTimelineWorkspace({
               </div>
             )}
           </div>
+
+          <div className="grid gap-2 rounded-md border bg-card/70 p-2 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="grid grid-cols-2 gap-1.5">
+              {briefingMetrics.map((item) => (
+                <div key={`brief-${item.metric}`} className="rounded border border-border/70 bg-background/70 px-2 py-1.5">
+                  <div className="text-[9px] uppercase tracking-wide text-muted-foreground">{item.label}</div>
+                  <div className="mt-0.5 text-xs font-semibold">{formatMetricValue(item.metric, item.value)}</div>
+                  <div className={cn("text-[10px]", item.delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                    {item.delta >= 0 ? "+" : ""}
+                    {item.delta.toFixed(2)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded border border-border/70 bg-background/70 p-2">
+              <div className="mb-1 text-[11px] text-muted-foreground">Aggregated {labelForMetric(selectedMetric)} trend</div>
+              <div className="h-24">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={briefingLineData} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="2 3" strokeOpacity={0.08} />
+                    <XAxis dataKey="timestamp" hide />
+                    <YAxis hide />
+                    <RechartsTooltip
+                      labelFormatter={(value) => new Date(String(value)).toLocaleString("en-US")}
+                      formatter={(value) => [formatMetricValue(selectedMetric, Number(value)), labelForMetric(selectedMetric)]}
+                    />
+                    <Area
+                      type="stepAfter"
+                      dataKey="value"
+                      stroke="#34d399"
+                      strokeWidth={1.8}
+                      fillOpacity={0}
+                      isAnimationActive={false}
+                      dot={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+          </div>
+
+          </div>
+
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-md border bg-muted/15 p-1.5">
+            <div className="flex items-center gap-1.5 border-b border-border/70 pb-1.5">
+              <MagnifyingGlassIcon className="h-3 w-3 text-muted-foreground" />
+              <input
+                type="search"
+                value={campaignQuery}
+                onChange={(event) => setCampaignQuery(event.target.value)}
+                placeholder="Search campaigns"
+                className="h-6 w-full bg-transparent text-[11px] outline-none placeholder:text-muted-foreground/80"
+                aria-label="Search campaigns"
+              />
+              <span className="rounded border border-border/70 px-1 py-0.5 text-[10px] text-muted-foreground">
+                {watchlistCampaigns.length}
+              </span>
+            </div>
+
+            <div className="mt-1 inline-flex items-center rounded-md border border-border/70 p-0.5">
+              <Button
+                size="sm"
+                variant={watchlistGroupMode === "index" ? "secondary" : "ghost"}
+                className="h-6 px-2 text-[10px]"
+                onClick={() => setWatchlistGroupMode("index")}
+              >
+                Indexes
+              </Button>
+              <Button
+                size="sm"
+                variant={watchlistGroupMode === "objective" ? "secondary" : "ghost"}
+                className="h-6 px-2 text-[10px]"
+                onClick={() => setWatchlistGroupMode("objective")}
+              >
+                Types
+              </Button>
+            </div>
+
+            <div className="mt-1.5 flex-1 space-y-1.5 overflow-auto pr-0.5">
+              {watchlistCampaigns.length === 0 ? (
+                <div className="rounded border border-border/70 bg-background/70 px-2 py-1.5 text-[11px] text-muted-foreground">
+                  No campaigns match the current filter.
+                </div>
+              ) : (
+                watchlistGroups.map((group) => (
+                  <div key={`watchlist-group-${group.id}`} className="rounded border border-border/70 bg-background/70 p-1">
+                    <div className="mb-1 flex items-center justify-between px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="truncate">{group.label}</span>
+                      <span className={cn(group.isSelectedIndex ? "text-primary" : undefined)}>{group.count}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {group.campaigns.map((campaign) => {
+                        const isFocused = focusedCampaignId === campaign.id;
+                        const isManaged = dcoManagedCampaignIds.includes(campaign.id);
+                        const delta = getEntityDeltaPct(sortMetric, campaign.comparison, isManaged, latestDcoDeltas);
+                        return (
+                          <button
+                            key={`watchlist-${group.id}-${campaign.id}`}
+                            type="button"
+                            className={cn(
+                              "grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded border px-1.5 py-1 text-left",
+                              isFocused ? "border-primary/60 bg-primary/[0.08]" : "border-border/70 bg-card hover:bg-muted/40"
+                            )}
+                            onClick={() => {
+                              setExpandedCampaignId(campaign.id);
+                              setFocusedCampaignId(campaign.id);
+                              setFocusedAdSet(undefined);
+                              setExpandedAdSetChartId(undefined);
+                              setFocusedAdId(undefined);
+                              onSelectedCampaignChange?.(campaign.id);
+                              void loadAdSets(campaign.id);
+                            }}
+                          >
+                            <span className="truncate text-[11px] font-medium">{campaign.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatMetricValue(sortMetric, getCampaignMetricValue(campaign, sortMetric))}
+                            </span>
+                            <span className={cn("text-[10px] font-medium", delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                              {delta >= 0 ? "+" : ""}
+                              {delta.toFixed(2)}%
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-1.5 rounded border border-border/70 bg-background/70 p-1.5">
+              <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span>DCO 24h</span>
+                <span>{recentActionMessages.length}</span>
+              </div>
+              <div className="max-h-32 space-y-1 overflow-auto">
+                {recentActionMessages.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground">No events in the last 24h.</div>
+                ) : (
+                  recentActionMessages.map((item) => (
+                    <div key={`event-msg-rail-${item.id}`} className="rounded border border-border/60 bg-card px-1.5 py-1">
+                      <div className="truncate text-[10px] text-foreground">{item.text}</div>
+                      <div className="text-[10px] text-muted-foreground">{formatRelativeTime(item.at)}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </aside>
         </CardContent>
       </Card>
     </TooltipProvider>
