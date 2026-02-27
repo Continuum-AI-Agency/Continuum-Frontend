@@ -59,10 +59,14 @@ export function ActiveBrandProvider({
   useEffect(() => {
     const metadata = user?.user_metadata as { onboarding?: { activeBrandId?: string } } | undefined;
     const metadataId = metadata?.onboarding?.activeBrandId;
-    if (metadataId && metadataId !== selectedBrandId) {
+    if (
+      metadataId &&
+      metadataId !== selectedBrandId &&
+      summaries.some((brand) => brand.id === metadataId && !brand.isPending)
+    ) {
       setSelectedBrandId(metadataId);
     }
-  }, [user, selectedBrandId]);
+  }, [user, selectedBrandId, summaries]);
 
   useEffect(() => {
     setSelectedBrandId(activeBrandId);

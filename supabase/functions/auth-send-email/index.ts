@@ -16,6 +16,27 @@ interface AuthHookPayload {
   };
 }
 
+function buildLoginUrl(redirectTo: string, token: string): string {
+  const trimmed = redirectTo.trim();
+  const hasProtocol = /^https?:\/\//i.test(trimmed);
+
+  try {
+    const parsed = new URL(trimmed, "https://continuum.local");
+    if (!parsed.searchParams.has("token")) {
+      parsed.searchParams.set("token", token);
+    }
+
+    if (hasProtocol) {
+      return parsed.toString();
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    const separator = trimmed.includes("?") ? "&" : "?";
+    return `${trimmed}${separator}token=${encodeURIComponent(token)}`;
+  }
+}
+
 serve(async (req) => {
   try {
     const payload: AuthHookPayload = await req.json();
@@ -32,7 +53,7 @@ serve(async (req) => {
     let subject = "Sign in to Continuum";
     let html = "";
 
-    const loginUrl = `${redirect_to}?token=${token}`;
+    const loginUrl = buildLoginUrl(redirect_to, token);
 
     if (email_action_type === "magiclink" || email_action_type === "login_otp") {
       subject = "Sign in to Continuum";

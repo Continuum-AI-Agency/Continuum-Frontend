@@ -29,6 +29,7 @@ export type SupabaseFunctionClient = {
 export type BrandProfileDetails = {
   id: string;
   name: string;
+  logoPath: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -40,7 +41,7 @@ export async function fetchBrandProfileDetails(brandId: string): Promise<BrandPr
   const { data, error } = await supabase
     .schema("brand_profiles")
     .from("brand_profiles")
-    .select("id, brand_name, created_at, updated_at, created_by, completed_at")
+    .select("id, brand_name, logo_path, created_at, updated_at, created_by, completed_at")
     .eq("id", brandId)
     .maybeSingle();
 
@@ -55,6 +56,7 @@ export async function fetchBrandProfileDetails(brandId: string): Promise<BrandPr
   return {
     id: data.id,
     name: data.brand_name,
+    logoPath: data.logo_path ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
     createdBy: data.created_by,

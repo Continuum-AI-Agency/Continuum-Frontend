@@ -4,9 +4,30 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveActiveBrandId } from "@/lib/brands/resolve-active-brand";
-import { setActiveBrand } from "@/lib/onboarding/storage";
+import { setActiveBrandPreference } from "@/lib/brands/preferences";
 import type { BrandSummary } from "@/lib/repositories/brandProfile";
 import type { User } from "@supabase/supabase-js";
+
+function describeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const value = error as { message?: string; code?: string; hint?: string; details?: string };
+    const parts = [
+      value.message,
+      value.code ? `code=${value.code}` : null,
+      value.details ? `details=${value.details}` : null,
+      value.hint ? `hint=${value.hint}` : null,
+    ].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(" | ");
+    }
+  }
+
+  return "Unknown error";
+}
 
 export type ActiveBrandContext = {
   activeBrandId: string | null;
@@ -150,9 +171,9 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
   if (activeBrandId && shouldPersist) {
     try {
-      await setActiveBrand(activeBrandId);
+      await setActiveBrandPreference(activeBrandId);
     } catch (e) {
-      console.error("[activeBrand] Failed to persist active brand preference", e);
+      console.error("[activeBrand] Failed to persist active brand preference:", describeError(e));
     }
   }
 

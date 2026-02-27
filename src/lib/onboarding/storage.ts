@@ -379,6 +379,28 @@ async function updateUserOnboardingMetadata(
   }
 }
 
+async function upsertUserBrandPreference(
+  supabase: SupabaseOnboardingClient,
+  userId: string,
+  brandId: string
+): Promise<void> {
+  const { error } = await supabase
+    .schema("brand_profiles")
+    .from("user_brand_preferences" as any)
+    .upsert(
+      {
+        user_id: userId,
+        active_brand_id: brandId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" } as any
+    );
+
+  if (error) {
+    throw error;
+  }
+}
+
 async function upsertMetadataRows(
   supabase: SupabaseOnboardingClient,
   userId: string,
@@ -743,6 +765,7 @@ export async function setActiveBrand(brandId: string): Promise<OnboardingState> 
 
   context.metadata.activeBrandId = brandId;
   await updateUserOnboardingMetadata(context.supabase, brandId);
+  await upsertUserBrandPreference(context.supabase, context.user.id, brandId);
 
   return targetState;
 }
@@ -762,6 +785,7 @@ export async function createBrandProfile(
   metadata.activeBrandId = brandId;
   await persistMetadata(supabase, user, metadata);
   await ensureBrandProfileRecord(supabase, brandId, owner, state);
+  await upsertUserBrandPreference(supabase, user.id, brandId);
   return { brandId, state };
 }
 
@@ -898,6 +922,8 @@ export async function createMagicLinkInvite(
       token_hash: tokenHash,
       created_by: user.id,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      accepted_at: null,
+      revoked_at: null,
     }, { onConflict: "brand_profile_id,email" } as any);
 
   const link = `${siteUrl.replace(/\/$/, "")}/invite/callback?token=${token}&brand=${brandId}`;

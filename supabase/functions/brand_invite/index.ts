@@ -131,6 +131,34 @@ async function hashToken(token: string) {
     .join("");
 }
 
+async function setActiveBrandPreference(options: {
+  service: ReturnType<typeof createServiceClient>;
+  userId: string;
+  brandId: string;
+  logger: Logger;
+}) {
+  const { service, userId, brandId, logger } = options;
+  const { error: upsertPreferenceError } = await service
+    .schema("brand_profiles")
+    .from("user_brand_preferences")
+    .upsert(
+      {
+        user_id: userId,
+        active_brand_id: brandId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+
+  if (upsertPreferenceError) {
+    logger.error("Failed to upsert active brand preference", {
+      error: upsertPreferenceError,
+      userId,
+      brandId,
+    });
+  }
+}
+
 type GeneratedLinkData = {
   properties?: {
     action_link?: string;
@@ -327,6 +355,8 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
       token_hash: tokenHash,
       created_by: inviterId,
       expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      accepted_at: null,
+      revoked_at: null,
     }, { onConflict: "brand_profile_id,email" })
     .select("id")
     .single<{ id: string }>();
@@ -334,25 +364,6 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
   if (upsertError) {
     logger.error("Invite upsert failed", { error: upsertError });
     return json({ error: upsertError.message }, 500);
-  }
-
-  if (linkType === "magiclink" && linkUserId) {
-    const { error: permError } = await service
-      .schema("brand_profiles")
-      .from("permissions")
-      .upsert(
-        {
-          user_id: linkUserId,
-          brand_profile_id: input.brandId,
-          email,
-          role: input.role,
-        },
-        { onConflict: "user_id,brand_profile_id" }
-      );
-    if (permError) {
-      logger.error("Permissions upsert failed", { error: permError });
-      return json({ error: permError.message }, 500);
-    }
   }
 
   const { data: brandRow, error: brandError } = await service
@@ -460,6 +471,13 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>, lo
     logger.error("Permissions upsert failed", { error: permError });
     return json({ error: permError.message }, 500);
   }
+
+  await setActiveBrandPreference({
+    service,
+    userId: user.id,
+    brandId: invite.brand_profile_id,
+    logger,
+  });
 
   try {
     await updateActiveBrandMetadata({

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildInviteLoginRedirect } from "@/lib/invites/urls";
+import { normalizeInviteBrandId, normalizeInviteToken } from "@/lib/invites/params";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 
 type InviteStatus = "idle" | "working" | "error";
@@ -20,8 +21,8 @@ export default function InviteCallbackPage() {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    const token = searchParams.get("token");
-    const brandId = searchParams.get("brand");
+    const token = normalizeInviteToken(searchParams.get("token"));
+    const brandId = normalizeInviteBrandId(searchParams.get("brand"));
 
     if (!token || !brandId) {
       router.replace("/dashboard?invite=missing_params");

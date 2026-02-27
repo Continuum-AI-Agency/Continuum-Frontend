@@ -21,7 +21,7 @@ import {
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRightIcon, ExitIcon } from "@radix-ui/react-icons";
+import { ChevronRightIcon, ExitIcon, MoonIcon, SunIcon } from "@radix-ui/react-icons";
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import Link from "next/link";
@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import { BrandSwitcher } from "./BrandSwitcher";
 import { motion } from "framer-motion";
+import { useTheme } from "@/components/theme-provider";
 
 const transitionStandard = {
   duration: 0.25,
@@ -107,6 +108,7 @@ export function AppSidebar() {
   const { isMobile, state, toggleSidebar } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
+  const { appearance, toggle } = useTheme();
   const isAdmin = isAdminUser(user);
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
 
@@ -263,24 +265,6 @@ export function AppSidebar() {
 
       <SidebarFooter className="px-3 pb-4">
         <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
-          <SidebarMenuItem>
-             <SidebarMenuButton
-               size="lg"
-               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-             >
-                <div className="flex items-center justify-center w-8">
-                  <CurrentUserAvatar size={32} />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-semibold">{user?.user_metadata?.name || "User"}</span>
-                  <span className="truncate text-xs">{user?.email}</span>
-                </div>
-             </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        
-        <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
-        <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
           {APP_NAVIGATION_FOOTER.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
             const active = isRouteActive(pathname, searchParams, item);
@@ -331,6 +315,43 @@ export function AppSidebar() {
                 {isPending ? "Signing out..." : "Sign out"}
               </span>
             </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
+        <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip={appearance === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              size="lg"
+              onClick={toggle}
+              onMouseEnter={() => setHoveredHref("theme-toggle")}
+              onMouseLeave={() => setHoveredHref(null)}
+              className="group text-slate-400 hover:text-slate-100 transition-all duration-200"
+            >
+              <AnimatedIcon
+                icon={(appearance === "dark" ? SunIcon : MoonIcon) as any}
+                isHovered={hoveredHref === "theme-toggle"}
+                active={false}
+              />
+              <span className="group-data-[collapsible=icon]:hidden">
+                {appearance === "dark" ? "Light mode" : "Dark mode"}
+              </span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+             <SidebarMenuButton
+               size="lg"
+               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+             >
+                <div className="flex items-center justify-center w-8">
+                  <CurrentUserAvatar size={32} />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                  <span className="truncate font-semibold">{user?.user_metadata?.name || "User"}</span>
+                  <span className="truncate text-xs">{user?.email}</span>
+                </div>
+             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

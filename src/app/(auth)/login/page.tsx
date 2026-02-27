@@ -101,6 +101,7 @@ export default function LoginPage() {
     await login({
       ...data,
       email: submittedEmail,
+      redirectTo: inviteRedirect,
     });
   };
 
@@ -238,7 +239,7 @@ export default function LoginPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          onClick={signInWithGooglePopup}
+                          onClick={() => signInWithGooglePopup(inviteRedirect)}
                           disabled={isPending || isGooglePending}
                           className="flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-4 rounded-xl border border-gray-300 shadow-sm hover:shadow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -277,7 +278,7 @@ export default function LoginPage() {
 
                         <button
                           type="button"
-                          onClick={signInWithLinkedIn}
+                          onClick={() => signInWithLinkedIn(inviteRedirect)}
                           disabled={isPending}
                           className="flex items-center justify-center gap-2 bg-[#0A66C2] hover:bg-[#004182] font-medium py-3 px-4 rounded-xl shadow-sm hover:shadow transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                           style={{ color: '#fff' }}

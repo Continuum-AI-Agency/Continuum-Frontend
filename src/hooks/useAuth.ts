@@ -91,10 +91,10 @@ export function useAuth() {
     });
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (redirectTo?: string) => {
     setError(null);
 
-    const result = await signInWithGoogleAction();
+    const result = await signInWithGoogleAction(redirectTo);
 
     if (!result.success) {
       setError(result.error);
@@ -104,10 +104,10 @@ export function useAuth() {
     router.push(result.data.url);
   };
 
-  const signInWithLinkedIn = async () => {
+  const signInWithLinkedIn = async (redirectTo?: string) => {
     setError(null);
 
-    const result = await signInWithLinkedInAction();
+    const result = await signInWithLinkedInAction(redirectTo);
 
     if (!result.success) {
       setError(result.error);
@@ -139,7 +139,7 @@ export function useAuth() {
     return await checkUserStatusAction(email);
   };
 
-  const signInWithGooglePopup = async (): Promise<void> => {
+  const signInWithGooglePopup = async (redirectTo?: string): Promise<void> => {
     setError(null);
     setIsGooglePending(true);
 
@@ -148,7 +148,7 @@ export function useAuth() {
       const popup = openCenteredPopup(url, "Continue with Google");
 
       if (!popup) {
-        const result = await signInWithGoogleAction();
+        const result = await signInWithGoogleAction(redirectTo);
         if (!result.success) {
           setError(result.error);
           return;
@@ -192,8 +192,8 @@ export function useAuth() {
       } catch {}
 
       router.refresh();
-      const redirectTo = searchParams.get("redirectTo") || "/dashboard";
-      router.replace(redirectTo);
+      const nextRedirect = redirectTo ?? searchParams.get("redirectTo") ?? "/dashboard";
+      router.replace(nextRedirect);
     } catch {
       setError("Authentication failed. Please try again");
     } finally {

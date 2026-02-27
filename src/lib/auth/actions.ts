@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { loginSchema, signupSchema, recoverySchema, magicLinkSchema } from "./schemas";
 import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "./schemas";
+import { resolveAuthRedirect } from "./redirect";
 
 type ActionResult<T = void> = 
   | { success: true; data: T }
@@ -51,6 +52,12 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
   }
 
   const supabase = await createSupabaseServerClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const redirectTo = resolveAuthRedirect({
+    requestedRedirect: validation.data.redirectTo,
+    siteUrl,
+    fallbackPath: "/dashboard",
+  });
   
   try {
     const { error } = await supabase.auth.signInWithPassword({
@@ -66,7 +73,7 @@ export async function loginAction(input: LoginInput): Promise<ActionResult> {
     }
 
     revalidatePath("/", "layout");
-    redirect("/dashboard");
+    redirect(redirectTo);
   } catch (error) {
     if ((error as Error).message?.includes("NEXT_REDIRECT")) {
       throw error;
@@ -202,14 +209,20 @@ export async function recoveryAction(input: RecoveryInput): Promise<ActionResult
   }
 }
 
-export async function signInWithGoogleAction(): Promise<ActionResult<{ url: string }>> {
+export async function signInWithGoogleAction(redirectTo?: string): Promise<ActionResult<{ url: string }>> {
   const supabase = await createSupabaseServerClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const oauthRedirectTo = resolveAuthRedirect({
+    requestedRedirect: redirectTo,
+    siteUrl,
+    fallbackPath: "/callback",
+  });
 
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
+        redirectTo: oauthRedirectTo,
       },
     });
 
@@ -239,14 +252,20 @@ export async function signInWithGoogleAction(): Promise<ActionResult<{ url: stri
   }
 }
 
-export async function signInWithLinkedInAction(): Promise<ActionResult<{ url: string }>> {
+export async function signInWithLinkedInAction(redirectTo?: string): Promise<ActionResult<{ url: string }>> {
   const supabase = await createSupabaseServerClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const oauthRedirectTo = resolveAuthRedirect({
+    requestedRedirect: redirectTo,
+    siteUrl,
+    fallbackPath: "/callback",
+  });
 
   try {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "linkedin_oidc",
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/callback`,
+        redirectTo: oauthRedirectTo,
       },
     });
 
@@ -288,13 +307,11 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
 
   const supabase = await createSupabaseServerClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const requestedRedirect = validation.data.redirectTo;
-  const emailRedirectTo =
-    requestedRedirect && (requestedRedirect.startsWith("/") || requestedRedirect.startsWith(siteUrl))
-      ? requestedRedirect.startsWith("http")
-        ? requestedRedirect
-        : `${siteUrl}${requestedRedirect}`
-      : `${siteUrl}/callback`;
+  const emailRedirectTo = resolveAuthRedirect({
+    requestedRedirect: validation.data.redirectTo,
+    siteUrl,
+    fallbackPath: "/callback",
+  });
 
   try {
     const { error } = await supabase.auth.signInWithOtp({

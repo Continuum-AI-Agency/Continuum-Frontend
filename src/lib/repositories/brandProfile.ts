@@ -7,8 +7,8 @@ import {
   renameBrandProfile,
   updateBrandLogo,
   revokeInvite,
-  setActiveBrand,
 } from "@/lib/onboarding/storage";
+import { setActiveBrandPreference } from "@/lib/brands/preferences";
 import { z } from "zod";
 import { httpServer } from "@/lib/api/http.server";
 import { invokeDeleteBrandProfile, fetchBrandProfileDetails, type BrandProfileDetails } from "@/lib/brands/profile";
@@ -48,7 +48,7 @@ export interface BrandProfileRepository {
 export function createSupabaseBrandProfileRepository(): BrandProfileRepository {
   return {
     async switchActiveBrand(brandId: string) {
-      await setActiveBrand(brandId);
+      await setActiveBrandPreference(brandId);
     },
     async renameBrand(brandId: string, name: string) {
       await renameBrandProfile(brandId, name);

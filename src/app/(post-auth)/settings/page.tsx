@@ -1,11 +1,11 @@
 import { Flex, Grid, Heading, Text } from "@radix-ui/themes";
-import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import BrandSettingsPanel from "@/components/settings/BrandSettingsPanel";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
 import { RunStrategicAnalysisButton } from "@/components/strategic-analyses/RunStrategicAnalysisButton";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { fetchBrandProfileDetails } from "@/lib/brands/profile";
+import { fetchBrandDocuments } from "@/lib/brands/documents";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { UserSettingsPanel } from "@/components/settings/UserSettingsPanel";
 import { createEmptyUserIntegrationSummary, fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
@@ -36,15 +36,15 @@ export default async function SettingsPage() {
 
   const repo = createBrandProfileRepository();
   const [
-    { state: activeState },
     integrationSummary,
     brandProfile,
+    documents,
     members,
     invites
   ] = await Promise.all([
-    ensureOnboardingState(activeBrandId),
     fetchBrandIntegrationSummary(activeBrandId),
     fetchBrandProfileDetails(activeBrandId),
+    fetchBrandDocuments(activeBrandId),
     repo.fetchMembers(activeBrandId),
     repo.fetchInvites(activeBrandId)
   ]);
@@ -76,8 +76,8 @@ export default async function SettingsPage() {
               <GlassPanel className="p-6 h-full lg:col-span-7 xl:col-span-8">
                 <BrandSettingsPanel
                   data={{
-                    brandName: activeState.brand.name,
-                    logoPath: activeState.brand.logoPath,
+                    brandName: brandProfile?.name ?? "Untitled Brand",
+                    logoPath: brandProfile?.logoPath ?? null,
                     members,
                     invites,
                     profile: brandProfile ?? undefined,
@@ -94,10 +94,10 @@ export default async function SettingsPage() {
             </Grid>
           </SettingsTabsContent>
           <SettingsTabsContent value="knowledge" className="mt-3">
-            <GlassPanel className="p-6">
+              <GlassPanel className="p-6">
               <BrandDocumentsSection 
                 brandId={activeBrandId} 
-                documents={activeState.documents} 
+                documents={documents} 
               />
             </GlassPanel>
           </SettingsTabsContent>
