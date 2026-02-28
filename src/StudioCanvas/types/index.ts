@@ -29,10 +29,10 @@ export interface FrameSlot {
 export type ImageStylePreset = 'photorealistic' | 'anime' | '3d-render' | 'cyberpunk' | 'studio-ghibli' | 'clay' | 'none';
 
 export interface NanoGenNodeData extends BaseNodeData {
-  model: 'nano-banana' | 'nano-banana-pro';
+  model: 'nano-banana' | 'nano-banana-pro' | 'nano-banana-2';
   positivePrompt: string;
   aspectRatio: string;
-  imageSize?: '1K' | '2K' | '4K';
+  imageSize?: '512px' | '1K' | '2K' | '4K';
   stylePreset?: ImageStylePreset;
   seed?: number;
   steps?: number;

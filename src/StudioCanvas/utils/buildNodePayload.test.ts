@@ -41,6 +41,40 @@ describe('buildNodePayload', () => {
       expect(payload?.model).toBe('gemini-3-pro-image-preview');
     });
 
+    it('should map nano-banana-2 to gemini-3.1-flash-image-preview with selectable size options', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana-2',
+          positivePrompt: 'A cat',
+          imageSize: '2K',
+        },
+      };
+
+      const payload = buildNanoGenPayload(node, new Map(), [], []);
+      expect(payload?.model).toBe('gemini-3.1-flash-image-preview');
+      expect(payload?.resolution).toBe('2048x2048');
+      expect(payload?.imageSize).toBe('2K');
+    });
+
+    it('should default nano-banana-2 to 512px size', () => {
+      const node: StudioNode = {
+        id: 'nano',
+        type: 'nanoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'nano-banana-2',
+          positivePrompt: 'A cat',
+        },
+      };
+
+      const payload = buildNanoGenPayload(node, new Map(), [], []);
+      expect(payload?.imageSize).toBe('512px');
+      expect(payload?.resolution).toBe('512x512');
+    });
+
     it('should prioritize edge inputs', () => {
       const node: StudioNode = {
         id: 'nano',

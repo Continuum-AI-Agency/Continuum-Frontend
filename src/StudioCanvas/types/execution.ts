@@ -53,7 +53,7 @@ export interface GenerationPayload {
   negativePrompt?: string;
   aspectRatio?: string;
   resolution?: string;
-  imageSize?: '1K' | '2K' | '4K';
+  imageSize?: '512px' | '1K' | '2K' | '4K';
   durationSeconds?: number;
   referenceImages?: Array<{
     data: string;

@@ -52,9 +52,22 @@ export function NanoGenNode({ id, data, selected }: NodeProps<ReactFlowNode<Nano
   }, [data.isExecuting, data.error, data.generatedImage]);
 
   const handleModelChange = useCallback((value: string) => {
-    updateNodeData(id, { model: value as NanoGenNodeData['model'] });
+    const model = value as NanoGenNodeData['model'];
+    const currentSize = data.imageSize;
+    const isProSize = currentSize === '1K' || currentSize === '2K' || currentSize === '4K';
+    const isNano2Size = currentSize === '512px' || isProSize;
+
+    updateNodeData(id, {
+      model,
+      imageSize:
+        model === 'nano-banana'
+          ? undefined
+          : model === 'nano-banana-pro'
+            ? (isProSize ? currentSize : '1K')
+            : (isNano2Size ? currentSize : '512px'),
+    });
     triggerSave();
-  }, [id, updateNodeData, triggerSave]);
+  }, [data.imageSize, id, updateNodeData, triggerSave]);
 
   const handlePromptChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     updateNodeData(id, { positivePrompt: e.target.value });
@@ -69,12 +82,14 @@ export function NanoGenNode({ id, data, selected }: NodeProps<ReactFlowNode<Nano
   }, [id, updateNodeData, triggerSave]);
 
   const handleImageSizeChange = useCallback((value: string) => {
-    updateNodeData(id, { imageSize: value as '1K' | '2K' | '4K' });
+    updateNodeData(id, { imageSize: value as '512px' | '1K' | '2K' | '4K' });
     triggerSave();
   }, [id, updateNodeData, triggerSave]);
 
   const ratio = resolveAspectRatioValue(data.aspectRatio);
-  const generatorDescription = `Nano Gen • ${data.model === 'nano-banana-pro' ? (data.imageSize || '1K') : 'Flash'} • ${data.aspectRatio || '1:1'}`;
+  const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
+  const currentImageSize = data.imageSize || (data.model === 'nano-banana-2' ? '512px' : '1K');
+  const generatorDescription = `Nano Gen • ${isHighFidelityNanoModel ? currentImageSize : 'Flash'} • ${data.aspectRatio || '1:1'}`;
 
   return (
     <TooltipProvider>
@@ -102,14 +117,21 @@ export function NanoGenNode({ id, data, selected }: NodeProps<ReactFlowNode<Nano
                 <SelectContent>
                     <SelectItem value="nano-banana">Flash</SelectItem>
                     <SelectItem value="nano-banana-pro">Pro</SelectItem>
+                    <SelectItem value="nano-banana-2">Nano Banana 2</SelectItem>
                 </SelectContent>
             </Select>
-            {data.model === 'nano-banana-pro' && (
-                <Select value={data.imageSize || '1K'} onValueChange={handleImageSizeChange}>
-                    <SelectTrigger className="h-6 w-14 text-[10px] px-2 py-0 border-border/70 bg-background/90">
+            {isHighFidelityNanoModel && (
+                <Select
+                  value={data.imageSize || (data.model === 'nano-banana-2' ? '512px' : '1K')}
+                  onValueChange={handleImageSizeChange}
+                >
+                    <SelectTrigger className="h-6 w-16 text-[10px] px-2 py-0 border-border/70 bg-background/90">
                         <SelectValue placeholder="Size" />
                     </SelectTrigger>
                     <SelectContent>
+                        {data.model === 'nano-banana-2' && (
+                          <SelectItem value="512px">512px</SelectItem>
+                        )}
                         <SelectItem value="1K">1K</SelectItem>
                         <SelectItem value="2K">2K</SelectItem>
                         <SelectItem value="4K">4K</SelectItem>

@@ -326,7 +326,24 @@ export function buildNanoGenPayload(
     ? 'gemini-2.5-flash-image'
     : data.model === 'nano-banana-pro'
       ? 'gemini-3-pro-image-preview'
+      : data.model === 'nano-banana-2'
+        ? 'gemini-3.1-flash-image-preview'
       : data.model;
+  const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
+  const imageSize = data.model === 'nano-banana-pro'
+    ? (data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K' ? data.imageSize : '1K')
+    : data.model === 'nano-banana-2'
+      ? (data.imageSize || '512px')
+      : undefined;
+  const resolution = data.model === 'nano-banana'
+    ? '1024x1024'
+    : imageSize === '512px'
+      ? '512x512'
+      : imageSize === '2K'
+        ? '2048x2048'
+        : imageSize === '4K'
+          ? '4096x4096'
+          : '1024x1024';
 
   return {
     brandId,
@@ -337,8 +354,8 @@ export function buildNanoGenPayload(
       ? data.negativePrompt
       : undefined,
     aspectRatio: data.aspectRatio || '16:9',
-    resolution: '1024x1024',
-    imageSize: data.model === 'nano-banana-pro' ? data.imageSize || '1K' : undefined,
+    resolution,
+    imageSize: isHighFidelityNanoModel ? imageSize : undefined,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
 }

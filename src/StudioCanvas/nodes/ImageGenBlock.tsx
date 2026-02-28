@@ -73,11 +73,36 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
 
   const handleModelChange = useCallback(
     (value: string) => {
+      const model = value as NanoGenNodeData['model'];
+      const currentSize = data.imageSize;
+      const isProSize = currentSize === '1K' || currentSize === '2K' || currentSize === '4K';
+      const isNano2Size = currentSize === '512px' || isProSize;
+
       updateNode(id, (node) => ({
         ...node,
         data: {
           ...(node.data as NanoGenNodeData),
-          model: value as NanoGenNodeData['model'],
+          model,
+          imageSize:
+            model === 'nano-banana'
+              ? undefined
+              : model === 'nano-banana-pro'
+                ? (isProSize ? currentSize : '1K')
+                : (isNano2Size ? currentSize : '512px'),
+        },
+      }));
+      triggerSave();
+    },
+    [data.imageSize, id, triggerSave, updateNode]
+  );
+
+  const handleImageSizeChange = useCallback(
+    (value: string) => {
+      updateNode(id, (node) => ({
+        ...node,
+        data: {
+          ...(node.data as NanoGenNodeData),
+          imageSize: value as NanoGenNodeData['imageSize'],
         },
       }));
       triggerSave();
@@ -126,7 +151,14 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   const ratio = getAspectRatioValue(aspectRatio);
   const fileBaseName = `image-${id}`;
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
-  const generatorDescription = `${data.model === 'nano-banana-pro' ? 'Nano Banana Pro' : 'Nano Banana'} • ${aspectRatio}`;
+  const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
+  const currentImageSize = data.imageSize || (data.model === 'nano-banana-2' ? '512px' : '1K');
+  const modelLabel = data.model === 'nano-banana-pro'
+    ? 'Nano Banana Pro'
+    : data.model === 'nano-banana-2'
+      ? 'Nano Banana 2'
+      : 'Nano Banana';
+  const generatorDescription = `${modelLabel}${isHighFidelityNanoModel ? ` • ${currentImageSize}` : ''} • ${aspectRatio}`;
 
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
@@ -292,7 +324,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           <ContextMenuSubTrigger>Model</ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-44">
             <ContextMenuCheckboxItem
-              checked={(data.model || 'nano-banana') === 'nano-banana'}
+              checked={(data.model || 'nano-banana-2') === 'nano-banana'}
               onClick={() => handleModelChange('nano-banana')}
             >
               Nano Banana
@@ -303,8 +335,38 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             >
               Nano Banana Pro
             </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem
+              checked={(data.model || 'nano-banana-2') === 'nano-banana-2'}
+              onClick={() => handleModelChange('nano-banana-2')}
+            >
+              Nano Banana 2
+            </ContextMenuCheckboxItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
+        {isHighFidelityNanoModel && (
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Size</ContextMenuSubTrigger>
+            <ContextMenuSubContent className="w-36">
+              {data.model === 'nano-banana-2' && (
+                <ContextMenuCheckboxItem
+                  checked={currentImageSize === '512px'}
+                  onClick={() => handleImageSizeChange('512px')}
+                >
+                  512px
+                </ContextMenuCheckboxItem>
+              )}
+              {(['1K', '2K', '4K'] as const).map((value) => (
+                <ContextMenuCheckboxItem
+                  key={value}
+                  checked={currentImageSize === value}
+                  onClick={() => handleImageSizeChange(value)}
+                >
+                  {value}
+                </ContextMenuCheckboxItem>
+              ))}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+        )}
         <ContextMenuSub>
           <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-36">

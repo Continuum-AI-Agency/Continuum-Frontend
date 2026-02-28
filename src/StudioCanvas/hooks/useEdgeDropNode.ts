@@ -58,7 +58,8 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
     case 'nanoGen':
       return {
         data: {
-            model: 'nano-banana',
+            model: 'nano-banana-2',
+            imageSize: '512px',
             positivePrompt: '',
             negativePrompt: '',
             aspectRatio: '16:9',
