@@ -14,7 +14,7 @@ export function resolveThemeAppearance({
   prefersDark,
   defaultAppearance,
 }: ResolveAppearanceInput): ThemeAppearance {
-  const fallbackAppearance = defaultAppearance ?? (prefersDark ? "dark" : "light");
+  const fallbackAppearance = defaultAppearance ?? "light";
 
   if (cookieAppearance === "dark" || cookieAppearance === "light") {
     return cookieAppearance;

@@ -43,13 +43,13 @@ describe("resolveThemeAppearance", () => {
     ).toBe("dark");
   });
 
-  it("falls back to system preference when no explicit default is provided", () => {
+  it("falls back to light when no explicit default is provided", () => {
     expect(
       resolveThemeAppearance({
         storedMode: null,
         prefersDark: true,
       })
-    ).toBe("dark");
+    ).toBe("light");
   });
 });
 

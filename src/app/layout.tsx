@@ -48,7 +48,7 @@ function NoFlashScript() {
             ? 'dark'
             : stored === 'system'
               ? (prefersDark ? 'dark' : 'light')
-              : (prefersDark ? 'dark' : 'light'));
+              : 'light');
         var root = document.documentElement;
         if (appearance === 'dark') {
           root.setAttribute('data-theme', 'dark');

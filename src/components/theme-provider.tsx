@@ -34,7 +34,7 @@ function applyDomTheme(appearance: ThemeAppearance) {
 }
 
 export function ThemeProvider({ children, initialAppearance }: { children: React.ReactNode; initialAppearance?: ThemeAppearance }) {
-  const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "system");
+  const [mode, setMode] = useState<ThemeMode>(() => getStoredMode() ?? "light");
   const [appearance, setAppearance] = useState<ThemeAppearance>(initialAppearance ?? "light");
 
   // Sync appearance with mode and system preference
