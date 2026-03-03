@@ -1,4 +1,6 @@
 import { SelectableAsset, SelectableAssetsResponse } from "@/lib/schemas/integrations";
+import type { PlatformKey } from "@/components/onboarding/platforms";
+import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
 export type MetaSelectableAdAccountBundle = {
   ad_account_id: string;
@@ -10,6 +12,131 @@ export type MetaSelectableAdAccountBundles = {
   ad_accounts: MetaSelectableAdAccountBundle[];
   assets_without_ad_account: SelectableAsset[];
 };
+
+const FALLBACK_TYPE_BY_PLATFORM: Record<PlatformKey, string> = {
+  youtube: "youtube_channel",
+  instagram: "meta_instagram_account",
+  facebook: "meta_page",
+  tiktok: "tiktok_account",
+  linkedin: "linkedin_account",
+  googleAds: "google_ad_account",
+  amazonAds: "amazon_ad_account",
+  dv360: "dv360_advertiser",
+  threads: "meta_threads_account",
+};
+
+const PROVIDER_BY_PLATFORM: Partial<Record<PlatformKey, string>> = {
+  youtube: "google",
+  instagram: "meta",
+  facebook: "meta",
+  googleAds: "google",
+  dv360: "google",
+  threads: "meta",
+};
+
+function inferProviderFromType(type: string): string | undefined {
+  const normalized = type.toLowerCase();
+  if (
+    normalized.includes("meta") ||
+    normalized.includes("facebook") ||
+    normalized.includes("instagram") ||
+    normalized.includes("threads")
+  ) {
+    return "meta";
+  }
+  if (normalized.includes("google") || normalized.includes("youtube") || normalized.includes("dv360")) {
+    return "google";
+  }
+  return undefined;
+}
+
+function buildSelectableAssetFromBrandAccount(
+  platformKey: PlatformKey,
+  account: {
+    integrationAccountId: string;
+    externalAccountId: string | null;
+    type: string | null;
+    name: string;
+    alias: string | null;
+  }
+): SelectableAsset {
+  return {
+    asset_pk: account.integrationAccountId,
+    integration_account_id: account.integrationAccountId,
+    external_id: account.externalAccountId ?? account.integrationAccountId,
+    type: account.type ?? FALLBACK_TYPE_BY_PLATFORM[platformKey],
+    name: account.alias ?? account.name ?? null,
+    business_id: null,
+    ad_account_id: null,
+  };
+}
+
+export function mergeSelectableAssetsWithBrandSummary(
+  response: SelectableAssetsResponse,
+  summary: BrandIntegrationSummary
+): SelectableAssetsResponse {
+  const knownIds = new Set(
+    getSelectableAssetsFlatList(response).map((asset) => asset.integration_account_id || asset.asset_pk)
+  );
+
+  const missingByProvider = new Map<string, SelectableAsset[]>();
+  const missingAssets: SelectableAsset[] = [];
+
+  (Object.keys(summary) as PlatformKey[]).forEach((platformKey) => {
+    const accounts = summary[platformKey]?.accounts ?? [];
+    accounts.forEach((account) => {
+      const integrationAccountId = account.integrationAccountId;
+      if (!integrationAccountId || knownIds.has(integrationAccountId)) {
+        return;
+      }
+
+      knownIds.add(integrationAccountId);
+      const selectableAsset = buildSelectableAssetFromBrandAccount(platformKey, account);
+      missingAssets.push(selectableAsset);
+
+      const providerKey =
+        PROVIDER_BY_PLATFORM[platformKey] ??
+        inferProviderFromType(selectableAsset.type);
+      if (!providerKey) {
+        return;
+      }
+
+      const existing = missingByProvider.get(providerKey) ?? [];
+      existing.push(selectableAsset);
+      missingByProvider.set(providerKey, existing);
+    });
+  });
+
+  if (missingAssets.length === 0) {
+    return response;
+  }
+
+  const mergedProviders = { ...(response.providers ?? {}) };
+  missingByProvider.forEach((providerAssets, providerKey) => {
+    const provider = mergedProviders[providerKey] ?? {};
+    const existingAssets = provider.assets ?? [];
+    const existingIds = new Set(existingAssets.map((asset: SelectableAsset) => asset.integration_account_id || asset.asset_pk));
+    const nextAssets = [...existingAssets];
+    providerAssets.forEach((asset) => {
+      const id = asset.integration_account_id || asset.asset_pk;
+      if (!existingIds.has(id)) {
+        existingIds.add(id);
+        nextAssets.push(asset);
+      }
+    });
+
+    mergedProviders[providerKey] = {
+      ...provider,
+      assets: nextAssets,
+    };
+  });
+
+  return {
+    ...response,
+    assets: [...(response.assets ?? []), ...missingAssets],
+    providers: mergedProviders,
+  };
+}
 
 export function getSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
   return asset.name?.trim() || asset.external_id;

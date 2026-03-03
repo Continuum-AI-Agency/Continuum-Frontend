@@ -4,7 +4,13 @@ import {
   selectableAssetsResponseSchema,
   type SelectableAssetsResponse,
 } from "@/lib/schemas/integrations";
-import { getMetaSelectableAdAccountBundles, getSelectableAssetsFlatList } from "@/lib/integrations/selectableAssets";
+import {
+  getMetaSelectableAdAccountBundles,
+  getSelectableAssetsFlatList,
+  mergeSelectableAssetsWithBrandSummary,
+} from "@/lib/integrations/selectableAssets";
+import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
+import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
 const SAMPLE_ASSET = {
   asset_pk: "11111111-1111-1111-1111-111111111111",
@@ -34,6 +40,13 @@ const SAMPLE_GOOGLE_ASSET = {
   business_id: null,
   ad_account_id: null,
 };
+
+function createEmptyBrandSummary(): BrandIntegrationSummary {
+  return PLATFORM_KEYS.reduce((acc, key) => {
+    acc[key] = { accounts: [] };
+    return acc;
+  }, {} as Record<PlatformKey, { accounts: BrandIntegrationSummary[PlatformKey]["accounts"] }>) as BrandIntegrationSummary;
+}
 
 describe("selectable assets schemas", () => {
   test("selectableAssetsResponseSchema accepts legacy payload", () => {
@@ -222,6 +235,75 @@ describe("selectable assets schemas", () => {
     });
 
     expect(getSelectableAssetsFlatList(response)).toEqual([SAMPLE_GOOGLE_ASSET, SAMPLE_ASSET]);
+  });
+
+  test("mergeSelectableAssetsWithBrandSummary includes assigned brand accounts missing from selectable assets", () => {
+    const response: SelectableAssetsResponse = selectableAssetsResponseSchema.parse({
+      synced_at: null,
+      stale: false,
+      providers: { meta: { assets: [] } },
+    });
+
+    const summary = createEmptyBrandSummary();
+    summary.facebook.accounts.push({
+      assignmentId: "aaaa1111-1111-4111-8111-111111111111",
+      integrationAccountId: "bbbb2222-2222-4222-8222-222222222222",
+      name: "Brand Page",
+      alias: null,
+      externalAccountId: "page_123",
+      status: "active",
+      linkedAt: null,
+      providerIntegrationId: "cccc3333-3333-4333-8333-333333333333",
+      type: "meta_page",
+      settings: null,
+    });
+
+    const merged = mergeSelectableAssetsWithBrandSummary(response, summary);
+    const flat = getSelectableAssetsFlatList(merged);
+    expect(flat.some((asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222")).toBe(true);
+    expect(
+      merged.providers.meta?.assets?.some(
+        (asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222"
+      )
+    ).toBe(true);
+  });
+
+  test("mergeSelectableAssetsWithBrandSummary does not duplicate accounts already in selectable assets", () => {
+    const response: SelectableAssetsResponse = selectableAssetsResponseSchema.parse({
+      synced_at: null,
+      stale: false,
+      providers: {
+        meta: {
+          assets: [
+            {
+              ...SAMPLE_ASSET,
+              asset_pk: "bbbb2222-2222-4222-8222-222222222222",
+              integration_account_id: "bbbb2222-2222-4222-8222-222222222222",
+            },
+          ],
+        },
+      },
+    });
+
+    const summary = createEmptyBrandSummary();
+    summary.facebook.accounts.push({
+      assignmentId: "aaaa1111-1111-4111-8111-111111111111",
+      integrationAccountId: "bbbb2222-2222-4222-8222-222222222222",
+      name: "Brand Page",
+      alias: null,
+      externalAccountId: "page_123",
+      status: "active",
+      linkedAt: null,
+      providerIntegrationId: "cccc3333-3333-4333-8333-333333333333",
+      type: "meta_page",
+      settings: null,
+    });
+
+    const merged = mergeSelectableAssetsWithBrandSummary(response, summary);
+    const flat = getSelectableAssetsFlatList(merged).filter(
+      (asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222"
+    );
+    expect(flat).toHaveLength(1);
   });
 
   test("getMetaSelectableAdAccountBundles groups by ad account and ignores businesses", () => {

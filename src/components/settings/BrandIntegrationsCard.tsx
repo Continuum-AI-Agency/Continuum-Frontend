@@ -27,6 +27,7 @@ import {
   getMetaSelectableAdAccountBundles,
   getSelectableAssetsFlatList,
   getSelectableAssetLabel,
+  mergeSelectableAssetsWithBrandSummary,
 } from "@/lib/integrations/selectableAssets";
 import { useToast } from "@/components/ui/ToastProvider";
 import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
@@ -149,6 +150,7 @@ type AssignmentsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   brandProfileId: string;
+  summary: BrandIntegrationSummary;
   assignedIds: string[];
   onSaved?: () => Promise<void> | void;
 };
@@ -157,21 +159,26 @@ function AssignmentsDialog({
   open,
   onOpenChange,
   brandProfileId,
+  summary,
   assignedIds,
   onSaved,
 }: AssignmentsDialogProps) {
   const { show } = useToast();
   const selectableAssetsQuery = useSelectableAssets();
   const applyAssignments = useApplyBrandProfileIntegrationAccounts();
+  const selectableAssetsData = useMemo(() => {
+    if (!selectableAssetsQuery.data) return null;
+    return mergeSelectableAssetsWithBrandSummary(selectableAssetsQuery.data, summary);
+  }, [selectableAssetsQuery.data, summary]);
 
   const selectableAssets = useMemo(
-    () => (selectableAssetsQuery.data ? getSelectableAssetsFlatList(selectableAssetsQuery.data) : []),
-    [selectableAssetsQuery.data]
+    () => (selectableAssetsData ? getSelectableAssetsFlatList(selectableAssetsData) : []),
+    [selectableAssetsData]
   );
   
   const metaBundles = useMemo(
-    () => (selectableAssetsQuery.data ? getMetaSelectableAdAccountBundles(selectableAssetsQuery.data) : null),
-    [selectableAssetsQuery.data]
+    () => (selectableAssetsData ? getMetaSelectableAdAccountBundles(selectableAssetsData) : null),
+    [selectableAssetsData]
   );
 
   const [selectedById, setSelectedById] = useState<Record<string, boolean>>(
@@ -255,8 +262,8 @@ function AssignmentsDialog({
 
   const isLoading = selectableAssetsQuery.isLoading;
   const isSaving = applyAssignments.isPending;
-  const stale = selectableAssetsQuery.data?.stale;
-  const syncedAt = selectableAssetsQuery.data?.synced_at;
+  const stale = selectableAssetsData?.stale;
+  const syncedAt = selectableAssetsData?.synced_at;
 
   const groupedAssets = useMemo(() => {
     const grouped = PLATFORMS.reduce((acc, { key }) => {
@@ -816,6 +823,7 @@ export function BrandIntegrationsCard({
           open={editOpen}
           onOpenChange={setEditOpen}
           brandProfileId={brandProfileId}
+          summary={resolvedSummary}
           assignedIds={assignedIds}
           onSaved={onRefresh}
         />

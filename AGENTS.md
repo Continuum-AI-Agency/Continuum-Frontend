@@ -145,3 +145,9 @@ When you learn something, place a note of it here:
 - Keep theming synchronized via both `data-theme` and `html.dark/html.light` so Tailwind `dark:` utilities, CSS variables, and chart/map theme detection stay consistent.
 - Keep skeleton loaders neutral (`bg-muted/70`), and shape each skeleton to match real page structure (headers, controls, cards, tables) instead of generic full-bleed blocks.
 - `StringNode` enrichment payload sends uploads under `context.images`; the `/api/ai-studio/enrich` route should parse `context.*` and stream SSE (`text` + `complete`) for `useWorkflowExecution`.
+- Avoid self-referential RLS policies on `brand_profiles.permissions`; they can trigger PostgreSQL `54001` (`statement_too_complex`). Use `brand_profiles.has_brand_access(...)` as a `SECURITY DEFINER` helper for cross-row visibility checks.
+- Paid media observability should use a two-step exploration model: `Campaigns` snapshot first (including index-level averaged cards), then `Ad Sets` drill-in with a single selected ad set timeline and one metric visualized at a time.
+- Campaign compare should support TradingView-style multi-entity plotting: add/remove multiple campaigns/indexes to one metric chart, and keep indexes grouped by default with an optional `Decompose` toggle to expose member campaigns.
+- Minimize dropdown-driven selection for paid media exploration: prefer left-rail ticker-style list menus for campaign/index/ad set selection with quick row actions and lightweight chart focus.
+- Replace full-page paid media action logs with a compact, context-aware alert feed (search + status filter + sort + pagination) so the primary chart/explorer keeps most visual real estate.
+- In brand integration assignment UIs, always merge brand-assigned integration accounts into selectable assets so invited members can view and keep existing brand-linked accounts even without personal OAuth ownership.

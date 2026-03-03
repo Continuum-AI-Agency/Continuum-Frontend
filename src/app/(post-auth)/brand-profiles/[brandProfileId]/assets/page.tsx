@@ -1,5 +1,6 @@
 import { fetchSelectableAssetsForCurrentUser } from "@/lib/api/integrations/server";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { mergeSelectableAssetsWithBrandSummary } from "@/lib/integrations/selectableAssets";
 import { BrandAssetsForm } from "./BrandAssetsForm";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,10 @@ export default async function Page({ params }: { params: { brandProfileId: strin
 		fetchSelectableAssetsForCurrentUser(),
 		fetchBrandIntegrationSummary(params.brandProfileId),
 	]);
+	const mergedSelectableAssetsResponse = mergeSelectableAssetsWithBrandSummary(
+		selectableAssetsResponse,
+		integrationSummary
+	);
 
 	const assignedIntegrationAccountIds = Object.values(integrationSummary).flatMap(group =>
 		group.accounts.map(account => account.integrationAccountId)
@@ -16,7 +21,7 @@ export default async function Page({ params }: { params: { brandProfileId: strin
 	return (
 		<BrandAssetsForm
 			brandProfileId={params.brandProfileId}
-			selectableAssetsResponse={selectableAssetsResponse}
+			selectableAssetsResponse={mergedSelectableAssetsResponse}
 			assignedIntegrationAccountIds={assignedIntegrationAccountIds}
 		/>
 	);
