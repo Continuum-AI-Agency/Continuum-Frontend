@@ -13,8 +13,8 @@ import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platfor
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
 const SAMPLE_ASSET = {
-  asset_pk: "11111111-1111-1111-1111-111111111111",
-  integration_account_id: "22222222-2222-2222-2222-222222222222",
+  asset_pk: "11111111-1111-4111-8111-111111111111",
+  integration_account_id: "22222222-2222-4222-8222-222222222222",
   external_id: "ext_1",
   type: "meta_ad_account",
   name: "Account 1",
@@ -23,17 +23,18 @@ const SAMPLE_ASSET = {
 };
 
 const SAMPLE_PAGE_ASSET = {
-  asset_pk: "44444444-4444-4444-4444-444444444444",
-  integration_account_id: "55555555-5555-5555-5555-555555555555",
+  asset_pk: "44444444-4444-4444-8444-444444444444",
+  integration_account_id: "55555555-5555-4555-8555-555555555555",
   external_id: "ext_page_1",
   type: "meta_page",
   name: "Page 1",
   business_id: "biz_1",
   ad_account_id: "act_1",
 };
+
 const SAMPLE_GOOGLE_ASSET = {
-  asset_pk: "66666666-6666-6666-6666-666666666666",
-  integration_account_id: "77777777-7777-7777-7777-777777777777",
+  asset_pk: "66666666-6666-4666-8666-666666666666",
+  integration_account_id: "77777777-7777-4777-8777-777777777777",
   external_id: "ext_google_1",
   type: "google_ad_account",
   name: "Google Ads 1",
@@ -116,7 +117,7 @@ describe("selectable assets schemas", () => {
           hierarchy: {
             integrations: [
               {
-                integration_id: "33333333-3333-3333-3333-333333333333",
+                integration_id: "33333333-3333-4333-8333-333333333333",
                 businesses: [
                   {
                     business_id: null,
@@ -143,7 +144,7 @@ describe("selectable assets schemas", () => {
     });
 
     expect(parsed.assets).toEqual([]);
-    expect(parsed.providers.meta.hierarchy?.meta.integrations).toHaveLength(1);
+    expect(parsed.providers.meta.hierarchy?.integrations).toHaveLength(1);
   });
 
   test("getSelectableAssetsFlatList returns the cross-provider assets list", () => {
@@ -408,16 +409,20 @@ describe("selectable assets schemas", () => {
       assets: [
         {
           ...SAMPLE_ASSET,
+          asset_pk: "00000000-0000-4000-8001-000000000000",
+          integration_account_id: "00000000-0000-4000-8002-000000000000",
           ad_account_id: "act_1",
         },
         {
           ...SAMPLE_PAGE_ASSET,
+          asset_pk: "00000000-0000-4000-8003-000000000000",
+          integration_account_id: "00000000-0000-4000-8004-000000000000",
           ad_account_id: "act_1",
         },
         {
           ...SAMPLE_PAGE_ASSET,
-          asset_pk: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-          integration_account_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+          asset_pk: "00000000-0000-4000-8005-000000000000",
+          integration_account_id: "00000000-0000-4000-8006-000000000000",
           external_id: "ext_ig_1",
           type: "meta_instagram_account",
           name: "IG 1",
@@ -425,16 +430,16 @@ describe("selectable assets schemas", () => {
         },
         {
           ...SAMPLE_PAGE_ASSET,
-          asset_pk: "dddddddd-dddd-dddd-dddd-dddddddddddd",
-          integration_account_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+          asset_pk: "00000000-0000-4000-8007-000000000000",
+          integration_account_id: "00000000-0000-4000-8008-000000000000",
           external_id: "ext_page_2",
           name: "Page 2",
           ad_account_id: "act_1",
         },
         {
           ...SAMPLE_PAGE_ASSET,
-          asset_pk: "ffffffff-ffff-ffff-ffff-ffffffffffff",
-          integration_account_id: "11111111-2222-3333-4444-555555555555",
+          asset_pk: "00000000-0000-4000-8009-000000000000",
+          integration_account_id: "11111111-2222-4333-8444-555555555555",
           external_id: "ext_page_3",
           name: "Page 3",
           ad_account_id: null,
@@ -453,11 +458,11 @@ describe("selectable assets schemas", () => {
 
   test("integrationAssetsResponseSchema parses integration scoped payload", () => {
     const parsed = integrationAssetsResponseSchema.parse({
-      integration_id: "33333333-3333-3333-3333-333333333333",
+      integration_id: "33333333-3333-4333-8333-333333333333",
       provider: "meta",
       synced_at: null,
       stale: false,
-      assets: [{ ...SAMPLE_ASSET, integration_id: "33333333-3333-3333-3333-333333333333" }],
+      assets: [{ ...SAMPLE_ASSET, integration_id: "33333333-3333-4333-8333-333333333333" }],
       assets_flat: [SAMPLE_ASSET],
       providers: {
         meta: { assets: [SAMPLE_ASSET] },

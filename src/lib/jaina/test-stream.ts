@@ -1,4 +1,4 @@
-import { reportPayloadSchema, hasReportContent, type SoTReport } from "./schemas";
+import { reportPayloadSchema, hasReportContent, type FrontendCheckpointReport } from "./schemas";
 
 const streamingReport = {
   executive_summary: "Your top-performing campaigns across the last 7 days are driven by the Advantage+ App suite...",
@@ -52,7 +52,7 @@ const streamingReport = {
 const result = reportPayloadSchema.safeParse(streamingReport);
 
 if (result.success && !("type" in result.data)) {
-  const report = result.data as SoTReport;
+  const report = result.data as FrontendCheckpointReport;
   
   console.log("✓ Parsing successful");
   console.log("Has content:", hasReportContent(report));
@@ -70,7 +70,7 @@ if (result.success && !("type" in result.data)) {
     console.log("Highlights:", section.highlights.length);
     console.log("Tables:", section.tables.length);
     if (section.tables.length > 0) {
-      console.log("Table headers:", section.tables[0].headers.join(", "));
+      const t = section.tables[0]; if ("headers" in t) console.log("Table headers:", t.headers.join(", "));
       console.log("Table rows:", section.tables[0].rows.length);
     }
   }

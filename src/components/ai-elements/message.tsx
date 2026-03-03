@@ -25,6 +25,7 @@ export function Message({ role, children }: MessageProps) {
         color={isUser ? "gray" : "purple"}
         variant="soft"
         className="mt-1 shrink-0 shadow-sm"
+        aria-hidden="true"
       />
       <Box
         className={cn(

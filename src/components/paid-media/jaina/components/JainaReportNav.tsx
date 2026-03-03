@@ -1,7 +1,9 @@
 "use client";
 
+import { type FrontendCheckpointReport } from "@/lib/jaina/schemas";
+
 import { Box, Flex, Text } from "@radix-ui/themes";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const NAV_ITEMS = [
   { key: "executive-summary", label: "Executive Summary" },
@@ -14,10 +16,17 @@ const NAV_ITEMS = [
 
 type JainaReportNavProps = {
   idPrefix?: string;
+  report: FrontendCheckpointReport | null;
 };
 
-export function JainaReportNav({ idPrefix = "jaina-report" }: JainaReportNavProps) {
-  const getSectionId = (key: string) => `${idPrefix}-${key}`;
+export function JainaReportNav({ 
+  idPrefix = "jaina-report",
+  report 
+}: JainaReportNavProps) {
+  const getSectionId = useCallback(
+    (key: string) => `${idPrefix}-${key}`,
+    [idPrefix]
+  );
   const [activeId, setActiveId] = useState<string>(() =>
     getSectionId("executive-summary")
   );
@@ -47,7 +56,7 @@ export function JainaReportNav({ idPrefix = "jaina-report" }: JainaReportNavProp
     elements.forEach((el) => el && observer.observe(el));
 
     return () => observer.disconnect();
-  }, [idPrefix]);
+  }, [getSectionId]);
 
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
@@ -64,7 +73,15 @@ export function JainaReportNav({ idPrefix = "jaina-report" }: JainaReportNavProp
           Table of Contents
         </Text>
         <Flex direction="column" gap="1">
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter(item => {
+            if (item.key === "executive-summary") return true;
+            if (item.key === "performance-snapshot") return (report?.performance_snapshot.length ?? 0) > 0;
+            if (item.key === "strategic-insights") return (report?.sections.length ?? 0) > 0;
+            if (item.key === "recommendations") return (report?.strategic_recommendations.length ?? 0) > 0;
+            if (item.key === "key-trends") return (report?.graphs.length ?? 0) > 0;
+            if (item.key === "data-tables") return true; // Fallback tables might exist
+            return true;
+          }).map((item) => (
             <button
               key={item.key}
               onClick={() => scrollToSection(getSectionId(item.key))}

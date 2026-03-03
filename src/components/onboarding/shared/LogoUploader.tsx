@@ -85,7 +85,7 @@ export function LogoUploader() {
       
       <Avatar className="w-32 h-32 cursor-pointer border-4 border-muted-foreground/10 hover:border-primary/50 transition-all shadow-sm" onClick={() => inputRef.current?.click()}>
         <AvatarImage src={previewUrl ?? undefined} alt="Brand Logo" className="object-cover" />
-        <AvatarFallback className="text-3xl font-semibold bg-muted text-muted-foreground">
+        <AvatarFallback className="text-3xl font-semibold bg-transparent text-muted-foreground">
           {isUploading ? "..." : initials}
         </AvatarFallback>
       </Avatar>

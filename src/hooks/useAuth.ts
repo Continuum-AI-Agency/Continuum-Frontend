@@ -144,7 +144,7 @@ export function useAuth() {
     setIsGooglePending(true);
 
     try {
-      const url = buildOAuthStartUrl("google", "login");
+      const url = buildOAuthStartUrl("google", "login", { popup: true });
       const popup = openCenteredPopup(url, "Continue with Google");
 
       if (!popup) {

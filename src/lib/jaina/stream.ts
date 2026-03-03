@@ -1,6 +1,6 @@
 import {
   jainaStreamEventSchema,
-  frontendSoTReportSchema,
+  frontendCheckpointReportSchema,
   outputJsonDeltaSchema,
   outputTextDeltaSchema,
   progressEventSchema,
@@ -11,13 +11,17 @@ import {
   responseOutputItemSchema,
   responseOutputItemDoneSchema,
   responseReportAssemblySchema,
-  responseSoTReportSchema,
+  responseCheckpointReportSchema,
   reportPayloadSchema,
   stateDeltaSchema,
   hitlPausedSchema,
   canvasActionsProposedSchema,
   artifactDeltaSchema,
   streamErrorSchema,
+  toolBatchSchema,
+  handoffStartSchema,
+  handoffCompleteSchema,
+  agentEnvelopeSchema,
   toolCallSchema,
   toolResultSchema,
   thoughtEventSchema,
@@ -34,7 +38,8 @@ import {
   type ToolCallEventData,
   type ToolResultEventData,
   type ResponsePlanDecisionEventData,
-  type FrontendSoTReport,
+  type FrontendCheckpointReport,
+  type HandoffTraceEntry,
 } from "./schemas";
 import type { CampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
 import { z } from "zod";
@@ -196,7 +201,7 @@ function normalizeMetricStatus(value: unknown): string | undefined {
   return raw;
 }
 
-function normalizeRecommendation(value: unknown): FrontendSoTReport["strategic_recommendations"][number] | null {
+function normalizeRecommendation(value: unknown): FrontendCheckpointReport["strategic_recommendations"][number] | null {
   if (typeof value === "string") {
     const title = getNonEmptyString(value);
     if (!title) return null;
@@ -234,7 +239,7 @@ function normalizeRecommendation(value: unknown): FrontendSoTReport["strategic_r
 
 function normalizeMetric(
   value: unknown
-): FrontendSoTReport["performance_snapshot"][number] | null {
+): FrontendCheckpointReport["performance_snapshot"][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -245,7 +250,7 @@ function normalizeMetric(
     "Metric";
 
   const valueRaw = record.value;
-  const normalizedMetric: FrontendSoTReport["performance_snapshot"][number] = {
+  const normalizedMetric: FrontendCheckpointReport["performance_snapshot"][number] = {
     metric,
     value:
       typeof valueRaw === "number" || typeof valueRaw === "string"
@@ -292,7 +297,7 @@ function normalizeGraph(value: unknown): Record<string, unknown> | null {
 
 function normalizeTable(
   value: unknown
-): FrontendSoTReport["sections"][number]["tables"][number] | null {
+): FrontendCheckpointReport["sections"][number]["tables"][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -341,7 +346,7 @@ function normalizeTable(
 
 function normalizeHighlight(
   value: unknown
-): FrontendSoTReport["sections"][number]["highlights"][number] | null {
+): FrontendCheckpointReport["sections"][number]["highlights"][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -371,7 +376,7 @@ function normalizeHighlight(
 
 function normalizeSection(
   value: unknown
-): FrontendSoTReport["sections"][number] | null {
+): FrontendCheckpointReport["sections"][number] | null {
   const record = asRecord(value);
   if (!record) return null;
 
@@ -381,15 +386,15 @@ function normalizeSection(
     summary: getNonEmptyString(record.summary) ?? "",
     highlights: asArray(record.highlights ?? record.insights ?? record.key_insights)
       .map((item) => normalizeHighlight(item))
-      .filter((item): item is FrontendSoTReport["sections"][number]["highlights"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport["sections"][number]["highlights"][number] => Boolean(item)),
     tables: asArray(record.tables)
       .map((item) => normalizeTable(item))
-      .filter((item): item is FrontendSoTReport["sections"][number]["tables"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport["sections"][number]["tables"][number] => Boolean(item)),
     actions: asArray(
       record.actions ?? record.recommendations ?? record.reccomendations
     )
       .map((item) => normalizeRecommendation(item))
-      .filter((item): item is FrontendSoTReport["sections"][number]["actions"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport["sections"][number]["actions"][number] => Boolean(item)),
     confidence: getNonEmptyString(record.confidence) ?? null,
     cached_sources: asArray(record.cached_sources)
       .map((item) => getNonEmptyString(item))
@@ -400,14 +405,34 @@ function normalizeSection(
   };
 }
 
-function normalizeSoTReportPayload(value: unknown): FrontendSoTReport | null {
-  const strict = frontendSoTReportSchema.safeParse(value);
+function normalizeHandoffTraceEntry(value: unknown): HandoffTraceEntry | null {
+  const record = asRecord(value);
+  if (!record) return null;
+
+  return {
+    correlation_id: getNonEmptyString(record.correlation_id) ?? "",
+    parent_correlation_id: getNonEmptyString(record.parent_correlation_id) ?? null,
+    from_scope: getNonEmptyString(record.from_scope) ?? null,
+    to_scope: getNonEmptyString(record.to_scope) ?? "unknown",
+    objective: getNonEmptyString(record.objective) ?? null,
+    entity_id: getNonEmptyString(record.entity_id) ?? null,
+    status: (getNonEmptyString(record.status) as "started" | "completed" | "failed") ?? "started",
+    started_at: getNonEmptyString(record.started_at) ?? new Date().toISOString(),
+    finished_at: getNonEmptyString(record.finished_at) ?? null,
+    duration_ms: typeof record.duration_ms === "number" ? record.duration_ms : null,
+    error: getNonEmptyString(record.error) ?? null,
+  };
+}
+
+
+function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointReport | null {
+  const strict = frontendCheckpointReportSchema.safeParse(value);
   if (strict.success) return strict.data;
 
   const payloadRecord = asRecord(value);
   if (!payloadRecord) return null;
 
-  const normalized: FrontendSoTReport = {
+  const normalized: FrontendCheckpointReport = {
     language: getNonEmptyString(payloadRecord.language) ?? "en",
     executive_summary:
       getNonEmptyString(payloadRecord.executive_summary) ??
@@ -416,10 +441,10 @@ function normalizeSoTReportPayload(value: unknown): FrontendSoTReport | null {
       "",
     performance_snapshot: asArray(payloadRecord.performance_snapshot)
       .map((item) => normalizeMetric(item))
-      .filter((item): item is FrontendSoTReport["performance_snapshot"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item)),
     sections: asArray(payloadRecord.sections)
       .map((item) => normalizeSection(item))
-      .filter((item): item is FrontendSoTReport["sections"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport["sections"][number] => Boolean(item)),
     strategic_recommendations: asArray(
       payloadRecord.strategic_recommendations ??
         payloadRecord.recommendations ??
@@ -429,11 +454,11 @@ function normalizeSoTReportPayload(value: unknown): FrontendSoTReport | null {
         payloadRecord["priority reccomendations"]
     )
       .map((item) => normalizeRecommendation(item))
-      .filter((item): item is FrontendSoTReport["strategic_recommendations"][number] => Boolean(item)),
+      .filter((item): item is FrontendCheckpointReport["strategic_recommendations"][number] => Boolean(item)),
     follow_up_questions: asArray(payloadRecord.follow_up_questions)
       .map((item) => getNonEmptyString(item))
       .filter((item): item is string => Boolean(item)),
-    handoff_trace: asArray(payloadRecord.handoff_trace),
+    handoff_trace: asArray(payloadRecord.handoff_trace).map(normalizeHandoffTraceEntry).filter((item): item is HandoffTraceEntry => Boolean(item)),
     cached_sources: asArray(payloadRecord.cached_sources)
       .map((item) => getNonEmptyString(item))
       .filter((item): item is string => Boolean(item)),
@@ -442,14 +467,14 @@ function normalizeSoTReportPayload(value: unknown): FrontendSoTReport | null {
       .filter((item): item is Record<string, unknown> => Boolean(item)),
   };
 
-  const normalizedResult = frontendSoTReportSchema.safeParse(normalized);
+  const normalizedResult = frontendCheckpointReportSchema.safeParse(normalized);
   if (normalizedResult.success) return normalizedResult.data;
 
   const fallback = reportPayloadSchema.safeParse(payloadRecord);
   if (!fallback.success) return null;
   if ("type" in fallback.data && fallback.data.type === "direct_answer") return null;
 
-  const fallbackResult = frontendSoTReportSchema.safeParse(fallback.data);
+  const fallbackResult = frontendCheckpointReportSchema.safeParse(fallback.data);
   return fallbackResult.success ? fallbackResult.data : null;
 }
 
@@ -1064,15 +1089,15 @@ export function reduceJainaStreamEvent(
         canvasActions: hasEnvelope ? state.canvasActions : [...state.canvasActions, envelope],
       };
     }
-    case "response.sot_report": {
-      const parsed = responseSoTReportSchema.safeParse(event);
+    case "response.checkpoint_report": {
+      const parsed = responseCheckpointReportSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
-        return { ...nextBase, status: "error", error: "Malformed response.sot_report event" };
+        return { ...nextBase, status: "error", error: "Malformed response.checkpoint_report event" };
       }
 
-      const normalizedReport = normalizeSoTReportPayload(parsed.data.data.report);
+      const normalizedReport = normalizeCheckpointReportPayload(parsed.data.data.report);
       if (!normalizedReport) {
-        return { ...nextBase, status: "error", error: "Invalid response.sot_report payload" };
+        return { ...nextBase, status: "error", error: "Invalid response.checkpoint_report payload" };
       }
 
       return {
@@ -1222,6 +1247,106 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
+    case "tool.batch": {
+      const parsed = toolBatchSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed tool.batch event" };
+      }
+
+      const { merged: nextToolCalls } = mergeToolCalls(
+        state.toolCalls,
+        parsed.data.data.calls
+      );
+      const { merged: nextToolResults, added: newResults } = mergeToolResults(
+        state.toolResults,
+        parsed.data.data.results
+      );
+
+      const nextProgress = [...state.progress];
+      for (const call of parsed.data.data.calls) {
+        if (!state.toolCalls.some((c) => c.id === call.id)) {
+          nextProgress.push({
+            stage: "tool_start",
+            at: new Date().toISOString(),
+            detail: `Executing ${call.name}`,
+            data: call,
+          });
+        }
+      }
+      for (const res of newResults) {
+        nextProgress.push({
+          stage: "tool_complete",
+          at: new Date().toISOString(),
+          detail: `Completed ${res.name}`,
+          data: res,
+        });
+      }
+
+      return {
+        ...nextBase,
+        toolCalls: nextToolCalls,
+        toolResults: nextToolResults,
+        progress: nextProgress,
+      };
+    }
+    case "handoff.start": {
+      const parsed = handoffStartSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed handoff.start event" };
+      }
+      const data = parsed.data.data;
+      return {
+        ...nextBase,
+        progress: [
+          ...state.progress,
+          {
+            stage: "handoff_start",
+            at: new Date().toISOString(),
+            detail: `Handoff from ${data.from_scope ?? "unknown"} to ${data.to_scope}`,
+            data,
+          },
+        ],
+      };
+    }
+    case "handoff.complete": {
+      const parsed = handoffCompleteSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed handoff.complete event" };
+      }
+      const data = parsed.data.data;
+      return {
+        ...nextBase,
+        progress: [
+          ...state.progress,
+          {
+            stage: "handoff_complete",
+            at: new Date().toISOString(),
+            detail: `Handoff to ${data.to_scope} ${data.status}`,
+            data,
+          },
+        ],
+      };
+    }
+    case "agent.envelope": {
+      const parsed = agentEnvelopeSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed agent.envelope event" };
+      }
+      const data = parsed.data.data;
+      return {
+        ...nextBase,
+        progress: [
+          ...state.progress,
+          {
+            stage: "agent_event",
+            at: new Date().toISOString(),
+            detail: `Agent ${data.envelope.kind} ${data.envelope.event}`,
+            data,
+          },
+        ],
+      };
+    }
+
     case "thought": {
       const parsed = thoughtEventSchema.safeParse((event as { data?: unknown }).data ?? {});
       if (!parsed.success) {

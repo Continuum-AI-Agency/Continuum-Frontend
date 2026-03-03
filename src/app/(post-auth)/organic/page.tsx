@@ -29,21 +29,39 @@ export default async function OrganicPage() {
   const brandProfileId = brandId;
 
   const mvpPlatformSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
+  let integrationSummary: Awaited<ReturnType<typeof fetchBrandIntegrationSummary>> | null = null;
+  try {
+    integrationSummary = await fetchBrandIntegrationSummary(brandProfileId);
+  } catch (error) {
+    console.error("[OrganicPage] Failed to load integration account summary", error);
+  }
+
   const platformAccounts = ORGANIC_PLATFORMS.filter(({ key }) =>
     mvpPlatformSet.has(key as OrganicPlatformKey)
   ).map(({ key, label }) => {
     const connection = onboarding.connections[key] ?? { connected: false, accountId: null };
+    const summaryAccounts = integrationSummary?.[key as PlatformKey]?.accounts ?? [];
+    
+    // Platform is considered connected if either the user connected it personally OR the brand has assigned accounts.
+    const isConnected = Boolean(connection.connected) || summaryAccounts.length > 0;
+    
+    // Priority for default account ID:
+    // 1. Personal connection account ID
+    // 2. First assigned brand account ID
+    const accountId = connection.accountId ?? (summaryAccounts.length > 0 ? summaryAccounts[0].integrationAccountId : null);
+
     return {
       platform: key as OrganicPlatformKey,
       label,
-      connected: Boolean(connection.connected),
-      accountId: connection.accountId ?? null,
+      connected: isConnected,
+      accountId,
     };
   });
 
   const activePlatformKeys = platformAccounts
     .filter((account) => account.connected && account.accountId)
     .map((account) => account.platform);
+
   const platformAccountIds = platformAccounts.reduce<Record<string, string>>((acc, account) => {
     if (account.connected && account.accountId) {
       acc[account.platform] = account.accountId;
@@ -157,12 +175,6 @@ export default async function OrganicPage() {
     errorMessage: insightsError,
   });
 
-  let integrationSummary: Awaited<ReturnType<typeof fetchBrandIntegrationSummary>> | null = null;
-  try {
-    integrationSummary = await fetchBrandIntegrationSummary(brandProfileId);
-  } catch (error) {
-    console.error("[OrganicPage] Failed to load integration account summary for metrics", error);
-  }
 
   const showNoTrendsMessage = selectorTrends.length === 0;
   const metricAccountsByPlatform = deriveMetricAccountsByPlatform({

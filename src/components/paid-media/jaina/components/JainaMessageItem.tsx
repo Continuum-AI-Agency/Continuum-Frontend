@@ -37,7 +37,7 @@ import { formatStageLabel, formatToolLabel } from "../jainaUtils";
 import { Agent, AgentContent, AgentHeader } from "@/components/ai-elements/agent";
 import { Checkpoint } from "@/components/ai-elements/checkpoint";
 import {
-  frontendSoTReportSchema,
+  frontendCheckpointReportSchema,
   hasReportContent,
   type CreativeArtifact,
   type ToolResultEventData,
@@ -200,7 +200,7 @@ export function JainaMessageItem({
     if (!report || ("type" in report && report.type === "direct_answer")) {
       return null;
     }
-    const parsed = frontendSoTReportSchema.safeParse(report);
+    const parsed = frontendCheckpointReportSchema.safeParse(report);
     return parsed.success ? parsed.data : null;
   }, [report]);
   const shouldRenderReport = Boolean(

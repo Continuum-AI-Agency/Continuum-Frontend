@@ -49,31 +49,35 @@ function resolveAccountName(row: {
 export async function fetchBrandIntegrationSummary(
   brandProfileId: string
 ): Promise<BrandIntegrationSummary> {
-  // Prefer service role to avoid RLS blockers on cross-owner integration assets.
-  const supabase =
+  const supabase = await createSupabaseServerClient();
+  
+  // We invoke the edge function which handles the cross-owner bypass using its own service role.
+  // This avoids needing the service role key in the frontend server's environment.
+  const { data, error } = await supabase.functions.invoke("fetch-brand-integrations", {
+    body: { brandId: brandProfileId },
+  });
+
+  if (!error && data?.summary) {
+    return data.summary as BrandIntegrationSummary;
+  }
+
+  // Fallback to local implementation if Edge Function is unavailable or fails
+  console.warn("[fetchBrandIntegrationSummary] Edge function failed, falling back to local query", error);
+  
+  // Local implementation (requires SERVICE_ROLE_KEY for cross-owner access if user is not owner)
+  const querySupabase =
     process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL
       ? createClient<Database>(
           process.env.NEXT_PUBLIC_SUPABASE_URL,
           process.env.SUPABASE_SERVICE_ROLE_KEY,
           { auth: { autoRefreshToken: false, persistSession: false } }
         )
-      : await createSupabaseServerClient();
+      : supabase;
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      console.warn("[fetchBrandIntegrationSummary] No authenticated user found and Service Role not available.");
-      return createEmptySummary();
-    }
-  }
-
-  const { data, error } = await supabase
+  const { data: assignments, error: queryError } = await querySupabase
     .schema("brand_profiles")
     .from("brand_profile_integration_accounts")
-    .select(
-      `
+    .select(`
       id,
       alias,
       created_at,
@@ -86,47 +90,27 @@ export async function fetchBrandIntegrationSummary(
         status,
         external_account_id
       )
-    `
-    )
+    `)
     .eq("brand_profile_id", brandProfileId);
 
-  if (error) {
-    console.error("[fetchBrandIntegrationSummary] assignments query failed", error);
-    return createEmptySummary();
-  }
-
-  if (!data || data.length === 0) {
+  if (queryError || !assignments) {
+    console.error("[fetchBrandIntegrationSummary] assignments query failed", queryError);
     return createEmptySummary();
   }
 
   const summary = createEmptySummary();
+  const rows = assignments as any[];
 
-  type IntegrationAssignment = {
-    id: string;
-    alias: string | null;
-    settings: unknown;
-    created_at: string | null;
-    integration_accounts_assets: IntegrationAccountAssetRow | null;
-  };
-
-  const assignments = data as IntegrationAssignment[];
-
-  assignments.forEach((assignment) => {
+  rows.forEach((assignment) => {
     const account = assignment.integration_accounts_assets;
     if (!account) return;
 
     const platformKey = mapIntegrationTypeToPlatformKey(account.type ?? undefined);
     if (!platformKey) return;
 
-    const accountName = resolveAccountName({
-      alias: assignment.alias ?? null,
-      accountName: account.name ?? null,
-      externalAccountId: account.external_account_id ?? null,
-    });
-
-    summary[platformKey].accounts.push({
-      assignmentId: assignment.id,
-      integrationAccountId: account.id,
+summary[platformKey].accounts.push({
+assignmentId: assignment.id,
+integrationAccountId: account.id,
       alias: assignment.alias ?? null,
       name: accountName,
       externalAccountId: account.external_account_id ?? null,
@@ -139,7 +123,7 @@ export async function fetchBrandIntegrationSummary(
   });
 
   // Fallback: if a type wasn't mapped but clearly indicates platform, attempt substring mapping.
-  assignments.forEach((assignment) => {
+  rows.forEach((assignment) => {
     const account = assignment.integration_accounts_assets;
     if (!account) return;
     const alreadyIncluded = summary.youtube.accounts.some((a) => a.integrationAccountId === account.id);
@@ -150,21 +134,22 @@ export async function fetchBrandIntegrationSummary(
         assignmentId: assignment.id,
         integrationAccountId: account.id,
         alias: assignment.alias ?? null,
-        name: resolveAccountName({
-          alias: assignment.alias ?? null,
-          accountName: account.name ?? null,
-          externalAccountId: account.external_account_id ?? null,
-        }),
-        externalAccountId: account.external_account_id ?? null,
-        status: account.status ?? null,
-        linkedAt: assignment.created_at ?? null,
-        providerIntegrationId: account.integration_id,
-        type: account.type ?? null,
-        settings: (assignment.settings as Record<string, unknown> | null) ?? null,
-      });
+name: resolveAccountName({
+alias: assignment.alias ?? null,
+accountName: account.name ?? null,
+externalAccountId: account.external_account_id ?? null,
+}),
+externalAccountId: account.external_account_id ?? null,
+status: account.status ?? null,
+linkedAt: assignment.created_at ?? null,
+providerIntegrationId: account.integration_id,
+type: account.type ?? null,
+settings: (assignment.settings as Record<string, unknown> | null) ?? null,
+    });
     }
-  });
+});
 
+  // Sort
   PLATFORM_KEYS.forEach(key => {
     summary[key].accounts.sort((a, b) => a.name.localeCompare(b.name));
   });

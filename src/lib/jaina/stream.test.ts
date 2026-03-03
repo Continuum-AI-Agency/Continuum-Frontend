@@ -5,14 +5,14 @@ import {
   reduceJainaStreamEvent,
   type JainaStreamState,
 } from "./stream";
-import type { SoTReport } from "./schemas";
+import type { FrontendCheckpointReport } from "./schemas";
 
-function asStructuredReport(state: JainaStreamState): SoTReport {
+function asStructuredReport(state: JainaStreamState): FrontendCheckpointReport {
   const report = state.report;
   if (!report || ("type" in report && report.type === "direct_answer")) {
     throw new Error("Expected structured report");
   }
-  return report as SoTReport;
+  return report as FrontendCheckpointReport;
 }
 
 describe("reduceJainaStreamEvent text deltas", () => {
@@ -51,18 +51,18 @@ describe("reduceJainaStreamEvent text deltas", () => {
 });
 
 describe("reduceJainaStreamEvent canonical report events", () => {
-  it("hydrates state from response.sot_report", () => {
+  it("hydrates state from response.checkpoint_report", () => {
     let state = createInitialJainaStreamState();
 
     state = reduceJainaStreamEvent(state, {
-      type: "response.sot_report",
+      type: "response.checkpoint_report",
       data: {
         item_id: "item_1",
         part_id: "part_1",
         report: {
           language: "en",
           executive_summary: "Campaign summary",
-          performance_snapshot: [{ metric: "Spend", value: 1200 }],
+          performance_snapshot: [{ metric: "Spend", value: 1200, status: "neutral" }],
           sections: [],
           strategic_recommendations: [],
           follow_up_questions: [],
@@ -82,14 +82,14 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     let state = createInitialJainaStreamState();
 
     state = reduceJainaStreamEvent(state, {
-      type: "response.sot_report",
+      type: "response.checkpoint_report",
       data: {
         item_id: "item_table_rows",
         part_id: "part_table_rows",
         report: {
           language: "en",
           executive_summary: "Campaign matrix",
-          performance_snapshot: [{ metric: "L7 ROAS", value: 0.97 }],
+          performance_snapshot: [{ metric: "L7 ROAS", value: 0.97, status: "neutral" }],
           sections: [
             {
               heading: "Campaign Efficiency Matrix",
@@ -134,7 +134,7 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     let state = createInitialJainaStreamState();
 
     state = reduceJainaStreamEvent(state, {
-      type: "response.sot_report",
+      type: "response.checkpoint_report",
       data: {
         item_id: "item_backend_shape",
         part_id: "part_backend_shape",
@@ -239,7 +239,7 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     let state = createInitialJainaStreamState();
 
     state = reduceJainaStreamEvent(state, {
-      type: "response.sot_report",
+      type: "response.checkpoint_report",
       data: {
         item_id: "item_aliases",
         part_id: "part_aliases",
@@ -419,7 +419,7 @@ describe("reduceJainaStreamEvent plan + hitl events", () => {
         item_id: "item_plan",
         part_id: "part_plan",
         delta:
-          '{"id":"plan_123","title":"Execution Plan","description":"Assemble final report","status":"pending","steps":[{"title":"Collect metrics","status":"completed"}]}'
+          '{"id":"plan_123","title":"Execution Plan","description":"Assemble final report","status":"pending","steps":[{"title":"Collect metrics","status":"completed"}]}',
       },
     } as any);
 
@@ -429,6 +429,43 @@ describe("reduceJainaStreamEvent plan + hitl events", () => {
 });
 
 describe("reduceJainaStreamEvent tool hydration compatibility", () => {
+  it("hydrates tool calls/results from tool.batch payloads", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "tool.batch",
+      data: {
+        calls: [
+          {
+            id: "tool_batch_1",
+            name: "fetch_metrics",
+            args: { account_id: "act_123" },
+            metadata: { source: "batch" },
+            correlation_id: "corr_1",
+            parent_correlation_id: null,
+          },
+        ],
+        results: [
+          {
+            id: "tool_batch_1",
+            name: "fetch_metrics",
+            ok: true,
+            cached: false,
+            output: { rows: 3 },
+            correlation_id: "corr_1",
+            parent_correlation_id: null,
+          },
+        ],
+      },
+    } as any);
+
+    expect(state.toolCalls.length).toBe(1);
+    expect(state.toolResults.length).toBe(1);
+    expect(state.toolCalls[0].correlation_id).toBe("corr_1");
+    expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
+    expect(state.progress.some((entry) => entry.stage === "tool_complete")).toBe(true);
+  });
+
   it("hydrates tool calls/results from canonical response.progress stages", () => {
     let state = createInitialJainaStreamState();
 
@@ -501,6 +538,21 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
 });
 
 describe("parseJainaStreamEvent compatibility guards", () => {
+  it("accepts canonical tool.batch events", () => {
+    const event = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "tool.batch",
+        data: {
+          calls: [],
+          results: [],
+        },
+      })
+    );
+
+    expect(event).not.toBeNull();
+    expect(event?.type).toBe("tool.batch");
+  });
+
   it("accepts known compatibility event types", () => {
     const event = parseJainaStreamEvent(
       JSON.stringify({
@@ -557,5 +609,69 @@ describe("reduceJainaStreamEvent state.delta tool hydration", () => {
     expect(state.toolResults[0].id).toBe("tool_delta_1");
     expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
     expect(state.progress.some((entry) => entry.stage === "tool_complete")).toBe(true);
+  });
+});
+
+describe("reduceJainaStreamEvent handoff tracking", () => {
+  it("tracks handoff lifecycle events", () => {
+    let state = createInitialJainaStreamState();
+
+    // Handoff Start
+    state = reduceJainaStreamEvent(state, {
+      type: "handoff.start",
+      data: {
+        correlation_id: "handoff_1",
+        from_scope: "router",
+        to_scope: "analyst",
+        objective: "Analyze spend",
+        entity_id: "act_1",
+      },
+    } as any);
+
+    expect(state.progress.some((p) => p.stage === "handoff_start")).toBe(true);
+    const entry = state.progress.find((p) => p.stage === "handoff_start");
+    expect(entry?.detail).toContain("router");
+    expect(entry?.detail).toContain("analyst");
+
+    // Handoff Complete
+    state = reduceJainaStreamEvent(state, {
+      type: "handoff.complete",
+      data: {
+        correlation_id: "handoff_1",
+        status: "completed",
+        duration_ms: 500,
+        from_scope: "router",
+        to_scope: "analyst",
+        objective: "Analyze spend",
+        entity_id: "act_1",
+        error: null,
+      },
+    } as any);
+
+    expect(state.progress.some((p) => p.stage === "handoff_complete")).toBe(true);
+  });
+});
+
+describe("normalizeCheckpointReportPayload strictness", () => {
+  it("gracefully handles missing or malformed fields in raw payload", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_bad",
+        part_id: "part_bad",
+        report: {
+          // missing required fields for the schema, but normalizer should handle it
+          executive_summary: "Partial report",
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe("Partial report");
+    expect(report.sections).toEqual([]);
+    expect(report.strategic_recommendations).toEqual([]);
   });
 });

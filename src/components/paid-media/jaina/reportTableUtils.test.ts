@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import type { FrontendSoTReport } from "@/lib/jaina/schemas";
+import type { FrontendCheckpointReport } from "@/lib/jaina/schemas";
 import {
   buildJitSnapshotFallbackTables,
   hasTimelineCharts,
 } from "./reportTableUtils";
 
 function createBaseReport(
-  overrides: Partial<FrontendSoTReport> = {}
-): FrontendSoTReport {
+  overrides: Partial<FrontendCheckpointReport> = {}
+): FrontendCheckpointReport {
   return {
     language: "en",
     executive_summary: "Summary",

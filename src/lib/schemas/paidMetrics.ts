@@ -1,5 +1,33 @@
 import { z } from "zod";
 
+const nullableComparisonValueSchema = z.object({
+  current: z.number(),
+  previous: z.number().nullable(),
+  percentageChange: z.number().nullable(),
+});
+
+const comparisonRecordSchema = z
+  .record(z.string(), nullableComparisonValueSchema)
+  .optional()
+  .transform((comparison) => {
+    if (!comparison) return undefined;
+
+    const normalized = Object.fromEntries(
+      Object.entries(comparison)
+        .filter(([, value]) => typeof value.previous === "number" && typeof value.percentageChange === "number")
+        .map(([key, value]) => [
+          key,
+          {
+            current: value.current,
+            previous: value.previous as number,
+            percentageChange: value.percentageChange as number,
+          },
+        ])
+    );
+
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  });
+
 export const PaidMetricsResponseSchema = z.object({
   metrics: z.object({
     spend: z.number(),
@@ -9,14 +37,7 @@ export const PaidMetricsResponseSchema = z.object({
     ctr: z.number(),
     cpc: z.number(),
   }),
-  comparison: z.record(
-    z.string(),
-    z.object({
-      current: z.number(),
-      previous: z.number(),
-      percentageChange: z.number(),
-    })
-  ).optional(),
+  comparison: comparisonRecordSchema,
   trends: z.array(
     z.object({
       date: z.string(),
@@ -24,13 +45,39 @@ export const PaidMetricsResponseSchema = z.object({
       roas: z.number(),
       impressions: z.number().optional(),
       clicks: z.number().optional(),
+      ctr: z.number().optional(),
+      cpc: z.number().optional(),
     })
   ),
   range: z.object({
       since: z.string(),
       until: z.string(),
       preset: z.string()
-  })
+  }),
+  previous_range: z
+    .object({
+      since: z.string(),
+      until: z.string(),
+    })
+    .optional(),
+  insights: z
+    .array(
+      z.object({
+        date_start: z.string().optional(),
+        date_stop: z.string().optional(),
+        spend: z.number().optional(),
+        impressions: z.number().optional(),
+        clicks: z.number().optional(),
+        cpc: z.number().optional(),
+        ctr: z.number().optional(),
+        roas: z.number().optional(),
+        purchase_value: z.number().optional(),
+        actions: z.array(z.unknown()).optional(),
+        action_values: z.array(z.unknown()).optional(),
+        cost_per_action_type: z.array(z.unknown()).optional(),
+      })
+    )
+    .optional(),
 });
 
 export type PaidMetricsResponse = z.infer<typeof PaidMetricsResponseSchema>;

@@ -105,7 +105,7 @@ export function SettingsLogoUploader({ brandId, brandName, initialLogoPath, disa
         onClick={() => !isUploading && !disabled && inputRef.current?.click()}
       >
         <AvatarImage src={previewUrl ?? undefined} alt="Brand Logo" className="object-cover" />
-        <AvatarFallback className="text-2xl font-semibold bg-muted text-muted-foreground">
+        <AvatarFallback className="text-2xl font-semibold bg-transparent text-muted-foreground">
           {isUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : initials}
         </AvatarFallback>
       </Avatar>

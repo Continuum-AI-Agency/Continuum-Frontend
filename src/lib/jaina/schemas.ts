@@ -2,6 +2,26 @@ import { z } from "zod";
 import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
 
 // ============================================================================
+// Handoff Schemas
+// ============================================================================
+
+export const handoffTraceEntrySchema = z.object({
+  correlation_id: z.string(),
+  parent_correlation_id: z.string().nullable(),
+  from_scope: z.string().nullable(),
+  to_scope: z.string(),
+  objective: z.string().nullable(),
+  entity_id: z.string().nullable(),
+  status: z.enum(["started", "completed", "failed"]),
+  started_at: z.string(),
+  finished_at: z.string().nullable(),
+  duration_ms: z.number().nullable(),
+  error: z.string().nullable(),
+});
+
+export type HandoffTraceEntry = z.infer<typeof handoffTraceEntrySchema>;
+
+// ============================================================================
 // Request/Response Schemas
 // ============================================================================
 
@@ -12,6 +32,7 @@ export const jainaChatRequestSchema = z.object({
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
+    sessionId: z.string().min(1).optional(),
     canvas: z.boolean().optional(),
     campaignCanvas: z.record(z.string(), z.unknown()).optional(),
   }),
@@ -155,33 +176,33 @@ export const frontendGraphSchema = z
   })
   .passthrough();
 
-export const frontendSoTSectionSchema = z.object({
+export const checkpointSectionSchema = z.object({
   heading: z.string(),
   scope: z.string(),
   summary: z.string(),
-  highlights: z.array(insightSchema),
-  tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])),
-  actions: z.array(recommendationItemSchema),
-  confidence: z.string().nullable(),
-  cached_sources: z.array(z.string()),
-  graphs: z.array(frontendGraphSchema),
+  highlights: z.array(insightSchema).default([]),
+  tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])).default([]),
+  actions: z.array(recommendationItemSchema).default([]),
+  confidence: z.string().nullable().default(null),
+  cached_sources: z.array(z.string()).default([]),
+  graphs: z.array(frontendGraphSchema).default([]),
 });
 
-export type FrontendSoTSection = z.infer<typeof frontendSoTSectionSchema>;
+export type CheckpointSection = z.infer<typeof checkpointSectionSchema>;
 
-export const frontendSoTReportSchema = z.object({
-  language: z.string(),
-  executive_summary: z.string(),
-  performance_snapshot: z.array(frontendMetricItemSchema),
-  sections: z.array(frontendSoTSectionSchema),
-  strategic_recommendations: z.array(recommendationItemSchema),
-  follow_up_questions: z.array(z.string()),
-  handoff_trace: z.array(z.unknown()),
-  cached_sources: z.array(z.string()),
-  graphs: z.array(frontendGraphSchema),
+export const frontendCheckpointReportSchema = z.object({
+  language: z.string().default("en"),
+  executive_summary: z.string().default(""),
+  performance_snapshot: z.array(frontendMetricItemSchema).default([]),
+  sections: z.array(checkpointSectionSchema).default([]),
+  strategic_recommendations: z.array(recommendationItemSchema).default([]),
+  follow_up_questions: z.array(z.string()).default([]),
+  handoff_trace: z.array(handoffTraceEntrySchema).default([]),
+  cached_sources: z.array(z.string()).default([]),
+  graphs: z.array(frontendGraphSchema).default([]),
 });
 
-export type FrontendSoTReport = z.infer<typeof frontendSoTReportSchema>;
+export type FrontendCheckpointReport = z.infer<typeof frontendCheckpointReportSchema>;
 
 export const chartDatasetSchema = z.object({
   label: z.string(),
@@ -239,7 +260,7 @@ export const responseCreatedSchema = streamEventSchema(
     id: z.string(),
     object: z.literal("realtime.response"),
     status: z.literal("in_progress"),
-    status_details: z.null(),
+    status_details: z.null().optional(),
     output: z.array(z.unknown()),
   })
 );
@@ -324,8 +345,76 @@ export type CanvasActionsProposedEventData = Exclude<
   undefined
 >;
 
-export const responseSoTReportSchema = streamEventSchema(
-  "response.sot_report",
+export const toolBatchSchema = streamEventSchema(
+  "tool.batch",
+  z.object({
+    calls: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      args: z.record(z.string(), z.unknown()),
+      metadata: z.record(z.string(), z.unknown()),
+      correlation_id: z.string().optional().nullable(),
+      parent_correlation_id: z.string().nullable().optional(),
+    })),
+    results: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      ok: z.boolean(),
+      cached: z.boolean(),
+      shared: z.boolean().optional(),
+      duration_ms: z.number().optional(),
+      output: z.unknown().optional(),
+      error: z.string().optional(),
+      correlation_id: z.string().optional().nullable(),
+      parent_correlation_id: z.string().nullable().optional(),
+    })),
+  })
+);
+
+export const handoffStartSchema = streamEventSchema(
+  "handoff.start",
+  z.object({
+    correlation_id: z.string(),
+    from_scope: z.string().nullable(),
+    to_scope: z.string(),
+    objective: z.string().nullable(),
+    entity_id: z.string().nullable(),
+  })
+);
+
+export const handoffCompleteSchema = streamEventSchema(
+  "handoff.complete",
+  z.object({
+    correlation_id: z.string(),
+    status: z.enum(["completed", "failed"]),
+    duration_ms: z.number(),
+    error: z.string().nullable(),
+    from_scope: z.string().nullable(),
+    to_scope: z.string(),
+    objective: z.string().nullable(),
+    entity_id: z.string().nullable(),
+  })
+);
+
+export const agentEnvelopeSchema = streamEventSchema(
+  "agent.envelope",
+  z.object({
+    envelope: z.object({
+      version: z.literal("1"),
+      kind: z.enum(["tool", "handoff", "agent"]),
+      event: z.enum(["start", "complete", "error"]),
+      correlation_id: z.string(),
+      parent_correlation_id: z.string().nullable(),
+      session_id: z.string().nullable(),
+      scope: z.string().nullable(),
+      timestamp: z.string(),
+      payload: z.record(z.string(), z.unknown()),
+    }),
+  })
+);
+
+export const responseCheckpointReportSchema = streamEventSchema(
+  "response.checkpoint_report",
   z.object({
     item_id: z.string(),
     part_id: z.string(),
@@ -373,7 +462,7 @@ export const responseDoneSchema = streamEventSchema(
     id: z.string(),
     object: z.literal("realtime.response"),
     status: z.literal("completed"),
-    status_details: z.null(),
+    status_details: z.null().optional(),
     output: z.array(z.unknown()),
   })
 );
@@ -403,7 +492,11 @@ export type JainaStreamEvent =
   | z.infer<typeof responsePlanDeltaSchema>
   | z.infer<typeof hitlPausedSchema>
   | z.infer<typeof canvasActionsProposedSchema>
-  | z.infer<typeof responseSoTReportSchema>
+  | z.infer<typeof toolBatchSchema>
+  | z.infer<typeof handoffStartSchema>
+  | z.infer<typeof handoffCompleteSchema>
+  | z.infer<typeof agentEnvelopeSchema>
+  | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseReportAssemblySchema>
   | z.infer<typeof outputTextDeltaSchema>
   | z.infer<typeof responseContentPartDoneSchema>
@@ -420,7 +513,11 @@ export const jainaStreamEventSchema = z.union([
   responsePlanDeltaSchema,
   hitlPausedSchema,
   canvasActionsProposedSchema,
-  responseSoTReportSchema,
+  toolBatchSchema,
+  handoffStartSchema,
+  handoffCompleteSchema,
+  agentEnvelopeSchema,
+  responseCheckpointReportSchema,
   responseReportAssemblySchema,
   outputTextDeltaSchema,
   responseContentPartDoneSchema,
@@ -706,6 +803,17 @@ export const adkEventSchema = z.object({
 
 export type AdkEventData = z.infer<typeof adkEventSchema>;
 
+export const compatibilityStreamEventSchema = z.union([
+  z.object({
+    type: z.literal("thought"),
+    data: thoughtEventSchema,
+  }),
+  z.object({
+    type: z.literal("adk.event"),
+    data: adkEventSchema,
+  }),
+]);
+
 // ============================================================================
 // SoT Report Schemas - The main report structure
 // ============================================================================
@@ -767,31 +875,6 @@ export const recommendationSchema = recommendationItemSchema.extend({
   expected_outcome: z.string().optional(),
 });
 
-export const soTSectionSchema = z.object({
-  heading: z.string(),
-  scope: z.string(),
-  summary: z.string(),
-  highlights: z.array(insightSchema).default([]),
-  tables: z.array(tableSchema).default([]),
-  actions: z.array(recommendationItemSchema).default([]),
-  confidence: z.string().nullable().default(null),
-  cached_sources: z.array(z.string()).default([]),
-  graphs: z.array(z.unknown()).default([]),
-});
-
-export const sotReportSchema = z.object({
-  language: z.string().default("en"),
-  executive_summary: z.string().default(""),
-  performance_snapshot: z.array(metricItemSchema).default([]),
-  sections: z.array(soTSectionSchema).default([]),
-  strategic_recommendations: z.array(recommendationItemSchema).default([]),
-  follow_up_questions: z.array(z.string()).default([]),
-  handoff_trace: z.array(z.unknown()).default([]),
-  cached_sources: z.array(z.string()).default([]),
-  graphs: z.array(z.unknown()).default([]),
-});
-
-export type SoTReport = z.infer<typeof sotReportSchema>;
 
 // ============================================================================
 // Legacy/Direct Answer Schemas
@@ -1187,9 +1270,16 @@ export const reportPayloadSchema = z.union([
         if (Array.isArray(itemRecommendations)) {
           strategicRecommendations.push(...itemRecommendations.map((r: any) => ({
             title: r.title || r.action || formatEnumLabel(r.type) || "Recommendation",
-            rationale: r.rationale || r.description || r.reasoning || "",
+            rationale: r.rationale || r.description || r.recommendation || r.reasoning || "",
             expected_impact: r.expected_impact ?? r.impact ?? null,
             priority: r.priority ? String(r.priority).toUpperCase() : "MEDIUM",
+            // Backward compatibility
+            action: r.action || r.title || formatEnumLabel(r.type) || "Recommendation",
+            description: r.rationale || r.description || r.recommendation || r.reasoning || "",
+            type: formatEnumLabel(r.type) || null,
+            target: r.target || null,
+            reasoning: r.reasoning || r.rationale || null,
+            impact: r.impact || r.expected_impact || null,
           })));
         }
       }
@@ -1207,7 +1297,7 @@ export const reportPayloadSchema = z.union([
       graphs: allGraphs,
     };
   }),
-  // Catch-all for flexible/streaming JSON formats - try this BEFORE strict sotReportSchema
+  // Catch-all for flexible/streaming JSON formats - try this BEFORE strict frontendCheckpointReportSchema
   z.record(z.string(), z.unknown()).transform((data) => {
     const anyData = data as any;
     
@@ -1329,6 +1419,13 @@ export const reportPayloadSchema = z.union([
         rationale: s.rationale || s.description || s.recommendation || s.reasoning || "",
         expected_impact: s.expected_impact ?? s.impact ?? null,
         priority: s.priority ? String(s.priority).toUpperCase() : "MEDIUM",
+        // Backward compatibility
+        action: s.action || s.title || formatEnumLabel(s.type) || "Recommendation",
+        description: s.rationale || s.description || s.recommendation || s.reasoning || "",
+        type: formatEnumLabel(s.type) || null,
+        target: s.target || null,
+        reasoning: s.reasoning || s.rationale || null,
+        impact: s.impact || s.expected_impact || null,
       })));
     }
     
@@ -1353,25 +1450,25 @@ export const reportPayloadSchema = z.union([
       data_integrity_notes: ["Date Range", `Date Range: ${anyData.date_range || "N/A"}`],
     };
   }),
-  // Strict SoTReport schema - only matches if data has meaningful SoT fields
-  sotReportSchema,
+  // Strict FrontendCheckpointReport schema - only matches if data has meaningful SoT fields
+  frontendCheckpointReportSchema,
   // Direct answer format
   directAnswerSchema,
 ]);
 
-export type ReportPayload = SoTReport | FrontendSoTReport | DirectAnswerPayload;
+export type ReportPayload = FrontendCheckpointReport | DirectAnswerPayload;
 
 // ============================================================================
 // Helper to check if report has content
 // ============================================================================
 
 export function hasReportContent(
-  report: ReportPayload | FrontendSoTReport | null
+  report: ReportPayload | null
 ): boolean {
   if (!report) return false;
   if ("type" in report && report.type === "direct_answer") return true;
   
-  const r = report as SoTReport;
+  const r = report as FrontendCheckpointReport;
   return !!(
     r.executive_summary ||
     r.performance_snapshot?.length ||

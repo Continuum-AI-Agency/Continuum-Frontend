@@ -10,8 +10,10 @@ import {
   jainaChatStopResponseSchema,
   responsePlanDecisionSchema,
   responsePlanRequestedSchema,
-  sotReportSchema,
+  frontendCheckpointReportSchema,
+  handoffTraceEntrySchema,
 } from "./schemas";
+
 
 describe("jainaChatRequestSchema", () => {
   it("accepts required request fields", () => {
@@ -44,10 +46,10 @@ describe("jainaChatRequestSchema", () => {
   });
 });
 
-describe("sotReportSchema Resilience", () => {
+describe("frontendCheckpointReportSchema Resilience", () => {
   it("should parse a minimal report with only executive_summary", () => {
     const minimal = { executive_summary: "Test summary" };
-    const result = sotReportSchema.safeParse(minimal);
+    const result = frontendCheckpointReportSchema.safeParse(minimal);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.language).toBe("en");
@@ -58,7 +60,7 @@ describe("sotReportSchema Resilience", () => {
 
   it("should parse a report with only executive_summary", () => {
     const minimal = { executive_summary: "Test summary" };
-    const result = sotReportSchema.safeParse(minimal);
+    const result = frontendCheckpointReportSchema.safeParse(minimal);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.executive_summary).toBe("Test summary");
@@ -67,7 +69,7 @@ describe("sotReportSchema Resilience", () => {
 
   it("should provide defaults for missing arrays", () => {
     const empty = {};
-    const result = sotReportSchema.safeParse(empty);
+    const result = frontendCheckpointReportSchema.safeParse(empty);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.sections).toBeDefined();
@@ -229,5 +231,75 @@ describe("plan approval contracts", () => {
     expect(approve?.status).toBe("approved");
     expect(deny).not.toBeNull();
     expect(deny?.status).toBe("rejected");
+  });
+  it("normalizes response.plan.decision variants", () => {
+    const approve = parsePlanDecisionPayload({
+      decision: "approve",
+      planId: "hitl_call_1",
+      reason: "Looks good",
+    });
+    const deny = parsePlanDecisionPayload({
+      approved: false,
+      planId: "hitl_call_1",
+      reason: "Need tighter scope",
+    });
+
+    expect(approve).not.toBeNull();
+    expect(approve?.status).toBe("approved");
+    expect(deny).not.toBeNull();
+    expect(deny?.status).toBe("rejected");
+  });
+});
+
+describe("handoffTraceEntrySchema", () => {
+  it("accepts valid handoff trace entry", () => {
+    const entry = {
+      correlation_id: "corr_123",
+      parent_correlation_id: null,
+      from_scope: "router",
+      to_scope: "analyst",
+      objective: "Deep dive into spend",
+      entity_id: "act_123",
+      status: "completed",
+      started_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      duration_ms: 1250,
+      error: null,
+    };
+    const result = handoffTraceEntrySchema.safeParse(entry);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid status", () => {
+    const entry = {
+      correlation_id: "corr_123",
+      status: "pending_approval", // not in enum
+    };
+    const result = handoffTraceEntrySchema.safeParse(entry);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("hasReportContent helper", () => {
+  const { hasReportContent } = require("./schemas");
+
+  it("returns true for direct_answer", () => {
+    expect(hasReportContent({ type: "direct_answer", content: "hello" })).toBe(true);
+  });
+
+  it("returns false for null", () => {
+    expect(hasReportContent(null)).toBe(false);
+  });
+
+  it("returns true if executive_summary is present", () => {
+    expect(hasReportContent({ executive_summary: "Summary", performance_snapshot: [], sections: [], strategic_recommendations: [], graphs: [] })).toBe(true);
+  });
+
+  it("returns false for empty report object", () => {
+    expect(hasReportContent({ executive_summary: "", performance_snapshot: [], sections: [], strategic_recommendations: [], graphs: [] })).toBe(false);
+  });
+
+  it("returns true if performance_snapshot has items", () => {
+    expect(hasReportContent({ executive_summary: "", performance_snapshot: [{ metric: "M", value: 1 }], sections: [], strategic_recommendations: [], graphs: [] })).toBe(true);
   });
 });

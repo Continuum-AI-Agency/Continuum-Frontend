@@ -70,6 +70,7 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
   const context = requestUrl.searchParams.get("context");
   const provider = requestUrl.searchParams.get("provider");
   const next = requestUrl.searchParams.get("next");
+  const isImpersonating = requestUrl.searchParams.get("impersonate") === "true";
   const isPopup = requestUrl.searchParams.get("popup") === "true";
   const origin = requestUrl.origin;
   const cookieContext = request.cookies.get("continuum_oauth_context")?.value;
@@ -143,6 +144,15 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
     fallbackRedirect: next ? `${origin}${next}` : `${origin}/dashboard`,
     isPopup,
   });
+
+  if (isImpersonating) {
+    response.cookies.set("is_impersonating", "true", {
+      path: "/",
+      maxAge: 3600,
+      sameSite: "lax",
+    });
+  }
+
   response.cookies.delete("continuum_oauth_context");
   response.cookies.delete("continuum_oauth_provider");
   return response;

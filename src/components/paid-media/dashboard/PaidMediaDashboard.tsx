@@ -4,15 +4,12 @@ import * as React from "react";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { Box, Card, Flex, Heading, IconButton, Select, Text } from "@radix-ui/themes";
 
-import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  buildCampaignIndexAggregate,
-  type CampaignIndexRecord,
-} from "@/lib/paid-media/campaign-indexes";
+import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
+import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
 import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
-import { CampaignTimelineWorkspace } from "./CampaignTimelineWorkspace";
+import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 
 type Campaign = {
@@ -55,6 +52,29 @@ type IndexSaveDraft = {
   campaignIds: string[];
 };
 
+async function mapWithConcurrency<T, U>(
+  items: T[],
+  limit: number,
+  mapper: (item: T) => Promise<U>
+): Promise<U[]> {
+  if (items.length === 0) return [];
+
+  const safeLimit = Math.max(1, Math.min(limit, items.length));
+  const results = new Array<U>(items.length);
+  let cursor = 0;
+
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index]);
+    }
+  };
+
+  await Promise.all(Array.from({ length: safeLimit }, () => worker()));
+  return results;
+}
+
 export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardProps) {
   const [platform, setPlatform] = React.useState<Platform>("meta");
   const [timeRange, setTimeRange] = React.useState<TimePreset>("last_7d");
@@ -68,10 +88,15 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
   const [selectedCampaignIndexId, setSelectedCampaignIndexId] = React.useState<string>("all");
   const [indexDialogOpen, setIndexDialogOpen] = React.useState(false);
   const [savingIndex, setSavingIndex] = React.useState(false);
+  const loadCampaignsRequestIdRef = React.useRef(0);
 
   const loadCampaigns = React.useCallback(async () => {
+    const requestId = loadCampaignsRequestIdRef.current + 1;
+    loadCampaignsRequestIdRef.current = requestId;
+
     if (!adAccountId) {
       setCampaigns([]);
+      setSelectedCampaignId(undefined);
       setLoadState({ status: "idle" });
       return;
     }
@@ -98,8 +123,10 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
 
       const rawCampaigns = data?.campaigns ?? [];
 
-      const campaignsWithMetrics = await Promise.all(
-        rawCampaigns.map(async (campaign: Campaign) => {
+      const campaignsWithMetrics = await mapWithConcurrency(
+        rawCampaigns,
+        6,
+        async (campaign: Campaign) => {
           try {
             const metricsResponse = await fetch("/api/paid-metrics", {
               method: "POST",
@@ -127,12 +154,18 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
           }
 
           return campaign;
-        })
+        }
       );
 
+      if (requestId !== loadCampaignsRequestIdRef.current) {
+        return;
+      }
       setCampaigns(campaignsWithMetrics);
       setLoadState({ status: "success" });
     } catch (error) {
+      if (requestId !== loadCampaignsRequestIdRef.current) {
+        return;
+      }
       console.error("Failed to load campaigns:", error);
       setLoadState({
         status: "error",
@@ -199,30 +232,6 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
     () => campaignIndexes.find((index) => index.id === selectedCampaignIndexId),
     [campaignIndexes, selectedCampaignIndexId]
   );
-
-  const indexCampaignSet = React.useMemo(() => {
-    if (!selectedCampaignIndex) return null;
-    return new Set(selectedCampaignIndex.campaignIds);
-  }, [selectedCampaignIndex]);
-
-  const indexedCampaigns = React.useMemo(() => {
-    if (!indexCampaignSet) return campaigns;
-    return campaigns.filter((campaign) => indexCampaignSet.has(campaign.id));
-  }, [campaigns, indexCampaignSet]);
-
-  const campaignGroupContext = React.useMemo(() => {
-    if (!selectedCampaignIndex) return undefined;
-
-    const aggregate = buildCampaignIndexAggregate(indexedCampaigns);
-    return {
-      id: `index:${selectedCampaignIndex.id}`,
-      label: selectedCampaignIndex.name,
-      campaignIds: selectedCampaignIndex.campaignIds,
-      metrics: aggregate.metrics,
-      comparison: aggregate.comparison,
-      trends: aggregate.trends,
-    };
-  }, [indexedCampaigns, selectedCampaignIndex]);
 
   const dialogInitialValue = React.useMemo<IndexSaveDraft | undefined>(() => {
     if (!selectedCampaignIndex || selectedCampaignIndexId === "all") return undefined;
@@ -335,30 +344,26 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
               </Select.Content>
             </Select.Root>
 
-            <Select.Root value={selectedCampaignIndexId} onValueChange={setSelectedCampaignIndexId}>
-              <Select.Trigger placeholder="Campaign index" className="min-w-[170px]" />
-              <Select.Content>
-                <Select.Item value="all">All campaigns</Select.Item>
-                {campaignIndexes.map((index) => (
-                  <Select.Item key={index.id} value={index.id}>
-                    {index.name}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-
             <Button
               variant="outline"
               className="h-10"
               onClick={() => {
-                if (selectedCampaignIndexId === "all") {
-                  setSelectedCampaignIndexId("all");
-                }
+                setSelectedCampaignIndexId("all");
                 setIndexDialogOpen(true);
               }}
             >
-              {selectedCampaignIndexId === "all" ? "New index" : "Edit index"}
+              New index
             </Button>
+
+            {selectedCampaignIndex && selectedCampaignIndexId !== "all" ? (
+              <Button
+                variant="outline"
+                className="h-10"
+                onClick={() => setIndexDialogOpen(true)}
+              >
+                Edit selected index
+              </Button>
+            ) : null}
 
             {selectedCampaignIndex && selectedCampaignIndexId !== "all" ? (
               <Button
@@ -394,18 +399,13 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
         )}
 
         {adAccountId ? (
-          <CampaignTimelineWorkspace
+          <CampaignAdSetWorkspace
             brandId={brandId}
             accountId={adAccountId}
             campaigns={campaigns}
-            indexGroups={campaignIndexes.map((index) => ({
-              id: index.id,
-              name: index.name,
-              campaignIds: index.campaignIds,
-            }))}
-            selectedIndexGroupId={selectedCampaignIndexId}
-            groupContext={campaignGroupContext}
-            isLoadingCampaigns={loadState.status === "loading-campaigns"}
+            campaignIndexes={campaignIndexes}
+            selectedCampaignIndexId={selectedCampaignIndexId}
+            onSelectedCampaignIndexChange={setSelectedCampaignIndexId}
             timeRangePreset={timeRange}
             resolution={timelineResolution}
             onResolutionChange={setTimelineResolution}
@@ -421,18 +421,11 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
           </Card>
         )}
 
-        <Card className="overflow-hidden">
-          <div className="border-b px-4 py-3">
-            <Heading size="4">DCO Action Log</Heading>
-          </div>
-          <Box className="p-4">
-            <DCOActionsWidget
-              brandId={brandId}
-              metaAccountId={adAccountId ?? undefined}
-              campaignId={selectedCampaignId}
-            />
-          </Box>
-        </Card>
+        <DCOActionAlertsBox
+          brandId={brandId}
+          metaAccountId={adAccountId ?? undefined}
+          campaignId={selectedCampaignId}
+        />
 
         <CampaignIndexManagerDialog
           open={indexDialogOpen}
@@ -446,6 +439,19 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
           saving={savingIndex}
           onSave={(draft) => void saveCampaignIndex(draft)}
         />
+
+        <Text size="1" color="gray" className="pb-1 text-center">
+          Charting library generously provided by{" "}
+          <a
+            href="https://www.tradingview.com/lightweight-charts/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            Trading View
+          </a>
+          .
+        </Text>
       </Flex>
     </Box>
   );

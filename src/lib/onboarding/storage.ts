@@ -146,19 +146,6 @@ async function ensureBrandProfileRecord(
     }
   }
 
-  try {
-    await supabase
-      .schema("brand_profiles")
-      .from("permissions")
-      .upsert({
-        brand_profile_id: brandId,
-        user_id: owner.id,
-        email: owner.email,
-        role: "owner",
-      }, { onConflict: "brand_profile_id,user_id" } as any);
-  } catch (e) {
-    console.warn(`[ensureBrandExists] Failed to upsert permission for ${brandId}`, e);
-  }
 }
 
 const DOCUMENT_SOURCE_VALUES = new Set<OnboardingDocument["source"]>([
@@ -615,12 +602,19 @@ async function loadOnboardingContext(
     await persistMetadata(supabase, user, normalizedMetadata);
   }
 
-  await ensureBrandProfileRecord(
-    supabase,
-    brandId,
-    owner,
-    normalizedMetadata.brands[brandId]
+await ensureBrandProfileRecord(
+supabase,
+brandId,
+owner,
+normalizedMetadata.brands[brandId]
   );
+
+  // If ensureBrandProfileRecord updated the state (e.g. synced completedAt), persist it.
+  // We check if it's different from what we loaded.
+  const finalState = normalizedMetadata.brands[brandId];
+  if (JSON.stringify(finalState) !== JSON.stringify(metadata.brands[brandId])) {
+    await persistMetadata(supabase, user, normalizedMetadata);
+  }
 
   return {
     metadata: normalizedMetadata,

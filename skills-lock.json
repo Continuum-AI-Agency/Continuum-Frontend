@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "mmt-tradingview-charts": {
+      "source": "emeraldls/mmt-agent-skills",
+      "sourceType": "github",
+      "computedHash": "722ced196779af9b9fafa37f3df0327c16f1ebf6ff2206e839d4e7163cf47e47"
+    }
+  }
+}

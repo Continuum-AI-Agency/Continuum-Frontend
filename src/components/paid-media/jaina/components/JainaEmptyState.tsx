@@ -50,7 +50,7 @@ export function JainaEmptyState({
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
         whileHover={{ scale: 1.1, rotate: 5 }}
-        className="rounded-full bg-purple-500/10 p-4 mb-2 cursor-pointer border border-purple-500/20 shadow-lg shadow-purple-500/5"
+        className="rounded-full bg-purple-500/10 p-4 mb-2 border border-purple-500/20 shadow-lg shadow-purple-500/5"
         aria-hidden="true"
       >
         <RocketIcon className="h-10 w-10 text-purple-400" />

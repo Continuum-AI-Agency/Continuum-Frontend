@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { resolveActiveBrandId } from "@/lib/brands/resolve-active-brand";
 import { setActiveBrandPreference } from "@/lib/brands/preferences";
 import type { BrandSummary } from "@/lib/repositories/brandProfile";
@@ -40,17 +41,25 @@ export type ActiveBrandContext = {
   user: User | null;
 };
 
-export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+type BrandPermissionRow = {
+  brand_profile_id: string;
+  role: string | null;
+};
 
-  if (error || !user) {
-    redirect("/login");
+type BrandInviteRow = {
+  brand_profile_id: string;
+  role: string | null;
+};
+
+function isStatementTooComplex(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
   }
 
+  return (error as { code?: string }).code === "54001";
+}
+
+async function fetchAccessibleBrandRows(user: User, supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   const [{ data: perms, error: permsError }, { data: invites, error: invitesError }] = await Promise.all([
     supabase
       .schema("brand_profiles")
@@ -73,6 +82,65 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   if (invitesError) {
     console.error("[activeBrand] invites query failed", invitesError);
   }
+
+  if (!isStatementTooComplex(permsError) && !isStatementTooComplex(invitesError)) {
+    return {
+      permissions: (perms ?? []) as BrandPermissionRow[],
+      invites: (invites ?? []) as BrandInviteRow[],
+    };
+  }
+
+  try {
+    const admin = createSupabaseAdminClient();
+    const [{ data: adminPerms, error: adminPermsError }, { data: adminInvites, error: adminInvitesError }] =
+      await Promise.all([
+        admin
+          .schema("brand_profiles")
+          .from("permissions")
+          .select("brand_profile_id, role")
+          .eq("user_id", user.id),
+        admin
+          .schema("brand_profiles")
+          .from("invites")
+          .select("brand_profile_id, role")
+          .eq("email", user.email ?? "")
+          .is("accepted_at", null)
+          .is("revoked_at", null)
+          .gt("expires_at", new Date().toISOString()),
+      ]);
+
+    if (adminPermsError) {
+      console.error("[activeBrand] admin fallback permissions query failed", adminPermsError);
+    }
+    if (adminInvitesError) {
+      console.error("[activeBrand] admin fallback invites query failed", adminInvitesError);
+    }
+
+    return {
+      permissions: (adminPerms ?? []) as BrandPermissionRow[],
+      invites: (adminInvites ?? []) as BrandInviteRow[],
+    };
+  } catch (error) {
+    console.error("[activeBrand] admin fallback failed", describeError(error));
+    return {
+      permissions: (perms ?? []) as BrandPermissionRow[],
+      invites: (invites ?? []) as BrandInviteRow[],
+    };
+  }
+}
+
+export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    redirect("/login");
+  }
+
+  const { permissions: perms, invites } = await fetchAccessibleBrandRows(user, supabase);
 
   const permittedIds = (perms ?? []).map((p) => p.brand_profile_id);
   const invitedIds = (invites ?? []).map((i) => i.brand_profile_id);

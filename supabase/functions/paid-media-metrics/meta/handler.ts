@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function buildCacheKey(params: {
   provider: string;
@@ -29,6 +30,185 @@ function buildCacheKey(params: {
   ].join(":");
 }
 
+type MetaInsightRow = {
+  date_start?: string;
+  date_stop?: string;
+  spend?: string | number;
+  impressions?: string | number;
+  clicks?: string | number;
+  cpc?: string | number;
+  ctr?: string | number;
+  actions?: unknown;
+  action_values?: unknown;
+  cost_per_action_type?: unknown;
+};
+
+type NormalizedInsight = {
+  date_start: string;
+  date_stop: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  cpc: number;
+  ctr: number;
+  roas: number;
+  purchase_value: number;
+  actions: unknown[];
+  action_values: unknown[];
+  cost_per_action_type: unknown[];
+};
+
+type AggregatedMetrics = {
+  spend: number;
+  roas: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  purchase_value: number;
+};
+
+const toNumber = (value: unknown): number => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+};
+
+const round = (value: number, digits = 4): number => {
+  const factor = 10 ** digits;
+  return Math.round(value * factor) / factor;
+};
+
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+const PURCHASE_ACTION_TYPES = new Set(["purchase", "omni_purchase"]);
+
+const extractPurchaseValue = (actionValues: unknown): number =>
+  asArray(actionValues)
+    .map((item) => {
+      if (!item || typeof item !== "object") return 0;
+      const record = item as Record<string, unknown>;
+      const actionType = typeof record.action_type === "string" ? record.action_type : "";
+      if (!PURCHASE_ACTION_TYPES.has(actionType)) return 0;
+      return toNumber(record.value);
+    })
+    .reduce((sum, value) => sum + value, 0);
+
+const normalizeInsight = (day: MetaInsightRow): NormalizedInsight => {
+  const spend = toNumber(day.spend);
+  const impressions = toNumber(day.impressions);
+  const clicks = toNumber(day.clicks);
+  const purchaseValue = extractPurchaseValue(day.action_values);
+  const cpc = toNumber(day.cpc) || (clicks > 0 ? round(spend / clicks) : 0);
+  const ctr = toNumber(day.ctr) || (impressions > 0 ? round((clicks / impressions) * 100) : 0);
+  const roas = spend > 0 ? round(purchaseValue / spend) : 0;
+
+  return {
+    date_start: typeof day.date_start === "string" ? day.date_start : "",
+    date_stop: typeof day.date_stop === "string" ? day.date_stop : (typeof day.date_start === "string" ? day.date_start : ""),
+    spend,
+    impressions,
+    clicks,
+    cpc,
+    ctr,
+    roas,
+    purchase_value: purchaseValue,
+    actions: asArray(day.actions),
+    action_values: asArray(day.action_values),
+    cost_per_action_type: asArray(day.cost_per_action_type),
+  };
+};
+
+const aggregateInsights = (rows: NormalizedInsight[]): AggregatedMetrics => {
+  const totals = rows.reduce(
+    (acc, row) => {
+      acc.spend += row.spend;
+      acc.impressions += row.impressions;
+      acc.clicks += row.clicks;
+      acc.purchase_value += row.purchase_value;
+      return acc;
+    },
+    { spend: 0, impressions: 0, clicks: 0, purchase_value: 0 },
+  );
+
+  const ctr = totals.impressions > 0 ? round((totals.clicks / totals.impressions) * 100) : 0;
+  const cpc = totals.clicks > 0 ? round(totals.spend / totals.clicks) : 0;
+  const roas = totals.spend > 0 ? round(totals.purchase_value / totals.spend) : 0;
+
+  return {
+    spend: round(totals.spend),
+    roas,
+    impressions: Math.round(totals.impressions),
+    clicks: Math.round(totals.clicks),
+    ctr,
+    cpc,
+    purchase_value: round(totals.purchase_value),
+  };
+};
+
+const computePercentageChange = (current: number, previous: number | null): number | null => {
+  if (previous === null) return null;
+  if (previous === 0) return current === 0 ? 0 : null;
+  return round(((current - previous) / Math.abs(previous)) * 100, 2);
+};
+
+const buildMetricComparison = (current: number, previous: number | null) => ({
+  current,
+  previous,
+  percentageChange: computePercentageChange(current, previous),
+});
+
+const toIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
+
+const computePreviousWindow = (sinceStr: string, untilStr: string) => {
+  const since = new Date(`${sinceStr}T00:00:00.000Z`);
+  const until = new Date(`${untilStr}T00:00:00.000Z`);
+  const windowDays = Math.max(1, Math.floor((until.getTime() - since.getTime()) / DAY_MS) + 1);
+
+  const previousUntil = new Date(since.getTime() - DAY_MS);
+  const previousSince = new Date(previousUntil.getTime() - (windowDays - 1) * DAY_MS);
+
+  return {
+    since: toIsoDay(previousSince),
+    until: toIsoDay(previousUntil),
+  };
+};
+
+const fetchMetaInsights = async (args: {
+  entityId: string;
+  accessToken: string;
+  level: "campaign" | "adset";
+  since: string;
+  until: string;
+  log: (msg: string, extra?: unknown) => void;
+  label: "current" | "previous";
+}): Promise<MetaInsightRow[]> => {
+  const insightsUrl = `https://graph.facebook.com/v23.0/${args.entityId}/insights`;
+  const insightsParams = new URLSearchParams({
+    fields: "spend,impressions,clicks,cpc,ctr,actions,action_values,cost_per_action_type,date_start,date_stop",
+    time_range: JSON.stringify({ since: args.since, until: args.until }),
+    level: args.level,
+    time_increment: "1",
+    access_token: args.accessToken,
+  });
+
+  const insightsResponse = await fetch(`${insightsUrl}?${insightsParams.toString()}`);
+  if (!insightsResponse.ok) {
+    const errorData = await insightsResponse.json().catch(() => ({}));
+    args.log(`Meta insights API error (${args.label})`, {
+      status: insightsResponse.status,
+      error: errorData,
+    });
+    throw new Error(`Failed to fetch ${args.label} insights from Meta API`);
+  }
+
+  const insightsData = await insightsResponse.json().catch(() => ({}));
+  return Array.isArray(insightsData?.data) ? insightsData.data : [];
+};
+
 export async function handleMetaMetrics(params: any, req: Request) {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
@@ -42,8 +222,8 @@ export async function handleMetaMetrics(params: any, req: Request) {
         JSON.stringify({ error: "brandId and accountId are required" }),
         {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -52,8 +232,8 @@ export async function handleMetaMetrics(params: any, req: Request) {
         JSON.stringify({ error: "Either campaignId or adsetId is required" }),
         {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        }
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -66,7 +246,10 @@ export async function handleMetaMetrics(params: any, req: Request) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Authenticate user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(supabaseToken);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(supabaseToken);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -80,32 +263,33 @@ export async function handleMetaMetrics(params: any, req: Request) {
 
     switch (range?.preset || "last_7d") {
       case "last_7d":
-        since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        since = new Date(now.getTime() - 7 * DAY_MS);
         until = now;
         break;
       case "last_14d":
-        since = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+        since = new Date(now.getTime() - 14 * DAY_MS);
         until = now;
         break;
       case "last_30d":
-        since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        since = new Date(now.getTime() - 30 * DAY_MS);
         until = now;
         break;
       case "custom":
-        since = range.since ? new Date(range.since) : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        since = range.since ? new Date(range.since) : new Date(now.getTime() - 7 * DAY_MS);
         until = range.until ? new Date(range.until) : now;
         break;
       default:
-        since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        since = new Date(now.getTime() - 7 * DAY_MS);
         until = now;
     }
 
-    const sinceStr = since.toISOString().split("T")[0];
-    const untilStr = until.toISOString().split("T")[0];
+    const sinceStr = toIsoDay(since);
+    const untilStr = toIsoDay(until);
 
     const entityId = adsetId || campaignId;
+    const level = adsetId ? "adset" : "campaign";
     const scopeType = adsetId ? "paid_adset" : "paid_campaign";
-    
+
     const cacheKey = buildCacheKey({
       provider: "meta",
       scopeType,
@@ -140,8 +324,9 @@ export async function handleMetaMetrics(params: any, req: Request) {
       }
     }
 
-    const { data: accessToken, error: tokenError } = await supabase
-      .rpc("get_meta_access_token", { p_ad_account_id: adAccountId });
+    const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
+      p_ad_account_id: adAccountId,
+    });
 
     if (tokenError || !accessToken) {
       log("No access token found for ad account", { adAccountId, error: tokenError });
@@ -151,98 +336,74 @@ export async function handleMetaMetrics(params: any, req: Request) {
       });
     }
 
-    log(`Fetching insights for ${adsetId ? 'adset' : 'campaign'} ${entityId} from ${sinceStr} to ${untilStr}`);
+    log(`Fetching insights for ${level} ${entityId} from ${sinceStr} to ${untilStr}`);
 
-    // Fetch insights from Meta API (campaign or adset level)
-    const insightsUrl = `https://graph.facebook.com/v23.0/${entityId}/insights`;
-    const insightsParams = new URLSearchParams({
-      fields: "spend,impressions,clicks,cpc,ctr,actions,action_values,cost_per_action_type",
-      time_range: JSON.stringify({ since: sinceStr, until: untilStr }),
-      level: adsetId ? "adset" : "campaign",
-      time_increment: "1",
-      access_token: accessToken,
+    const currentRows = await fetchMetaInsights({
+      entityId,
+      accessToken,
+      level,
+      since: sinceStr,
+      until: untilStr,
+      log,
+      label: "current",
     });
+    const insights = currentRows.map(normalizeInsight);
+    const metrics = aggregateInsights(insights);
 
-    const insightsResponse = await fetch(`${insightsUrl}?${insightsParams}`);
-    if (!insightsResponse.ok) {
-      const errorData = await insightsResponse.json();
-      log("Meta insights API error", { status: insightsResponse.status, error: errorData });
-      return new Response(JSON.stringify({ error: "Failed to fetch campaign insights from Meta API" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const previousWindow = computePreviousWindow(sinceStr, untilStr);
+    let previousMetrics: AggregatedMetrics | null = null;
+
+    try {
+      const previousRows = await fetchMetaInsights({
+        entityId,
+        accessToken,
+        level,
+        since: previousWindow.since,
+        until: previousWindow.until,
+        log,
+        label: "previous",
       });
+      previousMetrics = aggregateInsights(previousRows.map(normalizeInsight));
+    } catch (error) {
+      log("Previous-window insights fetch failed; returning null previous comparisons", error);
     }
 
-    const insightsData = await insightsResponse.json();
-    const insights = insightsData.data || [];
-
-    // Aggregate insights across the time period
-    const totals = insights.reduce((acc: any, day: any) => {
-      acc.spend += parseFloat(day.spend || 0);
-      acc.impressions += parseInt(day.impressions || 0);
-      acc.clicks += parseInt(day.clicks || 0);
-      return acc;
-    }, { spend: 0, impressions: 0, clicks: 0 });
-
-    // Calculate derived metrics
-    const ctr = totals.impressions > 0 ? Number(((totals.clicks / totals.impressions) * 100).toFixed(4)) : 0;
-    const cpc = totals.clicks > 0 ? Number((totals.spend / totals.clicks).toFixed(4)) : 0;
-
-    // Extract ROAS from action_values if available
-    let roas = 0;
-    if (insights.length > 0 && insights[0].action_values) {
-      const purchaseValue = insights[0].action_values.find((av: any) =>
-        av.action_type === "purchase" || av.action_type === "omni_purchase"
-      );
-      if (purchaseValue && totals.spend > 0) {
-        roas = Number((parseFloat(purchaseValue.value) / totals.spend).toFixed(4));
-      }
-    }
-
-    // Generate trend data
-    const trends = insights.map((day: any) => ({
-      date: day.date_start,
-      spend: parseFloat(day.spend || 0),
-      roas: roas, // Using aggregate ROAS for now
-      impressions: parseInt(day.impressions || 0),
-      clicks: parseInt(day.clicks || 0),
-    }));
-
-    // Mock comparison data for now (would need previous period data)
     const comparison = {
-      spend: { current: totals.spend, previous: totals.spend * 0.9, percentageChange: 11.1 },
-      roas: { current: roas, previous: Number((roas * 0.95).toFixed(4)), percentageChange: 5.3 },
-      impressions: { current: totals.impressions, previous: Math.floor(totals.impressions * 0.92), percentageChange: 8.7 },
-      clicks: { current: totals.clicks, previous: Math.floor(totals.clicks * 0.91), percentageChange: 10.0 },
-      ctr: { current: ctr, previous: Number((ctr * 0.98).toFixed(4)), percentageChange: 2.0 },
-      cpc: { current: cpc, previous: Number((cpc * 1.02).toFixed(4)), percentageChange: -2.0 },
+      spend: buildMetricComparison(metrics.spend, previousMetrics?.spend ?? null),
+      roas: buildMetricComparison(metrics.roas, previousMetrics?.roas ?? null),
+      impressions: buildMetricComparison(metrics.impressions, previousMetrics?.impressions ?? null),
+      clicks: buildMetricComparison(metrics.clicks, previousMetrics?.clicks ?? null),
+      ctr: buildMetricComparison(metrics.ctr, previousMetrics?.ctr ?? null),
+      cpc: buildMetricComparison(metrics.cpc, previousMetrics?.cpc ?? null),
     };
 
+    const trends = insights.map((day) => ({
+      date: day.date_start,
+      spend: day.spend,
+      roas: day.roas,
+      impressions: day.impressions,
+      clicks: day.clicks,
+      ctr: day.ctr,
+      cpc: day.cpc,
+    }));
+
     const response = {
-      metrics: {
-        spend: totals.spend,
-        roas: roas,
-        impressions: totals.impressions,
-        clicks: totals.clicks,
-        ctr: ctr,
-        cpc: cpc,
-      },
+      metrics,
       comparison,
       trends,
+      insights,
       range: {
         since: sinceStr,
         until: untilStr,
         preset: range?.preset || "last_7d",
-      }
+      },
+      previous_range: previousWindow,
     };
 
     try {
       const nowTime = new Date();
       const expiresAt = new Date(nowTime.getTime() + CACHE_TTL_MS);
-      await supabase
-        .schema("brand_profiles")
-        .from("reporting_cache")
-        .insert({
+      await supabase.schema("brand_profiles").from("reporting_cache").insert({
         cache_key: cacheKey,
         provider: "meta",
         scope_type: scopeType,
@@ -264,10 +425,9 @@ export async function handleMetaMetrics(params: any, req: Request) {
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });
-
   } catch (error) {
     console.error("[paid-media-metrics:meta] Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

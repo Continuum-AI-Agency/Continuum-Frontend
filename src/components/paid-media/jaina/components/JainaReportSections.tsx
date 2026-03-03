@@ -1,25 +1,35 @@
+"use client";
+
 import { Card, Box, Text, Badge, Heading, Flex } from "@radix-ui/themes";
 import { CheckCircle2Icon, AlertCircleIcon, InfoIcon } from "lucide-react";
-import { type FrontendSoTReport } from "@/lib/jaina/schemas";
+import { type FrontendCheckpointReport } from "@/lib/jaina/schemas";
 import { JainaReportCharts, isJainaChartInput } from "./JainaReportCharts";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 
 type JainaReportSectionsProps = {
-  sections: FrontendSoTReport["sections"];
+  sections: FrontendCheckpointReport["sections"];
+  isStreaming?: boolean;
 };
 
-export function JainaReportSections({ sections }: JainaReportSectionsProps) {
+export function JainaReportSections({ sections, isStreaming }: JainaReportSectionsProps) {
   if (!sections || sections.length === 0) return null;
 
   return (
     <div className="space-y-8">
       {sections.map((section, index) => (
-        <SectionCard key={index} section={section} />
+        <SectionCard key={index} section={section} isStreaming={isStreaming} />
       ))}
     </div>
   );
 }
 
-function SectionCard({ section }: { section: FrontendSoTReport["sections"][number] }) {
+function SectionCard({ 
+  section,
+  isStreaming
+}: { 
+  section: FrontendCheckpointReport["sections"][number],
+  isStreaming?: boolean
+}) {
   const severityColor = {
     positive: "green",
     neutral: "blue",
@@ -67,9 +77,13 @@ function SectionCard({ section }: { section: FrontendSoTReport["sections"][numbe
       </div>
 
       {section.summary && (
-        <Text size="2" className="text-white/70 leading-relaxed">
-          {section.summary}
-        </Text>
+        <div className="prose prose-invert max-w-none">
+          <SafeMarkdown
+            content={section.summary}
+            className="text-[15px] leading-relaxed text-white/70"
+            mode={isStreaming ? "streaming" : "static"}
+          />
+        </div>
       )}
 
       {section.highlights && section.highlights.length > 0 && (
@@ -261,8 +275,8 @@ function toRenderableTable(value: unknown): RenderableTable | null {
     }
 
     const objectRows = rowsValue.filter(
-      (row) => row && typeof row === "object" && !Array.isArray(row)
-    ) as Array<Record<string, unknown>>;
+      (row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row))
+    );
     if (objectRows.length === 0) return null;
 
     const headers = Object.keys(objectRows[0]);

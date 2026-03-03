@@ -76,11 +76,9 @@ export function ToolHeader({ title }: { title?: string }) {
 
   return (
     <Collapsible.Trigger asChild>
-      <Flex
-        align="center"
-        justify="between"
-        p="2"
-        className="cursor-pointer hover:bg-white/5 transition-colors"
+      <button
+        type="button"
+        className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-white/5 transition-colors rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Flex align="center" gap="2">
           <CodeIcon className="text-purple-400" />
@@ -89,10 +87,10 @@ export function ToolHeader({ title }: { title?: string }) {
           </Text>
           {state === "running" && <Spinner size={12} />}
         </Flex>
-        <IconButton variant="ghost" size="1" color="gray">
+        <div className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400">
           <ChevronDownIcon />
-        </IconButton>
-      </Flex>
+        </div>
+      </button>
     </Collapsible.Trigger>
   );
 }

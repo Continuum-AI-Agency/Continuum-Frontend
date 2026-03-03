@@ -15,7 +15,7 @@ export default function GoogleOAuthButton() {
     if (pending) return;
     setPending(true);
 
-    const popupUrl = buildOAuthStartUrl("google", "auth");
+    const popupUrl = buildOAuthStartUrl("google", "auth", { popup: true });
     const popup = openCenteredPopup(popupUrl, "Continue with Google");
     if (!popup) {
       show({ title: "Popup blocked", description: "Enable popups to continue with Google.", variant: "error" });

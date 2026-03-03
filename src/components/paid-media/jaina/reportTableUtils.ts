@@ -1,4 +1,4 @@
-import type { FrontendSoTReport } from "@/lib/jaina/schemas";
+import type { FrontendCheckpointReport } from "@/lib/jaina/schemas";
 
 type ReportTable = {
   headers: string[];
@@ -60,7 +60,7 @@ function isTimelineLikeValue(value: unknown): boolean {
   return !Number.isNaN(parsed);
 }
 
-function collectReportGraphs(report: FrontendSoTReport): GraphRecord[] {
+function collectReportGraphs(report: FrontendCheckpointReport): GraphRecord[] {
   const topLevelGraphs = Array.isArray(report.graphs)
     ? report.graphs
         .map((graph) => asRecord(graph))
@@ -115,7 +115,7 @@ function extractTimelineCandidates(graph: GraphRecord): unknown[] {
   return values;
 }
 
-export function hasTimelineCharts(report: FrontendSoTReport): boolean {
+export function hasTimelineCharts(report: FrontendCheckpointReport): boolean {
   const graphs = collectReportGraphs(report);
 
   return graphs.some((graph) => {
@@ -134,7 +134,7 @@ export function hasTimelineCharts(report: FrontendSoTReport): boolean {
   });
 }
 
-function buildSnapshotMetricsTable(report: FrontendSoTReport): ReportTable | null {
+function buildSnapshotMetricsTable(report: FrontendCheckpointReport): ReportTable | null {
   if (!Array.isArray(report.performance_snapshot) || report.performance_snapshot.length === 0) {
     return null;
   }
@@ -161,7 +161,7 @@ function buildSnapshotMetricsTable(report: FrontendSoTReport): ReportTable | nul
   };
 }
 
-function buildGraphDataTables(report: FrontendSoTReport): ReportTable[] {
+function buildGraphDataTables(report: FrontendCheckpointReport): ReportTable[] {
   const graphs = collectReportGraphs(report);
   const tables: ReportTable[] = [];
 
@@ -253,7 +253,7 @@ function buildGraphDataTables(report: FrontendSoTReport): ReportTable[] {
   return tables.filter((table) => table.rows.length > 0);
 }
 
-export function buildJitSnapshotFallbackTables(report: FrontendSoTReport): ReportTable[] {
+export function buildJitSnapshotFallbackTables(report: FrontendCheckpointReport): ReportTable[] {
   if (hasTimelineCharts(report)) {
     return [];
   }

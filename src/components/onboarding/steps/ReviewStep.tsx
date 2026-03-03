@@ -330,7 +330,7 @@ export function ReviewStep() {
               <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
                   <AvatarImage src={logoUrl || ""} />
-                  <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                  <AvatarFallback className="bg-transparent text-primary font-bold">
                     {state.brand.name?.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>

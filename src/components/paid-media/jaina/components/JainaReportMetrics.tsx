@@ -1,8 +1,8 @@
 import { Card, Flex, Grid, Text, Badge, Heading } from "@radix-ui/themes";
-import { type FrontendSoTReport } from "@/lib/jaina/schemas";
+import { type FrontendCheckpointReport } from "@/lib/jaina/schemas";
 
 type JainaReportMetricsProps = {
-  metrics: FrontendSoTReport["performance_snapshot"];
+  metrics: FrontendCheckpointReport["performance_snapshot"];
 };
 
 export function JainaReportMetrics({ metrics }: JainaReportMetricsProps) {
@@ -23,7 +23,7 @@ export function JainaReportMetrics({ metrics }: JainaReportMetricsProps) {
 }
 
 function buildMetricKey(
-  item: FrontendSoTReport["performance_snapshot"][number],
+  item: FrontendCheckpointReport["performance_snapshot"][number],
   index: number
 ) {
   const metric = (item ?? {}) as Record<string, unknown>;
@@ -35,7 +35,7 @@ function buildMetricKey(
   ].join("|");
 }
 
-function MetricCard({ item }: { item: FrontendSoTReport["performance_snapshot"][number] }) {
+function MetricCard({ item }: { item: FrontendCheckpointReport["performance_snapshot"][number] }) {
   const metric = (item ?? {}) as Record<string, unknown>;
   const change = getMetricChange(item);
   const numericChange =
@@ -73,7 +73,7 @@ function MetricCard({ item }: { item: FrontendSoTReport["performance_snapshot"][
 }
 
 export function getMetricChange(
-  item: FrontendSoTReport["performance_snapshot"][number]
+  item: FrontendCheckpointReport["performance_snapshot"][number]
 ): unknown {
   const metric = (item ?? {}) as Record<string, unknown>;
   return metric.change ?? metric.trend;
@@ -111,7 +111,7 @@ function formatMetricStatusLabel(status: unknown): string {
   return raw;
 }
 
-function formatMetricValue(item: FrontendSoTReport["performance_snapshot"][number]) {
+function formatMetricValue(item: FrontendCheckpointReport["performance_snapshot"][number]) {
   const metric = (item ?? {}) as Record<string, unknown>;
   const value = metric.value;
   const format = typeof metric.format === "string" ? metric.format : undefined;

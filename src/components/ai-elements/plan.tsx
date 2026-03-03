@@ -118,17 +118,17 @@ export const PlanTitle = ({ children, className, ...props }: PlanTitleProps) => 
 function StatusIcon({ status }: { status: PlanStatus }) {
   switch (status) {
     case "completed":
-      return <CheckCircle2Icon className="size-4 text-emerald-500 shrink-0" />;
+      return <CheckCircle2Icon aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />;
     case "approved":
-      return <UserCheckIcon className="size-4 text-emerald-500 shrink-0" />;
+      return <UserCheckIcon aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />;
     case "in_progress":
-      return <Loader2Icon className="size-4 text-indigo-400 animate-spin shrink-0" />;
+      return <Loader2Icon aria-hidden="true" className="size-4 text-indigo-400 animate-spin shrink-0" />;
     case "awaiting_approval":
-      return <AlertCircleIcon className="size-4 text-amber-500 shrink-0" />;
+      return <AlertCircleIcon aria-hidden="true" className="size-4 text-amber-500 shrink-0" />;
     case "rejected":
-      return <AlertCircleIcon className="size-4 text-red-500 shrink-0" />;
+      return <AlertCircleIcon aria-hidden="true" className="size-4 text-red-500 shrink-0" />;
     default:
-      return <CircleIcon className="size-4 text-muted-foreground/40 shrink-0" />;
+      return <CircleIcon aria-hidden="true" className="size-4 text-muted-foreground/40 shrink-0" />;
   }
 }
 
@@ -222,6 +222,7 @@ export const PlanFeedback = ({
           placeholder={placeholder}
           disabled={disabled}
           className="w-full min-h-[80px] rounded-md border bg-muted/30 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+          aria-label={placeholder}
         />
         <Button
           size="sm"

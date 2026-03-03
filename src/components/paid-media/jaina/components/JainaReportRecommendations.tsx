@@ -1,12 +1,16 @@
+"use client";
+
 import { Heading, Text, Badge, Flex } from "@radix-ui/themes";
 import { Task, TaskTrigger, TaskContent } from "@/components/ai-elements/task";
 import { type RecommendationItem } from "@/lib/jaina/schemas";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
 
 interface JainaReportRecommendationsProps {
   recommendations: RecommendationItem[];
+  isStreaming?: boolean;
 }
 
-export function JainaReportRecommendations({ recommendations }: JainaReportRecommendationsProps) {
+export function JainaReportRecommendations({ recommendations, isStreaming }: JainaReportRecommendationsProps) {
   if (!recommendations || recommendations.length === 0) return null;
 
   return (
@@ -24,9 +28,13 @@ export function JainaReportRecommendations({ recommendations }: JainaReportRecom
             <TaskTrigger title={item.title || "Recommendation"} />
             <TaskContent>
               <div className="space-y-3 py-2">
-                <Text size="2" className="text-secondary leading-relaxed block">
-                  {item.rationale}
-                </Text>
+                <div className="prose prose-invert max-w-none">
+                  <SafeMarkdown
+                    content={item.rationale}
+                    className="text-[14px] leading-relaxed text-secondary"
+                    mode={isStreaming ? "streaming" : "static"}
+                  />
+                </div>
                 <Flex align="center" gap="3" wrap="wrap">
                   {item.expected_impact && (
                     <Badge color="indigo" variant="soft" className="text-[10px] uppercase">

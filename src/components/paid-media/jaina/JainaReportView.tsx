@@ -4,8 +4,8 @@ import React from "react";
 import { Badge, Callout, Flex, Heading } from "@radix-ui/themes";
 import { DownloadIcon, MailIcon } from "lucide-react";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
-import type { FrontendSoTReport } from "@/lib/jaina/schemas";
-import type { JainaStreamStatus } from "@/lib/jaina/stream";
+import { type FrontendCheckpointReport, hasReportContent } from "@/lib/jaina/schemas";
+import { type JainaStreamStatus } from "@/lib/jaina/stream";
 import { JainaReportNav } from "./components/JainaReportNav";
 import { JainaReportMetrics } from "./components/JainaReportMetrics";
 import { JainaReportCharts, isJainaChartInput } from "./components/JainaReportCharts";
@@ -17,13 +17,12 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { Card, Box, Text } from "@radix-ui/themes";
 import { Sources, SourcesContent, SourcesTrigger, Source } from "@/components/ai-elements/sources";
 import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
-import { hasReportContent } from "@/lib/jaina/schemas";
 import { buildJitSnapshotFallbackTables } from "./reportTableUtils";
 import { cn } from "@/lib/utils";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
 type JainaReportViewProps = {
-  report: FrontendSoTReport | null;
+  report: FrontendCheckpointReport | null;
   status: JainaStreamStatus;
   error?: string;
   onSuggestionClick?: (query: string) => void;
@@ -250,7 +249,7 @@ export function JainaReportView({
         <Flex gap="0" align="start" className="relative h-full min-h-0 min-w-0">
           {showSidebarNav ? (
           <div className="border-r border-white/5 p-4 sticky top-0 shrink-0 w-64 max-h-full min-h-0 overflow-y-auto">
-            <JainaReportNav idPrefix={resolvedIdPrefix} />
+            <JainaReportNav idPrefix={resolvedIdPrefix} report={report} />
           </div>
           ) : null}
 
@@ -281,7 +280,7 @@ export function JainaReportView({
                   <SafeMarkdown
                     content={report.executive_summary || "No summary provided."}
                     className="text-[15px] leading-relaxed text-secondary"
-                    mode="static"
+                    mode={status === "streaming" ? "streaming" : "static"}
                   />
                 </div>
               </div>
@@ -294,7 +293,10 @@ export function JainaReportView({
 
               {report.sections.length > 0 && (
                 <div id={sectionId("strategic-insights")} className="scroll-mt-20">
-                  <JainaReportSections sections={report.sections} />
+                  <JainaReportSections 
+                    sections={report.sections} 
+                    isStreaming={status === "streaming"} 
+                  />
                 </div>
               )}
 
@@ -312,7 +314,10 @@ export function JainaReportView({
 
               {report.strategic_recommendations.length > 0 && (
                 <div id={sectionId("recommendations")} className="scroll-mt-20">
-                  <JainaReportRecommendations recommendations={report.strategic_recommendations} />
+                  <JainaReportRecommendations 
+                    recommendations={report.strategic_recommendations} 
+                    isStreaming={status === "streaming"}
+                  />
                 </div>
               )}
 
@@ -353,22 +358,22 @@ export function JainaReportView({
           </Flex>
         </Flex>
       </ArtifactContent>
-    </Artifact>
-    </ResizablePanel>
-    <ResizableHandle
-      withHandle
-      className="bg-white/10 hover:bg-primary/40 transition-colors h-1 cursor-row-resize [&>div]:h-1.5 [&>div]:w-8 [&>div]:rounded-full"
-    />
-    <ResizablePanel
-      defaultSize="16%"
-      minSize="0%"
-      collapsible
-      collapsedSize="0%"
-      className="min-h-0"
-    >
-      <div className="h-full w-full bg-transparent" />
-    </ResizablePanel>
-    </ResizablePanelGroup>
+      </Artifact>
+      </ResizablePanel>
+      <ResizableHandle
+        withHandle
+        className="bg-white/10 hover:bg-primary/40 transition-colors h-1 cursor-row-resize [&>div]:h-1.5 [&>div]:w-8 [&>div]:rounded-full"
+      />
+      <ResizablePanel
+        defaultSize="16%"
+        minSize="0%"
+        collapsible
+        collapsedSize="0%"
+        className="min-h-0"
+      >
+        <div className="h-full w-full bg-transparent" />
+      </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }
@@ -381,7 +386,9 @@ function EmptyReport({ status }: { status: JainaStreamStatus }) {
         <Text color="gray">
           {status === "streaming"
             ? "Streaming data… this panel will populate as soon as the report is ready."
-            : "Submit a question to generate a report."}
+            : status === "starting"
+              ? "Initializing Jaina analyst..."
+              : "Submit a question to generate a report."}
         </Text>
       </Box>
     </Card>
@@ -394,7 +401,7 @@ type PdfTable = {
 };
 
 function formatMetricValueForPdf(
-  metric: FrontendSoTReport["performance_snapshot"][number]
+  metric: FrontendCheckpointReport["performance_snapshot"][number]
 ) {
   if (!metric || typeof metric !== "object") return "";
   const typedMetric = metric as {
@@ -421,7 +428,7 @@ function formatMetricValueForPdf(
 
 function renderReportPdf(
   doc: InstanceType<typeof import("jspdf").jsPDF>,
-  report: FrontendSoTReport,
+  report: FrontendCheckpointReport,
   fallbackTables: PdfTable[]
 ) {
   const marginX = 40;

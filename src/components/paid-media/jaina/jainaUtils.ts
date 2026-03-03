@@ -1,4 +1,4 @@
-import { hasReportContent, type ReportPayload, type SoTReport } from "@/lib/jaina/schemas";
+import { hasReportContent, type ReportPayload, type FrontendCheckpointReport } from "@/lib/jaina/schemas";
 import type { JainaChatMessage } from "./types";
 
 const reportSignalKeys = [
@@ -56,7 +56,7 @@ export const getReportSummary = (report: ReportPayload | null) => {
   if ("type" in report && report.type === "direct_answer") {
     return report.content;
   }
-  const r = report as SoTReport;
+  const r = report as FrontendCheckpointReport;
   return r.executive_summary || "";
 };
 
