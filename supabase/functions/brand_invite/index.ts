@@ -295,14 +295,14 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
   let linkType: "invite" | "magiclink" = "invite";
   let linkData: GeneratedLinkData | null = null;
 
-  const inviteLink = await service.auth.admin.generateLink({
+  const generatedInviteLink = await service.auth.admin.generateLink({
     type: "invite",
     email,
     options: { redirectTo: destination },
   });
 
-  if (inviteLink.error) {
-    const authError = inviteLink.error as AuthApiErrorShape;
+  if (generatedInviteLink.error) {
+    const authError = generatedInviteLink.error as AuthApiErrorShape;
     if (authError.code === "email_exists") {
       linkType = "magiclink";
       const magicLink = await service.auth.admin.generateLink({
@@ -316,14 +316,15 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
       }
       linkData = magicLink.data as GeneratedLinkData | null;
     } else {
-      logger.error("Invite link generation failed", { error: inviteLink.error });
+      logger.error("Invite link generation failed", { error: generatedInviteLink.error });
       return json({ error: authError.message ?? "Invite link generation failed" }, 500);
     }
   } else {
-    linkData = inviteLink.data as GeneratedLinkData | null;
+    linkData = generatedInviteLink.data as GeneratedLinkData | null;
   }
 
-  const actionLink = linkData?.properties?.action_link ?? destination;
+  const generatedActionLink = linkData?.properties?.action_link ?? destination;
+  const inviteLink = destination;
   const linkUserId =
     linkData?.user?.id ?? (linkType === "magiclink" ? await getExistingUserIdByEmail(service.auth.admin, email) : null);
 
@@ -384,9 +385,14 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
     <div style="font-family: Arial, sans-serif; line-height: 1.6;">
       <p>${inviterEmail} invited you to join <strong>${brandName}</strong> on Continuum.</p>
       <p>Role: <strong>${input.role}</strong></p>
-      <p><a href="${actionLink}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;text-decoration:none;border-radius:6px;">Accept invite</a></p>
+      <p><a href="${inviteLink}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;text-decoration:none;border-radius:6px;">Accept invite</a></p>
+      ${
+        generatedActionLink !== inviteLink
+          ? `<p>Optional one-click sign-in link: <a href="${generatedActionLink}">${generatedActionLink}</a></p>`
+          : ""
+      }
       <p>If the button does not work, copy and paste this link:</p>
-      <p><a href="${actionLink}">${actionLink}</a></p>
+      <p><a href="${inviteLink}">${inviteLink}</a></p>
     </div>
   `;
 
@@ -411,7 +417,7 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
   }
 
   return json({
-    link: actionLink,
+    link: inviteLink,
     inviteId: inviteRow?.id ?? null,
     emailSent,
     existingUser: linkType === "magiclink",

@@ -33,6 +33,38 @@ export default function InviteCallbackPage() {
       setStatus("working");
       setMessage("Verifying your session...");
 
+      const persistActiveBrandSelection = async (userId: string | undefined) => {
+        if (!userId) return;
+
+        const { error: preferenceError } = await supabase
+          .schema("brand_profiles")
+          .from("user_brand_preferences")
+          .upsert(
+            {
+              user_id: userId,
+              active_brand_id: brandId,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" },
+          );
+
+        if (preferenceError) {
+          throw new Error(preferenceError.message ?? "Unable to set active brand preference.");
+        }
+
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: {
+            onboarding: {
+              activeBrandId: brandId,
+            },
+          },
+        });
+
+        if (metadataError) {
+          console.warn("[invite] Active brand metadata update failed", metadataError);
+        }
+      };
+
       const hash = window.location.hash;
       if (hash && hash.includes("access_token")) {
         const hashParams = new URLSearchParams(hash.substring(1));
@@ -84,6 +116,18 @@ export default function InviteCallbackPage() {
             .maybeSingle();
 
           if (membership) {
+            try {
+              await persistActiveBrandSelection(userId);
+            } catch (persistError) {
+              const persistMessage = encodeURIComponent(
+                persistError instanceof Error
+                  ? persistError.message
+                  : "Unable to activate invited brand.",
+              );
+              router.replace(`/dashboard?invite=error&message=${persistMessage}`);
+              return;
+            }
+
             router.replace("/dashboard?invite=accepted");
             return;
           }
@@ -91,6 +135,19 @@ export default function InviteCallbackPage() {
 
         const errorMessage = encodeURIComponent(detailedMessage ?? error.message ?? "invite_failed");
         router.replace(`/dashboard?invite=error&message=${errorMessage}`);
+        return;
+      }
+
+      const userId = sessionData.session?.user?.id;
+      try {
+        await persistActiveBrandSelection(userId);
+      } catch (persistError) {
+        const persistMessage = encodeURIComponent(
+          persistError instanceof Error
+            ? persistError.message
+            : "Unable to activate invited brand.",
+        );
+        router.replace(`/dashboard?invite=error&message=${persistMessage}`);
         return;
       }
 

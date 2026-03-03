@@ -37,6 +37,7 @@ function createSupabaseStub(options?: {
   sessionPayload?: SessionPayload;
   invokeError?: { message?: string } | null;
   membership?: { id: string } | null;
+  preferenceError?: { message?: string } | null;
 }) {
   const auth = {
     setSession: vi.fn(async () => ({ data: { session: null }, error: null })),
@@ -44,10 +45,12 @@ function createSupabaseStub(options?: {
       data: options?.sessionPayload ?? { session: { access_token: "access-token", user: { id: "user-1" } } },
       error: options?.sessionError ?? null,
     })),
+    updateUser: vi.fn(async () => ({ data: { user: null }, error: null })),
   };
 
   const invoke = vi.fn(async () => ({ error: options?.invokeError ?? null }));
   const maybeSingle = vi.fn(async () => ({ data: options?.membership ?? null, error: null }));
+  const upsert = vi.fn(async () => ({ error: options?.preferenceError ?? null }));
 
   const permissionQuery: any = {
     select: vi.fn(() => permissionQuery),
@@ -55,15 +58,27 @@ function createSupabaseStub(options?: {
     maybeSingle,
   };
 
+  const preferenceQuery: any = {
+    upsert,
+  };
+
   const schema = vi.fn(() => ({
-    from: vi.fn(() => permissionQuery),
+    from: vi.fn((table: string) => {
+      if (table === "permissions") {
+        return permissionQuery;
+      }
+      if (table === "user_brand_preferences") {
+        return preferenceQuery;
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    }),
   }));
 
   return {
     auth,
     functions: { invoke },
     schema,
-    spies: { auth, invoke, maybeSingle },
+    spies: { auth, invoke, maybeSingle, upsert },
   };
 }
 
@@ -125,6 +140,14 @@ describe("InviteCallbackPage", () => {
       body: { action: "accept", token: "invite-token", brandId },
       headers: { Authorization: "Bearer access-token" },
     });
+    expect(supabase.spies.upsert).toHaveBeenCalledTimes(1);
+    expect(supabase.spies.auth.updateUser).toHaveBeenCalledWith({
+      data: {
+        onboarding: {
+          activeBrandId: brandId,
+        },
+      },
+    });
   });
 
   it("treats function error as accepted when membership already exists", async () => {
@@ -142,6 +165,23 @@ describe("InviteCallbackPage", () => {
     });
 
     expect(supabase.spies.maybeSingle).toHaveBeenCalled();
+    expect(supabase.spies.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects to invite error when active brand preference persistence fails", async () => {
+    const supabase = createSupabaseStub({
+      preferenceError: { message: "preference write failed" },
+    });
+    createSupabaseBrowserClientSpy.mockReturnValue(supabase);
+    params = new URLSearchParams({ token: "invite-token", brand: brandId });
+
+    render(<InviteCallbackPage />);
+
+    await waitFor(() => {
+      expect(replaceSpy).toHaveBeenCalledWith(
+        "/dashboard?invite=error&message=preference%20write%20failed",
+      );
+    });
   });
 
   it("redirects to invite error with detailed message when acceptance fails", async () => {
