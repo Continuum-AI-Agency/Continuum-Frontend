@@ -108,11 +108,15 @@ export async function fetchBrandIntegrationSummary(
     const platformKey = mapIntegrationTypeToPlatformKey(account.type ?? undefined);
     if (!platformKey) return;
 
-summary[platformKey].accounts.push({
-assignmentId: assignment.id,
-integrationAccountId: account.id,
+    summary[platformKey].accounts.push({
+      assignmentId: assignment.id,
+      integrationAccountId: account.id,
       alias: assignment.alias ?? null,
-      name: accountName,
+      name: resolveAccountName({
+        alias: assignment.alias ?? null,
+        accountName: account.name ?? null,
+        externalAccountId: account.external_account_id ?? null,
+      }),
       externalAccountId: account.external_account_id ?? null,
       status: account.status ?? null,
       linkedAt: assignment.created_at ?? null,

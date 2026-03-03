@@ -10,11 +10,12 @@ import {
   ORGANIC_MVP_PLATFORM_KEYS,
   type OrganicPlatformKey,
 } from "@/lib/organic/platforms";
+import { type PlatformKey } from "@/components/onboarding/platforms";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import type { Trend } from "@/lib/organic/trends";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { fetchBrandIntegrationSummary, type BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { deriveMetricAccountsByPlatform } from "@/lib/organic/metricAccounts";
 import { redirect } from "next/navigation";
 import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
@@ -29,7 +30,7 @@ export default async function OrganicPage() {
   const brandProfileId = brandId;
 
   const mvpPlatformSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
-  let integrationSummary: Awaited<ReturnType<typeof fetchBrandIntegrationSummary>> | null = null;
+  let integrationSummary: BrandIntegrationSummary | null = null;
   try {
     integrationSummary = await fetchBrandIntegrationSummary(brandProfileId);
   } catch (error) {
