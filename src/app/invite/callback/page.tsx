@@ -38,14 +38,14 @@ export default function InviteCallbackPage() {
 
         const { error: preferenceError } = await supabase
           .schema("brand_profiles")
-          .from("user_brand_preferences")
+          .from("user_brand_preferences" as any)
           .upsert(
             {
               user_id: userId,
               active_brand_id: brandId,
               updated_at: new Date().toISOString(),
             },
-            { onConflict: "user_id" },
+            { onConflict: "user_id" } as any,
           );
 
         if (preferenceError) {
