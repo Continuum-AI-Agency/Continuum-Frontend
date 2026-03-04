@@ -1,10 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { ReloadIcon } from "@radix-ui/react-icons";
-import { Box, Card, Flex, Heading, IconButton, Select, Text } from "@radix-ui/themes";
+import { BellIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { Box, Card, Flex, IconButton, Select, Text } from "@radix-ui/themes";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
 import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
@@ -87,6 +97,7 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
   const [campaignIndexes, setCampaignIndexes] = React.useState<CampaignIndexRecord[]>([]);
   const [selectedCampaignIndexId, setSelectedCampaignIndexId] = React.useState<string>("all");
   const [indexDialogOpen, setIndexDialogOpen] = React.useState(false);
+  const [alertsPanelOpen, setAlertsPanelOpen] = React.useState(false);
   const [savingIndex, setSavingIndex] = React.useState(false);
   const loadCampaignsRequestIdRef = React.useRef(0);
 
@@ -294,12 +305,10 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
     [adAccountId, brandId, loadCampaignIndexes]
   );
 
-  const deleteSelectedCampaignIndex = React.useCallback(async () => {
-    if (!selectedCampaignIndex || selectedCampaignIndexId === "all") return;
-
+  const deleteCampaignIndex = React.useCallback(async (indexId: string) => {
     setSavingIndex(true);
     try {
-      const response = await fetch(`/api/paid-media/campaign-indexes/${selectedCampaignIndex.id}`, {
+      const response = await fetch(`/api/paid-media/campaign-indexes/${indexId}`, {
         method: "DELETE",
       });
 
@@ -314,77 +323,86 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
     } finally {
       setSavingIndex(false);
     }
-  }, [loadCampaignIndexes, selectedCampaignIndex, selectedCampaignIndexId]);
+  }, [loadCampaignIndexes]);
 
   return (
     <Box className="w-full">
-      <Flex direction="column" gap="4">
-        <Flex justify="between" align="center" wrap="wrap" gap="3">
-          <Heading size="6">Paid Media Dashboard</Heading>
-          <Flex gap="2" align="center" wrap="wrap" className="w-full sm:w-auto">
-            <Select.Root value={platform} onValueChange={handlePlatformChange}>
-              <Select.Trigger placeholder="Select platform" className="min-w-[120px]" />
-              <Select.Content>
-                <Select.Item value="meta">Meta</Select.Item>
-                <Select.Item value="google-ads" disabled>
-                  Google Ads
-                </Select.Item>
-                <Select.Item value="dv360" disabled>
-                  DV360
-                </Select.Item>
-              </Select.Content>
-            </Select.Root>
+      <Flex direction="column" gap="2">
+        <Flex justify="end" align="center" wrap="wrap" gap="2" className="px-1">
+          <Select.Root value={platform} onValueChange={handlePlatformChange}>
+            <Select.Trigger placeholder="Select platform" className="min-h-8 min-w-[110px] text-xs" />
+            <Select.Content>
+              <Select.Item value="meta">Meta</Select.Item>
+              <Select.Item value="google-ads" disabled>
+                Google Ads
+              </Select.Item>
+              <Select.Item value="dv360" disabled>
+                DV360
+              </Select.Item>
+            </Select.Content>
+          </Select.Root>
 
-            <Select.Root value={timeRange} onValueChange={handleTimeRangeChange}>
-              <Select.Trigger placeholder="Select time range" className="min-w-[130px]" />
-              <Select.Content>
-                <Select.Item value="last_7d">Last 7 days</Select.Item>
-                <Select.Item value="last_14d">Last 14 days</Select.Item>
-                <Select.Item value="last_30d">Last 30 days</Select.Item>
-              </Select.Content>
-            </Select.Root>
+          <Select.Root value={timeRange} onValueChange={handleTimeRangeChange}>
+            <Select.Trigger placeholder="Select time range" className="min-h-8 min-w-[120px] text-xs" />
+            <Select.Content>
+              <Select.Item value="last_7d">Last 7 days</Select.Item>
+              <Select.Item value="last_14d">Last 14 days</Select.Item>
+              <Select.Item value="last_30d">Last 30 days</Select.Item>
+            </Select.Content>
+          </Select.Root>
 
-            <Button
-              variant="outline"
-              className="h-10"
-              onClick={() => {
-                setSelectedCampaignIndexId("all");
-                setIndexDialogOpen(true);
-              }}
-            >
-              New index
-            </Button>
-
-            {selectedCampaignIndex && selectedCampaignIndexId !== "all" ? (
+          <Popover open={indexDialogOpen} onOpenChange={setIndexDialogOpen} modal={false}>
+            <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className="h-10"
-                onClick={() => setIndexDialogOpen(true)}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => {
+                  setSelectedCampaignIndexId("all");
+                }}
               >
-                Edit selected index
+                New index
               </Button>
-            ) : null}
+            </PopoverTrigger>
+            <PopoverContent align="end" className="z-[60] w-[min(96vw,560px)] p-0">
+              <CampaignIndexManagerDialog
+                campaigns={campaigns.map((campaign) => ({
+                  id: campaign.id,
+                  name: campaign.name,
+                  status: campaign.status,
+                }))}
+                initialValue={dialogInitialValue}
+                saving={savingIndex}
+                onCancel={() => setIndexDialogOpen(false)}
+                onSave={(draft) => void saveCampaignIndex(draft)}
+              />
+            </PopoverContent>
+          </Popover>
 
-            {selectedCampaignIndex && selectedCampaignIndexId !== "all" ? (
-              <Button
-                variant="outline"
-                className="h-10 text-destructive"
-                onClick={() => void deleteSelectedCampaignIndex()}
-                disabled={savingIndex}
-              >
-                Delete index
+          <DropdownMenu open={alertsPanelOpen} onOpenChange={setAlertsPanelOpen} modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs">
+                <BellIcon className="mr-1.5 h-3.5 w-3.5" />
+                Alerts
               </Button>
-            ) : null}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[min(96vw,1100px)] p-0">
+              <DCOActionAlertsBox
+                brandId={brandId}
+                metaAccountId={adAccountId ?? undefined}
+                campaignId={selectedCampaignId}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-            <IconButton
-              variant="soft"
-              onClick={handleRefresh}
-              disabled={loadState.status === "loading-campaigns"}
-              className="min-h-[44px] min-w-[44px]"
-            >
-              <ReloadIcon className={loadState.status === "loading-campaigns" ? "animate-spin" : ""} />
-            </IconButton>
-          </Flex>
+          <IconButton
+            variant="soft"
+            onClick={handleRefresh}
+            disabled={loadState.status === "loading-campaigns"}
+            className="h-8 w-8"
+          >
+            <ReloadIcon className={loadState.status === "loading-campaigns" ? "animate-spin" : ""} />
+          </IconButton>
         </Flex>
 
         {loadState.status === "error" && (
@@ -412,6 +430,11 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
             activeOnly={activeOnly}
             onActiveOnlyChange={setActiveOnly}
             onSelectedCampaignChange={setSelectedCampaignId}
+            onEditCampaignIndex={(indexId) => {
+              setSelectedCampaignIndexId(indexId);
+              setIndexDialogOpen(true);
+            }}
+            onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
           />
         ) : (
           <Card>
@@ -420,25 +443,6 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
             </Box>
           </Card>
         )}
-
-        <DCOActionAlertsBox
-          brandId={brandId}
-          metaAccountId={adAccountId ?? undefined}
-          campaignId={selectedCampaignId}
-        />
-
-        <CampaignIndexManagerDialog
-          open={indexDialogOpen}
-          onOpenChange={setIndexDialogOpen}
-          campaigns={campaigns.map((campaign) => ({
-            id: campaign.id,
-            name: campaign.name,
-            status: campaign.status,
-          }))}
-          initialValue={dialogInitialValue}
-          saving={savingIndex}
-          onSave={(draft) => void saveCampaignIndex(draft)}
-        />
 
         <Text size="1" color="gray" className="pb-1 text-center">
           Charting library generously provided by{" "}

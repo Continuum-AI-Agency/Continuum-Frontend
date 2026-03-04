@@ -1,11 +1,39 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeftIcon, ReloadIcon } from "@radix-ui/react-icons";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  DotsHorizontalIcon,
+  ReloadIcon,
+} from "@radix-ui/react-icons";
 import type { UTCTimestamp } from "lightweight-charts";
 
 import { Button } from "@/components/ui/button";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ContextMenu,
+  ContextMenuCheckboxItem,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { Input } from "@/components/ui/input";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   SidebarContent,
@@ -13,14 +41,15 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
   SidebarMenu,
   SidebarMenuItem,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
 import { useTimelineBlocks } from "@/hooks/timeline/useTimelineBlocks";
+import type { ActionLog, ActionStatus } from "@/lib/types/dco";
 import {
   buildCampaignIndexAggregate,
   type CampaignIndexRecord,
@@ -30,6 +59,7 @@ import { cn } from "@/lib/utils";
 import type { AdSet } from "./AdSetTable";
 import {
   ObservabilityLightweightChart,
+  type ObservabilityChartMarker,
   type ObservabilityChartPoint,
   type ObservabilityChartSeries,
 } from "./ObservabilityLightweightChart";
@@ -40,6 +70,8 @@ type TimelineResolution = "daily" | "hourly";
 type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "impressions" | "clicks";
 type ViewMode = "campaigns" | "adsets";
 type Scope = { type: "campaign"; id: string } | { type: "index"; id: string };
+type CampaignSearchFilter = "all" | "active" | "paused";
+type RailEntityFilter = "all" | "campaigns" | "indexes";
 
 type Campaign = {
   id: string;
@@ -91,6 +123,8 @@ type CampaignAdSetWorkspaceProps = {
   activeOnly: boolean;
   onActiveOnlyChange: (value: boolean) => void;
   onSelectedCampaignChange?: (campaignId: string | undefined) => void;
+  onEditCampaignIndex?: (indexId: string) => void;
+  onDeleteCampaignIndex?: (indexId: string) => void;
 };
 
 const METRICS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"];
@@ -112,6 +146,17 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   cpc: "#f97316",
   impressions: "#14b8a6",
   clicks: "#84cc16",
+};
+
+const CHART_HEIGHT_CLASS = "h-[clamp(220px,40vh,340px)]";
+const RAIL_HEIGHT_CLASS = "h-[clamp(320px,58vh,470px)]";
+const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(280px,54vh,440px)]";
+
+const ACTION_STATUS_COLOR: Record<ActionStatus, string> = {
+  APPROVED: "#0ea5e9",
+  FAILED: "#ef4444",
+  PENDING: "#f59e0b",
+  SUCCESS: "#10b981",
 };
 
 function daysForPreset(preset: TimePreset): number {
@@ -140,6 +185,11 @@ function formatNumber(value: number): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
+}
+
+function formatDeltaPercent(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
 }
 
 function formatMetric(metric: MetricKey, value: number): string {
@@ -238,6 +288,143 @@ function latestMetricValue(
   return 0;
 }
 
+function metricPercentageChange(metric: MetricKey, comparison?: PaidMetricsComparison): number | undefined {
+  const value = comparison?.[metric]?.percentageChange;
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return value;
+}
+
+function trendPercentageChange(points: ObservabilityChartPoint[]): number | undefined {
+  if (points.length < 2) return undefined;
+  const first = points[0]?.value;
+  const last = points[points.length - 1]?.value;
+  if (!Number.isFinite(first) || !Number.isFinite(last)) return undefined;
+  if (first === 0) return last === 0 ? 0 : undefined;
+  return ((last - first) / Math.abs(first)) * 100;
+}
+
+function scopedAdSetKey(adSet: ScopedAdSet): string {
+  return `${adSet.campaignId}:${adSet.id}`;
+}
+
+function averageTrendPoints(pointSets: ObservabilityChartPoint[][]): ObservabilityChartPoint[] {
+  if (pointSets.length === 0) return [];
+  const byTime = new Map<number, { sum: number; count: number }>();
+
+  pointSets.forEach((points) => {
+    points.forEach((point) => {
+      const key = Number(point.time);
+      const current = byTime.get(key);
+      if (current) {
+        current.sum += point.value;
+        current.count += 1;
+        return;
+      }
+      byTime.set(key, { sum: point.value, count: 1 });
+    });
+  });
+
+  return Array.from(byTime.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([time, agg]) => ({
+      time: time as UTCTimestamp,
+      value: agg.count > 0 ? agg.sum / agg.count : 0,
+    }));
+}
+
+function toResolutionBucket(isoDate: string, resolution: TimelineResolution): string {
+  if (resolution === "daily") {
+    return isoDate.slice(0, 10);
+  }
+
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  parsed.setMinutes(0, 0, 0);
+  return parsed.toISOString().slice(0, 13);
+}
+
+function pointBucket(pointTime: UTCTimestamp, resolution: TimelineResolution): string {
+  const iso = new Date(Number(pointTime) * 1000).toISOString();
+  return toResolutionBucket(iso, resolution);
+}
+
+function describeActionLog(log: ActionLog): string {
+  if (log.error) return log.error;
+  if (log.decisionNote) return log.decisionNote;
+
+  const changed = Object.entries(log.paramsChanged ?? {});
+  if (changed.length > 0) {
+    const [key, value] = changed[0];
+    return `${key}: ${String(value)}`;
+  }
+
+  return `${log.actionType} on ${log.scopeType.toLowerCase()} scope`;
+}
+
+function normalizeActionMarkerTime(
+  log: ActionLog,
+  points: ObservabilityChartPoint[],
+  resolution: TimelineResolution
+): UTCTimestamp | null {
+  if (points.length === 0) return null;
+
+  const targetBucket = toResolutionBucket(log.occurredAt, resolution);
+  const exact = points.find((point) => pointBucket(point.time, resolution) === targetBucket);
+  if (exact) return exact.time;
+
+  const actionTimestamp = toUtcTimestamp(log.occurredAt);
+  if (!actionTimestamp) return null;
+
+  let nearest: ObservabilityChartPoint | undefined;
+  let nearestDelta = Number.POSITIVE_INFINITY;
+  points.forEach((point) => {
+    const delta = Math.abs(Number(point.time) - Number(actionTimestamp));
+    if (delta < nearestDelta) {
+      nearest = point;
+      nearestDelta = delta;
+    }
+  });
+
+  return nearest?.time ?? null;
+}
+
+function mapActionLogsToMarkers(
+  logs: ActionLog[],
+  points: ObservabilityChartPoint[],
+  resolution: TimelineResolution
+): ObservabilityChartMarker[] {
+  if (logs.length === 0 || points.length === 0) return [];
+
+  return logs
+    .slice()
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .slice(-24)
+    .reduce<ObservabilityChartMarker[]>((markers, log) => {
+      const time = normalizeActionMarkerTime(log, points, resolution);
+      if (!time) return markers;
+
+      const statusColor = ACTION_STATUS_COLOR[log.status] ?? "#f59e0b";
+      const scopeLabel =
+        log.scopeType === "ADSET"
+          ? `Ad set ${log.metaAdsetId ?? log.scopeId}`
+          : log.scopeType === "CAMPAIGN"
+            ? `Campaign ${log.metaCampaignId ?? log.scopeId}`
+            : log.scopeType;
+
+      markers.push({
+        id: log.id,
+        time,
+        label: `${log.actionType} · ${log.status}`,
+        detail: `${scopeLabel} · ${new Date(log.occurredAt).toLocaleString("en-US")}\n${describeActionLog(log)}`,
+        color: statusColor,
+        text: log.actionType.slice(0, 1),
+        shape: log.status === "FAILED" ? "arrowDown" : "arrowUp",
+        position: log.status === "FAILED" ? "belowBar" : "aboveBar",
+      });
+      return markers;
+    }, []);
+}
+
 function getDcoManagedCampaignIds(
   timelineCampaigns: Array<{ id: string; ad_sets?: Array<{ ads?: unknown[] }> }>
 ): string[] {
@@ -290,15 +477,22 @@ export function CampaignAdSetWorkspace({
   activeOnly,
   onActiveOnlyChange,
   onSelectedCampaignChange,
+  onEditCampaignIndex,
+  onDeleteCampaignIndex,
 }: CampaignAdSetWorkspaceProps) {
   const [viewMode, setViewMode] = React.useState<ViewMode>("campaigns");
   const [campaignQuery, setCampaignQuery] = React.useState("");
+  const [campaignSearchFilter, setCampaignSearchFilter] = React.useState<CampaignSearchFilter>("all");
+  const [railEntityFilter, setRailEntityFilter] = React.useState<RailEntityFilter>("all");
   const [decomposeIndexes, setDecomposeIndexes] = React.useState(false);
   const [scope, setScope] = React.useState<Scope | undefined>();
   const [campaignMetric, setCampaignMetric] = React.useState<MetricKey>("spend");
   const [adSetMetric, setAdSetMetric] = React.useState<MetricKey>("spend");
   const [selectedCompareKeys, setSelectedCompareKeys] = React.useState<string[]>([]);
-  const [selectedAdSetKey, setSelectedAdSetKey] = React.useState<string | undefined>();
+  const [selectedAdSetKeys, setSelectedAdSetKeys] = React.useState<string[]>([]);
+  const [focusedAdSetKey, setFocusedAdSetKey] = React.useState<string | undefined>();
+  const [showSelectedAdSetAverage, setShowSelectedAdSetAverage] = React.useState(false);
+  const [showSelectedAdSetLines, setShowSelectedAdSetLines] = React.useState(true);
   const [adSetsByCampaign, setAdSetsByCampaign] = React.useState<Record<string, AdSetLoadState>>({});
 
   const now = React.useMemo(() => new Date(), []);
@@ -321,6 +515,23 @@ export function CampaignAdSetWorkspace({
     () => getDcoManagedCampaignIds(timelineCampaigns),
     [timelineCampaigns]
   );
+
+  const { logs: actionLogs, setFilters: setActionLogFilters } = useDCOActionLogs({
+    brandId,
+    metaAccountId: accountId,
+    initialPageSize: 120,
+    initialDateRangeDays: daysForPreset(timeRangePreset),
+  });
+
+  React.useEffect(() => {
+    setActionLogFilters({
+      metaAccountId: accountId,
+      campaignId: undefined,
+      scopeType: undefined,
+      status: undefined,
+      actionType: undefined,
+    });
+  }, [accountId, setActionLogFilters]);
 
   const timelineFallbackByCampaign = React.useMemo(() => {
     return timelineCampaigns.reduce<Record<string, ScopedAdSet[]>>((acc, campaign) => {
@@ -358,9 +569,23 @@ export function CampaignAdSetWorkspace({
 
   const filteredCampaigns = React.useMemo(() => {
     const normalized = campaignQuery.trim().toLowerCase();
-    if (!normalized) return eligibleCampaigns;
-    return eligibleCampaigns.filter((campaign) => campaign.name.toLowerCase().includes(normalized));
-  }, [campaignQuery, eligibleCampaigns]);
+    return eligibleCampaigns.filter((campaign) => {
+      const status = (campaign.status ?? "").toUpperCase();
+      if (campaignSearchFilter === "active" && status !== "ACTIVE") return false;
+      if (campaignSearchFilter === "paused" && status === "ACTIVE") return false;
+      if (!normalized) return true;
+
+      const haystack = [
+        campaign.name,
+        campaign.id,
+        campaign.status,
+        campaign.objective ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [campaignQuery, campaignSearchFilter, eligibleCampaigns]);
 
   const campaignById = React.useMemo(
     () => new Map(eligibleCampaigns.map((campaign) => [campaign.id, campaign])),
@@ -383,6 +608,17 @@ export function CampaignAdSetWorkspace({
       .filter((entry) => entry.members.length > 0)
       .sort((left, right) => Number(right.isSelected) - Number(left.isSelected));
   }, [campaignIndexes, eligibleCampaigns, selectedCampaignIndexId]);
+
+  const filteredIndexCards = React.useMemo(() => {
+    const normalized = campaignQuery.trim().toLowerCase();
+    if (!normalized) return indexCards;
+    return indexCards.filter((entry) => {
+      const haystack = [entry.index.name, entry.index.id, ...entry.members.map((member) => member.name)]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [campaignQuery, indexCards]);
 
   const compareEntities = React.useMemo(() => {
     const indexEntities: CompareEntity[] = indexCards.map((entry) => ({
@@ -435,19 +671,71 @@ export function CampaignAdSetWorkspace({
       .filter((entity): entity is CompareEntity => Boolean(entity));
   }, [compareEntityByKey, selectedCompareKeys]);
 
+  const compareColorByKey = React.useMemo(() => {
+    return new Map(
+      selectedCompareEntities.map((entity, index) => [
+        entity.key,
+        COMPARE_COLORS[index % COMPARE_COLORS.length],
+      ])
+    );
+  }, [selectedCompareEntities]);
+
+  const actionLogsByCampaignId = React.useMemo(() => {
+    const map = new Map<string, ActionLog[]>();
+    actionLogs.forEach((log) => {
+      const campaignId =
+        log.metaCampaignId ??
+        (log.scopeType === "CAMPAIGN" && log.scopeId ? log.scopeId : undefined);
+      if (!campaignId) return;
+      const existing = map.get(campaignId);
+      if (existing) {
+        existing.push(log);
+        return;
+      }
+      map.set(campaignId, [log]);
+    });
+    return map;
+  }, [actionLogs]);
+
+  const actionLogsByAdSetId = React.useMemo(() => {
+    const map = new Map<string, ActionLog[]>();
+    actionLogs.forEach((log) => {
+      const adSetId = log.metaAdsetId ?? (log.scopeType === "ADSET" && log.scopeId ? log.scopeId : undefined);
+      if (!adSetId) return;
+      const existing = map.get(adSetId);
+      if (existing) {
+        existing.push(log);
+        return;
+      }
+      map.set(adSetId, [log]);
+    });
+    return map;
+  }, [actionLogs]);
+
   const compareChartSeries = React.useMemo<ObservabilityChartSeries[]>(() => {
     return selectedCompareEntities
-      .map((entity, index) => ({
-        id: entity.key,
-        label: entity.label,
-        color: COMPARE_COLORS[index % COMPARE_COLORS.length],
-        points: mapTrendPoints(entity.trends, campaignMetric),
-        variant: index === 0 ? ("area" as const) : ("line" as const),
-        emphasized: index === 0,
-        dashed: index > 0,
-      }))
+      .map((entity, index) => {
+        const points = mapTrendPoints(entity.trends, campaignMetric);
+        const campaignIds =
+          entity.type === "campaign"
+            ? [entity.key.replace("campaign:", "")]
+            : indexCards.find((entry) => `index:${entry.index.id}` === entity.key)?.members.map((member) => member.id) ?? [];
+        const logs = campaignIds.flatMap((campaignId) => actionLogsByCampaignId.get(campaignId) ?? []);
+        const markerLogs = Array.from(new Map(logs.map((log) => [log.id, log])).values());
+
+        return {
+          id: entity.key,
+          label: entity.label,
+          color: compareColorByKey.get(entity.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
+          points,
+          markers: mapActionLogsToMarkers(markerLogs, points, resolution),
+          variant: "line" as const,
+          emphasized: index === 0,
+          dashed: index > 0,
+        };
+      })
       .filter((entry) => entry.points.length > 0);
-  }, [campaignMetric, selectedCompareEntities]);
+  }, [actionLogsByCampaignId, campaignMetric, compareColorByKey, indexCards, resolution, selectedCompareEntities]);
 
   const focusedCampaignContext = React.useMemo(() => {
     if (scope?.type === "index") {
@@ -457,6 +745,7 @@ export function CampaignAdSetWorkspace({
           label: `Index · ${entry.index.name}`,
           metrics: entry.aggregate.metrics,
           trends: entry.aggregate.trends,
+          comparison: undefined,
         };
       }
     }
@@ -468,6 +757,7 @@ export function CampaignAdSetWorkspace({
           label: campaign.name,
           metrics: campaign.metrics,
           trends: campaign.trends ?? [],
+          comparison: campaign.comparison,
         };
       }
     }
@@ -478,6 +768,10 @@ export function CampaignAdSetWorkspace({
         label: selected.type === "index" ? `Index · ${selected.label}` : selected.label,
         metrics: selected.metrics,
         trends: selected.trends,
+        comparison:
+          selected.type === "campaign"
+            ? campaignById.get(selected.key.replace("campaign:", ""))?.comparison
+            : undefined,
       };
     }
 
@@ -485,14 +779,24 @@ export function CampaignAdSetWorkspace({
   }, [campaignById, indexCards, scope, selectedCompareEntities]);
 
   const campaignMetricCards = React.useMemo(() => {
-    return METRICS.map((metric) => ({
-      metric,
-      label: labelForMetric(metric),
-      value: latestMetricValue(metric, focusedCampaignContext?.metrics, focusedCampaignContext?.trends),
-      color: METRIC_CARD_COLORS[metric],
-      spark: mapTrendPoints(focusedCampaignContext?.trends, metric),
-    }));
-  }, [focusedCampaignContext?.metrics, focusedCampaignContext?.trends]);
+    return METRICS.map((metric) => {
+      const spark = mapTrendPoints(focusedCampaignContext?.trends, metric);
+      return {
+        metric,
+        label: labelForMetric(metric),
+        value: latestMetricValue(metric, focusedCampaignContext?.metrics, focusedCampaignContext?.trends),
+        color: METRIC_CARD_COLORS[metric],
+        spark,
+        changePct:
+          metricPercentageChange(metric, focusedCampaignContext?.comparison) ??
+          trendPercentageChange(spark),
+      };
+    });
+  }, [
+    focusedCampaignContext?.comparison,
+    focusedCampaignContext?.metrics,
+    focusedCampaignContext?.trends,
+  ]);
 
   const toggleCompareEntity = React.useCallback((key: string) => {
     setSelectedCompareKeys((current) => {
@@ -621,7 +925,8 @@ export function CampaignAdSetWorkspace({
 
   React.useEffect(() => {
     setAdSetsByCampaign({});
-    setSelectedAdSetKey(undefined);
+    setSelectedAdSetKeys([]);
+    setFocusedAdSetKey(undefined);
   }, [accountId, brandId, resolution, timeRangePreset]);
 
   React.useEffect(() => {
@@ -680,49 +985,173 @@ export function CampaignAdSetWorkspace({
     return filtered.sort((left, right) => (right.metrics?.spend ?? 0) - (left.metrics?.spend ?? 0));
   }, [activeOnly, adSetsByCampaign, scopedCampaignIds]);
 
+  const filteredScopedAdSets = React.useMemo(() => {
+    const normalized = campaignQuery.trim().toLowerCase();
+    if (!normalized) return scopedAdSets;
+    return scopedAdSets.filter((adSet) => {
+      const haystack = [adSet.name, adSet.id, adSet.campaignName, adSet.status].join(" ").toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [campaignQuery, scopedAdSets]);
+
   React.useEffect(() => {
     if (scopedAdSets.length === 0) {
-      setSelectedAdSetKey(undefined);
+      setSelectedAdSetKeys([]);
+      setFocusedAdSetKey(undefined);
       return;
     }
 
-    setSelectedAdSetKey((current) => {
-      if (current && scopedAdSets.some((row) => `${row.campaignId}:${row.id}` === current)) {
+    const validKeys = new Set(scopedAdSets.map((adSet) => scopedAdSetKey(adSet)));
+    const firstKey = scopedAdSetKey(scopedAdSets[0]);
+
+    setSelectedAdSetKeys((current) => {
+      const retained = current.filter((key) => validKeys.has(key));
+      if (retained.length > 0) {
+        return retained;
+      }
+      return [firstKey];
+    });
+
+    setFocusedAdSetKey((current) => {
+      if (current && validKeys.has(current)) {
         return current;
       }
-      return `${scopedAdSets[0].campaignId}:${scopedAdSets[0].id}`;
+      return firstKey;
     });
   }, [scopedAdSets]);
 
-  const selectedAdSet = React.useMemo(() => {
-    if (!selectedAdSetKey) return undefined;
-    return scopedAdSets.find((adSet) => `${adSet.campaignId}:${adSet.id}` === selectedAdSetKey);
-  }, [scopedAdSets, selectedAdSetKey]);
+  React.useEffect(() => {
+    if (selectedAdSetKeys.length === 0) {
+      setFocusedAdSetKey(undefined);
+      return;
+    }
+
+    if (focusedAdSetKey && selectedAdSetKeys.includes(focusedAdSetKey)) return;
+    setFocusedAdSetKey(selectedAdSetKeys[0]);
+  }, [focusedAdSetKey, selectedAdSetKeys]);
+
+  const selectedAdSetSet = React.useMemo(() => new Set(selectedAdSetKeys), [selectedAdSetKeys]);
+
+  const selectedScopedAdSets = React.useMemo(() => {
+    return scopedAdSets.filter((adSet) => selectedAdSetSet.has(scopedAdSetKey(adSet)));
+  }, [scopedAdSets, selectedAdSetSet]);
+
+  const focusedAdSet = React.useMemo(() => {
+    if (!focusedAdSetKey) return selectedScopedAdSets[0];
+    const explicit = scopedAdSets.find((adSet) => scopedAdSetKey(adSet) === focusedAdSetKey);
+    return explicit ?? selectedScopedAdSets[0];
+  }, [focusedAdSetKey, scopedAdSets, selectedScopedAdSets]);
+
+  const toggleAdSetSelection = React.useCallback(
+    (key: string) => {
+      setSelectedAdSetKeys((current) => {
+        if (current.includes(key)) {
+          if (current.length === 1) return current;
+          const next = current.filter((item) => item !== key);
+          setFocusedAdSetKey((focused) => (focused === key ? next[0] : focused));
+          return next;
+        }
+        setFocusedAdSetKey(key);
+        return [...current, key];
+      });
+    },
+    []
+  );
 
   const adSetMetricCards = React.useMemo(() => {
-    return METRICS.map((metric) => ({
-      metric,
-      label: labelForMetric(metric),
-      value: latestMetricValue(metric, selectedAdSet?.metrics, selectedAdSet?.trends),
-      color: METRIC_CARD_COLORS[metric],
-      spark: mapTrendPoints(selectedAdSet?.trends, metric),
-    }));
-  }, [selectedAdSet?.metrics, selectedAdSet?.trends]);
+    return METRICS.map((metric) => {
+      const spark = mapTrendPoints(focusedAdSet?.trends, metric);
+      return {
+        metric,
+        label: labelForMetric(metric),
+        value: latestMetricValue(metric, focusedAdSet?.metrics, focusedAdSet?.trends),
+        color: METRIC_CARD_COLORS[metric],
+        spark,
+        changePct: metricPercentageChange(metric, focusedAdSet?.comparison) ?? trendPercentageChange(spark),
+      };
+    });
+  }, [focusedAdSet?.comparison, focusedAdSet?.metrics, focusedAdSet?.trends]);
+
+  const adSetColorByKey = React.useMemo(() => {
+    return new Map(
+      selectedAdSetKeys.map((key, index) => [key, COMPARE_COLORS[index % COMPARE_COLORS.length]])
+    );
+  }, [selectedAdSetKeys]);
+
+  const selectedAdSetActionLogs = React.useMemo(() => {
+    const logs = selectedScopedAdSets.flatMap((adSet) => actionLogsByAdSetId.get(adSet.id) ?? []);
+    return Array.from(new Map(logs.map((log) => [log.id, log])).values());
+  }, [actionLogsByAdSetId, selectedScopedAdSets]);
 
   const selectedAdSetSeries = React.useMemo<ObservabilityChartSeries[]>(() => {
-    const points = mapTrendPoints(selectedAdSet?.trends, adSetMetric);
-    if (points.length === 0) return [];
-    return [
-      {
-        id: selectedAdSet ? `${selectedAdSet.campaignId}:${selectedAdSet.id}` : "adset",
-        label: selectedAdSet?.name ?? "Ad Set",
-        color: "#0ea5e9",
-        points,
-        variant: "area",
+    const pointEntries = selectedScopedAdSets
+      .map((adSet) => {
+        const key = scopedAdSetKey(adSet);
+        return {
+          key,
+          adSet,
+          points: mapTrendPoints(adSet.trends, adSetMetric),
+        };
+      })
+      .filter((entry) => entry.points.length > 0);
+
+    if (pointEntries.length === 0) return [];
+
+    const series: ObservabilityChartSeries[] = [];
+
+    if (showSelectedAdSetAverage) {
+      const averaged = averageTrendPoints(pointEntries.map((entry) => entry.points));
+      if (averaged.length > 0) {
+        series.push({
+          id: "adset-avg",
+          label: `Selected Avg (${pointEntries.length})`,
+          color: "#0ea5e9",
+          points: averaged,
+          markers: mapActionLogsToMarkers(selectedAdSetActionLogs, averaged, resolution),
+          variant: "line",
+          emphasized: true,
+        });
+      }
+    }
+
+    if (showSelectedAdSetLines) {
+      pointEntries.forEach((entry, index) => {
+        series.push({
+          id: entry.key,
+          label: entry.adSet.name,
+          color: adSetColorByKey.get(entry.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
+          points: entry.points,
+          markers: mapActionLogsToMarkers(actionLogsByAdSetId.get(entry.adSet.id) ?? [], entry.points, resolution),
+          variant: "line",
+          emphasized: !showSelectedAdSetAverage && index === 0,
+        });
+      });
+    }
+
+    if (!showSelectedAdSetAverage && !showSelectedAdSetLines) {
+      const [first] = pointEntries;
+      series.push({
+        id: first.key,
+        label: first.adSet.name,
+        color: adSetColorByKey.get(first.key) ?? "#0ea5e9",
+        points: first.points,
+        markers: mapActionLogsToMarkers(actionLogsByAdSetId.get(first.adSet.id) ?? [], first.points, resolution),
+        variant: "line",
         emphasized: true,
-      },
-    ];
-  }, [adSetMetric, selectedAdSet]);
+      });
+    }
+
+    return series;
+  }, [
+    actionLogsByAdSetId,
+    adSetColorByKey,
+    adSetMetric,
+    resolution,
+    selectedAdSetActionLogs,
+    selectedScopedAdSets,
+    showSelectedAdSetAverage,
+    showSelectedAdSetLines,
+  ]);
 
   const isAdSetLoading = scopedCampaignIds.some(
     (campaignId) => adSetsByCampaign[campaignId]?.status === "loading"
@@ -733,7 +1162,7 @@ export function CampaignAdSetWorkspace({
     .filter((message): message is string => Boolean(message));
 
   const scopeRailItems = React.useMemo(() => {
-    const indexItems = indexCards.map((entry) => ({
+    const indexItems = filteredIndexCards.map((entry) => ({
       key: `index:${entry.index.id}`,
       label: entry.index.name,
       type: "index" as const,
@@ -741,7 +1170,7 @@ export function CampaignAdSetWorkspace({
       count: entry.members.length,
     }));
 
-    const campaignItems = eligibleCampaigns.map((campaign) => ({
+    const campaignItems = filteredCampaigns.map((campaign) => ({
       key: `campaign:${campaign.id}`,
       label: campaign.name,
       type: "campaign" as const,
@@ -750,24 +1179,37 @@ export function CampaignAdSetWorkspace({
     }));
 
     return [...indexItems, ...campaignItems];
-  }, [adSetMetric, eligibleCampaigns, indexCards]);
+  }, [adSetMetric, filteredCampaigns, filteredIndexCards]);
+
+  const hasIndexRail = railEntityFilter !== "campaigns" && filteredIndexCards.length > 0;
+  const hasCampaignRail = railEntityFilter !== "indexes";
+  const shouldSplitCampaignRail = hasIndexRail && hasCampaignRail;
+  const indexPanelDefaultSize = Math.min(55, Math.max(16, Math.min(filteredIndexCards.length, 3) * 12));
+  const activeScopeLabel = React.useMemo(() => {
+    if (!scope) return "All";
+    if (scope.type === "campaign") {
+      return campaignById.get(scope.id)?.name ?? "Campaign";
+    }
+    const idx = campaignIndexes.find((entry) => entry.id === scope.id);
+    return idx ? `Index · ${idx.name}` : "Index";
+  }, [campaignById, campaignIndexes, scope]);
 
   return (
     <Card className="overflow-hidden border-border/70">
-      <CardHeader className="border-b border-border/70 bg-muted/20 pb-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <CardTitle className="text-lg">Campaign Explorer</CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              TradingView-style compare for campaign/index performance, then ad set drill-in.
-            </p>
+      <CardHeader className="border-b border-border/70 bg-muted/20 px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <CardTitle className="truncate text-sm">Campaign Explorer</CardTitle>
+            <span className="hidden text-[11px] text-muted-foreground lg:inline">
+              Compare campaigns/indexes and drill into ad sets.
+            </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-md border border-border/70 bg-background p-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
               <Button
                 variant={viewMode === "campaigns" ? "secondary" : "ghost"}
-                size="sm"
+                size="xs"
                 onClick={() => {
                   setViewMode("campaigns");
                   onSelectedCampaignChange?.(undefined);
@@ -777,23 +1219,23 @@ export function CampaignAdSetWorkspace({
               </Button>
               <Button
                 variant={viewMode === "adsets" ? "secondary" : "ghost"}
-                size="sm"
+                size="xs"
                 onClick={() => setViewMode("adsets")}
               >
                 Ad Sets
               </Button>
             </div>
 
-            <div className="inline-flex rounded-md border border-border/70 bg-background p-1">
+            <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
               <Button
-                size="sm"
+                size="xs"
                 variant={resolution === "daily" ? "secondary" : "ghost"}
                 onClick={() => onResolutionChange("daily")}
               >
                 Daily
               </Button>
               <Button
-                size="sm"
+                size="xs"
                 variant={resolution === "hourly" ? "secondary" : "ghost"}
                 onClick={() => onResolutionChange("hourly")}
               >
@@ -801,183 +1243,18 @@ export function CampaignAdSetWorkspace({
               </Button>
             </div>
 
-            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background px-2 py-1">
+            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background px-2 py-0.5">
               <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
-              <span className="text-xs font-medium">Active only</span>
+              <span className="text-[11px] font-medium">Active only</span>
             </div>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="p-4">
+      <CardContent className="p-0">
         {viewMode === "campaigns" ? (
-          <section className="grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
-              <SidebarHeader>
-                <SidebarInput
-                  value={campaignQuery}
-                  onChange={(event) => setCampaignQuery(event.target.value)}
-                  placeholder="Search campaigns"
-                  className="text-xs"
-                  aria-label="Search campaigns"
-                />
-              </SidebarHeader>
-
-              <SidebarSeparator />
-
-              <SidebarContent className="gap-0">
-                <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 flex h-auto items-center justify-between px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
-                    <span>Indexes</span>
-                    <span className="flex items-center gap-1.5 normal-case tracking-normal">
-                      <span className="text-[10px] text-sidebar-foreground/60">Decompose</span>
-                      <Switch checked={decomposeIndexes} onCheckedChange={setDecomposeIndexes} />
-                    </span>
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <ScrollArea className="h-[220px] px-1 pb-1">
-                      {indexCards.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">No indexes available.</div>
-                      ) : (
-                        <SidebarMenu>
-                          {indexCards.map((entry) => {
-                            const indexKey = `index:${entry.index.id}`;
-                            const isAdded = selectedCompareSet.has(indexKey);
-
-                            return (
-                              <SidebarMenuItem key={indexKey}>
-                                <div className="rounded border border-transparent px-1 py-1 hover:border-sidebar-border/70 hover:bg-sidebar-accent/40">
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setScope({ type: "index", id: entry.index.id });
-                                        toggleCompareEntity(indexKey);
-                                        onSelectedCampaignChange?.(undefined);
-                                      }}
-                                      className={cn(
-                                        "grid min-w-0 flex-1 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-1 py-1 text-left",
-                                        isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
-                                      )}
-                                    >
-                                      <span className="truncate text-[12px] font-medium">{entry.index.name}</span>
-                                      <span className="text-[11px] text-sidebar-foreground/65">
-                                        {formatMetric(campaignMetric, entry.aggregate.metrics[campaignMetric] ?? 0)}
-                                      </span>
-                                    </button>
-
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-6 px-1.5 text-[10px]"
-                                      onClick={() => {
-                                        setScope({ type: "index", id: entry.index.id });
-                                        setViewMode("adsets");
-                                        onSelectedCampaignChange?.(undefined);
-                                      }}
-                                    >
-                                      Open
-                                    </Button>
-                                  </div>
-
-                                  {decomposeIndexes ? (
-                                    <div className="mt-1 space-y-1 border-t border-sidebar-border/70 pt-1.5">
-                                      {entry.members.map((campaign) => {
-                                        const campaignKey = `campaign:${campaign.id}`;
-                                        const campaignAdded = selectedCompareSet.has(campaignKey);
-                                        return (
-                                          <button
-                                            key={campaignKey}
-                                            type="button"
-                                            onClick={() => {
-                                              setScope({ type: "campaign", id: campaign.id });
-                                              toggleCompareEntity(campaignKey);
-                                              onSelectedCampaignChange?.(campaign.id);
-                                            }}
-                                            className={cn(
-                                              "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1 text-left text-[11px]",
-                                              campaignAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
-                                            )}
-                                          >
-                                            <span className="truncate">{campaign.name}</span>
-                                            <span className="text-sidebar-foreground/65">
-                                              {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
-                                            </span>
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      )}
-                    </ScrollArea>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarSeparator />
-
-                <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
-                    Campaigns
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <ScrollArea className="h-[290px] px-1 pb-1">
-                      {filteredCampaigns.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">No campaigns match.</div>
-                      ) : (
-                        <SidebarMenu>
-                          {filteredCampaigns.map((campaign) => {
-                            const key = `campaign:${campaign.id}`;
-                            const isAdded = selectedCompareSet.has(key);
-                            return (
-                              <SidebarMenuItem key={campaign.id}>
-                                <div className="flex items-center gap-1.5 rounded px-1 py-1 hover:bg-sidebar-accent/40">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setScope({ type: "campaign", id: campaign.id });
-                                      toggleCompareEntity(key);
-                                      onSelectedCampaignChange?.(campaign.id);
-                                    }}
-                                    className={cn(
-                                      "grid min-w-0 flex-1 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-1 py-1 text-left",
-                                      isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
-                                    )}
-                                  >
-                                    <span className="truncate text-[12px]">{campaign.name}</span>
-                                    <span className="text-[11px] text-sidebar-foreground/65">
-                                      {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
-                                    </span>
-                                  </button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 px-1.5 text-[10px]"
-                                    onClick={() => {
-                                      setScope({ type: "campaign", id: campaign.id });
-                                      setViewMode("adsets");
-                                      onSelectedCampaignChange?.(campaign.id);
-                                    }}
-                                  >
-                                    Open
-                                  </Button>
-                                </div>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      )}
-                    </ScrollArea>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              </SidebarContent>
-            </aside>
-
-            <div className="rounded-md border border-border/70 bg-card p-3">
+          <section className="grid gap-2 pb-2 pl-2 pr-0 pt-2 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="rounded-md border border-border/70 bg-card p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-semibold">Compare Timeline</div>
@@ -992,7 +1269,7 @@ export function CampaignAdSetWorkspace({
                 </span>
               </div>
 
-              <ScrollArea className="mt-3 w-full">
+              <ScrollArea className="mt-2.5 w-full">
                 <div className="flex min-w-max gap-2 pb-1">
                   {campaignMetricCards.map((card) => (
                     <button
@@ -1000,17 +1277,31 @@ export function CampaignAdSetWorkspace({
                       type="button"
                       onClick={() => setCampaignMetric(card.metric)}
                       className={cn(
-                        "w-[172px] cursor-pointer rounded-md border px-2.5 py-2 text-left transition-colors",
+                        "w-[156px] cursor-pointer rounded-md border px-2 py-1.5 text-left transition-colors",
                         campaignMetric === card.metric
                           ? "border-primary/60 bg-primary/[0.07]"
                           : "border-border/70 bg-background hover:bg-muted/40"
                       )}
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-1.5">
                         <span className="text-[11px] font-medium text-muted-foreground">{card.label}</span>
                         <span className="text-xs font-semibold">{formatMetric(card.metric, card.value)}</span>
                       </div>
-                      <div className="mt-2 h-11">
+                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <span
+                          className={cn(
+                            "text-[10px] font-medium",
+                            card.changePct == null
+                              ? "text-muted-foreground"
+                              : card.changePct >= 0
+                                ? "text-emerald-600"
+                                : "text-destructive"
+                          )}
+                        >
+                          {card.changePct == null ? "No change data" : formatDeltaPercent(card.changePct)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-10">
                         {card.spark.length > 0 ? (
                           <ObservabilityLightweightChart
                             compact
@@ -1020,7 +1311,7 @@ export function CampaignAdSetWorkspace({
                                 label: card.label,
                                 color: card.color,
                                 points: card.spark,
-                                variant: "area",
+                                variant: "line",
                                 emphasized: true,
                               },
                             ]}
@@ -1034,7 +1325,7 @@ export function CampaignAdSetWorkspace({
                 </div>
               </ScrollArea>
 
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 {compareChartSeries.map((line) => (
                   <span
                     key={`legend-${line.id}`}
@@ -1046,145 +1337,459 @@ export function CampaignAdSetWorkspace({
                 ))}
               </div>
 
-              <div className="mt-3 h-[430px]">
-                {compareChartSeries.length > 0 ? (
-                  <ObservabilityLightweightChart series={compareChartSeries} />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                    Add at least one campaign or index to visualize {labelForMetric(campaignMetric)}.
+              <ContextMenu>
+                <ContextMenuTrigger>
+                  <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
+                    {compareChartSeries.length > 0 ? (
+                      <ObservabilityLightweightChart series={compareChartSeries} />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                        Add at least one campaign or index to visualize {labelForMetric(campaignMetric)}.
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-56">
+                  <ContextMenuLabel>Chart actions</ContextMenuLabel>
+                  <ContextMenuSeparator />
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger inset>Quick actions</ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-52">
+                      <ContextMenuItem
+                        onSelect={() => {
+                          setScope(undefined);
+                          setSelectedCompareKeys([]);
+                          setCampaignMetric("spend");
+                        }}
+                      >
+                        Reset compare view
+                      </ContextMenuItem>
+                      <ContextMenuItem onSelect={() => setSelectedCompareKeys([])}>
+                        Clear compared entities
+                      </ContextMenuItem>
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger inset>Display</ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-52">
+                      <ContextMenuCheckboxItem
+                        checked={activeOnly}
+                        onCheckedChange={(checked) => onActiveOnlyChange(checked === true)}
+                      >
+                        Active only
+                      </ContextMenuCheckboxItem>
+                      <ContextMenuCheckboxItem
+                        checked={decomposeIndexes}
+                        onCheckedChange={(checked) => setDecomposeIndexes(checked === true)}
+                      >
+                        Decompose indexes
+                      </ContextMenuCheckboxItem>
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger inset>Resolution</ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-52">
+                      <ContextMenuRadioGroup
+                        value={resolution}
+                        onValueChange={(value) => onResolutionChange(value as TimelineResolution)}
+                      >
+                        <ContextMenuRadioItem value="daily">Daily</ContextMenuRadioItem>
+                        <ContextMenuRadioItem value="hourly">Hourly</ContextMenuRadioItem>
+                      </ContextMenuRadioGroup>
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                  <ContextMenuSub>
+                    <ContextMenuSubTrigger inset>Metric</ContextMenuSubTrigger>
+                    <ContextMenuSubContent className="w-52">
+                      <ContextMenuRadioGroup
+                        value={campaignMetric}
+                        onValueChange={(value) => setCampaignMetric(value as MetricKey)}
+                      >
+                        {METRICS.map((metric) => (
+                          <ContextMenuRadioItem key={`campaign-metric-${metric}`} value={metric}>
+                            {labelForMetric(metric)}
+                          </ContextMenuRadioItem>
+                        ))}
+                      </ContextMenuRadioGroup>
+                    </ContextMenuSubContent>
+                  </ContextMenuSub>
+                </ContextMenuContent>
+              </ContextMenu>
             </div>
-          </section>
-        ) : (
-          <section className="grid gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
-              <SidebarHeader className="p-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setViewMode("campaigns");
-                    onSelectedCampaignChange?.(undefined);
-                  }}
-                  className="h-8 w-full justify-start border-sidebar-border/70 bg-sidebar text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                >
-                  <ArrowLeftIcon className="mr-1 h-3.5 w-3.5" />
-                  Back to campaigns
-                </Button>
+
+            <aside className="rounded-l-md rounded-r-none border border-r-0 border-sidebar-border bg-sidebar text-sidebar-foreground">
+              <SidebarHeader className="space-y-2 p-2">
+                <Input
+                  value={campaignQuery}
+                  onChange={(event) => setCampaignQuery(event.target.value)}
+                  placeholder="Search by name, id, status, objective..."
+                  className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
+                  aria-label="Search campaigns and indexes"
+                />
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="xs"
+                    variant={railEntityFilter === "all" ? "secondary" : "ghost"}
+                    onClick={() => setRailEntityFilter("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant={railEntityFilter === "indexes" ? "secondary" : "ghost"}
+                    onClick={() => setRailEntityFilter("indexes")}
+                  >
+                    Indexes
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant={railEntityFilter === "campaigns" ? "secondary" : "ghost"}
+                    onClick={() => setRailEntityFilter("campaigns")}
+                  >
+                    Campaigns
+                  </Button>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <Button size="icon-xs" variant="ghost" className="ml-auto">
+                        <DotsHorizontalIcon />
+                      </Button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-56">
+                      <ContextMenuLabel>Rail filters</ContextMenuLabel>
+                      <ContextMenuSeparator />
+                      <ContextMenuSub>
+                        <ContextMenuSubTrigger inset>Status</ContextMenuSubTrigger>
+                        <ContextMenuSubContent className="w-48">
+                          <ContextMenuRadioGroup
+                            value={campaignSearchFilter}
+                            onValueChange={(value) => setCampaignSearchFilter(value as CampaignSearchFilter)}
+                          >
+                            <ContextMenuRadioItem value="all">All</ContextMenuRadioItem>
+                            <ContextMenuRadioItem value="active">Active</ContextMenuRadioItem>
+                            <ContextMenuRadioItem value="paused">Non-active</ContextMenuRadioItem>
+                          </ContextMenuRadioGroup>
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                      <ContextMenuSub>
+                        <ContextMenuSubTrigger inset>Actions</ContextMenuSubTrigger>
+                        <ContextMenuSubContent className="w-48">
+                          <ContextMenuItem
+                            onSelect={() => {
+                              setCampaignQuery("");
+                              setCampaignSearchFilter("all");
+                              setRailEntityFilter("all");
+                            }}
+                          >
+                            Reset rail filters
+                          </ContextMenuItem>
+                        </ContextMenuSubContent>
+                      </ContextMenuSub>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                </div>
               </SidebarHeader>
 
               <SidebarSeparator />
 
-              <SidebarContent className="gap-0">
-                <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
-                    Scope
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <ScrollArea className="h-[220px] px-1 pb-1">
-                      {scopeRailItems.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">No available scope.</div>
-                      ) : (
-                        <SidebarMenu>
-                          {scopeRailItems.map((item) => {
-                            const isActive = scope && `${scope.type}:${scope.id}` === item.key;
-                            return (
-                              <SidebarMenuItem key={item.key}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (item.type === "campaign") {
-                                      const campaignId = item.campaignId ?? item.key.replace("campaign:", "");
-                                      setScope({ type: "campaign", id: campaignId });
-                                      onSelectedCampaignChange?.(campaignId);
-                                      return;
+              <SidebarContent className="gap-0 pb-2">
+                {shouldSplitCampaignRail ? (
+                  <ResizablePanelGroup orientation="vertical" className={RAIL_HEIGHT_CLASS}>
+                    <ResizablePanel defaultSize={indexPanelDefaultSize} minSize={14} maxSize={65}>
+                      <SidebarGroup className="pt-1">
+                        <SidebarGroupLabel className="mb-1 flex h-auto items-center justify-between px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                          <span>Indexes</span>
+                          <span className="flex items-center gap-1.5 normal-case tracking-normal">
+                            <span className="text-[10px] text-sidebar-foreground/60">Decompose</span>
+                            <Switch checked={decomposeIndexes} onCheckedChange={setDecomposeIndexes} />
+                          </span>
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                          <ScrollArea className="h-full max-h-[220px] px-1 pb-1">
+                            {filteredIndexCards.length === 0 ? (
+                              <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                                No indexes match.
+                              </div>
+                            ) : (
+                              <SidebarMenu>
+                                {filteredIndexCards.map((entry) => {
+                                  const indexKey = `index:${entry.index.id}`;
+                                  const isAdded = selectedCompareSet.has(indexKey);
+                                  return (
+                                    <SidebarMenuItem key={indexKey}>
+                                      <ContextMenu>
+                                        <ContextMenuTrigger asChild>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setScope({ type: "index", id: entry.index.id });
+                                              toggleCompareEntity(indexKey);
+                                              onSelectedCampaignChange?.(undefined);
+                                            }}
+                                            className={cn(
+                                              "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                              isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
+                                            )}
+                                          >
+                                            <span className="truncate font-medium">{entry.index.name}</span>
+                                            <span className="text-sidebar-foreground/65">
+                                              {formatMetric(campaignMetric, entry.aggregate.metrics[campaignMetric] ?? 0)}
+                                            </span>
+                                          </button>
+                                        </ContextMenuTrigger>
+                                        <ContextMenuContent className="w-52">
+                                          <ContextMenuItem
+                                            onSelect={() => {
+                                              setScope({ type: "index", id: entry.index.id });
+                                              setViewMode("adsets");
+                                              onSelectedCampaignChange?.(undefined);
+                                            }}
+                                          >
+                                            Open ad sets
+                                          </ContextMenuItem>
+                                          <ContextMenuItem onSelect={() => toggleCompareEntity(indexKey)}>
+                                            {isAdded ? "Remove from compare" : "Add to compare"}
+                                          </ContextMenuItem>
+                                          <ContextMenuSeparator />
+                                          <ContextMenuItem onSelect={() => onEditCampaignIndex?.(entry.index.id)}>
+                                            Edit index
+                                          </ContextMenuItem>
+                                          <ContextMenuItem
+                                            onSelect={() => onDeleteCampaignIndex?.(entry.index.id)}
+                                            className="text-destructive"
+                                          >
+                                            Delete index
+                                          </ContextMenuItem>
+                                        </ContextMenuContent>
+                                      </ContextMenu>
+
+                                      {decomposeIndexes ? (
+                                        <div className="mt-1 space-y-1 border-t border-sidebar-border/70 pt-1">
+                                          {entry.members.map((campaign) => {
+                                            const campaignKey = `campaign:${campaign.id}`;
+                                            const campaignAdded = selectedCompareSet.has(campaignKey);
+                                            const campaignColor = compareColorByKey.get(campaignKey);
+                                            return (
+                                              <button
+                                                key={campaignKey}
+                                                type="button"
+                                                onClick={() => {
+                                                  setScope({ type: "campaign", id: campaign.id });
+                                                  toggleCompareEntity(campaignKey);
+                                                  onSelectedCampaignChange?.(campaign.id);
+                                                }}
+                                                className={cn(
+                                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1 text-left text-[11px]",
+                                                  campaignAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
+                                                )}
+                                              >
+                                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                                  <span
+                                                    className="h-2 w-2 shrink-0 rounded-full border border-sidebar-border/80"
+                                                    style={
+                                                      campaignColor
+                                                        ? { backgroundColor: campaignColor, borderColor: campaignColor }
+                                                        : undefined
+                                                    }
+                                                  />
+                                                  <span className="truncate">{campaign.name}</span>
+                                                </span>
+                                                <span className="text-sidebar-foreground/65">
+                                                  {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
+                                                </span>
+                                                <span
+                                                  title={`Open ad sets for ${campaign.name}`}
+                                                  onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setScope({ type: "campaign", id: campaign.id });
+                                                    setViewMode("adsets");
+                                                    onSelectedCampaignChange?.(campaign.id);
+                                                  }}
+                                                  className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+                                                >
+                                                  <ChevronRightIcon className="h-3 w-3" />
+                                                </span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : null}
+                                    </SidebarMenuItem>
+                                  );
+                                })}
+                              </SidebarMenu>
+                            )}
+                          </ScrollArea>
+                        </SidebarGroupContent>
+                      </SidebarGroup>
+                    </ResizablePanel>
+                    <ResizableHandle className="bg-sidebar-border/70" />
+                    <ResizablePanel defaultSize={100 - indexPanelDefaultSize} minSize={30}>
+                      <SidebarGroup className="pt-1">
+                        <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                          Campaigns
+                        </SidebarGroupLabel>
+                        <SidebarGroupContent>
+                          <ScrollArea className="h-full px-1 pb-1">
+                            {filteredCampaigns.length === 0 ? (
+                              <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                                No campaigns match.
+                              </div>
+                            ) : (
+                              <SidebarMenu>
+                                {filteredCampaigns.map((campaign) => {
+                                  const key = `campaign:${campaign.id}`;
+                                  const isAdded = selectedCompareSet.has(key);
+                                  const campaignColor = compareColorByKey.get(key);
+                                  return (
+                                    <SidebarMenuItem key={campaign.id}>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setScope({ type: "campaign", id: campaign.id });
+                                          toggleCompareEntity(key);
+                                          onSelectedCampaignChange?.(campaign.id);
+                                        }}
+                                        className={cn(
+                                          "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                          isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
+                                        )}
+                                      >
+                                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                                          <span
+                                            className="h-2.5 w-2.5 shrink-0 rounded-full border border-sidebar-border/80"
+                                            style={
+                                              campaignColor
+                                                ? { backgroundColor: campaignColor, borderColor: campaignColor }
+                                                : undefined
+                                            }
+                                          />
+                                          <span className="truncate">{campaign.name}</span>
+                                        </span>
+                                        <span className="text-sidebar-foreground/65">
+                                          {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
+                                        </span>
+                                        <span
+                                          title={`Open ad sets for ${campaign.name}`}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setScope({ type: "campaign", id: campaign.id });
+                                            setViewMode("adsets");
+                                            onSelectedCampaignChange?.(campaign.id);
+                                          }}
+                                          className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+                                        >
+                                          <ChevronRightIcon className="h-3 w-3" />
+                                        </span>
+                                      </button>
+                                    </SidebarMenuItem>
+                                  );
+                                })}
+                              </SidebarMenu>
+                            )}
+                          </ScrollArea>
+                        </SidebarGroupContent>
+                      </SidebarGroup>
+                    </ResizablePanel>
+                  </ResizablePanelGroup>
+                ) : hasIndexRail ? (
+                  <SidebarGroup className="pt-1">
+                    <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                      Indexes
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <ScrollArea className={cn(RAIL_SCROLL_HEIGHT_CLASS, "px-1 pb-1")}>
+                        {filteredIndexCards.map((entry) => {
+                          const indexKey = `index:${entry.index.id}`;
+                          const isAdded = selectedCompareSet.has(indexKey);
+                          return (
+                            <SidebarMenuItem key={indexKey}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setScope({ type: "index", id: entry.index.id });
+                                  toggleCompareEntity(indexKey);
+                                  onSelectedCampaignChange?.(undefined);
+                                }}
+                                className={cn(
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                  isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
+                                )}
+                              >
+                                <span className="truncate font-medium">{entry.index.name}</span>
+                                <span className="text-sidebar-foreground/65">
+                                  {formatMetric(campaignMetric, entry.aggregate.metrics[campaignMetric] ?? 0)}
+                                </span>
+                              </button>
+                            </SidebarMenuItem>
+                          );
+                        })}
+                      </ScrollArea>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                ) : (
+                  <SidebarGroup className="pt-1">
+                    <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                      Campaigns
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                      <ScrollArea className={cn(RAIL_SCROLL_HEIGHT_CLASS, "px-1 pb-1")}>
+                        {filteredCampaigns.map((campaign) => {
+                          const key = `campaign:${campaign.id}`;
+                          const isAdded = selectedCompareSet.has(key);
+                          const campaignColor = compareColorByKey.get(key);
+                          return (
+                            <SidebarMenuItem key={campaign.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setScope({ type: "campaign", id: campaign.id });
+                                  toggleCompareEntity(key);
+                                  onSelectedCampaignChange?.(campaign.id);
+                                }}
+                                className={cn(
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded px-2 py-1.5 text-left text-[11px]",
+                                  isAdded ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
+                                )}
+                              >
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <span
+                                    className="h-2.5 w-2.5 shrink-0 rounded-full border border-sidebar-border/80"
+                                    style={
+                                      campaignColor
+                                        ? { backgroundColor: campaignColor, borderColor: campaignColor }
+                                        : undefined
                                     }
-                                    setScope({ type: "index", id: item.key.replace("index:", "") });
-                                    onSelectedCampaignChange?.(undefined);
+                                  />
+                                  <span className="truncate">{campaign.name}</span>
+                                </span>
+                                <span className="text-sidebar-foreground/65">
+                                  {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
+                                </span>
+                                <span
+                                  title={`Open ad sets for ${campaign.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setScope({ type: "campaign", id: campaign.id });
+                                    setViewMode("adsets");
+                                    onSelectedCampaignChange?.(campaign.id);
                                   }}
-                                  className={cn(
-                                    "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left",
-                                    isActive ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
-                                  )}
+                                  className="rounded p-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                                 >
-                                  <span className="truncate text-[12px]">
-                                    {item.type === "index" ? `Index · ${item.label}` : item.label}
-                                  </span>
-                                  <span className="text-[11px] text-sidebar-foreground/65">
-                                    {formatMetric(adSetMetric, item.value)}
-                                  </span>
-                                </button>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      )}
-                    </ScrollArea>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                <SidebarSeparator />
-
-                <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
-                    Ad Sets
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <ScrollArea className="h-[360px] px-1 pb-1">
-                      {isAdSetLoading ? (
-                        <div className="space-y-1 px-1">
-                          {Array.from({ length: 8 }).map((_, idx) => (
-                            <Skeleton
-                              key={`adset-list-skeleton-${idx}`}
-                              className="h-8 w-full bg-sidebar-accent/50"
-                            />
-                          ))}
-                        </div>
-                      ) : scopedAdSets.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
-                          No ad sets for this scope.
-                        </div>
-                      ) : (
-                        <SidebarMenu>
-                          {scopedAdSets.map((adSet) => {
-                            const key = `${adSet.campaignId}:${adSet.id}`;
-                            const isSelected = key === selectedAdSetKey;
-                            return (
-                              <SidebarMenuItem key={key}>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedAdSetKey(key);
-                                    onSelectedCampaignChange?.(adSet.campaignId);
-                                  }}
-                                  className={cn(
-                                    "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left",
-                                    isSelected ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
-                                  )}
-                                >
-                                  <span className="min-w-0">
-                                    <span className="block truncate text-[12px]">{adSet.name}</span>
-                                    <span className="block truncate text-[10px] text-sidebar-foreground/60">
-                                      {adSet.campaignName}
-                                    </span>
-                                  </span>
-                                  <span className="text-[11px] text-sidebar-foreground/65">
-                                    {formatMetric(adSetMetric, adSet.metrics?.[adSetMetric] ?? 0)}
-                                  </span>
-                                </button>
-                              </SidebarMenuItem>
-                            );
-                          })}
-                        </SidebarMenu>
-                      )}
-                    </ScrollArea>
-                  </SidebarGroupContent>
-                </SidebarGroup>
+                                  <ChevronRightIcon className="h-3 w-3" />
+                                </span>
+                              </button>
+                            </SidebarMenuItem>
+                          );
+                        })}
+                      </ScrollArea>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
+                )}
               </SidebarContent>
             </aside>
-
+          </section>
+        ) : (
+          <section className="grid gap-2 pb-2 pl-2 pr-0 pt-2 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-3">
               {adSetErrors.length > 0 ? (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -1192,20 +1797,23 @@ export function CampaignAdSetWorkspace({
                 </div>
               ) : null}
 
-              <div className="rounded-md border border-border/70 p-3">
+              <div className="rounded-md border border-border/70 p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">
-                      {selectedAdSet ? selectedAdSet.name : "Select an ad set"}
+                      {focusedAdSet ? focusedAdSet.name : "Select ad sets"}
                     </div>
-                    <div className="text-xs text-muted-foreground">Single metric timeline</div>
+                    <div className="text-xs text-muted-foreground">
+                      {selectedScopedAdSets.length} selected · {showSelectedAdSetAverage ? "avg on" : "avg off"} ·{" "}
+                      {showSelectedAdSetLines ? "lines on" : "lines off"}
+                    </div>
                   </div>
                   <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
                     Active KPI: {labelForMetric(adSetMetric)}
                   </span>
                 </div>
 
-                <ScrollArea className="mt-3 w-full">
+                <ScrollArea className="mt-2.5 w-full">
                   <div className="flex min-w-max gap-2 pb-1">
                     {adSetMetricCards.map((card) => (
                       <button
@@ -1213,17 +1821,31 @@ export function CampaignAdSetWorkspace({
                         type="button"
                         onClick={() => setAdSetMetric(card.metric)}
                         className={cn(
-                          "w-[172px] cursor-pointer rounded-md border px-2.5 py-2 text-left transition-colors",
+                          "w-[156px] cursor-pointer rounded-md border px-2 py-1.5 text-left transition-colors",
                           adSetMetric === card.metric
                             ? "border-primary/60 bg-primary/[0.07]"
                             : "border-border/70 bg-background hover:bg-muted/40"
                         )}
                       >
-                        <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center justify-between gap-1.5">
                           <span className="text-[11px] font-medium text-muted-foreground">{card.label}</span>
                           <span className="text-xs font-semibold">{formatMetric(card.metric, card.value)}</span>
                         </div>
-                        <div className="mt-2 h-11">
+                        <div className="mt-1.5 flex items-center justify-between gap-2">
+                          <span
+                            className={cn(
+                              "text-[10px] font-medium",
+                              card.changePct == null
+                                ? "text-muted-foreground"
+                                : card.changePct >= 0
+                                  ? "text-emerald-600"
+                                  : "text-destructive"
+                            )}
+                          >
+                            {card.changePct == null ? "No change data" : formatDeltaPercent(card.changePct)}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-10">
                           {card.spark.length > 0 ? (
                             <ObservabilityLightweightChart
                               compact
@@ -1233,7 +1855,7 @@ export function CampaignAdSetWorkspace({
                                   label: card.label,
                                   color: card.color,
                                   points: card.spark,
-                                  variant: "area",
+                                  variant: "line",
                                   emphasized: true,
                                 },
                               ]}
@@ -1259,24 +1881,270 @@ export function CampaignAdSetWorkspace({
                   ))}
                 </div>
 
-                <div className="mt-3 h-[430px]">
-                  {selectedAdSetSeries.length > 0 ? (
-                    <ObservabilityLightweightChart series={selectedAdSetSeries} />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      {isAdSetLoading ? (
-                        <span className="inline-flex items-center gap-2">
-                          <ReloadIcon className="h-4 w-4 animate-spin" />
-                          Loading ad set timeline...
-                        </span>
+                <ContextMenu>
+                  <ContextMenuTrigger>
+                    <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
+                      {selectedAdSetSeries.length > 0 ? (
+                        <ObservabilityLightweightChart series={selectedAdSetSeries} />
                       ) : (
-                        "No timeline data for this ad set."
+                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                          {isAdSetLoading ? (
+                            <span className="inline-flex items-center gap-2">
+                              <ReloadIcon className="h-4 w-4 animate-spin" />
+                              Loading ad set timeline...
+                            </span>
+                          ) : (
+                            "No timeline data for selected ad sets."
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-56">
+                    <ContextMenuLabel>Ad set view actions</ContextMenuLabel>
+                    <ContextMenuSeparator />
+                    <ContextMenuSub>
+                      <ContextMenuSubTrigger inset>Quick actions</ContextMenuSubTrigger>
+                      <ContextMenuSubContent className="w-52">
+                        <ContextMenuItem
+                          onSelect={() => {
+                            setAdSetMetric("spend");
+                            setShowSelectedAdSetAverage(false);
+                            setShowSelectedAdSetLines(true);
+                            const first = scopedAdSets[0];
+                            if (!first) return;
+                            const key = scopedAdSetKey(first);
+                            setSelectedAdSetKeys([key]);
+                            setFocusedAdSetKey(key);
+                          }}
+                        >
+                          Reset view
+                        </ContextMenuItem>
+                        <ContextMenuItem
+                          onSelect={() => {
+                            const keys = filteredScopedAdSets.map((adSet) => scopedAdSetKey(adSet));
+                            setSelectedAdSetKeys(keys);
+                            if (keys.length > 0) setFocusedAdSetKey(keys[0]);
+                          }}
+                        >
+                          Select all visible
+                        </ContextMenuItem>
+                        <ContextMenuItem onSelect={() => setSelectedAdSetKeys([])}>Clear selected</ContextMenuItem>
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                    <ContextMenuSub>
+                      <ContextMenuSubTrigger inset>Display</ContextMenuSubTrigger>
+                      <ContextMenuSubContent className="w-52">
+                        <ContextMenuCheckboxItem
+                          checked={showSelectedAdSetAverage}
+                          onCheckedChange={(checked) => setShowSelectedAdSetAverage(checked === true)}
+                        >
+                          Show averaged line
+                        </ContextMenuCheckboxItem>
+                        <ContextMenuCheckboxItem
+                          checked={showSelectedAdSetLines}
+                          onCheckedChange={(checked) => setShowSelectedAdSetLines(checked === true)}
+                        >
+                          Show individual lines
+                        </ContextMenuCheckboxItem>
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                    <ContextMenuSub>
+                      <ContextMenuSubTrigger inset>Metric</ContextMenuSubTrigger>
+                      <ContextMenuSubContent className="w-52">
+                        <ContextMenuRadioGroup
+                          value={adSetMetric}
+                          onValueChange={(value) => setAdSetMetric(value as MetricKey)}
+                        >
+                          {METRICS.map((metric) => (
+                            <ContextMenuRadioItem key={`adset-metric-${metric}`} value={metric}>
+                              {labelForMetric(metric)}
+                            </ContextMenuRadioItem>
+                          ))}
+                        </ContextMenuRadioGroup>
+                      </ContextMenuSubContent>
+                    </ContextMenuSub>
+                  </ContextMenuContent>
+                </ContextMenu>
               </div>
             </div>
+
+            <aside className="rounded-l-md rounded-r-none border border-r-0 border-sidebar-border bg-sidebar text-sidebar-foreground">
+              <SidebarHeader className="space-y-2 p-2">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    setViewMode("campaigns");
+                    onSelectedCampaignChange?.(undefined);
+                  }}
+                  className="h-7 w-full justify-start border-sidebar-border/70 bg-sidebar text-xs text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                >
+                  <ArrowLeftIcon className="mr-1 h-3.5 w-3.5" />
+                  Back to campaigns
+                </Button>
+                <Input
+                  value={campaignQuery}
+                  onChange={(event) => setCampaignQuery(event.target.value)}
+                  placeholder="Search scope and ad sets..."
+                  className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
+                />
+                <Breadcrumb>
+                  <BreadcrumbList className="text-[11px]">
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="text-[11px] text-sidebar-foreground/70">Campaigns</BreadcrumbPage>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="text-[11px] text-sidebar-foreground/70">{activeScopeLabel}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="text-[11px]">Ad Sets</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </SidebarHeader>
+
+              <SidebarSeparator />
+
+              <SidebarContent className="gap-0 pb-2">
+                <SidebarGroup className="pt-1">
+                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                    Scope
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <ScrollArea className="h-[150px] px-1 pb-1">
+                      {scopeRailItems.length === 0 ? (
+                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">No available scope.</div>
+                      ) : (
+                        <SidebarMenu>
+                          {scopeRailItems.map((item) => {
+                            const isActive = scope && `${scope.type}:${scope.id}` === item.key;
+                            const campaignColor =
+                              item.type === "campaign" ? compareColorByKey.get(item.key) : undefined;
+                            return (
+                              <SidebarMenuItem key={item.key}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (item.type === "campaign") {
+                                      const campaignId = item.campaignId ?? item.key.replace("campaign:", "");
+                                      setScope({ type: "campaign", id: campaignId });
+                                      onSelectedCampaignChange?.(campaignId);
+                                      return;
+                                    }
+                                    setScope({ type: "index", id: item.key.replace("index:", "") });
+                                    onSelectedCampaignChange?.(undefined);
+                                  }}
+                                  className={cn(
+                                    "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left",
+                                    isActive ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50"
+                                  )}
+                                >
+                                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                                    {item.type === "campaign" ? (
+                                      <span
+                                        className="h-2.5 w-2.5 shrink-0 rounded-full border border-sidebar-border/80"
+                                        style={
+                                          campaignColor
+                                            ? { backgroundColor: campaignColor, borderColor: campaignColor }
+                                            : undefined
+                                        }
+                                      />
+                                    ) : null}
+                                    <span className="truncate text-[12px]">
+                                      {item.type === "index" ? `Index · ${item.label}` : item.label}
+                                    </span>
+                                  </span>
+                                  <span className="text-[11px] text-sidebar-foreground/65">
+                                    {formatMetric(adSetMetric, item.value)}
+                                  </span>
+                                </button>
+                              </SidebarMenuItem>
+                            );
+                          })}
+                        </SidebarMenu>
+                      )}
+                    </ScrollArea>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarSeparator />
+
+                <SidebarGroup className="pt-1">
+                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                    Ad Sets ({selectedScopedAdSets.length} selected)
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <ScrollArea className="h-[300px] px-1 pb-1">
+                      {isAdSetLoading ? (
+                        <div className="space-y-1 px-1">
+                          {Array.from({ length: 8 }).map((_, idx) => (
+                            <Skeleton
+                              key={`adset-list-skeleton-${idx}`}
+                              className="h-8 w-full bg-sidebar-accent/50"
+                            />
+                          ))}
+                        </div>
+                      ) : filteredScopedAdSets.length === 0 ? (
+                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                          No ad sets for this scope.
+                        </div>
+                      ) : (
+                        <SidebarMenu>
+                          {filteredScopedAdSets.map((adSet) => {
+                            const key = scopedAdSetKey(adSet);
+                            const isSelected = selectedAdSetSet.has(key);
+                            const isFocused = focusedAdSetKey === key;
+                            const adSetColor = adSetColorByKey.get(key);
+                            return (
+                              <SidebarMenuItem key={key}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    toggleAdSetSelection(key);
+                                    onSelectedCampaignChange?.(adSet.campaignId);
+                                  }}
+                                  className={cn(
+                                    "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-left",
+                                    isSelected ? "bg-sidebar-accent/70" : "hover:bg-sidebar-accent/50",
+                                    isFocused && "ring-1 ring-sidebar-ring"
+                                  )}
+                                >
+                                  <span className="min-w-0">
+                                    <span className="inline-flex items-center gap-1.5 truncate text-[12px]">
+                                      <span
+                                        className={cn(
+                                          "h-2.5 w-2.5 shrink-0 rounded-full border border-sidebar-border/80",
+                                          isSelected ? "opacity-100" : "opacity-40"
+                                        )}
+                                        style={
+                                          adSetColor
+                                            ? { backgroundColor: adSetColor, borderColor: adSetColor }
+                                            : undefined
+                                        }
+                                      />
+                                      {adSet.name}
+                                    </span>
+                                    <span className="block truncate text-[10px] text-sidebar-foreground/60">
+                                      {adSet.campaignName}
+                                    </span>
+                                  </span>
+                                  <span className="text-[11px] text-sidebar-foreground/65">
+                                    {formatMetric(adSetMetric, adSet.metrics?.[adSetMetric] ?? 0)}
+                                  </span>
+                                </button>
+                              </SidebarMenuItem>
+                            );
+                          })}
+                        </SidebarMenu>
+                      )}
+                    </ScrollArea>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              </SidebarContent>
+            </aside>
           </section>
         )}
       </CardContent>

@@ -1,20 +1,19 @@
 "use client";
 
 import * as React from "react";
+import { CheckIcon } from "@radix-ui/react-icons";
 
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 type CampaignOption = {
   id: string;
@@ -29,112 +28,132 @@ type CampaignIndexDraft = {
 };
 
 type CampaignIndexManagerDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   campaigns: CampaignOption[];
   initialValue?: CampaignIndexDraft;
   saving?: boolean;
+  onCancel: () => void;
   onSave: (draft: CampaignIndexDraft) => void;
 };
 
 export function CampaignIndexManagerDialog({
-  open,
-  onOpenChange,
   campaigns,
   initialValue,
   saving = false,
+  onCancel,
   onSave,
 }: CampaignIndexManagerDialogProps) {
   const [name, setName] = React.useState("");
   const [selectedCampaignIds, setSelectedCampaignIds] = React.useState<string[]>([]);
+  const [search, setSearch] = React.useState("");
+  const [commandOpen, setCommandOpen] = React.useState(false);
 
   React.useEffect(() => {
-    if (!open) return;
-
     setName(initialValue?.name ?? "");
     setSelectedCampaignIds(initialValue?.campaignIds ?? []);
-  }, [initialValue, open]);
+  }, [initialValue]);
 
-  const toggleCampaign = React.useCallback((campaignId: string, checked: boolean) => {
+  const toggleCampaign = React.useCallback((campaignId: string) => {
     setSelectedCampaignIds((current) => {
-      if (checked) {
-        return Array.from(new Set([...current, campaignId]));
+      if (current.includes(campaignId)) {
+        return current.filter((id) => id !== campaignId);
       }
-      return current.filter((id) => id !== campaignId);
+      return Array.from(new Set([...current, campaignId]));
     });
   }, []);
 
   const canSave = name.trim().length > 0 && selectedCampaignIds.length > 0 && !saving;
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleCampaigns = React.useMemo(() => {
+    if (!normalizedSearch) return campaigns;
+    return campaigns.filter((campaign) => {
+      const haystack = [campaign.name, campaign.id, campaign.status].join(" ").toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [campaigns, normalizedSearch]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{initialValue?.id ? "Edit campaign index" : "Create campaign index"}</DialogTitle>
-          <DialogDescription>
-            Name a campaign index and choose campaigns to aggregate together.
-          </DialogDescription>
-        </DialogHeader>
+    <div className="rounded-md border border-border/70 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/75">
+      <div className="space-y-2 border-b border-border/70 px-3 py-2.5">
+        <p className="text-sm font-semibold">
+          {initialValue?.id ? "Edit campaign index" : "Create campaign index"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Command-based selection. Search, toggle campaigns, then save the grouped index.
+        </p>
+        <Input
+          id="campaign-index-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Q1 Core Portfolio"
+          maxLength={120}
+          className="h-8 text-xs"
+        />
+      </div>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="campaign-index-name">Index name</Label>
-            <Input
-              id="campaign-index-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Q1 Core Portfolio"
-              maxLength={120}
-            />
-          </div>
+      <Command className="rounded-none bg-transparent">
+        <CommandInput
+          placeholder="Search campaigns by name, id, status..."
+          value={search}
+          onValueChange={setSearch}
+          onFocus={() => setCommandOpen(true)}
+          onBlur={() => setCommandOpen(false)}
+          className="h-9 text-xs"
+        />
+        {commandOpen ? (
+          <CommandList className="max-h-[320px]" onMouseDown={(event) => event.preventDefault()}>
+            <CommandEmpty>No campaign matches this search.</CommandEmpty>
+            <CommandGroup heading={`Campaigns (${selectedCampaignIds.length} selected)`}>
+              {visibleCampaigns.map((campaign) => {
+                const selected = selectedCampaignIds.includes(campaign.id);
 
-          <div className="space-y-2">
-            <Label>Campaigns ({selectedCampaignIds.length} selected)</Label>
-            <ScrollArea className="h-72 rounded-md border p-2">
-              <div className="space-y-1">
-                {campaigns.map((campaign) => {
-                  const checked = selectedCampaignIds.includes(campaign.id);
-
-                  return (
-                    <label
-                      key={campaign.id}
-                      className="flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-1.5 text-sm hover:bg-muted/50"
+                return (
+                  <CommandItem
+                    key={campaign.id}
+                    value={`${campaign.name} ${campaign.id} ${campaign.status}`}
+                    keywords={[campaign.id, campaign.status]}
+                    onSelect={() => toggleCampaign(campaign.id)}
+                    className="cursor-pointer gap-2 py-2"
+                  >
+                    <span
+                      className={cn(
+                        "inline-flex h-4 w-4 items-center justify-center rounded border border-border",
+                        selected ? "bg-primary text-primary-foreground" : "bg-background"
+                      )}
+                      aria-hidden="true"
                     >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(value) => toggleCampaign(campaign.id, value === true)}
-                          aria-label={`Select ${campaign.name}`}
-                        />
-                        <span className="truncate">{campaign.name}</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">{campaign.status}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          </div>
-        </div>
+                      {selected ? <CheckIcon className="h-3 w-3" /> : null}
+                    </span>
+                    <span className="truncate text-xs">{campaign.name}</span>
+                    <span className="ml-auto text-[10px] uppercase text-muted-foreground">
+                      {campaign.status}
+                    </span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        ) : null}
+      </Command>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() =>
-              onSave({
-                id: initialValue?.id,
-                name: name.trim(),
-                campaignIds: selectedCampaignIds,
-              })
-            }
-            disabled={!canSave}
-          >
-            {saving ? "Saving..." : initialValue?.id ? "Save index" : "Create index"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      <div className="flex items-center justify-end gap-2 border-t border-border/70 px-3 py-2">
+        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() =>
+            onSave({
+              id: initialValue?.id,
+              name: name.trim(),
+              campaignIds: selectedCampaignIds,
+            })
+          }
+          disabled={!canSave}
+        >
+          {saving ? "Saving..." : initialValue?.id ? "Save index" : "Create index"}
+        </Button>
+      </div>
+    </div>
   );
 }

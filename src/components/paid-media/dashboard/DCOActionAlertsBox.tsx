@@ -5,8 +5,16 @@ import { MagnifyingGlassIcon, ReloadIcon } from "@radix-ui/react-icons";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -15,24 +23,44 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
-import type { ActionLog, ActionStatus } from "@/lib/types/dco";
+import type { ActionLog, ActionStatus, ScopeType } from "@/lib/types/dco";
 import { cn } from "@/lib/utils";
 
 type DCOActionAlertsBoxProps = {
   brandId: string;
   metaAccountId?: string;
   campaignId?: string;
+  className?: string;
 };
 
 type SortMode = "newest" | "oldest" | "severity" | "action";
 type StatusFilter = "all" | ActionStatus;
+type ScopeFilter = "all" | ScopeType;
+type QuickView = "all" | "attention" | "pending" | "successful" | "campaign" | "adset";
 
 const STATUS_ORDER: Record<ActionStatus, number> = {
   FAILED: 0,
   PENDING: 1,
   APPROVED: 2,
   SUCCESS: 3,
+};
+
+const QUICK_VIEW_LABEL: Record<QuickView, string> = {
+  all: "All events",
+  attention: "Needs attention",
+  pending: "Pending",
+  successful: "Successful",
+  campaign: "Campaign scope",
+  adset: "Ad set scope",
 };
 
 function formatRelativeTime(isoString: string): string {
@@ -54,6 +82,15 @@ function formatRelativeTime(isoString: string): string {
   });
 }
 
+function formatTimestamp(isoString: string): string {
+  return new Date(isoString).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function summarizeAction(log: ActionLog): string {
   if (log.error) return log.error;
   if (log.decisionNote) return log.decisionNote;
@@ -67,17 +104,34 @@ function summarizeAction(log: ActionLog): string {
   return `${log.actionType} applied on ${log.scopeType.toLowerCase()} scope`;
 }
 
-function statusTone(status: ActionStatus): string {
-  if (status === "FAILED") return "border-l-rose-500 bg-rose-500/5";
-  if (status === "PENDING") return "border-l-amber-500 bg-amber-500/5";
-  if (status === "APPROVED") return "border-l-sky-500 bg-sky-500/5";
-  return "border-l-emerald-500 bg-emerald-500/5";
+function badgeVariantForStatus(status: ActionStatus): "destructive" | "secondary" | "outline" {
+  if (status === "FAILED") return "destructive";
+  if (status === "PENDING") return "outline";
+  return "secondary";
 }
 
-export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOActionAlertsBoxProps) {
+function matchesQuickView(log: ActionLog, view: QuickView): boolean {
+  if (view === "all") return true;
+  if (view === "attention") return log.status === "FAILED" || log.status === "PENDING";
+  if (view === "pending") return log.status === "PENDING";
+  if (view === "successful") return log.status === "SUCCESS" || log.status === "APPROVED";
+  if (view === "campaign") return log.scopeType === "CAMPAIGN";
+  if (view === "adset") return log.scopeType === "ADSET" || log.scopeType === "AD";
+  return true;
+}
+
+export function DCOActionAlertsBox({
+  brandId,
+  metaAccountId,
+  campaignId,
+  className,
+}: DCOActionAlertsBoxProps) {
   const [search, setSearch] = React.useState("");
+  const [commandOpen, setCommandOpen] = React.useState(false);
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
+  const [scopeFilter, setScopeFilter] = React.useState<ScopeFilter>("all");
+  const [quickView, setQuickView] = React.useState<QuickView>("all");
 
   const {
     logs,
@@ -90,8 +144,8 @@ export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOAc
   } = useDCOActionLogs({
     brandId,
     metaAccountId,
-    initialPageSize: 30,
-    initialDateRangeDays: 7,
+    initialPageSize: 80,
+    initialDateRangeDays: 14,
   });
 
   React.useEffect(() => {
@@ -105,7 +159,9 @@ export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOAc
     const normalizedSearch = search.trim().toLowerCase();
 
     const base = logs.filter((log) => {
+      if (!matchesQuickView(log, quickView)) return false;
       if (statusFilter !== "all" && log.status !== statusFilter) return false;
+      if (scopeFilter !== "all" && log.scopeType !== scopeFilter) return false;
       if (!normalizedSearch) return true;
 
       const haystack = [
@@ -139,7 +195,9 @@ export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOAc
       if (severityGap !== 0) return severityGap;
       return new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime();
     });
-  }, [logs, search, sortMode, statusFilter]);
+  }, [logs, quickView, scopeFilter, search, sortMode, statusFilter]);
+
+  const commandRows = React.useMemo(() => filteredLogs.slice(0, 8), [filteredLogs]);
 
   const contextLabel = campaignId
     ? "Campaign context"
@@ -148,41 +206,34 @@ export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOAc
       : "Brand context";
 
   return (
-    <Card className="overflow-hidden border-border/70">
-      <CardHeader className="space-y-2 border-b border-border/70 bg-muted/20 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <CardTitle className="text-base">Automation Alerts</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              {contextLabel} · {pagination.totalCount} total events
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={refresh}
-            disabled={isLoading}
-            aria-label="Refresh alerts"
-          >
-            <ReloadIcon className={cn("h-4 w-4", isLoading ? "animate-spin" : undefined)} />
-          </Button>
+    <div className={cn("grid h-[min(72vh,680px)] min-h-0 gap-3 lg:grid-cols-[220px_minmax(0,1fr)]", className)}>
+      <aside className="rounded-md border border-border/70 bg-muted/10 p-2">
+        <div className="px-1">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menu</div>
+          <p className="mt-1 text-[11px] text-muted-foreground">{contextLabel}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full min-w-[180px] flex-1">
-            <MagnifyingGlassIcon className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search alerts..."
-              className="h-8 pl-7 text-xs"
-              aria-label="Search action alerts"
-            />
-          </div>
+        <div className="mt-2 space-y-1">
+          {(Object.keys(QUICK_VIEW_LABEL) as QuickView[]).map((view) => (
+            <button
+              key={`alerts-quick-view-${view}`}
+              type="button"
+              onClick={() => setQuickView(view)}
+              className={cn(
+                "w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                quickView === view
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {QUICK_VIEW_LABEL[view]}
+            </button>
+          ))}
+        </div>
 
+        <div className="mt-3 space-y-2 border-t border-border/70 pt-2">
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-            <SelectTrigger className="h-8 w-[130px] text-xs">
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -194,8 +245,22 @@ export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOAc
             </SelectContent>
           </Select>
 
+          <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue placeholder="Scope" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All scope</SelectItem>
+              <SelectItem value="GLOBAL">Global</SelectItem>
+              <SelectItem value="ACCOUNT">Account</SelectItem>
+              <SelectItem value="CAMPAIGN">Campaign</SelectItem>
+              <SelectItem value="ADSET">Ad Set</SelectItem>
+              <SelectItem value="AD">Ad</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-8 w-[130px] text-xs">
+            <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
@@ -206,69 +271,145 @@ export function DCOActionAlertsBox({ brandId, metaAccountId, campaignId }: DCOAc
             </SelectContent>
           </Select>
         </div>
-      </CardHeader>
+      </aside>
 
-      <CardContent className="p-3">
-        {error ? (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        ) : null}
-
-        {isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, idx) => (
-              <Skeleton key={`alert-skeleton-${idx}`} className="h-14 w-full bg-muted/70" />
-            ))}
-          </div>
-        ) : filteredLogs.length === 0 ? (
-          <div className="rounded-md border border-border/70 bg-muted/20 px-3 py-6 text-center text-xs text-muted-foreground">
-            No alerts for this context.
-          </div>
-        ) : (
-          <div className="max-h-[240px] space-y-2 overflow-auto pr-1">
-            {filteredLogs.map((log) => (
-              <div key={log.id} className={cn("rounded-md border border-border/70 border-l-4 px-3 py-2", statusTone(log.status))}>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={log.status === "FAILED" ? "destructive" : "secondary"}>{log.status}</Badge>
-                  <span className="text-xs font-medium">{log.actionType}</span>
-                  <span className="text-[11px] text-muted-foreground">{formatRelativeTime(log.occurredAt)}</span>
-                </div>
-                <p className="mt-1 line-clamp-2 text-xs text-foreground">{summarizeAction(log)}</p>
-                <div className="mt-1 text-[10px] text-muted-foreground">
-                  Scope: {log.scopeType} · Campaign: {log.metaCampaignId ?? "--"}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {pagination.totalPages > 1 ? (
-          <div className="mt-2 flex items-center justify-between text-xs">
+      <section className="flex min-h-0 flex-col rounded-md border border-border/70 bg-background">
+        <div className="space-y-2 border-b border-border/70 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold">Automation Alerts Console</div>
+              <p className="text-xs text-muted-foreground">
+                {pagination.totalCount} total events · {filteredLogs.length} visible
+              </p>
+            </div>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => goToPage(Math.max(1, pagination.page - 1))}
-              disabled={!pagination.hasPrevPage || isLoading}
+              size="icon"
+              className="h-8 w-8"
+              onClick={refresh}
+              disabled={isLoading}
+              aria-label="Refresh alerts"
             >
-              Previous
-            </Button>
-            <span className="text-muted-foreground">
-              Page {pagination.page} / {pagination.totalPages}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => goToPage(Math.min(pagination.totalPages, pagination.page + 1))}
-              disabled={!pagination.hasNextPage || isLoading}
-            >
-              Next
+              <ReloadIcon className={cn("h-4 w-4", isLoading ? "animate-spin" : undefined)} />
             </Button>
           </div>
-        ) : null}
-      </CardContent>
-    </Card>
+
+          <Command className="rounded-md border border-border/70 bg-muted/5">
+            <CommandInput
+              value={search}
+              onValueChange={setSearch}
+              onFocus={() => setCommandOpen(true)}
+              onBlur={() => setCommandOpen(false)}
+              placeholder="Command search: action, campaign, ad set, status..."
+            />
+            {commandOpen ? (
+              <CommandList className="max-h-[140px]" onMouseDown={(event) => event.preventDefault()}>
+                <CommandGroup heading="Quick commands">
+                  <CommandItem onSelect={() => setStatusFilter("FAILED")}>Show failed only</CommandItem>
+                  <CommandItem onSelect={() => setStatusFilter("PENDING")}>Show pending only</CommandItem>
+                  <CommandItem onSelect={() => setQuickView("campaign")}>Limit to campaign scope</CommandItem>
+                  <CommandItem onSelect={() => setQuickView("adset")}>Limit to ad set scope</CommandItem>
+                </CommandGroup>
+                <CommandSeparator />
+                <CommandGroup heading="Matching actions">
+                  {commandRows.map((log) => (
+                    <CommandItem
+                      key={`alert-command-${log.id}`}
+                      onSelect={() => setSearch(`${log.actionType} ${log.metaCampaignId ?? ""}`)}
+                    >
+                      <MagnifyingGlassIcon className="h-3.5 w-3.5" />
+                      <span className="truncate">{log.actionType}</span>
+                      <span className="ml-auto text-[10px] text-muted-foreground">{log.status}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                <CommandEmpty>No matching commands.</CommandEmpty>
+              </CommandList>
+            ) : null}
+          </Command>
+        </div>
+
+        <div className="flex-1 min-h-0">
+          {error ? (
+            <div className="m-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </div>
+          ) : null}
+
+          {isLoading ? (
+            <div className="space-y-2 p-2">
+              {Array.from({ length: 8 }).map((_, idx) => (
+                <Skeleton key={`alert-skeleton-${idx}`} className="h-10 w-full bg-muted/70" />
+              ))}
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="flex h-full min-h-[220px] items-center justify-center p-4 text-sm text-muted-foreground">
+              No alerts for this filter set.
+            </div>
+          ) : (
+            <ScrollArea className="h-full">
+              <Table className="text-xs">
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead className="w-[130px]">Time</TableHead>
+                    <TableHead className="w-[110px]">Status</TableHead>
+                    <TableHead className="w-[170px]">Action</TableHead>
+                    <TableHead className="w-[110px]">Scope</TableHead>
+                    <TableHead className="w-[200px]">Entity</TableHead>
+                    <TableHead>Detail</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-[11px] text-muted-foreground">
+                        <div>{formatTimestamp(log.occurredAt)}</div>
+                        <div>{formatRelativeTime(log.occurredAt)}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={badgeVariantForStatus(log.status)}>{log.status}</Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{log.actionType}</TableCell>
+                      <TableCell>{log.scopeType}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <div>Campaign: {log.metaCampaignId ?? "--"}</div>
+                        <div>Ad set: {log.metaAdsetId ?? "--"}</div>
+                      </TableCell>
+                      <TableCell className="max-w-[360px] whitespace-normal text-foreground">
+                        {summarizeAction(log)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-border/70 px-2.5 py-2 text-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => goToPage(Math.max(1, pagination.page - 1))}
+            disabled={!pagination.hasPrevPage || isLoading}
+          >
+            Previous
+          </Button>
+          <span className="text-muted-foreground">
+            Page {pagination.page} / {pagination.totalPages || 1}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => goToPage(Math.min(Math.max(1, pagination.totalPages), pagination.page + 1))}
+            disabled={!pagination.hasNextPage || isLoading}
+          >
+            Next
+          </Button>
+        </div>
+      </section>
+    </div>
   );
 }

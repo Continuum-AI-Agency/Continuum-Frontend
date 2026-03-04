@@ -112,7 +112,9 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
       </div>
 
       {/* CSS animations */}
-      <style jsx>{`
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes loginGradient {
           0% {
             background-position: 0% 0%;
@@ -142,7 +144,9 @@ const CSSFallback: React.FC<CSSFallbackProps> = ({
             transform: translateX(0);
           }
         }
-      `}</style>
+      `,
+        }}
+      />
     </div>
   );
 };

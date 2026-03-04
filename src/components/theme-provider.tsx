@@ -90,7 +90,7 @@ export function ThemeProvider({ children, initialAppearance }: { children: React
 
   return (
     <ThemeContext.Provider value={value}>
-      <Theme appearance={appearance} accentColor="violet" grayColor="slate" radius="medium">
+      <Theme appearance={appearance} accentColor="violet" grayColor="slate" radius="medium" scaling="95%">
         {children}
       </Theme>
     </ThemeContext.Provider>

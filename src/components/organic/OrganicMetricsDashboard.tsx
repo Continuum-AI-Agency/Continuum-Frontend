@@ -184,7 +184,7 @@ function trendDirection(value: number | undefined) {
 }
 
 function rangeLabel(preset: OrganicDateRangePreset) {
-  return preset.replaceAll("_", " ");
+  return preset.replace(/_/g, " ");
 }
 
 function mergePosts(existing: OrganicPost[], incoming: OrganicPost[]) {
@@ -342,15 +342,15 @@ function PostGalleryCard({
   const previewViews = recent7dMetrics.views ?? post.metrics?.views ?? post.metrics?.reach;
   const mediaHeightClass = selected
     ? video
-      ? "h-[400px] sm:h-[460px]"
+      ? "h-[280px] sm:h-[320px]"
       : carousel
-        ? "h-[360px] sm:h-[420px]"
-        : "h-[380px] sm:h-[440px]"
+        ? "h-[250px] sm:h-[290px]"
+        : "h-[260px] sm:h-[300px]"
     : video
-      ? "h-[320px] sm:h-[380px]"
+      ? "h-[220px] sm:h-[260px]"
       : carousel
-        ? "h-[280px] sm:h-[320px]"
-        : "h-[300px] sm:h-[340px]";
+        ? "h-[190px] sm:h-[220px]"
+        : "h-[210px] sm:h-[240px]";
   const reelData: ReelItem[] = preview
     ? [
         {
@@ -496,7 +496,7 @@ function PostSnapshotPanel({
             {preview ? (
               video ? (
                 <Reel
-                  className="max-h-[460px] min-h-[260px] w-full"
+                  className="max-h-[320px] min-h-[180px] w-full"
                   data={[
                     {
                       id: `${post.id}-snapshot`,
@@ -526,11 +526,11 @@ function PostSnapshotPanel({
                 <img
                   src={preview}
                   alt={post.title ?? post.caption ?? "Selected post"}
-                  className="max-h-[460px] min-h-[260px] w-full object-contain"
+                  className="max-h-[320px] min-h-[180px] w-full object-contain"
                 />
               )
             ) : (
-              <Box className="flex min-h-[260px] items-center justify-center">
+              <Box className="flex min-h-[180px] items-center justify-center">
                 <Text size="1" color="gray">No preview available</Text>
               </Box>
             )}
@@ -634,7 +634,7 @@ function PostSnapshotPanel({
             )}
           </Box>
 
-          <Text size="2" className="line-clamp-8">
+          <Text size="1" className="line-clamp-8">
             {post.caption?.trim().length ? post.caption : "No caption available for this post."}
           </Text>
         </Box>
@@ -669,7 +669,7 @@ function MetricCard({
       variant="surface"
       className={cn(
         "border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-all duration-200 motion-reduce:transition-none",
-        compact ? "min-h-[62px]" : "min-h-[88px]",
+        compact ? "min-h-[50px]" : "min-h-[70px]",
         active ? "border-blue-500/70 bg-blue-500/10 shadow-blue-500/10" : "",
         interactive ? "hover:-translate-y-0.5 hover:shadow-md" : ""
       )}
@@ -863,7 +863,7 @@ function Dashboard({
     <Flex
       direction="column"
       gap="3"
-      className="min-h-0 rounded-xl border border-subtle bg-[linear-gradient(160deg,rgba(59,130,246,0.04)_0%,rgba(14,165,233,0.03)_48%,rgba(255,255,255,0.92)_100%)] p-2 shadow-sm"
+      className="rounded-xl border border-subtle bg-[linear-gradient(160deg,rgba(59,130,246,0.04)_0%,rgba(14,165,233,0.03)_48%,rgba(255,255,255,0.92)_100%)] p-2 sm:p-3 shadow-sm pb-10"
     >
       <Flex align="center" justify="between" wrap="wrap" gap="2">
         <Box>
@@ -880,10 +880,10 @@ function Dashboard({
       </Flex>
 
       {isAccountView ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
           {KPI_CONFIG.map((metric) => (
             <MetricCard
-              key={metric.key}
+              key={String(metric.key)}
               label={metric.label}
               value={metric.key === "profileVisits24h" ? profileVisits24h : metrics[metric.key]}
               comparison={metricComparisonFor(data, metric.key)}
@@ -898,8 +898,8 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? (
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
-          <Card variant="surface" className="border border-subtle bg-surface xl:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card variant="surface" className="border border-subtle bg-surface lg:col-span-2 xl:col-span-2">
             <Box p="3">
               <Flex align="center" justify="between" mb="2" wrap="wrap" gap="2">
                 <Box>
@@ -1111,7 +1111,7 @@ function Dashboard({
                     transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
                     className={cn(
                       "grid grid-cols-1 gap-4 lg:items-start",
-                      selectedPost ? "lg:grid-cols-[minmax(0,1fr)_420px]" : "lg:grid-cols-1"
+                      selectedPost ? "lg:grid-cols-[minmax(0,1fr)_320px]" : "lg:grid-cols-1"
                     )}
                   >
                     <motion.div layout className="min-w-0">
@@ -1119,7 +1119,7 @@ function Dashboard({
                         <div
                           className={cn(
                             "mx-auto grid gap-3 sm:gap-4",
-                            "[grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]"
+                            "[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]"
                           )}
                         >
                           {(data.posts ?? []).map((post) => (
@@ -1542,7 +1542,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           </Flex>
         </Flex>
 
-        <Box pt="3" className="flex-1 min-h-0 overflow-y-auto">
+        <Box pt="3" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {platformAccounts.length === 0 ? (
             <Callout.Root color="blue" variant="surface">
               <Callout.Text>

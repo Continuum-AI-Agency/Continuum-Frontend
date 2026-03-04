@@ -114,7 +114,7 @@
   --bg-galaxy-c1-overlay-light: rgba(255,210,238,0.10);
 
   /* Layout and viewport density tokens */
-  --font-size-root: 16px;
+  --font-size-root: 14px;
   --layout-density: 1;
   --app-shell-gap: 1rem;
   --app-shell-gap-compact: 0.75rem;
@@ -139,6 +139,7 @@ html {
 
 @media (max-width: 1536px) {
   :root {
+    --font-size-root: 12px;
     --app-shell-pad-inline: 1.25rem;
     --ai-chat-shell-offset: 1rem;
     --ai-chat-shell-min-height: 36rem;
@@ -152,6 +153,7 @@ html {
 
 @media (max-width: 1366px), (max-height: 820px) {
   :root {
+    --font-size-root: 10px;
     --layout-density: 0.92;
     --app-shell-gap: 0.75rem;
     --app-shell-pad-inline: 1rem;
@@ -168,6 +170,7 @@ html {
 
 @media (max-height: 740px) {
   :root {
+    --font-size-root: 9px;
     --layout-density: 0.88;
     --app-shell-pad-inline: 0.75rem;
     --app-shell-pad-block: 0.625rem;

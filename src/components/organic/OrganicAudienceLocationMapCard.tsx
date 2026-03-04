@@ -178,7 +178,7 @@ function normalizeCityKey(value: string) {
 
 function timeframeLabel(value?: string) {
   if (!value) return "Timeframe unavailable";
-  return TIMEFRAME_LABELS[value] ?? value.replaceAll("_", " ");
+  return TIMEFRAME_LABELS[value] ?? value.replace(/_/g, " ");
 }
 
 function resolveCountryLabel(value: string) {
@@ -368,7 +368,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
         </Flex>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="relative h-[620px] xl:h-[720px] overflow-hidden rounded-lg border border-subtle">
+          <div className="relative h-[400px] sm:h-[500px] xl:h-[600px] overflow-hidden rounded-lg border border-subtle">
             {renderPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
                 <Text size="2" color="gray">
@@ -482,7 +482,9 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           </div>
         </div>
       </Box>
-      <style jsx global>{`
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         .audience-location-tooltip.maplibregl-popup .maplibregl-popup-content {
           background: transparent;
           padding: 0;
@@ -493,7 +495,9 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
         .audience-location-tooltip.maplibregl-popup .maplibregl-popup-tip {
           border-top-color: rgba(9, 9, 11, 0.95);
         }
-      `}</style>
+      `,
+        }}
+      />
     </Card>
   );
 }

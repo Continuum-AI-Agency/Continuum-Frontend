@@ -77,6 +77,18 @@ const snakeInstagramOrganicMetricsResponseSchema = z.object({
   }),
   metrics: snakeInstagramOrganicMetricsSchema,
   comparison: z.record(z.string(), snakeMetricComparisonSchema).nullable().optional(),
+  posts: z.array(z.unknown()).optional(),
+  trends: z.array(z.unknown()).optional(),
+  boostedEvents: z.array(z.unknown()).optional(),
+  boosted_events: z.array(z.unknown()).optional(),
+  audienceBreakdown: z.unknown().optional(),
+  audience_breakdown: z.unknown().optional(),
+  audienceDemographics: z.unknown().optional(),
+  audience_demographics: z.unknown().optional(),
+  contentTypePerformance: z.array(z.unknown()).optional(),
+  content_type_performance: z.array(z.unknown()).optional(),
+  recentComments: z.array(z.unknown()).optional(),
+  recent_comments: z.array(z.unknown()).optional(),
 });
 
 const looseInstagramMetricsSchema = z
@@ -135,6 +147,18 @@ const looseInstagramOrganicMetricsResponseSchema = z
     warnings: z.array(z.unknown()).optional(),
     interactionBreakdowns: z.record(z.string(), z.unknown()).optional(),
     insights: z.array(z.unknown()).optional(),
+    posts: z.array(z.unknown()).optional(),
+    trends: z.array(z.unknown()).optional(),
+    boostedEvents: z.array(z.unknown()).optional(),
+    boosted_events: z.array(z.unknown()).optional(),
+    audienceBreakdown: z.unknown().optional(),
+    audience_breakdown: z.unknown().optional(),
+    audienceDemographics: z.unknown().optional(),
+    audience_demographics: z.unknown().optional(),
+    contentTypePerformance: z.array(z.unknown()).optional(),
+    content_type_performance: z.array(z.unknown()).optional(),
+    recentComments: z.array(z.unknown()).optional(),
+    recent_comments: z.array(z.unknown()).optional(),
     range: z.unknown(),
     metrics: z.unknown(),
     comparison: z.record(z.string(), z.unknown()).nullable().optional(),
@@ -260,7 +284,7 @@ function normalizeInteractionBreakdowns(breakdowns: unknown) {
 function normalizeInsights(insights: unknown) {
   if (insights === null || insights === undefined) return undefined;
   if (!Array.isArray(insights)) return undefined;
-  return insights.map(insight => insightsResponseSchema.parse(insight));
+  return insights.map((insight) => insightsResponseSchema.parse(insight));
 }
 
 export function normalizeInstagramOrganicMetricsResponse(payload: unknown): InstagramOrganicMetricsResponse {
@@ -325,7 +349,14 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
         saved: snakeParsed.data.metrics.saved,
         totalInteractions: snakeParsed.data.metrics.total_interactions,
       },
-      comparison,
+      comparison: comparison,
+      posts: snakeParsed.data.posts,
+      trends: snakeParsed.data.trends,
+      boostedEvents: snakeParsed.data.boostedEvents ?? snakeParsed.data.boosted_events,
+      audienceBreakdown: snakeParsed.data.audienceBreakdown ?? snakeParsed.data.audience_breakdown,
+      audienceDemographics: snakeParsed.data.audienceDemographics ?? snakeParsed.data.audience_demographics,
+      contentTypePerformance: snakeParsed.data.contentTypePerformance ?? snakeParsed.data.content_type_performance,
+      recentComments: snakeParsed.data.recentComments ?? snakeParsed.data.recent_comments,
     });
   }
 
@@ -340,17 +371,24 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
 
     return instagramOrganicMetricsResponseSchema.parse({
       platform: "instagram",
-      accountId,
+      accountId: accountId,
       brandId: looseParsed.data.brandId ?? looseParsed.data.brand_id,
       integrationAccountId: looseParsed.data.integrationAccountId ?? looseParsed.data.integration_account_id,
       externalAccountId: looseParsed.data.externalAccountId ?? looseParsed.data.external_account_id,
       fetchedAt: looseParsed.data.fetchedAt ?? looseParsed.data.fetched_at,
-      range,
+      range: range,
       warnings: looseParsed.data.warnings,
-      metrics,
-      interactionBreakdowns,
-      comparison,
-      insights,
+      metrics: metrics,
+      interactionBreakdowns: interactionBreakdowns,
+      comparison: comparison,
+      insights: insights,
+      posts: looseParsed.data.posts,
+      trends: looseParsed.data.trends,
+      boostedEvents: looseParsed.data.boostedEvents ?? looseParsed.data.boosted_events,
+      audienceBreakdown: looseParsed.data.audienceBreakdown ?? looseParsed.data.audience_breakdown,
+      audienceDemographics: looseParsed.data.audienceDemographics ?? looseParsed.data.audience_demographics,
+      contentTypePerformance: looseParsed.data.contentTypePerformance ?? looseParsed.data.content_type_performance,
+      recentComments: looseParsed.data.recentComments ?? looseParsed.data.recent_comments,
     });
   }
 

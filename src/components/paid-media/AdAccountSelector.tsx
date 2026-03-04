@@ -2,8 +2,21 @@
 "use client";
 
 import * as React from "react";
-import { Select, Callout } from "@radix-ui/themes";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { Callout } from "@radix-ui/themes";
+
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
+import { cn } from "@/lib/utils";
 
 type AdAccount = {
   id: string;
@@ -22,6 +35,7 @@ export function AdAccountSelector({
   onSelect,
 }: AdAccountSelectorProps) {
   const { integrations, isLoading, isError } = useBrandIntegrations(brandId);
+  const [open, setOpen] = React.useState(false);
   const [timelineAccounts, setTimelineAccounts] = React.useState<AdAccount[]>([]);
   const [timelineAccountsLoaded, setTimelineAccountsLoaded] = React.useState(false);
 
@@ -110,32 +124,61 @@ export function AdAccountSelector({
     );
   }
 
+  const selectedAccount = selectedAccountId
+    ? adAccounts.find((account) => account.id === selectedAccountId)
+    : undefined;
+
   return (
-    <Select.Root
-      value={selectedAccountId ?? ""}
-      onValueChange={onSelect}
-      disabled={isLoading || adAccounts.length === 0}
-    >
-      <Select.Trigger variant="surface" radius="large" className="min-w-[220px]">
-        {isLoading
-          ? "Loading ad accounts…"
-          : selectedAccountId
-          ? adAccounts.find((a) => a.id === selectedAccountId)?.name ?? "Ad account"
-          : "Select ad account"}
-      </Select.Trigger>
-      <Select.Content>
-        {adAccounts.length === 0 ? (
-          <Select.Item value="none" disabled>
-            No ad accounts
-          </Select.Item>
-        ) : (
-          adAccounts.map((account) => (
-            <Select.Item key={account.id} value={account.id}>
-              {account.name}
-            </Select.Item>
-          ))
-        )}
-      </Select.Content>
-    </Select.Root>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          disabled={isLoading || adAccounts.length === 0}
+          className="h-8 min-w-[240px] justify-between text-xs font-normal"
+        >
+          {isLoading
+            ? "Loading ad accounts…"
+            : selectedAccount
+              ? selectedAccount.name
+              : "Select ad account"}
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent className="w-[320px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search ad accounts..." className="h-9 text-xs" />
+          <CommandList>
+            <CommandEmpty>No ad accounts found.</CommandEmpty>
+            <CommandGroup heading="Ad accounts">
+              {adAccounts.map((account) => (
+                <CommandItem
+                  key={account.id}
+                  value={`${account.name} ${account.id}`}
+                  keywords={[account.id]}
+                  onSelect={() => {
+                    onSelect(account.id);
+                    setOpen(false);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "mr-1.5 h-3.5 w-3.5",
+                      selectedAccountId === account.id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span className="truncate text-xs">{account.name}</span>
+                  <span className="ml-auto truncate text-[10px] text-muted-foreground">{account.id}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

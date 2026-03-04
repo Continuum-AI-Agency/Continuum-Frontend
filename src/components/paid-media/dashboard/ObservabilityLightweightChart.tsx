@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import {
-  AreaSeries,
   ColorType,
+  createSeriesMarkers,
   createChart,
   CrosshairMode,
   LineSeries,
@@ -11,6 +11,9 @@ import {
   LineType,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
+  type MouseEventParams,
+  type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
 
@@ -27,9 +30,21 @@ export type ObservabilityChartSeries = {
   label: string;
   color: string;
   points: ObservabilityChartPoint[];
-  variant?: "area" | "line";
+  markers?: ObservabilityChartMarker[];
+  variant?: "line";
   emphasized?: boolean;
   dashed?: boolean;
+};
+
+export type ObservabilityChartMarker = {
+  id: string;
+  time: UTCTimestamp;
+  label: string;
+  detail?: string;
+  color?: string;
+  text?: string;
+  shape?: "circle" | "square" | "arrowUp" | "arrowDown";
+  position?: "aboveBar" | "belowBar" | "inBar";
 };
 
 type ObservabilityLightweightChartProps = {
@@ -38,25 +53,21 @@ type ObservabilityLightweightChartProps = {
   compact?: boolean;
 };
 
-type SupportedSeriesType = "Area" | "Line";
+type SupportedSeriesType = "Line";
 
 type RegisteredSeries = {
-  api: ISeriesApi<SupportedSeriesType>;
-  variant: "area" | "line";
+  api: ISeriesApi<SupportedSeriesType, Time>;
+  markersApi: ISeriesMarkersPluginApi<Time>;
 };
 
-function toRgba(hex: string, alpha: number): string {
-  const normalized = hex.replace("#", "");
-  if (normalized.length !== 6) {
-    return `rgba(14,165,233,${alpha})`;
-  }
-
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-
-  return `rgba(${r},${g},${b},${alpha})`;
-}
+type HoverState = {
+  x: number;
+  y: number;
+  timeLabel: string;
+  rows: Array<{ id: string; label: string; color: string; value: string }>;
+  markerLabel?: string;
+  markerDetail?: string;
+};
 
 function sanitizePoints(points: ObservabilityChartPoint[]): ObservabilityChartPoint[] {
   const byTime = new Map<number, number>();
@@ -79,6 +90,8 @@ export function ObservabilityLightweightChart({
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const chartRef = React.useRef<IChartApi | null>(null);
   const seriesMapRef = React.useRef<Map<string, RegisteredSeries>>(new Map());
+  const markerMetaRef = React.useRef<Map<string, { label: string; detail?: string }>>(new Map());
+  const [hover, setHover] = React.useState<HoverState | null>(null);
   const { appearance } = useTheme();
   const isDark = appearance === "dark";
 
@@ -147,6 +160,7 @@ export function ObservabilityLightweightChart({
 
     return () => {
       seriesMapRef.current.clear();
+      markerMetaRef.current.clear();
       chart.remove();
       chartRef.current = null;
     };
@@ -164,69 +178,163 @@ export function ObservabilityLightweightChart({
       seriesMapRef.current.delete(id);
     });
 
+    markerMetaRef.current.clear();
     series.forEach((entry, index) => {
-      const variant = entry.variant ?? (index === 0 ? "area" : "line");
       const isPrimary = entry.emphasized ?? index === 0;
       const lineColor = entry.color;
-      const topColor = toRgba(lineColor, isPrimary ? 0.22 : 0.14);
-      const bottomColor = toRgba(lineColor, 0.01);
-
-      const existing = seriesMapRef.current.get(entry.id);
-      if (existing && existing.variant !== variant) {
-        chart.removeSeries(existing.api);
-        seriesMapRef.current.delete(entry.id);
-      }
 
       let registered = seriesMapRef.current.get(entry.id);
       if (!registered) {
-        const api =
-          variant === "area"
-            ? chart.addSeries(AreaSeries, {
-                lineColor,
-                topColor,
-                bottomColor,
-                lineType: LineType.WithSteps,
-                lineWidth: isPrimary ? 2 : 1,
-                crosshairMarkerVisible: !compact,
-                lastValueVisible: !compact,
-                priceLineVisible: false,
-              })
-            : chart.addSeries(LineSeries, {
-                color: lineColor,
-                lineType: LineType.WithSteps,
-                lineStyle: entry.dashed ? LineStyle.Dashed : LineStyle.Solid,
-                lineWidth: isPrimary ? 2 : 1,
-                crosshairMarkerVisible: !compact,
-                lastValueVisible: !compact,
-                priceLineVisible: false,
-              });
+        const api = chart.addSeries(LineSeries, {
+          color: lineColor,
+          lineType: LineType.Curved,
+          lineStyle: entry.dashed ? LineStyle.Dashed : LineStyle.Solid,
+          lineWidth: isPrimary ? 2 : 1,
+          pointMarkersVisible: true,
+          pointMarkersRadius: compact ? 1.5 : 2.25,
+          crosshairMarkerVisible: !compact,
+          lastValueVisible: !compact,
+          priceLineVisible: false,
+        });
 
-        registered = { api, variant };
+        const markersApi = createSeriesMarkers(api, []);
+        registered = { api, markersApi };
         seriesMapRef.current.set(entry.id, registered);
       }
 
-      if (registered.variant === "area") {
-        registered.api.applyOptions({
-          lineColor,
-          topColor,
-          bottomColor,
-          lineType: LineType.WithSteps,
-          lineWidth: isPrimary ? 2 : 1,
-        });
-      } else {
-        registered.api.applyOptions({
-          color: lineColor,
-          lineType: LineType.WithSteps,
-          lineStyle: entry.dashed ? LineStyle.Dashed : LineStyle.Solid,
-          lineWidth: isPrimary ? 2 : 1,
-        });
-      }
+      registered.api.applyOptions({
+        color: lineColor,
+        lineType: LineType.Curved,
+        lineStyle: entry.dashed ? LineStyle.Dashed : LineStyle.Solid,
+        lineWidth: isPrimary ? 2 : 1,
+        pointMarkersVisible: true,
+        pointMarkersRadius: compact ? 1.5 : 2.25,
+      });
 
       registered.api.setData(sanitizePoints(entry.points));
+
+      const markers = (entry.markers ?? []).map((marker) => {
+        const markerId = `${entry.id}::${marker.id}`;
+        markerMetaRef.current.set(markerId, {
+          label: marker.label,
+          detail: marker.detail,
+        });
+        return {
+          id: markerId,
+          time: marker.time,
+          position: marker.position ?? "aboveBar",
+          shape: marker.shape ?? "square",
+          color: marker.color ?? entry.color,
+          text: marker.text ?? "F",
+        };
+      });
+      registered.markersApi.setMarkers(markers);
     });
 
     chart.timeScale().fitContent();
   }, [compact, series]);
 
-  return <div ref={containerRef} className={cn("h-full w-full [&_a#tv-attr-logo]:hidden", className)} />;
+  React.useEffect(() => {
+    const chart = chartRef.current;
+    const container = containerRef.current;
+    if (!chart || !container || compact) {
+      setHover(null);
+      return;
+    }
+
+    const handleMove = (param: MouseEventParams<Time>) => {
+      if (
+        !param.point ||
+        param.time === undefined ||
+        param.point.x < 0 ||
+        param.point.y < 0 ||
+        param.point.x > container.clientWidth ||
+        param.point.y > container.clientHeight
+      ) {
+        setHover(null);
+        return;
+      }
+
+      const rows = series
+        .map((entry) => {
+          const registered = seriesMapRef.current.get(entry.id);
+          if (!registered) return null;
+          const data = param.seriesData.get(registered.api) as { value?: number; close?: number } | undefined;
+          const value = typeof data?.value === "number" ? data.value : data?.close;
+          if (typeof value !== "number" || !Number.isFinite(value)) return null;
+          return {
+            id: entry.id,
+            label: entry.label,
+            color: entry.color,
+            value: value.toLocaleString("en-US", { maximumFractionDigits: 2 }),
+          };
+        })
+        .filter((row): row is { id: string; label: string; color: string; value: string } => Boolean(row));
+
+      const markerInfo = param.hoveredObjectId
+        ? markerMetaRef.current.get(String(param.hoveredObjectId))
+        : undefined;
+      if (rows.length === 0 && !markerInfo) {
+        setHover(null);
+        return;
+      }
+
+      const timeLabel =
+        typeof param.time === "number"
+          ? new Date(param.time * 1000).toLocaleString("en-US", {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : String(param.time);
+
+      const x = Math.min(param.point.x + 12, Math.max(8, container.clientWidth - 248));
+      const y = Math.max(8, param.point.y - 14);
+      setHover({
+        x,
+        y,
+        timeLabel,
+        rows,
+        markerLabel: markerInfo?.label,
+        markerDetail: markerInfo?.detail,
+      });
+    };
+
+    chart.subscribeCrosshairMove(handleMove);
+    return () => {
+      chart.unsubscribeCrosshairMove(handleMove);
+      setHover(null);
+    };
+  }, [compact, series]);
+
+  return (
+    <div ref={containerRef} className={cn("relative h-full w-full [&_a#tv-attr-logo]:hidden", className)}>
+      {!compact && hover ? (
+        <div
+          className="pointer-events-none absolute z-20 max-w-[240px] rounded-md border border-border/80 bg-background/95 px-2 py-1.5 text-[11px] shadow-md backdrop-blur-sm"
+          style={{ left: hover.x, top: hover.y }}
+        >
+          <div className="mb-1 font-medium text-foreground">{hover.timeLabel}</div>
+          <div className="space-y-0.5">
+            {hover.rows.map((row) => (
+              <div key={`hover-row-${row.id}`} className="flex items-center justify-between gap-2">
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
+                  <span className="truncate text-muted-foreground">{row.label}</span>
+                </span>
+                <span className="font-medium text-foreground">{row.value}</span>
+              </div>
+            ))}
+          </div>
+          {hover.markerLabel ? (
+            <div className="mt-1.5 rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-700 dark:text-amber-300">
+              <div className="font-medium">{hover.markerLabel}</div>
+              {hover.markerDetail ? <div className="mt-0.5 line-clamp-3">{hover.markerDetail}</div> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }

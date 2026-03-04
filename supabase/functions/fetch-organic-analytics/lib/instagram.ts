@@ -931,7 +931,8 @@ export async function fetchInstagramAnalytics(params: {
       .filter((post): post is NonNullable<typeof post> => post !== null)
       .map((post) => [post.id, post] as const)
   );
-  const posts = media.map((post) => {
+  const allMedia = media.length > 0 ? media : detailedMedia;
+  const posts = allMedia.map((post) => {
     const postId = String(post.id ?? "");
     const detail = detailById.get(postId);
     if (detail) return detail;
