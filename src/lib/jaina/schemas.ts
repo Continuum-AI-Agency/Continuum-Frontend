@@ -1453,7 +1453,9 @@ export const reportPayloadSchema = z.union([
     
     return {
       language: "en",
+      report_title: "",
       executive_summary: executiveSummary || "Analysis complete.",
+      budget: null,
       performance_snapshot: performanceSnapshot,
       sections,
       strategic_recommendations: strategicRecommendations,
@@ -1644,12 +1646,22 @@ export const reportPayloadSchema = z.union([
         const sectionHighlights = Array.isArray(highlightsSource)
           ? highlightsSource
               .map((item) => mapHighlight(item))
-              .filter((item): item is Record<string, unknown> => Boolean(item))
+              .filter(
+                (
+                  item
+                ): item is NonNullable<ReturnType<typeof mapHighlight>> =>
+                  item !== null
+              )
           : [];
         const sectionActions = Array.isArray(actionsSource)
           ? actionsSource
               .map((item) => mapRecommendation(item))
-              .filter((item): item is Record<string, unknown> => Boolean(item))
+              .filter(
+                (
+                  item
+                ): item is NonNullable<ReturnType<typeof mapRecommendation>> =>
+                  item !== null
+              )
           : [];
         const rawTables = Array.isArray(section.tables)
           ? section.tables
@@ -1688,11 +1700,15 @@ export const reportPayloadSchema = z.union([
     }
 
     const sectionTables: any[] = [];
-    const campaignTable = toTableFromRows(source.campaign_table);
+    const campaignTable = toTableFromRows(
+      Array.isArray(source.campaign_table) ? source.campaign_table : undefined
+    );
     if (campaignTable) {
       sectionTables.push(campaignTable);
     }
-    const performanceTable = toTableFromRows(source.performance_table);
+    const performanceTable = toTableFromRows(
+      Array.isArray(source.performance_table) ? source.performance_table : undefined
+    );
     if (performanceTable) {
       sectionTables.push(performanceTable);
     }
@@ -1725,7 +1741,12 @@ export const reportPayloadSchema = z.union([
       topLevelHighlights.push(
         ...sourceInsights
           .map((item) => mapHighlight(item))
-          .filter((item): item is Record<string, unknown> => Boolean(item))
+          .filter(
+            (
+              item
+            ): item is NonNullable<ReturnType<typeof mapHighlight>> =>
+              item !== null
+          )
       );
     }
 
@@ -1781,7 +1802,12 @@ export const reportPayloadSchema = z.union([
       strategicRecommendations.push(
         ...recommendationSource
           .map((item) => mapRecommendation(item))
-          .filter((item): item is Record<string, unknown> => Boolean(item))
+          .filter(
+            (
+              item
+            ): item is NonNullable<ReturnType<typeof mapRecommendation>> =>
+              item !== null
+          )
       );
     }
     if (strategicRecommendations.length === 0) {
