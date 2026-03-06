@@ -211,7 +211,7 @@ export function TimelineContainer({
   });
 
   const dcoManagedCampaignIds = useMemo(() => {
-    return campaigns
+    const managedIds = campaigns
       .filter((campaign) => {
         const campaignWithAds = campaign as { ads?: unknown[] };
         const hasCampaignAds = Array.isArray(campaignWithAds.ads) && campaignWithAds.ads.length > 0;
@@ -221,6 +221,12 @@ export function TimelineContainer({
         return hasCampaignAds || hasAdSetAds;
       })
       .map((campaign) => campaign.id);
+
+    if (managedIds.length > 0) {
+      return managedIds;
+    }
+
+    return Array.from(new Set(campaigns.map((campaign) => campaign.id)));
   }, [campaigns]);
 
   useEffect(() => {

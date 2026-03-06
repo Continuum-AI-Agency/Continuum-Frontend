@@ -7,12 +7,12 @@ Deliver an observability-first paid media dashboard/timeline MVP that keeps curr
 
 ## Product Decisions (Locked)
 - Default resolution is `daily`.
-- Averages and KPI summaries come from DCO `timeline_blocks` data.
+- Averages and KPI summaries come from DCO `timeline_ad_blocks` data (via block-shape aggregation in `fetch-timeline-blocks`).
 - Hybrid data model:
   - DCO timeline blocks = observability/data-science truth (summary + deltas + managed-state timeline).
   - Live Meta ingestion = baseline enrichment and fallback detail.
 - Audit log is a full-width table dock below timeline and auto-filters by selected campaign.
-- Targets/deltas come from database payloads (`deltas` in timeline blocks).
+- Targets/deltas come from timeline payloads, currently computed as period-over-period deltas when sourced from `timeline_ad_blocks`.
 - Keep DB terms in UI now (no enum relabeling yet).
 - Hourly view is only for DCO-managed assets; non-DCO entities are hidden in hourly mode.
 - Campaign explorer allows only one expanded campaign at a time.

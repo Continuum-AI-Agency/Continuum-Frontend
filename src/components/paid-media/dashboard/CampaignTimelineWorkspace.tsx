@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Area,
   AreaChart,
+  Brush,
   CartesianGrid,
   PolarAngleAxis,
   PolarGrid,
@@ -163,6 +164,11 @@ type MarkerPoint = {
   count: number;
   tooltip: string;
   kpiShiftPct?: number | null;
+};
+
+type ChartZoomRange = {
+  startIndex: number;
+  endIndex: number;
 };
 
 const KPI_COLUMNS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"];
@@ -970,6 +976,7 @@ export function CampaignTimelineWorkspace({
   const [focusedCampaignId, setFocusedCampaignId] = React.useState<string | undefined>();
   const [focusedAdSet, setFocusedAdSet] = React.useState<{ campaignId: string; adSetId: string } | undefined>();
   const [focusedAdId, setFocusedAdId] = React.useState<string | undefined>();
+  const [topChartZoomRange, setTopChartZoomRange] = React.useState<ChartZoomRange | null>(null);
   const [adSetState, setAdSetState] = React.useState<Record<string, AdSetLoadState>>({});
   const [adsByAdSet, setAdsByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
   const [timelineActionLogs, setTimelineActionLogs] = React.useState<ActionLogMarker[]>([]);
@@ -1671,6 +1678,86 @@ export function CampaignTimelineWorkspace({
     return { data, lines };
   }, [activeOnly, adSetState, blocks, dcoManagedCampaignIds, focusedCampaign, focusedDeltaPct, focusedShowTarget, groupContext, latestDcoDeltas, selectedMetric]);
 
+  React.useEffect(() => {
+    setTopChartZoomRange(null);
+  }, [accountId, groupContext?.id, focusedCampaignId, resolution]);
+
+  React.useEffect(() => {
+    setTopChartZoomRange((current) => {
+      if (!current) return null;
+      const maxIndex = topChartModel.data.length - 1;
+      if (maxIndex < 1) return null;
+      const startIndex = Math.max(0, Math.min(current.startIndex, maxIndex));
+      const endIndex = Math.max(startIndex, Math.min(current.endIndex, maxIndex));
+      if (startIndex === 0 && endIndex === maxIndex) return null;
+      return { startIndex, endIndex };
+    });
+  }, [topChartModel.data.length]);
+
+  const visibleTopChartData = React.useMemo(() => {
+    if (!topChartZoomRange || topChartModel.data.length === 0) {
+      return topChartModel.data;
+    }
+
+    return topChartModel.data.slice(topChartZoomRange.startIndex, topChartZoomRange.endIndex + 1);
+  }, [topChartModel.data, topChartZoomRange]);
+
+  const handleTopChartBrushChange = React.useCallback(
+    (range: { startIndex?: number; endIndex?: number } | null) => {
+      if (!range || typeof range.startIndex !== "number" || typeof range.endIndex !== "number") {
+        setTopChartZoomRange(null);
+        return;
+      }
+
+      const maxIndex = topChartModel.data.length - 1;
+      if (maxIndex < 1) {
+        setTopChartZoomRange(null);
+        return;
+      }
+
+      const startIndex = Math.max(0, Math.min(range.startIndex, maxIndex));
+      const endIndex = Math.max(startIndex, Math.min(range.endIndex, maxIndex));
+
+      if (startIndex === 0 && endIndex === maxIndex) {
+        setTopChartZoomRange(null);
+        return;
+      }
+
+      setTopChartZoomRange({ startIndex, endIndex });
+    },
+    [topChartModel.data.length]
+  );
+
+  const clearTopChartZoom = React.useCallback(() => {
+    setTopChartZoomRange(null);
+  }, []);
+
+  const zoomWindowDurationMs = React.useMemo(() => {
+    if (visibleTopChartData.length < 2) return null;
+    const first = new Date(String((visibleTopChartData[0] as Record<string, unknown>).timestamp ?? "")).getTime();
+    const last = new Date(
+      String((visibleTopChartData[visibleTopChartData.length - 1] as Record<string, unknown>).timestamp ?? "")
+    ).getTime();
+    if (!Number.isFinite(first) || !Number.isFinite(last)) return null;
+    return Math.max(0, last - first);
+  }, [visibleTopChartData]);
+
+  const latestVisibleTimestampMs = React.useMemo(() => {
+    if (visibleTopChartData.length === 0) return null;
+    const value = new Date(
+      String((visibleTopChartData[visibleTopChartData.length - 1] as Record<string, unknown>).timestamp ?? "")
+    ).getTime();
+    return Number.isFinite(value) ? value : null;
+  }, [visibleTopChartData]);
+
+  const suggestHourlyZoom = React.useMemo(() => {
+    if (resolution !== "daily") return false;
+    if (zoomWindowDurationMs === null) return false;
+    if (zoomWindowDurationMs > 2 * 24 * 60 * 60 * 1000) return false;
+    if (latestVisibleTimestampMs === null) return false;
+    return now.getTime() - latestVisibleTimestampMs <= 72 * 60 * 60 * 1000;
+  }, [latestVisibleTimestampMs, now, resolution, zoomWindowDurationMs]);
+
   const graphTitle = groupContext
     ? `${groupContext.label} - ${labelForMetric(selectedMetric)}`
     : focusedCampaign
@@ -1734,7 +1821,7 @@ export function CampaignTimelineWorkspace({
       return [];
     }
 
-    const orderedRows = topChartModel.data
+    const orderedRows = visibleTopChartData
       .map((rawRow) => {
         const row = rawRow as Record<string, unknown>;
         const timestamp = String(row.timestamp ?? "");
@@ -1817,7 +1904,7 @@ export function CampaignTimelineWorkspace({
     });
 
     return markers;
-  }, [resolution, scopedTimelineActionLogs, topChartModel.data, topPrimaryLineKey]);
+  }, [resolution, scopedTimelineActionLogs, topPrimaryLineKey, visibleTopChartData]);
 
   const actionScopeSummary = React.useMemo(() => {
     const summary = {
@@ -1902,16 +1989,16 @@ export function CampaignTimelineWorkspace({
     [topChartModel.lines]
   );
   const topTargetPoint = React.useMemo(
-    () => getLatestSeriesPoint(topChartModel.data, "timestamp", topTargetLineKey),
-    [topChartModel.data, topTargetLineKey]
+    () => getLatestSeriesPoint(visibleTopChartData, "timestamp", topTargetLineKey),
+    [topTargetLineKey, visibleTopChartData]
   );
   const topTargetValue = React.useMemo(
     () => topTargetPoint?.y ?? null,
     [topTargetPoint]
   );
   const topActualValue = React.useMemo(
-    () => getLatestSeriesValue(topChartModel.data, topPrimaryLineKey),
-    [topChartModel.data, topPrimaryLineKey]
+    () => getLatestSeriesValue(visibleTopChartData, topPrimaryLineKey),
+    [topPrimaryLineKey, visibleTopChartData]
   );
   const topDenominatorSummary = React.useMemo(
     () => formatDenominatorSummary(selectedMetric, topActualValue, topTargetValue),
@@ -1934,7 +2021,7 @@ export function CampaignTimelineWorkspace({
   );
   const briefingLineData = React.useMemo(() => {
     if (!topPrimaryLineKey) return [] as Array<{ timestamp: string; value: number }>;
-    return topChartModel.data
+    return visibleTopChartData
       .map((rawRow) => {
         const row = rawRow as Record<string, unknown>;
         const timestamp = String(row.timestamp ?? "");
@@ -1943,7 +2030,7 @@ export function CampaignTimelineWorkspace({
         return { timestamp, value };
       })
       .filter((row): row is { timestamp: string; value: number } => row !== null);
-  }, [topChartModel.data, topPrimaryLineKey]);
+  }, [topPrimaryLineKey, visibleTopChartData]);
   const recentActionMessages = React.useMemo(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     return scopedTimelineActionLogs
@@ -2100,6 +2187,41 @@ export function CampaignTimelineWorkspace({
                   <span className="text-muted-foreground">Tooltips include next-bucket KPI shift after each action.</span>
                 </div>
 
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+                    <span className="rounded border border-border/70 px-2 py-0.5">
+                      Window points: {visibleTopChartData.length}/{topChartModel.data.length}
+                    </span>
+                    {topChartZoomRange ? (
+                      <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-600 dark:text-emerald-300">
+                        Zoom active
+                      </span>
+                    ) : null}
+                    {suggestHourlyZoom ? (
+                      <span className="rounded border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-amber-700 dark:text-amber-300">
+                        Zoom window supports hourly drill-in
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {topChartZoomRange ? (
+                      <Button variant="outline" size="sm" className="h-7 px-2 text-[11px]" onClick={clearTopChartZoom}>
+                        Reset zoom
+                      </Button>
+                    ) : null}
+                    {suggestHourlyZoom ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 border-amber-500/35 bg-amber-500/10 px-2 text-[11px] text-amber-700 hover:bg-amber-500/15 dark:text-amber-300"
+                        onClick={() => onResolutionChange("hourly")}
+                      >
+                        Switch to hourly
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
                 <div className="h-[228px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={topChartModel.data} margin={{ top: 8, right: 8, left: 2, bottom: 0 }}>
@@ -2187,6 +2309,23 @@ export function CampaignTimelineWorkspace({
                             fontWeight: 700,
                           }}
                           ifOverflow="extendDomain"
+                        />
+                      ) : null}
+                      {topChartModel.data.length > 2 ? (
+                        <Brush
+                          dataKey="timestamp"
+                          startIndex={topChartZoomRange?.startIndex ?? 0}
+                          endIndex={topChartZoomRange?.endIndex ?? topChartModel.data.length - 1}
+                          height={26}
+                          travellerWidth={8}
+                          stroke="hsl(var(--border))"
+                          tickFormatter={(value) =>
+                            new Date(String(value)).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })
+                          }
+                          onChange={handleTopChartBrushChange}
                         />
                       ) : null}
                     </AreaChart>

@@ -25,7 +25,7 @@ Treat paid media like infrastructure observability:
 - `daily` is default resolution.
 - `hourly` is DCO-only scope.
 - Blend two sources:
-  - DCO timeline blocks: truth for deltas, target context, and block summaries.
+  - DCO timeline blocks (rebuilt from `DCO_Campaigns.timeline_ad_blocks`): truth for block summaries, campaign status context, and period-over-period deltas.
   - Live Meta ingestion: baseline metrics and entity enrichment.
 
 ## Module Boundaries
@@ -72,16 +72,20 @@ Responsibilities:
 - Edge function: `supabase/functions/fetch-timeline-blocks/index.ts`
 - Type model: `src/types/timeline/index.ts`
 
+Storage/source notes:
+- Raw source table is `DCO_Campaigns.timeline_ad_blocks`.
+- Edge function rebuilds block-shaped payloads (`summary`, `deltas`, `campaigns`, `events`) for client compatibility.
+
 Core block fields:
 - `block_start`, `block_end`: inclusive time window boundary for each block payload.
 - `resolution`: `daily` or `hourly`.
 - `summary`: aggregate KPI values for the block.
-- `deltas`: target-relative deltas (for example `ctr_delta_pct`, `roas_delta_pct`, `spend_delta_pct`, `conversions_delta`).
+- `deltas`: currently period-over-period block deltas (for example `ctr_delta_pct`, `roas_delta_pct`, `spend_delta_pct`, `conversions_delta`).
 - `campaigns[]`: nested campaign/ad set/ad timeline structure.
 - `events[]`: timeline events tied to entities.
 
 Important behavior:
-- The edge function normalizes/derives `metrics_daily` where missing.
+- The edge function rebuilds block-level `summary`, `deltas`, and campaign `metrics_daily` from `timeline_ad_blocks`.
 - The hook merges campaigns/events across returned blocks and stitches ad segments.
 
 ### 2) Live Meta Campaign/Ad Set/Ad Fetch
@@ -211,7 +215,7 @@ Ad set loads are protected by:
 `fetch-timeline-blocks` enforces:
 - bearer token auth,
 - brand membership via `brand_profiles.permissions`,
-- brand/account scope consistency on `DCO_Campaigns.timeline_blocks`.
+- brand/account scope consistency on `DCO_Campaigns.timeline_ad_blocks`.
 
 ### Other edge fetchers
 Campaign/ad set/ad fetchers require authenticated user token and Meta token resolution by account.
