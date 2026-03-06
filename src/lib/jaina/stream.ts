@@ -3,6 +3,9 @@ import {
   frontendCheckpointReportSchema,
   outputJsonDeltaSchema,
   outputTextDeltaSchema,
+  responseObjectiveUpdatedSchema,
+  responseObjectivesSchema,
+  responseClarificationRequestSchema,
   progressEventSchema,
   responseContentPartSchema,
   responseContentPartDoneSchema,
@@ -40,6 +43,8 @@ import {
   type ResponsePlanDecisionEventData,
   type FrontendCheckpointReport,
   type HandoffTraceEntry,
+  type JainaObjective,
+  type JainaObjectiveStatus,
 } from "./schemas";
 import type { CampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
 import { z } from "zod";
@@ -76,6 +81,11 @@ export type JainaPendingPlan = {
   status: "awaiting_approval";
 };
 
+export type JainaPendingClarification = {
+  id?: string;
+  question: string;
+};
+
 export type JainaStreamState = {
   status: JainaStreamStatus;
   reportJson: string;
@@ -86,6 +96,8 @@ export type JainaStreamState = {
   reportAssemblyHtml: string | null;
   plan: JainaPlan | null;
   pendingPlan: JainaPendingPlan | null;
+  pendingClarification: JainaPendingClarification | null;
+  objectives: JainaObjective[];
   lastPlanDecision: ResponsePlanDecisionEventData | null;
   error?: string;
   responseId?: string;
@@ -93,6 +105,9 @@ export type JainaStreamState = {
   itemId?: string;
   partId?: string;
   outputItemId?: string;
+  contentPartKinds: Record<string, "text" | "json">;
+  lastCompletedPartId?: string;
+  finalContentKind?: "report" | "text";
   progress: JainaProgressEntry[];
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
@@ -113,7 +128,10 @@ export function createInitialJainaStreamState(): JainaStreamState {
     reportAssemblyHtml: null,
     plan: null,
     pendingPlan: null,
+    pendingClarification: null,
+    objectives: [],
     lastPlanDecision: null,
+    contentPartKinds: {},
     progress: [],
     toolCalls: [],
     toolResults: [],
@@ -158,7 +176,9 @@ function normalizeReportAssemblyToSoT(reportAssembly: ReportAssembly): ReportPay
 
   return {
     language: "en",
+    report_title: reportAssembly.header.title,
     executive_summary: reportAssembly.summary.narrative,
+    budget: null,
     performance_snapshot: snapshot,
     sections: [
       {
@@ -246,6 +266,7 @@ function normalizeMetric(
   const metric =
     getNonEmptyString(record.metric) ??
     getNonEmptyString(record.label) ??
+    getNonEmptyString(record.name) ??
     getNonEmptyString(record.title) ??
     "Metric";
 
@@ -277,12 +298,16 @@ function normalizeMetric(
 
   const prefix = getNonEmptyString(record.prefix);
   if (prefix) normalizedMetric.prefix = prefix;
+  else if (getNonEmptyString(record.unit) === "currency") normalizedMetric.prefix = "$";
 
   const suffix = getNonEmptyString(record.suffix);
   if (suffix) normalizedMetric.suffix = suffix;
+  else if (getNonEmptyString(record.unit) === "%") normalizedMetric.suffix = "%";
+  else if (getNonEmptyString(record.unit) === "x") normalizedMetric.suffix = "x";
 
   const format = getNonEmptyString(record.format);
   if (format) normalizedMetric.format = format;
+  else if (getNonEmptyString(record.unit) === "currency") normalizedMetric.format = "currency";
 
   return normalizedMetric;
 }
@@ -347,6 +372,18 @@ function normalizeTable(
 function normalizeHighlight(
   value: unknown
 ): FrontendCheckpointReport["sections"][number]["highlights"][number] | null {
+  const textHighlight = getNonEmptyString(value);
+  if (textHighlight) {
+    return {
+      category: "analysis",
+      text: textHighlight,
+      impact: null,
+      severity: "neutral",
+      confidence: null,
+      evidence: [],
+    };
+  }
+
   const record = asRecord(value);
   if (!record) return null;
 
@@ -383,7 +420,11 @@ function normalizeSection(
   return {
     heading: getNonEmptyString(record.heading) ?? getNonEmptyString(record.title) ?? "Analysis",
     scope: getNonEmptyString(record.scope) ?? "account",
-    summary: getNonEmptyString(record.summary) ?? "",
+    summary:
+      getNonEmptyString(record.summary) ??
+      getNonEmptyString(record.section_summary) ??
+      getNonEmptyString(record.analysis_summary) ??
+      "",
     highlights: asArray(record.highlights ?? record.insights ?? record.key_insights)
       .map((item) => normalizeHighlight(item))
       .filter((item): item is FrontendCheckpointReport["sections"][number]["highlights"][number] => Boolean(item)),
@@ -424,37 +465,138 @@ function normalizeHandoffTraceEntry(value: unknown): HandoffTraceEntry | null {
   };
 }
 
+function unwrapReportEnvelope(value: unknown): unknown {
+  let current: unknown = value;
+
+  for (let i = 0; i < 4; i += 1) {
+    const record = asRecord(current);
+    if (!record) break;
+
+    const nestedReport = asRecord(record.report);
+    if (nestedReport) {
+      current = nestedReport;
+      continue;
+    }
+
+    const nestedPayload = asRecord(record.payload);
+    if (nestedPayload) {
+      current = nestedPayload;
+      continue;
+    }
+
+    const nestedData = asRecord(record.data);
+    if (nestedData) {
+      current = nestedData;
+      continue;
+    }
+
+    break;
+  }
+
+  return current;
+}
+
+function hasStructuredReportContent(report: FrontendCheckpointReport): boolean {
+  return Boolean(
+    report.executive_summary ||
+      report.performance_snapshot.length ||
+      report.strategic_recommendations.length ||
+      report.graphs.length ||
+      report.sections.some(
+        (section) =>
+          Boolean(section.summary) ||
+          section.highlights.length > 0 ||
+          section.actions.length > 0 ||
+          section.tables.length > 0 ||
+          section.graphs.length > 0
+      )
+  );
+}
+
 
 function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointReport | null {
-  const strict = frontendCheckpointReportSchema.safeParse(value);
-  if (strict.success) return strict.data;
+  const unwrappedValue = unwrapReportEnvelope(value);
 
-  const payloadRecord = asRecord(value);
+  const strict = frontendCheckpointReportSchema.safeParse(unwrappedValue);
+  if (strict.success && hasStructuredReportContent(strict.data)) return strict.data;
+
+  const payloadRecord = asRecord(unwrappedValue);
   if (!payloadRecord) return null;
+
+  const normalizedSections = asArray(payloadRecord.sections)
+    .map((item) => normalizeSection(item))
+    .filter((item): item is FrontendCheckpointReport["sections"][number] => Boolean(item));
+
+  const normalizedRecommendations = asArray(
+    payloadRecord.strategic_recommendations ??
+      payloadRecord.recommendations ??
+      payloadRecord.reccomendations ??
+      payloadRecord.priority_recommendations ??
+      payloadRecord.priority_reccomendations ??
+      payloadRecord["priority reccomendations"]
+  )
+    .map((item) => normalizeRecommendation(item))
+    .filter((item): item is FrontendCheckpointReport["strategic_recommendations"][number] => Boolean(item));
+
+  const sectionActions = normalizedSections.flatMap((section) => section.actions);
+  const strategicRecommendations =
+    normalizedRecommendations.length > 0 ? normalizedRecommendations : sectionActions;
+
+  const normalizedPerformanceSnapshot = asArray(
+    payloadRecord.performance_snapshot ?? payloadRecord.key_metrics
+  )
+    .map((item) => normalizeMetric(item))
+    .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item));
+
+  const normalizedKpis = asArray(payloadRecord.kpis)
+    .map((item) => {
+      const kpi = asRecord(item);
+      if (!kpi) return null;
+      return normalizeMetric({
+        metric:
+          getNonEmptyString(kpi.name) ??
+          getNonEmptyString(kpi.metric) ??
+          getNonEmptyString(kpi.label) ??
+          "KPI",
+        value: kpi.value,
+        status: kpi.status,
+        unit: kpi.unit,
+        context: kpi.description,
+      });
+    })
+    .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item));
+
+  const budgetRecord = asRecord(payloadRecord.budget);
+  const budgetMetric =
+    budgetRecord &&
+    (typeof budgetRecord.total_spend === "number" || typeof budgetRecord.total_spend === "string")
+      ? normalizeMetric({
+          metric: "Total Spend",
+          value: budgetRecord.total_spend,
+          unit: budgetRecord.currency === "USD" ? "currency" : undefined,
+          status: "neutral",
+        })
+      : null;
 
   const normalized: FrontendCheckpointReport = {
     language: getNonEmptyString(payloadRecord.language) ?? "en",
+    report_title:
+      getNonEmptyString(asRecord(payloadRecord.summary)?.title) ??
+      getNonEmptyString(payloadRecord.title) ??
+      "",
     executive_summary:
       getNonEmptyString(payloadRecord.executive_summary) ??
       getNonEmptyString(payloadRecord.summary) ??
       getNonEmptyString(payloadRecord.title) ??
       "",
-    performance_snapshot: asArray(payloadRecord.performance_snapshot)
-      .map((item) => normalizeMetric(item))
-      .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item)),
-    sections: asArray(payloadRecord.sections)
-      .map((item) => normalizeSection(item))
-      .filter((item): item is FrontendCheckpointReport["sections"][number] => Boolean(item)),
-    strategic_recommendations: asArray(
-      payloadRecord.strategic_recommendations ??
-        payloadRecord.recommendations ??
-        payloadRecord.reccomendations ??
-        payloadRecord.priority_recommendations ??
-        payloadRecord.priority_reccomendations ??
-        payloadRecord["priority reccomendations"]
-    )
-      .map((item) => normalizeRecommendation(item))
-      .filter((item): item is FrontendCheckpointReport["strategic_recommendations"][number] => Boolean(item)),
+    budget: asRecord(payloadRecord.budget) ?? null,
+    performance_snapshot: [
+      ...normalizedPerformanceSnapshot,
+      ...normalizedKpis,
+      ...(budgetMetric ? [budgetMetric] : []),
+    ],
+    sections: normalizedSections,
+    strategic_recommendations: strategicRecommendations,
     follow_up_questions: asArray(payloadRecord.follow_up_questions)
       .map((item) => getNonEmptyString(item))
       .filter((item): item is string => Boolean(item)),
@@ -470,7 +612,7 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
   const normalizedResult = frontendCheckpointReportSchema.safeParse(normalized);
   if (normalizedResult.success) return normalizedResult.data;
 
-  const fallback = reportPayloadSchema.safeParse(payloadRecord);
+  const fallback = reportPayloadSchema.safeParse(unwrappedValue);
   if (!fallback.success) return null;
   if ("type" in fallback.data && fallback.data.type === "direct_answer") return null;
 
@@ -493,7 +635,9 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
   for (const candidate of candidates) {
     try {
       const parsedJson = JSON.parse(candidate);
-      const parsedReport = reportPayloadSchema.safeParse(parsedJson);
+      const parsedReport = reportPayloadSchema.safeParse(
+        unwrapReportEnvelope(parsedJson)
+      );
       if (parsedReport.success) return parsedReport.data;
     } catch {
       continue;
@@ -707,6 +851,29 @@ function parsePartialReportFromAccumulatedText(
     raw.summary = executiveSummary;
   }
 
+  const summaryObject = extractObjectFieldByKeys(trimmed, ["summary"]);
+  if (summaryObject) {
+    const summaryTitle = getNonEmptyString(summaryObject.title);
+    if (summaryTitle) {
+      raw.title = summaryTitle;
+    }
+
+    const overview = getNonEmptyString(summaryObject.overview);
+    if (overview) {
+      raw.summary = overview;
+    }
+
+    const keyFindings = asArray(summaryObject.key_findings);
+    if (keyFindings.length > 0) {
+      raw.key_insights = keyFindings;
+    }
+
+    const summaryRecommendations = asArray(summaryObject.recommendations);
+    if (summaryRecommendations.length > 0) {
+      raw.recommendations = summaryRecommendations;
+    }
+  }
+
   const sectionSummary = extractStringFieldByKeys(trimmed, [
     "section_summary",
     "analysis_summary",
@@ -719,9 +886,15 @@ function parsePartialReportFromAccumulatedText(
   const performanceSnapshot = extractArrayFieldByKeys(trimmed, [
     "performance_snapshot",
     "key_metrics",
+    "kpis",
   ]);
   if (performanceSnapshot) {
     raw.performance_snapshot = performanceSnapshot;
+  }
+
+  const budget = extractObjectFieldByKeys(trimmed, ["budget"]);
+  if (budget) {
+    raw.budget = budget;
   }
 
   const keyInsights = extractArrayFieldByKeys(trimmed, [
@@ -736,6 +909,7 @@ function parsePartialReportFromAccumulatedText(
   }
 
   const recommendationList = extractArrayFieldByKeys(trimmed, [
+    "strategic_recommendations",
     "action_plan",
     "next_steps",
     "recommendations",
@@ -746,6 +920,11 @@ function parsePartialReportFromAccumulatedText(
   ]);
   if (recommendationList) {
     raw.recommendations = recommendationList;
+  }
+
+  const sections = extractArrayFieldByKeys(trimmed, ["sections"]);
+  if (sections) {
+    raw.sections = sections;
   }
 
   const charts = extractArrayFieldByKeys(trimmed, ["charts", "graphs"]);
@@ -775,6 +954,21 @@ function parsePartialReportFromAccumulatedText(
   const parsed = reportPayloadSchema.safeParse(raw);
   if (!parsed.success) return null;
   return parsed.data;
+}
+
+function looksLikeStructuredReportDelta(delta: string): boolean {
+  const trimmed = delta.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
+  return (
+    trimmed.includes("\"report_type\"") ||
+    trimmed.includes("\"executive_summary\"") ||
+    trimmed.includes("\"performance_snapshot\"") ||
+    trimmed.includes("\"sections\"") ||
+    trimmed.includes("\"strategic_recommendations\"") ||
+    trimmed.includes("\"kpis\"") ||
+    trimmed.includes("\"budget\"")
+  );
 }
 
 export function parseJainaStreamEvent(line: string): ParsedJainaStreamEvent | null {
@@ -867,6 +1061,151 @@ function parsePlanFromAccumulatedDelta(
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function toObjectiveId(candidate: string, fallbackIndex?: number): string {
+  const normalized = candidate
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (normalized.length > 0) return normalized;
+  if (typeof fallbackIndex === "number") return `objective-${fallbackIndex + 1}`;
+  return `objective-${Date.now()}`;
+}
+
+function normalizeObjectiveStatus(value: unknown): JainaObjectiveStatus {
+  const raw = getNonEmptyString(value)?.toLowerCase();
+  if (!raw) return "pending";
+  if (["completed", "complete", "done", "success", "succeeded"].includes(raw)) {
+    return "completed";
+  }
+  if (["in_progress", "in-progress", "running", "active", "started"].includes(raw)) {
+    return "in_progress";
+  }
+  if (["failed", "error", "errored", "cancelled", "canceled", "blocked"].includes(raw)) {
+    return "failed";
+  }
+  return "pending";
+}
+
+function normalizeObjectiveFromRecord(
+  record: Record<string, unknown>,
+  fallbackIndex?: number
+): JainaObjective | null {
+  const rawId =
+    getNonEmptyString(record.id) ??
+    getNonEmptyString(record.objective_id) ??
+    getNonEmptyString(record.key);
+  const title =
+    getNonEmptyString(record.title) ??
+    getNonEmptyString(record.label) ??
+    getNonEmptyString(record.objective) ??
+    getNonEmptyString(record.summary) ??
+    (rawId ? rawId.replace(/[_-]+/g, " ") : undefined);
+  if (!title) return null;
+
+  const id = toObjectiveId(rawId ?? title, fallbackIndex);
+  return {
+    id,
+    title,
+    description:
+      getNonEmptyString(record.description) ??
+      getNonEmptyString(record.summary) ??
+      undefined,
+    status: normalizeObjectiveStatus(record.status),
+  };
+}
+
+function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
+  const map = new Map<string, JainaObjective>();
+  for (const objective of objectives) {
+    map.set(objective.id, objective);
+  }
+  return Array.from(map.values());
+}
+
+function normalizeObjectiveListFromPayload(payload: Record<string, unknown>): JainaObjective[] {
+  const candidates = [
+    ...asArray(payload.objectives),
+    ...asArray(payload.items),
+    ...asArray(payload.checklist),
+  ];
+
+  return dedupeObjectives(
+    candidates.reduce<JainaObjective[]>((acc, item, index) => {
+      const record = asRecord(item);
+      if (!record) return acc;
+      const objective = normalizeObjectiveFromRecord(record, index);
+      if (objective) acc.push(objective);
+      return acc;
+    }, [])
+  );
+}
+
+function upsertObjective(
+  currentObjectives: JainaObjective[],
+  payload: Record<string, unknown>
+): JainaObjective[] {
+  const nestedRecord =
+    asRecord(payload.objective) ?? asRecord(payload.update) ?? payload;
+  const rawId =
+    getNonEmptyString(nestedRecord.id) ??
+    getNonEmptyString(nestedRecord.objective_id) ??
+    getNonEmptyString(nestedRecord.key) ??
+    getNonEmptyString(payload.id) ??
+    getNonEmptyString(payload.objective_id) ??
+    getNonEmptyString(payload.key);
+  const normalizedId = rawId ? toObjectiveId(rawId) : undefined;
+
+  const existingMatch =
+    (normalizedId
+      ? currentObjectives.find((objective) => objective.id === normalizedId)
+      : undefined) ??
+    (() => {
+      const title =
+        getNonEmptyString(nestedRecord.title) ??
+        getNonEmptyString(nestedRecord.label) ??
+        getNonEmptyString(payload.title) ??
+        getNonEmptyString(payload.label);
+      if (!title) return undefined;
+      return currentObjectives.find(
+        (objective) => objective.title.toLowerCase() === title.toLowerCase()
+      );
+    })();
+
+  const mergedRecord: Record<string, unknown> = {
+    ...nestedRecord,
+    ...(normalizedId ? { id: normalizedId } : {}),
+    title:
+      getNonEmptyString(nestedRecord.title) ??
+      getNonEmptyString(nestedRecord.label) ??
+      getNonEmptyString(payload.title) ??
+      getNonEmptyString(payload.label) ??
+      existingMatch?.title,
+    description:
+      getNonEmptyString(nestedRecord.description) ??
+      getNonEmptyString(nestedRecord.summary) ??
+      getNonEmptyString(payload.description) ??
+      getNonEmptyString(payload.summary) ??
+      existingMatch?.description,
+    status:
+      nestedRecord.status ??
+      payload.status ??
+      existingMatch?.status ??
+      "pending",
+  };
+
+  const normalized = normalizeObjectiveFromRecord(mergedRecord);
+  if (!normalized) return currentObjectives;
+
+  const targetId = existingMatch?.id ?? normalized.id;
+  const withTargetId: JainaObjective = { ...normalized, id: targetId };
+  const nextObjectives = currentObjectives.filter(
+    (objective) => objective.id !== targetId
+  );
+  nextObjectives.push(withTargetId);
+  return dedupeObjectives(nextObjectives);
 }
 
 function collectToolDeltaCandidates(
@@ -1106,6 +1445,7 @@ export function reduceJainaStreamEvent(
         partId: parsed.data.data.part_id,
         report: normalizedReport,
         reportJson: JSON.stringify(normalizedReport),
+        finalContentKind: "report",
       };
     }
     case "response.report_assembly": {
@@ -1121,6 +1461,7 @@ export function reduceJainaStreamEvent(
         reportAssembly: parsed.data.data.report,
         reportAssemblyHtml: parsed.data.data.html_preview,
         report: normalizeReportAssemblyToSoT(parsed.data.data.report),
+        finalContentKind: "report",
       };
     }
     case "response.created": {
@@ -1150,6 +1491,42 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         itemId: parsed.data.data.item_id,
         partId: parsed.data.data.part.id,
+        contentPartKinds: {
+          ...state.contentPartKinds,
+          [parsed.data.data.part.id]: parsed.data.data.part.type,
+        },
+      };
+    }
+    case "response.objectives": {
+      const parsed = responseObjectivesSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed response.objectives event" };
+      }
+      const payload = Array.isArray(parsed.data.data)
+        ? { objectives: parsed.data.data }
+        : ((asRecord(parsed.data.data) ?? {}) as Record<string, unknown>);
+      const objectives = normalizeObjectiveListFromPayload(payload);
+      if (objectives.length === 0) {
+        return nextBase;
+      }
+      return {
+        ...nextBase,
+        objectives,
+      };
+    }
+    case "response.objective.updated": {
+      const parsed = responseObjectiveUpdatedSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return {
+          ...nextBase,
+          status: "error",
+          error: "Malformed response.objective.updated event",
+        };
+      }
+      const payload = parsed.data.data as Record<string, unknown>;
+      return {
+        ...nextBase,
+        objectives: upsertObjective(state.objectives, payload),
       };
     }
     case "response.progress": {
@@ -1580,6 +1957,7 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         reportJson: nextReportJson,
         report: pickRicherReport(state.report, parsedReport),
+        finalContentKind: "report",
       };
     }
     case "response.output_text.delta": {
@@ -1589,10 +1967,19 @@ export function reduceJainaStreamEvent(
       }
 
       const payload = parsed.data.data;
-      const nextReportJson = `${state.reportJson}${payload.delta}`;
-      const parsedReport =
-        parseReportFromAccumulatedText(nextReportJson) ??
-        parsePartialReportFromAccumulatedText(nextReportJson);
+      const partKind = state.contentPartKinds[payload.part_id];
+      const shouldParseAsReport =
+        partKind === "json" ||
+        state.finalContentKind === "report" ||
+        state.reportJson.trim().length > 0 ||
+        looksLikeStructuredReportDelta(payload.delta);
+      const nextReportJson = shouldParseAsReport
+        ? `${state.reportJson}${payload.delta}`
+        : state.reportJson;
+      const parsedReport = shouldParseAsReport
+        ? parseReportFromAccumulatedText(nextReportJson) ??
+          parsePartialReportFromAccumulatedText(nextReportJson)
+        : null;
 
       return {
         ...nextBase,
@@ -1602,6 +1989,38 @@ export function reduceJainaStreamEvent(
         reportJson: nextReportJson,
         responseText: `${state.responseText}${payload.delta}`,
         report: pickRicherReport(state.report, parsedReport),
+      };
+    }
+    case "response.clarification_request": {
+      const parsed = responseClarificationRequestSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return {
+          ...nextBase,
+          status: "error",
+          error: "Malformed response.clarification_request event",
+        };
+      }
+
+      const payload = parsed.data.data;
+      const question =
+        (typeof payload.question === "string" && payload.question.trim()) ||
+        (typeof payload.prompt === "string" && payload.prompt.trim()) ||
+        (typeof payload.message === "string" && payload.message.trim()) ||
+        state.responseText.trim() ||
+        "Clarification needed.";
+      const clarificationId =
+        (typeof payload.id === "string" && payload.id.trim()) ||
+        (typeof payload.clarification_id === "string" &&
+          payload.clarification_id.trim()) ||
+        undefined;
+
+      return {
+        ...nextBase,
+        pendingClarification: {
+          ...(clarificationId ? { id: clarificationId } : {}),
+          question,
+        },
+        finalContentKind: "text",
       };
     }
     case "state.delta": {
@@ -1702,11 +2121,14 @@ export function reduceJainaStreamEvent(
         return nextBase;
       }
       if (!state.reportJson.trim() || state.report) {
-        return nextBase;
+        return {
+          ...nextBase,
+          finalContentKind: state.report ? "report" : state.finalContentKind,
+        };
       }
       const parsedReport = parseReportFromAccumulatedText(state.reportJson);
       if (parsedReport) {
-        return { ...nextBase, report: parsedReport };
+        return { ...nextBase, report: parsedReport, finalContentKind: "report" };
       }
       return nextBase;
     }
@@ -1715,14 +2137,39 @@ export function reduceJainaStreamEvent(
       if (parsed.success && parsed.data.data?.part_id && state.partId && parsed.data.data.part_id !== state.partId) {
         return nextBase;
       }
+      const completedPartId = parsed.success ? parsed.data.data?.part_id : undefined;
+      const completedPartKind =
+        completedPartId && state.contentPartKinds[completedPartId]
+          ? state.contentPartKinds[completedPartId]
+          : undefined;
+      const finalContentKind =
+        state.report || completedPartKind === "json"
+          ? "report"
+          : completedPartKind === "text"
+            ? "text"
+            : state.finalContentKind;
+
       if (!state.reportJson.trim() || state.report) {
-        return nextBase;
+        return {
+          ...nextBase,
+          lastCompletedPartId: completedPartId,
+          finalContentKind,
+        };
       }
       const parsedReport = parseReportFromAccumulatedText(state.reportJson);
       if (parsedReport) {
-        return { ...nextBase, report: parsedReport };
+        return {
+          ...nextBase,
+          report: parsedReport,
+          lastCompletedPartId: completedPartId,
+          finalContentKind: "report",
+        };
       }
-      return nextBase;
+      return {
+        ...nextBase,
+        lastCompletedPartId: completedPartId,
+        finalContentKind,
+      };
     }
     case "response.done": {
       const parsed = responseDoneSchema.safeParse(event);
@@ -1730,11 +2177,20 @@ export function reduceJainaStreamEvent(
         return { ...nextBase, status: "error", error: "Malformed response.done event" };
       }
       if (!state.reportJson.trim()) {
-        return { ...nextBase, status: "complete" };
+        return {
+          ...nextBase,
+          status: "complete",
+          finalContentKind: state.report ? "report" : state.finalContentKind,
+        };
       }
       const parsedReport = parseReportFromAccumulatedText(state.reportJson);
       if (parsedReport) {
-        return { ...nextBase, status: "complete", report: parsedReport };
+        return {
+          ...nextBase,
+          status: "complete",
+          report: parsedReport,
+          finalContentKind: "report",
+        };
       }
       return { ...nextBase, status: "complete" };
     }

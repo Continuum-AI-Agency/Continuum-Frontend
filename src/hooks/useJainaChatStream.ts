@@ -25,6 +25,8 @@ type JainaChatInput = {
   canvas?: boolean;
   adAccountId: string;
   brandId: string;
+  sessionId?: string;
+  clarificationId?: string;
   userId?: string;
   campaignCanvas?: Record<string, unknown>;
 };
@@ -193,9 +195,13 @@ export function useJainaChatStream() {
           query: input.query,
           userId: input.userId,
           canvas: input.canvas,
+          clarification: input.clarificationId
+            ? { id: input.clarificationId }
+            : undefined,
           context: {
             adAccountId: input.adAccountId,
             brandId: input.brandId,
+            sessionId: input.sessionId,
             canvas: input.canvas,
             campaignCanvas: input.campaignCanvas,
           },

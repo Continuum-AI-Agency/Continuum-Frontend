@@ -6,6 +6,7 @@ import type {
   PlanStep,
   ArtifactDeltaEventData,
   ReportAssembly,
+  JainaObjective,
 } from "@/lib/jaina/schemas";
 import type { PlanStatus } from "@/components/ai-elements/plan";
 
@@ -41,4 +42,9 @@ export type JainaChatMessage = {
   reportAssemblyHtml?: string;
   plan?: JainaPlan;
   artifacts?: ArtifactDeltaEventData;
+  pendingClarification?: {
+    id?: string;
+    question: string;
+  };
+  objectives?: JainaObjective[];
 };

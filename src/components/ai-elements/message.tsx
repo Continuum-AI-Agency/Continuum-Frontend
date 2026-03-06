@@ -31,8 +31,8 @@ export function Message({ role, children }: MessageProps) {
         className={cn(
           "rounded-2xl px-4 py-2 text-[15px] leading-relaxed shadow-sm",
           isUser
-            ? "max-w-[85%] bg-gray-200 text-gray-900 rounded-tr-sm font-medium"
-            : "max-w-full min-w-0 flex-1 border border-white/10 bg-white/5 backdrop-blur-md text-white rounded-tl-sm"
+            ? "max-w-[85%] rounded-tr-sm bg-muted text-foreground font-medium"
+            : "max-w-full min-w-0 flex-1 rounded-tl-sm border border-border/70 bg-card/90 text-foreground"
         )}
       >
         {children}

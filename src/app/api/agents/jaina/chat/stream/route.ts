@@ -4,6 +4,29 @@ import { getApiBaseUrl } from "@/lib/api/config";
 
 export const runtime = "nodejs";
 
+const HOP_BY_HOP_HEADERS = [
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "content-length",
+] as const;
+
+function createStreamResponseHeaders(upstreamHeaders: Headers): Headers {
+  const headers = new Headers(upstreamHeaders);
+  for (const header of HOP_BY_HOP_HEADERS) {
+    headers.delete(header);
+  }
+  headers.set("Content-Type", "application/x-ndjson");
+  headers.set("Cache-Control", "no-cache, no-transform");
+  headers.set("X-Accel-Buffering", "no");
+  return headers;
+}
+
 export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -46,27 +69,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const headers = new Headers(backendResponse.headers);
-  headers.set("Content-Type", "application/x-ndjson");
-  headers.set("Cache-Control", "no-cache, no-transform");
-  headers.set("Connection", "keep-alive");
-  headers.set("X-Accel-Buffering", "no");
-  headers.delete("content-length");
-
-  const reader = backendResponse.body.getReader();
-  const stream = new ReadableStream({
-    async pull(controller) {
-      const { value, done } = await reader.read();
-      if (done) {
-        controller.close();
-        return;
-      }
-      if (value) controller.enqueue(value);
-    },
-    cancel(reason) {
-      reader.cancel(reason).catch(() => {});
-    },
+  const headers = createStreamResponseHeaders(backendResponse.headers);
+  return new Response(backendResponse.body, {
+    headers,
+    status: backendResponse.status,
+    statusText: backendResponse.statusText,
   });
-
-  return new Response(stream, { headers, status: backendResponse.status });
 }

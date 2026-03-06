@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Badge, Button, Flex, Heading, Text } from "@radix-ui/themes";
+import { Button, Flex, Heading } from "@radix-ui/themes";
 import {
   ArchiveIcon,
   Cross2Icon,
@@ -30,7 +30,7 @@ export function JainaHeader({
   isStreaming,
 }: JainaHeaderProps) {
   return (
-    <header className="relative z-10 flex items-center justify-between gap-3 p-3 bg-white/5 backdrop-blur-xl border-b border-white/10 shadow-lg transition-all duration-300">
+    <header className="relative z-10 flex items-center justify-between gap-3 border-b border-border/60 bg-background/70 p-3 shadow-sm transition-all duration-300">
       <Flex align="center" gap="4" className="flex-1 min-w-0">
         <Flex align="center" gap="2" className="shrink-0 mr-2">
           <Heading size="3" className="tracking-tight font-bold whitespace-nowrap">

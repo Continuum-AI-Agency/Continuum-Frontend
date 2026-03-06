@@ -29,8 +29,8 @@ export const Node = ({ handles, className, selected, ...props }: NodeProps) => (
     )}
     {...props}
   >
-    {handles.target && <Handle position={Position.Left} type="target" />}
-    {handles.source && <Handle position={Position.Right} type="source" />}
+    {handles.target && <Handle position={Position.Top} type="target" />}
+    {handles.source && <Handle position={Position.Bottom} type="source" />}
     {props.children}
   </Card>
 );

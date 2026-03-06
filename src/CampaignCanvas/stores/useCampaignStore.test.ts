@@ -45,7 +45,7 @@ describe("useCampaignStore.addConnectedNode", () => {
     expect(state.edges[0]?.target).toBe(audienceNode?.id);
   });
 
-  it("keeps non-audience children on the right side", () => {
+  it("stacks non-audience children below the parent", () => {
     useCampaignStore.setState({
       nodes: [createAdSetNode("adset-1", { x: 120, y: 200 })],
     });
@@ -55,7 +55,24 @@ describe("useCampaignStore.addConnectedNode", () => {
     const adNode = state.nodes.find((node) => node.type === "ad");
 
     expect(adNode).toBeTruthy();
-    expect(adNode?.position).toEqual({ x: 420, y: 200 });
+    expect(adNode?.position).toEqual({ x: 120, y: 500 });
+  });
+
+  it("offsets sibling children horizontally while keeping top-down flow", () => {
+    useCampaignStore.setState({
+      nodes: [createAdSetNode("adset-1", { x: 120, y: 200 })],
+    });
+
+    const store = useCampaignStore.getState();
+    store.addConnectedNode("adset-1", "ad");
+    store.addConnectedNode("adset-1", "audience");
+
+    const state = useCampaignStore.getState();
+    const adNodes = state.nodes.filter((node) => node.id !== "adset-1");
+    const positions = adNodes.map((node) => node.position);
+
+    expect(positions).toContainEqual({ x: 120, y: 500 });
+    expect(positions).toContainEqual({ x: -60, y: 500 });
   });
 
   it("validates structure against graph rules and canonical payload schema", () => {

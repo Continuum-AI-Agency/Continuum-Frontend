@@ -51,8 +51,15 @@ interface CampaignStore {
   setEdgeStyle: (style: 'curved' | 'straight') => void;
 }
 
-const CONNECTED_NODE_HORIZONTAL_OFFSET = 300;
 const CONNECTED_NODE_VERTICAL_OFFSET = 300;
+const CONNECTED_NODE_SIBLING_HORIZONTAL_SPACING = 180;
+
+function getSiblingHorizontalOffset(index: number): number {
+  if (index <= 0) return 0;
+  const depth = Math.ceil(index / 2);
+  const direction = index % 2 === 1 ? -1 : 1;
+  return direction * depth * CONNECTED_NODE_SIBLING_HORIZONTAL_SPACING;
+}
 
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
   nodes: [],
@@ -143,20 +150,15 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   addConnectedNode: (sourceId, targetType, data = {}) => {
-    const { nodes, addNode, onConnect } = get();
+    const { nodes, edges, addNode, onConnect } = get();
     const sourceNode = nodes.find(n => n.id === sourceId);
     if (!sourceNode) return;
 
-    const shouldAttachBelowSource = sourceNode.type === 'ad-set' && targetType === 'audience';
-    const newPosition = shouldAttachBelowSource
-      ? {
-          x: sourceNode.position.x,
-          y: sourceNode.position.y + CONNECTED_NODE_VERTICAL_OFFSET,
-        }
-      : {
-          x: sourceNode.position.x + CONNECTED_NODE_HORIZONTAL_OFFSET,
-          y: sourceNode.position.y,
-        };
+    const existingChildrenCount = edges.filter((edge) => edge.source === sourceId).length;
+    const newPosition = {
+      x: sourceNode.position.x + getSiblingHorizontalOffset(existingChildrenCount),
+      y: sourceNode.position.y + CONNECTED_NODE_VERTICAL_OFFSET,
+    };
 
     const targetId = addNode(targetType, data, newPosition);
     onConnect({ source: sourceId, sourceHandle: null, target: targetId, targetHandle: null });

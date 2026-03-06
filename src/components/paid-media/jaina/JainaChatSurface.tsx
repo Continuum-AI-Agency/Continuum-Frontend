@@ -26,11 +26,19 @@ type JainaChatSurfaceProps = {
   campaignId?: string | null;
   campaignCanvasPayload?: CampaignCanvasPayload | null;
   userId?: string | null;
+  onCanvasActionApplied?: () => void;
   className?: string;
 };
 
 function normalizeIdentity(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
+}
+
+function createJainaSessionId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `jaina-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function JainaChatSurface({
@@ -40,6 +48,7 @@ export function JainaChatSurface({
   campaignId,
   campaignCanvasPayload,
   userId,
+  onCanvasActionApplied,
   className,
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
@@ -47,6 +56,8 @@ export function JainaChatSurface({
 
   const { state, start, cancel, reset, clearMemory, approvePlan } = useJainaChatStream();
   const [isPlanMode, setIsPlanMode] = React.useState(false);
+  const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
+  const pendingClarificationId = state.pendingClarification?.id;
 
   const [messages, setMessages] = React.useState<JainaChatMessage[]>([]);
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(
@@ -73,34 +84,58 @@ export function JainaChatSurface({
       });
     }
 
-    if (state.status === "streaming" && state.responseText) {
-      const isJsonStart = state.responseText.trim().startsWith("{");
-      updateMessage(activeResponseId, {
-        content: isJsonStart ? "Generating analysis..." : state.responseText,
-      });
+    if (state.status === "streaming" && (state.responseText || state.objectives.length > 0)) {
+      const shouldPreferReport =
+        state.finalContentKind === "report" || Boolean(state.report);
+      if (shouldPreferReport) {
+        updateMessage(activeResponseId, {
+          content: "Building checkpoint report…",
+          objectives: state.objectives,
+        });
+      } else {
+        const isJsonStart = state.responseText.trim().startsWith("{");
+        updateMessage(activeResponseId, {
+          content:
+            isJsonStart
+              ? "Generating analysis..."
+              : state.responseText || "Working through objectives…",
+          objectives: state.objectives,
+        });
+      }
     }
 
     if (state.status === "complete") {
       const finalThought = getFinalThought(state.progress);
       const reportSummary = getReportSummary(state.report);
-      
-      // If we have streaming text, prefer that as the content, unless a structured report summary overrides it
-      let content = state.responseText || finalThought || reportSummary || "Response ready.";
-      
-      // Special case: If the streaming text looks like a raw JSON report, we might want to hide it 
-      // and show the summary instead. But for now, we assume text delta is conversational.
-      if (typeof content === 'string' && content.trim().startsWith('{') && state.report) {
-         content = reportSummary || "Report generated.";
-      }
+      const hasClarificationRequest = Boolean(state.pendingClarification);
 
       const reportType =
         state.report && typeof state.report === "object" && "type" in state.report
           ? (state.report as { type?: unknown }).type
           : undefined;
       const isDirectAnswer = reportType === "direct_answer";
+      const shouldPreferReport =
+        !hasClarificationRequest &&
+        !isDirectAnswer &&
+        (state.finalContentKind === "report" ||
+          (Boolean(state.report) && state.lastEventType === "response.content_part.done"));
+      const content = shouldPreferReport
+        ? reportSummary || "Report ready."
+        : state.responseText ||
+          state.pendingClarification?.question ||
+          finalThought ||
+          reportSummary ||
+          "Response ready.";
+
       const hasReportSignal = resolveReportSignal(state.progress, state.stateDeltas);
       const reportHasContent = hasReportContent(state.report);
-      const renderAsReport = !!(state.report && !isDirectAnswer && reportHasContent && hasReportSignal);
+      const renderAsReport = !!(
+        !hasClarificationRequest &&
+        state.report &&
+        !isDirectAnswer &&
+        reportHasContent &&
+        (hasReportSignal || shouldPreferReport)
+      );
         
       updateMessage(activeResponseId, {
         status: "done",
@@ -115,6 +150,8 @@ export function JainaChatSurface({
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
         artifacts: state.artifacts,
+        pendingClarification: state.pendingClarification ?? undefined,
+        objectives: state.objectives,
       });
       setActiveResponseId(null);
     }
@@ -130,6 +167,7 @@ export function JainaChatSurface({
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
         artifacts: state.artifacts,
+        objectives: state.objectives,
       });
       setActiveResponseId(null);
     }
@@ -147,7 +185,11 @@ export function JainaChatSurface({
     state.toolResults,
     state.stateDeltas,
     state.responseText,
+    state.finalContentKind,
+    state.lastEventType,
     state.artifacts,
+    state.pendingClarification,
+    state.objectives,
   ]);
 
   React.useEffect(() => {
@@ -211,6 +253,9 @@ export function JainaChatSurface({
       for (const action of envelope.actions) {
         processAIAction(action);
       }
+      if (envelope.actions.length > 0) {
+        onCanvasActionApplied?.();
+      }
 
       show({
         title: "Canvas updated by Jaina",
@@ -218,13 +263,14 @@ export function JainaChatSurface({
         variant: "success",
       });
     }
-  }, [brandProfileId, processAIAction, show, state.canvasActions, state.toolResults, userId]);
+  }, [brandProfileId, onCanvasActionApplied, processAIAction, show, state.canvasActions, state.toolResults, userId]);
 
   React.useEffect(() => {
     if (adAccountId) {
       reset();
       setMessages([]);
       setActiveResponseId(null);
+      setSessionId(createJainaSessionId());
       processedToolResultIdsRef.current.clear();
       processedCanvasEnvelopeKeysRef.current.clear();
     }
@@ -242,6 +288,7 @@ export function JainaChatSurface({
       }
 
       const now = new Date().toISOString();
+      const clarificationId = pendingClarificationId;
       const userMessage: JainaChatMessage = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -252,7 +299,9 @@ export function JainaChatSurface({
       const assistantMessage: JainaChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: "Thinking through your request…",
+        content: clarificationId
+          ? "Processing your clarification…"
+          : "Thinking through your request…",
         createdAt: now,
         status: "streaming",
         title: "Jaina Analyst",
@@ -268,6 +317,8 @@ export function JainaChatSurface({
         canvas: isPlanMode || Boolean(campaignCanvasPayload),
         adAccountId: adAccountId,
         brandId: brandProfileId,
+        sessionId,
+        clarificationId,
         userId: userId ?? undefined,
         campaignCanvas: campaignCanvasPayload ?? undefined,
       });
@@ -280,13 +331,14 @@ export function JainaChatSurface({
         });
       }
     },
-    [brandProfileId, adAccountId, campaignCanvasPayload, isPlanMode, show, start, userId]
+    [adAccountId, brandProfileId, campaignCanvasPayload, isPlanMode, pendingClarificationId, sessionId, show, start, userId]
   );
 
   const handleClearConversation = React.useCallback(() => {
     reset();
     setMessages([]);
     setActiveResponseId(null);
+    setSessionId(createJainaSessionId());
     processedToolResultIdsRef.current.clear();
     processedCanvasEnvelopeKeysRef.current.clear();
   }, [reset]);
@@ -363,8 +415,8 @@ export function JainaChatSurface({
   }
 
   return (
-    <div className={cn("relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20 backdrop-blur-xl", className)}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(88,80,236,0.12),transparent_55%),radial-gradient(circle_at_20%_80%,rgba(14,116,144,0.16),transparent_50%)]" />
+    <div className={cn("relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/70 backdrop-blur-xl", className)}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(88,80,236,0.08),transparent_55%),radial-gradient(circle_at_20%_80%,rgba(14,116,144,0.12),transparent_50%)]" />
 
       <JainaHeader
         brandName={brandName}

@@ -37,6 +37,7 @@ export type NormalizedChart = {
   title: string;
   description?: string | null;
   type: ChartType;
+  frontend_parser?: "series" | "chartjs";
   data?: ChartPoint[];
   series?: ChartSeries[];
   x_axis_label?: string;
@@ -77,6 +78,15 @@ export function JainaReportCharts({ charts, showHeading = true }: JainaReportCha
       </Grid>
     </div>
   );
+}
+
+function resolveFrontendParserHint(value: unknown): "series" | "chartjs" | "" {
+  if (typeof value !== "string") return "";
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.startsWith("series")) return "series";
+  if (normalized.startsWith("chartjs")) return "chartjs";
+  return "";
 }
 
 function normalizeChartType(input: unknown): ChartType {
@@ -138,10 +148,86 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
   if (!rawChart || typeof rawChart !== "object") return null;
 
   const chart = rawChart as Record<string, unknown>;
+  const parserHint = resolveFrontendParserHint(
+    chart.frontend_parser ?? chart.data_format
+  );
   const title = typeof chart.title === "string" ? chart.title : "Chart";
   const description =
     typeof chart.description === "string" ? chart.description : null;
   const type = normalizeChartType(chart.type ?? chart.graph_type ?? chart.chart_type);
+
+  if (parserHint === "series" && Array.isArray(chart.series)) {
+    const series = chart.series.filter((item) => item && typeof item === "object");
+    return {
+      title,
+      description,
+      type,
+      frontend_parser: "series",
+      series: series.map((item, seriesIndex) => {
+        const record = item as Record<string, unknown>;
+        const data = Array.isArray(record.data) ? record.data : [];
+        return {
+          name: typeof record.name === "string" ? record.name : `Series ${seriesIndex + 1}`,
+          data: data.map((point, pointIndex) => {
+            if (!point || typeof point !== "object") {
+              return { x: pointIndex + 1, y: 0 };
+            }
+            const pointRecord = point as Record<string, unknown>;
+            return {
+              x: String(pointRecord.x ?? pointRecord.label ?? pointIndex + 1),
+              y: Number(pointRecord.y ?? pointRecord.value ?? 0),
+            };
+          }),
+        };
+      }),
+      x_axis_label:
+        typeof chart.x_axis_label === "string" ? chart.x_axis_label : undefined,
+      y_axis_label:
+        typeof chart.y_axis_label === "string" ? chart.y_axis_label : undefined,
+    };
+  }
+
+  if (parserHint === "chartjs" && Array.isArray(chart.labels) && Array.isArray(chart.datasets)) {
+    const labels = chart.labels.map((label) => String(label ?? ""));
+    const datasets = chart.datasets.filter(
+      (dataset) => dataset && typeof dataset === "object"
+    );
+    if (datasets.length === 1) {
+      const firstDataset = datasets[0] as Record<string, unknown>;
+      const values = Array.isArray(firstDataset.data) ? firstDataset.data : [];
+      return {
+        title,
+        description,
+        type,
+        frontend_parser: "chartjs",
+        data: labels.map((label, index) => ({
+          label,
+          value: Number(values[index] ?? 0),
+        })),
+      };
+    }
+
+    return {
+      title,
+      description,
+      type,
+      frontend_parser: "chartjs",
+      series: datasets.map((dataset, datasetIndex) => {
+        const record = dataset as Record<string, unknown>;
+        const values = Array.isArray(record.data) ? record.data : [];
+        return {
+          name:
+            typeof record.label === "string"
+              ? record.label
+              : `Series ${datasetIndex + 1}`,
+          data: labels.map((label, index) => ({
+            x: label,
+            y: Number(values[index] ?? 0),
+          })),
+        };
+      }),
+    };
+  }
 
   if (Array.isArray(chart.labels) && Array.isArray(chart.datasets)) {
     const labels = chart.labels.map((label) => String(label ?? ""));
@@ -156,6 +242,7 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         title,
         description,
         type,
+        frontend_parser: parserHint === "chartjs" ? "chartjs" : undefined,
         data: labels.map((label, index) => ({
           label,
           value: Number(values[index] ?? 0),
@@ -167,6 +254,7 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
       title,
       description,
       type,
+      frontend_parser: parserHint === "chartjs" ? "chartjs" : undefined,
       series: datasets.map((dataset, datasetIndex) => {
         const record = dataset as Record<string, unknown>;
         const values = Array.isArray(record.data) ? record.data : [];
@@ -192,6 +280,7 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
       title,
       description,
       type,
+      frontend_parser: parserHint === "series" ? "series" : undefined,
       series: series.map((item, index) => {
         const record = item as Record<string, unknown>;
         const values = Array.isArray(record.values) ? record.values : [];
@@ -213,6 +302,7 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
       title,
       description,
       type,
+      frontend_parser: parserHint === "series" ? "series" : undefined,
       series: series.map((item, seriesIndex) => {
         const record = item as Record<string, unknown>;
         const data = Array.isArray(record.data) ? record.data : [];
@@ -248,6 +338,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
         title,
         description,
         type,
+        frontend_parser:
+          parserHint === "series" || parserHint === "chartjs"
+            ? (parserHint as "series" | "chartjs")
+            : undefined,
         series: wideSeries,
         x_axis_label:
           typeof chart.x_axis_label === "string" ? chart.x_axis_label : undefined,
@@ -260,6 +354,10 @@ export function normalizeJainaChart(rawChart: JainaChartInput): NormalizedChart 
       title,
       description,
       type,
+      frontend_parser:
+        parserHint === "series" || parserHint === "chartjs"
+          ? (parserHint as "series" | "chartjs")
+          : undefined,
       data: rows.map((item) => {
           const record = item as Record<string, unknown>;
           return {

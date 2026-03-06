@@ -12,6 +12,8 @@ import {
   responsePlanRequestedSchema,
   frontendCheckpointReportSchema,
   handoffTraceEntrySchema,
+  responseObjectiveUpdatedSchema,
+  responseObjectivesSchema,
 } from "./schemas";
 
 
@@ -39,6 +41,22 @@ describe("jainaChatRequestSchema", () => {
         campaignCanvas: {
           nodes: [],
         },
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts optional clarification id", () => {
+    const result = jainaChatRequestSchema.safeParse({
+      query: "Campaign-level view",
+      clarification: {
+        id: "clar_001",
+      },
+      context: {
+        adAccountId: "act_123",
+        brandId: "brand_456",
+        sessionId: "session_abc",
       },
     });
 
@@ -248,6 +266,52 @@ describe("plan approval contracts", () => {
     expect(approve?.status).toBe("approved");
     expect(deny).not.toBeNull();
     expect(deny?.status).toBe("rejected");
+  });
+});
+
+describe("objective checklist stream contracts", () => {
+  it("accepts response.objectives payloads", () => {
+    const result = responseObjectivesSchema.safeParse({
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "objective_scope_campaigns",
+            title: "Scope campaigns",
+            status: "in_progress",
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts unwrapped response.objectives arrays", () => {
+    const result = responseObjectivesSchema.safeParse({
+      type: "response.objectives",
+      data: [
+        {
+          id: "objective_scope_campaigns",
+          title: "Scope campaigns",
+          status: "pending",
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts response.objective.updated payloads", () => {
+    const result = responseObjectiveUpdatedSchema.safeParse({
+      type: "response.objective.updated",
+      data: {
+        objective_id: "objective_scope_campaigns",
+        status: "completed",
+      },
+    });
+
+    expect(result.success).toBe(true);
   });
 });
 

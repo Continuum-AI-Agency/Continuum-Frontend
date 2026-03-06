@@ -29,6 +29,11 @@ export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   userId: z.string().optional(),
   canvas: z.boolean().optional(),
+  clarification: z
+    .object({
+      id: z.string().min(1),
+    })
+    .optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
@@ -159,10 +164,19 @@ export const frontendMetricItemSchema = z.object({
   format: z.string().optional(),
 });
 
+export const frontendBudgetSchema = z
+  .object({
+    total_spend: z.union([z.number(), z.string()]).optional(),
+    currency: z.string().optional(),
+  })
+  .passthrough();
+
 export const frontendGraphSchema = z
   .object({
     title: z.string().optional(),
     description: z.string().nullable().optional(),
+    frontend_parser: z.string().optional(),
+    data_format: z.string().optional(),
     type: z.string().optional(),
     graph_type: z.string().optional(),
     chart_type: z.string().optional(),
@@ -192,7 +206,9 @@ export type CheckpointSection = z.infer<typeof checkpointSectionSchema>;
 
 export const frontendCheckpointReportSchema = z.object({
   language: z.string().default("en"),
+  report_title: z.string().default(""),
   executive_summary: z.string().default(""),
+  budget: frontendBudgetSchema.nullable().default(null),
   performance_snapshot: z.array(frontendMetricItemSchema).default([]),
   sections: z.array(checkpointSectionSchema).default([]),
   strategic_recommendations: z.array(recommendationItemSchema).default([]),
@@ -456,6 +472,64 @@ export const responseOutputItemDoneSchema = streamEventSchema(
   })
 );
 
+export const responseClarificationRequestSchema = streamEventSchema(
+  "response.clarification_request",
+  z
+    .object({
+      id: z.string().optional(),
+      clarification_id: z.string().optional(),
+      question: z.string().optional(),
+      prompt: z.string().optional(),
+      message: z.string().optional(),
+    })
+    .passthrough()
+);
+
+const objectiveEventItemSchema = z
+  .object({
+    id: z.string().optional(),
+    objective_id: z.string().optional(),
+    key: z.string().optional(),
+    title: z.string().optional(),
+    label: z.string().optional(),
+    description: z.string().optional(),
+    summary: z.string().optional(),
+    status: z.string().optional(),
+  })
+  .passthrough();
+
+export const responseObjectivesSchema = streamEventSchema(
+  "response.objectives",
+  z.union([
+    z
+      .object({
+        objectives: z.array(objectiveEventItemSchema).optional(),
+        items: z.array(objectiveEventItemSchema).optional(),
+        checklist: z.array(objectiveEventItemSchema).optional(),
+      })
+      .passthrough(),
+    z.array(objectiveEventItemSchema),
+  ])
+);
+
+export const responseObjectiveUpdatedSchema = streamEventSchema(
+  "response.objective.updated",
+  z
+    .object({
+      objective: objectiveEventItemSchema.optional(),
+      update: objectiveEventItemSchema.optional(),
+      id: z.string().optional(),
+      objective_id: z.string().optional(),
+      key: z.string().optional(),
+      title: z.string().optional(),
+      label: z.string().optional(),
+      description: z.string().optional(),
+      summary: z.string().optional(),
+      status: z.string().optional(),
+    })
+    .passthrough()
+);
+
 export const responseDoneSchema = streamEventSchema(
   "response.done",
   z.object({
@@ -499,6 +573,9 @@ export type JainaStreamEvent =
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseReportAssemblySchema>
   | z.infer<typeof outputTextDeltaSchema>
+  | z.infer<typeof responseObjectivesSchema>
+  | z.infer<typeof responseObjectiveUpdatedSchema>
+  | z.infer<typeof responseClarificationRequestSchema>
   | z.infer<typeof responseContentPartDoneSchema>
   | z.infer<typeof responseOutputItemDoneSchema>
   | z.infer<typeof responseDoneSchema>
@@ -520,6 +597,9 @@ export const jainaStreamEventSchema = z.union([
   responseCheckpointReportSchema,
   responseReportAssemblySchema,
   outputTextDeltaSchema,
+  responseObjectivesSchema,
+  responseObjectiveUpdatedSchema,
+  responseClarificationRequestSchema,
   responseContentPartDoneSchema,
   responseOutputItemDoneSchema,
   responseDoneSchema,
@@ -572,6 +652,24 @@ export const artifactDeltaSchema = z.object({
 });
 
 export type ArtifactDeltaEventData = z.infer<typeof artifactDeltaSchema>;
+
+export const jainaObjectiveStatusSchema = z.enum([
+  "pending",
+  "in_progress",
+  "completed",
+  "failed",
+]);
+
+export type JainaObjectiveStatus = z.infer<typeof jainaObjectiveStatusSchema>;
+
+export const jainaObjectiveSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string().optional(),
+  status: jainaObjectiveStatusSchema,
+});
+
+export type JainaObjective = z.infer<typeof jainaObjectiveSchema>;
 
 export const planStepSchema = z.object({
   title: z.string(),
@@ -1052,15 +1150,74 @@ function parseWideChartsFromRows(graph: any): any[] {
   }));
 }
 
+function resolveFrontendParserHint(value: unknown): "series" | "chartjs" | "" {
+  if (typeof value !== "string") return "";
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized.startsWith("series")) return "series";
+  if (normalized.startsWith("chartjs")) return "chartjs";
+  return "";
+}
+
 function parseGraph(graph: any): any {
   if (!graph) return null;
-  
+
+  const parserHint = resolveFrontendParserHint(
+    graph.frontend_parser ?? graph.data_format
+  );
+
   const baseChart = {
     title: graph.title || graph.graph_name || "Chart",
     type: normalizeChartType(graph.type || graph.graph_type || "bar"),
     description: graph.description || graph.graph_description,
+    frontend_parser: parserHint || undefined,
   };
-  
+
+  if (parserHint === "series" && Array.isArray(graph.series)) {
+    return {
+      ...baseChart,
+      series: graph.series.map((s: any) => ({
+        name: s.name || "Series",
+        data: (s.data || []).map((d: any, index: number) => ({
+          x: d.x || d.label || d.name || d.category || String(index + 1),
+          y: toFiniteNumber(d.y ?? d.value),
+        })),
+      })),
+      x_axis_label: graph.x_axis_label,
+      y_axis_label: graph.y_axis_label,
+    };
+  }
+
+  if (parserHint === "chartjs" && Array.isArray(graph.labels) && Array.isArray(graph.datasets)) {
+    const labels = graph.labels.map((label: unknown) => String(label ?? ""));
+    const datasets = graph.datasets;
+
+    if (datasets.length === 1) {
+      const dataset = datasets[0] || {};
+      return {
+        ...baseChart,
+        title: graph.title || dataset.label || baseChart.title,
+        data: labels.map((label: string, index: number) => ({
+          label,
+          value: toFiniteNumber(dataset.data?.[index]),
+        })),
+      };
+    }
+
+    return {
+      ...baseChart,
+      series: datasets.map((dataset: any, datasetIndex: number) => ({
+        name: dataset.label || `Series ${datasetIndex + 1}`,
+        data: labels.map((label: string, index: number) => ({
+          x: label,
+          y: toFiniteNumber(dataset.data?.[index]),
+        })),
+      })),
+      x_axis_label: graph.x_axis_label,
+      y_axis_label: graph.y_axis_label,
+    };
+  }
+
   if (Array.isArray(graph.series)) {
     return {
       ...baseChart,
@@ -1118,6 +1275,15 @@ function parseGraph(graph: any): any {
 
 function parseGraphsFromInput(graph: any): any[] {
   if (!graph) return [];
+  const parserHint = resolveFrontendParserHint(
+    graph.frontend_parser ?? graph.data_format
+  );
+
+  if (parserHint === "series" || parserHint === "chartjs") {
+    const parsedWithHint = parseGraph(graph);
+    return parsedWithHint ? [parsedWithHint] : [];
+  }
+
   const wideCharts = parseWideChartsFromRows(graph);
   if (wideCharts.length > 0) {
     return wideCharts;
@@ -1299,100 +1465,297 @@ export const reportPayloadSchema = z.union([
   }),
   // Catch-all for flexible/streaming JSON formats - try this BEFORE strict frontendCheckpointReportSchema
   z.record(z.string(), z.unknown()).transform((data) => {
-    const anyData = data as any;
-    
-    // Support multiple field name variations
-    const executiveSummary = anyData.executive_summary || anyData.summary || anyData.title || "";
-    const sectionSummary =
-      anyData.section_summary ||
-      anyData.analysis_summary ||
-      anyData.section_overview ||
-      "";
+    const anyData = data as Record<string, unknown>;
+    const nestedReport =
+      anyData.report && typeof anyData.report === "object" && !Array.isArray(anyData.report)
+        ? (anyData.report as Record<string, unknown>)
+        : null;
+    const source = nestedReport ?? anyData;
+    const summaryObject =
+      source.summary && typeof source.summary === "object" && !Array.isArray(source.summary)
+        ? (source.summary as Record<string, unknown>)
+        : null;
+
+    const mapRecommendation = (value: unknown) => {
+      if (typeof value === "string") {
+        return {
+          title: value,
+          rationale: value,
+          expected_impact: null,
+          priority: "MEDIUM",
+          action: value,
+          description: value,
+          type: null,
+          target: null,
+          reasoning: null,
+          impact: null,
+        };
+      }
+      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+      const item = value as Record<string, unknown>;
+      const title =
+        (typeof item.action === "string" && item.action) ||
+        (typeof item.title === "string" && item.title) ||
+        formatEnumLabel(item.type) ||
+        "Recommendation";
+      const rationale =
+        (typeof item.rationale === "string" && item.rationale) ||
+        (typeof item.description === "string" && item.description) ||
+        (typeof item.recommendation === "string" && item.recommendation) ||
+        (typeof item.reasoning === "string" && item.reasoning) ||
+        "";
+      return {
+        title,
+        rationale,
+        expected_impact: item.expected_impact ?? item.impact ?? null,
+        priority:
+          item.priority !== undefined && item.priority !== null
+            ? String(item.priority).toUpperCase()
+            : "MEDIUM",
+        action: title,
+        description: rationale,
+        type: formatEnumLabel(item.type) || null,
+        target: (typeof item.target === "string" && item.target) || null,
+        reasoning:
+          (typeof item.reasoning === "string" && item.reasoning) ||
+          (typeof item.rationale === "string" && item.rationale) ||
+          null,
+        impact:
+          (typeof item.impact === "string" && item.impact) ||
+          (typeof item.expected_impact === "string" && item.expected_impact) ||
+          null,
+      };
+    };
+
+    const mapHighlight = (value: unknown) => {
+      if (typeof value === "string") {
+        return {
+          category: "analysis",
+          title: "",
+          text: value,
+          impact: null,
+          severity: "neutral",
+          confidence: null,
+          evidence: [],
+        };
+      }
+      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+      const insight = value as Record<string, unknown>;
+      return {
+        category:
+          (typeof insight.category === "string" && insight.category) || "analysis",
+        title:
+          (typeof insight.title === "string" && insight.title) ||
+          (typeof insight.name === "string" && insight.name) ||
+          "",
+        text:
+          (typeof insight.content === "string" && insight.content) ||
+          (typeof insight.description === "string" && insight.description) ||
+          (typeof insight.text === "string" && insight.text) ||
+          "",
+        impact:
+          (typeof insight.impact === "string" && insight.impact) ||
+          (typeof insight.metric === "string" && insight.metric) ||
+          null,
+        severity: toInsightSeverity(insight),
+        confidence:
+          (typeof insight.confidence === "string" && insight.confidence) || null,
+        evidence: Array.isArray(insight.evidence)
+          ? insight.evidence.map((item: unknown) => toDisplayString(item))
+          : [],
+      };
+    };
+
+    const sectionGraphSources = [
+      source.main_graph,
+      source.primary_performance_graph,
+      ...(Array.isArray(source.graphs) ? source.graphs : []),
+      ...(Array.isArray(source.charts) ? source.charts : []),
+    ];
+    const allGraphs = sectionGraphSources.flatMap((graph) => parseGraphsFromInput(graph));
+
     const performanceSnapshot: any[] = [];
-    // Support: key_metrics (Lead Strategist), performance_snapshot (SoT)
-    const metricsSource = anyData.key_metrics || anyData.performance_snapshot || [];
+    const metricsSource = source.key_metrics || source.performance_snapshot || [];
     if (Array.isArray(metricsSource)) {
-      performanceSnapshot.push(...metricsSource.map((m: any) => ({
-        metric: m.label || m.metric || "Metric",
-        value: m.value ?? m.value ?? "0",
-        change: m.change,
-        direction: m.direction,
-        context: m.context,
-        sub_label: m.sub_label,
-        status: toMetricStatus(m),
-        prefix: m.prefix,
-        suffix: m.suffix,
-      })));
-    }
-    
-    const allGraphs: any[] = [];
-    // Support: main_graph, primary_performance_graph, graphs, charts
-    if (anyData.main_graph) {
-      allGraphs.push(...parseGraphsFromInput(anyData.main_graph));
-    }
-    if (anyData.primary_performance_graph) {
-      allGraphs.push(...parseGraphsFromInput(anyData.primary_performance_graph));
-    }
-    if (Array.isArray(anyData.graphs)) {
-      allGraphs.push(
-        ...anyData.graphs.flatMap((graph: any) => parseGraphsFromInput(graph))
+      performanceSnapshot.push(
+        ...metricsSource.map((m: any) => ({
+          metric: m.label || m.metric || m.name || "Metric",
+          value: m.value ?? "0",
+          change: m.change,
+          direction: m.direction,
+          context: m.context,
+          sub_label: m.sub_label,
+          status: toMetricStatus(m),
+          prefix: m.prefix || (m.unit === "currency" ? "$" : undefined),
+          suffix: m.suffix || (m.unit === "%" ? "%" : undefined),
+          format: m.format || (m.unit === "currency" ? "currency" : undefined),
+        }))
       );
     }
-    if (Array.isArray(anyData.charts)) {
-      allGraphs.push(
-        ...anyData.charts.flatMap((graph: any) => parseGraphsFromInput(graph))
+
+    if (Array.isArray(source.kpis)) {
+      performanceSnapshot.push(
+        ...source.kpis.map((kpi: any) => ({
+          metric: kpi.name || kpi.metric || kpi.label || "KPI",
+          value: kpi.value ?? "0",
+          status: toMetricStatus(kpi),
+          prefix: kpi.unit === "currency" ? "$" : undefined,
+          suffix: kpi.unit === "x" || kpi.unit === "%" ? String(kpi.unit) : undefined,
+          format: kpi.unit === "currency" ? "currency" : undefined,
+          context: typeof kpi.description === "string" ? kpi.description : undefined,
+        }))
       );
     }
-    
+
+    const budget =
+      source.budget && typeof source.budget === "object" && !Array.isArray(source.budget)
+        ? (source.budget as Record<string, unknown>)
+        : null;
+    if (budget && budget.total_spend !== undefined && budget.total_spend !== null) {
+      performanceSnapshot.push({
+        metric: "Total Spend",
+        value:
+          typeof budget.total_spend === "number" || typeof budget.total_spend === "string"
+            ? budget.total_spend
+            : String(budget.total_spend),
+        prefix: budget.currency === "USD" ? "$" : undefined,
+        format: budget.currency === "USD" ? "currency" : undefined,
+        status: "neutral",
+      });
+    }
+
     const sections: any[] = [];
+    const topLevelHighlights: any[] = [];
+
+    if (Array.isArray(source.sections)) {
+      for (const rawSection of source.sections) {
+        if (!rawSection || typeof rawSection !== "object" || Array.isArray(rawSection)) {
+          continue;
+        }
+        const section = rawSection as Record<string, unknown>;
+        const highlightsSource =
+          section.highlights ||
+          section.insights ||
+          section.key_insights ||
+          section.key_findings ||
+          [];
+        const actionsSource =
+          section.actions || section.recommendations || section.reccomendations || [];
+        const sectionHighlights = Array.isArray(highlightsSource)
+          ? highlightsSource
+              .map((item) => mapHighlight(item))
+              .filter((item): item is Record<string, unknown> => Boolean(item))
+          : [];
+        const sectionActions = Array.isArray(actionsSource)
+          ? actionsSource
+              .map((item) => mapRecommendation(item))
+              .filter((item): item is Record<string, unknown> => Boolean(item))
+          : [];
+        const rawTables = Array.isArray(section.tables)
+          ? section.tables
+          : section.table
+            ? [section.table]
+            : [];
+        const sectionGraphs = [
+          ...(Array.isArray(section.graphs) ? section.graphs : []),
+          ...(Array.isArray(section.charts) ? section.charts : []),
+        ].flatMap((graph) => parseGraphsFromInput(graph));
+
+        sections.push({
+          heading:
+            (typeof section.heading === "string" && section.heading) ||
+            (typeof section.title === "string" && section.title) ||
+            "Analysis",
+          scope:
+            (typeof section.scope === "string" && section.scope) || "account",
+          summary:
+            (typeof section.summary === "string" && section.summary) ||
+            (typeof section.content === "string" && section.content) ||
+            (typeof section.section_summary === "string" && section.section_summary) ||
+            (typeof section.analysis_summary === "string" && section.analysis_summary) ||
+            "",
+          highlights: sectionHighlights,
+          tables: rawTables,
+          actions: sectionActions,
+          confidence:
+            (typeof section.confidence === "string" && section.confidence) || null,
+          cached_sources: Array.isArray(section.cached_sources)
+            ? section.cached_sources.map((item) => toDisplayString(item))
+            : [],
+          graphs: sectionGraphs,
+        });
+      }
+    }
+
     const sectionTables: any[] = [];
-    
-    // Support: campaign_table, performance_table
-    const campaignTable = toTableFromRows(anyData.campaign_table);
+    const campaignTable = toTableFromRows(source.campaign_table);
     if (campaignTable) {
       sectionTables.push(campaignTable);
     }
-    const performanceTable = toTableFromRows(anyData.performance_table);
+    const performanceTable = toTableFromRows(source.performance_table);
     if (performanceTable) {
       sectionTables.push(performanceTable);
     }
-    if (anyData.table && Array.isArray(anyData.table.headers) && Array.isArray(anyData.table.rows)) {
+    if (
+      source.table &&
+      typeof source.table === "object" &&
+      !Array.isArray(source.table) &&
+      Array.isArray((source.table as Record<string, unknown>).headers) &&
+      Array.isArray((source.table as Record<string, unknown>).rows)
+    ) {
+      const table = source.table as Record<string, unknown>;
       sectionTables.push({
-        headers: anyData.table.headers.map((header: unknown) => toDisplayString(header)),
-        rows: anyData.table.rows.map((row: unknown) =>
+        headers: (table.headers as unknown[]).map((header) => toDisplayString(header)),
+        rows: (table.rows as unknown[]).map((row) =>
           Array.isArray(row) ? row.map((cell) => toDisplayString(cell)) : []
         ),
       });
     }
-    
-    // Support: key_insights, strategy_and_insights, strategic_analysis, insights
-    const highlights: any[] = [];
+
     const insightsSources = [
-      anyData.key_insights,
-      anyData.strategic_analysis,
-      anyData.strategy_and_insights,
-      anyData.insights,
-      anyData.key_findings,
+      summaryObject?.key_findings,
+      source.key_insights,
+      source.strategic_analysis,
+      source.strategy_and_insights,
+      source.insights,
+      source.key_findings,
     ];
-    for (const source of insightsSources) {
-      if (!Array.isArray(source)) continue;
-      highlights.push(...source.map((a: any) => ({
-        category: a.category || "analysis",
-        title: a.title || a.name || "",
-        text: a.content || a.description || a.text || "",
-        impact: a.impact || a.metric || null,
-        severity: toInsightSeverity(a),
-        confidence: a.confidence ?? null,
-        evidence: Array.isArray(a.evidence) ? a.evidence.map((item: unknown) => toDisplayString(item)) : [],
-      })));
+    for (const sourceInsights of insightsSources) {
+      if (!Array.isArray(sourceInsights)) continue;
+      topLevelHighlights.push(
+        ...sourceInsights
+          .map((item) => mapHighlight(item))
+          .filter((item): item is Record<string, unknown> => Boolean(item))
+      );
     }
-    
-    if (sectionTables.length > 0 || highlights.length > 0 || allGraphs.length > 0 || sectionSummary) {
+
+    if (sections.length > 0 && topLevelHighlights.length > 0) {
+      const firstSection = sections[0];
+      if (firstSection && Array.isArray(firstSection.highlights)) {
+        firstSection.highlights = [...topLevelHighlights, ...firstSection.highlights];
+      }
+    }
+
+    const sectionSummary =
+      (typeof source.section_summary === "string" && source.section_summary) ||
+      (typeof source.analysis_summary === "string" && source.analysis_summary) ||
+      (typeof source.section_overview === "string" && source.section_overview) ||
+      "";
+    if (
+      sections.length === 0 &&
+      (sectionTables.length > 0 ||
+        topLevelHighlights.length > 0 ||
+        allGraphs.length > 0 ||
+        sectionSummary)
+    ) {
       sections.push({
-        heading: anyData.section_title || anyData.analysis_title || "Analysis",
+        heading:
+          (typeof source.section_title === "string" && source.section_title) ||
+          (typeof source.analysis_title === "string" && source.analysis_title) ||
+          "Analysis",
         scope: "account",
         summary: sectionSummary,
-        highlights,
+        highlights: topLevelHighlights,
         tables: sectionTables,
         actions: [],
         confidence: null,
@@ -1400,54 +1763,70 @@ export const reportPayloadSchema = z.union([
         graphs: allGraphs,
       });
     }
-    
-    // Support: action_plan, next_steps, recommendations, priority_recommendations
+
     const strategicRecommendations: any[] = [];
     const recommendationSources = [
-      anyData.action_plan,
-      anyData.next_steps,
-      anyData.recommendations,
-      anyData.reccomendations,
-      anyData.priority_recommendations,
-      anyData.priority_reccomendations,
-      anyData["priority reccomendations"],
+      summaryObject?.recommendations,
+      source.strategic_recommendations,
+      source.action_plan,
+      source.next_steps,
+      source.recommendations,
+      source.reccomendations,
+      source.priority_recommendations,
+      source.priority_reccomendations,
+      source["priority reccomendations"],
     ];
-    for (const source of recommendationSources) {
-      if (!Array.isArray(source)) continue;
-      strategicRecommendations.push(...source.map((s: any) => ({
-        title: s.action || s.title || formatEnumLabel(s.type) || "Recommendation",
-        rationale: s.rationale || s.description || s.recommendation || s.reasoning || "",
-        expected_impact: s.expected_impact ?? s.impact ?? null,
-        priority: s.priority ? String(s.priority).toUpperCase() : "MEDIUM",
-        // Backward compatibility
-        action: s.action || s.title || formatEnumLabel(s.type) || "Recommendation",
-        description: s.rationale || s.description || s.recommendation || s.reasoning || "",
-        type: formatEnumLabel(s.type) || null,
-        target: s.target || null,
-        reasoning: s.reasoning || s.rationale || null,
-        impact: s.impact || s.expected_impact || null,
-      })));
+    for (const recommendationSource of recommendationSources) {
+      if (!Array.isArray(recommendationSource)) continue;
+      strategicRecommendations.push(
+        ...recommendationSource
+          .map((item) => mapRecommendation(item))
+          .filter((item): item is Record<string, unknown> => Boolean(item))
+      );
     }
-    
+    if (strategicRecommendations.length === 0) {
+      for (const section of sections) {
+        if (Array.isArray(section.actions)) {
+          strategicRecommendations.push(...section.actions);
+        }
+      }
+    }
+
+    const executiveSummary =
+      (typeof source.executive_summary === "string" && source.executive_summary) ||
+      (typeof summaryObject?.overview === "string" && summaryObject.overview) ||
+      (typeof source.summary === "string" && source.summary) ||
+      (typeof source.title === "string" && source.title) ||
+      "";
+    const reportTitle =
+      (typeof summaryObject?.title === "string" && summaryObject.title) ||
+      (typeof source.title === "string" && source.title) ||
+      "";
+
     return {
-      language: "en",
-      // Primary field names (SoT format)
+      language:
+        (typeof source.language === "string" && source.language) || "en",
+      report_title: reportTitle,
       executive_summary: executiveSummary,
+      budget,
       performance_snapshot: performanceSnapshot,
       sections,
       strategic_recommendations: strategicRecommendations,
-      follow_up_questions: anyData.follow_up_questions || [],
-      handoff_trace: anyData.handoff_trace || [],
-      cached_sources: anyData.cached_sources || [],
+      follow_up_questions: Array.isArray(source.follow_up_questions)
+        ? source.follow_up_questions
+        : [],
+      handoff_trace: Array.isArray(source.handoff_trace) ? source.handoff_trace : [],
+      cached_sources: Array.isArray(source.cached_sources) ? source.cached_sources : [],
       graphs: allGraphs,
-      // Aliases for backward compatibility / other formats
       summary: executiveSummary,
       charts: allGraphs,
       priority_recommendations: strategicRecommendations,
-      strategic_insights: highlights,
-      title: anyData.title || "",
-      // Legacy fields
-      data_integrity_notes: ["Date Range", `Date Range: ${anyData.date_range || "N/A"}`],
+      strategic_insights: topLevelHighlights,
+      title: (typeof source.title === "string" && source.title) || "",
+      data_integrity_notes: [
+        "Date Range",
+        `Date Range: ${typeof source.date_range === "string" ? source.date_range : "N/A"}`,
+      ],
     };
   }),
   // Strict FrontendCheckpointReport schema - only matches if data has meaningful SoT fields

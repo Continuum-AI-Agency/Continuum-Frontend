@@ -48,6 +48,206 @@ describe("reduceJainaStreamEvent text deltas", () => {
     expect(report.strategic_recommendations.length).toBe(1);
     expect(report.strategic_recommendations[0].title).toContain("Pause");
   });
+
+  it("maps SoT report sections and recommendations from nested output_json payloads", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_json.delta",
+      data: {
+        delta: JSON.stringify({
+          report: {
+            executive_summary: "Top-level summary",
+            sections: [
+              {
+                heading: "Analysis",
+                scope: "account",
+                summary: "Section summary",
+                highlights: ["Revenue is lagging on iOS campaigns."],
+                actions: [
+                  {
+                    action: "Pause iOS campaigns",
+                    description: "Spend is not returning value.",
+                    priority: "high",
+                  },
+                ],
+              },
+            ],
+            strategic_recommendations: [
+              {
+                action: "Reallocate budget to Android",
+                description: "Android has stronger ROAS.",
+                priority: "medium",
+              },
+            ],
+          },
+        }),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe("Top-level summary");
+    expect(report.sections[0]?.summary).toBe("Section summary");
+    expect(report.sections[0]?.highlights[0]?.text).toContain("Revenue is lagging");
+    expect(report.sections[0]?.actions[0]?.title).toBe("Pause iOS campaigns");
+    expect(report.strategic_recommendations[0]?.title).toBe("Reallocate budget to Android");
+  });
+
+  it("promotes section actions to strategic recommendations when top-level recommendations are missing", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_json.delta",
+      data: {
+        delta: JSON.stringify({
+          report: {
+            executive_summary: "Action-only recommendations",
+            sections: [
+              {
+                heading: "What to do next",
+                scope: "campaign",
+                summary: "Immediate optimizations",
+                actions: [
+                  {
+                    action: "Pause laggard set",
+                    description: "Consistent low ROAS over 7 days.",
+                    priority: "high",
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.strategic_recommendations.length).toBe(1);
+    expect(report.strategic_recommendations[0]?.title).toBe("Pause laggard set");
+  });
+
+  it("maps SpecialistReport summary object and section content/table fields", () => {
+    let state = createInitialJainaStreamState();
+
+    const specialistPayload = {
+      report_type: "SpecialistReport",
+      summary: {
+        title: "Ad Set Breakdown",
+        overview: "ROAS is stable but frequency is high.",
+        key_findings: ["Frequency indicates audience saturation."],
+        recommendations: [
+          "Refresh creatives to reduce fatigue.",
+          "Test broader audiences.",
+        ],
+      },
+      budget: {
+        total_spend: 250491.65,
+        currency: "USD",
+      },
+      kpis: [
+        { name: "ROAS", value: 1.78, unit: "x", status: "critical" },
+        { name: "CTR", value: 0.97, unit: "%", status: "watch" },
+      ],
+      sections: [
+        {
+          title: "Ad Set Performance Metrics",
+          content: "Detailed metrics for this ad set.",
+          table: {
+            headers: ["Ad Set Name", "Spend", "ROAS"],
+            rows: [["A+ Android", "$250,491.65", "1.78"]],
+          },
+        },
+      ],
+      graphs: [
+        {
+          title: "Efficiency Metrics Comparison",
+          graph_type: "bar",
+          data_format: "chartjs",
+          frontend_parser: "chartjs_v1",
+          labels: ["ROAS", "CTR (%)", "Frequency"],
+          datasets: [{ label: "Metric Value", data: [1.78, 0.97, 7.34] }],
+        },
+      ],
+    };
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_specialist",
+        part_id: "part_specialist",
+        delta: `Here's my analysis\\n\\n${JSON.stringify(specialistPayload)}`,
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.report_title).toBe("Ad Set Breakdown");
+    expect(report.executive_summary).toContain("frequency is high");
+    expect(report.budget?.total_spend).toBe(250491.65);
+    expect(report.sections[0]?.summary).toBe("Detailed metrics for this ad set.");
+    expect(report.sections[0]?.highlights[0]?.text).toContain("audience saturation");
+    expect(report.sections[0]?.tables.length).toBe(1);
+    expect(report.strategic_recommendations.length).toBe(2);
+    expect(report.performance_snapshot.some((metric) => metric.metric === "ROAS")).toBe(true);
+    expect(report.performance_snapshot.some((metric) => metric.metric === "Total Spend")).toBe(true);
+    expect((report.graphs[0] as Record<string, unknown>)?.title).toBe(
+      "Efficiency Metrics Comparison"
+    );
+  });
+
+  it("keeps plain unwrapped text responses as text content", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.content_part.added",
+      data: {
+        item_id: "item_text_1",
+        part: {
+          id: "part_text_1",
+          object: "realtime.content_part",
+          type: "text",
+          text: "",
+        },
+      },
+    } as any);
+
+    const plainDelta =
+      "You currently have 7 active campaigns running. Total spend over the last 7 days is $132,130.34.";
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_text_1",
+        part_id: "part_text_1",
+        delta: plainDelta,
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.content_part.done",
+      data: {
+        item_id: "item_text_1",
+        part_id: "part_text_1",
+      },
+    } as any);
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_item.done",
+      data: { item_id: "item_text_1" },
+    } as any);
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_text_1",
+        object: "realtime.response",
+        status: "completed",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    expect(state.status).toBe("complete");
+    expect(state.finalContentKind).toBe("text");
+    expect(state.report).toBeNull();
+    expect(state.responseText).toContain("7 active campaigns");
+  });
 });
 
 describe("reduceJainaStreamEvent canonical report events", () => {
@@ -397,6 +597,93 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     expect(state.canvasActions[0].actions.length).toBe(2);
     expect(state.canvasActions[0].actions[0].type).toBe("CREATE_NODE");
   });
+
+  it("hydrates pending clarification requests", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.clarification_request",
+      data: {
+        id: "clar_001",
+        question: "Do you want this broken down by campaign or ad set?",
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    expect(state.pendingClarification?.id).toBe("clar_001");
+    expect(state.pendingClarification?.question).toContain("broken down");
+    expect(state.finalContentKind).toBe("text");
+  });
+
+  it("hydrates objective checklist events and incremental status updates", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "objective_scope_campaigns",
+            title: "Scope active campaigns",
+            description: "Collect active campaign set before deeper analysis.",
+            status: "in_progress",
+          },
+          {
+            id: "objective_analyze_efficiency",
+            title: "Analyze efficiency metrics",
+            status: "pending",
+          },
+        ],
+      },
+    } as any);
+
+    expect(state.objectives.length).toBe(2);
+    expect(state.objectives[0]?.status).toBe("in_progress");
+    expect(state.objectives[1]?.status).toBe("pending");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objective.updated",
+      data: {
+        objective_id: "objective_scope_campaigns",
+        status: "completed",
+      },
+    } as any);
+
+    expect(
+      state.objectives.find((objective) => objective.id === "objective-scope-campaigns")
+        ?.status
+    ).toBe("completed");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objective.updated",
+      data: {
+        objective: {
+          id: "objective_analyze_efficiency",
+          title: "Analyze efficiency metrics",
+          status: "in_progress",
+        },
+      },
+    } as any);
+
+    expect(
+      state.objectives.find((objective) => objective.id === "objective-analyze-efficiency")
+        ?.status
+    ).toBe("in_progress");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: [
+        {
+          id: "objective_finalize",
+          title: "Finalize response",
+          status: "pending",
+        },
+      ],
+    } as any);
+
+    expect(state.objectives.length).toBe(1);
+    expect(state.objectives[0]?.id).toBe("objective-finalize");
+  });
 });
 
 describe("reduceJainaStreamEvent plan + hitl events", () => {
@@ -553,6 +840,37 @@ describe("parseJainaStreamEvent compatibility guards", () => {
     expect(event?.type).toBe("tool.batch");
   });
 
+  it("accepts objective checklist stream events", () => {
+    const initEvent = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "response.objectives",
+        data: {
+          objectives: [
+            {
+              id: "objective_1",
+              title: "Compile KPI snapshot",
+              status: "pending",
+            },
+          ],
+        },
+      })
+    );
+    const updateEvent = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "response.objective.updated",
+        data: {
+          objective_id: "objective_1",
+          status: "completed",
+        },
+      })
+    );
+
+    expect(initEvent).not.toBeNull();
+    expect(initEvent?.type).toBe("response.objectives");
+    expect(updateEvent).not.toBeNull();
+    expect(updateEvent?.type).toBe("response.objective.updated");
+  });
+
   it("accepts known compatibility event types", () => {
     const event = parseJainaStreamEvent(
       JSON.stringify({
@@ -673,5 +991,37 @@ describe("normalizeCheckpointReportPayload strictness", () => {
     expect(report.executive_summary).toBe("Partial report");
     expect(report.sections).toEqual([]);
     expect(report.strategic_recommendations).toEqual([]);
+  });
+
+  it("unwraps nested report envelopes in checkpoint_report payloads", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_nested",
+        part_id: "part_nested",
+        report: {
+          report: {
+            executive_summary: "Nested report envelope",
+            sections: [
+              {
+                heading: "Nested section",
+                scope: "account",
+                summary: "Nested summary",
+                highlights: ["Nested highlight"],
+                actions: [],
+              },
+            ],
+          },
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe("Nested report envelope");
+    expect(report.sections[0]?.summary).toBe("Nested summary");
+    expect(report.sections[0]?.highlights[0]?.text).toBe("Nested highlight");
   });
 });
