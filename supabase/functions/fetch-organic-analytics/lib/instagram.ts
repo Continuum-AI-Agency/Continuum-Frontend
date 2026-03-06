@@ -14,6 +14,11 @@ import {
   trendComparison,
 } from "./shared.ts";
 import {
+  buildPostBreakdown24h,
+  buildPostBreakdown30d,
+  buildPostBreakdown7d,
+} from "./post-breakdowns.ts";
+import {
   META_API_VERSION,
   type AnalyticsScope,
   type DateRange,
@@ -389,19 +394,27 @@ async function fetchInstagramPostDetails(params: {
     });
   });
 
-  const breakdown30d = Array.from(dayMap.values())
-    .filter((point) => point.date >= postDate && point.date <= dailyUntil)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 30);
-
-  const breakdown7d = breakdown30d.slice(-7);
-  const breakdown24h: Array<{
-    hour: number;
-    views: number;
-    reach: number;
-    engagement: number;
-    comments: number;
-  }> = [];
+  const breakdown30d = buildPostBreakdown30d({
+    dayMap,
+    postDate,
+    untilDate: dailyUntil,
+    lifetimeFallback: {
+      views: metrics.views,
+      reach: metrics.reach,
+      engagement: metrics.totalInteractions,
+      comments: metrics.comments,
+    },
+  });
+  const breakdown7d = buildPostBreakdown7d(breakdown30d);
+  const breakdown24h = buildPostBreakdown24h({
+    breakdown30d,
+    lifetimeFallback: {
+      views: metrics.views,
+      reach: metrics.reach,
+      engagement: metrics.totalInteractions,
+      comments: metrics.comments,
+    },
+  });
 
   const carouselChildren =
     (post.children as { data?: Array<Record<string, unknown>> } | undefined)?.data ?? [];

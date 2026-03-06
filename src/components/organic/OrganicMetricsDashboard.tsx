@@ -12,7 +12,7 @@ import {
   Separator,
   Text,
 } from "@radix-ui/themes";
-import { ReloadIcon } from "@radix-ui/react-icons";
+import { DownloadIcon, ReloadIcon } from "@radix-ui/react-icons";
 import React from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -69,6 +69,10 @@ import {
   type DrilldownWindow,
   type PostMetricKey,
 } from "@/components/organic/organic-metrics-utils";
+import {
+  buildOrganicReportCsv,
+  buildOrganicReportHtml,
+} from "@/components/organic/organic-report-utils";
 
 export type OrganicAccountOption = {
   integrationAccountId: string;
@@ -217,6 +221,23 @@ function formatDateTime(value: string | undefined) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function downloadTextFile(params: {
+  content: string;
+  fileName: string;
+  mimeType: string;
+}) {
+  const blob = new Blob([params.content], { type: params.mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = params.fileName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function demographicColor(label: string) {
@@ -1184,6 +1205,8 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const [viewMode, setViewMode] = React.useState<MetricsViewMode>("account");
   const [rangePreset, setRangePreset] = React.useState<OrganicDateRangePreset>(DEFAULT_RANGE_PRESET);
   const [reloadTick, setReloadTick] = React.useState(0);
+  const [exportingReportFormat, setExportingReportFormat] = React.useState<"csv" | "html" | null>(null);
+  const [reportError, setReportError] = React.useState<string | null>(null);
   const manualRefreshRef = React.useRef(false);
   const [postDetailsById, setPostDetailsById] = React.useState<Record<string, OrganicPost>>({});
   const [loadingPostId, setLoadingPostId] = React.useState<string | null>(null);
@@ -1212,6 +1235,10 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
 
   const selectedAccount =
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
+
+  React.useEffect(() => {
+    setReportError(null);
+  }, [platform, selectedAccountId]);
 
   const fetchPostsWindow = React.useCallback(
     async (params: { accountId: string; windowOffset: number; forceRefresh: boolean }) => {
@@ -1332,6 +1359,99 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     manualRefreshRef.current = true;
     setReloadTick((tick) => tick + 1);
   }, [viewMode]);
+
+  const handleExportReport = React.useCallback(async (format: "csv" | "html") => {
+    if (!selectedAccountId) return;
+
+    setReportError(null);
+    setExportingReportFormat(format);
+    try {
+      const [accountData, postsData] = await Promise.all([
+        fetchOrganicAnalytics({
+          brandId,
+          integrationAccountId: selectedAccountId,
+          platform,
+          range: { preset: "last_30d" },
+          scope: "account",
+          forceRefresh: false,
+        }),
+        fetchOrganicAnalytics({
+          brandId,
+          integrationAccountId: selectedAccountId,
+          platform,
+          range: { preset: "last_30d" },
+          scope: "posts",
+          forceRefresh: false,
+        }),
+      ]);
+
+      const postIds = Array.from(
+        new Set((postsData.posts ?? []).map((post) => post.id).filter((postId) => postId.length > 0))
+      );
+      const detailedPosts: OrganicPost[] = [];
+      const concurrency = 4;
+
+      for (let index = 0; index < postIds.length; index += concurrency) {
+        const batch = postIds.slice(index, index + concurrency);
+        const batchResults = await Promise.all(
+          batch.map(async (postId) => {
+            try {
+              const detailData = await fetchOrganicAnalytics({
+                brandId,
+                integrationAccountId: selectedAccountId,
+                platform,
+                range: { preset: "last_30d" },
+                scope: "posts",
+                selectedPostId: postId,
+                forceRefresh: false,
+              });
+              return (detailData.posts ?? []).find((post) => post.id === postId) ?? null;
+            } catch (error) {
+              console.error(`[OrganicMetricsDashboard] Failed to load report detail for post ${postId}`, error);
+              return null;
+            }
+          })
+        );
+
+        detailedPosts.push(
+          ...batchResults.filter((post): post is OrganicPost => post !== null)
+        );
+      }
+
+      const reportPosts = mergePosts(postsData.posts ?? [], detailedPosts);
+      const reportPayload = {
+        platform,
+        accountName: selectedAccount?.name ?? accountData.accountId,
+        generatedAt: new Date().toISOString(),
+        accountRangeSince: accountData.range.since,
+        accountRangeUntil: accountData.range.until,
+        accountMetrics: accountData.metrics,
+        posts: reportPosts,
+      };
+
+      const dateTag = new Date().toISOString().slice(0, 10);
+      if (format === "html") {
+        const html = buildOrganicReportHtml(reportPayload);
+        downloadTextFile({
+          content: html,
+          fileName: `continuum-${platform}-organic-report-${dateTag}.html`,
+          mimeType: "text/html;charset=utf-8;",
+        });
+      } else {
+        const csv = buildOrganicReportCsv(reportPayload);
+        downloadTextFile({
+          content: csv,
+          fileName: `continuum-${platform}-organic-report-${dateTag}.csv`,
+          mimeType: "text/csv;charset=utf-8;",
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to export organic report.";
+      setReportError(message);
+    } finally {
+      setExportingReportFormat(null);
+    }
+  }, [brandId, platform, selectedAccount?.name, selectedAccountId]);
 
   React.useEffect(() => {
     const firstPlatformAccountId = platformAccounts[0]?.integrationAccountId ?? null;
@@ -1539,10 +1659,41 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               <ReloadIcon className={cn(state.status === "loading" && "animate-spin")} />
               Refresh
             </Button>
+
+            <Button
+              variant="surface"
+              radius="large"
+              onClick={() => {
+                void handleExportReport("csv");
+              }}
+              disabled={!selectedAccountId || state.status === "loading" || exportingReportFormat !== null}
+              aria-label="Export last thirty day organic report as csv"
+            >
+              <DownloadIcon className={cn(exportingReportFormat === "csv" && "animate-pulse")} />
+              {exportingReportFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
+            </Button>
+
+            <Button
+              variant="surface"
+              radius="large"
+              onClick={() => {
+                void handleExportReport("html");
+              }}
+              disabled={!selectedAccountId || state.status === "loading" || exportingReportFormat !== null}
+              aria-label="Export last thirty day organic report as html"
+            >
+              <DownloadIcon className={cn(exportingReportFormat === "html" && "animate-pulse")} />
+              {exportingReportFormat === "html" ? "Exporting HTML..." : "Export HTML"}
+            </Button>
           </Flex>
         </Flex>
 
         <Box pt="3" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+          {reportError ? (
+            <Callout.Root color="red" variant="surface" mb="3">
+              <Callout.Text>{reportError}</Callout.Text>
+            </Callout.Root>
+          ) : null}
           {platformAccounts.length === 0 ? (
             <Callout.Root color="blue" variant="surface">
               <Callout.Text>

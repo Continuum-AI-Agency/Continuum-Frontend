@@ -12,6 +12,11 @@ import {
   trendComparison,
 } from "./shared.ts";
 import {
+  buildPostBreakdown24h,
+  buildPostBreakdown30d,
+  buildPostBreakdown7d,
+} from "./post-breakdowns.ts";
+import {
   META_API_VERSION,
   type AnalyticsScope,
   type DateRange,
@@ -148,11 +153,27 @@ async function fetchFacebookPostDetails(params: {
     });
   });
 
-  const breakdown30d = Array.from(dayMap.values())
-    .filter((point) => point.date >= createdDate && point.date <= dailyUntil)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 30);
-  const breakdown7d = breakdown30d.slice(-7);
+  const breakdown30d = buildPostBreakdown30d({
+    dayMap,
+    postDate: createdDate,
+    untilDate: dailyUntil,
+    lifetimeFallback: {
+      views: videoViews > 0 ? videoViews : impressions,
+      reach,
+      engagement: engaged,
+      comments: comments.length,
+    },
+  });
+  const breakdown7d = buildPostBreakdown7d(breakdown30d);
+  const breakdown24h = buildPostBreakdown24h({
+    breakdown30d,
+    lifetimeFallback: {
+      views: videoViews > 0 ? videoViews : impressions,
+      reach,
+      engagement: engaged,
+      comments: comments.length,
+    },
+  });
 
   return {
     id: postId,
@@ -176,7 +197,7 @@ async function fetchFacebookPostDetails(params: {
       postViews: videoViews,
     },
     comments,
-    breakdown24h: [],
+    breakdown24h,
     breakdown7d,
     breakdown30d,
     isBoosted: paid > 0,
