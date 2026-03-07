@@ -80,6 +80,7 @@ type ViewMode = "campaigns" | "adsets";
 type Scope = { type: "campaign"; id: string } | { type: "index"; id: string };
 type CampaignSearchFilter = "all" | "active" | "paused";
 type RailEntityFilter = "all" | "campaigns" | "indexes";
+type HourlySliceOption = "all" | 6 | 12 | 24 | 48;
 
 type Campaign = {
   id: string;
@@ -159,6 +160,7 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
 const CHART_HEIGHT_CLASS = "h-[clamp(220px,40vh,340px)]";
 const RAIL_HEIGHT_CLASS = "h-[clamp(320px,58vh,470px)]";
 const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(280px,54vh,440px)]";
+const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
 
 function daysForPreset(preset: TimePreset): number {
   switch (preset) {
@@ -425,6 +427,11 @@ export function normalizeCompareSelection({
   return { nextKeys: [], seeded: true };
 }
 
+export function toHourlySliceSeconds(slice: HourlySliceOption): number | null {
+  if (slice === "all") return null;
+  return slice * 60 * 60;
+}
+
 export function CampaignAdSetWorkspace({
   brandId,
   accountId,
@@ -449,6 +456,7 @@ export function CampaignAdSetWorkspace({
   const [scope, setScope] = React.useState<Scope | undefined>();
   const [campaignMetric, setCampaignMetric] = React.useState<MetricKey>("spend");
   const [adSetMetric, setAdSetMetric] = React.useState<MetricKey>("spend");
+  const [hourlySlice, setHourlySlice] = React.useState<HourlySliceOption>(24);
   const [selectedCompareKeys, setSelectedCompareKeys] = React.useState<string[]>([]);
   const [selectedAdSetKeys, setSelectedAdSetKeys] = React.useState<string[]>([]);
   const [focusedAdSetKey, setFocusedAdSetKey] = React.useState<string | undefined>();
@@ -780,6 +788,21 @@ export function CampaignAdSetWorkspace({
   const showAllEntityOptions = React.useCallback(() => {
     setRailEntityFilter("all");
   }, []);
+
+  const handleResolutionChange = React.useCallback(
+    (value: TimelineResolution) => {
+      onResolutionChange(value);
+      if (value === "hourly") {
+        setHourlySlice(24);
+      }
+    },
+    [onResolutionChange]
+  );
+
+  const chartVisibleWindowSeconds = React.useMemo(() => {
+    if (resolution !== "hourly") return null;
+    return toHourlySliceSeconds(hourlySlice);
+  }, [hourlySlice, resolution]);
 
   const loadCampaignAdSets = React.useCallback(
     async (campaign: Campaign) => {
@@ -1212,18 +1235,37 @@ export function CampaignAdSetWorkspace({
               <Button
                 size="xs"
                 variant={resolution === "daily" ? "secondary" : "ghost"}
-                onClick={() => onResolutionChange("daily")}
+                onClick={() => handleResolutionChange("daily")}
               >
                 Daily
               </Button>
               <Button
                 size="xs"
                 variant={resolution === "hourly" ? "secondary" : "ghost"}
-                onClick={() => onResolutionChange("hourly")}
+                onClick={() => handleResolutionChange("hourly")}
               >
                 Hourly
               </Button>
             </div>
+
+            {resolution === "hourly" ? (
+              <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
+                {HOURLY_SLICE_OPTIONS.map((slice) => {
+                  const isActive = hourlySlice === slice;
+                  const label = slice === "all" ? "All" : `${slice}h`;
+                  return (
+                    <Button
+                      key={`hourly-slice-${label}`}
+                      size="xs"
+                      variant={isActive ? "secondary" : "ghost"}
+                      onClick={() => setHourlySlice(slice)}
+                    >
+                      {label}
+                    </Button>
+                  );
+                })}
+              </div>
+            ) : null}
 
             <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background px-2 py-0.5">
               <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
@@ -1323,7 +1365,10 @@ export function CampaignAdSetWorkspace({
                 <ContextMenuTrigger>
                   <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
                     {compareChartSeries.length > 0 ? (
-                      <ObservabilityLightweightChart series={compareChartSeries} />
+                      <ObservabilityLightweightChart
+                        series={compareChartSeries}
+                        visibleWindowSeconds={chartVisibleWindowSeconds}
+                      />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                         Add at least one campaign or index to visualize {labelForMetric(campaignMetric)}.
@@ -1373,7 +1418,7 @@ export function CampaignAdSetWorkspace({
                     <ContextMenuSubContent className="w-52">
                       <ContextMenuRadioGroup
                         value={resolution}
-                        onValueChange={(value) => onResolutionChange(value as TimelineResolution)}
+                        onValueChange={(value) => handleResolutionChange(value as TimelineResolution)}
                       >
                         <ContextMenuRadioItem value="daily">Daily</ContextMenuRadioItem>
                         <ContextMenuRadioItem value="hourly">Hourly</ContextMenuRadioItem>
@@ -1951,7 +1996,10 @@ export function CampaignAdSetWorkspace({
                   <ContextMenuTrigger>
                     <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
                       {selectedAdSetSeries.length > 0 ? (
-                        <ObservabilityLightweightChart series={selectedAdSetSeries} />
+                        <ObservabilityLightweightChart
+                          series={selectedAdSetSeries}
+                          visibleWindowSeconds={chartVisibleWindowSeconds}
+                        />
                       ) : (
                         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                           {isAdSetLoading ? (

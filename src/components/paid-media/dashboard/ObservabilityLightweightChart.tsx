@@ -52,6 +52,7 @@ type ObservabilityLightweightChartProps = {
   series: ObservabilityChartSeries[];
   className?: string;
   compact?: boolean;
+  visibleWindowSeconds?: number | null;
 };
 
 type SupportedSeriesType = "Line";
@@ -110,6 +111,23 @@ function sanitizePoints(points: ObservabilityChartPoint[]): ObservabilityChartPo
   return Array.from(byTime.entries())
     .sort((left, right) => left[0] - right[0])
     .map(([time, value]) => ({ time: time as UTCTimestamp, value }));
+}
+
+function getSeriesTimeBounds(series: ObservabilityChartSeries[]): { min: number; max: number } | null {
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+
+  series.forEach((entry) => {
+    entry.points.forEach((point) => {
+      const time = Number(point.time);
+      if (!Number.isFinite(time)) return;
+      if (time < min) min = time;
+      if (time > max) max = time;
+    });
+  });
+
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return { min, max };
 }
 
 function bookmarkScopeLabel(scopes: Set<string>): string {
@@ -189,6 +207,7 @@ export function ObservabilityLightweightChart({
   series,
   className,
   compact = false,
+  visibleWindowSeconds = null,
 }: ObservabilityLightweightChartProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const chartRef = React.useRef<IChartApi | null>(null);
@@ -367,9 +386,19 @@ export function ObservabilityLightweightChart({
       registered.api.setData(sanitizePoints(entry.points));
     });
 
-    chart.timeScale().fitContent();
+    const bounds = getSeriesTimeBounds(series);
+    if (bounds && typeof visibleWindowSeconds === "number" && visibleWindowSeconds > 0) {
+      const to = bounds.max;
+      const from = Math.max(bounds.min, to - visibleWindowSeconds);
+      chart.timeScale().setVisibleRange({
+        from: from as UTCTimestamp,
+        to: to as UTCTimestamp,
+      });
+    } else {
+      chart.timeScale().fitContent();
+    }
     recalcOverlays();
-  }, [compact, recalcOverlays, series]);
+  }, [compact, recalcOverlays, series, visibleWindowSeconds]);
 
   React.useEffect(() => {
     const chart = chartRef.current;

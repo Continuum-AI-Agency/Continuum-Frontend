@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { normalizeCompareSelection } from "./CampaignAdSetWorkspace";
+import {
+  normalizeCompareSelection,
+  toHourlySliceSeconds,
+} from "./CampaignAdSetWorkspace";
 
 describe("normalizeCompareSelection", () => {
   it("seeds with first index when selection starts empty in all mode", () => {
@@ -66,5 +69,17 @@ describe("normalizeCompareSelection", () => {
 
     expect(result.seeded).toBe(true);
     expect(result.nextKeys).toEqual([]);
+  });
+});
+
+describe("toHourlySliceSeconds", () => {
+  it("maps hourly slices to seconds", () => {
+    expect(toHourlySliceSeconds(6)).toBe(21600);
+    expect(toHourlySliceSeconds(24)).toBe(86400);
+    expect(toHourlySliceSeconds(48)).toBe(172800);
+  });
+
+  it("returns null for all", () => {
+    expect(toHourlySliceSeconds("all")).toBeNull();
   });
 });
