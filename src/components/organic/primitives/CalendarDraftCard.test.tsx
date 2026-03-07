@@ -26,12 +26,14 @@ vi.mock("@/components/ui/context-menu", () => ({
     children,
     onSelect,
     className,
+    disabled,
   }: {
     children: ReactNode;
     onSelect?: () => void;
     className?: string;
+    disabled?: boolean;
   }) => (
-    <button className={className} onClick={() => onSelect?.()}>
+    <button className={className} disabled={disabled} onClick={() => onSelect?.()}>
       {children}
     </button>
   ),
@@ -171,6 +173,59 @@ describe("CalendarDraftCard", () => {
     expect(updater(draft).timeLabel).toBe("11:15 AM");
     expect(onSelect).toHaveBeenCalledWith("draft-1");
     (window as unknown as { prompt?: unknown }).prompt = originalPrompt;
+  });
+
+  it("ignores invalid custom posting time edits", () => {
+    const originalPrompt = (window as unknown as { prompt?: unknown }).prompt;
+    (window as unknown as { prompt: () => string }).prompt = vi.fn(() => "9 AM");
+    render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={vi.fn()}
+        onToggleSelection={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByText("Time: Custom...")[0]);
+
+    expect(store.updateDraft).not.toHaveBeenCalled();
+    (window as unknown as { prompt?: unknown }).prompt = originalPrompt;
+  });
+
+  it("only allows marking as scheduled when the draft is assigned and time is valid", () => {
+    const unscheduledDraft: OrganicCalendarDraft = {
+      ...draft,
+      id: "draft-2",
+      dateLabel: "Unscheduled",
+    };
+
+    const { rerender } = render(
+      <CalendarDraftCard
+        draft={draft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={vi.fn()}
+        onToggleSelection={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByText("Mark as scheduled")[0]);
+    expect(store.updateDraft).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <CalendarDraftCard
+        draft={unscheduledDraft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={vi.fn()}
+        onToggleSelection={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getAllByText("Mark as scheduled")[0]);
+    expect(store.updateDraft).toHaveBeenCalledTimes(1);
   });
 
   it("mouseover expands card into a quick preview state", () => {

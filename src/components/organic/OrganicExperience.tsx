@@ -44,6 +44,7 @@ import {
   weeklyGridSchema,
 } from "@/lib/organic/types";
 import { parseWeeklyGridPayload } from "@/lib/organic/weekly-grid";
+import { isFutureLocalDateTime } from "@/lib/organic/scheduling";
 import { WeeklyGridEditor } from "./WeeklyGridEditor";
 import { DailyTemplatesPanel } from "./DailyTemplatesPanel";
 import { PromptSelector } from "./PromptSelector";
@@ -753,9 +754,17 @@ function useDailyDetails(show: ReturnType<typeof useToast>["show"]): {
 
   const updateSchedule = useCallback(
     (dayPlatform: string, scheduledAt: string) => {
+      if (scheduledAt && !isFutureLocalDateTime(scheduledAt)) {
+        show({
+          title: "Invalid schedule time",
+          description: "Pick a future local date and time.",
+          variant: "warning",
+        });
+        return;
+      }
       dispatch({ type: "schedule", dayPlatform, scheduledAt });
     },
-    []
+    [show]
   );
 
   const attachMedia = useCallback((dayPlatform: string, url: string) => {

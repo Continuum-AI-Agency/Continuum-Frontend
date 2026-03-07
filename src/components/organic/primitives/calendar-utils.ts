@@ -1,4 +1,5 @@
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "./types"
+import { parseTimeLabel } from "@/lib/organic/scheduling"
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
@@ -115,17 +116,10 @@ export function parseTimeLabelToMinutes(timeLabel: string): number | null {
 export function parseTimeLabelToParts(
   timeLabel: string
 ): { hour: number; minute: number } | null {
-  const match = timeLabel.match(/(\d+)(?::(\d+))?\s*(AM|PM)/i)
-  if (!match) return null
+  const parsed = parseTimeLabel(timeLabel)
+  if (!parsed) return null
 
-  let hour = parseInt(match[1], 10)
-  const minute = parseInt(match[2] ?? "0", 10)
-  const ampm = match[3].toUpperCase()
-
-  if (ampm === "PM" && hour < 12) hour += 12
-  if (ampm === "AM" && hour === 12) hour = 0
-
-  return { hour, minute }
+  return { hour: parsed.hour24, minute: parsed.minute }
 }
 
 export function buildScheduledAt(dayId: string, timeLabel: string): string | null {

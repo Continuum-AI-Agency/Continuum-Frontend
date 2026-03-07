@@ -33,6 +33,7 @@ import { DraftHoverCardContent } from "./DraftHoverCardContent";
 import { cardVariants } from "./draft-card-styles";
 import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import { isValidTimeLabel, normalizeTimeLabel } from "@/lib/organic/scheduling";
 
 const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "facebook", "linkedin"];
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
@@ -67,6 +68,9 @@ export function CalendarDraftCard({
 }) {
   const platform = (draft.platforms[0] || "instagram") as "instagram" | "linkedin" | "facebook" | "tiktok" | "youtube" | "twitter";
   const isStreaming = draft.status === "streaming";
+  const isAssignedToDay = draft.dateLabel.trim().toLowerCase() !== "unscheduled";
+  const hasValidTimeLabel = isValidTimeLabel(draft.timeLabel);
+  const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;
   const [isHovered, setIsHovered] = React.useState(false);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const moveDraft = useCalendarStore((state) => state.moveDraft);
@@ -110,10 +114,12 @@ export function CalendarDraftCard({
 
     const trimmed = nextTime.trim();
     if (!trimmed) return;
+    const normalized = normalizeTimeLabel(trimmed);
+    if (!normalized) return;
 
     applyQuickEdit((currentDraft) => ({
       ...currentDraft,
-      timeLabel: trimmed,
+      timeLabel: normalized,
     }));
   }, [applyQuickEdit, draft.timeLabel]);
 
@@ -308,7 +314,9 @@ export function CalendarDraftCard({
             Time: Custom...
           </ContextMenuItem>
           <ContextMenuItem
+            disabled={!canMarkScheduled}
             onSelect={() =>
+              canMarkScheduled &&
               applyQuickEdit((currentDraft) => ({
                 ...currentDraft,
                 status: "scheduled",

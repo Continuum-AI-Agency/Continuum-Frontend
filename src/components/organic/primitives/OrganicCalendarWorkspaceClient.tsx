@@ -250,7 +250,9 @@ export function OrganicCalendarWorkspaceClient({
       const targetDay = context?.dayId
         ? calendarDays.find((day) => day.id === context.dayId) ?? null
         : null
-      const status = context?.status ?? "draft"
+      const requestedStatus = context?.status ?? "draft"
+      const status =
+        requestedStatus === "scheduled" && !targetDay ? "draft" : requestedStatus
       const trendTag = context?.trendId ?? selectedTrendIds[0]
 
       const draftId =

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   Badge,
   Box,
@@ -19,6 +20,11 @@ import { PlatformPreview } from "./PlatformPreview";
 import type { CreativeAssetDragPayload } from "@/lib/creative-assets/drag";
 import type { DetailedPostTemplate } from "@/lib/organic/types";
 import type { PostingState } from "./types";
+import {
+  getNowLocalDateTimeInputValue,
+  isFutureLocalDateTime,
+  parseLocalDateTime,
+} from "@/lib/organic/scheduling";
 
 type DailyTemplatesPanelProps = {
   templates: DetailedPostTemplate[];
@@ -39,6 +45,8 @@ export function DailyTemplatesPanel({
   onScheduleChange,
   onAssetDrop,
 }: DailyTemplatesPanelProps) {
+  const minScheduleAt = React.useMemo(() => getNowLocalDateTimeInputValue(), []);
+
   return (
     <Card>
       <Box p="4">
@@ -54,6 +62,19 @@ export function DailyTemplatesPanel({
 
             const handleDrop = (payload: CreativeAssetDragPayload) => {
               onAssetDrop(payload, template);
+            };
+
+            const handleScheduleInputChange = (value: string) => {
+              if (!value) {
+                onScheduleChange(template.day_platform, "");
+                return;
+              }
+
+              const parsed = parseLocalDateTime(value);
+              if (!parsed) return;
+              if (!isFutureLocalDateTime(value)) return;
+
+              onScheduleChange(template.day_platform, value);
             };
 
             return (
@@ -116,8 +137,9 @@ export function DailyTemplatesPanel({
                           <TextField.Root
                             type="datetime-local"
                             value={state.scheduledAt}
+                            min={minScheduleAt}
                             onChange={(event) =>
-                              onScheduleChange(template.day_platform, event.target.value)
+                              handleScheduleInputChange(event.target.value)
                             }
                           />
                         </Box>
