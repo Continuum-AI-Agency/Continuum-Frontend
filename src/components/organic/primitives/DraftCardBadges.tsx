@@ -22,11 +22,12 @@ export function StatusBadge({ status, format }: { status: OrganicCalendarDraft["
     );
   }
   
-  const statusKey = status as "draft" | "scheduled" | "streaming" | "placeholder";
+  const statusKey = status as "draft" | "scheduled" | "streaming" | "failed" | "placeholder";
   const label = {
     draft: "Draft",
     scheduled: "Scheduled",
     streaming: "Streaming",
+    failed: "Failed",
     placeholder: "Seeded",
   }[status];
 

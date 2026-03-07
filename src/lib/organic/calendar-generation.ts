@@ -147,6 +147,15 @@ export const calendarGenerationOptionsSchema = z
     guidancePrompt: nonEmptyStringSchema.optional(),
     language: nonEmptyStringSchema.optional(),
     preferredPlatforms: z.array(platformKeySchema).optional(),
+    assetGeneration: z
+      .object({
+        enabled: z.boolean().optional(),
+        provider: nonEmptyStringSchema.optional(),
+        model: nonEmptyStringSchema.optional(),
+        thumbnailSize: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .optional();
@@ -229,6 +238,9 @@ function cleanBackendOptions(
   if (options.preferredPlatforms && options.preferredPlatforms.length > 0) {
     clean.preferredPlatforms = options.preferredPlatforms;
   }
+  if (options.assetGeneration) {
+    clean.assetGeneration = options.assetGeneration;
+  }
   return Object.keys(clean).length > 0
     ? (clean as z.infer<typeof calendarGenerationOptionsSchema>)
     : null;
@@ -301,6 +313,18 @@ const placementCreativeSchema = z
   .object({
     creativeIdea: z.string().optional().nullable(),
     assetIds: z.array(z.string()).optional(),
+    mediaSuggestion: z
+      .object({
+        provider: z.string().optional(),
+        model: z.string().optional(),
+        kind: z.string().optional(),
+        prompt: z.string().optional(),
+        width: z.number().optional(),
+        height: z.number().optional(),
+        assetUrl: z.string().optional(),
+        alt: z.string().optional(),
+      })
+      .optional(),
     assetHints: z
       .array(
         z.object({
@@ -344,6 +368,26 @@ const placementEventSchema = z.object({
   placement: calendarPlacementSchema,
 });
 
+const slotStartedEventSchema = z.object({
+  type: z.literal("slot_started"),
+  placementId: z.string().min(1),
+  message: z.string().optional(),
+});
+
+const slotCompletedEventSchema = z.object({
+  type: z.literal("slot_completed"),
+  placement: calendarPlacementSchema,
+});
+
+const slotFailedEventSchema = z.object({
+  type: z.literal("slot_failed"),
+  placementId: z.string().min(1),
+  code: z.string().optional(),
+  message: z.string().min(1),
+  retryable: z.boolean().optional(),
+  attempts: z.number().int().nonnegative().optional(),
+});
+
 const errorEventSchema = z.object({
   type: z.literal("error"),
   code: z.string().optional(),
@@ -353,10 +397,20 @@ const errorEventSchema = z.object({
 
 const completeEventSchema = z.object({
   type: z.literal("complete"),
+  summary: z
+    .object({
+      total: z.number().int().nonnegative(),
+      succeeded: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 
 export const calendarGenerationEventSchema = z.discriminatedUnion("type", [
   progressEventSchema,
+  slotStartedEventSchema,
+  slotCompletedEventSchema,
+  slotFailedEventSchema,
   placementEventSchema,
   errorEventSchema,
   completeEventSchema,

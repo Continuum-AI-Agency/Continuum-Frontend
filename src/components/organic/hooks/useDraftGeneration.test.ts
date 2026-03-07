@@ -37,7 +37,6 @@ describe("useDraftGeneration", () => {
     setGhosts: vi.fn(),
     addEvent: vi.fn(),
     setDays: vi.fn(),
-    setUnscheduledDrafts: vi.fn(),
   };
 
   const defaultProps: HookProps = {
@@ -48,11 +47,43 @@ describe("useDraftGeneration", () => {
         label: "Mon",
         dateLabel: "Jan 26",
         suggestedTimes: ["9:00 AM", "1:00 PM"],
-        slots: [],
+        slots: [
+          {
+            id: "seed-1",
+            title: "Seeded topic",
+            summary: "Ready",
+            timeLabel: "9:00 AM",
+            dateLabel: "Mon, Jan 26",
+            status: "placeholder",
+            platforms: ["instagram"],
+            format: "Post",
+            objective: "Generation Seed",
+            captionPreview: "Generate me",
+            tags: [],
+            mediaCount: 1,
+            seedTrendId: "trend-1",
+          },
+        ],
       },
     ],
-    drafts: [],
-    selectedTrendIds: [],
+    drafts: [
+      {
+        id: "seed-1",
+        title: "Seeded topic",
+        summary: "Ready",
+        timeLabel: "9:00 AM",
+        dateLabel: "Mon, Jan 26",
+        status: "placeholder",
+        platforms: ["instagram"],
+        format: "Post",
+        objective: "Generation Seed",
+        captionPreview: "Generate me",
+        tags: [],
+        mediaCount: 1,
+        seedTrendId: "trend-1",
+      },
+    ],
+    selectedTrendIds: ["trend-1"],
     trends: [],
     platformAccountIds: { instagram: "acc-123" },
     activePlatforms: ["instagram"],
@@ -74,8 +105,9 @@ describe("useDraftGeneration", () => {
     (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
       async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
         onEvent({ type: "progress", completed: 1, total: 2, message: "Drafting..." });
+        onEvent({ type: "slot_started", placementId: "p1", message: "Building post..." });
         onEvent({
-          type: "placement",
+          type: "slot_completed",
           placement: {
             placementId: "p1",
             schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00Z" },
@@ -85,7 +117,7 @@ describe("useDraftGeneration", () => {
             copy: { caption: "Test Caption", hashtags: { high: ["#test"] } },
           },
         });
-        onEvent({ type: "complete" });
+        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
       }
     );
 
@@ -137,6 +169,76 @@ describe("useDraftGeneration", () => {
     );
     expect(streamCalendarGeneration).not.toHaveBeenCalled();
   });
+
+  it("marks failed placements and keeps run as complete_with_errors", async () => {
+    const props: HookProps = {
+      ...defaultProps,
+      calendarDays: [
+        {
+          id: "2026-01-26",
+          label: "Mon",
+          dateLabel: "Jan 26",
+          suggestedTimes: ["9:00 AM", "1:00 PM"],
+          slots: [
+            {
+              id: "seed-1",
+              title: "Seeded topic",
+              summary: "Ready",
+              timeLabel: "9:00 AM",
+              dateLabel: "Mon, Jan 26",
+              status: "placeholder",
+              platforms: ["instagram"],
+              format: "Post",
+              objective: "Generation Seed",
+              captionPreview: "Generate me",
+              tags: [],
+              mediaCount: 1,
+              seedTrendId: "trend-1",
+            },
+          ],
+        },
+      ],
+      drafts: [
+        {
+          id: "seed-1",
+          title: "Seeded topic",
+          summary: "Ready",
+          timeLabel: "9:00 AM",
+          dateLabel: "Mon, Jan 26",
+          status: "placeholder",
+          platforms: ["instagram"],
+          format: "Post",
+          objective: "Generation Seed",
+          captionPreview: "Generate me",
+          tags: [],
+          mediaCount: 1,
+          seedTrendId: "trend-1",
+        },
+      ],
+      selectedTrendIds: ["trend-1"],
+    };
+    const { result } = renderHook(() => useDraftGeneration(props));
+
+    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
+        onEvent({
+          type: "slot_failed",
+          placementId: "seed-1",
+          message: "Trend not found",
+          retryable: true,
+          attempts: 1,
+        });
+        onEvent({ type: "complete", summary: { total: 1, succeeded: 0, failed: 1 } });
+      }
+    );
+
+    await act(async () => {
+      await result.current.handleGenerateDrafts();
+    });
+
+    expect(mockStore.updateDraft).toHaveBeenCalled();
+    expect(mockStore.setGridStatus).toHaveBeenCalledWith("complete_with_errors");
+  });
 });
 
 describe("mapWeeklyGridToCalendarPlacements", () => {
@@ -178,10 +280,9 @@ describe("mapWeeklyGridToCalendarPlacements", () => {
         },
       ],
       selectedTrendIds: ["trend-1", "trend-2"],
-      activePlatforms: ["instagram", "facebook", "linkedin"],
+      activePlatforms: ["instagram", "linkedin"],
       platformAccountIds: {
         instagram: "ig-1",
-        facebook: "fb-1",
         linkedin: "li-1",
       },
     });

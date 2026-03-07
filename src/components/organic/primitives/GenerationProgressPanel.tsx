@@ -44,6 +44,7 @@ export function GenerationProgressPanel({
 
   const isError = status === "error" || error;
   const isComplete = status === "complete";
+  const isCompleteWithErrors = status === "complete_with_errors";
   const stageColor = stage ? stageColors[stage] : "gray";
   const stageLabel = stage ? stageLabels[stage] : "Processing";
 
@@ -71,6 +72,15 @@ export function GenerationProgressPanel({
                 >
                   <CheckIcon className="w-4 h-4" />
                 </Box>
+              ) : isCompleteWithErrors ? (
+                <Box
+                  className={cn(
+                    "flex items-center justify-center w-8 h-8 rounded-full",
+                    "bg-amber-100 text-amber-600"
+                  )}
+                >
+                  <Cross2Icon className="w-4 h-4" />
+                </Box>
               ) : (
                 <Box
                   className={cn(
@@ -88,9 +98,11 @@ export function GenerationProgressPanel({
                     ? "Generation Failed"
                     : isComplete
                     ? "Generation Complete"
+                    : isCompleteWithErrors
+                    ? "Generation Complete with Failures"
                     : "Generating Content"}
                 </Text>
-                {!isError && !isComplete && stage && (
+                {!isError && !isComplete && !isCompleteWithErrors && stage && (
                   <Badge color={stageColor as any} size="1">
                     {stageLabel}
                   </Badge>
@@ -111,6 +123,7 @@ export function GenerationProgressPanel({
               data-testid="generation-progress-bar"
               className={cn(
                 isComplete && "[&>div]:bg-emerald-500",
+                isCompleteWithErrors && "[&>div]:bg-amber-500",
                 isError && "[&>div]:bg-red-500"
               )}
             />

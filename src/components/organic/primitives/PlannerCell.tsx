@@ -33,6 +33,7 @@ type PlannerCellProps = {
   onSelectDraft: (id: string) => void
   onToggleSelection: (id: string) => void
   onRegenerate: (draftId: string) => void
+  onClearFailure?: (draftId: string) => void
   onNativeDrop?: (
     dayId: string,
     time: string,
@@ -59,6 +60,7 @@ export function PlannerCell({
   onSelectDraft,
   onToggleSelection,
   onRegenerate,
+  onClearFailure,
   onNativeDrop,
   onCreatePost,
 }: PlannerCellProps) {
@@ -136,6 +138,7 @@ export function PlannerCell({
             onSelect={onSelectDraft}
             onToggleSelection={onToggleSelection}
             onRegenerate={onRegenerate}
+            onClearFailure={onClearFailure}
           />
         ))}
 

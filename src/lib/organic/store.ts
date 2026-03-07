@@ -3,7 +3,6 @@ import { persist } from "zustand/middleware";
 import type { 
   OrganicCalendarDay, 
   OrganicCalendarDraft, 
-  OrganicDraftStatus,
   StreamEvent,
   EventHistory
 } from "@/components/organic/primitives/types";
@@ -51,7 +50,14 @@ export type WeeklyGrid = {
   slots: GridSlot[];
 };
 
-export type GridStatus = "idle" | "running" | "awaiting_approval" | "approved" | "complete" | "error";
+export type GridStatus =
+  | "idle"
+  | "running"
+  | "awaiting_approval"
+  | "approved"
+  | "complete"
+  | "complete_with_errors"
+  | "error";
 
 export interface ScheduledEvent {
   id: string;
@@ -64,7 +70,6 @@ export interface ScheduledEvent {
 
 interface CalendarState {
   days: OrganicCalendarDay[];
-  unscheduledDrafts: OrganicCalendarDraft[];
   ghosts: Record<string, number>;
   selectedDraftId: string | null;
   selectedDraftIds: string[];
@@ -82,11 +87,10 @@ interface CalendarState {
   eventHistory: EventHistory;
   
   setDays: (days: OrganicCalendarDay[]) => void;
-  setUnscheduledDrafts: (drafts: OrganicCalendarDraft[]) => void;
   updateDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
-  moveDraft: (draftId: string, targetDayId: string | "unscheduled") => void;
-  bulkMoveDrafts: (draftIds: string[], targetDayId: string | "unscheduled") => void;
-  addDraft: (dayId: string | "unscheduled", draft: OrganicCalendarDraft) => void;
+  moveDraft: (draftId: string, targetDayId: string) => void;
+  bulkMoveDrafts: (draftIds: string[], targetDayId: string) => void;
+  addDraft: (dayId: string, draft: OrganicCalendarDraft) => void;
   bulkDeleteDrafts: (draftIds: string[]) => void;
   setSelectedDraftId: (id: string | null) => void;
   toggleDraftSelection: (id: string) => void;
@@ -112,7 +116,6 @@ export const useCalendarStore = create<CalendarState>()(
   persist(
     (set) => ({
       days: [],
-      unscheduledDrafts: [],
       ghosts: {},
       selectedDraftId: null,
       selectedDraftIds: [],
@@ -126,7 +129,6 @@ export const useCalendarStore = create<CalendarState>()(
       eventHistory: [],
 
       setDays: (days) => set({ days }),
-      setUnscheduledDrafts: (drafts) => set({ unscheduledDrafts: drafts }),
       
       updateDraft: (draftId, updater) =>
         set((state) => ({
@@ -134,7 +136,6 @@ export const useCalendarStore = create<CalendarState>()(
             ...day,
             slots: day.slots.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
           })),
-          unscheduledDrafts: state.unscheduledDrafts.map((slot) => (slot.id === draftId ? updater(slot) : slot)),
         })),
 
       moveDraft: (draftId, targetDayId) =>
@@ -151,22 +152,7 @@ export const useCalendarStore = create<CalendarState>()(
             return day;
           });
 
-          let nextUnscheduled = state.unscheduledDrafts.filter((d) => {
-            if (d.id === draftId) {
-              movedDraft = d;
-              return false;
-            }
-            return true;
-          });
-
-          if (!movedDraft) return { days: nextDays, unscheduledDrafts: nextUnscheduled };
-
-          if (targetDayId === "unscheduled") {
-            return {
-              days: nextDays,
-              unscheduledDrafts: [...nextUnscheduled, movedDraft],
-            };
-          }
+          if (!movedDraft) return { days: nextDays };
 
           return {
             days: nextDays.map((day) => {
@@ -175,7 +161,6 @@ export const useCalendarStore = create<CalendarState>()(
               }
               return day;
             }),
-            unscheduledDrafts: nextUnscheduled,
           };
         }),
 
@@ -195,22 +180,7 @@ export const useCalendarStore = create<CalendarState>()(
             return { ...day, slots: remainingSlots };
           });
 
-          const nextUnscheduled = state.unscheduledDrafts.filter((slot) => {
-            if (draftIdSet.has(slot.id)) {
-              movedDrafts.push(slot);
-              return false;
-            }
-            return true;
-          });
-
-          if (movedDrafts.length === 0) return { days: nextDays, unscheduledDrafts: nextUnscheduled };
-
-          if (targetDayId === "unscheduled") {
-            return {
-              days: nextDays,
-              unscheduledDrafts: [...nextUnscheduled, ...movedDrafts],
-            };
-          }
+          if (movedDrafts.length === 0) return { days: nextDays };
 
           return {
             days: nextDays.map((day) => {
@@ -219,22 +189,11 @@ export const useCalendarStore = create<CalendarState>()(
               }
               return day;
             }),
-            unscheduledDrafts: nextUnscheduled,
           };
         }),
 
       addDraft: (dayId, draft) =>
         set((state) => {
-          if (dayId === "unscheduled") {
-            const exists = state.unscheduledDrafts.findIndex((d) => d.id === draft.id);
-            if (exists !== -1) {
-              const next = [...state.unscheduledDrafts];
-              next[exists] = draft;
-              return { unscheduledDrafts: next };
-            }
-            return { unscheduledDrafts: [...state.unscheduledDrafts, draft] };
-          }
-          
           return {
             days: state.days.map((day) => {
               if (day.id !== dayId) return day;
@@ -257,7 +216,6 @@ export const useCalendarStore = create<CalendarState>()(
               ...day,
               slots: day.slots.filter((slot) => !draftIdSet.has(slot.id)),
             })),
-            unscheduledDrafts: state.unscheduledDrafts.filter((slot) => !draftIdSet.has(slot.id)),
           };
         }),
 
@@ -308,7 +266,6 @@ export const useCalendarStore = create<CalendarState>()(
       clearCalendar: () =>
         set((state) => ({
           days: state.days.map((day) => ({ ...day, slots: [] })),
-          unscheduledDrafts: [],
           selectedDraftId: null,
           selectedDraftIds: [],
           gridStatus: "idle",

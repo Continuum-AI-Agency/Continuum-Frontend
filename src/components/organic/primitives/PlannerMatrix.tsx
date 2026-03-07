@@ -20,6 +20,7 @@ type PlannerMatrixProps = {
   onSelectDraft: (id: string) => void
   onToggleSelection: (id: string) => void
   onRegenerate: (draftId: string) => void
+  onClearFailure?: (draftId: string) => void
   onNativeDrop?: (
     dayId: string,
     time: string,
@@ -69,6 +70,7 @@ export function PlannerMatrix({
   onSelectDraft,
   onToggleSelection,
   onRegenerate,
+  onClearFailure,
   onNativeDrop,
   onCreatePost,
 }: PlannerMatrixProps) {
@@ -142,6 +144,7 @@ export function PlannerMatrix({
                       onSelectDraft={onSelectDraft}
                       onToggleSelection={onToggleSelection}
                       onRegenerate={onRegenerate}
+                      onClearFailure={onClearFailure}
                       onNativeDrop={onNativeDrop}
                       onCreatePost={onCreatePost}
                     />
@@ -168,6 +171,7 @@ export function PlannerMatrix({
                     onSelectDraft={onSelectDraft}
                     onToggleSelection={onToggleSelection}
                     onRegenerate={onRegenerate}
+                    onClearFailure={onClearFailure}
                     onNativeDrop={onNativeDrop}
                     onCreatePost={onCreatePost}
                   />

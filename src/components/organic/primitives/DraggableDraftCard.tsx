@@ -13,6 +13,7 @@ interface DraggableDraftCardProps {
   onSelect: (id: string) => void;
   onToggleSelection: (id: string) => void;
   onRegenerate?: (draftId: string) => void;
+  onClearFailure?: (draftId: string) => void;
   onPreview?: (draft: OrganicCalendarDraft | null) => void;
 }
 
@@ -23,6 +24,7 @@ export function DraggableDraftCard({
   onSelect,
   onToggleSelection,
   onRegenerate,
+  onClearFailure,
   onPreview,
 }: DraggableDraftCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -60,6 +62,7 @@ export function DraggableDraftCard({
         onSelect={onSelect}
         onToggleSelection={onToggleSelection}
         onRegenerate={onRegenerate}
+        onClearFailure={onClearFailure}
         onMouseEnter={() => onPreview?.(draft)}
         onMouseLeave={() => onPreview?.(null)}
       />

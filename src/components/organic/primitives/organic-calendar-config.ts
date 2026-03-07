@@ -10,10 +10,10 @@ export const ORGANIC_BETA_LAUNCH_SCHEDULE: Record<
 > = {
   Mon: "instagram",
   Tue: "linkedin",
-  Wed: "facebook",
+  Wed: "instagram",
   Thu: "instagram",
   Fri: "linkedin",
-  Sat: "facebook",
+  Sat: "linkedin",
 };
 
 export const ORGANIC_NEWSLETTER_DEFAULT = {

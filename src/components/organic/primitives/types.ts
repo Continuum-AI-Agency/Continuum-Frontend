@@ -9,6 +9,7 @@ export type OrganicDraftStatus =
   | "draft"
   | "scheduled"
   | "streaming"
+  | "failed"
   | "placeholder"
 
 export type OrganicCalendarDraft = {
@@ -35,6 +36,18 @@ export type OrganicCalendarDraft = {
   tone?: string
   cta?: string
   creativeIdea?: string
+  generationError?: string
+  generationAttempts?: number
+  mediaSuggestion?: {
+    provider?: string
+    model?: string
+    kind?: string
+    prompt?: string
+    width?: number
+    height?: number
+    assetUrl?: string
+    alt?: string
+  }
   assetHints?: Array<{
     role: string
     suggestion: string
@@ -116,7 +129,7 @@ export type OrganicSeedDragPayload = {
 
 export type StreamEvent = {
   id: string
-  type: "progress" | "placement" | "error" | "complete"
+  type: CalendarGenerationEvent["type"]
   timestamp: string
   data: CalendarGenerationEvent
 }

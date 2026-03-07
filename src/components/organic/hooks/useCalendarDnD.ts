@@ -18,7 +18,7 @@ import type {
 } from "../primitives/types"
 
 function isSchedulablePlatformTag(value: string | undefined): value is OrganicPlatformTag {
-  return value === "instagram" || value === "facebook" || value === "linkedin"
+  return value === "instagram" || value === "linkedin"
 }
 
 function parsePlannerCellId(id: string): { dayId: string; platform?: OrganicPlatformTag } | null {
@@ -53,7 +53,7 @@ function buildSeededDraft({
     title: trendTitle,
     summary: `Queued for generation from "${trendTitle}".`,
     timeLabel: formatTimeLabel(time),
-    dateLabel: day ? `${day.label}, ${day.dateLabel}` : "Unscheduled",
+    dateLabel: day ? `${day.label}, ${day.dateLabel}` : "Unassigned",
     status: "placeholder",
     platforms: [platform],
     format: "Post",
@@ -94,13 +94,6 @@ export function useCalendarDnD(
       const activeData = active.data.current as
         | { type?: string; trendId?: string; title?: string }
         | null
-
-      if (overId === "unscheduled-pool") {
-        if (activeData?.type === "draft") {
-          moveDraft(draftId, "unscheduled")
-        }
-        return
-      }
 
       if (activeData?.type === "draft") {
         const plannerCell = parsePlannerCellId(overId)

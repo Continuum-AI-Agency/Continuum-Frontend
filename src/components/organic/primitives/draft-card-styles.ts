@@ -29,6 +29,7 @@ export const statusBadgeVariants = cva(
         draft: "border-muted bg-muted/60 text-muted-foreground",
         scheduled: "border-emerald-500/30 bg-emerald-500/15 text-emerald-100",
         streaming: "border-amber-500/30 bg-amber-500/15 text-amber-100 animate-pulse",
+        failed: "border-red-500/30 bg-red-500/15 text-red-100",
         placeholder: "border-brand-primary/30 bg-brand-primary/10 text-brand-primary",
       },
     },
@@ -52,6 +53,10 @@ export const cardVariants = cva(
       },
       streaming: {
         true: "ring-1 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]",
+        false: "",
+      },
+      failed: {
+        true: "ring-1 ring-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]",
         false: "",
       },
       platformHover: {
@@ -82,6 +87,7 @@ export const cardVariants = cva(
       selected: false,
       multiSelected: false,
       streaming: false,
+      failed: false,
       platformHover: "none",
     },
   }

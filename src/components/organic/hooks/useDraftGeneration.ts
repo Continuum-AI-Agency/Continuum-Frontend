@@ -42,7 +42,7 @@ const DEFAULT_GRID_PROMPT: GenerationRequestPayload["prompt"] = {
   name: "Calendar Weekly MVP",
   description: "Generate a weekly post plan for selected trends.",
   content:
-    "Generate a weekly content grid for Instagram, Facebook, and LinkedIn. Keep posts distinct by platform and optimize for posting time.",
+    "Generate a weekly content grid for Instagram and LinkedIn. Keep posts distinct by platform and optimize for posting time.",
   source: "preset",
 };
 
@@ -131,7 +131,7 @@ export function mapWeeklyGridToCalendarPlacements({
     const slotIndex = daySlotCount.get(day.id) ?? 0;
     daySlotCount.set(day.id, slotIndex + 1);
 
-    const platform = platformOrder[(index + slotIndex) % platformOrder.length] ?? "instagram";
+    const platform = platformOrder[slotIndex % platformOrder.length] ?? "instagram";
     const trendId = selectedTrendIds.length
       ? selectedTrendIds[index % selectedTrendIds.length]
       : undefined;
@@ -249,7 +249,6 @@ export function useDraftGeneration({
     setGhosts,
     addEvent,
     setDays,
-    setUnscheduledDrafts,
   } = useCalendarStore();
 
   const gridEventSourceRef = React.useRef<EventSource | null>(null);
@@ -322,6 +321,8 @@ export function useDraftGeneration({
         timeLabel,
         dateLabel: day ? `${day.label}, ${day.dateLabel}` : placement.schedule.dayId,
         status: "draft",
+        generationError: undefined,
+        generationAttempts: existing?.generationAttempts,
         platforms: [placement.platform.name as OrganicPlatformTag],
         format: content.format ?? content.type ?? existing?.format ?? "Post",
         objective: content.objective ?? existing?.objective ?? "Draft",
@@ -334,6 +335,7 @@ export function useDraftGeneration({
         tone: content.tone ?? undefined,
         cta: content.cta ?? undefined,
         creativeIdea: placement.creative?.creativeIdea ?? undefined,
+        mediaSuggestion: placement.creative?.mediaSuggestion ?? undefined,
         assetHints: placement.creative?.assetHints ?? undefined,
         hashtags: placement.copy?.hashtags ?? undefined,
       };
@@ -352,7 +354,6 @@ export function useDraftGeneration({
       });
 
       setDays(calendarDays.map((day) => ({ ...day, slots: [] })));
-      setUnscheduledDrafts([]);
 
       placements.forEach((placement) => {
         addDraft(placement.dayId, placement.draft);
@@ -373,7 +374,6 @@ export function useDraftGeneration({
       setDays,
       setGridProgress,
       setGridStatus,
-      setUnscheduledDrafts,
     ]
   );
 
@@ -484,6 +484,12 @@ export function useDraftGeneration({
         .filter(Boolean)
     );
 
+    if (seeds.length === 0) {
+      setGridStatus("error");
+      setGridError("Place at least one trend on the calendar before generating.");
+      return;
+    }
+
     let resolvedTz = "UTC";
     try {
       resolvedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -492,13 +498,22 @@ export function useDraftGeneration({
     }
 
     try {
+      const completedPlacementIds = new Set<string>();
+      let failedPlacements = 0;
+      let succeededPlacements = 0;
+
       seeds.forEach((seed) => {
         if (!seed) return;
         updateDraftById(seed.placementId, (draft) => ({
           ...draft,
           status: "streaming",
+          generationError: undefined,
+          generationAttempts: (draft.generationAttempts ?? 0) + 1,
         }));
       });
+
+      const mvpSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
+      const preferredMvpPlatforms = activePlatforms.filter((platform) => mvpSet.has(platform));
 
       const payload: CalendarGenerationRequest = {
         brandProfileId,
@@ -510,7 +525,14 @@ export function useDraftGeneration({
           schedulePreset: "beta-launch" as const,
           includeNewsletter: true,
           guidancePrompt: undefined,
-          preferredPlatforms: activePlatforms.length > 0 ? activePlatforms : undefined,
+          preferredPlatforms:
+            preferredMvpPlatforms.length > 0 ? preferredMvpPlatforms : undefined,
+          assetGeneration: {
+            enabled: true,
+            provider: "nano-banana",
+            model: "2-flash",
+            thumbnailSize: 512,
+          },
         },
       };
 
@@ -533,8 +555,33 @@ export function useDraftGeneration({
           return;
         }
 
-        if (event.type === "placement") {
+        if (event.type === "slot_started") {
+          updateDraftById(event.placementId, (draft) => ({
+            ...draft,
+            status: "streaming",
+            generationError: undefined,
+          }));
+          return;
+        }
+
+        if (event.type === "slot_failed") {
+          failedPlacements += 1;
+          updateDraftById(event.placementId, (draft) => ({
+            ...draft,
+            status: "failed",
+            generationError: event.message,
+            generationAttempts: event.attempts ?? draft.generationAttempts,
+          }));
+          return;
+        }
+
+        if (event.type === "slot_completed" || event.type === "placement") {
           const placement = event.placement;
+          if (completedPlacementIds.has(placement.placementId)) {
+            return;
+          }
+          completedPlacementIds.add(placement.placementId);
+          succeededPlacements += 1;
           const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
           const nextDraft = mapPlacementToDraft(placement, existing);
 
@@ -553,7 +600,20 @@ export function useDraftGeneration({
         }
 
         if (event.type === "complete") {
-          setGridStatus("complete");
+          const total = event.summary?.total ?? seeds.length;
+          const failed = event.summary?.failed ?? failedPlacements;
+          const succeeded = event.summary?.succeeded ?? succeededPlacements;
+          const hasFailures = failed > 0;
+          setGridProgress({
+            percent: 100,
+            message: hasFailures
+              ? `Generated ${succeeded}/${total} posts. ${failed} failed and can be retried.`
+              : `Generated ${succeeded}/${total} posts.`,
+          });
+          setGridStatus(hasFailures ? "complete_with_errors" : "complete");
+          if (!hasFailures) {
+            setGridError(null);
+          }
         }
       });
     } catch (error) {
@@ -607,7 +667,7 @@ export function useDraftGeneration({
 
       if (Object.keys(availableAccountIds).length === 0) {
         setGridStatus("error");
-        setGridError("Connect at least one Instagram, Facebook, or LinkedIn account.");
+        setGridError("Connect at least one Instagram or LinkedIn account.");
         return;
       }
 
@@ -720,11 +780,17 @@ export function useDraftGeneration({
       const trendId = draft.seedTrendId;
       if (!trendId) return;
 
-      updateDraftById(draftId, (current) => ({ ...current, status: "streaming" }));
+      updateDraftById(draftId, (current) => ({
+        ...current,
+        status: "streaming",
+        generationError: undefined,
+        generationAttempts: (current.generationAttempts ?? 0) + 1,
+      }));
 
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
       try {
+        const completedPlacementIds = new Set<string>();
         await streamCalendarGeneration(
           {
             brandProfileId,
@@ -754,6 +820,14 @@ export function useDraftGeneration({
               },
             ],
             platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
+            options: {
+              assetGeneration: {
+                enabled: true,
+                provider: "nano-banana",
+                model: "2-flash",
+                thumbnailSize: 512,
+              },
+            },
           },
           (event) => {
             addEvent({
@@ -762,7 +836,22 @@ export function useDraftGeneration({
               timestamp: new Date().toISOString(),
               data: event,
             });
-            if (event.type === "placement") {
+
+            if (event.type === "slot_failed") {
+              updateDraftById(draftId, (current) => ({
+                ...current,
+                status: "failed",
+                generationError: event.message,
+                generationAttempts: event.attempts ?? current.generationAttempts,
+              }));
+              return;
+            }
+
+            if (event.type === "slot_completed" || event.type === "placement") {
+              if (completedPlacementIds.has(event.placement.placementId)) {
+                return;
+              }
+              completedPlacementIds.add(event.placement.placementId);
               const next = mapPlacementToDraft(event.placement, draft);
               addDraft(dayId, next);
               return;
@@ -773,7 +862,11 @@ export function useDraftGeneration({
           }
         );
       } catch {
-        updateDraftById(draftId, (current) => ({ ...current, status: "draft" }));
+        updateDraftById(draftId, (current) => ({
+          ...current,
+          status: "failed",
+          generationError: "Regeneration failed. Retry or clear this slot.",
+        }));
       }
     },
     [
@@ -790,6 +883,17 @@ export function useDraftGeneration({
     ]
   );
 
+  const handleClearFailure = React.useCallback(
+    (draftId: string) => {
+      updateDraftById(draftId, (draft) => ({
+        ...draft,
+        status: draft.seedTrendId ? "placeholder" : "draft",
+        generationError: undefined,
+      }));
+    },
+    [updateDraftById]
+  );
+
   return {
     seededDraftCount,
     gridStatus,
@@ -797,5 +901,6 @@ export function useDraftGeneration({
     handleGenerateDrafts,
     handleGenerateGridJob,
     handleRegenerate,
+    handleClearFailure,
   };
 }

@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import {
-  CopyIcon,
   CheckIcon,
+  Cross2Icon,
   LightningBoltIcon,
   Pencil1Icon,
   QuestionMarkCircledIcon,
@@ -35,7 +35,7 @@ import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 import { isValidTimeLabel, normalizeTimeLabel } from "@/lib/organic/scheduling";
 
-const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "facebook", "linkedin"];
+const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "linkedin"];
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
 const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
   instagram: "Instagram",
@@ -53,6 +53,7 @@ export function CalendarDraftCard({
   onToggleSelection,
   onDragStart,
   onRegenerate,
+  onClearFailure,
   onMouseEnter,
   onMouseLeave,
 }: {
@@ -63,19 +64,19 @@ export function CalendarDraftCard({
   onToggleSelection: (id: string) => void;
   onDragStart?: (event: React.DragEvent<HTMLButtonElement>, draftId: string) => void;
   onRegenerate?: (draftId: string) => void;
+  onClearFailure?: (draftId: string) => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
   const platform = (draft.platforms[0] || "instagram") as "instagram" | "linkedin" | "facebook" | "tiktok" | "youtube" | "twitter";
   const isStreaming = draft.status === "streaming";
-  const isAssignedToDay = draft.dateLabel.trim().toLowerCase() !== "unscheduled";
+  const isFailed = draft.status === "failed";
+  const isAssignedToDay = draft.dateLabel.trim().length > 0;
   const hasValidTimeLabel = isValidTimeLabel(draft.timeLabel);
   const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;
   const [isHovered, setIsHovered] = React.useState(false);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
-  const moveDraft = useCalendarStore((state) => state.moveDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
-  const addDraft = useCalendarStore((state) => state.addDraft);
 
   const focusEditor = React.useCallback(
     (draftId: string) => {
@@ -92,20 +93,18 @@ export function CalendarDraftCard({
     [draft.id, focusEditor, updateDraft]
   );
 
-  const duplicateToUnscheduled = React.useCallback(() => {
-    const nextId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? `${draft.id}-copy-${crypto.randomUUID()}`
-        : `${draft.id}-copy-${Date.now()}`;
-    const duplicate: OrganicCalendarDraft = {
-      ...draft,
-      id: nextId,
-      status: "draft",
-      title: `${draft.title} (Copy)`,
-    };
-    addDraft("unscheduled", duplicate);
-    focusEditor(nextId);
-  }, [addDraft, draft, focusEditor]);
+  const clearFailure = React.useCallback(() => {
+    if (onClearFailure) {
+      onClearFailure(draft.id);
+      return;
+    }
+
+    applyQuickEdit((currentDraft) => ({
+      ...currentDraft,
+      status: currentDraft.seedTrendId ? "placeholder" : "draft",
+      generationError: undefined,
+    }));
+  }, [applyQuickEdit, draft.id, onClearFailure]);
 
   const setCustomTime = React.useCallback(() => {
     if (typeof window === "undefined") return;
@@ -153,6 +152,7 @@ export function CalendarDraftCard({
                   selected: isSelected,
                   multiSelected: isMultiSelected,
                   streaming: isStreaming,
+                  failed: isFailed,
                   platformHover: isSelected ? "none" : platform,
                 }),
                 isHovered &&
@@ -202,7 +202,7 @@ export function CalendarDraftCard({
                       <span
                         role="button"
                         tabIndex={0}
-                        aria-label="Regenerate draft"
+                        aria-label={isFailed ? "Retry failed draft" : "Regenerate draft"}
                         className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -273,6 +273,59 @@ export function CalendarDraftCard({
                     <Progress value={draft.progress} className="h-1 bg-slate-800" />
                   </div>
                 ) : null}
+
+                {isFailed && draft.generationError ? (
+                  <div className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-red-100">
+                      Generation failed
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-[10px] text-red-100/90">
+                      {draft.generationError}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {onRegenerate ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="inline-flex items-center gap-1 rounded border border-red-300/40 px-2 py-0.5 text-[10px] text-red-100 hover:bg-red-500/20"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRegenerate(draft.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onRegenerate(draft.id);
+                            }
+                          }}
+                        >
+                          <LightningBoltIcon className="h-3 w-3" />
+                          Retry
+                        </span>
+                      ) : null}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="inline-flex items-center gap-1 rounded border border-red-300/40 px-2 py-0.5 text-[10px] text-red-100 hover:bg-red-500/20"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          clearFailure();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            clearFailure();
+                          }
+                        }}
+                      >
+                        <Cross2Icon className="h-3 w-3" />
+                        Clear
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </button>
           </HoverCardTrigger>
@@ -336,18 +389,18 @@ export function CalendarDraftCard({
             Mark as draft
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem onSelect={duplicateToUnscheduled}>
-            <CopyIcon className="mr-2 h-3.5 w-3.5" />
-            Duplicate to unscheduled
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() => {
-              moveDraft(draft.id, "unscheduled");
-              focusEditor(draft.id);
-            }}
-          >
-            Send to unscheduled
-          </ContextMenuItem>
+          {onRegenerate ? (
+            <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
+              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+              {isFailed ? "Retry generation" : "Regenerate"}
+            </ContextMenuItem>
+          ) : null}
+          {isFailed ? (
+            <ContextMenuItem onSelect={clearFailure}>
+              <Cross2Icon className="mr-2 h-3.5 w-3.5" />
+              Clear failure
+            </ContextMenuItem>
+          ) : null}
           <ContextMenuItem
             className="text-destructive focus:text-destructive"
             onSelect={() => bulkDeleteDrafts([draft.id])}

@@ -54,6 +54,21 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
     );
   }
 
+  if (event.type === "slot_completed") {
+    const placementData = event.data as Extract<
+      CalendarGenerationEvent,
+      { type: "slot_completed" }
+    >;
+    const placement = placementData.placement;
+    return (
+      <PlacementNotificationCard
+        placement={placement}
+        timestamp={event.timestamp}
+        onSelect={onPlacementSelect}
+      />
+    );
+  }
+
   if (event.type === "progress") {
     const progressData = event.data as Extract<CalendarGenerationEvent, { type: "progress" }>;
     const stage = progressData.stage || "processing";
@@ -84,6 +99,32 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
     );
   }
 
+  if (event.type === "slot_started") {
+    const startedData = event.data as Extract<
+      CalendarGenerationEvent,
+      { type: "slot_started" }
+    >;
+    return (
+      <Flex
+        align="center"
+        gap="3"
+        className="py-2 px-3 rounded-md hover:bg-muted/50 transition-colors"
+      >
+        <Box className="flex items-center justify-center text-amber-500">
+          <ReloadIcon className="w-3.5 h-3.5" />
+        </Box>
+        <Flex direction="column" className="flex-1 min-w-0">
+          <Text size="2" className="truncate">
+            {startedData.message ?? `Generating ${startedData.placementId}`}
+          </Text>
+        </Flex>
+        <Text size="1" color="gray" className="tabular-nums">
+          {timeLabel}
+        </Text>
+      </Flex>
+    );
+  }
+
   if (event.type === "error") {
     const errorData = event.data as Extract<CalendarGenerationEvent, { type: "error" }>;
     return (
@@ -99,6 +140,36 @@ export function StreamEventItem({ event, onPlacementSelect }: StreamEventItemPro
         <Flex direction="column" className="flex-1 min-w-0">
           <Text size="2" color="red" className="truncate">
             {errorData.message}
+          </Text>
+        </Flex>
+        <Text size="1" color="gray" className="tabular-nums">
+          {timeLabel}
+        </Text>
+      </Flex>
+    );
+  }
+
+  if (event.type === "slot_failed") {
+    const errorData = event.data as Extract<
+      CalendarGenerationEvent,
+      { type: "slot_failed" }
+    >;
+    return (
+      <Flex
+        align="center"
+        gap="3"
+        className="py-2 px-3 rounded-md bg-red-50 border border-red-100"
+        role="alert"
+      >
+        <Box className="flex items-center justify-center text-red-500">
+          <Cross2Icon className="w-3.5 h-3.5" />
+        </Box>
+        <Flex direction="column" className="flex-1 min-w-0">
+          <Text size="2" color="red" className="truncate">
+            {errorData.message}
+          </Text>
+          <Text size="1" color="gray">
+            {errorData.placementId}
           </Text>
         </Flex>
         <Text size="1" color="gray" className="tabular-nums">

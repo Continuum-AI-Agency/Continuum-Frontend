@@ -1,11 +1,8 @@
 import * as React from "react";
 import { useCalendarStore } from "@/lib/organic/store";
-import type { OrganicCalendarDay, OrganicCalendarDraft } from "../primitives/types";
+import type { OrganicCalendarDay } from "../primitives/types";
 
-export function useCalendarSelection(
-  days: OrganicCalendarDay[] = [],
-  unscheduledDrafts: OrganicCalendarDraft[] = []
-) {
+export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
   const {
     selectedDraftId,
     setSelectedDraftId,
@@ -61,11 +58,6 @@ export function useCalendarSelection(
         });
       });
 
-      unscheduledDrafts.forEach((slot) => {
-        flatSlots.push(slot.id);
-        if (slot.id === currentId) currentIndex = flatSlots.length - 1;
-      });
-
       if (currentIndex === -1) return;
 
       if (e.key === "ArrowDown") {
@@ -84,7 +76,7 @@ export function useCalendarSelection(
         clearAll();
       }
     },
-    [days, unscheduledDrafts, selectedDraftId, selectedDraftIds, handleSelect, clearAll, handleDelete]
+    [days, selectedDraftId, selectedDraftIds, handleSelect, clearAll, handleDelete]
   );
 
   return {

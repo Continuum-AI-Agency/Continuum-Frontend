@@ -236,6 +236,10 @@ describe("POST /api/organic/generate-grid", () => {
         },
         placements: [
           {
+            placementId: "seed-2026-02-23-trend-42",
+            trendId: "trend-42",
+            dayId: "2026-02-23",
+            scheduledAt: "2026-02-23T14:00:00.000Z",
             timeLabel: "9:00 AM",
             platform: "instagram",
             accountId: "acct_instagram_1",

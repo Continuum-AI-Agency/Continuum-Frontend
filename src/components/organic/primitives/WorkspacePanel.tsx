@@ -115,7 +115,7 @@ export function WorkspacePanel({
 }) {
   const showGenerationControls = mode !== "preview";
   const showPreview = mode === "full" || mode === "preview";
-  const showUnscheduledPool = mode === "full" || mode === "config";
+  const showUnscheduledPool = false;
   const isGenerationSidebar = mode === "generation";
   const isGenerating = gridStatus === "running";
   const [language, setLanguage] = React.useState("English");
@@ -127,10 +127,8 @@ export function WorkspacePanel({
   );
 
   const selectedDraft = React.useMemo(
-    () =>
-      allDrafts.find((draft) => draft.id === selectedDraftId) ||
-      unscheduledDrafts.find((draft) => draft.id === selectedDraftId),
-    [allDrafts, selectedDraftId, unscheduledDrafts]
+    () => allDrafts.find((draft) => draft.id === selectedDraftId),
+    [allDrafts, selectedDraftId]
   );
 
   const { setNodeRef, isOver } = useDroppable({
@@ -197,7 +195,7 @@ export function WorkspacePanel({
             <div className="space-y-1">
               <Label className="font-mono text-[10px] uppercase tracking-widest text-slate-700">Platforms</Label>
               <div className="flex h-8 items-center rounded-md border border-slate-400/80 bg-white/90 px-2 font-mono text-[10px] text-slate-900">
-                Instagram, Facebook, LinkedIn
+                Instagram, LinkedIn
               </div>
             </div>
           </div>

@@ -44,22 +44,7 @@ function toBackendPayload(payload: GenerationRequestPayload) {
 }
 
 function toFlattenedCalendarBackendPayload(payload: CalendarGenerationRequest) {
-  const normalized = toBackendCalendarGenerationRequest(payload);
-  return {
-    brandProfileId: normalized.brandProfileId,
-    weekStart: normalized.weekStart,
-    timezone: normalized.timezone,
-    platformAccountIds: normalized.platformAccountIds,
-    placements: normalized.placements.map((placement) => ({
-      timeLabel: placement.timeLabel ?? null,
-      platform: placement.platform,
-      accountId: placement.accountId ?? null,
-      seedSource: placement.seedSource,
-      desiredFormat: placement.desiredFormat ?? null,
-      metadata: placement.metadata ?? null,
-    })),
-    options: normalized.options,
-  };
+  return toBackendCalendarGenerationRequest(payload);
 }
 
 async function streamCalendarGeneration(
@@ -249,6 +234,12 @@ export async function POST(request: NextRequest) {
   const token = data.session.access_token.trim();
   if (calendarParsed.success) {
     return streamCalendarGeneration(request, token, calendarParsed.data);
+  }
+  if (!legacyParsed.success) {
+    return NextResponse.json(
+      { error: "Invalid legacy generation payload" },
+      { status: 422 }
+    );
   }
   return queueLegacyGridGeneration(legacyParsed.data, token);
 }

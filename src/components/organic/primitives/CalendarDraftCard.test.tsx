@@ -7,9 +7,7 @@ import type { OrganicCalendarDraft } from "./types";
 
 const store = {
   updateDraft: vi.fn(),
-  moveDraft: vi.fn(),
   bulkDeleteDrafts: vi.fn(),
-  addDraft: vi.fn(),
 };
 
 vi.mock("@/lib/organic/store", () => ({
@@ -132,8 +130,9 @@ describe("CalendarDraftCard", () => {
     expect(onSelect).toHaveBeenCalledWith("draft-1");
   });
 
-  it("send to unscheduled moves draft and focuses editor", () => {
+  it("retry generation action calls onRegenerate", () => {
     const onSelect = vi.fn();
+    const onRegenerate = vi.fn();
     render(
       <CalendarDraftCard
         draft={draft}
@@ -141,13 +140,14 @@ describe("CalendarDraftCard", () => {
         isMultiSelected={false}
         onSelect={onSelect}
         onToggleSelection={vi.fn()}
+        onRegenerate={onRegenerate}
       />
     );
 
-    fireEvent.click(screen.getAllByText("Send to unscheduled")[0]);
+    fireEvent.click(screen.getAllByText("Regenerate")[0]);
 
-    expect(store.moveDraft).toHaveBeenCalledWith("draft-1", "unscheduled");
-    expect(onSelect).toHaveBeenCalledWith("draft-1");
+    expect(onRegenerate).toHaveBeenCalledWith("draft-1");
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("allows custom posting time edits from quick actions", () => {
@@ -194,11 +194,11 @@ describe("CalendarDraftCard", () => {
     (window as unknown as { prompt?: unknown }).prompt = originalPrompt;
   });
 
-  it("only allows marking as scheduled when the draft is assigned and time is valid", () => {
-    const unscheduledDraft: OrganicCalendarDraft = {
+  it("only allows marking as scheduled when the time is valid", () => {
+    const invalidTimeDraft: OrganicCalendarDraft = {
       ...draft,
       id: "draft-2",
-      dateLabel: "Unscheduled",
+      timeLabel: "9 AM",
     };
 
     const { rerender } = render(
@@ -216,7 +216,7 @@ describe("CalendarDraftCard", () => {
 
     rerender(
       <CalendarDraftCard
-        draft={unscheduledDraft}
+        draft={invalidTimeDraft}
         isSelected={false}
         isMultiSelected={false}
         onSelect={vi.fn()}
@@ -226,6 +226,30 @@ describe("CalendarDraftCard", () => {
 
     fireEvent.click(screen.getAllByText("Mark as scheduled")[0]);
     expect(store.updateDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("clear failure button invokes onClearFailure for failed drafts", () => {
+    const failedDraft: OrganicCalendarDraft = {
+      ...draft,
+      id: "draft-failed",
+      status: "failed",
+      generationError: "Failed to generate post",
+    };
+    const onClearFailure = vi.fn();
+
+    render(
+      <CalendarDraftCard
+        draft={failedDraft}
+        isSelected={false}
+        isMultiSelected={false}
+        onSelect={vi.fn()}
+        onToggleSelection={vi.fn()}
+        onClearFailure={onClearFailure}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Clear"));
+    expect(onClearFailure).toHaveBeenCalledWith("draft-failed");
   });
 
   it("mouseover expands card into a quick preview state", () => {

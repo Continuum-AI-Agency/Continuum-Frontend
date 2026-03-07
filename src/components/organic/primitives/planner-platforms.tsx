@@ -63,10 +63,10 @@ const PLATFORM_META: Record<PlannerPlatformKey, PlannerPlatform> = {
 const SCHEDULABLE_PLATFORM_ORDER: OrganicPlatformTag[] = [
   "instagram",
   "linkedin",
-  "facebook",
 ]
 
 const COMING_SOON_ORDER: PlannerPlatformKey[] = [
+  "facebook",
   "youtube",
   "tiktok",
   "x",

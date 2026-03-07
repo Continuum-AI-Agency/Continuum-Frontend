@@ -75,9 +75,7 @@ type OrganicCalendarWorkspaceClientProps = {
 function isSchedulablePlannerPlatform(
   platform: PlannerPlatformKey | undefined
 ): platform is OrganicPlatformTag {
-  return Boolean(
-    platform && platform !== "youtube" && platform !== "tiktok" && platform !== "x"
-  )
+  return platform === "instagram" || platform === "linkedin"
 }
 
 export function OrganicCalendarWorkspaceClient({
@@ -93,7 +91,6 @@ export function OrganicCalendarWorkspaceClient({
   const {
     days: calendarDays,
     setDays: setCalendarDays,
-    unscheduledDrafts,
     toggleTrend,
     bulkMoveDrafts,
     bulkDeleteDrafts,
@@ -110,7 +107,7 @@ export function OrganicCalendarWorkspaceClient({
     handleSelect,
     clearAll,
     handleKeyDown,
-  } = useCalendarSelection(calendarDays, unscheduledDrafts)
+  } = useCalendarSelection(calendarDays)
 
   const resolvedTrends = React.useMemo(() => {
     const merged = [
@@ -184,8 +181,8 @@ export function OrganicCalendarWorkspaceClient({
   }, [handleWeekChange, weekStart])
 
   const drafts = React.useMemo(
-    () => [...calendarDays.flatMap((day) => day.slots), ...unscheduledDrafts],
-    [calendarDays, unscheduledDrafts]
+    () => calendarDays.flatMap((day) => day.slots),
+    [calendarDays]
   )
 
   const selectedDraft = React.useMemo(() => {
@@ -206,6 +203,7 @@ export function OrganicCalendarWorkspaceClient({
     handleAutoSort,
     handleGenerateGridJob,
     handleRegenerate,
+    handleClearFailure,
   } = useDraftGeneration({
     brandProfileId,
     calendarDays,
@@ -243,16 +241,16 @@ export function OrganicCalendarWorkspaceClient({
       const selectedPlatform =
         (isSchedulablePlannerPlatform(context?.platform) && context?.platform) ||
         (activePlatforms.find((platform) =>
-          ["instagram", "facebook", "linkedin"].includes(platform)
+          ["instagram", "linkedin"].includes(platform)
         ) as OrganicPlatformTag | undefined) ||
         "instagram"
 
       const targetDay = context?.dayId
         ? calendarDays.find((day) => day.id === context.dayId) ?? null
-        : null
+        : (calendarDays[0] ?? null)
+      if (!targetDay) return
       const requestedStatus = context?.status ?? "draft"
-      const status =
-        requestedStatus === "scheduled" && !targetDay ? "draft" : requestedStatus
+      const status = requestedStatus
       const trendTag = context?.trendId ?? selectedTrendIds[0]
 
       const draftId =
@@ -268,7 +266,7 @@ export function OrganicCalendarWorkspaceClient({
             : `New ${selectedPlatform[0].toUpperCase()}${selectedPlatform.slice(1)} post`,
         summary: "Quick draft created from planner.",
         timeLabel: targetDay?.suggestedTimes[0] ?? "9:00 AM",
-        dateLabel: targetDay ? `${targetDay.label}, ${targetDay.dateLabel}` : "Unscheduled",
+        dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
         status,
         platforms: [selectedPlatform],
         format: "Post",
@@ -282,7 +280,7 @@ export function OrganicCalendarWorkspaceClient({
         seedTrendId: status === "placeholder" ? trendTag : undefined,
       }
 
-      addDraft(targetDay?.id ?? "unscheduled", nextDraft)
+      addDraft(targetDay.id, nextDraft)
       handleSelect(draftId, false)
     },
     [activePlatforms, addDraft, calendarDays, handleSelect, selectedTrendIds]
@@ -317,13 +315,13 @@ export function OrganicCalendarWorkspaceClient({
     (trend: Trend): PlannerPlatformKey | undefined => {
       const firstSupported = trend.platforms.find(
         (platform): platform is OrganicPlatformTag =>
-          platform === "instagram" || platform === "linkedin" || platform === "facebook"
+          platform === "instagram" || platform === "linkedin"
       )
       if (firstSupported) return firstSupported
 
       const fallback = activePlatforms.find(
         (platform): platform is OrganicPlatformTag =>
-          platform === "instagram" || platform === "linkedin" || platform === "facebook"
+          platform === "instagram" || platform === "linkedin"
       )
       return fallback
     },
@@ -515,6 +513,7 @@ export function OrganicCalendarWorkspaceClient({
                       onSelectDraft={(id) => handleSelect(id, false)}
                       onToggleSelection={(id) => handleSelect(id, true)}
                       onRegenerate={handleRegenerate}
+                      onClearFailure={handleClearFailure}
                       onNativeDrop={handleNativeDrop}
                     />
                   </div>
