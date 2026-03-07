@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   ColorType,
-  createSeriesMarkers,
   createChart,
   CrosshairMode,
   LineSeries,
@@ -11,7 +10,6 @@ import {
   LineType,
   type IChartApi,
   type ISeriesApi,
-  type ISeriesMarkersPluginApi,
   type MouseEventParams,
   type Time,
   type UTCTimestamp,
@@ -45,6 +43,9 @@ export type ObservabilityChartMarker = {
   text?: string;
   shape?: "circle" | "square" | "arrowUp" | "arrowDown";
   position?: "aboveBar" | "belowBar" | "inBar";
+  scopeType?: string;
+  actionCount?: number;
+  status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
 };
 
 type ObservabilityLightweightChartProps = {
@@ -57,7 +58,6 @@ type SupportedSeriesType = "Line";
 
 type RegisteredSeries = {
   api: ISeriesApi<SupportedSeriesType, Time>;
-  markersApi: ISeriesMarkersPluginApi<Time>;
 };
 
 type HoverState = {
@@ -65,8 +65,38 @@ type HoverState = {
   y: number;
   timeLabel: string;
   rows: Array<{ id: string; label: string; color: string; value: string }>;
-  markerLabel?: string;
-  markerDetail?: string;
+};
+
+type OverlayMarker = {
+  key: string;
+  time: UTCTimestamp;
+  x: number;
+  label: string;
+  detail?: string;
+  color: string;
+  scopeType?: string;
+  actionCount: number;
+  status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
+};
+
+type OverlayBookmark = {
+  key: string;
+  x: number;
+  label: string;
+  detail?: string;
+};
+
+type OverlayGeometry = {
+  lineTop: number;
+  lineBottom: number;
+};
+
+type AnnotationHover = {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  detail?: string;
 };
 
 function sanitizePoints(points: ObservabilityChartPoint[]): ObservabilityChartPoint[] {
@@ -82,6 +112,79 @@ function sanitizePoints(points: ObservabilityChartPoint[]): ObservabilityChartPo
     .map(([time, value]) => ({ time: time as UTCTimestamp, value }));
 }
 
+function bookmarkScopeLabel(scopes: Set<string>): string {
+  const hasAdset = scopes.has("ADSET");
+  const hasAd = scopes.has("AD");
+  if (hasAdset && hasAd) return "Adset/Ad";
+  if (hasAdset) return "Adset";
+  if (hasAd) return "Ad";
+  return "Entity";
+}
+
+function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): OverlayBookmark[] {
+  const nestedMarkers = markers
+    .filter((marker) => marker.scopeType === "ADSET" || marker.scopeType === "AD")
+    .sort((left, right) => left.x - right.x);
+
+  if (nestedMarkers.length === 0) return [];
+
+  type Cluster = {
+    markers: OverlayMarker[];
+    count: number;
+    scopeTypes: Set<string>;
+    weightedX: number;
+    weight: number;
+  };
+
+  const clusters: Cluster[] = [];
+
+  nestedMarkers.forEach((marker) => {
+    const lastCluster = clusters[clusters.length - 1];
+    if (!lastCluster) {
+      clusters.push({
+        markers: [marker],
+        count: marker.actionCount,
+        scopeTypes: new Set(marker.scopeType ? [marker.scopeType] : []),
+        weightedX: marker.x * marker.actionCount,
+        weight: marker.actionCount,
+      });
+      return;
+    }
+
+    const currentX = lastCluster.weightedX / Math.max(1, lastCluster.weight);
+    if (Math.abs(marker.x - currentX) > minSpacingPx) {
+      clusters.push({
+        markers: [marker],
+        count: marker.actionCount,
+        scopeTypes: new Set(marker.scopeType ? [marker.scopeType] : []),
+        weightedX: marker.x * marker.actionCount,
+        weight: marker.actionCount,
+      });
+      return;
+    }
+
+    lastCluster.markers.push(marker);
+    lastCluster.count += marker.actionCount;
+    lastCluster.weight += marker.actionCount;
+    lastCluster.weightedX += marker.x * marker.actionCount;
+    if (marker.scopeType) lastCluster.scopeTypes.add(marker.scopeType);
+  });
+
+  return clusters.map((cluster, index) => {
+    const scopeLabel = bookmarkScopeLabel(cluster.scopeTypes);
+    const x = cluster.weightedX / Math.max(1, cluster.weight);
+    const label = `${cluster.count} action${cluster.count === 1 ? "" : "s"} in ${scopeLabel}`;
+    const details = Array.from(new Set(cluster.markers.map((marker) => marker.label))).slice(0, 3).join("\n");
+
+    return {
+      key: `bookmark:${index}:${Math.round(x)}`,
+      x,
+      label,
+      detail: details || undefined,
+    };
+  });
+}
+
 export function ObservabilityLightweightChart({
   series,
   className,
@@ -90,10 +193,65 @@ export function ObservabilityLightweightChart({
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const chartRef = React.useRef<IChartApi | null>(null);
   const seriesMapRef = React.useRef<Map<string, RegisteredSeries>>(new Map());
-  const markerMetaRef = React.useRef<Map<string, { label: string; detail?: string }>>(new Map());
+
   const [hover, setHover] = React.useState<HoverState | null>(null);
+  const [overlayMarkers, setOverlayMarkers] = React.useState<OverlayMarker[]>([]);
+  const [overlayBookmarks, setOverlayBookmarks] = React.useState<OverlayBookmark[]>([]);
+  const [overlayGeometry, setOverlayGeometry] = React.useState<OverlayGeometry>({ lineTop: 8, lineBottom: 8 });
+  const [annotationHover, setAnnotationHover] = React.useState<AnnotationHover | null>(null);
+
   const { appearance } = useTheme();
   const isDark = appearance === "dark";
+
+  const recalcOverlays = React.useCallback(() => {
+    const chart = chartRef.current;
+    const container = containerRef.current;
+
+    if (!chart || !container || compact) {
+      setOverlayMarkers([]);
+      setOverlayBookmarks([]);
+      setOverlayGeometry({ lineTop: 8, lineBottom: 8 });
+      return;
+    }
+
+    const lineTop = 8;
+    const lineBottom = Math.max(lineTop + 24, container.clientHeight - 28);
+    const mergedMarkers = new Map<string, Omit<OverlayMarker, "key" | "x">>();
+
+    series.forEach((entry) => {
+      (entry.markers ?? []).forEach((marker) => {
+        const markerKey = `${marker.id}:${marker.time}`;
+        if (mergedMarkers.has(markerKey)) return;
+        mergedMarkers.set(markerKey, {
+          time: marker.time,
+          label: marker.label,
+          detail: marker.detail,
+          color: marker.color ?? entry.color,
+          scopeType: marker.scopeType,
+          actionCount: Math.max(1, marker.actionCount ?? 1),
+          status: marker.status,
+        });
+      });
+    });
+
+    const positioned = Array.from(mergedMarkers.entries()).reduce<OverlayMarker[]>((acc, [key, marker]) => {
+      const coordinate = chart.timeScale().timeToCoordinate(marker.time as Time);
+      if (typeof coordinate !== "number" || !Number.isFinite(coordinate)) return acc;
+      if (coordinate < -12 || coordinate > container.clientWidth + 12) return acc;
+
+      acc.push({
+        key,
+        x: Number(coordinate),
+        ...marker,
+      });
+      return acc;
+    }, []);
+    positioned.sort((left, right) => left.time - right.time);
+
+    setOverlayMarkers(positioned);
+    setOverlayBookmarks(buildBottomBookmarks(positioned, 72));
+    setOverlayGeometry({ lineTop, lineBottom });
+  }, [compact, series]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -129,9 +287,7 @@ export function ObservabilityLightweightChart({
         visible: !compact,
         borderVisible: !compact,
         borderColor: isDark ? "rgba(51, 65, 85, 0.5)" : "rgba(203, 213, 225, 0.8)",
-        scaleMargins: compact
-          ? { top: 0.16, bottom: 0.16 }
-          : { top: 0.12, bottom: 0.12 },
+        scaleMargins: compact ? { top: 0.16, bottom: 0.16 } : { top: 0.12, bottom: 0.12 },
       },
       leftPriceScale: { visible: false },
       crosshair: compact
@@ -160,7 +316,6 @@ export function ObservabilityLightweightChart({
 
     return () => {
       seriesMapRef.current.clear();
-      markerMetaRef.current.clear();
       chart.remove();
       chartRef.current = null;
     };
@@ -178,7 +333,6 @@ export function ObservabilityLightweightChart({
       seriesMapRef.current.delete(id);
     });
 
-    markerMetaRef.current.clear();
     series.forEach((entry, index) => {
       const isPrimary = entry.emphasized ?? index === 0;
       const lineColor = entry.color;
@@ -197,8 +351,7 @@ export function ObservabilityLightweightChart({
           priceLineVisible: false,
         });
 
-        const markersApi = createSeriesMarkers(api, []);
-        registered = { api, markersApi };
+        registered = { api };
         seriesMapRef.current.set(entry.id, registered);
       }
 
@@ -212,27 +365,39 @@ export function ObservabilityLightweightChart({
       });
 
       registered.api.setData(sanitizePoints(entry.points));
-
-      const markers = (entry.markers ?? []).map((marker) => {
-        const markerId = `${entry.id}::${marker.id}`;
-        markerMetaRef.current.set(markerId, {
-          label: marker.label,
-          detail: marker.detail,
-        });
-        return {
-          id: markerId,
-          time: marker.time,
-          position: marker.position ?? "aboveBar",
-          shape: marker.shape ?? "square",
-          color: marker.color ?? entry.color,
-          text: marker.text ?? "F",
-        };
-      });
-      registered.markersApi.setMarkers(markers);
     });
 
     chart.timeScale().fitContent();
-  }, [compact, series]);
+    recalcOverlays();
+  }, [compact, recalcOverlays, series]);
+
+  React.useEffect(() => {
+    const chart = chartRef.current;
+    const container = containerRef.current;
+    if (!chart || !container || compact) {
+      return;
+    }
+
+    const handleVisibleRangeChange = () => {
+      recalcOverlays();
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      recalcOverlays();
+    });
+
+    chart.timeScale().subscribeVisibleTimeRangeChange(handleVisibleRangeChange);
+    resizeObserver.observe(container);
+
+    return () => {
+      chart.timeScale().unsubscribeVisibleTimeRangeChange(handleVisibleRangeChange);
+      resizeObserver.disconnect();
+    };
+  }, [compact, recalcOverlays]);
+
+  React.useEffect(() => {
+    setAnnotationHover(null);
+  }, [series]);
 
   React.useEffect(() => {
     const chart = chartRef.current;
@@ -271,10 +436,7 @@ export function ObservabilityLightweightChart({
         })
         .filter((row): row is { id: string; label: string; color: string; value: string } => Boolean(row));
 
-      const markerInfo = param.hoveredObjectId
-        ? markerMetaRef.current.get(String(param.hoveredObjectId))
-        : undefined;
-      if (rows.length === 0 && !markerInfo) {
+      if (rows.length === 0) {
         setHover(null);
         return;
       }
@@ -296,8 +458,6 @@ export function ObservabilityLightweightChart({
         y,
         timeLabel,
         rows,
-        markerLabel: markerInfo?.label,
-        markerDetail: markerInfo?.detail,
       });
     };
 
@@ -310,6 +470,101 @@ export function ObservabilityLightweightChart({
 
   return (
     <div ref={containerRef} className={cn("relative h-full w-full [&_a#tv-attr-logo]:hidden", className)}>
+      {!compact ? (
+        <div className="pointer-events-none absolute inset-0 z-10">
+          {overlayMarkers.map((marker) => (
+            <React.Fragment key={marker.key}>
+              <div
+                className="absolute w-px"
+                style={{
+                  left: marker.x,
+                  top: overlayGeometry.lineTop,
+                  height: Math.max(0, overlayGeometry.lineBottom - overlayGeometry.lineTop),
+                  backgroundColor: marker.color,
+                  opacity: 0.45,
+                }}
+              />
+              <button
+                type="button"
+                className="pointer-events-auto absolute h-2.5 w-2.5 rounded-[2px] border border-background/60 shadow-[0_0_0_1px_rgba(15,23,42,0.08)]"
+                style={{
+                  left: marker.x - 5,
+                  top: overlayGeometry.lineTop - 4,
+                  backgroundColor: marker.status === "PENDING" ? "transparent" : marker.color,
+                  borderColor: marker.color,
+                }}
+                aria-label={marker.label}
+                onMouseEnter={() => {
+                  setAnnotationHover({
+                    id: marker.key,
+                    x: Math.min(marker.x + 10, (containerRef.current?.clientWidth ?? 0) - 240),
+                    y: overlayGeometry.lineTop + 12,
+                    label: marker.label,
+                    detail: marker.detail,
+                  });
+                }}
+                onMouseLeave={() => {
+                  setAnnotationHover((current) => (current?.id === marker.key ? null : current));
+                }}
+                onFocus={() => {
+                  setAnnotationHover({
+                    id: marker.key,
+                    x: Math.min(marker.x + 10, (containerRef.current?.clientWidth ?? 0) - 240),
+                    y: overlayGeometry.lineTop + 12,
+                    label: marker.label,
+                    detail: marker.detail,
+                  });
+                }}
+                onBlur={() => {
+                  setAnnotationHover((current) => (current?.id === marker.key ? null : current));
+                }}
+              />
+            </React.Fragment>
+          ))}
+
+          {overlayBookmarks.map((bookmark) => (
+            <button
+              key={bookmark.key}
+              type="button"
+              className="pointer-events-auto absolute inline-flex max-w-[180px] -translate-x-1/2 items-center gap-1 rounded-[5px] border border-amber-500/40 bg-amber-500/14 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 shadow-sm dark:text-amber-200"
+              style={{
+                left: bookmark.x,
+                top: overlayGeometry.lineBottom + 4,
+              }}
+              onMouseEnter={() => {
+                const containerWidth = containerRef.current?.clientWidth ?? 0;
+                setAnnotationHover({
+                  id: bookmark.key,
+                  x: Math.min(bookmark.x + 10, containerWidth - 240),
+                  y: overlayGeometry.lineBottom - 54,
+                  label: bookmark.label,
+                  detail: bookmark.detail,
+                });
+              }}
+              onMouseLeave={() => {
+                setAnnotationHover((current) => (current?.id === bookmark.key ? null : current));
+              }}
+              onFocus={() => {
+                const containerWidth = containerRef.current?.clientWidth ?? 0;
+                setAnnotationHover({
+                  id: bookmark.key,
+                  x: Math.min(bookmark.x + 10, containerWidth - 240),
+                  y: overlayGeometry.lineBottom - 54,
+                  label: bookmark.label,
+                  detail: bookmark.detail,
+                });
+              }}
+              onBlur={() => {
+                setAnnotationHover((current) => (current?.id === bookmark.key ? null : current));
+              }}
+            >
+              <span className="h-2 w-2 rounded-[1px] bg-amber-500" />
+              <span className="truncate">{bookmark.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {!compact && hover ? (
         <div
           className="pointer-events-none absolute z-20 max-w-[240px] rounded-md border border-border/80 bg-background/95 px-2 py-1.5 text-[11px] shadow-md backdrop-blur-sm"
@@ -327,12 +582,19 @@ export function ObservabilityLightweightChart({
               </div>
             ))}
           </div>
-          {hover.markerLabel ? (
-            <div className="mt-1.5 rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-1 text-[10px] text-amber-700 dark:text-amber-300">
-              <div className="font-medium">{hover.markerLabel}</div>
-              {hover.markerDetail ? <div className="mt-0.5 line-clamp-3">{hover.markerDetail}</div> : null}
-            </div>
-          ) : null}
+        </div>
+      ) : null}
+
+      {!compact && annotationHover ? (
+        <div
+          className="pointer-events-none absolute z-30 max-w-[240px] rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-800 shadow-sm dark:text-amber-200"
+          style={{
+            left: Math.max(8, annotationHover.x),
+            top: Math.max(8, annotationHover.y),
+          }}
+        >
+          <div className="font-semibold">{annotationHover.label}</div>
+          {annotationHover.detail ? <div className="mt-0.5 whitespace-pre-line">{annotationHover.detail}</div> : null}
         </div>
       ) : null}
     </div>

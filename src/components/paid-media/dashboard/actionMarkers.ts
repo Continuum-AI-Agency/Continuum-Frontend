@@ -1,3 +1,9 @@
+import type { ActionLog, ActionStatus } from "@/lib/types/dco";
+import type {
+  ObservabilityChartMarker,
+  ObservabilityChartPoint,
+} from "./ObservabilityLightweightChart";
+
 export type MarkerResolution = "daily" | "hourly";
 
 function toBucket(timestamp: string, resolution: MarkerResolution): string {
@@ -9,6 +15,143 @@ function toBucket(timestamp: string, resolution: MarkerResolution): string {
   if (Number.isNaN(parsed.getTime())) return timestamp;
   parsed.setMinutes(0, 0, 0);
   return parsed.toISOString();
+}
+
+const ACTION_STATUS_COLOR: Record<ActionStatus, string> = {
+  APPROVED: "#0ea5e9",
+  FAILED: "#ef4444",
+  PENDING: "#f59e0b",
+  SUCCESS: "#10b981",
+};
+
+const ACTION_STATUS_WEIGHT: Record<ActionStatus, number> = {
+  FAILED: 4,
+  PENDING: 3,
+  APPROVED: 2,
+  SUCCESS: 1,
+};
+
+function toUtcTimestamp(isoDate: string): number | null {
+  const ms = Date.parse(isoDate);
+  if (Number.isNaN(ms)) return null;
+  return Math.floor(ms / 1000);
+}
+
+function pointBucket(pointTime: number, resolution: MarkerResolution): string {
+  const iso = new Date(Number(pointTime) * 1000).toISOString();
+  return toBucket(iso, resolution);
+}
+
+function describeActionLog(log: ActionLog): string {
+  if (log.error) return log.error;
+  if (log.decisionNote) return log.decisionNote;
+
+  const changed = Object.entries(log.paramsChanged ?? {});
+  if (changed.length > 0) {
+    const [key, value] = changed[0];
+    return `${key}: ${String(value)}`;
+  }
+
+  return `${log.actionType} on ${log.scopeType.toLowerCase()} scope`;
+}
+
+function normalizeMarkerTime(
+  log: ActionLog,
+  points: ObservabilityChartPoint[],
+  resolution: MarkerResolution
+): number | null {
+  if (points.length === 0) return null;
+
+  const targetBucket = toBucket(log.occurredAt, resolution);
+  const exact = points.find((point) => pointBucket(point.time, resolution) === targetBucket);
+  if (exact) return exact.time;
+
+  const actionTimestamp = toUtcTimestamp(log.occurredAt);
+  if (!actionTimestamp) return null;
+
+  let nearest: ObservabilityChartPoint | undefined;
+  let nearestDelta = Number.POSITIVE_INFINITY;
+  points.forEach((point) => {
+    const delta = Math.abs(Number(point.time) - Number(actionTimestamp));
+    if (delta < nearestDelta) {
+      nearest = point;
+      nearestDelta = delta;
+    }
+  });
+
+  return nearest?.time ?? null;
+}
+
+function strongestStatus(logs: ActionLog[]): ActionStatus {
+  return [...logs].sort((left, right) => {
+    return ACTION_STATUS_WEIGHT[right.status] - ACTION_STATUS_WEIGHT[left.status];
+  })[0]?.status ?? "SUCCESS";
+}
+
+export function mapActionLogsToTimelineMarkers(
+  logs: ActionLog[],
+  points: ObservabilityChartPoint[],
+  resolution: MarkerResolution,
+  maxMarkers = 36
+): ObservabilityChartMarker[] {
+  if (logs.length === 0 || points.length === 0) return [];
+
+  const grouped = new Map<string, { time: number; scopeType: ActionLog["scopeType"]; logs: ActionLog[] }>();
+
+  logs
+    .slice()
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .forEach((log) => {
+      const markerTime = normalizeMarkerTime(log, points, resolution);
+      if (!markerTime) return;
+
+      const key = `${markerTime}:${log.scopeType}`;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.logs.push(log);
+        return;
+      }
+
+      grouped.set(key, {
+        time: markerTime,
+        scopeType: log.scopeType,
+        logs: [log],
+      });
+    });
+
+  return Array.from(grouped.values())
+    .sort((left, right) => left.time - right.time)
+    .slice(-maxMarkers)
+    .map((group) => {
+      const status = strongestStatus(group.logs);
+      const color = ACTION_STATUS_COLOR[status];
+      const count = group.logs.length;
+      const latest = group.logs[group.logs.length - 1];
+      const uniqueActions = Array.from(new Set(group.logs.map((item) => item.actionType)));
+      const scopeRef =
+        latest.scopeType === "CAMPAIGN"
+          ? latest.metaCampaignId ?? latest.scopeId
+          : latest.scopeType === "ADSET"
+            ? latest.metaAdsetId ?? latest.scopeId
+            : latest.scopeType === "AD"
+              ? latest.metaAdId ?? latest.scopeId
+            : latest.scopeId;
+
+      return {
+        id: `marker:${group.scopeType}:${group.time}`,
+        time: group.time as ObservabilityChartMarker["time"],
+        label: `${latest.scopeType} · ${count} action${count > 1 ? "s" : ""} · ${status}`,
+        detail: `${new Date(latest.occurredAt).toLocaleString("en-US")} · ${scopeRef}\n${uniqueActions
+          .slice(0, 3)
+          .join(", ")}\n${describeActionLog(latest)}`,
+        color,
+        shape: "square",
+        position: "aboveBar",
+        scopeType: latest.scopeType,
+        actionCount: count,
+        status,
+      };
+    });
 }
 
 export function calculateImmediateKpiShiftPct(

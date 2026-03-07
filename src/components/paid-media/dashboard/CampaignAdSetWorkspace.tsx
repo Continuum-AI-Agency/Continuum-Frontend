@@ -32,6 +32,14 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -49,7 +57,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
 import { useTimelineBlocks } from "@/hooks/timeline/useTimelineBlocks";
-import type { ActionLog, ActionStatus } from "@/lib/types/dco";
+import type { ActionLog } from "@/lib/types/dco";
 import {
   buildCampaignIndexAggregate,
   type CampaignIndexRecord,
@@ -57,9 +65,9 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AdSet } from "./AdSetTable";
+import { mapActionLogsToTimelineMarkers } from "./actionMarkers";
 import {
   ObservabilityLightweightChart,
-  type ObservabilityChartMarker,
   type ObservabilityChartPoint,
   type ObservabilityChartSeries,
 } from "./ObservabilityLightweightChart";
@@ -151,13 +159,6 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
 const CHART_HEIGHT_CLASS = "h-[clamp(220px,40vh,340px)]";
 const RAIL_HEIGHT_CLASS = "h-[clamp(320px,58vh,470px)]";
 const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(280px,54vh,440px)]";
-
-const ACTION_STATUS_COLOR: Record<ActionStatus, string> = {
-  APPROVED: "#0ea5e9",
-  FAILED: "#ef4444",
-  PENDING: "#f59e0b",
-  SUCCESS: "#10b981",
-};
 
 function daysForPreset(preset: TimePreset): number {
   switch (preset) {
@@ -332,99 +333,6 @@ function averageTrendPoints(pointSets: ObservabilityChartPoint[][]): Observabili
     }));
 }
 
-function toResolutionBucket(isoDate: string, resolution: TimelineResolution): string {
-  if (resolution === "daily") {
-    return isoDate.slice(0, 10);
-  }
-
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) return isoDate;
-  parsed.setMinutes(0, 0, 0);
-  return parsed.toISOString().slice(0, 13);
-}
-
-function pointBucket(pointTime: UTCTimestamp, resolution: TimelineResolution): string {
-  const iso = new Date(Number(pointTime) * 1000).toISOString();
-  return toResolutionBucket(iso, resolution);
-}
-
-function describeActionLog(log: ActionLog): string {
-  if (log.error) return log.error;
-  if (log.decisionNote) return log.decisionNote;
-
-  const changed = Object.entries(log.paramsChanged ?? {});
-  if (changed.length > 0) {
-    const [key, value] = changed[0];
-    return `${key}: ${String(value)}`;
-  }
-
-  return `${log.actionType} on ${log.scopeType.toLowerCase()} scope`;
-}
-
-function normalizeActionMarkerTime(
-  log: ActionLog,
-  points: ObservabilityChartPoint[],
-  resolution: TimelineResolution
-): UTCTimestamp | null {
-  if (points.length === 0) return null;
-
-  const targetBucket = toResolutionBucket(log.occurredAt, resolution);
-  const exact = points.find((point) => pointBucket(point.time, resolution) === targetBucket);
-  if (exact) return exact.time;
-
-  const actionTimestamp = toUtcTimestamp(log.occurredAt);
-  if (!actionTimestamp) return null;
-
-  let nearest: ObservabilityChartPoint | undefined;
-  let nearestDelta = Number.POSITIVE_INFINITY;
-  points.forEach((point) => {
-    const delta = Math.abs(Number(point.time) - Number(actionTimestamp));
-    if (delta < nearestDelta) {
-      nearest = point;
-      nearestDelta = delta;
-    }
-  });
-
-  return nearest?.time ?? null;
-}
-
-function mapActionLogsToMarkers(
-  logs: ActionLog[],
-  points: ObservabilityChartPoint[],
-  resolution: TimelineResolution
-): ObservabilityChartMarker[] {
-  if (logs.length === 0 || points.length === 0) return [];
-
-  return logs
-    .slice()
-    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
-    .slice(-24)
-    .reduce<ObservabilityChartMarker[]>((markers, log) => {
-      const time = normalizeActionMarkerTime(log, points, resolution);
-      if (!time) return markers;
-
-      const statusColor = ACTION_STATUS_COLOR[log.status] ?? "#f59e0b";
-      const scopeLabel =
-        log.scopeType === "ADSET"
-          ? `Ad set ${log.metaAdsetId ?? log.scopeId}`
-          : log.scopeType === "CAMPAIGN"
-            ? `Campaign ${log.metaCampaignId ?? log.scopeId}`
-            : log.scopeType;
-
-      markers.push({
-        id: log.id,
-        time,
-        label: `${log.actionType} · ${log.status}`,
-        detail: `${scopeLabel} · ${new Date(log.occurredAt).toLocaleString("en-US")}\n${describeActionLog(log)}`,
-        color: statusColor,
-        text: log.actionType.slice(0, 1),
-        shape: log.status === "FAILED" ? "arrowDown" : "arrowUp",
-        position: log.status === "FAILED" ? "belowBar" : "aboveBar",
-      });
-      return markers;
-    }, []);
-}
-
 function getDcoManagedCampaignIds(
   timelineCampaigns: Array<{ id: string; ad_sets?: Array<{ ads?: unknown[] }> }>
 ): string[] {
@@ -464,6 +372,59 @@ async function mapWithConcurrency<T, U>(
   return results;
 }
 
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+type CompareSelectionNormalizationResult = {
+  nextKeys: string[];
+  seeded: boolean;
+};
+
+export function normalizeCompareSelection({
+  currentKeys,
+  availableKeys,
+  allKeys,
+  selectedCampaignIndexId,
+  seeded,
+}: {
+  currentKeys: string[];
+  availableKeys: Set<string>;
+  allKeys: string[];
+  selectedCampaignIndexId: string;
+  seeded: boolean;
+}): CompareSelectionNormalizationResult {
+  const valid = currentKeys.filter((key) => availableKeys.has(key));
+
+  if (seeded) {
+    return { nextKeys: valid, seeded: true };
+  }
+
+  if (valid.length > 0) {
+    return { nextKeys: valid, seeded: true };
+  }
+
+  if (selectedCampaignIndexId !== "all") {
+    const selectedIndexKey = `index:${selectedCampaignIndexId}`;
+    if (availableKeys.has(selectedIndexKey)) {
+      return { nextKeys: [selectedIndexKey], seeded: true };
+    }
+  }
+
+  const firstIndex = allKeys.find((key) => key.startsWith("index:"));
+  if (firstIndex) {
+    return { nextKeys: [firstIndex], seeded: true };
+  }
+
+  const firstCampaign = allKeys.find((key) => key.startsWith("campaign:"));
+  if (firstCampaign) {
+    return { nextKeys: [firstCampaign], seeded: true };
+  }
+
+  return { nextKeys: [], seeded: true };
+}
+
 export function CampaignAdSetWorkspace({
   brandId,
   accountId,
@@ -494,6 +455,7 @@ export function CampaignAdSetWorkspace({
   const [showSelectedAdSetAverage, setShowSelectedAdSetAverage] = React.useState(false);
   const [showSelectedAdSetLines, setShowSelectedAdSetLines] = React.useState(true);
   const [adSetsByCampaign, setAdSetsByCampaign] = React.useState<Record<string, AdSetLoadState>>({});
+  const hasSeededCompareSelectionRef = React.useRef(false);
 
   const now = React.useMemo(() => new Date(), []);
   const endDateIso = React.useMemo(() => now.toISOString(), [now]);
@@ -644,24 +606,24 @@ export function CampaignAdSetWorkspace({
     return new Map(compareEntities.map((entity) => [entity.key, entity]));
   }, [compareEntities]);
 
+  const allCompareKeys = React.useMemo(() => compareEntities.map((entity) => entity.key), [compareEntities]);
+
   React.useEffect(() => {
     setSelectedCompareKeys((current) => {
-      const valid = current.filter((key) => compareEntityByKey.has(key));
-      if (valid.length > 0) return valid;
-
-      if (selectedCampaignIndexId !== "all" && compareEntityByKey.has(`index:${selectedCampaignIndexId}`)) {
-        return [`index:${selectedCampaignIndexId}`];
+      const normalized = normalizeCompareSelection({
+        currentKeys: current,
+        availableKeys: new Set(compareEntityByKey.keys()),
+        allKeys: allCompareKeys,
+        selectedCampaignIndexId,
+        seeded: hasSeededCompareSelectionRef.current,
+      });
+      hasSeededCompareSelectionRef.current = normalized.seeded;
+      if (areStringArraysEqual(current, normalized.nextKeys)) {
+        return current;
       }
-
-      const firstIndex = indexCards[0]?.index.id;
-      if (firstIndex && compareEntityByKey.has(`index:${firstIndex}`)) {
-        return [`index:${firstIndex}`];
-      }
-
-      const firstCampaign = eligibleCampaigns[0]?.id;
-      return firstCampaign ? [`campaign:${firstCampaign}`] : [];
+      return normalized.nextKeys;
     });
-  }, [compareEntityByKey, eligibleCampaigns, indexCards, selectedCampaignIndexId]);
+  }, [allCompareKeys, compareEntityByKey, selectedCampaignIndexId]);
 
   const selectedCompareSet = React.useMemo(() => new Set(selectedCompareKeys), [selectedCompareKeys]);
 
@@ -728,7 +690,7 @@ export function CampaignAdSetWorkspace({
           label: entity.label,
           color: compareColorByKey.get(entity.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
           points,
-          markers: mapActionLogsToMarkers(markerLogs, points, resolution),
+          markers: mapActionLogsToTimelineMarkers(markerLogs, points, resolution),
           variant: "line" as const,
           emphasized: index === 0,
           dashed: index > 0,
@@ -801,10 +763,22 @@ export function CampaignAdSetWorkspace({
   const toggleCompareEntity = React.useCallback((key: string) => {
     setSelectedCompareKeys((current) => {
       if (current.includes(key)) {
-        return current.filter((item) => item !== key);
+        const next = current.filter((item) => item !== key);
+        if (
+          scope &&
+          key === `${scope.type}:${scope.id}`
+        ) {
+          setScope(undefined);
+          onSelectedCampaignChange?.(undefined);
+        }
+        return next;
       }
       return [...current, key];
     });
+  }, [onSelectedCampaignChange, scope]);
+
+  const showAllEntityOptions = React.useCallback(() => {
+    setRailEntityFilter("all");
   }, []);
 
   const loadCampaignAdSets = React.useCallback(
@@ -1107,7 +1081,7 @@ export function CampaignAdSetWorkspace({
           label: `Selected Avg (${pointEntries.length})`,
           color: "#0ea5e9",
           points: averaged,
-          markers: mapActionLogsToMarkers(selectedAdSetActionLogs, averaged, resolution),
+          markers: mapActionLogsToTimelineMarkers(selectedAdSetActionLogs, averaged, resolution),
           variant: "line",
           emphasized: true,
         });
@@ -1121,7 +1095,11 @@ export function CampaignAdSetWorkspace({
           label: entry.adSet.name,
           color: adSetColorByKey.get(entry.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
           points: entry.points,
-          markers: mapActionLogsToMarkers(actionLogsByAdSetId.get(entry.adSet.id) ?? [], entry.points, resolution),
+          markers: mapActionLogsToTimelineMarkers(
+            actionLogsByAdSetId.get(entry.adSet.id) ?? [],
+            entry.points,
+            resolution
+          ),
           variant: "line",
           emphasized: !showSelectedAdSetAverage && index === 0,
         });
@@ -1135,7 +1113,11 @@ export function CampaignAdSetWorkspace({
         label: first.adSet.name,
         color: adSetColorByKey.get(first.key) ?? "#0ea5e9",
         points: first.points,
-        markers: mapActionLogsToMarkers(actionLogsByAdSetId.get(first.adSet.id) ?? [], first.points, resolution),
+        markers: mapActionLogsToTimelineMarkers(
+          actionLogsByAdSetId.get(first.adSet.id) ?? [],
+          first.points,
+          resolution
+        ),
         variant: "line",
         emphasized: true,
       });
@@ -1430,7 +1412,7 @@ export function CampaignAdSetWorkspace({
                   <Button
                     size="xs"
                     variant={railEntityFilter === "all" ? "secondary" : "ghost"}
-                    onClick={() => setRailEntityFilter("all")}
+                    onClick={showAllEntityOptions}
                   >
                     All
                   </Button>
@@ -1477,7 +1459,7 @@ export function CampaignAdSetWorkspace({
                             onSelect={() => {
                               setCampaignQuery("");
                               setCampaignSearchFilter("all");
-                              setRailEntityFilter("all");
+                              showAllEntityOptions();
                             }}
                           >
                             Reset rail filters
@@ -1492,7 +1474,91 @@ export function CampaignAdSetWorkspace({
               <SidebarSeparator />
 
               <SidebarContent className="gap-0 pb-2">
-                {shouldSplitCampaignRail ? (
+                {railEntityFilter === "all" ? (
+                  <Command shouldFilter={false} className="h-full bg-transparent">
+                    <CommandList className={cn(RAIL_SCROLL_HEIGHT_CLASS, "px-1 pb-1")}>
+                      {filteredIndexCards.length === 0 && filteredCampaigns.length === 0 ? (
+                        <CommandEmpty>No campaigns or indexes match.</CommandEmpty>
+                      ) : null}
+
+                      {filteredIndexCards.length > 0 ? (
+                        <CommandGroup heading="Indexes">
+                          {filteredIndexCards.map((entry) => {
+                            const indexKey = `index:${entry.index.id}`;
+                            const isAdded = selectedCompareSet.has(indexKey);
+                            return (
+                              <CommandItem
+                                key={`all-index-${entry.index.id}`}
+                                value={`index ${entry.index.name} ${entry.index.id}`}
+                                onSelect={() => {
+                                  setScope({ type: "index", id: entry.index.id });
+                                  toggleCompareEntity(indexKey);
+                                  onSelectedCampaignChange?.(undefined);
+                                }}
+                                className={cn(
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-[11px]",
+                                  isAdded ? "bg-sidebar-accent/70" : ""
+                                )}
+                              >
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <span className="rounded border border-sidebar-border/80 px-1 py-0 text-[9px] uppercase text-sidebar-foreground/70">
+                                    IDX
+                                  </span>
+                                  <span className="truncate font-medium">{entry.index.name}</span>
+                                </span>
+                                <span className="text-sidebar-foreground/65">
+                                  {formatMetric(campaignMetric, entry.aggregate.metrics[campaignMetric] ?? 0)}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      ) : null}
+
+                      {filteredIndexCards.length > 0 && filteredCampaigns.length > 0 ? <CommandSeparator /> : null}
+
+                      {filteredCampaigns.length > 0 ? (
+                        <CommandGroup heading="Campaigns">
+                          {filteredCampaigns.map((campaign) => {
+                            const key = `campaign:${campaign.id}`;
+                            const isAdded = selectedCompareSet.has(key);
+                            const campaignColor = compareColorByKey.get(key);
+                            return (
+                              <CommandItem
+                                key={`all-campaign-${campaign.id}`}
+                                value={`campaign ${campaign.name} ${campaign.id} ${campaign.status ?? ""}`}
+                                onSelect={() => {
+                                  setScope({ type: "campaign", id: campaign.id });
+                                  toggleCompareEntity(key);
+                                  onSelectedCampaignChange?.(campaign.id);
+                                }}
+                                className={cn(
+                                  "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded px-2 py-1.5 text-[11px]",
+                                  isAdded ? "bg-sidebar-accent/70" : ""
+                                )}
+                              >
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <span
+                                    className="h-2.5 w-2.5 shrink-0 rounded-full border border-sidebar-border/80"
+                                    style={
+                                      campaignColor
+                                        ? { backgroundColor: campaignColor, borderColor: campaignColor }
+                                        : undefined
+                                    }
+                                  />
+                                  <span className="truncate">{campaign.name}</span>
+                                </span>
+                                <span className="text-sidebar-foreground/65">
+                                  {formatMetric(campaignMetric, campaign.metrics?.[campaignMetric] ?? 0)}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      ) : null}
+                    </CommandList>
+                  </Command>
+                ) : shouldSplitCampaignRail ? (
                   <ResizablePanelGroup orientation="vertical" className={RAIL_HEIGHT_CLASS}>
                     <ResizablePanel defaultSize={indexPanelDefaultSize} minSize={14} maxSize={65}>
                       <SidebarGroup className="pt-1">
