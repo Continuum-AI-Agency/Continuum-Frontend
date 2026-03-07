@@ -140,4 +140,127 @@ describe("POST /api/organic/generate-grid", () => {
       status: "queued",
     });
   });
+
+  it("streams calendar payloads and forwards flattened placement data", async () => {
+    const getApiUrlMock = (
+      globalThis as { __testGetApiUrl?: ReturnType<typeof vi.fn> }
+    ).__testGetApiUrl as ReturnType<typeof vi.fn>;
+    getApiUrlMock.mockReturnValue("https://organic.service/api/organic/generate-calendar");
+
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    fetchMock.mockResolvedValue(
+      new Response('{"type":"complete"}\n', {
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson" },
+      })
+    );
+
+    const originalAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
+
+    const requestBody = {
+      brandProfileId: "brand_123",
+      weekStart: "2026-02-23",
+      timezone: "America/New_York",
+      placements: [
+        {
+          placementId: "seed-2026-02-23-trend-42",
+          schedule: {
+            dayId: "2026-02-23",
+            scheduledAt: "2026-02-23T14:00:00.000Z",
+            timeLabel: "9:00 AM",
+          },
+          platform: {
+            name: "instagram",
+            accountId: "acct_instagram_1",
+          },
+          seed: {
+            source: "trend",
+            trendId: "trend-42",
+          },
+          content: {
+            format: "carousel",
+          },
+          metadata: {
+            priority: "high",
+          },
+        },
+      ],
+      platformAccountIds: {
+        instagram: "acct_instagram_1",
+        linkedin: "acct_linkedin_1",
+      },
+      options: {
+        schedulePreset: "beta-launch",
+        includeNewsletter: true,
+        newsletterDayId: "2026-02-25",
+        guidancePrompt: "Prioritize product education",
+        language: "English",
+        preferredPlatforms: ["instagram", "linkedin"],
+      },
+    };
+
+    try {
+      const response = await POST(
+        new Request("http://localhost/api/organic/generate-grid", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/x-ndjson",
+          },
+          body: JSON.stringify(requestBody),
+        }) as never
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://organic.service/api/organic/generate-calendar");
+      expect(init.headers).toMatchObject({
+        "Content-Type": "application/json",
+        Accept: "application/x-ndjson",
+        Authorization: "Bearer session-token",
+        apikey: "anon-key",
+        "x-supabase-auth": "session-token",
+        "x-auth-token": "session-token",
+        "X-Brand-Profile-Id": "brand_123",
+      });
+
+      const forwarded = JSON.parse(String(init.body));
+      expect(forwarded).toEqual({
+        brandProfileId: "brand_123",
+        weekStart: "2026-02-23",
+        timezone: "America/New_York",
+        platformAccountIds: {
+          instagram: "acct_instagram_1",
+          linkedin: "acct_linkedin_1",
+        },
+        placements: [
+          {
+            timeLabel: "9:00 AM",
+            platform: "instagram",
+            accountId: "acct_instagram_1",
+            seedSource: "trend",
+            desiredFormat: "carousel",
+            metadata: {
+              priority: "high",
+            },
+          },
+        ],
+        options: {
+          schedulePreset: "beta-launch",
+          includeNewsletter: true,
+          newsletterDayId: "2026-02-25",
+          guidancePrompt: "Prioritize product education",
+          language: "English",
+          preferredPlatforms: ["instagram", "linkedin"],
+        },
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("Content-Type")).toContain("application/x-ndjson");
+      await expect(response.text()).resolves.toBe('{"type":"complete"}\n');
+    } finally {
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = originalAnonKey;
+    }
+  });
 });
