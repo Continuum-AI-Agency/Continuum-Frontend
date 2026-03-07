@@ -713,6 +713,40 @@ describe("reduceJainaStreamEvent plan + hitl events", () => {
     expect(state.plan?.id).toBe("plan_123");
     expect(state.plan?.steps.length).toBe(1);
   });
+
+  it("uses chat_title and objective task list from plan delta payload", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.plan.delta",
+      data: {
+        item_id: "item_plan",
+        part_id: "part_plan",
+        delta: JSON.stringify({
+          plan_id: "plan_9f2c1e",
+          chat_title: "Android Campaign Performance Audit",
+          objectives: [
+            {
+              objective_id: "obj_campaign_1",
+              task: "Identify active campaigns and pull spend, installs, and ROAS for last_7d.",
+              success_criteria: "Return ranked campaign performance with evidence rows.",
+            },
+            {
+              objective_id: "obj_adset_2",
+              task: "Drill into underperforming campaigns at adset level to isolate CPI/CTR bottlenecks.",
+              success_criteria: "Return top issues and recommended budget/actions per adset.",
+            },
+          ],
+        }),
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("plan_9f2c1e");
+    expect(state.plan?.title).toBe("Android Campaign Performance Audit");
+    expect(state.plan?.steps.length).toBe(2);
+    expect(state.plan?.steps[0]?.title).toContain("Identify active campaigns");
+    expect(state.plan?.steps[1]?.title).toContain("Drill into underperforming campaigns");
+  });
 });
 
 describe("reduceJainaStreamEvent tool hydration compatibility", () => {
@@ -821,6 +855,39 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
     expect(state.toolResults.length).toBe(1);
     expect(state.toolCalls[0].id).toBe("tool_2");
     expect(state.toolResults[0].id).toBe("tool_2");
+  });
+
+  it("hydrates plan title from adk.event text payloads containing chat_title", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "adk.event",
+      data: {
+        author: "router",
+        content: {
+          role: "assistant",
+          parts: [
+            {
+              text: JSON.stringify({
+                plan_id: "active_campaign_lookup_2024",
+                chat_title: "Active Meta Campaigns Overview",
+                objectives: [
+                  {
+                    objective_id: "fetch_active_campaigns",
+                    task: "Identify and list all campaigns with ACTIVE status.",
+                    success_criteria: "Campaigns include spend and ROAS.",
+                  },
+                ],
+              }),
+            },
+          ],
+        },
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("active_campaign_lookup_2024");
+    expect(state.plan?.title).toBe("Active Meta Campaigns Overview");
+    expect(state.plan?.steps.length).toBe(1);
   });
 });
 

@@ -1011,16 +1011,27 @@ function parsePlanFromAccumulatedDelta(
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate) as Record<string, unknown>;
-      const stepsRaw = Array.isArray(parsed.steps) ? parsed.steps : [];
+      const stepsRaw = Array.isArray(parsed.steps)
+        ? parsed.steps
+        : Array.isArray(parsed.objectives)
+          ? parsed.objectives
+          : [];
       const steps = stepsRaw.reduce<JainaPlan["steps"]>((acc, step) => {
         if (!step || typeof step !== "object") return acc;
         const record = step as Record<string, unknown>;
-        const title = typeof record.title === "string" ? record.title : "";
+        const title =
+          getNonEmptyString(record.title) ??
+          getNonEmptyString(record.task) ??
+          getNonEmptyString(record.objective) ??
+          "";
         if (!title) return acc;
         acc.push({
           title,
           description:
-            typeof record.description === "string" ? record.description : undefined,
+            getNonEmptyString(record.description) ??
+            getNonEmptyString(record.success_criteria) ??
+            getNonEmptyString(record.summary) ??
+            undefined,
           status:
             typeof record.status === "string"
               ? (record.status as JainaPlan["steps"][number]["status"])
@@ -1036,6 +1047,8 @@ function parsePlanFromAccumulatedDelta(
           currentPlan?.id ||
           "plan-1",
         title:
+          (typeof parsed.chat_title === "string" && parsed.chat_title) ||
+          (typeof parsed.chatTitle === "string" && parsed.chatTitle) ||
           (typeof parsed.title === "string" && parsed.title) ||
           currentPlan?.title ||
           "Execution Plan",
@@ -1056,6 +1069,19 @@ function parsePlanFromAccumulatedDelta(
   }
 
   return currentPlan;
+}
+
+function looksLikePlanDelta(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.includes("\"plan_id\"") ||
+    trimmed.includes("\"planId\"") ||
+    trimmed.includes("\"chat_title\"") ||
+    trimmed.includes("\"chatTitle\"") ||
+    trimmed.includes("\"objectives\"") ||
+    trimmed.includes("\"steps\"")
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1782,8 +1808,12 @@ export function reduceJainaStreamEvent(
       for (const part of parsed.data.content.parts) {
         if ("text" in part) {
           const detail = formatThoughtDetail(part.text);
+          const inferredPlan = looksLikePlanDelta(part.text)
+            ? parsePlanFromAccumulatedDelta(part.text, nextState.plan)
+            : null;
           nextState = {
             ...nextState,
+            ...(inferredPlan ? { plan: inferredPlan } : {}),
             progress: [
               ...nextState.progress,
               {
