@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { DEFAULT_DATE_RANGE_DAYS, getDateRangeFromDays } from "@/lib/dco/dateRange";
 import type { ActionLog, ActionLogResponse, ActionLogFilters, ActionLogSort, CampaignOption, AdAccountOption } from "@/lib/types/dco";
@@ -37,6 +37,23 @@ interface UseDCOActionLogsReturn {
 }
 
 const DEFAULT_PAGE_SIZE = 20;
+
+function areFiltersEqual(left: ActionLogFilters, right: ActionLogFilters): boolean {
+  return (
+    left.metaAccountId === right.metaAccountId &&
+    left.campaignId === right.campaignId &&
+    left.actionType === right.actionType &&
+    left.status === right.status &&
+    left.scopeType === right.scopeType &&
+    left.dateFrom === right.dateFrom &&
+    left.dateTo === right.dateTo
+  );
+}
+
+function areSortEqual(left: ActionLogSort, right: ActionLogSort): boolean {
+  return left.sortBy === right.sortBy && left.sortOrder === right.sortOrder;
+}
+
 export function useDCOActionLogs({
   brandId,
   metaAccountId: initialMetaAccountId,
@@ -64,11 +81,21 @@ export function useDCOActionLogs({
     sortBy: "occurred_at",
     sortOrder: "desc",
   });
+  const filtersRef = useRef(filters);
+  const sortRef = useRef(sort);
 
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [adAccounts, setAdAccounts] = useState<AdAccountOption[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
   const [isLoadingAdAccounts, setIsLoadingAdAccounts] = useState(false);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  useEffect(() => {
+    sortRef.current = sort;
+  }, [sort]);
 
   const getDefaultDateRange = useCallback(() => {
     return getDateRangeFromDays(initialDateRangeDays);
@@ -224,13 +251,19 @@ export function useDCOActionLogs({
   }, [fetchLogs]);
 
   const setFilters = useCallback((newFilters: Partial<ActionLogFilters>) => {
-    setFiltersState(prev => ({ ...prev, ...newFilters }));
-    setPagination(prev => ({ ...prev, page: 1 }));
+    const previous = filtersRef.current;
+    const next = { ...previous, ...newFilters };
+    if (areFiltersEqual(previous, next)) return;
+
+    setFiltersState(next);
+    setPagination(prev => (prev.page === 1 ? prev : { ...prev, page: 1 }));
   }, []);
 
   const setSort = useCallback((newSort: ActionLogSort) => {
+    if (areSortEqual(sortRef.current, newSort)) return;
+
     setSortState(newSort);
-    setPagination(prev => ({ ...prev, page: 1 }));
+    setPagination(prev => (prev.page === 1 ? prev : { ...prev, page: 1 }));
   }, []);
 
   const goToPage = useCallback((page: number) => {

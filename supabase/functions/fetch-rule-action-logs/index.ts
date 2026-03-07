@@ -7,24 +7,27 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-interface ActionLogRow {
+interface ActionLogResponseRow {
   id: string;
-  brand_id: string;
-  meta_account_id: string;
-  action_type: string;
+  brandId: string;
+  metaAccountId: string;
+  metaCampaignId: string | null;
+  metaAdsetId: string | null;
+  metaAdId: string | null;
+  actionType: string;
   status: string;
-  scope_type: string;
-  scope_id: string;
-  occurred_at: string;
-  action_payload: Record<string, unknown>;
-  params_changed: Record<string, unknown>;
+  scopeType: string;
+  scopeId: string | null;
+  occurredAt: string;
+  actionPayload: Record<string, unknown>;
+  paramsChanged: Record<string, unknown>;
   result: Record<string, unknown>;
-  decision_note: string | null;
+  decisionNote: string | null;
   error: string | null;
 }
 
 interface ResponseBody {
-  data: ActionLogRow[];
+  data: ActionLogResponseRow[];
   pagination: {
     page: number;
     pageSize: number;
@@ -46,6 +49,63 @@ function parseIntParam(value: unknown, fallback: number, min: number, max: numbe
   const num = typeof value === "string" ? Number(value) : typeof value === "number" ? value : NaN;
   if (!Number.isFinite(num)) return fallback;
   return Math.max(min, Math.min(max, Math.floor(num)));
+}
+
+function readString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+}
+
+function readEntityIdFromPayload(payloads: unknown[], keys: string[]): string | null {
+  for (const payload of payloads) {
+    if (!payload || typeof payload !== "object") continue;
+    const record = payload as Record<string, unknown>;
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.length > 0) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function resolveCampaignId(row: Record<string, unknown>): string | null {
+  const scopeType = readString(row.scope_type);
+  const scopeId = readString(row.scope_id);
+  const payloads = [row.action_payload, row.params_changed, row.result];
+
+  return (
+    readString(row.meta_campaign_id) ??
+    (scopeType === "CAMPAIGN" ? scopeId : null) ??
+    readEntityIdFromPayload(payloads, ["meta_campaign_id", "metaCampaignId", "campaign_id", "campaignId"])
+  );
+}
+
+function resolveAdsetId(row: Record<string, unknown>): string | null {
+  const scopeType = readString(row.scope_type);
+  const scopeId = readString(row.scope_id);
+  const payloads = [row.action_payload, row.params_changed, row.result];
+
+  return (
+    readString(row.meta_adset_id) ??
+    (scopeType === "ADSET" ? scopeId : null) ??
+    readEntityIdFromPayload(payloads, ["meta_adset_id", "metaAdsetId", "adset_id", "adSetId"])
+  );
+}
+
+function resolveAdId(row: Record<string, unknown>): string | null {
+  const scopeType = readString(row.scope_type);
+  const scopeId = readString(row.scope_id);
+  const payloads = [row.action_payload, row.params_changed, row.result];
+
+  return (
+    readString(row.meta_ad_id) ??
+    (scopeType === "AD" ? scopeId : null) ??
+    readEntityIdFromPayload(payloads, ["meta_ad_id", "metaAdId", "ad_id", "adId"])
+  );
 }
 
 serve(async (req: Request) => {
@@ -126,7 +186,9 @@ serve(async (req: Request) => {
 
     // Apply optional filters
     if (metaAccountId) query = query.eq("meta_account_id", metaAccountId);
-    if (campaignId) query = query.eq("meta_campaign_id", campaignId);
+    if (campaignId) {
+      query = query.or(`meta_campaign_id.eq.${campaignId},and(scope_type.eq.CAMPAIGN,scope_id.eq.${campaignId})`);
+    }
     if (actionType) query = query.eq("action_type", actionType);
     if (status) query = query.eq("status", status);
     if (scopeType) query = query.eq("scope_type", scopeType);
@@ -158,10 +220,17 @@ serve(async (req: Request) => {
     // The frontend hook currently expects camelCase. Let's transform.
     const transformedLogs = (logs ?? []).map((log) => {
       const row = log as Record<string, unknown>;
+      const metaCampaignId = resolveCampaignId(row);
+      const metaAdsetId = resolveAdsetId(row);
+      const metaAdId = resolveAdId(row);
+
       return {
         id: row.id,
         brandId: row.brand_id,
         metaAccountId: row.meta_account_id,
+        metaCampaignId,
+        metaAdsetId,
+        metaAdId,
         actionType: row.action_type,
         status: row.status,
         scopeType: row.scope_type,
