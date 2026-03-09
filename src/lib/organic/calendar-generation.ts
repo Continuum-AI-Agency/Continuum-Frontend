@@ -206,6 +206,33 @@ export const backendCalendarGenerationRequestSchema = z
     platformAccountIds: platformAccountIdsSchema,
     options: calendarGenerationOptionsSchema.nullable(),
   })
+  .superRefine((value, ctx) => {
+    const placementPlatforms = new Set(value.placements.map((placement) => placement.platform));
+    if (placementPlatforms.size !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["placements"],
+        message: "Each request must include placements for exactly one platform.",
+      });
+      return;
+    }
+
+    const batchPlatform = value.placements[0]?.platform;
+    if (!batchPlatform) return;
+
+    const accountKeys = Object.entries(value.platformAccountIds)
+      .filter(([, accountId]) => typeof accountId === "string" && accountId.trim().length > 0)
+      .map(([platform]) => platform);
+
+    if (accountKeys.length !== 1 || accountKeys[0] !== batchPlatform) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["platformAccountIds"],
+        message:
+          "platformAccountIds must contain exactly one non-empty key matching the placements platform.",
+      });
+    }
+  })
   .strict();
 
 export type BackendCalendarGenerationRequest = z.infer<typeof backendCalendarGenerationRequestSchema>;

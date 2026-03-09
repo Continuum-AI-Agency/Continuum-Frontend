@@ -1,9 +1,11 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiUrl } from "@/lib/api/config";
 import {
+  backendCalendarGenerationRequestSchema,
   calendarGenerationRequestSchema,
   toBackendCalendarGenerationRequest,
 } from "@/lib/organic/calendar-generation";
@@ -20,11 +22,15 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedRequest = calendarGenerationRequestSchema.safeParse(json);
-  if (!parsedRequest.success) {
+  const parsedBackendRequest = backendCalendarGenerationRequestSchema.safeParse(json);
+  if (!parsedRequest.success && !parsedBackendRequest.success) {
     return NextResponse.json(
       {
         error: "Invalid calendar generation payload",
-        detail: parsedRequest.error.flatten(),
+        detail: {
+          calendar: parsedRequest.error.flatten(),
+          backend: parsedBackendRequest.error.flatten(),
+        },
       },
       { status: 400 }
     );
@@ -41,7 +47,31 @@ export async function POST(request: NextRequest) {
   const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 
   const backendUrl = getApiUrl("/api/organic/generate-calendar");
-  const payload = toBackendCalendarGenerationRequest(parsedRequest.data);
+  let payload;
+  if (parsedBackendRequest.success) {
+    payload = parsedBackendRequest.data;
+  } else {
+    if (!parsedRequest.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid calendar generation payload",
+          detail: "Unable to normalize request payload.",
+        },
+        { status: 400 }
+      );
+    }
+    try {
+      payload = toBackendCalendarGenerationRequest(parsedRequest.data);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: "Invalid calendar generation payload",
+          detail: error instanceof z.ZodError ? error.flatten() : String(error),
+        },
+        { status: 400 }
+      );
+    }
+  }
   
   const fetchHeaders: Record<string, string> = {
     "Content-Type": "application/json",

@@ -166,4 +166,55 @@ describe("TimeGridCanvas", () => {
 
     expect(onViewModeChange).toHaveBeenCalledWith("month")
   })
+
+  it("still allows adding posts when a cell already has a draft", () => {
+    const onCreatePost = vi.fn()
+    const days = buildWeekDays()
+    days[0] = {
+      ...days[0],
+      slots: [
+        {
+          id: "draft-1",
+          title: "Existing post",
+          summary: "Summary",
+          timeLabel: "9:00 AM",
+          dateLabel: "Mon, Feb 23",
+          status: "draft",
+          platforms: ["instagram"],
+          format: "Post",
+          objective: "Engagement",
+          captionPreview: "Caption",
+          tags: [],
+          mediaCount: 1,
+        },
+      ],
+    }
+
+    render(
+      <TimeGridCanvas
+        days={days}
+        selectedDraftId={null}
+        selectedDraftIds={[]}
+        activePlatforms={["instagram", "linkedin"]}
+        rangeTitle="February 23 – March 1, 2026"
+        rangeSubtitle="Week 9"
+        viewMode="week"
+        onViewModeChange={vi.fn()}
+        onPreviousWeek={vi.fn()}
+        onNextWeek={vi.fn()}
+        onCreatePost={onCreatePost}
+        onSelectDraft={vi.fn()}
+        onToggleSelection={vi.fn()}
+        onRegenerate={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getAllByText("+ Add post")[0])
+
+    expect(onCreatePost).toHaveBeenCalledWith({
+      dayId: "2026-02-23",
+      platform: "instagram",
+      status: "draft",
+    })
+  })
 })

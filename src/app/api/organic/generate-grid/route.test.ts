@@ -188,7 +188,6 @@ describe("POST /api/organic/generate-grid", () => {
       ],
       platformAccountIds: {
         instagram: "acct_instagram_1",
-        linkedin: "acct_linkedin_1",
       },
       options: {
         schedulePreset: "beta-launch",
@@ -232,7 +231,6 @@ describe("POST /api/organic/generate-grid", () => {
         timezone: "America/New_York",
         platformAccountIds: {
           instagram: "acct_instagram_1",
-          linkedin: "acct_linkedin_1",
         },
         placements: [
           {

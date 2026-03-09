@@ -103,6 +103,11 @@ export function PlannerCell({
   }
 
   const showEmptyState = drafts.length === 0 && ghosts === 0
+  const addButtonHeightClass = showEmptyState
+    ? compact
+      ? "h-10 text-[10px]"
+      : "h-16 text-xs"
+    : "h-9 text-[11px]"
 
   return (
     <div
@@ -160,49 +165,47 @@ export function PlannerCell({
           </div>
         ) : (
           <>
-            {showEmptyState ? (
-              <ContextMenu>
-                <ContextMenuTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onCreatePost({ dayId, platformKey: platform.key, status: "draft" })
-                    }
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onCreatePost({ dayId, platformKey: platform.key, status: "draft" })
+                  }
                   className={cn(
                     "flex w-full items-center justify-center rounded-lg border border-dashed border-border/80 font-medium text-muted-foreground transition-colors hover:border-orange-500/60 hover:text-foreground",
-                    compact ? "h-10 text-[10px]" : "h-16 text-xs"
+                    addButtonHeightClass
                   )}
                 >
                   + Add post
                 </button>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuLabel>Quick Add</ContextMenuLabel>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    onSelect={() =>
-                      onCreatePost({ dayId, platformKey: platform.key, status: "draft" })
-                    }
-                  >
-                    Add draft
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onSelect={() =>
-                      onCreatePost({ dayId, platformKey: platform.key, status: "scheduled" })
-                    }
-                  >
-                    Add scheduled post
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onSelect={() =>
-                      onCreatePost({ dayId, platformKey: platform.key, status: "placeholder" })
-                    }
-                  >
-                    Add idea placeholder
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ) : null}
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuLabel>Quick Add</ContextMenuLabel>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onSelect={() =>
+                    onCreatePost({ dayId, platformKey: platform.key, status: "draft" })
+                  }
+                >
+                  Add draft
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onSelect={() =>
+                    onCreatePost({ dayId, platformKey: platform.key, status: "scheduled" })
+                  }
+                >
+                  Add scheduled post
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onSelect={() =>
+                    onCreatePost({ dayId, platformKey: platform.key, status: "placeholder" })
+                  }
+                >
+                  Add idea placeholder
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </>
         )}
 

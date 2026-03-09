@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiUrl } from "@/lib/api/config";
@@ -52,6 +53,19 @@ async function streamCalendarGeneration(
   token: string,
   payload: CalendarGenerationRequest
 ) {
+  let normalizedPayload;
+  try {
+    normalizedPayload = toFlattenedCalendarBackendPayload(payload);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "Invalid calendar generation payload",
+        detail: error instanceof z.ZodError ? error.flatten() : String(error),
+      },
+      { status: 422 }
+    );
+  }
+
   const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
   const backendUrl = getApiUrl("/api/organic/generate-calendar");
   const upstreamResponse = await fetch(backendUrl, {
@@ -65,7 +79,7 @@ async function streamCalendarGeneration(
       "x-auth-token": token,
       "X-Brand-Profile-Id": payload.brandProfileId,
     },
-    body: JSON.stringify(toFlattenedCalendarBackendPayload(payload)),
+    body: JSON.stringify(normalizedPayload),
   });
 
   if (!upstreamResponse.ok || !upstreamResponse.body) {

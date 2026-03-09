@@ -76,7 +76,10 @@ export function buildPlannerPlatforms(
   activePlatforms: OrganicPlatformKey[],
   days: OrganicCalendarDay[]
 ): PlannerPlatform[] {
-  const discoveredSchedulable = new Set<OrganicPlatformTag>()
+  const discoveredSchedulable = new Set<OrganicPlatformTag>([
+    "instagram",
+    "linkedin",
+  ])
 
   activePlatforms.forEach((platform) => {
     if (SCHEDULABLE_PLATFORM_ORDER.includes(platform)) {
@@ -92,11 +95,6 @@ export function buildPlannerPlatforms(
       })
     })
   })
-
-  if (discoveredSchedulable.size === 0) {
-    discoveredSchedulable.add("instagram")
-    discoveredSchedulable.add("linkedin")
-  }
 
   const schedulablePlatforms = SCHEDULABLE_PLATFORM_ORDER.filter((platform) =>
     discoveredSchedulable.has(platform)

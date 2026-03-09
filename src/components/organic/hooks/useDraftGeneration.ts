@@ -499,8 +499,8 @@ export function useDraftGeneration({
 
     try {
       const completedPlacementIds = new Set<string>();
-      let failedPlacements = 0;
-      let succeededPlacements = 0;
+      const failedPlacementIds = new Set<string>();
+      const totalPlacements = seeds.length;
 
       seeds.forEach((seed) => {
         if (!seed) return;
@@ -514,108 +514,138 @@ export function useDraftGeneration({
 
       const mvpSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
       const preferredMvpPlatforms = activePlatforms.filter((platform) => mvpSet.has(platform));
+      const seedsByPlatform = new Map<OrganicPlatformKey, CalendarPlacementSeed[]>();
 
-      const payload: CalendarGenerationRequest = {
-        brandProfileId,
-        weekStart: weekStartId,
-        timezone: resolvedTz,
-        placements: seeds as CalendarPlacementSeed[],
-        platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
-        options: {
-          schedulePreset: "beta-launch" as const,
-          includeNewsletter: true,
-          guidancePrompt: undefined,
-          preferredPlatforms:
-            preferredMvpPlatforms.length > 0 ? preferredMvpPlatforms : undefined,
-          assetGeneration: {
-            enabled: true,
-            provider: "nano-banana",
-            model: "2-flash",
-            thumbnailSize: 512,
-          },
-        },
+      for (const seed of seeds as CalendarPlacementSeed[]) {
+        const platform = seed.platform.name;
+        const existing = seedsByPlatform.get(platform) ?? [];
+        existing.push(seed);
+        seedsByPlatform.set(platform, existing);
+      }
+
+      const updateGlobalProgress = (message?: string) => {
+        const processed = completedPlacementIds.size + failedPlacementIds.size;
+        setGridProgress({
+          percent: Math.min(99, Math.max(10, Math.round((processed / totalPlacements) * 100))),
+          message,
+        });
       };
 
-      await streamCalendarGeneration(payload, (event) => {
-        addEvent({
-          id: crypto.randomUUID(),
-          type: event.type,
-          timestamp: new Date().toISOString(),
-          data: event,
-        });
+      for (const [platform, platformSeeds] of seedsByPlatform.entries()) {
+        const platformAccountId =
+          platformAccountIds[platform] ??
+          platformSeeds[0]?.platform.accountId ??
+          null;
 
-        if (event.type === "progress") {
-          const message = event.stage
-            ? `[${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
-            : event.message ?? "Generating content...";
-          setGridProgress({
-            percent: Math.round((event.completed / event.total) * 100),
-            message,
+        if (!platformAccountId) {
+          throw new Error(`Missing account id for ${platform} batch.`);
+        }
+
+        let batchError: string | null = null;
+
+        const payload: CalendarGenerationRequest = {
+          brandProfileId,
+          weekStart: weekStartId,
+          timezone: resolvedTz,
+          placements: platformSeeds,
+          platformAccountIds: { [platform]: platformAccountId } as Record<OrganicPlatformKey, string>,
+          options: {
+            schedulePreset: "beta-launch" as const,
+            includeNewsletter: true,
+            guidancePrompt: undefined,
+            preferredPlatforms:
+              preferredMvpPlatforms.length > 0 ? [platform] : undefined,
+            assetGeneration: {
+              enabled: true,
+              provider: "nano-banana",
+              model: "2-flash",
+              thumbnailSize: 512,
+            },
+          },
+        };
+
+        await streamCalendarGeneration(payload, (event) => {
+          addEvent({
+            id: crypto.randomUUID(),
+            type: event.type,
+            timestamp: new Date().toISOString(),
+            data: event,
           });
-          return;
-        }
 
-        if (event.type === "slot_started") {
-          updateDraftById(event.placementId, (draft) => ({
-            ...draft,
-            status: "streaming",
-            generationError: undefined,
-          }));
-          return;
-        }
-
-        if (event.type === "slot_failed") {
-          failedPlacements += 1;
-          updateDraftById(event.placementId, (draft) => ({
-            ...draft,
-            status: "failed",
-            generationError: event.message,
-            generationAttempts: event.attempts ?? draft.generationAttempts,
-          }));
-          return;
-        }
-
-        if (event.type === "slot_completed" || event.type === "placement") {
-          const placement = event.placement;
-          if (completedPlacementIds.has(placement.placementId)) {
+          if (event.type === "progress") {
+            const message = event.stage
+              ? `[${platform.toUpperCase()}][${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
+              : `[${platform.toUpperCase()}] ${event.message ?? "Generating content..."}`;
+            updateGlobalProgress(message);
             return;
           }
-          completedPlacementIds.add(placement.placementId);
-          succeededPlacements += 1;
-          const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
-          const nextDraft = mapPlacementToDraft(placement, existing);
 
-          const targetDay = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
-          if (targetDay) {
-            addDraft(targetDay.id, nextDraft);
-            setGhosts(targetDay.id, 0);
+          if (event.type === "slot_started") {
+            updateDraftById(event.placementId, (draft) => ({
+              ...draft,
+              status: "streaming",
+              generationError: undefined,
+            }));
+            return;
           }
-          return;
-        }
 
-        if (event.type === "error") {
-          setGridError(event.message);
-          setGridStatus("error");
-          return;
-        }
-
-        if (event.type === "complete") {
-          const total = event.summary?.total ?? seeds.length;
-          const failed = event.summary?.failed ?? failedPlacements;
-          const succeeded = event.summary?.succeeded ?? succeededPlacements;
-          const hasFailures = failed > 0;
-          setGridProgress({
-            percent: 100,
-            message: hasFailures
-              ? `Generated ${succeeded}/${total} posts. ${failed} failed and can be retried.`
-              : `Generated ${succeeded}/${total} posts.`,
-          });
-          setGridStatus(hasFailures ? "complete_with_errors" : "complete");
-          if (!hasFailures) {
-            setGridError(null);
+          if (event.type === "slot_failed") {
+            if (!completedPlacementIds.has(event.placementId) && !failedPlacementIds.has(event.placementId)) {
+              failedPlacementIds.add(event.placementId);
+            }
+            updateDraftById(event.placementId, (draft) => ({
+              ...draft,
+              status: "failed",
+              generationError: event.message,
+              generationAttempts: event.attempts ?? draft.generationAttempts,
+            }));
+            updateGlobalProgress(
+              `${completedPlacementIds.size}/${totalPlacements} generated, ${failedPlacementIds.size} failed.`
+            );
+            return;
           }
+
+          if (event.type === "slot_completed" || event.type === "placement") {
+            const placement = event.placement;
+            if (completedPlacementIds.has(placement.placementId)) {
+              return;
+            }
+            completedPlacementIds.add(placement.placementId);
+            const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
+            const nextDraft = mapPlacementToDraft(placement, existing);
+
+            const targetDay = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
+            if (targetDay) {
+              addDraft(targetDay.id, nextDraft);
+              setGhosts(targetDay.id, 0);
+            }
+            updateGlobalProgress(
+              `${completedPlacementIds.size}/${totalPlacements} generated, ${failedPlacementIds.size} failed.`
+            );
+            return;
+          }
+
+          if (event.type === "error") {
+            batchError = event.message;
+          }
+        });
+
+        if (batchError) {
+          throw new Error(batchError);
         }
+      }
+
+      const failed = failedPlacementIds.size;
+      const succeeded = completedPlacementIds.size;
+      const hasFailures = failed > 0;
+      setGridProgress({
+        percent: 100,
+        message: hasFailures
+          ? `Generated ${succeeded}/${totalPlacements} posts. ${failed} failed and can be retried.`
+          : `Generated ${succeeded}/${totalPlacements} posts.`,
       });
+      setGridStatus(hasFailures ? "complete_with_errors" : "complete");
+      setGridError(null);
     } catch (error) {
       setGridStatus("error");
       setGridError(error instanceof Error ? error.message : "Generation failed. Please try again.");
@@ -779,6 +809,12 @@ export function useDraftGeneration({
 
       const trendId = draft.seedTrendId;
       if (!trendId) return;
+      const platformKey = (draft.platforms[0] ?? "instagram") as OrganicPlatformKey;
+      const batchAccountId = draft.targetAccountId ?? platformAccountIds[platformKey];
+      if (!batchAccountId) {
+        setGridError(`Missing account id for ${platformKey} batch.`);
+        return;
+      }
 
       updateDraftById(draftId, (current) => ({
         ...current,
@@ -805,10 +841,8 @@ export function useDraftGeneration({
                   timeLabel: draft.timeLabel,
                 },
                 platform: {
-                  name: draft.platforms[0] ?? "instagram",
-                  accountId:
-                    draft.targetAccountId ??
-                    platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
+                  name: platformKey,
+                  accountId: batchAccountId,
                 },
                 seed: {
                   source: "trend" as const,
@@ -819,7 +853,9 @@ export function useDraftGeneration({
                 },
               },
             ],
-            platformAccountIds: platformAccountIds as Record<OrganicPlatformKey, string>,
+            platformAccountIds: {
+              [platformKey]: batchAccountId,
+            } as Record<OrganicPlatformKey, string>,
             options: {
               assetGeneration: {
                 enabled: true,

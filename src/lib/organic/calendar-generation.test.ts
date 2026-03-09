@@ -34,7 +34,6 @@ function buildRequestPayload() {
     ],
     platformAccountIds: {
       instagram: "acct-1",
-      linkedin: "acct-2",
     },
     options: {
       schedulePreset: "beta-launch" as const,
@@ -82,6 +81,7 @@ describe("calendarGenerationRequestSchema", () => {
     });
     assert.equal(parsed.success, false);
   });
+
 });
 
 describe("toBackendCalendarGenerationRequest", () => {
@@ -97,5 +97,25 @@ describe("toBackendCalendarGenerationRequest", () => {
     assert.equal(backend.placements[0]?.seedSource, "trend");
     assert.equal(backend.placements[0]?.desiredFormat, "post");
     assert.equal(backend.placements[0]?.platform, "instagram");
+  });
+
+  test("rejects mixed-platform placement batches", () => {
+    const parsed = calendarGenerationRequestSchema.parse({
+      ...buildRequestPayload(),
+      placements: [
+        buildRequestPayload().placements[0],
+        {
+          ...buildRequestPayload().placements[0],
+          placementId: "seed-2",
+          platform: { name: "linkedin", accountId: "acct-2" },
+        },
+      ],
+      platformAccountIds: {
+        instagram: "acct-1",
+        linkedin: "acct-2",
+      },
+    });
+
+    assert.throws(() => toBackendCalendarGenerationRequest(parsed));
   });
 });

@@ -35,5 +35,6 @@ This spec defines scheduling behavior for the Organic Planner (`primitives`) and
 
 ## Backend Contract Notes
 - Primary generation call is a single batch request containing all `placements` for the week.
+- Platform batching rule: each request must include placements for exactly one platform and exactly one matching key in `platformAccountIds`.
 - Each placement must include `trendId`, `dayId`, `scheduledAt`, and `platform`.
 - Streaming responses support both global progress and slot-level lifecycle events (`slot_started`, `slot_completed`, `slot_failed`, `complete`).

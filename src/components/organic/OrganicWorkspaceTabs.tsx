@@ -9,7 +9,7 @@ type Props = {
 };
 
 export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
-  const [activeView, setActiveView] = React.useState<"planner" | "metrics">("planner");
+  const [activeView, setActiveView] = React.useState<"planner" | "metrics">("metrics");
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">

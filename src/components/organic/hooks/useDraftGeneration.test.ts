@@ -127,7 +127,7 @@ describe("useDraftGeneration", () => {
 
     expect(mockStore.setGridStatus).toHaveBeenCalledWith("running");
     expect(mockStore.setGridProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ percent: 50 })
+      expect.objectContaining({ percent: 10 })
     );
     expect(mockStore.addDraft).toHaveBeenCalledWith(
       "2026-01-26",
