@@ -36,7 +36,7 @@ export default function AIStudioClient({
   const router = useRouter();
   
   const mode = searchParams.get("mode") as "chat" | "canvas" | null;
-  const activeTab = mode === "canvas" ? "canvas" : "chat";
+  const activeTab = mode === "chat" ? "chat" : "canvas";
 
   const setActiveTab = (tab: "chat" | "canvas") => {
     const params = new URLSearchParams(searchParams);
