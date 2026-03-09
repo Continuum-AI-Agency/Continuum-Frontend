@@ -3,12 +3,12 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { radixThemesCaptured } from "../mocks/radixThemes";
 
-let routerPushSpy = vi.fn<(path: string) => void>();
-let routerRefreshSpy = vi.fn<() => void>();
-let logoutSpy = vi.fn<() => void>();
-let selectBrandSpy = vi.fn<(brandId: string) => void>();
-let toggleSpy = vi.fn<(checked: boolean) => void>();
-let createBrandProfileActionSpy = vi.fn<() => Promise<void>>();
+const routerPushSpy = vi.fn<(path: string) => void>();
+const routerRefreshSpy = vi.fn<() => void>();
+const logoutSpy = vi.fn<() => void>();
+const selectBrandSpy = vi.fn<(brandId: string) => void>();
+const toggleSpy = vi.fn<(checked: boolean) => void>();
+const createBrandProfileActionSpy = vi.fn<() => Promise<void>>();
 
 let sessionUser: unknown = { app_metadata: { roles: [] } };
 let themeAppearance: "light" | "dark" = "light";
@@ -18,16 +18,17 @@ let brandSummaries = [
   { id: "brand-2", name: "Pizza Test", completed: true },
 ];
 
-vi.mock("@radix-ui/react-icons", () => {
+vi.mock("lucide-react", () => {
   const Icon = () => React.createElement("span", { "data-icon": "icon" });
   return {
-    CheckCircledIcon: Icon,
-    ExitIcon: Icon,
-    GearIcon: Icon,
-    LayersIcon: Icon,
-    MixerHorizontalIcon: Icon,
-    MoonIcon: Icon,
-    PlusCircledIcon: Icon,
+    CircleCheck: Icon,
+    LogOut: Icon,
+    Settings: Icon,
+    Layers: Icon,
+    Plug: Icon,
+    Moon: Icon,
+    PlusCircle: Icon,
+    Search: Icon,
   };
 });
 
@@ -53,6 +54,7 @@ vi.mock("@/components/providers/ActiveBrandProvider", () => ({
     brandSummaries,
     isSwitching: false,
     selectBrand: selectBrandSpy,
+    user: sessionUser,
   }),
 }));
 

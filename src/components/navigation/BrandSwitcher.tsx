@@ -4,23 +4,12 @@ import * as React from "react"
 import { 
   ChevronsUpDown, 
   Plus, 
-  Layers, 
-  Moon, 
-  Sun, 
-  Monitor, 
-  Settings, 
-  CreditCard, 
-  LogOut,
-  Search
+  Layers
 } from "lucide-react"
 
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -44,24 +33,16 @@ import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions"
 import { getBrandMenuItemLabel } from "@/lib/brands/brand-switcher-utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext"
-
 export function BrandSwitcher() {
   const { isMobile } = useSidebar()
   const { activeBrandId, brandSummaries, selectBrand } = useActiveBrandContext()
   const router = useRouter()
   const [isCreating, startCreate] = React.useTransition()
   const [menuOpen, setMenuOpen] = React.useState(false)
-  
-  let onboarding: any = null;
-  try { onboarding = useOnboarding(); } catch (e) {}
-
-  const activeBrand = brandSummaries.find(b => b.id === activeBrandId) || brandSummaries[0]
 
   const brands = brandSummaries.map(brand => ({
     name: getBrandMenuItemLabel(brand),
     logo: brand.logoUrl ? brand.logoUrl : Layers,
-    plan: "Enterprise", 
     id: brand.id,
     completed: brand.completed,
     isPending: brand.isPending
@@ -93,7 +74,7 @@ export function BrandSwitcher() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="text-[var(--sidebar-foreground)] data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground overflow-hidden">
                 {typeof TeamLogo === "string" ? (
@@ -106,28 +87,30 @@ export function BrandSwitcher() {
                 )}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate font-semibold">{activeTeam.name}</span>
-                <span className="truncate text-xs">{activeTeam.plan}</span>
+                <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{activeTeam.name}</span>
               </div>
-              <ChevronsUpDown className="ml-auto group-data-[collapsible=icon]:hidden" />
+              <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 p-0 rounded-lg overflow-hidden"
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--popover)] text-[var(--popover-foreground)] p-0"
             align="start"
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <Command className="bg-transparent">
-              <CommandInput placeholder="Search brands..." className="h-9" />
+            <Command className="bg-transparent text-[var(--popover-foreground)]">
+              <CommandInput
+                placeholder="Search brands..."
+                className="h-9 text-[var(--popover-foreground)] placeholder:text-[color-mix(in_srgb,var(--popover-foreground)_56%,transparent)]"
+              />
               <CommandList>
                 <CommandEmpty>No brands found.</CommandEmpty>
                 <CommandGroup heading="Brands">
-                  {brands.map((brand, index) => (
+                  {brands.map((brand) => (
                     <CommandItem
                       key={brand.id}
                       onSelect={() => handleBrandSelect(brand.id)}
-                      className="gap-2 p-2"
+                      className="gap-2 p-2 text-[var(--popover-foreground)] data-[selected=true]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[selected=true]:text-[var(--popover-foreground)]"
                     >
                       <div className="flex size-6 items-center justify-center rounded-sm border overflow-hidden">
                         {typeof brand.logo === "string" ? (
@@ -139,7 +122,7 @@ export function BrandSwitcher() {
                           <brand.logo className="size-4 shrink-0" />
                         )}
                       </div>
-                      <span className="flex-1 truncate">{brand.name}</span>
+                      <span className="flex-1 truncate text-[0.8rem]">{brand.name}</span>
                       {brand.isPending && (
                         <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
                           Pending
@@ -158,12 +141,12 @@ export function BrandSwitcher() {
                         setMenuOpen(false);
                       });
                     }}
-                    className="gap-2 p-2"
+                    className="gap-2 p-2 text-[var(--popover-foreground)] data-[selected=true]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[selected=true]:text-[var(--popover-foreground)]"
                   >
                     <div className="flex size-6 items-center justify-center rounded-md border bg-background">
                       <Plus className="size-4" />
                     </div>
-                    <div className="font-medium text-muted-foreground">Add brand</div>
+                    <div className="font-medium text-[color-mix(in_srgb,var(--popover-foreground)_70%,transparent)]">Add brand</div>
                   </CommandItem>
                 </CommandGroup>
               </CommandList>

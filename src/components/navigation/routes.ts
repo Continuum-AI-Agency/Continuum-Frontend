@@ -1,29 +1,22 @@
-import type { ComponentType, ComponentProps } from "react";
 import {
-  HomeIcon,
-  ChatBubbleIcon,
-  FrameIcon,
-  GearIcon,
-  CheckCircledIcon,
-  MixerHorizontalIcon
-} from "@radix-ui/react-icons";
-import {
-  RocketLaunchIcon,
-  SparklesIcon,
-  ChatBubbleLeftRightIcon,
-  ChartBarSquareIcon,
-  CalendarIcon,
-  ClipboardDocumentListIcon,
-  UsersIcon,
-  DocumentTextIcon,
-  UserCircleIcon,
-  ArrowRightStartOnRectangleIcon
-} from "@heroicons/react/24/outline";
+  Home,
+  Settings,
+  ShieldCheck,
+  Plug,
+  Sparkles,
+  Sprout,
+  Target,
+  Blocks,
+  Users,
+  FileText,
+  User,
+  type LucideIcon,
+} from "lucide-react";
 
 export type AppNavigationItem = {
   label: string;
   href: string;
-  icon: ComponentType<ComponentProps<typeof HomeIcon>>;
+  icon: LucideIcon;
   badge?: {
     label: string;
     tone?: "green" | "red" | "blue" | "violet";
@@ -32,7 +25,7 @@ export type AppNavigationItem = {
   items?: {
     label: string;
     href: string;
-    icon: ComponentType<ComponentProps<typeof HomeIcon>>;
+    icon: LucideIcon;
   }[];
   adminOnly?: boolean;
 };
@@ -41,77 +34,31 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
   {
     label: "Dashboard",
     href: "/dashboard",
-    icon: HomeIcon,
+    icon: Home,
   },
   {
     label: "Creative Studio",
     href: "/ai-studio",
-    icon: SparklesIcon,
-    items: [
-      {
-        label: "Chat",
-        href: "/ai-studio?mode=chat",
-        icon: ChatBubbleLeftRightIcon,
-      },
-      {
-        label: "Canvas",
-        href: "/ai-studio?mode=canvas",
-        icon: FrameIcon,
-      },
-    ],
+    icon: Sparkles,
   },
   {
     label: "Organic Content",
     href: "/organic",
-    icon: ChartBarSquareIcon,
-    items: [
-      {
-        label: "Content Calendar",
-        href: "/organic",
-        icon: CalendarIcon,
-      },
-      {
-        label: "Metrics",
-        href: "/organic?tab=metrics",
-        icon: ClipboardDocumentListIcon,
-      },
-    ],
+    icon: Sprout,
   },
   {
-    label: "Paid Media",
+    label: "Campaigns",
     href: "/paid-media",
-    icon: RocketLaunchIcon,
+    icon: Target,
     badge: {
       label: "Beta",
       tone: "violet",
     },
-    items: [
-      {
-        label: "Dashboard",
-        href: "/paid-media?tab=dashboard",
-        icon: ChartBarSquareIcon,
-      },
-      {
-        label: "Jaina",
-        href: "/paid-media?tab=jaina",
-        icon: ChatBubbleIcon,
-      },
-      {
-        label: "DCO",
-        href: "/paid-media?tab=dco",
-        icon: ChartBarSquareIcon,
-      },
-      {
-        label: "Campaign Canvas",
-        href: "/paid-media/campaign-canvas",
-        icon: FrameIcon,
-      },
-    ],
   },
   {
     label: "Primitives",
     href: "/primitives",
-    icon: UsersIcon,
+    icon: Blocks,
     badge: {
       label: "MVP",
       tone: "blue",
@@ -121,17 +68,17 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       {
         label: "Audiences",
         href: "/primitives?tab=audiences",
-        icon: UsersIcon,
+        icon: Users,
       },
       {
         label: "Brand Guidelines",
         href: "/primitives?tab=guidelines",
-        icon: DocumentTextIcon,
+        icon: FileText,
       },
       {
         label: "Personas",
         href: "/primitives?tab=personas",
-        icon: UserCircleIcon,
+        icon: User,
       },
     ],
   },
@@ -141,17 +88,17 @@ export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [
   {
     label: "Settings",
     href: "/settings",
-    icon: GearIcon,
+    icon: Settings,
   },
   {
     label: "Integrations",
     href: "/settings/integrations",
-    icon: MixerHorizontalIcon,
+    icon: Plug,
   },
   {
     label: "Admin",
     href: "/admin",
-    icon: CheckCircledIcon,
+    icon: ShieldCheck,
     adminOnly: true,
   },
 ];

@@ -14,7 +14,7 @@ export function HomeBaseDashboard({
   paidViewSlot,
   organicViewSlot,
 }: Props) {
-  const [activeView, setActiveView] = useState<"paid" | "organic">("paid");
+  const [activeView, setActiveView] = useState<"paid" | "organic">("organic");
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

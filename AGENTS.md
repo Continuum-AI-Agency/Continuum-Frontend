@@ -159,3 +159,4 @@ When you learn something, place a note of it here:
 - Replace full-page paid media action logs with a compact, context-aware alert feed (search + status filter + sort + pagination) so the primary chart/explorer keeps most visual real estate.
 - In brand integration assignment UIs, always merge brand-assigned integration accounts into selectable assets so invited members can view and keep existing brand-linked accounts even without personal OAuth ownership.
 - Impersonation callbacks must persist `is_impersonating` (for `/auth/callback` and `/callback` paths) so middleware bypasses the `/set-password` requirement for admin impersonation sessions.
+- Exclude `/socket.io` and `/.well-known/appspecific/*` probes from Next middleware matchers so extension/devtools polling does not trigger Supabase auth lookups on 404 noise requests.

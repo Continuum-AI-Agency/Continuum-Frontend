@@ -1,6 +1,5 @@
 "use client";
 
-import { Flex } from "@radix-ui/themes";
 import React from "react";
 import { useSession } from "@/hooks/useSession";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -11,15 +10,8 @@ import {
 } from "@/lib/ui/dashboardWelcomeToast";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./navigation/routes";
+import { motion, useReducedMotion } from "framer-motion";
 
 export function DashboardHeader() {
   useDashboardWelcomeToast();
@@ -32,25 +24,30 @@ export function DashboardHeader() {
     || allRoutes.flatMap(r => r.items || []).find(sub => sub.href === pathname);
 
   const breadcrumbLabel = currentRoute?.label || "Dashboard";
+  const CurrentIcon = currentRoute?.icon;
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 border-b border-[var(--color-border)] px-4">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem className="hidden md:block">
-              <BreadcrumbLink href="/dashboard">
-                Continuum
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator className="hidden md:block" />
-            <BreadcrumbItem>
-              <BreadcrumbPage>{breadcrumbLabel}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_76%,transparent)] px-3 py-1.5">
+          <motion.span
+            aria-hidden="true"
+            className="inline-flex h-1.5 w-1.5 rounded-full bg-[var(--ring)]"
+            animate={
+              shouldReduceMotion
+                ? undefined
+                : { opacity: [1, 0.45, 1], scale: [1, 1.08, 1] }
+            }
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+          {CurrentIcon ? <CurrentIcon className="h-[15px] w-[15px] text-[var(--ring)]" aria-hidden="true" /> : null}
+          <span className="text-[0.78rem] font-medium tracking-[0.01em] text-[var(--color-foreground)]">
+            {breadcrumbLabel}
+          </span>
+        </div>
       </div>
       
       <div className="ml-auto flex items-center gap-3">

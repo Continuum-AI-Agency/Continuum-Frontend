@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ComponentType } from "react";
+import { useState, ElementType } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Badge } from "@radix-ui/themes";
 import {
@@ -21,7 +21,7 @@ import {
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRightIcon, ExitIcon, MoonIcon, SunIcon } from "@radix-ui/react-icons";
+import { ChevronRight, LogOut, Moon, Sun } from "lucide-react";
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import Link from "next/link";
@@ -36,11 +36,6 @@ import {
 import { BrandSwitcher } from "./BrandSwitcher";
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
-
-const transitionStandard = {
-  duration: 0.25,
-  ease: [0.2, 0.8, 0.2, 1],
-};
 
 function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams, item: { href: string }) {
   // Exact match for dashboard
@@ -69,7 +64,7 @@ function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams
 }
 
 interface AnimatedIconProps {
-  icon: ComponentType<{ className?: string }>;
+  icon: ElementType<{ className?: string }>;
   isHovered: boolean;
   active?: boolean;
 }
@@ -78,11 +73,13 @@ function AnimatedIcon({ icon: Icon, isHovered, active }: AnimatedIconProps) {
   return (
     <div className="relative flex items-center justify-center">
       <Icon className={cn(
-        "z-10 !h-5 !w-5 transition-colors duration-200",
-        active ? "text-[var(--ring)]" : "text-slate-400"
+        "z-10 !h-[18px] !w-[18px] stroke-[1.8] transition-colors duration-200",
+        active
+          ? "text-[var(--ring)]"
+          : "text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-hover:text-[var(--sidebar-foreground)]"
       )} />
       <motion.div
-        className="absolute -bottom-1.5 h-[1.5px] w-4 rounded-full bg-[var(--ring)]"
+        className="absolute -bottom-1.5 h-px w-3 rounded-full bg-[var(--ring)]"
         initial={{ scaleX: 0, opacity: 0 }}
         animate={{ 
           scaleX: isHovered ? 1 : 0, 
@@ -115,16 +112,16 @@ export function AppSidebar() {
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r border-[var(--color-border)] bg-slate-950/90 backdrop-blur-xl"
+      className="border-r border-[var(--color-border)] bg-[var(--sidebar)] backdrop-blur-xl"
     >
       <SidebarHeader className="flex items-center justify-between px-3">
         <BrandSwitcher />
         <button
           onClick={toggleSidebar}
-          className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-slate-800 transition-colors text-slate-400 hover:text-slate-100"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
           aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
         >
-          <ChevronRightIcon className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />
+          <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />
         </button>
       </SidebarHeader>
 
@@ -156,19 +153,27 @@ export function AppSidebar() {
                                 onMouseEnter={() => setHoveredHref(item.href)}
                                 onMouseLeave={() => setHoveredHref(null)}
                                 className={cn(
-                                  "group transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
-                                  (active || isSubActive) ? "text-[var(--ring)]" : "text-slate-400"
+                                  "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                                  (active || isSubActive)
+                                    ? "text-[var(--sidebar-foreground)]"
+                                    : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
                                 )}
                               >
+                                {(active || isSubActive) ? (
+                                  <span
+                                    className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
                                 <AnimatedIcon 
                                   icon={item.icon} 
                                   isHovered={hoveredHref === item.href} 
                                   active={active || isSubActive} 
                                 />
-                                <span className="group-data-[collapsible=icon]:hidden">
+                                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                                   {item.label}
                                 </span>
-                                <ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                                <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
                               </SidebarMenuButton>
                             </CollapsibleTrigger>
                           </TooltipTrigger>
@@ -195,11 +200,17 @@ export function AppSidebar() {
                                     onMouseEnter={() => setHoveredHref(subItem.href)}
                                     onMouseLeave={() => setHoveredHref(null)}
                                     className={cn(
-                                       "group text-slate-400 hover:text-slate-100 data-[active=true]:text-[var(--ring)]",
+                                       "group relative text-[color-mix(in_srgb,var(--sidebar-foreground)_66%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)]",
                                        "group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
                                     )}
                                   >
                                     <Link href={subItem.href}>
+                                      {subActive ? (
+                                        <span
+                                          className="absolute left-0 top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
+                                          aria-hidden="true"
+                                        />
+                                      ) : null}
                                       {SubIcon && (
                                         <AnimatedIcon 
                                           icon={SubIcon} 
@@ -207,7 +218,7 @@ export function AppSidebar() {
                                           active={subActive} 
                                         />
                                       )}
-                                      <span className="group-data-[collapsible=icon]:hidden">{subItem.label}</span>
+                                      <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">{subItem.label}</span>
                                     </Link>
                                   </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
@@ -230,17 +241,25 @@ export function AppSidebar() {
                       onMouseEnter={() => setHoveredHref(item.href)}
                       onMouseLeave={() => setHoveredHref(null)}
                       className={cn(
-                        "group transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
-                         active ? "text-[var(--ring)]" : "text-slate-400"
+                        "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                        active
+                          ? "text-[var(--sidebar-foreground)]"
+                          : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
                       )}
                     >
                       <Link href={item.href}>
+                        {active ? (
+                          <span
+                            className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
+                            aria-hidden="true"
+                          />
+                        ) : null}
                         <AnimatedIcon 
                           icon={item.icon} 
                           isHovered={hoveredHref === item.href} 
                           active={active} 
                         />
-                        <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                        <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
                     {item.badge ? (
@@ -279,17 +298,25 @@ export function AppSidebar() {
                   onMouseEnter={() => setHoveredHref(item.href)}
                   onMouseLeave={() => setHoveredHref(null)}
                   className={cn(
-                    "group transition-all duration-200 data-[active=true]:text-[var(--ring)] data-[active=true]:bg-transparent hover:text-slate-100",
-                     active ? "text-[var(--ring)]" : "text-slate-400"
+                    "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                    active
+                      ? "text-[var(--sidebar-foreground)]"
+                      : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
                   )}
                 >
                   <Link href={item.href}>
+                    {active ? (
+                      <span
+                        className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
+                        aria-hidden="true"
+                      />
+                    ) : null}
                     <AnimatedIcon 
                       icon={item.icon} 
                       isHovered={hoveredHref === item.href} 
                       active={active} 
                     />
-                    <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                    <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -304,14 +331,14 @@ export function AppSidebar() {
               onClick={() => logout()}
               onMouseEnter={() => setHoveredHref("sign-out")}
               onMouseLeave={() => setHoveredHref(null)}
-              className="group text-red-400 hover:text-red-300 hover:bg-red-950/20 transition-all duration-200"
+              className="group text-[var(--destructive)] hover:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)] hover:text-[var(--destructive)] transition-all duration-200"
             >
               <AnimatedIcon 
-                icon={ExitIcon as any} 
+                icon={LogOut} 
                 isHovered={hoveredHref === "sign-out"} 
                 active={false} 
               />
-              <span className="group-data-[collapsible=icon]:hidden">
+              <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                 {isPending ? "Signing out..." : "Sign out"}
               </span>
             </SidebarMenuButton>
@@ -327,14 +354,14 @@ export function AppSidebar() {
               onClick={toggle}
               onMouseEnter={() => setHoveredHref("theme-toggle")}
               onMouseLeave={() => setHoveredHref(null)}
-              className="group text-slate-400 hover:text-slate-100 transition-all duration-200"
+              className="group text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)] transition-all duration-200"
             >
               <AnimatedIcon
-                icon={(appearance === "dark" ? SunIcon : MoonIcon) as any}
+                icon={appearance === "dark" ? Sun : Moon}
                 isHovered={hoveredHref === "theme-toggle"}
                 active={false}
               />
-              <span className="group-data-[collapsible=icon]:hidden">
+              <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                 {appearance === "dark" ? "Light mode" : "Dark mode"}
               </span>
             </SidebarMenuButton>
@@ -348,8 +375,7 @@ export function AppSidebar() {
                   <CurrentUserAvatar size={32} />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate font-semibold">{user?.user_metadata?.name || "User"}</span>
-                  <span className="truncate text-xs">{user?.email}</span>
+                  <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{user?.user_metadata?.name || "User"}</span>
                 </div>
              </SidebarMenuButton>
           </SidebarMenuItem>

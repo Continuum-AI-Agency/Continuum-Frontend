@@ -3,15 +3,15 @@
 import React from "react";
 import { Avatar, Button, DropdownMenu, Switch, Text, TextField, Box, ScrollArea } from "@radix-ui/themes";
 import {
-  CheckCircledIcon,
-  ExitIcon,
-  GearIcon,
-  LayersIcon,
-  MixerHorizontalIcon,
-  MoonIcon,
-  PlusCircledIcon,
-  MagnifyingGlassIcon,
-} from "@radix-ui/react-icons";
+  CircleCheck,
+  LogOut,
+  Settings,
+  Layers,
+  Plug,
+  Moon,
+  PlusCircle,
+  Search,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/components/theme-provider";
@@ -57,12 +57,12 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
           variant="outline"
           size="2"
           onMouseEnter={() => setMenuOpen(true)}
-          className="rounded-full shadow-sm"
+          className="rounded-full border-[var(--border)] text-[var(--sidebar-foreground)] shadow-sm hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)]"
         >
           <Avatar
             size="2"
             src={brandSummaries.find(b => b.id === activeBrandId)?.logoUrl ?? undefined}
-            fallback={<LayersIcon />}
+            fallback={<Layers className="h-4 w-4 stroke-[1.8]" />}
             radius="full"
             className="mr-2"
           />
@@ -87,9 +87,10 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.stopPropagation()}
             size="2"
+            className="text-[var(--popover-foreground)]"
           >
             <TextField.Slot>
-              <MagnifyingGlassIcon />
+              <Search className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_60%,transparent)]" />
             </TextField.Slot>
           </TextField.Root>
         </Box>
@@ -97,7 +98,7 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: "200px" }}>
           {filteredBrands.length === 0 ? (
             <Box p="2">
-              <Text size="2" color="gray" className="pl-2">
+              <Text size="2" className="pl-2 text-[color-mix(in_srgb,var(--popover-foreground)_64%,transparent)]">
                 No brands found
               </Text>
             </Box>
@@ -115,13 +116,13 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                   await selectBrand(brand.id);
                   router.refresh();
                 }}
-                className="flex items-center justify-between gap-2"
+                className="flex items-center justify-between gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
               >
                 <div className="flex items-center gap-2">
                   <Avatar
                     size="1"
                     src={brand.logoUrl ?? undefined}
-                    fallback={<LayersIcon />}
+                    fallback={<Layers className="h-3.5 w-3.5 stroke-[1.8]" />}
                     radius="full"
                   />
                   <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
@@ -142,20 +143,20 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
               await createBrandProfileAction();
             });
           }}
-          className="flex items-center gap-2 mt-1"
+          className="mt-1 flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
         >
-          <PlusCircledIcon />
+          <PlusCircle className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
           New brand profile
         </DropdownMenu.Item>
 
         <DropdownMenu.Separator />
 
         <DropdownMenu.Item
-          className="flex items-center justify-between w-full"
+          className="flex w-full items-center justify-between text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={(event) => event.preventDefault()}
         >
           <div className="flex items-center gap-2">
-            <MoonIcon />
+            <Moon className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
             <Text>Dark mode</Text>
           </div>
           <Switch
@@ -167,36 +168,36 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         </DropdownMenu.Item>
 
         <DropdownMenu.Item
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={(event) => {
             event.preventDefault();
             router.push("/settings");
           }}
         >
-          <GearIcon />
+          <Settings className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
           Settings
         </DropdownMenu.Item>
 
         <DropdownMenu.Item
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={(event) => {
             event.preventDefault();
             router.push("/settings/integrations");
           }}
         >
-          <MixerHorizontalIcon />
+          <Plug className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
           Integrations
         </DropdownMenu.Item>
 
         {isAdmin ? (
           <DropdownMenu.Item
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
             onSelect={(event) => {
               event.preventDefault();
               router.push("/admin");
             }}
           >
-            <CheckCircledIcon />
+            <CircleCheck className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />
             Admin
           </DropdownMenu.Item>
         ) : null}
@@ -210,9 +211,9 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
             logout();
           }}
           disabled={isPending}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 text-[var(--destructive)] data-[highlighted]:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)] data-[highlighted]:text-[var(--destructive)]"
         >
-          <ExitIcon />
+          <LogOut className="h-4 w-4 stroke-[1.8]" />
           {isPending ? "Signing out..." : "Sign out"}
         </DropdownMenu.Item>
       </DropdownMenu.Content>
