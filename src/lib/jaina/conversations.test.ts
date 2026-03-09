@@ -70,6 +70,39 @@ describe("conversation row mapping", () => {
       createdAt: "2026-03-06T10:10:00.000Z",
     });
   });
+
+  it("maps persisted assistant metadata when present", () => {
+    const mapped = mapConversationMessageRow({
+      id: 10,
+      session_id: "session-1",
+      user_email: "analyst@example.com",
+      brand_id: "brand-1",
+      ad_account_id: "act-1",
+      role: "assistant",
+      content: "Checkpoint report generated: Synthesis summary unavailable.",
+      report: {
+        language: "en",
+        executive_summary: "Recovered from metadata.",
+        performance_snapshot: [],
+        sections: [],
+        strategic_recommendations: [],
+        follow_up_questions: [],
+        handoff_trace: [],
+        execution_objectives: [],
+        cached_sources: [],
+        graphs: [],
+      },
+      render_as_report: true,
+      final_thought: "done",
+      reasoning: [{ stage: "thinking", detail: "..." }],
+      created_at: "2026-03-06T10:12:00.000Z",
+    });
+
+    expect(mapped.report).toBeDefined();
+    expect(mapped.renderAsReport).toBe(true);
+    expect(mapped.finalThought).toBe("done");
+    expect(Array.isArray(mapped.reasoning)).toBe(true);
+  });
 });
 
 describe("normalizeTimestamp", () => {

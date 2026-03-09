@@ -23,6 +23,22 @@ export const jainaConversationMessageSchema = z.object({
   adAccountId: z.string().nullable(),
   role: jainaConversationRoleSchema,
   content: z.string(),
+  report: z.unknown().optional(),
+  reportAssembly: z.unknown().optional(),
+  reportAssemblyHtml: z.string().nullable().optional(),
+  finalThought: z.string().nullable().optional(),
+  renderAsReport: z.boolean().optional(),
+  reasoning: z.array(z.unknown()).optional(),
+  toolCalls: z.array(z.unknown()).optional(),
+  toolResults: z.array(z.unknown()).optional(),
+  artifacts: z.record(z.string(), z.unknown()).optional(),
+  pendingClarification: z
+    .object({
+      id: z.string().optional(),
+      question: z.string(),
+    })
+    .optional(),
+  objectives: z.array(z.unknown()).optional(),
   createdAt: z.string(),
 });
 export type JainaConversationMessage = z.infer<typeof jainaConversationMessageSchema>;
@@ -94,6 +110,22 @@ export const backendConversationMessageSchema = z.object({
   ad_account_id: z.string().nullable().optional(),
   role: jainaConversationRoleSchema,
   content: z.string(),
+  report: z.unknown().optional(),
+  report_assembly: z.unknown().optional(),
+  report_assembly_html: z.string().nullable().optional(),
+  final_thought: z.string().nullable().optional(),
+  render_as_report: z.boolean().optional(),
+  reasoning: z.array(z.unknown()).optional(),
+  tool_calls: z.array(z.unknown()).optional(),
+  tool_results: z.array(z.unknown()).optional(),
+  artifacts: z.record(z.string(), z.unknown()).optional(),
+  pending_clarification: z
+    .object({
+      id: z.string().optional(),
+      question: z.string(),
+    })
+    .optional(),
+  objectives: z.array(z.unknown()).optional(),
   created_at: z.string(),
 });
 export type BackendConversationMessage = z.infer<
@@ -134,6 +166,27 @@ export function mapConversationMessageRow(
     adAccountId: row.ad_account_id ?? null,
     role: row.role,
     content: row.content,
+    ...(row.report !== undefined ? { report: row.report } : {}),
+    ...(row.report_assembly !== undefined
+      ? { reportAssembly: row.report_assembly }
+      : {}),
+    ...(typeof row.report_assembly_html === "string"
+      ? { reportAssemblyHtml: row.report_assembly_html }
+      : {}),
+    ...(typeof row.final_thought === "string"
+      ? { finalThought: row.final_thought }
+      : {}),
+    ...(typeof row.render_as_report === "boolean"
+      ? { renderAsReport: row.render_as_report }
+      : {}),
+    ...(Array.isArray(row.reasoning) ? { reasoning: row.reasoning } : {}),
+    ...(Array.isArray(row.tool_calls) ? { toolCalls: row.tool_calls } : {}),
+    ...(Array.isArray(row.tool_results) ? { toolResults: row.tool_results } : {}),
+    ...(row.artifacts !== undefined ? { artifacts: row.artifacts } : {}),
+    ...(row.pending_clarification !== undefined
+      ? { pendingClarification: row.pending_clarification }
+      : {}),
+    ...(Array.isArray(row.objectives) ? { objectives: row.objectives } : {}),
     createdAt: row.created_at,
   };
 }

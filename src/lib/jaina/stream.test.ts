@@ -93,6 +93,88 @@ describe("reduceJainaStreamEvent text deltas", () => {
     expect(report.strategic_recommendations[0]?.title).toBe("Reallocate budget to Android");
   });
 
+  it("parses compatibility output_json deltas that carry payload fields at the root", () => {
+    let state = createInitialJainaStreamState();
+
+    const event = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "response.output_json.delta",
+        delta: JSON.stringify({
+          executive_summary:
+            "Reallocate 15-20% of spend from high-CPC prospecting into efficient lookalikes.",
+          strategic_recommendations: [
+            {
+              title: "Shift prospecting budget",
+              rationale: "High-CPC broad prospecting is underperforming versus lookalikes.",
+              expected_impact: "Lower blended CPC and improved ROAS",
+              priority: "HIGH",
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(event).not.toBeNull();
+    if (event) {
+      state = reduceJainaStreamEvent(state, event);
+    }
+
+    expect(state.status).not.toBe("error");
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toContain("Reallocate 15-20% of spend");
+    expect(report.strategic_recommendations[0]?.title).toBe("Shift prospecting budget");
+  });
+
+  it("maps strategic assembly deltas (summary.narrative + metrics) into SoT report fields", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_json.delta",
+      data: {
+        delta: JSON.stringify({
+          header: {
+            title: "Strategic Spend Shift",
+            period: "Last 30 days",
+            report_tags: ["strategic"],
+          },
+          summary: {
+            narrative:
+              "Analysis shows a 15-20% reallocation opportunity from broad prospecting into high-efficiency lookalikes.",
+            principal_deviation: "Prospecting CPC is elevated while lookalikes remain underfunded.",
+          },
+          metrics: [
+            {
+              label: "Prospecting CPC",
+              planned: 1.1,
+              actual: 3.71,
+              index_percent: 237.0,
+              unit: "%",
+              deviation_type: "negative",
+            },
+          ],
+          charts: [],
+          insights: [],
+          recommendations: [
+            {
+              title: "Move budget to lookalikes",
+              rationale: "Lookalikes deliver materially lower CPC with stronger CTR.",
+              expected_impact: "Higher ROI",
+              priority: "HIGH",
+            },
+          ],
+        }),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.report_title).toBe("Strategic Spend Shift");
+    expect(report.executive_summary).toContain("15-20% reallocation opportunity");
+    expect(report.performance_snapshot.length).toBe(1);
+    expect(report.performance_snapshot[0]?.metric).toBe("Prospecting CPC");
+    expect(report.performance_snapshot[0]?.value).toBe(3.71);
+    expect(report.strategic_recommendations[0]?.title).toBe("Move budget to lookalikes");
+  });
+
   it("promotes section actions to strategic recommendations when top-level recommendations are missing", () => {
     let state = createInitialJainaStreamState();
 
@@ -251,6 +333,22 @@ describe("reduceJainaStreamEvent text deltas", () => {
 });
 
 describe("reduceJainaStreamEvent canonical report events", () => {
+  it("stores run metadata from response.run.created events", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.run.created",
+      data: {
+        run_id: "run_123",
+        session_id: "sess_abc",
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    expect(state.runId).toBe("run_123");
+    expect(state.runSessionId).toBe("sess_abc");
+  });
+
   it("hydrates state from response.checkpoint_report", () => {
     let state = createInitialJainaStreamState();
 
@@ -994,6 +1092,26 @@ describe("reduceJainaStreamEvent state.delta tool hydration", () => {
     expect(state.toolResults[0].id).toBe("tool_delta_1");
     expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
     expect(state.progress.some((entry) => entry.stage === "tool_complete")).toBe(true);
+  });
+
+  it("hydrates checkpoint summary signal from checkpoint_summary state deltas", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "state.delta",
+      data: {
+        source: "checkpoint_summary",
+        delta: {
+          latest_checkpoint_summary:
+            "Shift 15-20% from high-CPC prospecting into lookalikes.",
+          summary_source: "synthesis",
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    expect(state.latestCheckpointSummary).toContain("15-20%");
+    expect(state.checkpointSummarySource).toBe("synthesis");
   });
 });
 

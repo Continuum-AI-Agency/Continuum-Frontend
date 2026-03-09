@@ -2,7 +2,7 @@ import {
   jainaStreamEventSchema,
   frontendCheckpointReportSchema,
   outputJsonDeltaSchema,
-  outputTextDeltaSchema,
+  reportAssemblySchema,
   responseObjectiveUpdatedSchema,
   responseObjectivesSchema,
   responseClarificationRequestSchema,
@@ -11,6 +11,7 @@ import {
   responseContentPartDoneSchema,
   responseCreatedSchema,
   responseDoneSchema,
+  responseRunCreatedSchema,
   responseOutputItemSchema,
   responseOutputItemDoneSchema,
   responseReportAssemblySchema,
@@ -31,7 +32,6 @@ import {
   adkEventSchema,
   parsePlanDecisionPayload,
   parsePlanRequestedPayload,
-  responsePlanDeltaSchema,
   type JainaStreamEvent,
   type ProgressEventData,
   type ReportAssembly,
@@ -64,7 +64,7 @@ const compatibilityStreamEventSchema = z.object({
     "response.plan.decision",
   ]),
   data: z.unknown().optional(),
-});
+}).passthrough();
 
 type CompatibilityStreamEvent = z.infer<typeof compatibilityStreamEventSchema>;
 export type ParsedJainaStreamEvent = JainaStreamEvent | CompatibilityStreamEvent;
@@ -101,6 +101,10 @@ export type JainaStreamState = {
   lastPlanDecision: ResponsePlanDecisionEventData | null;
   error?: string;
   responseId?: string;
+  runId?: string;
+  runSessionId?: string;
+  latestCheckpointSummary?: string;
+  checkpointSummarySource?: "synthesis" | "tool_fallback" | "default_unavailable" | null;
 
   itemId?: string;
   partId?: string;
@@ -138,10 +142,13 @@ export function createInitialJainaStreamState(): JainaStreamState {
     stateDeltas: [],
     artifacts: {},
     canvasActions: [],
+    checkpointSummarySource: null,
   };
 }
 
-function normalizeReportAssemblyToSoT(reportAssembly: ReportAssembly): ReportPayload {
+function normalizeReportAssemblyToSoT(
+  reportAssembly: ReportAssembly
+): FrontendCheckpointReport {
   const snapshot = reportAssembly.metrics.map((metric) => ({
     metric: metric.label,
     value: metric.actual,
@@ -196,6 +203,7 @@ function normalizeReportAssemblyToSoT(reportAssembly: ReportAssembly): ReportPay
     strategic_recommendations: recommendations,
     follow_up_questions: [],
     handoff_trace: [],
+    execution_objectives: [],
     cached_sources: [],
     graphs: reportAssembly.charts,
   };
@@ -270,7 +278,7 @@ function normalizeMetric(
     getNonEmptyString(record.title) ??
     "Metric";
 
-  const valueRaw = record.value;
+  const valueRaw = record.value ?? record.actual ?? record.current;
   const normalizedMetric: FrontendCheckpointReport["performance_snapshot"][number] = {
     metric,
     value:
@@ -279,18 +287,27 @@ function normalizeMetric(
         : String(valueRaw ?? ""),
   };
 
-  const changeRaw = record.change ?? (typeof record.trend === "number" ? record.trend : undefined);
+  const changeRaw =
+    record.change ??
+    (typeof record.trend === "number" ? record.trend : undefined) ??
+    (typeof record.index_percent === "number" ? record.index_percent : undefined);
   if (typeof changeRaw === "number" || typeof changeRaw === "string") {
     normalizedMetric.change = changeRaw;
   }
 
-  const status = normalizeMetricStatus(record.status ?? record.trend);
+  const status = normalizeMetricStatus(
+    record.status ?? record.trend ?? record.deviation_type
+  );
   if (status) normalizedMetric.status = status;
 
   const direction = getNonEmptyString(record.direction);
   if (direction) normalizedMetric.direction = direction;
 
-  const context = getNonEmptyString(record.context);
+  const context =
+    getNonEmptyString(record.context) ??
+    (record.planned !== undefined
+      ? `Planned: ${String(record.planned)}`
+      : undefined);
   if (context) normalizedMetric.context = context;
 
   const subLabel = getNonEmptyString(record.sub_label);
@@ -422,13 +439,15 @@ function normalizeSection(
     scope: getNonEmptyString(record.scope) ?? "account",
     summary:
       getNonEmptyString(record.summary) ??
+      getNonEmptyString(record.content) ??
       getNonEmptyString(record.section_summary) ??
       getNonEmptyString(record.analysis_summary) ??
       "",
     highlights: asArray(record.highlights ?? record.insights ?? record.key_insights)
+      .concat(asArray(record.key_findings))
       .map((item) => normalizeHighlight(item))
       .filter((item): item is FrontendCheckpointReport["sections"][number]["highlights"][number] => Boolean(item)),
-    tables: asArray(record.tables)
+    tables: asArray(record.tables ?? (record.table ? [record.table] : []))
       .map((item) => normalizeTable(item))
       .filter((item): item is FrontendCheckpointReport["sections"][number]["tables"][number] => Boolean(item)),
     actions: asArray(
@@ -519,21 +538,51 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
 
   const strict = frontendCheckpointReportSchema.safeParse(unwrappedValue);
   if (strict.success && hasStructuredReportContent(strict.data)) return strict.data;
+  const reportAssembly = reportAssemblySchema.safeParse(unwrappedValue);
+  if (reportAssembly.success) {
+    return normalizeReportAssemblyToSoT(reportAssembly.data);
+  }
 
   const payloadRecord = asRecord(unwrappedValue);
   if (!payloadRecord) return null;
+  const summaryRecord = asRecord(payloadRecord.summary);
+  const headerRecord = asRecord(payloadRecord.header);
 
   const normalizedSections = asArray(payloadRecord.sections)
     .map((item) => normalizeSection(item))
     .filter((item): item is FrontendCheckpointReport["sections"][number] => Boolean(item));
+  const normalizedTopLevelHighlights = asArray(
+    payloadRecord.key_insights ??
+      payloadRecord.strategic_analysis ??
+      payloadRecord.strategy_and_insights ??
+      payloadRecord.insights ??
+      payloadRecord.key_findings ??
+      summaryRecord?.key_findings
+  )
+    .map((item) => normalizeHighlight(item))
+    .filter((item): item is FrontendCheckpointReport["sections"][number]["highlights"][number] => Boolean(item));
+
+  if (normalizedSections.length > 0 && normalizedTopLevelHighlights.length > 0) {
+    normalizedSections[0] = {
+      ...normalizedSections[0],
+      highlights: [
+        ...normalizedTopLevelHighlights,
+        ...normalizedSections[0].highlights,
+      ],
+    };
+  }
 
   const normalizedRecommendations = asArray(
     payloadRecord.strategic_recommendations ??
+      payloadRecord.actions ??
+      payloadRecord.action_plan ??
+      payloadRecord.next_steps ??
       payloadRecord.recommendations ??
       payloadRecord.reccomendations ??
       payloadRecord.priority_recommendations ??
       payloadRecord.priority_reccomendations ??
-      payloadRecord["priority reccomendations"]
+      payloadRecord["priority reccomendations"] ??
+      summaryRecord?.recommendations
   )
     .map((item) => normalizeRecommendation(item))
     .filter((item): item is FrontendCheckpointReport["strategic_recommendations"][number] => Boolean(item));
@@ -543,7 +592,9 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
     normalizedRecommendations.length > 0 ? normalizedRecommendations : sectionActions;
 
   const normalizedPerformanceSnapshot = asArray(
-    payloadRecord.performance_snapshot ?? payloadRecord.key_metrics
+    payloadRecord.performance_snapshot ??
+      payloadRecord.key_metrics ??
+      payloadRecord.metrics
   )
     .map((item) => normalizeMetric(item))
     .filter((item): item is FrontendCheckpointReport["performance_snapshot"][number] => Boolean(item));
@@ -581,11 +632,14 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
   const normalized: FrontendCheckpointReport = {
     language: getNonEmptyString(payloadRecord.language) ?? "en",
     report_title:
-      getNonEmptyString(asRecord(payloadRecord.summary)?.title) ??
+      getNonEmptyString(summaryRecord?.title) ??
+      getNonEmptyString(headerRecord?.title) ??
       getNonEmptyString(payloadRecord.title) ??
       "",
     executive_summary:
       getNonEmptyString(payloadRecord.executive_summary) ??
+      getNonEmptyString(summaryRecord?.narrative) ??
+      getNonEmptyString(summaryRecord?.overview) ??
       getNonEmptyString(payloadRecord.summary) ??
       getNonEmptyString(payloadRecord.title) ??
       "",
@@ -601,6 +655,18 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
       .map((item) => getNonEmptyString(item))
       .filter((item): item is string => Boolean(item)),
     handoff_trace: asArray(payloadRecord.handoff_trace).map(normalizeHandoffTraceEntry).filter((item): item is HandoffTraceEntry => Boolean(item)),
+    execution_objectives: asArray(payloadRecord.execution_objectives)
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item))
+      .map((objective) => ({
+        id: getNonEmptyString(objective.id) ?? "",
+        title: getNonEmptyString(objective.title) ?? "",
+        status: normalizeObjectiveStatus(objective.status),
+        scope: getNonEmptyString(objective.scope) ?? null,
+        details: getNonEmptyString(objective.details) ?? null,
+        created_at: getNonEmptyString(objective.created_at) ?? new Date().toISOString(),
+        updated_at: getNonEmptyString(objective.updated_at) ?? new Date().toISOString(),
+      })),
     cached_sources: asArray(payloadRecord.cached_sources)
       .map((item) => getNonEmptyString(item))
       .filter((item): item is string => Boolean(item)),
@@ -632,19 +698,29 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
     if (extracted !== trimmed) candidates.push(extracted);
   }
 
+  let bestReport: ReportPayload | null = null;
+
   for (const candidate of candidates) {
     try {
       const parsedJson = JSON.parse(candidate);
+      const normalizedReport = normalizeCheckpointReportPayload(parsedJson);
+      if (normalizedReport) {
+        bestReport = pickRicherReport(bestReport, normalizedReport);
+        continue;
+      }
+
       const parsedReport = reportPayloadSchema.safeParse(
         unwrapReportEnvelope(parsedJson)
       );
-      if (parsedReport.success) return parsedReport.data;
+      if (parsedReport.success) {
+        bestReport = pickRicherReport(bestReport, parsedReport.data);
+      }
     } catch {
       continue;
     }
   }
 
-  return null;
+  return bestReport;
 }
 
 function scoreReport(report: ReportPayload | null): number {
@@ -698,18 +774,20 @@ function skipWhitespace(text: string, index: number): number {
 
 function findJsonValueStartByKey(text: string, key: string): number | null {
   let searchFrom = 0;
+  let latestValueStart: number | null = null;
   while (searchFrom < text.length) {
     const keyIndex = text.indexOf(`"${key}"`, searchFrom);
-    if (keyIndex === -1) return null;
+    if (keyIndex === -1) break;
     let cursor = skipWhitespace(text, keyIndex + key.length + 2);
     if (text[cursor] !== ":") {
       searchFrom = keyIndex + 1;
       continue;
     }
     cursor = skipWhitespace(text, cursor + 1);
-    return cursor;
+    latestValueStart = cursor;
+    searchFrom = keyIndex + 1;
   }
-  return null;
+  return latestValueStart;
 }
 
 function extractBalancedJsonSegment(
@@ -863,6 +941,11 @@ function parsePartialReportFromAccumulatedText(
       raw.summary = overview;
     }
 
+    const narrative = getNonEmptyString(summaryObject.narrative);
+    if (narrative) {
+      raw.summary = narrative;
+    }
+
     const keyFindings = asArray(summaryObject.key_findings);
     if (keyFindings.length > 0) {
       raw.key_insights = keyFindings;
@@ -887,6 +970,7 @@ function parsePartialReportFromAccumulatedText(
     "performance_snapshot",
     "key_metrics",
     "kpis",
+    "metrics",
   ]);
   if (performanceSnapshot) {
     raw.performance_snapshot = performanceSnapshot;
@@ -1386,6 +1470,19 @@ function mergeToolResults(
   return { merged, added };
 }
 
+function parseDeltaPayload<TSchema extends z.ZodTypeAny>(
+  event: ParsedJainaStreamEvent,
+  schema: TSchema
+): z.infer<TSchema> | null {
+  const fromData = schema.safeParse((event as { data?: unknown }).data ?? {});
+  if (fromData.success) return fromData.data;
+
+  const fromRoot = schema.safeParse(event);
+  if (fromRoot.success) return fromRoot.data;
+
+  return null;
+}
+
 export function reduceJainaStreamEvent(
   state: JainaStreamState,
   event: ParsedJainaStreamEvent
@@ -1399,12 +1496,12 @@ export function reduceJainaStreamEvent(
   const eventType = event.type as string | undefined;
   switch (eventType) {
     case "response.plan.delta": {
-      const parsed = responsePlanDeltaSchema.safeParse(event);
-      if (!parsed.success || !parsed.data.data) {
+      const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
+      if (!payload) {
         return { ...nextBase, status: "error", error: "Malformed response.plan.delta event" };
       }
 
-      const nextPlanJson = `${state.planJson}${parsed.data.data.delta}`;
+      const nextPlanJson = `${state.planJson}${payload.delta}`;
       const nextPlan = parsePlanFromAccumulatedDelta(nextPlanJson, state.plan);
       return {
         ...nextBase,
@@ -1496,6 +1593,17 @@ export function reduceJainaStreamEvent(
         return { ...nextBase, status: "error", error: "Malformed response.created event" };
       }
       return { ...nextBase, responseId: parsed.data.data.id };
+    }
+    case "response.run.created": {
+      const parsed = responseRunCreatedSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed response.run.created event" };
+      }
+      return {
+        ...nextBase,
+        runId: parsed.data.data.run_id,
+        runSessionId: parsed.data.data.session_id ?? undefined,
+      };
     }
     case "response.output_item.added": {
       const parsed = responseOutputItemSchema.safeParse(event);
@@ -1975,11 +2083,11 @@ export function reduceJainaStreamEvent(
       };
     }
     case "response.output_json.delta": {
-      const parsed = outputJsonDeltaSchema.safeParse((event as { data?: unknown }).data ?? {});
-      if (!parsed.success) {
+      const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
+      if (!payload) {
         return { ...nextBase, status: "error", error: "Malformed response.output_json.delta event" };
       }
-      const nextReportJson = `${state.reportJson}${parsed.data.delta}`;
+      const nextReportJson = `${state.reportJson}${payload.delta}`;
       const parsedReport =
         parseReportFromAccumulatedText(nextReportJson) ??
         parsePartialReportFromAccumulatedText(nextReportJson);
@@ -1991,13 +2099,13 @@ export function reduceJainaStreamEvent(
       };
     }
     case "response.output_text.delta": {
-      const parsed = outputTextDeltaSchema.safeParse(event);
-      if (!parsed.success || !parsed.data.data) {
+      const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
+      if (!payload) {
         return { ...nextBase, status: "error", error: "Malformed response.output_text.delta event" };
       }
-
-      const payload = parsed.data.data;
-      const partKind = state.contentPartKinds[payload.part_id];
+      const partKind = payload.part_id
+        ? state.contentPartKinds[payload.part_id]
+        : undefined;
       const shouldParseAsReport =
         partKind === "json" ||
         state.finalContentKind === "report" ||
@@ -2062,6 +2170,26 @@ export function reduceJainaStreamEvent(
       const payload = parsed.data.data;
       const nextStateDeltas = [...state.stateDeltas, payload];
       const toolDeltaPayload = asRecord(payload.delta) ?? {};
+      const checkpointSummarySourceRaw =
+        payload.source === "checkpoint_summary"
+          ? getNonEmptyString(toolDeltaPayload.summary_source)
+          : undefined;
+      const checkpointSummarySource =
+        checkpointSummarySourceRaw === "synthesis" ||
+        checkpointSummarySourceRaw === "tool_fallback" ||
+        checkpointSummarySourceRaw === "default_unavailable"
+          ? checkpointSummarySourceRaw
+          : undefined;
+      const checkpointSummaryPatch =
+        payload.source === "checkpoint_summary"
+          ? {
+              latestCheckpointSummary:
+                getNonEmptyString(toolDeltaPayload.latest_checkpoint_summary) ??
+                state.latestCheckpointSummary,
+              checkpointSummarySource:
+                checkpointSummarySource ?? state.checkpointSummarySource ?? null,
+            }
+          : {};
       const hydratedTools = hydrateToolsFromStateDelta(toolDeltaPayload);
       const { merged: mergedToolCalls, added: addedToolCalls } = mergeToolCalls(
         state.toolCalls,
@@ -2106,6 +2234,7 @@ export function reduceJainaStreamEvent(
           toolCalls: mergedToolCalls,
           toolResults: mergedToolResults,
           progress: nextProgress,
+          ...checkpointSummaryPatch,
         };
       }
 
@@ -2137,6 +2266,7 @@ export function reduceJainaStreamEvent(
         plan: nextPlan,
         pendingPlan: null,
         lastPlanDecision: decision,
+        ...checkpointSummaryPatch,
       };
     }
     case "error": {

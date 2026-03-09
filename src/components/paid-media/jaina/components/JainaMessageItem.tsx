@@ -166,6 +166,23 @@ function getObjectiveStatusClasses(status: JainaObjective["status"]): string {
   return "border-border/80 bg-muted/40 text-muted-foreground";
 }
 
+function isLikelyStructuredJsonMessage(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed) return false;
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    return true;
+  }
+  return (
+    trimmed.includes("\"executive_summary\"") ||
+    trimmed.includes("\"performance_snapshot\"") ||
+    trimmed.includes("\"sections\"") ||
+    trimmed.includes("\"strategic_recommendations\"")
+  );
+}
+
 type ObjectivesQueueProps = {
   objectives: JainaObjective[];
   isStreaming: boolean;
@@ -592,6 +609,8 @@ export function JainaMessageItem({
   const shouldRenderInlineReport = Boolean(
     structuredReport && hasReportContent(structuredReport)
   );
+  const shouldHideMarkdownContent =
+    shouldRenderInlineReport && isLikelyStructuredJsonMessage(message.content);
 
   const artifacts = isStreaming ? state.artifacts : message.artifacts;
   const artifactCreatives = artifacts?.creatives ?? [];
@@ -619,12 +638,14 @@ export function JainaMessageItem({
           </Text>
         ) : (
           <>
-            <SafeMarkdown
-              content={message.content}
-              className="text-[15px] leading-7 text-foreground"
-              mode={isStreaming ? "streaming" : "static"}
-              isAnimating={isStreaming}
-            />
+            {!shouldHideMarkdownContent ? (
+              <SafeMarkdown
+                content={message.content}
+                className="text-[15px] leading-7 text-foreground"
+                mode={isStreaming ? "streaming" : "static"}
+                isAnimating={isStreaming}
+              />
+            ) : null}
 
             {message.pendingClarification ? (
               <div className="rounded-lg border border-amber-300/40 bg-amber-100/20 px-3 py-2">

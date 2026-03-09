@@ -6,7 +6,7 @@ import { RocketIcon } from "@radix-ui/react-icons";
 import { motion } from "framer-motion";
 import { Attachment } from "@/components/ai-elements/attachments";
 
-import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import { Suggestion } from "@/components/ai-elements/suggestion";
 
 type JainaEmptyStateProps = {
   adAccountId: string | null;
@@ -17,6 +17,12 @@ export function JainaEmptyState({
   adAccountId,
   onExampleClick,
 }: JainaEmptyStateProps) {
+  const prompts = [
+    "Give me a 7-day campaign health brief with risks and opportunities.",
+    "Which creatives are winning on ROAS and which should be paused?",
+    "Recommend budget reallocations for this week by campaign.",
+  ];
+
   if (!adAccountId) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
@@ -48,49 +54,50 @@ export function JainaEmptyState({
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        whileHover={{ scale: 1.1, rotate: 5 }}
-        className="rounded-full bg-purple-500/10 p-4 mb-2 border border-purple-500/20 shadow-lg shadow-purple-500/5"
+        transition={{ duration: 0.35 }}
+        className="mb-2 rounded-full border border-primary/20 bg-primary/8 p-4 shadow-lg shadow-primary/10"
         aria-hidden="true"
       >
-        <RocketIcon className="h-10 w-10 text-purple-400" />
+        <RocketIcon className="h-10 w-10 text-primary" />
       </motion.div>
       
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.2, duration: 0.5 }}
-        className="space-y-2"
+        transition={{ delay: 0.08, duration: 0.3 }}
+        className="space-y-3 px-4"
       >
-        <Heading size="6" className="text-white tracking-tight font-bold">
-          How can Jaina help today?
+        <Text
+          size="1"
+          className="inline-flex rounded-full border border-border/70 bg-card/70 px-3 py-1 uppercase tracking-wide text-muted-foreground"
+        >
+          Paid Media Analyst
+        </Text>
+        <Heading size="6" className="tracking-tight font-semibold text-foreground">
+          Ask Jaina for a decision-ready performance brief.
         </Heading>
-        <Text size="2" className="text-secondary max-w-sm block opacity-70">
-          Ask about campaign performance, creative ROAS, or budget optimizations.
+        <Text size="3" className="mx-auto block max-w-2xl text-muted-foreground">
+          Get clear reads on spend efficiency, creative performance, and where to move budget next.
         </Text>
       </motion.div>
 
-      <div className="mt-6 w-full max-w-lg">
-        <Suggestions className="justify-center">
-          {[
-            "Which creatives improved ROAS week-over-week?",
-            "Summarize spend shifts and recommend budget moves.",
-            "What audiences are declining?",
-          ].map((s, i) => (
+      <div className="mt-6 w-full max-w-3xl px-4">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {prompts.map((prompt, index) => (
             <motion.div
-              key={s}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 + i * 0.1 }}
+              key={prompt}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.14 + index * 0.06, duration: 0.24 }}
             >
               <Suggestion
-                suggestion={s}
+                suggestion={prompt}
                 onClick={(q) => onExampleClick?.(q, [])}
-                className="bg-white/5 border-white/10 text-secondary hover:bg-white/10 h-auto py-2 px-6"
+                className="h-auto max-w-[min(100%,30rem)] whitespace-normal rounded-full border-border/70 bg-card/70 px-5 py-2 text-left text-foreground hover:border-primary/40 hover:bg-card"
               />
             </motion.div>
           ))}
-        </Suggestions>
+        </div>
       </div>
     </Flex>
   );

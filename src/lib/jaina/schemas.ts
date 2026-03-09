@@ -27,6 +27,7 @@ export type HandoffTraceEntry = z.infer<typeof handoffTraceEntrySchema>;
 
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
+  include_thoughts: z.boolean().optional(),
   userId: z.string().optional(),
   canvas: z.boolean().optional(),
   clarification: z
@@ -84,7 +85,7 @@ export const streamEventSchema = <TType extends string, TData extends z.ZodTypeA
   z.object({
     type: z.literal(type),
     data: data.optional(),
-  });
+  }).passthrough();
 
 export type StreamEvent<TType extends string, TData = Record<string, unknown>> = {
   type: TType;
@@ -171,6 +172,18 @@ export const frontendBudgetSchema = z
   })
   .passthrough();
 
+export const executionObjectiveSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: z.enum(["pending", "in_progress", "completed", "failed"]),
+  scope: z.string().nullable(),
+  details: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export type ExecutionObjective = z.infer<typeof executionObjectiveSchema>;
+
 export const frontendGraphSchema = z
   .object({
     title: z.string().optional(),
@@ -214,6 +227,7 @@ export const frontendCheckpointReportSchema = z.object({
   strategic_recommendations: z.array(recommendationItemSchema).default([]),
   follow_up_questions: z.array(z.string()).default([]),
   handoff_trace: z.array(handoffTraceEntrySchema).default([]),
+  execution_objectives: z.array(executionObjectiveSchema).default([]),
   cached_sources: z.array(z.string()).default([]),
   graphs: z.array(frontendGraphSchema).default([]),
 });
@@ -295,6 +309,14 @@ export const responseOutputItemSchema = streamEventSchema(
   })
 );
 
+export const responseRunCreatedSchema = streamEventSchema(
+  "response.run.created",
+  z.object({
+    run_id: z.string(),
+    session_id: z.string().nullable().optional(),
+  })
+);
+
 export const responseContentPartSchema = streamEventSchema(
   "response.content_part.added",
   z.object({
@@ -331,8 +353,8 @@ export type StateDeltaEventData = Exclude<z.infer<typeof stateDeltaSchema>["data
 export const responsePlanDeltaSchema = streamEventSchema(
   "response.plan.delta",
   z.object({
-    item_id: z.string(),
-    part_id: z.string(),
+    item_id: z.string().optional(),
+    part_id: z.string().optional(),
     delta: z.string(),
   })
 );
@@ -451,8 +473,8 @@ export const responseReportAssemblySchema = streamEventSchema(
 export const outputTextDeltaSchema = streamEventSchema(
   "response.output_text.delta",
   z.object({
-    item_id: z.string(),
-    part_id: z.string(),
+    item_id: z.string().optional(),
+    part_id: z.string().optional(),
     delta: z.string(),
   })
 );
@@ -557,9 +579,15 @@ export const outputJsonDeltaSchema = z.object({
   delta: z.string(),
 });
 
+export const responseOutputJsonDeltaSchema = streamEventSchema(
+  "response.output_json.delta",
+  outputJsonDeltaSchema
+);
+
 export type JainaStreamEvent =
   | z.infer<typeof responseCreatedSchema>
   | z.infer<typeof responseOutputItemSchema>
+  | z.infer<typeof responseRunCreatedSchema>
   | z.infer<typeof responseContentPartSchema>
   | z.infer<typeof progressEventSchema>
   | z.infer<typeof stateDeltaSchema>
@@ -572,6 +600,7 @@ export type JainaStreamEvent =
   | z.infer<typeof agentEnvelopeSchema>
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseReportAssemblySchema>
+  | z.infer<typeof responseOutputJsonDeltaSchema>
   | z.infer<typeof outputTextDeltaSchema>
   | z.infer<typeof responseObjectivesSchema>
   | z.infer<typeof responseObjectiveUpdatedSchema>
@@ -584,6 +613,7 @@ export type JainaStreamEvent =
 export const jainaStreamEventSchema = z.union([
   responseCreatedSchema,
   responseOutputItemSchema,
+  responseRunCreatedSchema,
   responseContentPartSchema,
   progressEventSchema,
   stateDeltaSchema,
@@ -596,6 +626,7 @@ export const jainaStreamEventSchema = z.union([
   agentEnvelopeSchema,
   responseCheckpointReportSchema,
   responseReportAssemblySchema,
+  responseOutputJsonDeltaSchema,
   outputTextDeltaSchema,
   responseObjectivesSchema,
   responseObjectiveUpdatedSchema,
@@ -1461,6 +1492,7 @@ export const reportPayloadSchema = z.union([
       strategic_recommendations: strategicRecommendations,
       follow_up_questions: [],
       handoff_trace: [],
+      execution_objectives: [],
       cached_sources: [],
       graphs: allGraphs,
     };
@@ -1842,6 +1874,9 @@ export const reportPayloadSchema = z.union([
         ? source.follow_up_questions
         : [],
       handoff_trace: Array.isArray(source.handoff_trace) ? source.handoff_trace : [],
+      execution_objectives: Array.isArray(source.execution_objectives)
+        ? source.execution_objectives
+        : [],
       cached_sources: Array.isArray(source.cached_sources) ? source.cached_sources : [],
       graphs: allGraphs,
       summary: executiveSummary,

@@ -193,6 +193,7 @@ export function useJainaChatStream() {
       try {
         payload = jainaChatRequestSchema.parse({
           query: input.query,
+          include_thoughts: true,
           userId: input.userId,
           canvas: input.canvas,
           clarification: input.clarificationId

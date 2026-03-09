@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PlusIcon } from "@radix-ui/react-icons";
+import { Loader2Icon, Trash2Icon } from "lucide-react";
 import { Button, Text } from "@radix-ui/themes";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -13,8 +14,10 @@ type JainaConversationSidebarProps = {
   sessionTitleById?: Record<string, string>;
   isLoading: boolean;
   isInteractionDisabled: boolean;
+  deletingSessionId?: string | null;
   onCreateConversation: () => void;
   onSelectConversation: (sessionId: string) => void;
+  onDeleteConversation: (sessionId: string) => void;
 };
 
 function formatSessionTimestamp(value: string | null): string {
@@ -52,8 +55,10 @@ export function JainaConversationSidebar({
   sessionTitleById,
   isLoading,
   isInteractionDisabled,
+  deletingSessionId,
   onCreateConversation,
   onSelectConversation,
+  onDeleteConversation,
 }: JainaConversationSidebarProps) {
   return (
     <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-72 md:border-b-0 md:border-r">
@@ -91,36 +96,64 @@ export function JainaConversationSidebar({
 
           {sessions.map((session) => {
             const isActive = session.sessionId === activeSessionId;
+            const isDeleting = deletingSessionId === session.sessionId;
             return (
-              <button
+              <div
                 key={session.sessionId}
-                type="button"
-                onClick={() => onSelectConversation(session.sessionId)}
-                disabled={isInteractionDisabled || isActive}
                 className={cn(
-                  "flex min-w-[220px] flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors md:min-w-0",
+                  "flex min-w-[220px] items-start gap-1 rounded-md border text-left transition-colors md:min-w-0",
                   isActive
                     ? "border-primary/70 bg-primary/10"
                     : "border-border/60 bg-background/40 hover:border-border hover:bg-background/70",
                   isInteractionDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                 )}
               >
-                <Text
-                  size="1"
-                  weight="medium"
-                  className="line-clamp-2 w-full text-primary"
+                <button
+                  type="button"
+                  onClick={() => onSelectConversation(session.sessionId)}
+                  disabled={isInteractionDisabled || isActive || isDeleting}
+                  className={cn(
+                    "flex flex-1 flex-col items-start gap-1 px-3 py-2 text-left",
+                    isInteractionDisabled || isDeleting
+                      ? "cursor-not-allowed"
+                      : "cursor-pointer"
+                  )}
                 >
-                  {getSessionTitle(session, sessionTitleById)}
-                </Text>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <Text size="1" className="uppercase tracking-wide text-muted-foreground">
-                    {session.lastMessageRole ?? "session"}
+                  <Text
+                    size="1"
+                    weight="medium"
+                    className="line-clamp-2 w-full text-primary"
+                  >
+                    {getSessionTitle(session, sessionTitleById)}
                   </Text>
-                  <Text size="1" className="text-muted-foreground">
-                    {formatSessionTimestamp(session.lastMessageAt)}
-                  </Text>
-                </div>
-              </button>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <Text size="1" className="uppercase tracking-wide text-muted-foreground">
+                      {session.lastMessageRole ?? "session"}
+                    </Text>
+                    <Text size="1" className="text-muted-foreground">
+                      {formatSessionTimestamp(session.lastMessageAt)}
+                    </Text>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteConversation(session.sessionId)}
+                  disabled={isInteractionDisabled || isDeleting}
+                  aria-label={`Delete conversation ${getSessionTitle(session, sessionTitleById)}`}
+                  className={cn(
+                    "mr-1 mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors",
+                    isInteractionDisabled || isDeleting
+                      ? "cursor-not-allowed opacity-50"
+                      : "cursor-pointer hover:bg-destructive/10 hover:text-destructive"
+                  )}
+                >
+                  {isDeleting ? (
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2Icon className="size-3.5" />
+                  )}
+                </button>
+              </div>
             );
           })}
         </div>

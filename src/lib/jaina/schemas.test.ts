@@ -62,6 +62,19 @@ describe("jainaChatRequestSchema", () => {
 
     expect(result.success).toBe(true);
   });
+
+  it("accepts include_thoughts in stream request contract", () => {
+    const result = jainaChatRequestSchema.safeParse({
+      query: "Summarize spend shifts",
+      include_thoughts: false,
+      context: {
+        adAccountId: "act_123",
+        brandId: "brand_456",
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("frontendCheckpointReportSchema Resilience", () => {
@@ -94,6 +107,7 @@ describe("frontendCheckpointReportSchema Resilience", () => {
       expect(Array.isArray(result.data.sections)).toBe(true);
       expect(result.data.sections.length).toBe(0);
       expect(result.data.performance_snapshot).toEqual([]);
+      expect(result.data.execution_objectives).toEqual([]);
     }
   });
 });
