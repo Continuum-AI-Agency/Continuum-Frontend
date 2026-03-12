@@ -62,6 +62,10 @@ type SpeechInputMode = "speech-recognition" | "media-recorder" | "none";
 
 export type SpeechInputProps = ComponentProps<typeof Button> & {
   onTranscriptionChange?: (text: string) => void;
+  onListeningChange?: (listening: boolean) => void;
+  preferStreamingTranscription?: boolean;
+  onAudioChunkRecorded?: (audioChunk: Blob) => Promise<void> | void;
+  chunkIntervalMs?: number;
   /**
    * Callback for when audio is recorded using MediaRecorder fallback.
    * This is called in browsers that don't support the Web Speech API (Firefox, Safari).
@@ -69,6 +73,15 @@ export type SpeechInputProps = ComponentProps<typeof Button> & {
    * Return the transcribed text, which will be passed to onTranscriptionChange.
    */
   onAudioRecorded?: (audioBlob: Blob) => Promise<string>;
+  /**
+   * Streaming transcription callback for MediaRecorder fallback.
+   * If provided, this is used instead of onAudioRecorded and can emit interim text
+   * by calling onDelta while the promise is in-flight.
+   */
+  onAudioRecordedStream?: (
+    audioBlob: Blob,
+    onDelta: (delta: string) => void
+  ) => Promise<string>;
   lang?: string;
 };
 
@@ -88,16 +101,39 @@ const detectSpeechInputMode = (): SpeechInputMode => {
   return "none";
 };
 
+const getPreferredRecorderMimeType = (): string | undefined => {
+  if (typeof window === "undefined" || !("MediaRecorder" in window)) {
+    return undefined;
+  }
+  const candidateMimeTypes = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+  ];
+  for (const mimeType of candidateMimeTypes) {
+    if (MediaRecorder.isTypeSupported(mimeType)) {
+      return mimeType;
+    }
+  }
+  return undefined;
+};
+
 export const SpeechInput = ({
   className,
   onTranscriptionChange,
+  onListeningChange,
+  preferStreamingTranscription = false,
+  onAudioChunkRecorded,
+  chunkIntervalMs = 800,
   onAudioRecorded,
+  onAudioRecordedStream,
   lang = "en-US",
   ...props
 }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode);
+  const [mode, setMode] = useState<SpeechInputMode>("none");
   const [isRecognitionReady, setIsRecognitionReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -108,10 +144,34 @@ export const SpeechInput = ({
   >(onTranscriptionChange);
   const onAudioRecordedRef =
     useRef<SpeechInputProps["onAudioRecorded"]>(onAudioRecorded);
+  const onAudioRecordedStreamRef =
+    useRef<SpeechInputProps["onAudioRecordedStream"]>(onAudioRecordedStream);
+  const onAudioChunkRecordedRef =
+    useRef<SpeechInputProps["onAudioChunkRecorded"]>(onAudioChunkRecorded);
 
   // Keep refs in sync
   onTranscriptionChangeRef.current = onTranscriptionChange;
   onAudioRecordedRef.current = onAudioRecorded;
+  onAudioRecordedStreamRef.current = onAudioRecordedStream;
+  onAudioChunkRecordedRef.current = onAudioChunkRecorded;
+
+  useEffect(() => {
+    onListeningChange?.(isListening);
+  }, [isListening, onListeningChange]);
+
+  useEffect(() => {
+    const detectedMode = detectSpeechInputMode();
+    if (
+      preferStreamingTranscription &&
+      typeof window !== "undefined" &&
+      "MediaRecorder" in window &&
+      "mediaDevices" in navigator
+    ) {
+      setMode("media-recorder");
+      return;
+    }
+    setMode(detectedMode);
+  }, [preferStreamingTranscription]);
 
   // Initialize Speech Recognition when mode is speech-recognition
   useEffect(() => {
@@ -195,19 +255,36 @@ export const SpeechInput = ({
 
   // Start MediaRecorder recording
   const startMediaRecorder = useCallback(async () => {
-    if (!onAudioRecordedRef.current) {
+    if (
+      !onAudioRecordedRef.current &&
+      !onAudioRecordedStreamRef.current &&
+      !onAudioChunkRecordedRef.current
+    ) {
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mediaRecorder = new MediaRecorder(stream);
+      const preferredMimeType = getPreferredRecorderMimeType();
+      const mediaRecorder = preferredMimeType
+        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+        : new MediaRecorder(stream);
       audioChunksRef.current = [];
 
-      const handleDataAvailable = (event: BlobEvent) => {
+      const handleDataAvailable = async (event: BlobEvent) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          if (onAudioChunkRecordedRef.current) {
+            try {
+              const cumulativeAudio = new Blob(audioChunksRef.current, {
+                type: mediaRecorder.mimeType || event.data.type || "audio/webm",
+              });
+              await onAudioChunkRecordedRef.current(cumulativeAudio);
+            } catch {
+              // Chunk-level errors are handled by callback implementor.
+            }
+          }
         }
       };
 
@@ -218,13 +295,24 @@ export const SpeechInput = ({
         streamRef.current = null;
 
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
+          type: mediaRecorder.mimeType || "audio/webm",
         });
 
-        if (audioBlob.size > 0 && onAudioRecordedRef.current) {
+        if (
+          audioBlob.size > 0 &&
+          (onAudioRecordedRef.current || onAudioRecordedStreamRef.current)
+        ) {
           setIsProcessing(true);
           try {
-            const transcript = await onAudioRecordedRef.current(audioBlob);
+            const transcribeRecordedAudio =
+              onAudioRecordedStreamRef.current
+                ? () =>
+                    onAudioRecordedStreamRef.current!(
+                      audioBlob,
+                      (delta) => onTranscriptionChangeRef.current?.(delta)
+                    )
+                : () => onAudioRecordedRef.current!(audioBlob);
+            const transcript = await transcribeRecordedAudio();
             if (transcript) {
               onTranscriptionChangeRef.current?.(transcript);
             }
@@ -249,12 +337,16 @@ export const SpeechInput = ({
       mediaRecorder.addEventListener("error", handleError);
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      if (onAudioChunkRecordedRef.current) {
+        mediaRecorder.start(chunkIntervalMs);
+      } else {
+        mediaRecorder.start();
+      }
       setIsListening(true);
     } catch {
       setIsListening(false);
     }
-  }, []);
+  }, [chunkIntervalMs]);
 
   // Stop MediaRecorder recording
   const stopMediaRecorder = useCallback(() => {
@@ -284,7 +376,10 @@ export const SpeechInput = ({
   const isDisabled =
     mode === "none" ||
     (mode === "speech-recognition" && !isRecognitionReady) ||
-    (mode === "media-recorder" && !onAudioRecorded) ||
+    (mode === "media-recorder" &&
+      !onAudioRecorded &&
+      !onAudioRecordedStream &&
+      !onAudioChunkRecorded) ||
     isProcessing;
 
   return (

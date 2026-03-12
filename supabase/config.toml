@@ -46,3 +46,13 @@ entrypoint = "./functions/fetch-timeline-blocks/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/fetch-timeline-accounts/index.ts"
+
+[functions.jaina-speech-to-text]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/jaina-speech-to-text/index.ts"
+
+[functions.jaina-speech-realtime]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/jaina-speech-realtime/index.ts"

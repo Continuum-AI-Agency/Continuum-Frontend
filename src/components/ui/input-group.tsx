@@ -8,13 +8,25 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
-function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
+type InputGroupProps = React.ComponentProps<"div"> & {
+  isRecording?: boolean;
+  isProcessing?: boolean;
+};
+
+function InputGroup({
+  className,
+  isRecording = false,
+  isProcessing = false,
+  ...props
+}: InputGroupProps) {
   return (
     <div
       data-slot="input-group"
+      data-recording={isRecording || undefined}
+      data-processing={isProcessing || undefined}
       role="group"
       className={cn(
-        "group/input-group border-input dark:bg-input/30 relative flex w-full items-center rounded-md border shadow-xs transition-[color,box-shadow] outline-none",
+        "group/input-group border-input bg-background dark:bg-input/30 relative flex w-full items-center rounded-xl border shadow-xs transition-[color,box-shadow,border-color] outline-none",
         "h-9 min-w-0 has-[>textarea]:h-auto",
 
         // Variants based on alignment.
@@ -24,10 +36,12 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
         "has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-end]]:[&>input]:pt-3",
 
         // Focus state.
-        "has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot=input-group-control]:focus-visible]:ring-[3px]",
+        "has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-ring/45 has-[[data-slot=input-group-control]:focus-visible]:ring-[3px]",
 
         // Error state.
         "has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[[data-slot][aria-invalid=true]]:border-destructive dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40",
+        "data-[recording=true]:border-rose-400/60 data-[recording=true]:shadow-[0_0_0_3px_color-mix(in_oklch,var(--color-rose-500)_20%,transparent)]",
+        "data-[processing=true]:border-amber-400/60 data-[processing=true]:shadow-[0_0_0_3px_color-mix(in_oklch,var(--color-amber-500)_15%,transparent)]",
 
         className
       )}
@@ -72,7 +86,10 @@ function InputGroupAddon({
         if ((e.target as HTMLElement).closest("button")) {
           return
         }
-        e.currentTarget.parentElement?.querySelector("input")?.focus()
+        const control = e.currentTarget.parentElement?.querySelector(
+          "input, textarea"
+        ) as HTMLInputElement | HTMLTextAreaElement | null
+        control?.focus()
       }}
       {...props}
     />
@@ -135,6 +152,7 @@ function InputGroupInput({
   return (
     <Input
       data-slot="input-group-control"
+      inputSize="md"
       className={cn(
         "flex-1 rounded-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent",
         className
