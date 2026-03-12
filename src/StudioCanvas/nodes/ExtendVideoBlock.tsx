@@ -111,7 +111,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover/preview:opacity-100 focus-visible:opacity-100"
+                  className="nodrag absolute right-2 top-2 z-20 h-7 w-7 border border-border/70 bg-background/90 opacity-90 shadow-sm backdrop-blur-sm transition-opacity hover:opacity-100 focus-visible:opacity-100"
                   onMouseDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation();
