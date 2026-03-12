@@ -72,8 +72,8 @@ import {
   type ObservabilityChartSeries,
 } from "./ObservabilityLightweightChart";
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
+import { resolveTimeRangeWindow, toMetricsRange, type PaidMediaTimeRange } from "./timeRange";
 
-type TimePreset = "last_7d" | "last_14d" | "last_30d";
 type TimelineResolution = "daily" | "hourly";
 type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "impressions" | "clicks";
 type ViewMode = "campaigns" | "adsets";
@@ -117,6 +117,7 @@ type CompareEntity = {
   type: "index" | "campaign";
   trends: PaidMetricsTrendPoint[];
   metrics?: Partial<Record<MetricKey, number>>;
+  comparison?: PaidMetricsComparison;
 };
 
 type CampaignAdSetWorkspaceProps = {
@@ -125,8 +126,9 @@ type CampaignAdSetWorkspaceProps = {
   campaigns: Campaign[];
   campaignIndexes: CampaignIndexRecord[];
   selectedCampaignIndexId: string;
+  alertsRefreshTick?: number;
   onSelectedCampaignIndexChange?: (indexId: string) => void;
-  timeRangePreset: TimePreset;
+  timeRange: PaidMediaTimeRange;
   resolution: TimelineResolution;
   onResolutionChange: (value: TimelineResolution) => void;
   activeOnly: boolean;
@@ -161,18 +163,6 @@ const CHART_HEIGHT_CLASS = "h-[clamp(220px,40vh,340px)]";
 const RAIL_HEIGHT_CLASS = "h-[clamp(320px,58vh,470px)]";
 const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(280px,54vh,440px)]";
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
-
-function daysForPreset(preset: TimePreset): number {
-  switch (preset) {
-    case "last_14d":
-      return 14;
-    case "last_30d":
-      return 30;
-    case "last_7d":
-    default:
-      return 7;
-  }
-}
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -335,6 +325,39 @@ function averageTrendPoints(pointSets: ObservabilityChartPoint[][]): Observabili
     }));
 }
 
+type AggregatedMetricsContext = {
+  metrics: Partial<Record<MetricKey, number>>;
+  comparison: PaidMetricsComparison;
+  trends: PaidMetricsTrendPoint[];
+};
+
+type AggregatableEntity = {
+  metrics?: Partial<Record<MetricKey, number>>;
+  comparison?: PaidMetricsComparison;
+  trends?: PaidMetricsTrendPoint[];
+};
+
+export function buildAggregatedMetricsContext(
+  entities: AggregatableEntity[]
+): AggregatedMetricsContext | undefined {
+  if (entities.length === 0) return undefined;
+
+  const aggregate = buildCampaignIndexAggregate(
+    entities.map((entity, index) => ({
+      id: `aggregate-${index}`,
+      metrics: entity.metrics,
+      comparison: entity.comparison,
+      trends: entity.trends,
+    }))
+  );
+
+  return {
+    metrics: aggregate.metrics,
+    comparison: aggregate.comparison,
+    trends: aggregate.trends,
+  };
+}
+
 function getDcoManagedCampaignIds(
   timelineCampaigns: Array<{ id: string; ad_sets?: Array<{ ads?: unknown[] }> }>
 ): string[] {
@@ -438,8 +461,9 @@ export function CampaignAdSetWorkspace({
   campaigns,
   campaignIndexes,
   selectedCampaignIndexId,
+  alertsRefreshTick,
   onSelectedCampaignIndexChange,
-  timeRangePreset,
+  timeRange,
   resolution,
   onResolutionChange,
   activeOnly,
@@ -464,14 +488,11 @@ export function CampaignAdSetWorkspace({
   const [showSelectedAdSetLines, setShowSelectedAdSetLines] = React.useState(true);
   const [adSetsByCampaign, setAdSetsByCampaign] = React.useState<Record<string, AdSetLoadState>>({});
   const hasSeededCompareSelectionRef = React.useRef(false);
+  const timeWindow = React.useMemo(() => resolveTimeRangeWindow(timeRange), [timeRange]);
+  const metricsRange = React.useMemo(() => toMetricsRange(timeRange), [timeRange]);
 
-  const now = React.useMemo(() => new Date(), []);
-  const endDateIso = React.useMemo(() => now.toISOString(), [now]);
-  const startDateIso = React.useMemo(() => {
-    const date = new Date(now);
-    date.setDate(date.getDate() - daysForPreset(timeRangePreset));
-    return date.toISOString();
-  }, [now, timeRangePreset]);
+  const startDateIso = React.useMemo(() => `${timeWindow.since}T00:00:00.000Z`, [timeWindow.since]);
+  const endDateIso = React.useMemo(() => `${timeWindow.until}T23:59:59.999Z`, [timeWindow.until]);
 
   const { campaigns: timelineCampaigns } = useTimelineBlocks({
     brandId,
@@ -486,12 +507,22 @@ export function CampaignAdSetWorkspace({
     [timelineCampaigns]
   );
 
-  const { logs: actionLogs, setFilters: setActionLogFilters } = useDCOActionLogs({
+  const { logs: actionLogs, setFilters: setActionLogFilters, refresh: refreshActionLogs } = useDCOActionLogs({
     brandId,
     metaAccountId: accountId,
     initialPageSize: 120,
-    initialDateRangeDays: daysForPreset(timeRangePreset),
+    initialDateRangeDays: timeWindow.dayCount,
   });
+  const refreshActionLogsRef = React.useRef(refreshActionLogs);
+
+  React.useEffect(() => {
+    refreshActionLogsRef.current = refreshActionLogs;
+  }, [refreshActionLogs]);
+
+  React.useEffect(() => {
+    if (!alertsRefreshTick) return;
+    refreshActionLogsRef.current();
+  }, [alertsRefreshTick]);
 
   React.useEffect(() => {
     setActionLogFilters({
@@ -597,6 +628,7 @@ export function CampaignAdSetWorkspace({
       type: "index",
       trends: entry.aggregate.trends,
       metrics: entry.aggregate.metrics,
+      comparison: entry.aggregate.comparison,
     }));
 
     const campaignEntities: CompareEntity[] = eligibleCampaigns.map((campaign) => ({
@@ -605,6 +637,7 @@ export function CampaignAdSetWorkspace({
       type: "campaign",
       trends: campaign.trends ?? [],
       metrics: campaign.metrics,
+      comparison: campaign.comparison,
     }));
 
     return [...indexEntities, ...campaignEntities];
@@ -698,7 +731,7 @@ export function CampaignAdSetWorkspace({
           label: entity.label,
           color: compareColorByKey.get(entity.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
           points,
-          markers: mapActionLogsToTimelineMarkers(markerLogs, points, resolution),
+          markers: mapActionLogsToTimelineMarkers(markerLogs, points, resolution, { viewLayer: "campaign" }),
           variant: "line" as const,
           emphasized: index === 0,
           dashed: index > 0,
@@ -707,65 +740,38 @@ export function CampaignAdSetWorkspace({
       .filter((entry) => entry.points.length > 0);
   }, [actionLogsByCampaignId, campaignMetric, compareColorByKey, indexCards, resolution, selectedCompareEntities]);
 
-  const focusedCampaignContext = React.useMemo(() => {
-    if (scope?.type === "index") {
-      const entry = indexCards.find((card) => card.index.id === scope.id);
-      if (entry) {
-        return {
-          label: `Index · ${entry.index.name}`,
-          metrics: entry.aggregate.metrics,
-          trends: entry.aggregate.trends,
-          comparison: undefined,
-        };
-      }
+  const selectedCompareSummary = React.useMemo(() => {
+    if (selectedCompareEntities.length === 0) return undefined;
+    if (selectedCompareEntities.length === 1) {
+      const [entity] = selectedCompareEntities;
+      return entity.type === "index" ? `Index · ${entity.label}` : entity.label;
     }
+    return `${selectedCompareEntities.length} selected entities`;
+  }, [selectedCompareEntities]);
 
-    if (scope?.type === "campaign") {
-      const campaign = campaignById.get(scope.id);
-      if (campaign) {
-        return {
-          label: campaign.name,
-          metrics: campaign.metrics,
-          trends: campaign.trends ?? [],
-          comparison: campaign.comparison,
-        };
-      }
-    }
-
-    const selected = selectedCompareEntities[0];
-    if (selected) {
-      return {
-        label: selected.type === "index" ? `Index · ${selected.label}` : selected.label,
-        metrics: selected.metrics,
-        trends: selected.trends,
-        comparison:
-          selected.type === "campaign"
-            ? campaignById.get(selected.key.replace("campaign:", ""))?.comparison
-            : undefined,
-      };
-    }
-
-    return undefined;
-  }, [campaignById, indexCards, scope, selectedCompareEntities]);
+  const aggregatedCampaignContext = React.useMemo(
+    () => buildAggregatedMetricsContext(selectedCompareEntities),
+    [selectedCompareEntities]
+  );
 
   const campaignMetricCards = React.useMemo(() => {
     return METRICS.map((metric) => {
-      const spark = mapTrendPoints(focusedCampaignContext?.trends, metric);
+      const spark = mapTrendPoints(aggregatedCampaignContext?.trends, metric);
       return {
         metric,
         label: labelForMetric(metric),
-        value: latestMetricValue(metric, focusedCampaignContext?.metrics, focusedCampaignContext?.trends),
+        value: latestMetricValue(metric, aggregatedCampaignContext?.metrics, aggregatedCampaignContext?.trends),
         color: METRIC_CARD_COLORS[metric],
         spark,
         changePct:
-          metricPercentageChange(metric, focusedCampaignContext?.comparison) ??
+          metricPercentageChange(metric, aggregatedCampaignContext?.comparison) ??
           trendPercentageChange(spark),
       };
     });
   }, [
-    focusedCampaignContext?.comparison,
-    focusedCampaignContext?.metrics,
-    focusedCampaignContext?.trends,
+    aggregatedCampaignContext?.comparison,
+    aggregatedCampaignContext?.metrics,
+    aggregatedCampaignContext?.trends,
   ]);
 
   const toggleCompareEntity = React.useCallback((key: string) => {
@@ -856,7 +862,7 @@ export function CampaignAdSetWorkspace({
                 accountId,
                 campaignId: campaign.id,
                 adsetId: adSet.id,
-                range: { preset: timeRangePreset },
+                range: metricsRange,
               }),
             });
 
@@ -917,14 +923,14 @@ export function CampaignAdSetWorkspace({
         }));
       }
     },
-    [accountId, adSetsByCampaign, brandId, timeRangePreset, timelineFallbackByCampaign]
+    [accountId, adSetsByCampaign, brandId, metricsRange, timelineFallbackByCampaign]
   );
 
   React.useEffect(() => {
     setAdSetsByCampaign({});
     setSelectedAdSetKeys([]);
     setFocusedAdSetKey(undefined);
-  }, [accountId, brandId, resolution, timeRangePreset]);
+  }, [accountId, brandId, resolution, timeRange]);
 
   React.useEffect(() => {
     if (
@@ -1033,12 +1039,6 @@ export function CampaignAdSetWorkspace({
     return scopedAdSets.filter((adSet) => selectedAdSetSet.has(scopedAdSetKey(adSet)));
   }, [scopedAdSets, selectedAdSetSet]);
 
-  const focusedAdSet = React.useMemo(() => {
-    if (!focusedAdSetKey) return selectedScopedAdSets[0];
-    const explicit = scopedAdSets.find((adSet) => scopedAdSetKey(adSet) === focusedAdSetKey);
-    return explicit ?? selectedScopedAdSets[0];
-  }, [focusedAdSetKey, scopedAdSets, selectedScopedAdSets]);
-
   const toggleAdSetSelection = React.useCallback(
     (key: string) => {
       setSelectedAdSetKeys((current) => {
@@ -1056,18 +1056,19 @@ export function CampaignAdSetWorkspace({
   );
 
   const adSetMetricCards = React.useMemo(() => {
+    const aggregate = buildAggregatedMetricsContext(selectedScopedAdSets);
     return METRICS.map((metric) => {
-      const spark = mapTrendPoints(focusedAdSet?.trends, metric);
+      const spark = mapTrendPoints(aggregate?.trends, metric);
       return {
         metric,
         label: labelForMetric(metric),
-        value: latestMetricValue(metric, focusedAdSet?.metrics, focusedAdSet?.trends),
+        value: latestMetricValue(metric, aggregate?.metrics, aggregate?.trends),
         color: METRIC_CARD_COLORS[metric],
         spark,
-        changePct: metricPercentageChange(metric, focusedAdSet?.comparison) ?? trendPercentageChange(spark),
+        changePct: metricPercentageChange(metric, aggregate?.comparison) ?? trendPercentageChange(spark),
       };
     });
-  }, [focusedAdSet?.comparison, focusedAdSet?.metrics, focusedAdSet?.trends]);
+  }, [selectedScopedAdSets]);
 
   const adSetColorByKey = React.useMemo(() => {
     return new Map(
@@ -1104,7 +1105,9 @@ export function CampaignAdSetWorkspace({
           label: `Selected Avg (${pointEntries.length})`,
           color: "#0ea5e9",
           points: averaged,
-          markers: mapActionLogsToTimelineMarkers(selectedAdSetActionLogs, averaged, resolution),
+          markers: mapActionLogsToTimelineMarkers(selectedAdSetActionLogs, averaged, resolution, {
+            viewLayer: "adset",
+          }),
           variant: "line",
           emphasized: true,
         });
@@ -1121,7 +1124,8 @@ export function CampaignAdSetWorkspace({
           markers: mapActionLogsToTimelineMarkers(
             actionLogsByAdSetId.get(entry.adSet.id) ?? [],
             entry.points,
-            resolution
+            resolution,
+            { viewLayer: "adset" }
           ),
           variant: "line",
           emphasized: !showSelectedAdSetAverage && index === 0,
@@ -1139,7 +1143,8 @@ export function CampaignAdSetWorkspace({
         markers: mapActionLogsToTimelineMarkers(
           actionLogsByAdSetId.get(first.adSet.id) ?? [],
           first.points,
-          resolution
+          resolution,
+          { viewLayer: "adset" }
         ),
         variant: "line",
         emphasized: true,
@@ -1283,8 +1288,10 @@ export function CampaignAdSetWorkspace({
                 <div>
                   <div className="text-sm font-semibold">Compare Timeline</div>
                   <div className="text-xs text-muted-foreground">
-                    {focusedCampaignContext
-                      ? `Metric cards and timeline for ${focusedCampaignContext.label}.`
+                    {selectedCompareSummary
+                      ? selectedCompareEntities.length === 1
+                        ? `Metric cards and timeline for ${selectedCompareSummary}.`
+                        : `Aggregated metric cards and timeline for ${selectedCompareSummary}.`
                       : "Select campaigns or indexes to compare."}
                   </div>
                 </div>
@@ -1912,7 +1919,11 @@ export function CampaignAdSetWorkspace({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">
-                      {focusedAdSet ? focusedAdSet.name : "Select ad sets"}
+                      {selectedScopedAdSets.length === 0
+                        ? "Select ad sets"
+                        : selectedScopedAdSets.length === 1
+                          ? selectedScopedAdSets[0]?.name
+                          : `Selected Ad Sets (${selectedScopedAdSets.length})`}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {selectedScopedAdSets.length} selected · {showSelectedAdSetAverage ? "avg on" : "avg off"} ·{" "}

@@ -99,4 +99,90 @@ describe("mapActionLogsToTimelineMarkers", () => {
     expect(markers[0]?.status).toBe("FAILED");
     expect(markers[1]?.time).toBe(1738407600);
   });
+
+  it("maps markers to nearest point within the same bucket when multiple points exist", () => {
+    const points = [
+      { time: 1738404000, value: 10 }, // 2025-02-01T10:00:00.000Z
+      { time: 1738406700, value: 11 }, // 2025-02-01T10:45:00.000Z
+    ] as const;
+
+    const logs: ActionLog[] = [
+      {
+        id: "nearest-1",
+        brandId: "brand-1",
+        metaAccountId: "act_123",
+        metaCampaignId: "cmp_1",
+        metaAdsetId: null,
+        metaAdId: null,
+        actionType: "ADJUST_BUDGET",
+        status: "SUCCESS",
+        scopeType: "CAMPAIGN",
+        scopeId: "cmp_1",
+        occurredAt: "2025-02-01T10:40:00.000Z",
+        actionPayload: {},
+        paramsChanged: {},
+        result: {},
+        decisionNote: null,
+        error: null,
+      },
+    ];
+
+    const markers = mapActionLogsToTimelineMarkers(logs, [...points], "daily");
+    expect(markers).toHaveLength(1);
+    expect(markers[0]?.time).toBe(1738406700);
+  });
+
+  it("demotes non-matching scopes to bottom markers for the current view layer", () => {
+    const points = [
+      { time: 1738404000, value: 10 }, // 2025-02-01T10:00:00.000Z
+      { time: 1738407600, value: 11 }, // 2025-02-01T11:00:00.000Z
+    ] as const;
+
+    const logs: ActionLog[] = [
+      {
+        id: "campaign-1",
+        brandId: "brand-1",
+        metaAccountId: "act_123",
+        metaCampaignId: "cmp_1",
+        metaAdsetId: "adset_1",
+        metaAdId: null,
+        actionType: "PAUSE_CAMPAIGN",
+        status: "SUCCESS",
+        scopeType: "CAMPAIGN",
+        scopeId: "cmp_1",
+        occurredAt: "2025-02-01T10:10:00.000Z",
+        actionPayload: {},
+        paramsChanged: {},
+        result: {},
+        decisionNote: null,
+        error: null,
+      },
+      {
+        id: "ad-1",
+        brandId: "brand-1",
+        metaAccountId: "act_123",
+        metaCampaignId: "cmp_1",
+        metaAdsetId: "adset_1",
+        metaAdId: "ad_1",
+        actionType: "SWITCH_CREATIVE",
+        status: "PENDING",
+        scopeType: "AD",
+        scopeId: "ad_1",
+        occurredAt: "2025-02-01T10:20:00.000Z",
+        actionPayload: {},
+        paramsChanged: {},
+        result: {},
+        decisionNote: null,
+        error: null,
+      },
+    ];
+
+    const markers = mapActionLogsToTimelineMarkers(logs, [...points], "hourly", { viewLayer: "campaign" });
+    expect(markers).toHaveLength(2);
+
+    const campaignMarker = markers.find((marker) => marker.scopeType === "CAMPAIGN");
+    const adMarker = markers.find((marker) => marker.scopeType === "AD");
+    expect(campaignMarker?.position).toBe("aboveBar");
+    expect(adMarker?.position).toBe("belowBar");
+  });
 });

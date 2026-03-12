@@ -1,10 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { BellIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { BellIcon, CalendarIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { Box, Card, Flex, IconButton, Select, Text } from "@radix-ui/themes";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { format, parseISO } from "date-fns";
+import type { DateRange } from "react-day-picker";
 
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,6 +25,13 @@ import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
 import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
 import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
+import {
+  buildDefaultCustomRange,
+  TIME_RANGE_OPTIONS,
+  toMetricsRange,
+  type PaidMediaTimeRange,
+  type TimePreset,
+} from "./timeRange";
 
 type Campaign = {
   id: string;
@@ -42,7 +53,6 @@ type Campaign = {
 };
 
 type Platform = "meta" | "google-ads" | "dv360";
-type TimePreset = "last_7d" | "last_14d" | "last_30d";
 type TimelineResolution = "daily" | "hourly";
 
 type PaidMediaDashboardProps = {
@@ -87,10 +97,15 @@ async function mapWithConcurrency<T, U>(
 
 export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardProps) {
   const [platform, setPlatform] = React.useState<Platform>("meta");
-  const [timeRange, setTimeRange] = React.useState<TimePreset>("last_7d");
+  const defaultCustomRange = React.useMemo(() => buildDefaultCustomRange(), []);
+  const [timeRangePreset, setTimeRangePreset] = React.useState<TimePreset>("last_7d");
+  const [customSince, setCustomSince] = React.useState(defaultCustomRange.since);
+  const [customUntil, setCustomUntil] = React.useState(defaultCustomRange.until);
+  const [customRangeOpen, setCustomRangeOpen] = React.useState(false);
   const [timelineResolution, setTimelineResolution] = React.useState<TimelineResolution>("daily");
   const [activeOnly, setActiveOnly] = React.useState(true);
   const [loadState, setLoadState] = React.useState<LoadState>({ status: "idle" });
+  const prefersReducedMotion = useReducedMotion();
 
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([]);
   const [selectedCampaignId, setSelectedCampaignId] = React.useState<string | undefined>();
@@ -98,8 +113,38 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
   const [selectedCampaignIndexId, setSelectedCampaignIndexId] = React.useState<string>("all");
   const [indexDialogOpen, setIndexDialogOpen] = React.useState(false);
   const [alertsPanelOpen, setAlertsPanelOpen] = React.useState(false);
+  const [alertsRefreshTick, setAlertsRefreshTick] = React.useState(0);
   const [savingIndex, setSavingIndex] = React.useState(false);
   const loadCampaignsRequestIdRef = React.useRef(0);
+  const timeRange = React.useMemo<PaidMediaTimeRange>(() => {
+    if (timeRangePreset !== "custom") {
+      return { preset: timeRangePreset };
+    }
+    return {
+      preset: "custom",
+      since: customSince,
+      until: customUntil,
+    };
+  }, [customSince, customUntil, timeRangePreset]);
+  const metricsRange = React.useMemo(() => toMetricsRange(timeRange), [timeRange]);
+  const customRangeSelection = React.useMemo<DateRange>(
+    () => ({
+      from: parseISO(customSince),
+      to: parseISO(customUntil),
+    }),
+    [customSince, customUntil]
+  );
+  const customRangeLabel = React.useMemo(() => {
+    const from = customRangeSelection.from;
+    const to = customRangeSelection.to;
+    if (!from) {
+      return "Pick a date range";
+    }
+    if (!to) {
+      return format(from, "LLL dd, yyyy");
+    }
+    return `${format(from, "LLL dd, yyyy")} - ${format(to, "LLL dd, yyyy")}`;
+  }, [customRangeSelection.from, customRangeSelection.to]);
 
   const loadCampaigns = React.useCallback(async () => {
     const requestId = loadCampaignsRequestIdRef.current + 1;
@@ -147,7 +192,7 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
                 brandId,
                 accountId: adAccountId,
                 campaignId: campaign.id,
-                range: { preset: timeRange },
+                range: metricsRange,
               }),
             });
 
@@ -183,7 +228,7 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
         message: error instanceof Error ? error.message : "Failed to load campaigns",
       });
     }
-  }, [adAccountId, brandId, platform, timeRange]);
+  }, [adAccountId, brandId, metricsRange, platform]);
 
   const loadCampaignIndexes = React.useCallback(async () => {
     if (!adAccountId) {
@@ -236,7 +281,17 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
   };
 
   const handleTimeRangeChange = (value: TimePreset) => {
-    setTimeRange(value);
+    setTimeRangePreset(value);
+    if (value !== "custom") {
+      setCustomRangeOpen(false);
+    }
+  };
+
+  const handleCustomRangeSelect = (range: DateRange | undefined) => {
+    if (!range?.from || !range?.to) return;
+    setCustomSince(format(range.from, "yyyy-MM-dd"));
+    setCustomUntil(format(range.to, "yyyy-MM-dd"));
+    setCustomRangeOpen(false);
   };
 
   const selectedCampaignIndex = React.useMemo(
@@ -342,14 +397,55 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
             </Select.Content>
           </Select.Root>
 
-          <Select.Root value={timeRange} onValueChange={handleTimeRangeChange}>
+          <Select.Root value={timeRangePreset} onValueChange={handleTimeRangeChange}>
             <Select.Trigger placeholder="Select time range" className="min-h-8 min-w-[120px] text-xs" />
             <Select.Content>
-              <Select.Item value="last_7d">Last 7 days</Select.Item>
-              <Select.Item value="last_14d">Last 14 days</Select.Item>
-              <Select.Item value="last_30d">Last 30 days</Select.Item>
+              {TIME_RANGE_OPTIONS.map((option) => (
+                <Select.Item key={option.value} value={option.value}>
+                  {option.label}
+                </Select.Item>
+              ))}
             </Select.Content>
           </Select.Root>
+
+          <AnimatePresence initial={false}>
+            {timeRangePreset === "custom" && (
+              <motion.div
+                key="custom-range-calendar"
+                initial={prefersReducedMotion ? false : { opacity: 0, y: -6, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.985 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 min-w-[250px] justify-start text-left text-xs font-normal"
+                    >
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                      {customRangeLabel}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-auto p-0">
+                    <Calendar
+                      mode="range"
+                      initialFocus
+                      defaultMonth={customRangeSelection.from}
+                      selected={customRangeSelection}
+                      onSelect={handleCustomRangeSelect}
+                      numberOfMonths={2}
+                      classNames={{
+                        head_row: "hidden",
+                        head_cell: "hidden",
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <Popover open={indexDialogOpen} onOpenChange={setIndexDialogOpen} modal={false}>
             <PopoverTrigger asChild>
@@ -391,6 +487,7 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
                 brandId={brandId}
                 metaAccountId={adAccountId ?? undefined}
                 campaignId={selectedCampaignId}
+                onRefresh={() => setAlertsRefreshTick((current) => current + 1)}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -424,12 +521,13 @@ export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardP
             campaignIndexes={campaignIndexes}
             selectedCampaignIndexId={selectedCampaignIndexId}
             onSelectedCampaignIndexChange={setSelectedCampaignIndexId}
-            timeRangePreset={timeRange}
+            timeRange={timeRange}
             resolution={timelineResolution}
             onResolutionChange={setTimelineResolution}
             activeOnly={activeOnly}
             onActiveOnlyChange={setActiveOnly}
             onSelectedCampaignChange={setSelectedCampaignId}
+            alertsRefreshTick={alertsRefreshTick}
             onEditCampaignIndex={(indexId) => {
               setSelectedCampaignIndexId(indexId);
               setIndexDialogOpen(true);

@@ -40,6 +40,7 @@ type DCOActionAlertsBoxProps = {
   metaAccountId?: string;
   campaignId?: string;
   className?: string;
+  onRefresh?: () => void;
 };
 
 type SortMode = "newest" | "oldest" | "severity" | "action";
@@ -125,6 +126,7 @@ export function DCOActionAlertsBox({
   metaAccountId,
   campaignId,
   className,
+  onRefresh,
 }: DCOActionAlertsBoxProps) {
   const [search, setSearch] = React.useState("");
   const [commandOpen, setCommandOpen] = React.useState(false);
@@ -204,6 +206,11 @@ export function DCOActionAlertsBox({
     : metaAccountId
       ? "Account context"
       : "Brand context";
+
+  const handleRefresh = React.useCallback(() => {
+    refresh();
+    onRefresh?.();
+  }, [onRefresh, refresh]);
 
   return (
     <div className={cn("grid h-[min(72vh,680px)] min-h-0 gap-3 lg:grid-cols-[220px_minmax(0,1fr)]", className)}>
@@ -286,7 +293,7 @@ export function DCOActionAlertsBox({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={refresh}
+              onClick={handleRefresh}
               disabled={isLoading}
               aria-label="Refresh alerts"
             >

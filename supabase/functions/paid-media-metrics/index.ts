@@ -9,6 +9,75 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type RangePreset = "last_7d" | "last_14d" | "last_30d" | "custom";
+type NormalizedRange = {
+  preset: RangePreset;
+  since?: string;
+  until?: string;
+};
+
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const SUPPORTED_PRESETS = new Set<RangePreset>(["last_7d", "last_14d", "last_30d", "custom"]);
+
+function coerceDateOnly(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (DATE_ONLY_PATTERN.test(trimmed)) {
+    const parsed = new Date(`${trimmed}T00:00:00.000Z`);
+    if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === trimmed) {
+      return trimmed;
+    }
+  }
+
+  const parsed = new Date(trimmed);
+  if (!Number.isFinite(parsed.getTime())) {
+    return undefined;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeRange(params: Record<string, unknown>): NormalizedRange {
+  const rangeInput =
+    params.range && typeof params.range === "object" && !Array.isArray(params.range)
+      ? (params.range as Record<string, unknown>)
+      : {};
+
+  const presetCandidate =
+    rangeInput.preset ?? params.rangePreset ?? params.range_preset ?? params.preset ?? "last_7d";
+  const preset = typeof presetCandidate === "string" && SUPPORTED_PRESETS.has(presetCandidate as RangePreset)
+    ? (presetCandidate as RangePreset)
+    : "last_7d";
+
+  if (preset !== "custom") {
+    return { preset };
+  }
+
+  const since = coerceDateOnly(
+    rangeInput.since ?? params.rangeSince ?? params.range_since ?? params.since,
+  );
+  const until = coerceDateOnly(
+    rangeInput.until ?? params.rangeUntil ?? params.range_until ?? params.until,
+  );
+
+  if (!since || !until) {
+    throw new Error("Custom range requires valid since and until dates.");
+  }
+
+  if (since > until) {
+    throw new Error("Custom range requires since to be on or before until.");
+  }
+
+  return {
+    preset: "custom",
+    since,
+    until,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -44,6 +113,17 @@ serve(async (req) => {
     params.accountId = params.accountId || params.adAccountId || params.ad_account_id;
     params.campaignId = params.campaignId || params.campaign_id;
     params.adsetId = params.adsetId || params.adset_id;
+    try {
+      params.range = normalizeRange(params);
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: error instanceof Error ? error.message : "Invalid range parameters" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
 
     console.log(`[paid-media-metrics] Processing request for platform: ${platform}`, params);
 

@@ -75,6 +75,7 @@ type OverlayMarker = {
   label: string;
   detail?: string;
   color: string;
+  position: "aboveBar" | "belowBar" | "inBar";
   scopeType?: string;
   actionCount: number;
   status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
@@ -131,18 +132,23 @@ function getSeriesTimeBounds(series: ObservabilityChartSeries[]): { min: number;
 }
 
 function bookmarkScopeLabel(scopes: Set<string>): string {
+  const hasCampaign = scopes.has("CAMPAIGN");
   const hasAdset = scopes.has("ADSET");
   const hasAd = scopes.has("AD");
+  const hasAccount = scopes.has("ACCOUNT");
+  const hasGlobal = scopes.has("GLOBAL");
+  if (hasCampaign && (hasAdset || hasAd)) return "Nested";
+  if (hasCampaign) return "Campaign";
   if (hasAdset && hasAd) return "Adset/Ad";
   if (hasAdset) return "Adset";
   if (hasAd) return "Ad";
+  if (hasAccount) return "Account";
+  if (hasGlobal) return "Global";
   return "Entity";
 }
 
 function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): OverlayBookmark[] {
-  const nestedMarkers = markers
-    .filter((marker) => marker.scopeType === "ADSET" || marker.scopeType === "AD")
-    .sort((left, right) => left.x - right.x);
+  const nestedMarkers = markers.slice().sort((left, right) => left.x - right.x);
 
   if (nestedMarkers.length === 0) return [];
 
@@ -246,6 +252,7 @@ export function ObservabilityLightweightChart({
           label: marker.label,
           detail: marker.detail,
           color: marker.color ?? entry.color,
+          position: marker.position ?? "aboveBar",
           scopeType: marker.scopeType,
           actionCount: Math.max(1, marker.actionCount ?? 1),
           status: marker.status,
@@ -267,8 +274,11 @@ export function ObservabilityLightweightChart({
     }, []);
     positioned.sort((left, right) => left.time - right.time);
 
-    setOverlayMarkers(positioned);
-    setOverlayBookmarks(buildBottomBookmarks(positioned, 72));
+    const topMarkers = positioned.filter((marker) => marker.position !== "belowBar");
+    const bookmarkMarkers = positioned.filter((marker) => marker.position === "belowBar");
+
+    setOverlayMarkers(topMarkers);
+    setOverlayBookmarks(buildBottomBookmarks(bookmarkMarkers, 72));
     setOverlayGeometry({ lineTop, lineBottom });
   }, [compact, series]);
 

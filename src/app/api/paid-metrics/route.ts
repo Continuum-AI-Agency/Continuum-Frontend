@@ -4,17 +4,38 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { PaidMetricsResponseSchema } from "@/lib/schemas/paidMetrics";
 
+const isoDaySchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must use YYYY-MM-DD format.");
+
+const rangeSchema = z
+  .discriminatedUnion("preset", [
+    z.object({
+      preset: z.enum(["last_7d", "last_14d", "last_30d"]),
+    }),
+    z.object({
+      preset: z.literal("custom"),
+      since: isoDaySchema,
+      until: isoDaySchema,
+    }),
+  ])
+  .superRefine((range, ctx) => {
+    if (range.preset === "custom" && range.since > range.until) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["since"],
+        message: "Custom range start date must be on or before end date.",
+      });
+    }
+  });
+
 const requestSchema = z.object({
   brandId: z.string(),
   platform: z.enum(["meta", "google-ads", "dv360"]).optional().default("meta"),
   accountId: z.string().optional(),
   campaignId: z.string().optional(),
   adsetId: z.string().optional(),
-  range: z.object({
-    preset: z.string(),
-    since: z.string().optional(),
-    until: z.string().optional(),
-  }),
+  range: rangeSchema,
   forceRefresh: z.boolean().optional(),
 });
 
@@ -46,13 +67,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate response against shared schema
     const validated = PaidMetricsResponseSchema.safeParse(data);
     if (!validated.success) {
       console.error("Invalid response from paid-media-metrics:", validated.error);
-       // Return data anyway but log error, or fail? Let's fail safe or return partial?
-       // For now, let's return data but warn in logs. 
-       // Actually, stricter is better.
       return NextResponse.json(
           { error: "Invalid response format from backend" }, 
           { status: 502 }

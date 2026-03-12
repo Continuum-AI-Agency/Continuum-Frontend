@@ -82,16 +82,16 @@ export const PaidMetricsResponseSchema = z.object({
 
 export type PaidMetricsResponse = z.infer<typeof PaidMetricsResponseSchema>;
 
+export type PaidMetricsRange =
+  | { preset: "last_7d" | "last_14d" | "last_30d" }
+  | { preset: "custom"; since: string; until: string };
+
 export type PaidMetricsRequest = {
     brandId: string;
     platform?: "meta" | "google-ads" | "dv360";
     accountId?: string;
     campaignId?: string;
     adsetId?: string;
-    range: {
-        preset: string;
-        since?: string;
-        until?: string;
-    };
+    range: PaidMetricsRange;
     forceRefresh?: boolean;
 };

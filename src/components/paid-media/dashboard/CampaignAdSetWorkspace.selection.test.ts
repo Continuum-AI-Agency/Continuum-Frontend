@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  buildAggregatedMetricsContext,
   normalizeCompareSelection,
   toHourlySliceSeconds,
 } from "./CampaignAdSetWorkspace";
@@ -81,5 +82,52 @@ describe("toHourlySliceSeconds", () => {
 
   it("returns null for all", () => {
     expect(toHourlySliceSeconds("all")).toBeNull();
+  });
+});
+
+describe("buildAggregatedMetricsContext", () => {
+  it("aggregates metrics, comparison, and trends across selected entities", () => {
+    const aggregate = buildAggregatedMetricsContext([
+      {
+        metrics: {
+          spend: 100,
+          roas: 2,
+          ctr: 1.2,
+          cpc: 1.5,
+          impressions: 1000,
+          clicks: 120,
+        },
+        comparison: {
+          spend: { current: 100, previous: 80, percentageChange: 25 },
+        },
+        trends: [{ date: "2026-01-01", spend: 100, roas: 2, ctr_pct: 1.2, cpc: 1.5, impressions: 1000, clicks: 120 }],
+      },
+      {
+        metrics: {
+          spend: 300,
+          roas: 4,
+          ctr: 2.4,
+          cpc: 3.5,
+          impressions: 3000,
+          clicks: 240,
+        },
+        comparison: {
+          spend: { current: 300, previous: 240, percentageChange: 25 },
+        },
+        trends: [{ date: "2026-01-01", spend: 300, roas: 4, ctr_pct: 2.4, cpc: 3.5, impressions: 3000, clicks: 240 }],
+      },
+    ]);
+
+    expect(aggregate).toBeDefined();
+    expect(aggregate?.metrics.spend).toBe(200);
+    expect(aggregate?.metrics.roas).toBe(3);
+    expect(aggregate?.comparison.spend?.percentageChange).toBe(25);
+    expect(aggregate?.trends).toHaveLength(1);
+    expect(aggregate?.trends[0]?.spend).toBe(200);
+    expect(aggregate?.trends[0]?.impressions).toBe(2000);
+  });
+
+  it("returns undefined when selection is empty", () => {
+    expect(buildAggregatedMetricsContext([])).toBeUndefined();
   });
 });

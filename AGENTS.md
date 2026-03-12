@@ -160,3 +160,5 @@ When you learn something, place a note of it here:
 - In brand integration assignment UIs, always merge brand-assigned integration accounts into selectable assets so invited members can view and keep existing brand-linked accounts even without personal OAuth ownership.
 - Impersonation callbacks must persist `is_impersonating` (for `/auth/callback` and `/callback` paths) so middleware bypasses the `/set-password` requirement for admin impersonation sessions.
 - Exclude `/socket.io` and `/.well-known/appspecific/*` probes from Next middleware matchers so extension/devtools polling does not trigger Supabase auth lookups on 404 noise requests.
+- Keep paid-media marker placement synchronized with alerts refresh: when `DCOActionAlertsBox` refreshes, trigger `CampaignAdSetWorkspace` action-log refresh so chart markers re-render against the latest alerts.
+- In paid-media observability charts, place action markers at the nearest in-window chart timestamp (time-sensitive), render full top markers only for the active layer (`CAMPAIGN` in campaign view, `ADSET` in adset view), and demote non-layer scopes (for example `AD`) to bottom bookmarks.

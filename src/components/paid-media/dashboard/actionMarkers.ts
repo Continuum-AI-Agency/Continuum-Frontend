@@ -5,6 +5,12 @@ import type {
 } from "./ObservabilityLightweightChart";
 
 export type MarkerResolution = "daily" | "hourly";
+export type MarkerViewLayer = "campaign" | "adset";
+
+type MarkerMappingOptions = {
+  maxMarkers?: number;
+  viewLayer?: MarkerViewLayer;
+};
 
 function toBucket(timestamp: string, resolution: MarkerResolution): string {
   if (resolution === "daily") {
@@ -62,16 +68,16 @@ function normalizeMarkerTime(
 ): number | null {
   if (points.length === 0) return null;
 
-  const targetBucket = toBucket(log.occurredAt, resolution);
-  const exact = points.find((point) => pointBucket(point.time, resolution) === targetBucket);
-  if (exact) return exact.time;
-
   const actionTimestamp = toUtcTimestamp(log.occurredAt);
   if (!actionTimestamp) return null;
 
+  const targetBucket = toBucket(log.occurredAt, resolution);
+  const bucketPoints = points.filter((point) => pointBucket(point.time, resolution) === targetBucket);
+  const candidates = bucketPoints.length > 0 ? bucketPoints : points;
+
   let nearest: ObservabilityChartPoint | undefined;
   let nearestDelta = Number.POSITIVE_INFINITY;
-  points.forEach((point) => {
+  candidates.forEach((point) => {
     const delta = Math.abs(Number(point.time) - Number(actionTimestamp));
     if (delta < nearestDelta) {
       nearest = point;
@@ -88,15 +94,32 @@ function strongestStatus(logs: ActionLog[]): ActionStatus {
   })[0]?.status ?? "SUCCESS";
 }
 
+function matchesViewLayer(scopeType: ActionLog["scopeType"], viewLayer: MarkerViewLayer): boolean {
+  if (viewLayer === "campaign") return scopeType === "CAMPAIGN";
+  return scopeType === "ADSET";
+}
+
 export function mapActionLogsToTimelineMarkers(
   logs: ActionLog[],
   points: ObservabilityChartPoint[],
   resolution: MarkerResolution,
-  maxMarkers = 36
+  options: number | MarkerMappingOptions = {}
 ): ObservabilityChartMarker[] {
   if (logs.length === 0 || points.length === 0) return [];
 
-  const grouped = new Map<string, { time: number; scopeType: ActionLog["scopeType"]; logs: ActionLog[] }>();
+  const normalizedOptions = typeof options === "number" ? { maxMarkers: options } : options;
+  const maxMarkers = normalizedOptions.maxMarkers ?? 36;
+  const viewLayer = normalizedOptions.viewLayer ?? "campaign";
+
+  const grouped = new Map<
+    string,
+    {
+      time: number;
+      scopeType: ActionLog["scopeType"];
+      position: ObservabilityChartMarker["position"];
+      logs: ActionLog[];
+    }
+  >();
 
   logs
     .slice()
@@ -104,8 +127,9 @@ export function mapActionLogsToTimelineMarkers(
     .forEach((log) => {
       const markerTime = normalizeMarkerTime(log, points, resolution);
       if (!markerTime) return;
+      const position = matchesViewLayer(log.scopeType, viewLayer) ? "aboveBar" : "belowBar";
 
-      const key = `${markerTime}:${log.scopeType}`;
+      const key = `${markerTime}:${log.scopeType}:${position}`;
       const existing = grouped.get(key);
       if (existing) {
         existing.logs.push(log);
@@ -115,6 +139,7 @@ export function mapActionLogsToTimelineMarkers(
       grouped.set(key, {
         time: markerTime,
         scopeType: log.scopeType,
+        position,
         logs: [log],
       });
     });
@@ -146,7 +171,7 @@ export function mapActionLogsToTimelineMarkers(
           .join(", ")}\n${describeActionLog(latest)}`,
         color,
         shape: "square",
-        position: "aboveBar",
+        position: group.position,
         scopeType: latest.scopeType,
         actionCount: count,
         status,
