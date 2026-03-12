@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ElementType } from "react";
+import { useCallback, useRef, useState, ElementType } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Badge } from "@radix-ui/themes";
 import {
@@ -36,6 +36,7 @@ import {
 import { BrandSwitcher } from "./BrandSwitcher";
 import { motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
+import { isPointerInDeepSidebarZone } from "./sidebarHoverIntent";
 
 function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams, item: { href: string }) {
   // Exact match for dashboard
@@ -102,22 +103,61 @@ import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvide
 export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { isMobile, state, toggleSidebar } = useSidebar();
+  const { isMobile, state, open, setOpen, toggleSidebar } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
   const isAdmin = isAdminUser(user);
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
+  const wasAutoExpandedRef = useRef(false);
+
+  const handleSidebarMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (isMobile || state !== "collapsed" || open) {
+        return;
+      }
+
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const shouldAutoExpand = isPointerInDeepSidebarZone({
+        pointerClientX: event.clientX,
+        sidebarLeft: bounds.left,
+        sidebarWidth: bounds.width,
+      });
+      if (!shouldAutoExpand) {
+        return;
+      }
+
+      setOpen(true);
+      wasAutoExpandedRef.current = true;
+    },
+    [isMobile, open, setOpen, state]
+  );
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    if (isMobile || !wasAutoExpandedRef.current || state !== "expanded") {
+      return;
+    }
+
+    setOpen(false);
+    wasAutoExpandedRef.current = false;
+  }, [isMobile, setOpen, state]);
+
+  const handleToggleSidebar = useCallback(() => {
+    wasAutoExpandedRef.current = false;
+    toggleSidebar();
+  }, [toggleSidebar]);
 
   return (
     <Sidebar
       collapsible="icon"
       className="border-r border-[var(--color-border)] bg-[var(--sidebar)] backdrop-blur-xl"
+      onMouseMove={handleSidebarMouseMove}
+      onMouseLeave={handleSidebarMouseLeave}
     >
       <SidebarHeader className="flex items-center justify-between px-3">
         <BrandSwitcher />
         <button
-          onClick={toggleSidebar}
+          onClick={handleToggleSidebar}
           className="flex h-8 w-8 items-center justify-center rounded-md text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
           aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
         >
