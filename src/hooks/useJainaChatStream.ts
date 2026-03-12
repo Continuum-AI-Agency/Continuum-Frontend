@@ -28,7 +28,6 @@ type JainaChatInput = {
   sessionId?: string;
   clarificationId?: string;
   userId?: string;
-  campaignCanvas?: Record<string, unknown>;
 };
 
 type StartResult = { error?: string };
@@ -204,7 +203,6 @@ export function useJainaChatStream() {
             brandId: input.brandId,
             sessionId: input.sessionId,
             canvas: input.canvas,
-            campaignCanvas: input.campaignCanvas,
           },
         });
       } catch (error) {
@@ -245,7 +243,9 @@ export function useJainaChatStream() {
           },
         });
 
-        setState((prev) => ({ ...prev, status: "complete" }));
+        setState((prev) =>
+          prev.status === "error" ? prev : { ...prev, status: "complete" }
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Stream failed";
         if (!controller.signal.aborted) {

@@ -16,6 +16,7 @@ import {
   responseOutputItemDoneSchema,
   responseReportAssemblySchema,
   responseCheckpointReportSchema,
+  responseBlockDeltaSchema,
   reportPayloadSchema,
   stateDeltaSchema,
   hitlPausedSchema,
@@ -32,6 +33,8 @@ import {
   adkEventSchema,
   parsePlanDecisionPayload,
   parsePlanRequestedPayload,
+  deriveLegacyFieldsFromBlocks,
+  hasReportContent,
   type JainaStreamEvent,
   type ProgressEventData,
   type ReportAssembly,
@@ -113,11 +116,19 @@ export type JainaStreamState = {
   lastCompletedPartId?: string;
   finalContentKind?: "report" | "text";
   progress: JainaProgressEntry[];
+  hasCanonicalCheckpointReport: boolean;
+  blockDeltas: Array<{
+    sequence: number;
+    source: string;
+    agent?: string;
+    block: FrontendCheckpointReport["blocks"][number];
+  }>;
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
   stateDeltas: StateDeltaEventData[];
   artifacts: ArtifactDeltaEventData;
   canvasActions: CampaignCanvasActionsEnvelope[];
+  reportSourceEventId?: string;
   lastEventType?: string;
 };
 
@@ -137,12 +148,15 @@ export function createInitialJainaStreamState(): JainaStreamState {
     lastPlanDecision: null,
     contentPartKinds: {},
     progress: [],
+    hasCanonicalCheckpointReport: false,
+    blockDeltas: [],
     toolCalls: [],
     toolResults: [],
     stateDeltas: [],
     artifacts: {},
     canvasActions: [],
     checkpointSummarySource: null,
+    reportSourceEventId: undefined,
   };
 }
 
@@ -187,6 +201,7 @@ function normalizeReportAssemblyToSoT(
     executive_summary: reportAssembly.summary.narrative,
     budget: null,
     performance_snapshot: snapshot,
+    blocks: [],
     sections: [
       {
         heading: reportAssembly.header.title,
@@ -344,9 +359,15 @@ function normalizeTable(
   if (!record) return null;
 
   const rowsRaw = asArray(record.rows);
-  const hasHeaders = Array.isArray(record.headers) && record.headers.length > 0;
+  const headerSource =
+    Array.isArray(record.headers) && record.headers.length > 0
+      ? record.headers
+      : Array.isArray(record.columns) && record.columns.length > 0
+        ? record.columns
+        : [];
+  const hasHeaders = headerSource.length > 0;
   const headers = hasHeaders
-    ? (record.headers as unknown[]).map((header) => String(header))
+    ? (headerSource as unknown[]).map((header) => String(header))
     : [];
 
   const normalizedRows: Array<unknown[] | Record<string, unknown>> = rowsRaw
@@ -519,6 +540,7 @@ function hasStructuredReportContent(report: FrontendCheckpointReport): boolean {
   return Boolean(
     report.executive_summary ||
       report.performance_snapshot.length ||
+      report.blocks.length ||
       report.strategic_recommendations.length ||
       report.graphs.length ||
       report.sections.some(
@@ -532,12 +554,58 @@ function hasStructuredReportContent(report: FrontendCheckpointReport): boolean {
   );
 }
 
+function createEmptyStructuredReport(): FrontendCheckpointReport {
+  return frontendCheckpointReportSchema.parse({});
+}
+
+function asStructuredReportFromState(
+  report: ReportPayload | null
+): FrontendCheckpointReport | null {
+  if (!report) return null;
+  if ("type" in report && report.type === "direct_answer") return null;
+  return report as FrontendCheckpointReport;
+}
+
+function mergeBlockDerivedCompatibility(
+  report: FrontendCheckpointReport
+): FrontendCheckpointReport {
+  if (!Array.isArray(report.blocks) || report.blocks.length === 0) {
+    return report;
+  }
+
+  const derived = deriveLegacyFieldsFromBlocks(report.blocks);
+
+  return {
+    ...report,
+    performance_snapshot:
+      report.performance_snapshot.length > 0
+        ? report.performance_snapshot
+        : derived.performance_snapshot,
+    sections: report.sections.length > 0 ? report.sections : derived.sections,
+    strategic_recommendations:
+      report.strategic_recommendations.length > 0
+        ? report.strategic_recommendations
+        : derived.strategic_recommendations,
+    follow_up_questions:
+      report.follow_up_questions.length > 0
+        ? report.follow_up_questions
+        : derived.follow_up_questions,
+    graphs: report.graphs.length > 0 ? report.graphs : derived.graphs,
+    cached_sources: Array.from(
+      new Set([...report.cached_sources, ...derived.cached_sources])
+    ),
+  };
+}
+
 
 function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointReport | null {
   const unwrappedValue = unwrapReportEnvelope(value);
 
   const strict = frontendCheckpointReportSchema.safeParse(unwrappedValue);
-  if (strict.success && hasStructuredReportContent(strict.data)) return strict.data;
+  if (strict.success) {
+    const mergedStrict = mergeBlockDerivedCompatibility(strict.data);
+    if (hasStructuredReportContent(mergedStrict)) return mergedStrict;
+  }
   const reportAssembly = reportAssemblySchema.safeParse(unwrappedValue);
   if (reportAssembly.success) {
     return normalizeReportAssemblyToSoT(reportAssembly.data);
@@ -628,6 +696,12 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
           status: "neutral",
         })
       : null;
+  const normalizedBlocksResult = frontendCheckpointReportSchema.shape.blocks.safeParse(
+    asArray(payloadRecord.blocks)
+  );
+  const normalizedBlocks = normalizedBlocksResult.success
+    ? normalizedBlocksResult.data
+    : [];
 
   const normalized: FrontendCheckpointReport = {
     language: getNonEmptyString(payloadRecord.language) ?? "en",
@@ -649,6 +723,7 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
       ...normalizedKpis,
       ...(budgetMetric ? [budgetMetric] : []),
     ],
+    blocks: normalizedBlocks,
     sections: normalizedSections,
     strategic_recommendations: strategicRecommendations,
     follow_up_questions: asArray(payloadRecord.follow_up_questions)
@@ -676,14 +751,21 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
   };
 
   const normalizedResult = frontendCheckpointReportSchema.safeParse(normalized);
-  if (normalizedResult.success) return normalizedResult.data;
+  if (normalizedResult.success) {
+    const mergedNormalized = mergeBlockDerivedCompatibility(normalizedResult.data);
+    if (hasStructuredReportContent(mergedNormalized)) {
+      return mergedNormalized;
+    }
+  }
 
   const fallback = reportPayloadSchema.safeParse(unwrappedValue);
   if (!fallback.success) return null;
   if ("type" in fallback.data && fallback.data.type === "direct_answer") return null;
 
   const fallbackResult = frontendCheckpointReportSchema.safeParse(fallback.data);
-  return fallbackResult.success ? fallbackResult.data : null;
+  if (!fallbackResult.success) return null;
+  const mergedFallback = mergeBlockDerivedCompatibility(fallbackResult.data);
+  return hasStructuredReportContent(mergedFallback) ? mergedFallback : null;
 }
 
 function parseReportFromAccumulatedText(reportJson: string): ReportPayload | null {
@@ -701,26 +783,99 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
   let bestReport: ReportPayload | null = null;
 
   for (const candidate of candidates) {
-    try {
-      const parsedJson = JSON.parse(candidate);
-      const normalizedReport = normalizeCheckpointReportPayload(parsedJson);
-      if (normalizedReport) {
-        bestReport = pickRicherReport(bestReport, normalizedReport);
-        continue;
-      }
+    const parsedJson = parseLooseJsonCandidate(candidate);
+    if (!parsedJson) continue;
 
-      const parsedReport = reportPayloadSchema.safeParse(
-        unwrapReportEnvelope(parsedJson)
-      );
-      if (parsedReport.success) {
-        bestReport = pickRicherReport(bestReport, parsedReport.data);
-      }
-    } catch {
-      continue;
+    const extracted = extractReportPayloadFromUnknown(parsedJson);
+    if (extracted) {
+      bestReport = pickRicherReport(bestReport, extracted);
     }
   }
 
   return bestReport;
+}
+
+function parseLooseJsonCandidate(candidate: string): unknown | null {
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    try {
+      return JSON.parse(sanitizeJsonStringLiterals(candidate));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function shouldAttemptStringReportExtraction(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
+  return (
+    trimmed.includes("checkpoint_report") ||
+    trimmed.includes("executive_summary") ||
+    trimmed.includes("performance_snapshot") ||
+    trimmed.includes("sections") ||
+    trimmed.includes("blocks") ||
+    trimmed.includes("strategic_recommendations")
+  );
+}
+
+function extractReportPayloadFromUnknown(
+  value: unknown,
+  depth = 0
+): ReportPayload | null {
+  if (depth > 6 || value == null) return null;
+
+  const normalized = normalizeCheckpointReportPayload(value);
+  if (normalized) return normalized;
+
+  const parsed = reportPayloadSchema.safeParse(unwrapReportEnvelope(value));
+  if (parsed.success && hasReportContent(parsed.data)) return parsed.data;
+
+  if (typeof value === "string") {
+    if (!shouldAttemptStringReportExtraction(value)) return null;
+    const parsedJson = parseLooseJsonCandidate(value.trim());
+    if (!parsedJson) return null;
+    return extractReportPayloadFromUnknown(parsedJson, depth + 1);
+  }
+
+  if (Array.isArray(value)) {
+    for (const candidate of value) {
+      const extracted = extractReportPayloadFromUnknown(candidate, depth + 1);
+      if (extracted) return extracted;
+    }
+    return null;
+  }
+
+  const record = asRecord(value);
+  if (!record) return null;
+
+  const prioritizedKeys = [
+    "checkpoint_report",
+    "report",
+    "payload",
+    "data",
+    "content",
+    "parts",
+    "text",
+    "message",
+    "response",
+  ];
+
+  for (const key of prioritizedKeys) {
+    if (!(key in record)) continue;
+    const extracted = extractReportPayloadFromUnknown(record[key], depth + 1);
+    if (extracted) return extracted;
+  }
+
+  const values = Object.values(record);
+  for (let index = 0; index < values.length && index < 24; index += 1) {
+    const extracted = extractReportPayloadFromUnknown(values[index], depth + 1);
+    if (extracted) return extracted;
+  }
+
+  return null;
 }
 
 function scoreReport(report: ReportPayload | null): number {
@@ -735,6 +890,7 @@ function scoreReport(report: ReportPayload | null): number {
     (Array.isArray(structured.performance_snapshot)
       ? structured.performance_snapshot.length
       : 0) +
+    (Array.isArray(structured.blocks) ? structured.blocks.length : 0) +
     (Array.isArray(structured.graphs) ? structured.graphs.length : 0) +
     (Array.isArray(structured.strategic_recommendations)
       ? structured.strategic_recommendations.length
@@ -764,12 +920,102 @@ function pickRicherReport(
     : currentReport;
 }
 
+function getStreamEventId(
+  event: ParsedJainaStreamEvent,
+  currentResponseId?: string
+): string | undefined {
+  const record = asRecord(event);
+  if (!record) return undefined;
+  const rootEventId = getNonEmptyString(record.event_id);
+  if (rootEventId) return rootEventId;
+
+  const dataRecord = asRecord(record.data);
+  const dataEventId = dataRecord ? getNonEmptyString(dataRecord.event_id) : undefined;
+  if (dataEventId) return dataEventId;
+
+  const fallbackId = getNonEmptyString(record.id);
+  if (fallbackId && fallbackId !== currentResponseId) {
+    return fallbackId;
+  }
+
+  return undefined;
+}
+
+function mergeReportForEventId(input: {
+  currentReport: ReportPayload | null;
+  candidateReport: ReportPayload;
+  currentSourceEventId?: string;
+  incomingEventId?: string;
+}): { report: ReportPayload; reportSourceEventId?: string } {
+  const { currentReport, candidateReport, currentSourceEventId, incomingEventId } = input;
+  if (incomingEventId && currentSourceEventId === incomingEventId) {
+    return {
+      report: candidateReport,
+      reportSourceEventId: incomingEventId,
+    };
+  }
+
+  return {
+    report: pickRicherReport(currentReport, candidateReport) ?? candidateReport,
+    reportSourceEventId: incomingEventId ?? currentSourceEventId,
+  };
+}
+
 function skipWhitespace(text: string, index: number): number {
   let cursor = index;
   while (cursor < text.length && /\s/.test(text[cursor])) {
     cursor += 1;
   }
   return cursor;
+}
+
+function sanitizeJsonStringLiterals(input: string): string {
+  let inString = false;
+  let isEscaped = false;
+  let output = "";
+
+  for (const char of input) {
+    if (!inString) {
+      if (char === "\"") inString = true;
+      output += char;
+      continue;
+    }
+
+    if (isEscaped) {
+      isEscaped = false;
+      output += char;
+      continue;
+    }
+
+    if (char === "\\") {
+      isEscaped = true;
+      output += char;
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = false;
+      output += char;
+      continue;
+    }
+
+    if (char === "\n") {
+      output += "\\n";
+      continue;
+    }
+    if (char === "\r") {
+      output += "\\r";
+      continue;
+    }
+    if (char === "\t") {
+      output += "\\t";
+      continue;
+    }
+
+    output += char;
+  }
+
+  return output;
 }
 
 function findJsonValueStartByKey(text: string, key: string): number | null {
@@ -866,7 +1112,11 @@ function extractStringFieldByKeys(
         try {
           return JSON.parse(encoded);
         } catch {
-          return undefined;
+          try {
+            return JSON.parse(sanitizeJsonStringLiterals(encoded));
+          } catch {
+            return undefined;
+          }
         }
       }
       cursor += 1;
@@ -885,7 +1135,12 @@ function extractArrayFieldByKeys(text: string, keys: string[]): unknown[] | unde
       const parsed = JSON.parse(segment);
       if (Array.isArray(parsed)) return parsed;
     } catch {
-      continue;
+      try {
+        const parsed = JSON.parse(sanitizeJsonStringLiterals(segment));
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        continue;
+      }
     }
   }
   return undefined;
@@ -906,7 +1161,14 @@ function extractObjectFieldByKeys(
         return parsed as Record<string, unknown>;
       }
     } catch {
-      continue;
+      try {
+        const parsed = JSON.parse(sanitizeJsonStringLiterals(segment));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        continue;
+      }
     }
   }
   return undefined;
@@ -1045,14 +1307,60 @@ function looksLikeStructuredReportDelta(delta: string): boolean {
   if (!trimmed) return false;
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
   return (
+    trimmed.includes("checkpoint_report") ||
     trimmed.includes("\"report_type\"") ||
     trimmed.includes("\"executive_summary\"") ||
     trimmed.includes("\"performance_snapshot\"") ||
     trimmed.includes("\"sections\"") ||
+    trimmed.includes("\"blocks\"") ||
     trimmed.includes("\"strategic_recommendations\"") ||
     trimmed.includes("\"kpis\"") ||
     trimmed.includes("\"budget\"")
   );
+}
+
+function looksLikeCheckpointReportPayload(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.includes("checkpoint_report") ||
+    trimmed.includes("\"checkpoint_report\"") ||
+    trimmed.includes("\"report_metadata\"") ||
+    (trimmed.includes("\"executive_summary\"") &&
+      (trimmed.includes("\"sections\"") ||
+        trimmed.includes("\"blocks\"") ||
+        trimmed.includes("\"performance_snapshot\"") ||
+        trimmed.includes("\"strategic_recommendations\"")))
+  );
+}
+
+function parseStructuredReportFromText(text: string): ReportPayload | null {
+  const strictSchemaMatch = parseReportFromAccumulatedText(text);
+  if (strictSchemaMatch) {
+    if ("type" in strictSchemaMatch && strictSchemaMatch.type === "direct_answer") {
+      return null;
+    }
+    return strictSchemaMatch;
+  }
+
+  const looksLikeReportText =
+    looksLikeCheckpointReportPayload(text) ||
+    text.includes("checkpoint_report") ||
+    text.includes("\"executive_summary\"") ||
+    text.includes("\"performance_snapshot\"") ||
+    text.includes("\"strategic_recommendations\"") ||
+    text.includes("\"follow_up_questions\"") ||
+    text.includes("\"sections\"") ||
+    text.includes("\"blocks\"");
+  if (!looksLikeReportText) {
+    return null;
+  }
+  const parsedReport = parsePartialReportFromAccumulatedText(text);
+  if (!parsedReport) return null;
+  if ("type" in parsedReport && parsedReport.type === "direct_answer") {
+    return null;
+  }
+  return parsedReport;
 }
 
 export function parseJainaStreamEvent(line: string): ParsedJainaStreamEvent | null {
@@ -1487,6 +1795,7 @@ export function reduceJainaStreamEvent(
   state: JainaStreamState,
   event: ParsedJainaStreamEvent
 ): JainaStreamState {
+  const streamEventId = getStreamEventId(event, state.responseId);
   const nextBase: JainaStreamState = {
     ...state,
     status: state.status === "idle" ? "streaming" : state.status,
@@ -1567,7 +1876,47 @@ export function reduceJainaStreamEvent(
         itemId: parsed.data.data.item_id,
         partId: parsed.data.data.part_id,
         report: normalizedReport,
+        reportSourceEventId: undefined,
         reportJson: JSON.stringify(normalizedReport),
+        hasCanonicalCheckpointReport: true,
+        blockDeltas: [],
+        finalContentKind: "report",
+      };
+    }
+    case "response.block.delta": {
+      const parsed = responseBlockDeltaSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return { ...nextBase, status: "error", error: "Malformed response.block.delta event" };
+      }
+      if (state.hasCanonicalCheckpointReport) {
+        return nextBase;
+      }
+
+      const payload = parsed.data.data;
+      if (state.blockDeltas.some((entry) => entry.sequence === payload.sequence)) {
+        return nextBase;
+      }
+      const nextBlockDeltas = [
+        ...state.blockDeltas,
+        {
+          sequence: payload.sequence,
+          source: payload.source,
+          agent: payload.agent,
+          block: payload.block,
+        },
+      ].sort((left, right) => left.sequence - right.sequence);
+
+      const existingStructured = asStructuredReportFromState(state.report);
+      const baseReport = existingStructured ?? createEmptyStructuredReport();
+      const progressiveReport = mergeBlockDerivedCompatibility({
+        ...baseReport,
+        blocks: nextBlockDeltas.map((entry) => entry.block),
+      });
+
+      return {
+        ...nextBase,
+        blockDeltas: nextBlockDeltas,
+        report: progressiveReport,
         finalContentKind: "report",
       };
     }
@@ -1584,6 +1933,9 @@ export function reduceJainaStreamEvent(
         reportAssembly: parsed.data.data.report,
         reportAssemblyHtml: parsed.data.data.html_preview,
         report: normalizeReportAssemblyToSoT(parsed.data.data.report),
+        reportSourceEventId: undefined,
+        hasCanonicalCheckpointReport: false,
+        blockDeltas: [],
         finalContentKind: "report",
       };
     }
@@ -1592,7 +1944,58 @@ export function reduceJainaStreamEvent(
       if (!parsed.success || !parsed.data.data) {
         return { ...nextBase, status: "error", error: "Malformed response.created event" };
       }
-      return { ...nextBase, responseId: parsed.data.data.id };
+      const incomingResponseId = parsed.data.data.id;
+      const isDuplicateCreated = state.responseId === incomingResponseId;
+      if (isDuplicateCreated) {
+        return {
+          ...nextBase,
+          responseId: state.responseId,
+        };
+      }
+      const isInFlight =
+        state.status === "starting" || state.status === "streaming";
+      const hasActiveResponse =
+        Boolean(state.responseId) &&
+        state.responseId !== incomingResponseId;
+      if (isInFlight && hasActiveResponse) {
+        return nextBase;
+      }
+      return {
+        ...nextBase,
+        status: "streaming",
+        error: undefined,
+        responseId: incomingResponseId,
+        reportJson: "",
+        planJson: "",
+        responseText: "",
+        report: null,
+        reportAssembly: null,
+        reportAssemblyHtml: null,
+        plan: null,
+        pendingPlan: null,
+        pendingClarification: null,
+        objectives: [],
+        lastPlanDecision: null,
+        latestCheckpointSummary: undefined,
+        checkpointSummarySource: null,
+        runId: undefined,
+        runSessionId: undefined,
+        itemId: undefined,
+        partId: undefined,
+        outputItemId: undefined,
+        contentPartKinds: {},
+        lastCompletedPartId: undefined,
+        finalContentKind: undefined,
+        progress: [],
+        hasCanonicalCheckpointReport: false,
+        blockDeltas: [],
+        toolCalls: [],
+        toolResults: [],
+        stateDeltas: [],
+        artifacts: {},
+        canvasActions: [],
+        reportSourceEventId: undefined,
+      };
     }
     case "response.run.created": {
       const parsed = responseRunCreatedSchema.safeParse(event);
@@ -1863,6 +2266,22 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return nextBase;
       }
+      const structuredReport = parseStructuredReportFromText(parsed.data.text);
+      if (structuredReport) {
+        const merged = mergeReportForEventId({
+          currentReport: state.report,
+          candidateReport: structuredReport,
+          currentSourceEventId: state.reportSourceEventId,
+          incomingEventId: streamEventId,
+        });
+        return {
+          ...nextBase,
+          reportJson: `${state.reportJson}${parsed.data.text}`,
+          report: merged.report,
+          reportSourceEventId: merged.reportSourceEventId,
+          finalContentKind: "report",
+        };
+      }
       const detail = formatThoughtDetail(parsed.data.text);
       return {
         ...nextBase,
@@ -1915,6 +2334,23 @@ export function reduceJainaStreamEvent(
 
       for (const part of parsed.data.content.parts) {
         if ("text" in part) {
+          const structuredReport = parseStructuredReportFromText(part.text);
+          if (structuredReport) {
+            const merged = mergeReportForEventId({
+              currentReport: nextState.report,
+              candidateReport: structuredReport,
+              currentSourceEventId: nextState.reportSourceEventId,
+              incomingEventId: streamEventId,
+            });
+            nextState = {
+              ...nextState,
+              reportJson: `${nextState.reportJson}${part.text}`,
+              report: merged.report,
+              reportSourceEventId: merged.reportSourceEventId,
+              finalContentKind: "report",
+            };
+            continue;
+          }
           const detail = formatThoughtDetail(part.text);
           const inferredPlan = looksLikePlanDelta(part.text)
             ? parsePlanFromAccumulatedDelta(part.text, nextState.plan)
@@ -2088,6 +2524,13 @@ export function reduceJainaStreamEvent(
         return { ...nextBase, status: "error", error: "Malformed response.output_json.delta event" };
       }
       const nextReportJson = `${state.reportJson}${payload.delta}`;
+      if (state.hasCanonicalCheckpointReport) {
+        return {
+          ...nextBase,
+          reportJson: nextReportJson,
+          finalContentKind: "report",
+        };
+      }
       const parsedReport =
         parseReportFromAccumulatedText(nextReportJson) ??
         parsePartialReportFromAccumulatedText(nextReportJson);
@@ -2095,6 +2538,7 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         reportJson: nextReportJson,
         report: pickRicherReport(state.report, parsedReport),
+        reportSourceEventId: parsedReport ? undefined : state.reportSourceEventId,
         finalContentKind: "report",
       };
     }
@@ -2102,6 +2546,15 @@ export function reduceJainaStreamEvent(
       const payload = parseDeltaPayload(event, outputJsonDeltaSchema);
       if (!payload) {
         return { ...nextBase, status: "error", error: "Malformed response.output_text.delta event" };
+      }
+      if (state.hasCanonicalCheckpointReport) {
+        return {
+          ...nextBase,
+          ...(payload.item_id && !nextBase.outputItemId
+            ? { outputItemId: payload.item_id }
+            : {}),
+          responseText: `${state.responseText}${payload.delta}`,
+        };
       }
       const partKind = payload.part_id
         ? state.contentPartKinds[payload.part_id]
@@ -2127,6 +2580,7 @@ export function reduceJainaStreamEvent(
         reportJson: nextReportJson,
         responseText: `${state.responseText}${payload.delta}`,
         report: pickRicherReport(state.report, parsedReport),
+        reportSourceEventId: parsedReport ? undefined : state.reportSourceEventId,
       };
     }
     case "response.clarification_request": {
@@ -2280,6 +2734,12 @@ export function reduceJainaStreamEvent(
       if (parsed.success && parsed.data.data?.item_id && parsed.data.data.item_id !== state.outputItemId) {
         return nextBase;
       }
+      if (state.hasCanonicalCheckpointReport) {
+        return {
+          ...nextBase,
+          finalContentKind: "report",
+        };
+      }
       if (!state.reportJson.trim() || state.report) {
         return {
           ...nextBase,
@@ -2288,7 +2748,12 @@ export function reduceJainaStreamEvent(
       }
       const parsedReport = parseReportFromAccumulatedText(state.reportJson);
       if (parsedReport) {
-        return { ...nextBase, report: parsedReport, finalContentKind: "report" };
+        return {
+          ...nextBase,
+          report: parsedReport,
+          reportSourceEventId: undefined,
+          finalContentKind: "report",
+        };
       }
       return nextBase;
     }
@@ -2321,6 +2786,7 @@ export function reduceJainaStreamEvent(
         return {
           ...nextBase,
           report: parsedReport,
+          reportSourceEventId: undefined,
           lastCompletedPartId: completedPartId,
           finalContentKind: "report",
         };
@@ -2336,6 +2802,36 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return { ...nextBase, status: "error", error: "Malformed response.done event" };
       }
+      if (
+        parsed.data.data?.id &&
+        state.responseId &&
+        parsed.data.data.id !== state.responseId
+      ) {
+        return nextBase;
+      }
+      const terminalStatus = parsed.data.data?.status ?? "completed";
+      if (terminalStatus !== "completed") {
+        const recoveredReport =
+          state.report ??
+          (state.reportJson.trim().length > 0
+            ? parseReportFromAccumulatedText(state.reportJson)
+            : null);
+        return {
+          ...nextBase,
+          status: "error",
+          error: getDoneFailureMessage(parsed.data.data?.status_details),
+          report: recoveredReport ?? state.report,
+          finalContentKind:
+            recoveredReport || state.report ? "report" : state.finalContentKind,
+        };
+      }
+      if (state.hasCanonicalCheckpointReport) {
+        return {
+          ...nextBase,
+          status: "complete",
+          finalContentKind: state.report ? "report" : state.finalContentKind,
+        };
+      }
       if (!state.reportJson.trim()) {
         return {
           ...nextBase,
@@ -2349,6 +2845,7 @@ export function reduceJainaStreamEvent(
           ...nextBase,
           status: "complete",
           report: parsedReport,
+          reportSourceEventId: undefined,
           finalContentKind: "report",
         };
       }
@@ -2397,6 +2894,17 @@ function formatToolLabel(toolName: unknown) {
   return value.replace(/_/g, " ");
 }
 
+function getDoneFailureMessage(statusDetails: unknown): string {
+  const details = asRecord(statusDetails);
+  if (!details) return "Jaina run failed.";
+  const directMessage = getNonEmptyString(details.message);
+  if (directMessage) return directMessage;
+  const nestedError = asRecord(details.error);
+  const nestedMessage = getNonEmptyString(nestedError?.message);
+  if (nestedMessage) return nestedMessage;
+  return "Jaina run failed.";
+}
+
 type ThoughtPayload = Record<string, unknown>;
 
 function formatThoughtDetail(text: string | undefined): string | undefined {
@@ -2441,7 +2949,12 @@ function formatThoughtDetail(text: string | undefined): string | undefined {
     parts.push(`Tables: ${tables.join("; ")}`);
   }
 
-  return parts.length > 0 ? parts.join(" • ") : undefined;
+  if (parts.length > 0) {
+    return parts.join(" • ");
+  }
+
+  const serialized = serializeThoughtPayload(parsed);
+  return serialized ?? undefined;
 }
 
 function parseThoughtPayload(text: string): ThoughtPayload | null {
@@ -2477,6 +2990,18 @@ function stripThoughtCodeFence(text: string): string {
     return fenced[1].trim();
   }
   return text.trim();
+}
+
+function serializeThoughtPayload(payload: ThoughtPayload): string | null {
+  try {
+    const serialized = JSON.stringify(payload, null, 2);
+    if (!serialized) return null;
+    const maxLength = 8000;
+    if (serialized.length <= maxLength) return serialized;
+    return `${serialized.slice(0, maxLength)}\n... (truncated)`;
+  } catch {
+    return null;
+  }
 }
 
 function getNonEmptyString(value: unknown): string | undefined {

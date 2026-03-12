@@ -311,4 +311,153 @@ describe("Report Parsing Integration", () => {
       expect(data.strategic_recommendations[1].priority).toBe("MEDIUM");
     }
   });
+
+  it("should parse category-based blocks and derive legacy render fields", () => {
+    const payload = {
+      executive_summary: "Blocks-based synthesis output.",
+      blocks: [
+        {
+          block_id: "block-summary-1",
+          category: "summary_breakdown",
+          scope: "account",
+          title: "Account Breakdown",
+          summary: "Account-level findings and actions.",
+          cached_sources: ["cache://account"],
+          highlights: [
+            {
+              category: "performance",
+              title: "Top Winner",
+              text: "Prospecting campaign delivered strongest ROAS.",
+              impact: "POSITIVE",
+              severity: "positive",
+              evidence: ["ROAS 1.92"],
+            },
+          ],
+          actions: [
+            {
+              title: "Scale Prospecting Winner",
+              rationale: "Best-performing campaign has stable CPA and ROAS.",
+              expected_impact: "Improve blended ROAS",
+              priority: "HIGH",
+            },
+          ],
+          tables: [
+            {
+              title: "Campaign Snapshot",
+              headers: ["Campaign", "ROAS"],
+              rows: [["Prospecting", "1.92"]],
+            },
+          ],
+        },
+        {
+          block_id: "block-data-1",
+          category: "data",
+          scope: "campaign",
+          title: "Metric Snapshot",
+          summary: "Latest metric snapshot for decision making.",
+          cached_sources: [],
+          rows: [
+            { metric: "Spend", value: 1200, prefix: "$", status: "neutral" },
+            { metric: "ROAS", value: 1.92, suffix: "x", status: "positive" },
+          ],
+          tables: [
+            {
+              headers: ["Segment", "CPA"],
+              rows: [["Prospecting", "21.31"]],
+            },
+          ],
+        },
+        {
+          block_id: "block-graph-1",
+          category: "graph",
+          scope: "campaign",
+          title: "Trend Graphs",
+          summary: "Recent trend evolution.",
+          cached_sources: [],
+          graphs: [
+            {
+              title: "ROAS Trend",
+              type: "line",
+              series: [{ name: "ROAS", data: [{ x: "Mon", y: 1.2 }, { x: "Tue", y: 1.4 }] }],
+            },
+            {
+              title: "Spend by Day",
+              type: "bar",
+              data: [{ label: "Mon", value: 400 }, { label: "Tue", value: 800 }],
+            },
+          ],
+        },
+        {
+          block_id: "block-insight-1",
+          category: "insight_recommendation",
+          scope: "account",
+          title: "Decision Layer",
+          summary: "Recommendations and follow-up questions.",
+          cached_sources: [],
+          items: [
+            {
+              item_type: "recommendation",
+              title: "Reallocate Budget",
+              summary: "Shift 20% budget from low performers to winners.",
+              payload: { priority: "HIGH", expected_impact: "Higher ROAS" },
+            },
+            {
+              item_type: "question",
+              title: "Approval Needed",
+              summary: "Can we move 20% budget this week?",
+              payload: {},
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = reportPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      const data = result.data as any;
+      expect(data.blocks.length).toBe(4);
+      expect(data.performance_snapshot.length).toBe(2);
+      expect(data.sections.length).toBeGreaterThan(0);
+      expect(data.strategic_recommendations.length).toBe(1);
+      expect(data.strategic_recommendations[0].title).toBe("Reallocate Budget");
+      expect(data.follow_up_questions).toContain("Can we move 20% budget this week?");
+      expect(data.graphs.length).toBe(2);
+    }
+  });
+
+  it("should normalize legacy block_type aliases into canonical categories", () => {
+    const payload = {
+      summary: "Alias compatibility check",
+      blocks: [
+        {
+          block_id: "legacy-1",
+          block_type: "recommendations",
+          scope: "account",
+          title: "Legacy Recommendations",
+          summary: "Legacy recommendation payload.",
+          cached_sources: [],
+          recommendations: [
+            {
+              action: "Pause Laggards",
+              description: "Pause lowest-ROAS ad sets.",
+              priority: "MEDIUM",
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = reportPayloadSchema.safeParse(payload);
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      const data = result.data as any;
+      expect(data.blocks.length).toBe(1);
+      expect(data.blocks[0].category).toBe("insight_recommendation");
+      expect(data.strategic_recommendations.length).toBe(1);
+      expect(data.strategic_recommendations[0].title).toBe("Pause Laggards");
+    }
+  });
 });

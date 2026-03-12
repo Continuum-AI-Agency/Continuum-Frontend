@@ -8,8 +8,6 @@ import { PaidMediaDashboard } from "@/components/paid-media/dashboard/PaidMediaD
 import { useSearchParams, useRouter } from "next/navigation";
 import { CampaignCanvas } from "@/CampaignCanvas/components/CampaignCanvas";
 import { ReactFlowProvider } from "@xyflow/react";
-import { useCampaignStore } from "@/CampaignCanvas/stores/useCampaignStore";
-import { buildCampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 import { useSession } from "@/hooks/useSession";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -37,8 +35,6 @@ export default function PaidMediaClientPage({
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
   const [isResizingCanvas, setIsResizingCanvas] = React.useState(false);
   const canvasShellRef = React.useRef<HTMLDivElement | null>(null);
-  const nodes = useCampaignStore((state) => state.nodes);
-  const edges = useCampaignStore((state) => state.edges);
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => {
@@ -120,17 +116,6 @@ export default function PaidMediaClientPage({
     return () => window.removeEventListener("resize", updateWidth);
   }, [clampCanvasWidth]);
 
-  const campaignCanvasPayload = React.useMemo(
-    () =>
-      buildCampaignCanvasPayload(nodes, edges, {
-        source: "agent-check-in",
-        brandProfileId,
-        adAccountId: selectedAdAccount,
-        campaignId: selectedCampaign,
-      }),
-    [brandProfileId, edges, nodes, selectedAdAccount, selectedCampaign]
-  );
-
   if (!mounted) {
     return (
       <div className="box-border flex h-full min-h-0 w-full max-w-none flex-col gap-2 px-0 py-2">
@@ -197,7 +182,6 @@ export default function PaidMediaClientPage({
                 brandName={brandName}
                 adAccountId={selectedAdAccount}
                 campaignId={selectedCampaign}
-                campaignCanvasPayload={campaignCanvasPayload}
                 userId={user?.id ?? null}
                 onCanvasActionApplied={handleCanvasActionApplied}
                 className="rounded-none border-none bg-transparent backdrop-blur-none"

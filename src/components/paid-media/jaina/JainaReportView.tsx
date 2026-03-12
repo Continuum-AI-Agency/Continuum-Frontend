@@ -4,7 +4,11 @@ import React from "react";
 import { Badge, Callout, Flex, Heading } from "@radix-ui/themes";
 import { DownloadIcon, MailIcon } from "lucide-react";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
-import { type FrontendCheckpointReport, hasReportContent } from "@/lib/jaina/schemas";
+import {
+  deriveLegacyFieldsFromBlocks,
+  type FrontendCheckpointReport,
+  hasReportContent,
+} from "@/lib/jaina/schemas";
 import { type JainaStreamStatus } from "@/lib/jaina/stream";
 import { JainaReportNav } from "./components/JainaReportNav";
 import { JainaReportMetrics } from "./components/JainaReportMetrics";
@@ -18,6 +22,7 @@ import { Card, Box, Text } from "@radix-ui/themes";
 import { Sources, SourcesContent, SourcesTrigger, Source } from "@/components/ai-elements/sources";
 import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
 import { buildJitSnapshotFallbackTables } from "./reportTableUtils";
+import { downloadJainaReportPdf } from "./reportExport";
 import { cn } from "@/lib/utils";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
@@ -57,13 +62,90 @@ export function JainaReportView({
     (suffix: string) => `${resolvedIdPrefix}-${suffix}`,
     [resolvedIdPrefix]
   );
-  const fallbackTables = React.useMemo(
-    () => (report ? buildJitSnapshotFallbackTables(report) : []),
+  const blockDerivedFields = React.useMemo(
+    () => (report ? deriveLegacyFieldsFromBlocks(report.blocks) : null),
     [report]
   );
+  const displayPerformanceSnapshot = React.useMemo(
+    () =>
+      report
+        ? blockDerivedFields && blockDerivedFields.performance_snapshot.length > 0
+          ? blockDerivedFields.performance_snapshot
+          : report.performance_snapshot
+        : [],
+    [blockDerivedFields, report]
+  );
+  const displaySections = React.useMemo(
+    () =>
+      report
+        ? blockDerivedFields && blockDerivedFields.sections.length > 0
+          ? blockDerivedFields.sections
+          : report.sections
+        : [],
+    [blockDerivedFields, report]
+  );
+  const displayRecommendations = React.useMemo(
+    () =>
+      report
+        ? blockDerivedFields && blockDerivedFields.strategic_recommendations.length > 0
+          ? blockDerivedFields.strategic_recommendations
+          : report.strategic_recommendations
+        : [],
+    [blockDerivedFields, report]
+  );
+  const displayFollowUpQuestions = React.useMemo(
+    () =>
+      report
+        ? blockDerivedFields && blockDerivedFields.follow_up_questions.length > 0
+          ? blockDerivedFields.follow_up_questions
+          : report.follow_up_questions
+        : [],
+    [blockDerivedFields, report]
+  );
+  const displayGraphs = React.useMemo(
+    () =>
+      report
+        ? blockDerivedFields && blockDerivedFields.graphs.length > 0
+          ? blockDerivedFields.graphs
+          : report.graphs
+        : [],
+    [blockDerivedFields, report]
+  );
+  const displayCachedSources = React.useMemo(() => {
+    if (!report) return [];
+    const combined = [
+      ...report.cached_sources,
+      ...(blockDerivedFields?.cached_sources ?? []),
+    ];
+    return Array.from(new Set(combined.filter((source) => source.trim().length > 0)));
+  }, [blockDerivedFields?.cached_sources, report]);
+  const reportForDisplay = React.useMemo(() => {
+    if (!report) return null;
+    return {
+      ...report,
+      performance_snapshot: displayPerformanceSnapshot,
+      sections: displaySections,
+      strategic_recommendations: displayRecommendations,
+      follow_up_questions: displayFollowUpQuestions,
+      graphs: displayGraphs,
+      cached_sources: displayCachedSources,
+    };
+  }, [
+    displayCachedSources,
+    displayFollowUpQuestions,
+    displayGraphs,
+    displayPerformanceSnapshot,
+    displayRecommendations,
+    displaySections,
+    report,
+  ]);
+  const fallbackTables = React.useMemo(
+    () => (reportForDisplay ? buildJitSnapshotFallbackTables(reportForDisplay) : []),
+    [reportForDisplay]
+  );
   const topLevelCharts = React.useMemo(
-    () => (report ? report.graphs.filter((chart) => isJainaChartInput(chart)) : []),
-    [report]
+    () => displayGraphs.filter((chart) => isJainaChartInput(chart)),
+    [displayGraphs]
   );
 
   React.useEffect(() => {
@@ -129,68 +211,22 @@ export function JainaReportView({
     return <EmptyReport status={status} />;
   }
 
-  const handleDownloadPDF = async () => {
-    if (!report) return;
+  const handleDownloadPDF = React.useCallback(async () => {
+    if (!reportForDisplay) return;
     try {
-      const { jsPDF } = await import("jspdf");
-      const doc = new jsPDF({ unit: "pt", format: "a4" });
-      const exportNode = reportExportRef.current;
-
-      if (exportNode) {
-        const html2canvas = (await import("html2canvas")).default;
-        const canvas = await html2canvas(exportNode, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#0b0b0b",
-          logging: false,
-        });
-
-        const margin = 24;
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const usableWidth = pageWidth - margin * 2;
-        const usableHeight = pageHeight - margin * 2;
-        const imageHeight = (canvas.height * usableWidth) / canvas.width;
-        const imageData = canvas.toDataURL("image/png");
-
-        let renderedHeight = 0;
-        while (renderedHeight < imageHeight) {
-          if (renderedHeight > 0) {
-            doc.addPage();
-          }
-          const yOffset = margin - renderedHeight;
-          doc.addImage(
-            imageData,
-            "PNG",
-            margin,
-            yOffset,
-            usableWidth,
-            imageHeight,
-            undefined,
-            "FAST"
-          );
-          renderedHeight += usableHeight;
-        }
-      } else {
-        renderReportPdf(doc, report, fallbackTables);
-      }
-
-      doc.save(`jaina-report-${new Date().toISOString().split("T")[0]}.pdf`);
+      await downloadJainaReportPdf({
+        report: reportForDisplay,
+        fallbackTables,
+        exportNode: reportExportRef.current,
+      });
     } catch {
-      try {
-        const { jsPDF } = await import("jspdf");
-        const doc = new jsPDF({ unit: "pt", format: "a4" });
-        renderReportPdf(doc, report, fallbackTables);
-        doc.save(`jaina-report-${new Date().toISOString().split("T")[0]}.pdf`);
-      } catch {
-        show({
-          title: "Export failed",
-          description: "Unable to generate PDF report right now.",
-          variant: "error",
-        });
-      }
+      show({
+        title: "Export failed",
+        description: "Unable to generate PDF report right now.",
+        variant: "error",
+      });
     }
-  };
+  }, [fallbackTables, reportForDisplay, show]);
 
   const handleSendEmail = () => {
     show({
@@ -249,7 +285,7 @@ export function JainaReportView({
         <Flex gap="0" align="start" className="relative h-full min-h-0 min-w-0">
           {showSidebarNav ? (
           <div className="border-r border-white/5 p-4 sticky top-0 shrink-0 w-64 max-h-full min-h-0 overflow-y-auto">
-            <JainaReportNav idPrefix={resolvedIdPrefix} report={report} />
+            <JainaReportNav idPrefix={resolvedIdPrefix} report={reportForDisplay} />
           </div>
           ) : null}
 
@@ -285,16 +321,16 @@ export function JainaReportView({
                 </div>
               </div>
 
-              {report.performance_snapshot.length > 0 && (
+              {displayPerformanceSnapshot.length > 0 && (
                 <div id={sectionId("performance-snapshot")} className="scroll-mt-20">
-                  <JainaReportMetrics metrics={report.performance_snapshot} />
+                  <JainaReportMetrics metrics={displayPerformanceSnapshot} />
                 </div>
               )}
 
-              {report.sections.length > 0 && (
+              {displaySections.length > 0 && (
                 <div id={sectionId("strategic-insights")} className="scroll-mt-20">
                   <JainaReportSections 
-                    sections={report.sections} 
+                    sections={displaySections}
                     isStreaming={status === "streaming"} 
                   />
                 </div>
@@ -312,16 +348,16 @@ export function JainaReportView({
                 </div>
               )}
 
-              {report.strategic_recommendations.length > 0 && (
+              {displayRecommendations.length > 0 && (
                 <div id={sectionId("recommendations")} className="scroll-mt-20">
                   <JainaReportRecommendations 
-                    recommendations={report.strategic_recommendations} 
+                    recommendations={displayRecommendations}
                     isStreaming={status === "streaming"}
                   />
                 </div>
               )}
 
-              {report.follow_up_questions.length > 0 && (
+              {displayFollowUpQuestions.length > 0 && (
                 <div
                   id={sectionId("follow-up-questions")}
                   className="space-y-4 pt-6 border-t border-white/5 scroll-mt-20"
@@ -330,7 +366,7 @@ export function JainaReportView({
                     Continue Exploration
                   </Heading>
                   <Suggestions>
-                    {report.follow_up_questions.map((question, index) => (
+                    {displayFollowUpQuestions.map((question, index) => (
                       <Suggestion
                         key={`${question}-${index}`}
                         suggestion={question}
@@ -342,12 +378,12 @@ export function JainaReportView({
                 </div>
               )}
 
-              {report.cached_sources.length > 0 && (
+              {displayCachedSources.length > 0 && (
                 <div id="cached-sources" className="pt-6 border-t border-white/5 scroll-mt-20">
                   <Sources>
-                    <SourcesTrigger count={report.cached_sources.length} />
+                    <SourcesTrigger count={displayCachedSources.length} />
                     <SourcesContent>
-                      {report.cached_sources.map((source) => (
+                      {displayCachedSources.map((source) => (
                         <Source key={source} title={source} href="#" />
                       ))}
                     </SourcesContent>
@@ -393,175 +429,4 @@ function EmptyReport({ status }: { status: JainaStreamStatus }) {
       </Box>
     </Card>
   );
-}
-
-type PdfTable = {
-  headers: string[];
-  rows: string[][];
-};
-
-function formatMetricValueForPdf(
-  metric: FrontendCheckpointReport["performance_snapshot"][number]
-) {
-  if (!metric || typeof metric !== "object") return "";
-  const typedMetric = metric as {
-    value?: unknown;
-    format?: string;
-    prefix?: string;
-    suffix?: string;
-  };
-  const value = typedMetric.value;
-  if (typeof value !== "number") return String(value);
-  if (typedMetric.format === "currency" || typedMetric.prefix === "$") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 2,
-    }).format(value);
-  }
-  if (typedMetric.format === "percentage" || typedMetric.suffix === "%") {
-    return `${value}%`;
-  }
-  const formatted = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return `${typedMetric.prefix || ""}${formatted}${typedMetric.suffix || ""}`;
-}
-
-function renderReportPdf(
-  doc: InstanceType<typeof import("jspdf").jsPDF>,
-  report: FrontendCheckpointReport,
-  fallbackTables: PdfTable[]
-) {
-  const marginX = 40;
-  const marginY = 44;
-  const maxWidth = doc.internal.pageSize.getWidth() - marginX * 2;
-  const maxY = doc.internal.pageSize.getHeight() - marginY;
-  let y = marginY;
-
-  const ensureSpace = (requiredHeight = 16) => {
-    if (y + requiredHeight > maxY) {
-      doc.addPage();
-      y = marginY;
-    }
-  };
-
-  const addHeading = (text: string, size = 14) => {
-    ensureSpace(size + 10);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(size);
-    doc.text(text, marginX, y);
-    y += size + 8;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-  };
-
-  const addParagraph = (text?: string | null) => {
-    if (!text) return;
-    const lines = doc.splitTextToSize(text, maxWidth) as string[];
-    for (const line of lines) {
-      ensureSpace(15);
-      doc.text(line, marginX, y);
-      y += 15;
-    }
-    y += 4;
-  };
-
-  const addBullet = (text: string) => {
-    const lines = doc.splitTextToSize(`• ${text}`, maxWidth) as string[];
-    for (const line of lines) {
-      ensureSpace(14);
-      doc.text(line, marginX, y);
-      y += 14;
-    }
-  };
-
-  const addTable = (title: string, table: PdfTable) => {
-    if (!table.headers.length || !table.rows.length) return;
-    addHeading(title, 12);
-    addParagraph(table.headers.join(" | "));
-    for (const row of table.rows) {
-      addParagraph(row.join(" | "));
-    }
-  };
-
-  addHeading("Performance Analysis Report", 16);
-  addParagraph(`Generated: ${new Date().toLocaleString()}`);
-  addParagraph(`Language: ${report.language || "EN"}`);
-
-  addHeading("Executive Summary");
-  addParagraph(report.executive_summary || "No summary provided.");
-
-  if (report.performance_snapshot.length > 0) {
-    addHeading("Performance Snapshot");
-    for (const metric of report.performance_snapshot) {
-      const metricRecord = metric as {
-        metric?: string;
-        change?: string | number | null;
-        context?: string;
-        sub_label?: string;
-      };
-      const metricLabel = metricRecord.metric || "Metric";
-      const metricValue = formatMetricValueForPdf(metric);
-      const change =
-        metricRecord.change === undefined || metricRecord.change === null
-          ? ""
-          : ` (Δ ${metricRecord.change})`;
-      const context =
-        metricRecord.context || metricRecord.sub_label
-          ? ` — ${metricRecord.context || metricRecord.sub_label}`
-          : "";
-      addBullet(`${metricLabel}: ${metricValue}${change}${context}`);
-    }
-    y += 4;
-  }
-
-  if (report.sections.length > 0) {
-    addHeading("Strategic Insights");
-    for (const section of report.sections) {
-      addHeading(`${section.heading} (${section.scope})`, 12);
-      addParagraph(section.summary);
-      for (const insight of section.highlights) {
-        const title = insight.title ? `${insight.title}: ` : "";
-        const impact = insight.impact ? ` [${insight.impact}]` : "";
-        addBullet(`${title}${insight.text}${impact}`);
-      }
-      for (let index = 0; index < section.tables.length; index += 1) {
-        const table = section.tables[index] as Partial<PdfTable>;
-        if (!table || !Array.isArray(table.headers) || !Array.isArray(table.rows)) {
-          continue;
-        }
-        addTable(`${section.heading} Table ${index + 1}`, {
-          headers: table.headers.map((header) => String(header)),
-          rows: table.rows.map((row) =>
-            Array.isArray(row) ? row.map((cell) => String(cell)) : []
-          ),
-        });
-      }
-    }
-  }
-
-  if (fallbackTables.length > 0) {
-    addHeading("Detailed Data");
-    for (let index = 0; index < fallbackTables.length; index += 1) {
-      addTable(`Data Table ${index + 1}`, fallbackTables[index]);
-    }
-  }
-
-  if (report.strategic_recommendations.length > 0) {
-    addHeading("Priority Recommendations");
-    for (const recommendation of report.strategic_recommendations) {
-      const title = recommendation.title || "Recommendation";
-      const details = recommendation.rationale || "";
-      const tags = [
-        recommendation.priority ? `Priority: ${recommendation.priority}` : "",
-        recommendation.expected_impact
-          ? `Impact: ${recommendation.expected_impact}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" | ");
-      addBullet(title);
-      addParagraph(details);
-      if (tags) addParagraph(tags);
-    }
-  }
 }

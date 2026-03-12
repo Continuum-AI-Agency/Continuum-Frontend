@@ -411,6 +411,79 @@ function resolveToolResultFromRef(
   return undefined;
 }
 
+type ResolvedToolEntry = {
+  id: string;
+  name: string;
+  toolCall?: ToolCallEventData;
+  toolResult?: ToolResultEventData;
+  state: "output-available" | "error" | "running";
+};
+
+type ToolCluster = {
+  key: string;
+  name: string;
+  entries: ResolvedToolEntry[];
+  completedCount: number;
+  errorCount: number;
+  runningCount: number;
+};
+
+function resolveToolEntries(
+  toolRefs: string[],
+  toolCalls: ToolCallEventData[],
+  toolResults: ToolResultEventData[]
+): ResolvedToolEntry[] {
+  return toolRefs.map((toolRef, index) => {
+    const toolCall = resolveToolCallFromRef(toolRef, toolCalls);
+    const toolResult = resolveToolResultFromRef(toolRef, toolResults);
+    const name = toolCall?.name || toolResult?.name || toolRef.replace(/^name:/, "");
+    const state: "output-available" | "error" | "running" = toolResult
+      ? toolResult.ok
+        ? "output-available"
+        : "error"
+      : "running";
+
+    return {
+      id: `${toolRef}-${toolCall?.id ?? toolResult?.id ?? index}`,
+      name,
+      toolCall,
+      toolResult,
+      state,
+    };
+  });
+}
+
+function clusterToolEntries(entries: ResolvedToolEntry[]): ToolCluster[] {
+  const order: string[] = [];
+  const groups = new Map<string, ToolCluster>();
+
+  for (const entry of entries) {
+    const key = entry.name || "tool";
+    if (!groups.has(key)) {
+      order.push(key);
+      groups.set(key, {
+        key,
+        name: entry.name || "tool",
+        entries: [],
+        completedCount: 0,
+        errorCount: 0,
+        runningCount: 0,
+      });
+    }
+    const group = groups.get(key);
+    if (!group) continue;
+
+    group.entries.push(entry);
+    if (entry.state === "output-available") group.completedCount += 1;
+    if (entry.state === "error") group.errorCount += 1;
+    if (entry.state === "running") group.runningCount += 1;
+  }
+
+  return order
+    .map((key) => groups.get(key))
+    .filter((group): group is ToolCluster => Boolean(group));
+}
+
 function ThinkingWindow({
   reasoning,
   toolCalls,
@@ -534,30 +607,67 @@ function ThinkingWindow({
                           Tool calls {toolGroupIndex > 1 ? `· ${toolGroupIndex}` : ""}
                         </Badge>
                       </div>
-                      <div className="space-y-3">
-                        {segment.toolRefs.map((toolRef) => {
-                          const toolCall = resolveToolCallFromRef(toolRef, safeToolCalls);
-                          const toolResult = resolveToolResultFromRef(toolRef, safeToolResults);
-                          const toolName = toolCall?.name || toolResult?.name || toolRef.replace(/^name:/, "");
-
-                          const toolState: "output-available" | "error" | "running" = toolResult
-                            ? toolResult.ok
-                              ? "output-available"
-                              : "error"
-                            : "running";
-
-                          return (
-                            <Tool key={toolRef} type={toolName} state={toolState}>
-                              <ToolHeader title={formatToolLabel(toolName)} />
-                              <ToolContent>
-                                <ToolInput value={toolCall?.args ?? {}} />
-                                {toolResult ? (
-                                  <ToolOutput value={toolResult.output ?? toolResult.error} />
+                      <div className="space-y-2">
+                        {clusterToolEntries(
+                          resolveToolEntries(
+                            segment.toolRefs,
+                            safeToolCalls,
+                            safeToolResults
+                          )
+                        ).map((cluster) => (
+                          <details
+                            key={cluster.key}
+                            className="rounded-md border border-border/60 bg-background/60"
+                            open={cluster.entries.length <= 1}
+                          >
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <Text size="1" weight="medium">
+                                  {formatToolLabel(cluster.name)}
+                                </Text>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {cluster.entries.length} call
+                                  {cluster.entries.length !== 1 ? "s" : ""}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {cluster.errorCount > 0 ? (
+                                  <Badge color="red" variant="soft" className="text-[10px]">
+                                    {cluster.errorCount} failed
+                                  </Badge>
                                 ) : null}
-                              </ToolContent>
-                            </Tool>
-                          );
-                        })}
+                                {cluster.runningCount > 0 ? (
+                                  <Badge color="amber" variant="soft" className="text-[10px]">
+                                    {cluster.runningCount} running
+                                  </Badge>
+                                ) : null}
+                                {cluster.completedCount > 0 ? (
+                                  <Badge color="green" variant="soft" className="text-[10px]">
+                                    {cluster.completedCount} done
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </summary>
+                            <div className="space-y-2 px-3 pb-3">
+                              {cluster.entries.map((entry) => (
+                                <Tool key={entry.id} type={entry.name} state={entry.state}>
+                                  <ToolHeader title={formatToolLabel(entry.name)} />
+                                  <ToolContent>
+                                    <ToolInput value={entry.toolCall?.args ?? {}} />
+                                    {entry.toolResult ? (
+                                      <ToolOutput
+                                        value={
+                                          entry.toolResult.output ??
+                                          entry.toolResult.error
+                                        }
+                                      />
+                                    ) : null}
+                                  </ToolContent>
+                                </Tool>
+                              ))}
+                            </div>
+                          </details>
+                        ))}
                       </div>
                   </motion.div>
                 );

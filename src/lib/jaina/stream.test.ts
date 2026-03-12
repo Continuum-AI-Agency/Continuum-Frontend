@@ -93,6 +93,137 @@ describe("reduceJainaStreamEvent text deltas", () => {
     expect(report.strategic_recommendations[0]?.title).toBe("Reallocate budget to Android");
   });
 
+  it("parses checkpoint_report envelope emitted as raw output_text JSON", () => {
+    let state = createInitialJainaStreamState();
+
+    const rawCheckpointEnvelope = {
+      type: "checkpoint_report",
+      report: {
+        language: "en",
+        executive_summary: "Envelope summary",
+        performance_snapshot: [
+          { metric: "Total Spend", value: "$1,200.00", status: "neutral" },
+        ],
+        sections: [
+          {
+            heading: "Campaign Health",
+            scope: "campaign",
+            summary: "Campaign has stable ROAS but high frequency risk.",
+            highlights: [
+              {
+                category: "risk",
+                text: "Frequency is above target.",
+                severity: "watch",
+              },
+            ],
+            tables: [
+              {
+                title: "Campaign KPIs",
+                columns: ["Metric", "Value"],
+                rows: [{ Metric: "ROAS", Value: "2.1" }],
+              },
+            ],
+            actions: [
+              {
+                title: "Refresh creatives",
+                rationale: "Reduce fatigue on high-frequency audiences.",
+                priority: "high",
+              },
+            ],
+          },
+        ],
+        strategic_recommendations: [
+          {
+            title: "Scale top segment",
+            rationale: "Best blended efficiency this week.",
+            priority: "medium",
+          },
+        ],
+        follow_up_questions: ["Want ad set breakdown next?"],
+      },
+    };
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_1",
+        part_id: "part_1",
+        delta: JSON.stringify(rawCheckpointEnvelope),
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_1",
+        object: "realtime.response",
+        status: "completed",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe("Envelope summary");
+    expect(report.sections[0]?.heading).toBe("Campaign Health");
+    expect(report.sections[0]?.tables[0]?.title).toBe("Campaign KPIs");
+    expect(report.sections[0]?.tables[0]?.rows[0]).toEqual({
+      Metric: "ROAS",
+      Value: "2.1",
+    });
+    expect(report.strategic_recommendations[0]?.title).toBe("Scale top segment");
+  });
+
+  it("parses nested content.parts checkpoint JSON emitted as output_text", () => {
+    let state = createInitialJainaStreamState();
+
+    const nestedContentEnvelope = {
+      content: {
+        role: "model",
+        parts: [
+          {
+            text: JSON.stringify({
+              checkpoint_report: {
+                report_metadata: {
+                  title: "Weekly Campaign Performance & Budget Analysis",
+                },
+                blocks: [
+                  {
+                    scope: "account",
+                    title: "Account Performance Summary",
+                    summary: "ROAS remains efficient at current spend.",
+                    data: {
+                      headers: ["Metric", "Value"],
+                      rows: [["Total Spend", "$151,593.91"]],
+                    },
+                  },
+                ],
+              },
+            }),
+            thoughtSignature: "sig_1",
+          },
+        ],
+      },
+    };
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_1",
+        part_id: "part_1",
+        delta: JSON.stringify(nestedContentEnvelope),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.report_title).toBe("Weekly Campaign Performance & Budget Analysis");
+    expect(report.sections[0]?.heading).toBe("Account Performance Summary");
+    expect(report.sections[0]?.tables[0]?.rows[0]).toEqual([
+      "Total Spend",
+      "$151,593.91",
+    ]);
+  });
+
   it("parses compatibility output_json deltas that carry payload fields at the root", () => {
     let state = createInitialJainaStreamState();
 
@@ -349,6 +480,106 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     expect(state.runSessionId).toBe("sess_abc");
   });
 
+  it("ignores duplicate response.created for the same response id", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_dupe",
+        object: "realtime.response",
+        status: "in_progress",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_dupe",
+        part_id: "part_dupe",
+        delta: "intermediate delta",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_dupe",
+        object: "realtime.response",
+        status: "in_progress",
+      },
+    } as any);
+
+    expect(state.responseId).toBe("resp_dupe");
+    expect(state.responseText).toContain("intermediate delta");
+  });
+
+  it("ignores foreign response.created while another response is in-flight", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_current",
+        object: "realtime.response",
+        status: "in_progress",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_current",
+        part_id: "part_current",
+        delta: "still streaming current response",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_other",
+        object: "realtime.response",
+        status: "in_progress",
+      },
+    } as any);
+
+    expect(state.responseId).toBe("resp_current");
+    expect(state.responseText).toContain("still streaming current response");
+    expect(state.status).toBe("streaming");
+  });
+
+  it("ignores response.done events for a different response id", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_current",
+        object: "realtime.response",
+        status: "in_progress",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_other",
+        object: "realtime.response",
+        status: "completed",
+      },
+    } as any);
+
+    expect(state.status).toBe("streaming");
+    expect(state.responseId).toBe("resp_current");
+  });
+
   it("hydrates state from response.checkpoint_report", () => {
     let state = createInitialJainaStreamState();
 
@@ -374,6 +605,413 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     const report = asStructuredReport(state);
     expect(report.executive_summary).toBe("Campaign summary");
     expect(state.itemId).toBe("item_1");
+  });
+
+  it("keeps the hydrated report when response.done arrives with failed status", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_failed_done",
+        part_id: "part_failed_done",
+        report: {
+          language: "en",
+          executive_summary: "Checkpoint already generated before failure.",
+          sections: [],
+          performance_snapshot: [],
+          strategic_recommendations: [],
+          follow_up_questions: [],
+          handoff_trace: [],
+          execution_objectives: [],
+          cached_sources: [],
+          graphs: [],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_failed_1",
+        object: "realtime.response",
+        status: "failed",
+        status_details: {
+          message: "Upstream tool timeout",
+        },
+        output: [],
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(state.status).toBe("error");
+    expect(state.error).toBe("Upstream tool timeout");
+    expect(report.executive_summary).toBe(
+      "Checkpoint already generated before failure."
+    );
+    expect(state.finalContentKind).toBe("report");
+  });
+
+  it("recovers report content from reportJson when response.done fails before completion", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_failed_text",
+        part_id: "part_failed_text",
+        delta: JSON.stringify({
+          checkpoint_report: {
+            report_metadata: { title: "Recovered On Failed Done" },
+            blocks: [
+              {
+                scope: "account",
+                title: "Summary",
+                summary: "Recovered from buffered output_text delta.",
+              },
+            ],
+          },
+        }),
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_failed_2",
+        object: "realtime.response",
+        status: "failed",
+        status_details: {
+          message: "Model stream failed late",
+        },
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(state.status).toBe("error");
+    expect(state.error).toBe("Model stream failed late");
+    expect(report.report_title).toBe("Recovered On Failed Done");
+    expect(report.sections[0]?.summary).toContain("Recovered from buffered");
+    expect(state.finalContentKind).toBe("report");
+  });
+
+  it("hydrates synthesis blocks from response.checkpoint_report.data.report.blocks", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_blocks",
+        part_id: "part_blocks",
+        report: {
+          executive_summary: "Synthesis complete.",
+          blocks: [
+            {
+              block_id: "summary_1",
+              category: "summary_breakdown",
+              scope: "account",
+              title: "Account Summary",
+              summary: "Highlights and actions.",
+              cached_sources: ["cache://summary"],
+              highlights: [
+                {
+                  category: "performance",
+                  text: "ROAS improved week-over-week.",
+                  impact: "positive",
+                  severity: "positive",
+                  confidence: null,
+                  evidence: [],
+                },
+              ],
+              actions: [],
+              tables: [],
+            },
+            {
+              block_id: "insights_1",
+              category: "insight_recommendation",
+              scope: "account",
+              title: "Decision Layer",
+              summary: "Recommendations and questions.",
+              cached_sources: [],
+              items: [
+                {
+                  item_type: "recommendation",
+                  title: "Reallocate Budget",
+                  summary: "Shift 20% toward top performers.",
+                  payload: { priority: "HIGH" },
+                },
+                {
+                  item_type: "question",
+                  title: "Approval",
+                  summary: "Can we reallocate this week?",
+                  payload: {},
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    const report = asStructuredReport(state);
+    expect(report.blocks.length).toBe(2);
+    expect(report.sections.length).toBeGreaterThan(0);
+    expect(report.strategic_recommendations[0]?.title).toBe("Reallocate Budget");
+    expect(report.follow_up_questions).toContain("Can we reallocate this week?");
+  });
+
+  it("orders and dedupes progressive response.block.delta events by sequence", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.block.delta",
+      data: {
+        sequence: 2,
+        source: "thought",
+        agent: "synthesis_agent",
+        block: {
+          block_id: "block_2",
+          category: "insight_recommendation",
+          scope: "account",
+          title: "Recommendations",
+          summary: "Actions to take.",
+          cached_sources: [],
+          items: [
+            {
+              item_type: "recommendation",
+              title: "Shift Budget",
+              summary: "Move budget to stronger campaigns.",
+              payload: {},
+            },
+          ],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.block.delta",
+      data: {
+        sequence: 1,
+        source: "thought",
+        agent: "synthesis_agent",
+        block: {
+          block_id: "block_1",
+          category: "summary_breakdown",
+          scope: "account",
+          title: "Summary",
+          summary: "Top findings.",
+          cached_sources: [],
+          highlights: [],
+          actions: [],
+          tables: [],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.block.delta",
+      data: {
+        sequence: 1,
+        source: "thought",
+        agent: "synthesis_agent",
+        block: {
+          block_id: "block_1",
+          category: "summary_breakdown",
+          scope: "account",
+          title: "Updated Summary",
+          summary: "Top findings updated.",
+          cached_sources: [],
+          highlights: [],
+          actions: [],
+          tables: [],
+        },
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(state.blockDeltas.map((entry) => entry.sequence)).toEqual([1, 2]);
+    expect(report.blocks.length).toBe(2);
+    expect(report.blocks[0]?.title).toBe("Summary");
+    expect(report.blocks[1]?.title).toBe("Recommendations");
+  });
+
+  it("reconciles progressive blocks with final response.checkpoint_report", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.block.delta",
+      data: {
+        sequence: 1,
+        source: "thought",
+        agent: "synthesis_agent",
+        block: {
+          block_id: "progressive_1",
+          category: "summary_breakdown",
+          scope: "account",
+          title: "Progressive",
+          summary: "Interim summary.",
+          cached_sources: [],
+          highlights: [],
+          actions: [],
+          tables: [],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "final_item",
+        part_id: "final_part",
+        report: {
+          executive_summary: "Final report.",
+          blocks: [
+            {
+              block_id: "final_1",
+              category: "summary_breakdown",
+              scope: "account",
+              title: "Final Summary",
+              summary: "Authoritative summary.",
+              cached_sources: [],
+              highlights: [],
+              actions: [],
+              tables: [],
+            },
+          ],
+        },
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(state.hasCanonicalCheckpointReport).toBe(true);
+    expect(state.blockDeltas).toEqual([]);
+    expect(report.blocks.length).toBe(1);
+    expect(report.blocks[0]?.title).toBe("Final Summary");
+    expect(state.itemId).toBe("final_item");
+  });
+
+  it("ignores progressive blocks after canonical checkpoint report arrives", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "final_item",
+        part_id: "final_part",
+        report: {
+          executive_summary: "Final report.",
+          blocks: [
+            {
+              block_id: "final_1",
+              category: "summary_breakdown",
+              scope: "account",
+              title: "Final Summary",
+              summary: "Authoritative summary.",
+              cached_sources: [],
+              highlights: [],
+              actions: [],
+              tables: [],
+            },
+          ],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.block.delta",
+      data: {
+        sequence: 1,
+        source: "thought",
+        agent: "synthesis_agent",
+        block: {
+          block_id: "late_preview",
+          category: "summary_breakdown",
+          scope: "account",
+          title: "Late Preview",
+          summary: "Should not override final report.",
+          cached_sources: [],
+          highlights: [],
+          actions: [],
+          tables: [],
+        },
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(state.blockDeltas).toEqual([]);
+    expect(report.blocks.length).toBe(1);
+    expect(report.blocks[0]?.title).toBe("Final Summary");
+  });
+
+  it("does not let output_json deltas overwrite canonical checkpoint report", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_final",
+        part_id: "part_final",
+        report: {
+          executive_summary: "Canonical summary.",
+          blocks: [
+            {
+              block_id: "final_1",
+              category: "summary_breakdown",
+              scope: "account",
+              title: "Canonical Block",
+              summary: "Final payload block.",
+              cached_sources: [],
+              highlights: [],
+              actions: [],
+              tables: [],
+            },
+          ],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_json.delta",
+      data: {
+        item_id: "item_final",
+        part_id: "part_final",
+        delta: JSON.stringify({
+          blocks: [
+            {
+              block_id: "preview_override",
+              category: "summary_breakdown",
+              scope: "account",
+              title: "Preview Override",
+              summary: "Should be ignored after final checkpoint.",
+              cached_sources: [],
+              highlights: [],
+              actions: [],
+              tables: [],
+            },
+          ],
+        }),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.blocks.length).toBe(1);
+    expect(report.blocks[0]?.title).toBe("Canonical Block");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_1",
+        object: "realtime.response",
+        status: "completed",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    const completedReport = asStructuredReport(state);
+    expect(state.status).toBe("complete");
+    expect(completedReport.blocks[0]?.title).toBe("Canonical Block");
   });
 
   it("accepts SoT table rows as objects with headers", () => {
@@ -987,9 +1625,286 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
     expect(state.plan?.title).toBe("Active Meta Campaigns Overview");
     expect(state.plan?.steps.length).toBe(1);
   });
+
+  it("promotes checkpoint_report JSON text in adk.event to main report state", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "adk.event",
+      data: {
+        author: "core",
+        content: {
+          role: "model",
+          parts: [
+            {
+              text: JSON.stringify({
+                checkpoint_report: {
+                  report_metadata: {
+                    title: "Weekly Campaign Performance & Budget Analysis",
+                    date_range: "Last 7 Days",
+                  },
+                  blocks: [
+                    {
+                      scope: "account",
+                      title: "Account Performance Summary",
+                      summary: "ROAS is stable at high spend levels.",
+                      data: {
+                        headers: ["Metric", "Value"],
+                        rows: [["Total Spend", "$151,593.91"]],
+                      },
+                    },
+                  ],
+                },
+              }),
+              thoughtSignature: "sig_1",
+            },
+          ],
+        },
+      },
+    } as any);
+
+    expect(state.progress.length).toBe(0);
+    const report = asStructuredReport(state);
+    expect(report.report_title).toBe("Weekly Campaign Performance & Budget Analysis");
+    expect(report.sections.length).toBeGreaterThan(0);
+    expect(report.sections[0]?.heading).toBe("Account Performance Summary");
+    expect(state.finalContentKind).toBe("report");
+  });
+
+  it("promotes nested content.parts checkpoint payloads emitted via thought events", () => {
+    let state = createInitialJainaStreamState();
+
+    const thoughtEnvelope = JSON.stringify({
+      content: {
+        role: "model",
+        parts: [
+          {
+            text: JSON.stringify({
+              type: "checkpoint_report",
+              report: {
+                executive_summary: "Recovered nested thought payload",
+                sections: [],
+                performance_snapshot: [],
+                strategic_recommendations: [],
+                follow_up_questions: [],
+                handoff_trace: [],
+                execution_objectives: [],
+                cached_sources: [],
+                graphs: [],
+              },
+            }),
+            thoughtSignature: "sig_1",
+          },
+        ],
+      },
+    });
+
+    state = reduceJainaStreamEvent(state, {
+      type: "thought",
+      data: {
+        text: thoughtEnvelope,
+      },
+    } as any);
+
+    expect(state.progress.length).toBe(0);
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe("Recovered nested thought payload");
+    expect(state.finalContentKind).toBe("report");
+  });
+
+  it("keeps arbitrary thought JSON visible in reasoning when it is not report-like", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          phase: "routing",
+          candidate_tools: ["get_action_insights", "get_key_metrics"],
+          score: 0.92,
+        }),
+      },
+    } as any);
+
+    expect(state.progress.length).toBe(1);
+    expect(state.progress[0]?.stage).toBe("thinking");
+    expect(state.progress[0]?.detail).toContain("\"phase\": \"routing\"");
+    expect(state.report).toBeNull();
+  });
+
+  it("promotes schema-valid report assembly thought JSON without checkpoint keywords", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          header: {
+            title: "Weekly Report",
+            period: "Last 7 days",
+            report_tags: ["health"],
+          },
+          summary: {
+            narrative: "Assembly summary from thought payload.",
+          },
+          metrics: [
+            {
+              label: "ROAS",
+              planned: 2,
+              actual: 2.4,
+              index_percent: 120,
+              unit: "x",
+              deviation_type: "positive",
+            },
+          ],
+          charts: [],
+          insights: [],
+          recommendations: [],
+        }),
+      },
+    } as any);
+
+    expect(state.progress.length).toBe(0);
+    const report = asStructuredReport(state);
+    expect(report.report_title).toBe("Weekly Report");
+    expect(report.executive_summary).toContain("Assembly summary from thought payload.");
+    expect(state.finalContentKind).toBe("report");
+  });
+
+  it("overwrites report payload for the same event id with the latest version", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      id: "evt_same_1",
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          checkpoint_report: {
+            report_metadata: { title: "Same Event" },
+            blocks: [
+              {
+                scope: "account",
+                title: "V1 Block",
+                summary: "Richer first payload",
+              },
+            ],
+          },
+        }),
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      id: "evt_same_1",
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          executive_summary: "V2 overwrite payload",
+          sections: [],
+          performance_snapshot: [],
+          strategic_recommendations: [],
+          follow_up_questions: [],
+          handoff_trace: [],
+          execution_objectives: [],
+          cached_sources: [],
+          graphs: [],
+        }),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe("V2 overwrite payload");
+    expect(report.blocks.length).toBe(0);
+  });
+
+  it("does not use current response id as report overwrite event id", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_same",
+        object: "realtime.response",
+        status: "in_progress",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      id: "resp_same",
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          checkpoint_report: {
+            report_metadata: { title: "Response ID Safeguard" },
+            blocks: [
+              {
+                scope: "account",
+                title: "Rich Block",
+                summary: "Rich version should remain.",
+                data: {
+                  headers: ["Metric", "Value"],
+                  rows: [["Spend", "$100"]],
+                },
+              },
+            ],
+          },
+        }),
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      id: "resp_same",
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          executive_summary: "Sparse overwrite that should not replace rich block data",
+          sections: [],
+          performance_snapshot: [],
+          strategic_recommendations: [],
+          follow_up_questions: [],
+          handoff_trace: [],
+          execution_objectives: [],
+          cached_sources: [],
+          graphs: [],
+        }),
+      },
+    } as any);
+
+    const report = asStructuredReport(state);
+    expect(report.report_title).toBe("Response ID Safeguard");
+    expect(report.blocks.length).toBeGreaterThan(0);
+  });
 });
 
 describe("parseJainaStreamEvent compatibility guards", () => {
+  it("accepts canonical response.block.delta events", () => {
+    const event = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "response.block.delta",
+        data: {
+          sequence: 1,
+          source: "thought",
+          agent: "synthesis_agent",
+          block: {
+            block_id: "block_1",
+            category: "summary_breakdown",
+            scope: "account",
+            title: "Summary",
+            summary: "Summary text.",
+            cached_sources: [],
+            highlights: [],
+            actions: [],
+            tables: [],
+          },
+        },
+      })
+    );
+
+    expect(event).not.toBeNull();
+    expect(event?.type).toBe("response.block.delta");
+  });
+
   it("accepts canonical tool.batch events", () => {
     const event = parseJainaStreamEvent(
       JSON.stringify({

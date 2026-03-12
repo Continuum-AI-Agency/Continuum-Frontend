@@ -1,22 +1,50 @@
 "use client";
 
 import React from "react";
-import { Box, Button } from "@radix-ui/themes";
+import { Box, Button, TextArea } from "@radix-ui/themes";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import {
+  Edit2Icon,
+  PlayIcon,
+  SaveIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
 
 import { AnimatedShaderBackground } from "@/components/ui/animated-shader-background";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useJainaChatStream } from "@/hooks/useJainaChatStream";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
+import {
+  Queue,
+  QueueItem,
+  QueueItemActions,
+  QueueItemContent,
+  QueueItemIndicator,
+  QueueList,
+  QueueSection,
+  QueueSectionContent,
+  QueueSectionLabel,
+  QueueSectionTrigger,
+  QueueItemAction,
+} from "@/components/ai-elements/queue";
 import { cn } from "@/lib/utils";
 import type { JainaChatMessage } from "./types";
+import {
+  enqueueMessage,
+  removeQueuedMessage,
+  shouldQueueSubmission,
+  updateQueuedMessageContent,
+  type QueuedJainaMessage,
+} from "./queueing";
 
 import { JainaHeader } from "./components/JainaHeader";
 import { JainaEmptyState } from "./components/JainaEmptyState";
 import { JainaMessageItem } from "./components/JainaMessageItem";
 import { JainaConversationSidebar } from "./components/JainaConversationSidebar";
 import { getFinalThought, getReportSummary, resolveReportSignal, hasReportContent } from "./jainaUtils";
+import { parsePersistedReportValue } from "./persistedReport";
 import type { CampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
 import { extractCampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
@@ -28,10 +56,7 @@ import {
   type JainaConversationMessage,
   type JainaConversationSession,
 } from "@/lib/jaina/conversations";
-import {
-  reportAssemblySchema,
-  reportPayloadSchema,
-} from "@/lib/jaina/schemas";
+import { frontendCheckpointReportSchema, reportAssemblySchema } from "@/lib/jaina/schemas";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 type JainaChatSurfaceProps = {
@@ -54,6 +79,13 @@ function createJainaSessionId(): string {
     return crypto.randomUUID();
   }
   return `jaina-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createQueuedMessageId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `queued-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function normalizeSessionTitle(value: string | null | undefined): string | null {
@@ -102,40 +134,14 @@ async function readErrorMessage(
   return detail;
 }
 
-function extractJsonObjectCandidate(value: string): unknown {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const candidates = [trimmed];
-  const firstBraceIndex = trimmed.indexOf("{");
-  const lastBraceIndex = trimmed.lastIndexOf("}");
-  if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
-    const sliced = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
-    if (sliced !== trimmed) candidates.push(sliced);
-  }
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-}
-
 function parsePersistedReport(
   message: JainaConversationMessage
 ): JainaChatMessage["report"] | undefined {
-  const direct = reportPayloadSchema.safeParse(message.report);
-  if (direct.success) return direct.data;
-
-  const embedded = extractJsonObjectCandidate(message.content);
-  const embeddedReport = reportPayloadSchema.safeParse(embedded);
-  if (embeddedReport.success) return embeddedReport.data;
-
-  return undefined;
+  return parsePersistedReportValue({
+    report: message.report,
+    content: message.content,
+    reasoning: message.reasoning,
+  });
 }
 
 function parsePersistedReportAssembly(
@@ -145,11 +151,87 @@ function parsePersistedReportAssembly(
   return parsed.success ? parsed.data : undefined;
 }
 
+function normalizePersistedObjectiveStatus(
+  value: unknown
+): "pending" | "in_progress" | "completed" | "failed" {
+  if (value === "pending" || value === "in_progress" || value === "completed" || value === "failed") {
+    return value;
+  }
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    normalized === "in_progress" ||
+    normalized === "in-progress" ||
+    normalized === "running" ||
+    normalized === "active"
+  ) {
+    return "in_progress";
+  }
+  if (
+    normalized === "completed" ||
+    normalized === "complete" ||
+    normalized === "done" ||
+    normalized === "success"
+  ) {
+    return "completed";
+  }
+  if (
+    normalized === "failed" ||
+    normalized === "error" ||
+    normalized === "errored" ||
+    normalized === "cancelled" ||
+    normalized === "canceled"
+  ) {
+    return "failed";
+  }
+  return "pending";
+}
+
+function deriveObjectivesFromPersistedSources(input: {
+  message: JainaConversationMessage;
+  report: JainaChatMessage["report"] | undefined;
+}): JainaChatMessage["objectives"] | undefined {
+  if (Array.isArray(input.message.objectives) && input.message.objectives.length > 0) {
+    return input.message.objectives as JainaChatMessage["objectives"];
+  }
+
+  const report = input.report;
+  if (!report || ("type" in report && report.type === "direct_answer")) {
+    return undefined;
+  }
+
+  const parsedReport = frontendCheckpointReportSchema.safeParse(report);
+  if (!parsedReport.success) {
+    return undefined;
+  }
+
+  if (
+    !Array.isArray(parsedReport.data.execution_objectives) ||
+    parsedReport.data.execution_objectives.length === 0
+  ) {
+    return undefined;
+  }
+
+  const objectives = parsedReport.data.execution_objectives
+    .filter((objective) => typeof objective?.id === "string" && objective.id.trim().length > 0)
+    .map((objective) => ({
+      id: objective.id,
+      title: objective.title || objective.id,
+      status: normalizePersistedObjectiveStatus(objective.status),
+      description: objective.details ?? objective.scope ?? undefined,
+    }));
+
+  return objectives.length > 0 ? objectives : undefined;
+}
+
 function mapConversationMessageToChatMessage(
   message: JainaConversationMessage
 ): JainaChatMessage {
   const persistedReport = parsePersistedReport(message);
   const persistedReportAssembly = parsePersistedReportAssembly(message);
+  const persistedObjectives = deriveObjectivesFromPersistedSources({
+    message,
+    report: persistedReport,
+  });
   const content =
     persistedReport && isFallbackCheckpointMessage(message.content)
       ? resolveReportSummaryForMessage(persistedReport) || message.content
@@ -193,9 +275,7 @@ function mapConversationMessageToChatMessage(
           },
         }
       : {}),
-    ...(Array.isArray(message.objectives)
-      ? { objectives: message.objectives as JainaChatMessage["objectives"] }
-      : {}),
+    ...(persistedObjectives ? { objectives: persistedObjectives } : {}),
     ...(message.role === "assistant"
       ? {
           status: "done",
@@ -337,12 +417,18 @@ export function JainaChatSurface({
   const [isConversationSwitching, setIsConversationSwitching] = React.useState(false);
   const [deletingSessionId, setDeletingSessionId] = React.useState<string | null>(null);
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(null);
+  const [queuedMessages, setQueuedMessages] = React.useState<QueuedJainaMessage[]>([]);
+  const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(
+    null
+  );
+  const [queueEditDraft, setQueueEditDraft] = React.useState("");
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
   const processedCanvasEnvelopeKeysRef = React.useRef<Set<string>>(new Set());
   const persistedAssistantResponseIdsRef = React.useRef<Set<string>>(new Set());
   const conversationChannelRef = React.useRef<RealtimeChannel | null>(null);
   const activeSessionIdRef = React.useRef(sessionId);
   const streamBusyRef = React.useRef(false);
+  const queueDispatchInFlightRef = React.useRef(false);
 
   React.useEffect(() => {
     activeSessionIdRef.current = sessionId;
@@ -485,6 +571,10 @@ export function JainaChatSurface({
         processedCanvasEnvelopeKeysRef.current.clear();
         persistedAssistantResponseIdsRef.current.clear();
         setActiveResponseId(null);
+        setQueuedMessages([]);
+        setEditingQueueMessageId(null);
+        setQueueEditDraft("");
+        queueDispatchInFlightRef.current = false;
         setSessionId(targetSessionId);
         setConversationSessions(sortConversationSessions(payload.sessions));
         setSessionTitleById((previous) => {
@@ -653,13 +743,16 @@ export function JainaChatSurface({
     }
     if (state.status === "error" && state.error) {
       const failedResponseId = activeResponseId;
+      const reportHasContent = hasReportContent(state.report);
       updateMessage(failedResponseId, {
         status: "error",
         content: state.error,
         title: "Jaina error",
+        report: state.report ?? undefined,
         reportAssembly: state.reportAssembly ?? undefined,
         reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
         plan: state.plan ?? undefined,
+        renderAsReport: reportHasContent,
         reasoning: state.progress,
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
@@ -668,6 +761,7 @@ export function JainaChatSurface({
       });
 
       persistedAssistantResponseIdsRef.current.add(failedResponseId);
+      void refreshConversationSnapshot(sessionId);
 
       setActiveResponseId(null);
     }
@@ -793,6 +887,10 @@ export function JainaChatSurface({
       reset();
       setMessages([]);
       setActiveResponseId(null);
+      setQueuedMessages([]);
+      setEditingQueueMessageId(null);
+      setQueueEditDraft("");
+      queueDispatchInFlightRef.current = false;
       processedToolResultIdsRef.current.clear();
       processedCanvasEnvelopeKeysRef.current.clear();
       persistedAssistantResponseIdsRef.current.clear();
@@ -819,6 +917,7 @@ export function JainaChatSurface({
         if (!mostRecentSessionId) {
           setSessionId(createJainaSessionId());
           setMessages([]);
+          setQueuedMessages([]);
           setShaderState("visible");
           return;
         }
@@ -854,6 +953,7 @@ export function JainaChatSurface({
           variant: "error",
         });
         setSessionId(createJainaSessionId());
+        setQueuedMessages([]);
         setShaderState("visible");
       } finally {
         if (!cancelled) {
@@ -921,19 +1021,21 @@ export function JainaChatSurface({
     supabase,
   ]);
 
-  const handleSubmit = React.useCallback(
-    async (query: string) => {
+  const dispatchMessage = React.useCallback(
+    async (input: { query: string; canvas: boolean; clarificationId?: string }) => {
+      const query = input.query.trim();
+      if (!query) return false;
+
       if (!adAccountId) {
         show({
           title: "Select an ad account",
           description: "Jaina needs an ad account context.",
           variant: "warning",
         });
-        return;
+        return false;
       }
 
       const now = new Date().toISOString();
-      const clarificationId = pendingClarificationId;
       let activeSessionId = sessionId;
 
       try {
@@ -954,7 +1056,7 @@ export function JainaChatSurface({
           description: message,
           variant: "error",
         });
-        return;
+        return false;
       }
 
       const userMessage: JainaChatMessage = {
@@ -967,7 +1069,7 @@ export function JainaChatSurface({
       const assistantMessage: JainaChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: clarificationId
+        content: input.clarificationId
           ? "Processing your clarification…"
           : "Thinking through your request…",
         createdAt: now,
@@ -997,31 +1099,30 @@ export function JainaChatSurface({
       processedToolResultIdsRef.current.clear();
       processedCanvasEnvelopeKeysRef.current.clear();
 
-      const result = await start({
+      void start({
         query,
-        canvas: isPlanMode || Boolean(campaignCanvasPayload),
+        canvas: input.canvas || Boolean(campaignCanvasPayload),
         adAccountId,
         brandId: brandProfileId,
         sessionId: activeSessionId,
-        clarificationId,
+        clarificationId: input.clarificationId,
         userId: userId ?? undefined,
-        campaignCanvas: campaignCanvasPayload ?? undefined,
+      }).then((result) => {
+        if (result.error) {
+          show({
+            title: "Request failed",
+            description: result.error,
+            variant: "error",
+          });
+        }
       });
 
-      if (result.error) {
-        show({
-          title: "Request failed",
-          description: result.error,
-          variant: "error",
-        });
-      }
+      return true;
     },
     [
       adAccountId,
       brandProfileId,
       campaignCanvasPayload,
-      isPlanMode,
-      pendingClarificationId,
       ensureConversationSession,
       sessionId,
       sessionTitleById,
@@ -1032,6 +1133,129 @@ export function JainaChatSurface({
     ]
   );
 
+  const queueMessageForLater = React.useCallback(
+    (input: { query: string; canvas: boolean; clarificationId?: string }) => {
+      const content = input.query.trim();
+      if (!content) return;
+      const queuedMessage: QueuedJainaMessage = {
+        id: createQueuedMessageId(),
+        content,
+        createdAt: new Date().toISOString(),
+        canvas: input.canvas,
+        ...(input.clarificationId ? { clarificationId: input.clarificationId } : {}),
+      };
+      setQueuedMessages((previous) => enqueueMessage(previous, queuedMessage));
+    },
+    []
+  );
+
+  const handleSubmit = React.useCallback(
+    async (query: string) => {
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) return;
+
+      const input = {
+        query: normalizedQuery,
+        canvas: isPlanMode,
+        clarificationId: pendingClarificationId,
+      };
+
+      const shouldQueue = shouldQueueSubmission({
+        isStreaming,
+        activeResponseId,
+      });
+      if (shouldQueue) {
+        queueMessageForLater(input);
+        return;
+      }
+
+      await dispatchMessage(input);
+    },
+    [
+      activeResponseId,
+      dispatchMessage,
+      queueMessageForLater,
+      isPlanMode,
+      isStreaming,
+      pendingClarificationId,
+    ]
+  );
+
+  const handleQueueEditStart = React.useCallback((message: QueuedJainaMessage) => {
+    setEditingQueueMessageId(message.id);
+    setQueueEditDraft(message.content);
+  }, []);
+
+  const handleQueueEditCancel = React.useCallback(() => {
+    setEditingQueueMessageId(null);
+    setQueueEditDraft("");
+  }, []);
+
+  const handleQueueEditSave = React.useCallback(() => {
+    if (!editingQueueMessageId) return;
+    const trimmedDraft = queueEditDraft.trim();
+    if (!trimmedDraft) return;
+
+    setQueuedMessages((previous) =>
+      updateQueuedMessageContent(previous, editingQueueMessageId, trimmedDraft)
+    );
+    setEditingQueueMessageId(null);
+    setQueueEditDraft("");
+  }, [editingQueueMessageId, queueEditDraft]);
+
+  const handleQueueRemove = React.useCallback(
+    (queueMessageId: string) => {
+      setQueuedMessages((previous) =>
+        removeQueuedMessage(previous, queueMessageId)
+      );
+      if (editingQueueMessageId === queueMessageId) {
+        setEditingQueueMessageId(null);
+        setQueueEditDraft("");
+      }
+    },
+    [editingQueueMessageId]
+  );
+
+  React.useEffect(() => {
+    if (isHistoryLoading || isConversationSwitching) return;
+    if (isStreaming || activeResponseId) return;
+    if (queuedMessages.length === 0) return;
+    if (queueDispatchInFlightRef.current) return;
+
+    const nextQueuedMessage = queuedMessages[0];
+    if (!nextQueuedMessage) return;
+
+    queueDispatchInFlightRef.current = true;
+
+    void (async () => {
+      const started = await dispatchMessage({
+        query: nextQueuedMessage.content,
+        canvas: nextQueuedMessage.canvas,
+        clarificationId: nextQueuedMessage.clarificationId,
+      });
+
+      if (started) {
+        setQueuedMessages((previous) =>
+          removeQueuedMessage(previous, nextQueuedMessage.id)
+        );
+        if (editingQueueMessageId === nextQueuedMessage.id) {
+          setEditingQueueMessageId(null);
+          setQueueEditDraft("");
+        }
+      }
+
+      queueDispatchInFlightRef.current = false;
+    })();
+  }, [
+    activeResponseId,
+    dispatchMessage,
+    editingQueueMessageId,
+    isConversationSwitching,
+    isHistoryLoading,
+    isStreaming,
+    queuedMessages,
+  ]);
+
   const handleClearConversation = React.useCallback(() => {
     if (isStreaming) {
       cancel();
@@ -1039,6 +1263,10 @@ export function JainaChatSurface({
     reset();
     setMessages([]);
     setActiveResponseId(null);
+    setQueuedMessages([]);
+    setEditingQueueMessageId(null);
+    setQueueEditDraft("");
+    queueDispatchInFlightRef.current = false;
     setSessionId(createJainaSessionId());
     setShaderState("visible");
     processedToolResultIdsRef.current.clear();
@@ -1112,6 +1340,10 @@ export function JainaChatSurface({
             reset();
             setMessages([]);
             setActiveResponseId(null);
+            setQueuedMessages([]);
+            setEditingQueueMessageId(null);
+            setQueueEditDraft("");
+            queueDispatchInFlightRef.current = false;
             setSessionId(createJainaSessionId());
             setShaderState("visible");
             processedToolResultIdsRef.current.clear();
@@ -1217,6 +1449,11 @@ export function JainaChatSurface({
     }
   }, [clearMemory, adAccountId, show]);
 
+  const isInputDisabled = isHistoryLoading || isConversationSwitching;
+  const isQueueStreaming = isStreaming || Boolean(activeResponseId);
+  const canStartQueuedNow =
+    !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
+
   if (!adAccountId) {
     return <JainaEmptyState adAccountId={null} />;
   }
@@ -1314,9 +1551,119 @@ export function JainaChatSurface({
       </div>
 
       <Box p="4" className="relative z-10">
+        {queuedMessages.length > 0 ? (
+          <div className="mx-auto mb-3 w-full max-w-[1600px] px-4 md:px-6 lg:px-8">
+            <Queue className="border-border/70 bg-card/80 shadow-none">
+              <QueueSection defaultOpen>
+                <QueueSectionTrigger>
+                  <QueueSectionLabel
+                    count={queuedMessages.length}
+                    label="queued messages"
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {isQueueStreaming ? "waiting for current response" : "next will send now"}
+                  </span>
+                </QueueSectionTrigger>
+                <QueueSectionContent className="pt-2">
+                  <QueueList className="h-[180px]">
+                    {queuedMessages.map((queuedMessage, index) => {
+                      const isEditing = editingQueueMessageId === queuedMessage.id;
+                      return (
+                        <QueueItem key={queuedMessage.id}>
+                          <div className="flex items-start gap-2">
+                            <QueueItemIndicator completed={false} />
+                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                              {isEditing ? (
+                                <TextArea
+                                  size="2"
+                                  value={queueEditDraft}
+                                  onChange={(event) => setQueueEditDraft(event.target.value)}
+                                  className="min-h-[74px] resize-none"
+                                  aria-label="Edit queued message"
+                                />
+                              ) : (
+                                <QueueItemContent>{queuedMessage.content}</QueueItemContent>
+                              )}
+                              <div className="text-[11px] text-muted-foreground/90">
+                                #{index + 1} in queue
+                                {queuedMessage.canvas ? " • plan mode" : ""}
+                                {queuedMessage.clarificationId ? " • clarification" : ""}
+                              </div>
+                            </div>
+                            <QueueItemActions>
+                              {isEditing ? (
+                                <>
+                                  <QueueItemAction
+                                    aria-label="Save queued message"
+                                    onClick={handleQueueEditSave}
+                                  >
+                                    <SaveIcon className="size-3.5" />
+                                  </QueueItemAction>
+                                  <QueueItemAction
+                                    aria-label="Cancel queued message edit"
+                                    onClick={handleQueueEditCancel}
+                                  >
+                                    <XIcon className="size-3.5" />
+                                  </QueueItemAction>
+                                </>
+                              ) : (
+                                <>
+                                  {index === 0 && canStartQueuedNow ? (
+                                    <QueueItemAction
+                                      aria-label="Send queued message now"
+                                      onClick={() => {
+                                        if (queueDispatchInFlightRef.current) return;
+                                        queueDispatchInFlightRef.current = true;
+                                        void (async () => {
+                                          const started = await dispatchMessage({
+                                            query: queuedMessage.content,
+                                            canvas: queuedMessage.canvas,
+                                            clarificationId: queuedMessage.clarificationId,
+                                          });
+                                          if (started) {
+                                            setQueuedMessages((previous) =>
+                                              removeQueuedMessage(
+                                                previous,
+                                                queuedMessage.id
+                                              )
+                                            );
+                                          }
+                                          queueDispatchInFlightRef.current = false;
+                                        })();
+                                      }}
+                                    >
+                                      <PlayIcon className="size-3.5" />
+                                    </QueueItemAction>
+                                  ) : null}
+                                  <QueueItemAction
+                                    aria-label="Edit queued message"
+                                    onClick={() => handleQueueEditStart(queuedMessage)}
+                                  >
+                                    <Edit2Icon className="size-3.5" />
+                                  </QueueItemAction>
+                                  <QueueItemAction
+                                    aria-label="Remove queued message"
+                                    onClick={() => handleQueueRemove(queuedMessage.id)}
+                                  >
+                                    <Trash2Icon className="size-3.5" />
+                                  </QueueItemAction>
+                                </>
+                              )}
+                            </QueueItemActions>
+                          </div>
+                        </QueueItem>
+                      );
+                    })}
+                  </QueueList>
+                </QueueSectionContent>
+              </QueueSection>
+            </Queue>
+          </div>
+        ) : null}
+
         <PromptInput
           onSubmit={(value) => handleSubmit(value)}
-          disabled={isStreaming || isHistoryLoading || isConversationSwitching}
+          disabled={isInputDisabled}
           placeholder="Ask Jaina anything..."
           actions={
             <Button
@@ -1324,7 +1671,7 @@ export function JainaChatSurface({
               size="1"
               variant={isPlanMode ? "solid" : "soft"}
               color={isPlanMode ? "amber" : "gray"}
-              disabled={isStreaming || isHistoryLoading || isConversationSwitching}
+              disabled={isInputDisabled}
               aria-pressed={isPlanMode}
               onClick={() => setIsPlanMode((prev) => !prev)}
             >

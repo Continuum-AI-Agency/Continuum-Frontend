@@ -40,7 +40,6 @@ export const jainaChatRequestSchema = z.object({
     brandId: z.string().min(1),
     sessionId: z.string().min(1).optional(),
     canvas: z.boolean().optional(),
-    campaignCanvas: z.record(z.string(), z.unknown()).optional(),
   }),
 });
 
@@ -203,6 +202,75 @@ export const frontendGraphSchema = z
   })
   .passthrough();
 
+export const checkpointBlockCategorySchema = z.enum([
+  "summary_breakdown",
+  "insight_recommendation",
+  "data",
+  "graph",
+]);
+
+export type CheckpointBlockCategory = z.infer<typeof checkpointBlockCategorySchema>;
+
+const checkpointBlockBaseSchema = z.object({
+  block_id: z.string().min(1),
+  category: checkpointBlockCategorySchema,
+  scope: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  cached_sources: z.array(z.string()),
+});
+
+export const insightRecommendationItemSchema = z.object({
+  item_type: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  payload: z.record(z.string(), z.unknown()).default({}),
+});
+
+export type InsightRecommendationItem = z.infer<typeof insightRecommendationItemSchema>;
+
+export const summaryBreakdownBlockSchema = checkpointBlockBaseSchema.extend({
+  category: z.literal("summary_breakdown"),
+  highlights: z.array(insightSchema).default([]),
+  actions: z.array(recommendationItemSchema).default([]),
+  tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])).default([]),
+});
+
+export const insightRecommendationBlockSchema = checkpointBlockBaseSchema.extend({
+  category: z.literal("insight_recommendation"),
+  items: z.array(insightRecommendationItemSchema).default([]),
+});
+
+export const dataBlockSchema = checkpointBlockBaseSchema
+  .extend({
+    category: z.literal("data"),
+    rows: z.array(z.record(z.string(), z.unknown())).default([]),
+    tables: z.array(z.union([tableSectionSchema, reportTableGridSchema])).default([]),
+  })
+  .superRefine((value, ctx) => {
+    if (value.rows.length === 0 && value.tables.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "data blocks require rows and/or tables",
+        path: ["rows"],
+      });
+    }
+  });
+
+export const graphBlockSchema = checkpointBlockBaseSchema.extend({
+  category: z.literal("graph"),
+  graphs: z.array(frontendGraphSchema).min(1),
+});
+
+export const checkpointReportBlockSchema = z.discriminatedUnion("category", [
+  summaryBreakdownBlockSchema,
+  insightRecommendationBlockSchema,
+  dataBlockSchema,
+  graphBlockSchema,
+]);
+
+export type CheckpointReportBlock = z.infer<typeof checkpointReportBlockSchema>;
+
 export const checkpointSectionSchema = z.object({
   heading: z.string(),
   scope: z.string(),
@@ -223,6 +291,7 @@ export const frontendCheckpointReportSchema = z.object({
   executive_summary: z.string().default(""),
   budget: frontendBudgetSchema.nullable().default(null),
   performance_snapshot: z.array(frontendMetricItemSchema).default([]),
+  blocks: z.array(checkpointReportBlockSchema).default([]),
   sections: z.array(checkpointSectionSchema).default([]),
   strategic_recommendations: z.array(recommendationItemSchema).default([]),
   follow_up_questions: z.array(z.string()).default([]),
@@ -289,9 +358,9 @@ export const responseCreatedSchema = streamEventSchema(
   z.object({
     id: z.string(),
     object: z.literal("realtime.response"),
-    status: z.literal("in_progress"),
-    status_details: z.null().optional(),
-    output: z.array(z.unknown()),
+    status: z.string().optional(),
+    status_details: z.unknown().optional(),
+    output: z.array(z.unknown()).optional(),
   })
 );
 
@@ -460,6 +529,16 @@ export const responseCheckpointReportSchema = streamEventSchema(
   })
 );
 
+export const responseBlockDeltaSchema = streamEventSchema(
+  "response.block.delta",
+  z.object({
+    sequence: z.number().int().nonnegative(),
+    source: z.string(),
+    agent: z.string().optional(),
+    block: checkpointReportBlockSchema,
+  })
+);
+
 export const responseReportAssemblySchema = streamEventSchema(
   "response.report_assembly",
   z.object({
@@ -557,9 +636,9 @@ export const responseDoneSchema = streamEventSchema(
   z.object({
     id: z.string(),
     object: z.literal("realtime.response"),
-    status: z.literal("completed"),
-    status_details: z.null().optional(),
-    output: z.array(z.unknown()),
+    status: z.string(),
+    status_details: z.unknown().optional(),
+    output: z.array(z.unknown()).optional(),
   })
 );
 
@@ -599,6 +678,7 @@ export type JainaStreamEvent =
   | z.infer<typeof handoffCompleteSchema>
   | z.infer<typeof agentEnvelopeSchema>
   | z.infer<typeof responseCheckpointReportSchema>
+  | z.infer<typeof responseBlockDeltaSchema>
   | z.infer<typeof responseReportAssemblySchema>
   | z.infer<typeof responseOutputJsonDeltaSchema>
   | z.infer<typeof outputTextDeltaSchema>
@@ -625,6 +705,7 @@ export const jainaStreamEventSchema = z.union([
   handoffCompleteSchema,
   agentEnvelopeSchema,
   responseCheckpointReportSchema,
+  responseBlockDeltaSchema,
   responseReportAssemblySchema,
   responseOutputJsonDeltaSchema,
   outputTextDeltaSchema,
@@ -1134,6 +1215,583 @@ function toTableFromRows(rows: any[] | undefined): { headers: string[]; rows: st
   };
 }
 
+const legacyBlockCategoryAliasMap: Record<string, CheckpointBlockCategory> = {
+  section: "summary_breakdown",
+  sections: "summary_breakdown",
+  summary: "summary_breakdown",
+  summary_breakdown: "summary_breakdown",
+  strategic_section: "summary_breakdown",
+  insight: "insight_recommendation",
+  insights: "insight_recommendation",
+  recommendation: "insight_recommendation",
+  recommendations: "insight_recommendation",
+  question: "insight_recommendation",
+  questions: "insight_recommendation",
+  insight_recommendation: "insight_recommendation",
+  data: "data",
+  table: "data",
+  tables: "data",
+  metric: "data",
+  metrics: "data",
+  performance_snapshot: "data",
+  graph: "graph",
+  graphs: "graph",
+  chart: "graph",
+  charts: "graph",
+  visualization: "graph",
+};
+
+type LegacyFieldsFromBlocks = Pick<
+  FrontendCheckpointReport,
+  | "performance_snapshot"
+  | "sections"
+  | "strategic_recommendations"
+  | "follow_up_questions"
+  | "graphs"
+  | "cached_sources"
+>;
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function toRecordArray(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => toRecord(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item));
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function resolveBlockCategory(
+  category: unknown,
+  blockType: unknown
+): CheckpointBlockCategory | null {
+  const categoryKey = toDisplayString(category).toLowerCase().trim();
+  if (categoryKey && categoryKey in legacyBlockCategoryAliasMap) {
+    return legacyBlockCategoryAliasMap[categoryKey];
+  }
+
+  const blockTypeKey = toDisplayString(blockType).toLowerCase().trim();
+  if (blockTypeKey && blockTypeKey in legacyBlockCategoryAliasMap) {
+    return legacyBlockCategoryAliasMap[blockTypeKey];
+  }
+
+  return null;
+}
+
+function mapRecommendationValue(value: unknown): z.infer<typeof recommendationSchema> | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return {
+      title: "Recommendation",
+      rationale: trimmed,
+      expected_impact: null,
+      priority: "MEDIUM",
+      action: "Recommendation",
+      description: trimmed,
+      type: undefined,
+      target: undefined,
+      reasoning: undefined,
+      impact: undefined,
+    };
+  }
+
+  const item = toRecord(value);
+  if (!item) return null;
+
+  const title =
+    toNonEmptyString(item.action) ||
+    toNonEmptyString(item.title) ||
+    formatEnumLabel(item.type) ||
+    "Recommendation";
+  const rationale =
+    toNonEmptyString(item.rationale) ||
+    toNonEmptyString(item.description) ||
+    toNonEmptyString(item.recommendation) ||
+    toNonEmptyString(item.reasoning) ||
+    "";
+
+  return {
+    title,
+    rationale,
+    expected_impact:
+      toNonEmptyString(item.expected_impact) ||
+      toNonEmptyString(item.impact) ||
+      null,
+    priority:
+      item.priority !== undefined && item.priority !== null
+        ? String(item.priority).toUpperCase()
+        : "MEDIUM",
+    action: title,
+    description: rationale,
+    type: formatEnumLabel(item.type) || undefined,
+    target: toNonEmptyString(item.target) ?? undefined,
+    reasoning:
+      toNonEmptyString(item.reasoning) ??
+      toNonEmptyString(item.rationale) ??
+      undefined,
+    impact:
+      toNonEmptyString(item.impact) ??
+      toNonEmptyString(item.expected_impact) ??
+      undefined,
+  };
+}
+
+function mapHighlightValue(value: unknown): InsightItem | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return {
+      category: "analysis",
+      title: "",
+      text: trimmed,
+      impact: null,
+      severity: "neutral",
+      confidence: null,
+      evidence: [],
+    };
+  }
+
+  const insight = toRecord(value);
+  if (!insight) return null;
+
+  const text =
+    toNonEmptyString(insight.content) ||
+    toNonEmptyString(insight.description) ||
+    toNonEmptyString(insight.text) ||
+    "";
+  if (!text) return null;
+
+  return {
+    category: toNonEmptyString(insight.category) || "analysis",
+    title: toNonEmptyString(insight.title) || toNonEmptyString(insight.name) || "",
+    text,
+    impact: toNonEmptyString(insight.impact) || toNonEmptyString(insight.metric),
+    severity: toInsightSeverity(insight),
+    confidence: toNonEmptyString(insight.confidence),
+    evidence: Array.isArray(insight.evidence)
+      ? insight.evidence.map((item) => toDisplayString(item))
+      : [],
+  };
+}
+
+function toRecommendationItems(
+  values: unknown,
+  itemType: "recommendation" | "insight" | "question"
+): InsightRecommendationItem[] {
+  if (!Array.isArray(values)) return [];
+
+  return values
+    .map((value) => {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        return {
+          item_type: itemType,
+          title: itemType === "question" ? "Question" : formatEnumLabel(itemType),
+          summary: trimmed,
+          payload: {},
+        };
+      }
+
+      const item = toRecord(value);
+      if (!item) return null;
+      const resolvedItemType =
+        toNonEmptyString(item.item_type)?.toLowerCase() ||
+        toNonEmptyString(item.type)?.toLowerCase() ||
+        itemType;
+      const title =
+        toNonEmptyString(item.title) ||
+        toNonEmptyString(item.action) ||
+        formatEnumLabel(item.type) ||
+        formatEnumLabel(resolvedItemType);
+      const summary =
+        toNonEmptyString(item.summary) ||
+        toNonEmptyString(item.rationale) ||
+        toNonEmptyString(item.description) ||
+        toNonEmptyString(item.text) ||
+        "";
+      if (!title || !summary) return null;
+
+      const payload = { ...item };
+      return {
+        item_type: resolvedItemType,
+        title,
+        summary,
+        payload,
+      };
+    })
+    .filter((item): item is InsightRecommendationItem => Boolean(item));
+}
+
+function normalizeBlockTables(rawBlock: Record<string, unknown>) {
+  if (Array.isArray(rawBlock.tables)) return rawBlock.tables;
+  if (rawBlock.table) return [rawBlock.table];
+  return [];
+}
+
+function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["blocks"] {
+  if (!Array.isArray(rawBlocks)) return [];
+
+  const normalizedBlocks: FrontendCheckpointReport["blocks"] = [];
+
+  rawBlocks.forEach((value, index) => {
+    const rawBlock = toRecord(value);
+    if (!rawBlock) return;
+
+    const category = resolveBlockCategory(rawBlock.category, rawBlock.block_type);
+    if (!category) return;
+
+    const blockBase = {
+      block_id:
+        toNonEmptyString(rawBlock.block_id) ||
+        toNonEmptyString(rawBlock.id) ||
+        `block_${index + 1}`,
+      category,
+      scope: toNonEmptyString(rawBlock.scope) || "account",
+      title: toNonEmptyString(rawBlock.title) || `Block ${index + 1}`,
+      summary:
+        toNonEmptyString(rawBlock.summary) ||
+        toNonEmptyString(rawBlock.content) ||
+        toNonEmptyString(rawBlock.description) ||
+        "No summary provided.",
+      cached_sources: Array.isArray(rawBlock.cached_sources)
+        ? rawBlock.cached_sources.map((item) => toDisplayString(item))
+        : [],
+    } as const;
+
+    if (category === "summary_breakdown") {
+      const candidate = summaryBreakdownBlockSchema.safeParse({
+        ...blockBase,
+        category,
+        highlights: Array.isArray(rawBlock.highlights)
+          ? rawBlock.highlights
+              .map((item) => mapHighlightValue(item))
+              .filter((item): item is InsightItem => Boolean(item))
+          : Array.isArray(rawBlock.insights)
+            ? rawBlock.insights
+                .map((item) => mapHighlightValue(item))
+                .filter((item): item is InsightItem => Boolean(item))
+            : [],
+        actions: [
+          ...(Array.isArray(rawBlock.actions) ? rawBlock.actions : []),
+          ...(Array.isArray(rawBlock.recommendations)
+            ? rawBlock.recommendations
+            : []),
+          ...(Array.isArray(rawBlock.reccomendations)
+            ? rawBlock.reccomendations
+            : []),
+        ]
+          .map((item) => mapRecommendationValue(item))
+          .filter((item): item is z.infer<typeof recommendationSchema> => Boolean(item)),
+        tables: normalizeBlockTables(rawBlock),
+      });
+      if (candidate.success) normalizedBlocks.push(candidate.data);
+      return;
+    }
+
+    if (category === "insight_recommendation") {
+      const candidate = insightRecommendationBlockSchema.safeParse({
+        ...blockBase,
+        category,
+        items: [
+          ...toRecommendationItems(
+            rawBlock.items,
+            "insight"
+          ),
+          ...toRecommendationItems(rawBlock.recommendations, "recommendation"),
+          ...toRecommendationItems(rawBlock.reccomendations, "recommendation"),
+          ...toRecommendationItems(rawBlock.questions, "question"),
+          ...toRecommendationItems(rawBlock.follow_up_questions, "question"),
+        ],
+      });
+      if (candidate.success) normalizedBlocks.push(candidate.data);
+      return;
+    }
+
+    if (category === "data") {
+      const rows =
+        toRecordArray(rawBlock.rows).length > 0
+          ? toRecordArray(rawBlock.rows)
+          : toRecordArray(rawBlock.data);
+      const candidate = dataBlockSchema.safeParse({
+        ...blockBase,
+        category,
+        rows,
+        tables: normalizeBlockTables(rawBlock),
+      });
+      if (candidate.success) normalizedBlocks.push(candidate.data);
+      return;
+    }
+
+    const graphCandidates = [
+      ...(Array.isArray(rawBlock.graphs) ? rawBlock.graphs : []),
+      ...(Array.isArray(rawBlock.charts) ? rawBlock.charts : []),
+      ...(rawBlock.graph ? [rawBlock.graph] : []),
+      ...(rawBlock.chart ? [rawBlock.chart] : []),
+    ].flatMap((graph) => parseGraphsFromInput(graph));
+    const candidate = graphBlockSchema.safeParse({
+      ...blockBase,
+      category: "graph",
+      graphs: graphCandidates,
+    });
+    if (candidate.success) normalizedBlocks.push(candidate.data);
+  });
+
+  return normalizedBlocks;
+}
+
+function createTableFromRows(rows: Record<string, unknown>[], title?: string) {
+  const table = toTableFromRows(rows as any[]);
+  if (!table) return null;
+  return {
+    title,
+    headers: table.headers,
+    rows: table.rows,
+  };
+}
+
+export function deriveLegacyFieldsFromBlocks(
+  blocksInput: unknown
+): LegacyFieldsFromBlocks {
+  const blocks = normalizeIncomingBlocks(blocksInput);
+  const performanceSnapshot: FrontendCheckpointReport["performance_snapshot"] = [];
+  const sections: FrontendCheckpointReport["sections"] = [];
+  const strategicRecommendations: FrontendCheckpointReport["strategic_recommendations"] = [];
+  const followUpQuestions: FrontendCheckpointReport["follow_up_questions"] = [];
+  const graphs: FrontendCheckpointReport["graphs"] = [];
+  const cachedSources = new Set<string>();
+
+  blocks.forEach((block) => {
+    block.cached_sources.forEach((source) => {
+      if (source) cachedSources.add(source);
+    });
+
+    if (block.category === "summary_breakdown") {
+      sections.push({
+        heading: block.title,
+        scope: block.scope,
+        summary: block.summary,
+        highlights: block.highlights,
+        tables: block.tables,
+        actions: block.actions,
+        confidence: null,
+        cached_sources: block.cached_sources,
+        graphs: [],
+      });
+      return;
+    }
+
+    if (block.category === "insight_recommendation") {
+      const insightHighlights: InsightItem[] = [];
+      block.items.forEach((item) => {
+        const normalizedType = item.item_type.toLowerCase().trim();
+        if (normalizedType === "question") {
+          followUpQuestions.push(item.summary);
+          return;
+        }
+        if (normalizedType === "recommendation") {
+          const mappedRecommendation = mapRecommendationValue({
+            title: item.title,
+            rationale: item.summary,
+            ...(item.payload || {}),
+          });
+          if (mappedRecommendation) {
+            strategicRecommendations.push(mappedRecommendation);
+          }
+          return;
+        }
+        const mappedInsight = mapHighlightValue({
+          title: item.title,
+          text: item.summary,
+          ...(item.payload || {}),
+        });
+        if (mappedInsight) {
+          insightHighlights.push(mappedInsight);
+        }
+      });
+
+      if (insightHighlights.length > 0) {
+        sections.push({
+          heading: block.title,
+          scope: block.scope,
+          summary: block.summary,
+          highlights: insightHighlights,
+          tables: [],
+          actions: [],
+          confidence: null,
+          cached_sources: block.cached_sources,
+          graphs: [],
+        });
+      }
+      return;
+    }
+
+    if (block.category === "data") {
+      const rowTable = createTableFromRows(block.rows, block.title);
+      const sectionTables = [
+        ...(rowTable ? [rowTable] : []),
+        ...block.tables,
+      ];
+      if (sectionTables.length > 0) {
+        sections.push({
+          heading: block.title,
+          scope: block.scope,
+          summary: block.summary,
+          highlights: [],
+          tables: sectionTables,
+          actions: [],
+          confidence: null,
+          cached_sources: block.cached_sources,
+          graphs: [],
+        });
+      }
+
+      block.rows.forEach((row) => {
+        const metricLabel =
+          toNonEmptyString(row.metric) ||
+          toNonEmptyString(row.label) ||
+          toNonEmptyString(row.name);
+        if (!metricLabel) return;
+        if (row.value === undefined || row.value === null) return;
+        performanceSnapshot.push({
+          metric: metricLabel,
+          value:
+            typeof row.value === "number" || typeof row.value === "string"
+              ? row.value
+              : toDisplayString(row.value),
+          change:
+            typeof row.change === "number" || typeof row.change === "string"
+              ? row.change
+              : undefined,
+          direction: toNonEmptyString(row.direction) || undefined,
+          context:
+            toNonEmptyString(row.context) ||
+            toNonEmptyString(row.sub_label) ||
+            undefined,
+          sub_label: toNonEmptyString(row.sub_label) || undefined,
+          prefix: toNonEmptyString(row.prefix) || undefined,
+          suffix: toNonEmptyString(row.suffix) || undefined,
+          status: toNonEmptyString(row.status),
+          format: toNonEmptyString(row.format) || undefined,
+        });
+      });
+      return;
+    }
+
+    graphs.push(...block.graphs);
+  });
+
+  return {
+    performance_snapshot: performanceSnapshot,
+    sections,
+    strategic_recommendations: strategicRecommendations,
+    follow_up_questions: followUpQuestions,
+    graphs,
+    cached_sources: Array.from(cachedSources),
+  };
+}
+
+function buildBlocksFromLegacyFields(input: {
+  performance_snapshot: FrontendCheckpointReport["performance_snapshot"];
+  sections: FrontendCheckpointReport["sections"];
+  strategic_recommendations: FrontendCheckpointReport["strategic_recommendations"];
+  follow_up_questions: FrontendCheckpointReport["follow_up_questions"];
+  graphs: FrontendCheckpointReport["graphs"];
+  cached_sources: FrontendCheckpointReport["cached_sources"];
+}): FrontendCheckpointReport["blocks"] {
+  const blocks: FrontendCheckpointReport["blocks"] = [];
+  let blockIndex = 1;
+
+  input.sections.forEach((section) => {
+    const candidate = summaryBreakdownBlockSchema.safeParse({
+      block_id: `summary_breakdown_${blockIndex}`,
+      category: "summary_breakdown",
+      scope: section.scope || "account",
+      title: section.heading || `Section ${blockIndex}`,
+      summary: section.summary || "Summary unavailable.",
+      cached_sources: Array.isArray(section.cached_sources)
+        ? section.cached_sources
+        : [],
+      highlights: Array.isArray(section.highlights) ? section.highlights : [],
+      actions: Array.isArray(section.actions) ? section.actions : [],
+      tables: Array.isArray(section.tables) ? section.tables : [],
+    });
+    blockIndex += 1;
+    if (candidate.success) blocks.push(candidate.data);
+  });
+
+  if (input.performance_snapshot.length > 0) {
+    const candidate = dataBlockSchema.safeParse({
+      block_id: `data_${blockIndex}`,
+      category: "data",
+      scope: "account",
+      title: "Performance Snapshot",
+      summary: "Primary account metrics for this report.",
+      cached_sources: input.cached_sources,
+      rows: input.performance_snapshot.map((metric) => ({
+        ...metric,
+        label: metric.metric,
+      })),
+      tables: [],
+    });
+    blockIndex += 1;
+    if (candidate.success) blocks.push(candidate.data);
+  }
+
+  const recommendationItems = input.strategic_recommendations.map((item) => ({
+    item_type: "recommendation",
+    title: item.title || "Recommendation",
+    summary: item.rationale || item.title || "Recommendation details unavailable.",
+    payload: {
+      priority: item.priority,
+      expected_impact: item.expected_impact,
+    },
+  }));
+  const questionItems = input.follow_up_questions.map((question) => ({
+    item_type: "question",
+    title: "Question",
+    summary: question,
+    payload: {},
+  }));
+  if (recommendationItems.length > 0 || questionItems.length > 0) {
+    const candidate = insightRecommendationBlockSchema.safeParse({
+      block_id: `insight_recommendation_${blockIndex}`,
+      category: "insight_recommendation",
+      scope: "account",
+      title: "Insights and Recommendations",
+      summary: "Actionable recommendations and follow-up questions.",
+      cached_sources: input.cached_sources,
+      items: [...recommendationItems, ...questionItems],
+    });
+    blockIndex += 1;
+    if (candidate.success) blocks.push(candidate.data);
+  }
+
+  if (input.graphs.length > 0) {
+    const candidate = graphBlockSchema.safeParse({
+      block_id: `graph_${blockIndex}`,
+      category: "graph",
+      scope: "account",
+      title: "Graph Analysis",
+      summary: "Visual breakdown of key trends.",
+      cached_sources: input.cached_sources,
+      graphs: input.graphs,
+    });
+    if (candidate.success) blocks.push(candidate.data);
+  }
+
+  return blocks;
+}
+
 function parseWideChartsFromRows(graph: any): any[] {
   const rows = Array.isArray(graph?.data)
     ? graph.data.filter((row: unknown) => row && typeof row === "object")
@@ -1465,22 +2123,28 @@ export const reportPayloadSchema = z.union([
         
         const itemRecommendations = item.recommendations || item.reccomendations;
         if (Array.isArray(itemRecommendations)) {
-          strategicRecommendations.push(...itemRecommendations.map((r: any) => ({
-            title: r.title || r.action || formatEnumLabel(r.type) || "Recommendation",
-            rationale: r.rationale || r.description || r.recommendation || r.reasoning || "",
-            expected_impact: r.expected_impact ?? r.impact ?? null,
-            priority: r.priority ? String(r.priority).toUpperCase() : "MEDIUM",
-            // Backward compatibility
-            action: r.action || r.title || formatEnumLabel(r.type) || "Recommendation",
-            description: r.rationale || r.description || r.recommendation || r.reasoning || "",
-            type: formatEnumLabel(r.type) || null,
-            target: r.target || null,
-            reasoning: r.reasoning || r.rationale || null,
-            impact: r.impact || r.expected_impact || null,
-          })));
+          strategicRecommendations.push(
+            ...itemRecommendations
+              .map((item: unknown) => mapRecommendationValue(item))
+              .filter(
+                (
+                  recommendation
+                ): recommendation is z.infer<typeof recommendationSchema> =>
+                  recommendation !== null
+              )
+          );
         }
       }
     }
+
+    const blocks = buildBlocksFromLegacyFields({
+      performance_snapshot: performanceSnapshot,
+      sections,
+      strategic_recommendations: strategicRecommendations,
+      follow_up_questions: [],
+      graphs: allGraphs,
+      cached_sources: [],
+    });
     
     return {
       language: "en",
@@ -1488,6 +2152,7 @@ export const reportPayloadSchema = z.union([
       executive_summary: executiveSummary || "Analysis complete.",
       budget: null,
       performance_snapshot: performanceSnapshot,
+      blocks,
       sections,
       strategic_recommendations: strategicRecommendations,
       follow_up_questions: [],
@@ -1500,109 +2165,32 @@ export const reportPayloadSchema = z.union([
   // Catch-all for flexible/streaming JSON formats - try this BEFORE strict frontendCheckpointReportSchema
   z.record(z.string(), z.unknown()).transform((data) => {
     const anyData = data as Record<string, unknown>;
+    const nestedCheckpointReport =
+      anyData.checkpoint_report &&
+      typeof anyData.checkpoint_report === "object" &&
+      !Array.isArray(anyData.checkpoint_report)
+        ? (anyData.checkpoint_report as Record<string, unknown>)
+        : null;
     const nestedReport =
       anyData.report && typeof anyData.report === "object" && !Array.isArray(anyData.report)
         ? (anyData.report as Record<string, unknown>)
         : null;
-    const source = nestedReport ?? anyData;
+    const source = nestedCheckpointReport ?? nestedReport ?? anyData;
+    const reportMetadata =
+      source.report_metadata &&
+      typeof source.report_metadata === "object" &&
+      !Array.isArray(source.report_metadata)
+        ? (source.report_metadata as Record<string, unknown>)
+        : null;
     const summaryObject =
       source.summary && typeof source.summary === "object" && !Array.isArray(source.summary)
         ? (source.summary as Record<string, unknown>)
         : null;
 
-    const mapRecommendation = (value: unknown) => {
-      if (typeof value === "string") {
-        return {
-          title: value,
-          rationale: value,
-          expected_impact: null,
-          priority: "MEDIUM",
-          action: value,
-          description: value,
-          type: null,
-          target: null,
-          reasoning: null,
-          impact: null,
-        };
-      }
-      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-      const item = value as Record<string, unknown>;
-      const title =
-        (typeof item.action === "string" && item.action) ||
-        (typeof item.title === "string" && item.title) ||
-        formatEnumLabel(item.type) ||
-        "Recommendation";
-      const rationale =
-        (typeof item.rationale === "string" && item.rationale) ||
-        (typeof item.description === "string" && item.description) ||
-        (typeof item.recommendation === "string" && item.recommendation) ||
-        (typeof item.reasoning === "string" && item.reasoning) ||
-        "";
-      return {
-        title,
-        rationale,
-        expected_impact: item.expected_impact ?? item.impact ?? null,
-        priority:
-          item.priority !== undefined && item.priority !== null
-            ? String(item.priority).toUpperCase()
-            : "MEDIUM",
-        action: title,
-        description: rationale,
-        type: formatEnumLabel(item.type) || null,
-        target: (typeof item.target === "string" && item.target) || null,
-        reasoning:
-          (typeof item.reasoning === "string" && item.reasoning) ||
-          (typeof item.rationale === "string" && item.rationale) ||
-          null,
-        impact:
-          (typeof item.impact === "string" && item.impact) ||
-          (typeof item.expected_impact === "string" && item.expected_impact) ||
-          null,
-      };
-    };
-
-    const mapHighlight = (value: unknown) => {
-      if (typeof value === "string") {
-        return {
-          category: "analysis",
-          title: "",
-          text: value,
-          impact: null,
-          severity: "neutral",
-          confidence: null,
-          evidence: [],
-        };
-      }
-      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-      const insight = value as Record<string, unknown>;
-      return {
-        category:
-          (typeof insight.category === "string" && insight.category) || "analysis",
-        title:
-          (typeof insight.title === "string" && insight.title) ||
-          (typeof insight.name === "string" && insight.name) ||
-          "",
-        text:
-          (typeof insight.content === "string" && insight.content) ||
-          (typeof insight.description === "string" && insight.description) ||
-          (typeof insight.text === "string" && insight.text) ||
-          "",
-        impact:
-          (typeof insight.impact === "string" && insight.impact) ||
-          (typeof insight.metric === "string" && insight.metric) ||
-          null,
-        severity: toInsightSeverity(insight),
-        confidence:
-          (typeof insight.confidence === "string" && insight.confidence) || null,
-        evidence: Array.isArray(insight.evidence)
-          ? insight.evidence.map((item: unknown) => toDisplayString(item))
-          : [],
-      };
-    };
-
     const sectionGraphSources = [
       source.main_graph,
       source.primary_performance_graph,
+      ...(source.graph ? [source.graph] : []),
       ...(Array.isArray(source.graphs) ? source.graphs : []),
       ...(Array.isArray(source.charts) ? source.charts : []),
     ];
@@ -1660,6 +2248,8 @@ export const reportPayloadSchema = z.union([
 
     const sections: any[] = [];
     const topLevelHighlights: any[] = [];
+    const blockDerivedRecommendations: any[] = [];
+    const blockDerivedQuestions: string[] = [];
 
     if (Array.isArray(source.sections)) {
       for (const rawSection of source.sections) {
@@ -1677,21 +2267,21 @@ export const reportPayloadSchema = z.union([
           section.actions || section.recommendations || section.reccomendations || [];
         const sectionHighlights = Array.isArray(highlightsSource)
           ? highlightsSource
-              .map((item) => mapHighlight(item))
+              .map((item) => mapHighlightValue(item))
               .filter(
                 (
                   item
-                ): item is NonNullable<ReturnType<typeof mapHighlight>> =>
+                ): item is NonNullable<ReturnType<typeof mapHighlightValue>> =>
                   item !== null
               )
           : [];
         const sectionActions = Array.isArray(actionsSource)
           ? actionsSource
-              .map((item) => mapRecommendation(item))
+              .map((item) => mapRecommendationValue(item))
               .filter(
                 (
                   item
-                ): item is NonNullable<ReturnType<typeof mapRecommendation>> =>
+                ): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
                   item !== null
               )
           : [];
@@ -1725,6 +2315,149 @@ export const reportPayloadSchema = z.union([
             (typeof section.confidence === "string" && section.confidence) || null,
           cached_sources: Array.isArray(section.cached_sources)
             ? section.cached_sources.map((item) => toDisplayString(item))
+            : [],
+          graphs: sectionGraphs,
+        });
+      }
+    }
+
+    if (
+      sections.length === 0 &&
+      Array.isArray(source.blocks)
+    ) {
+      for (const rawBlock of source.blocks) {
+        if (!rawBlock || typeof rawBlock !== "object" || Array.isArray(rawBlock)) {
+          continue;
+        }
+        const block = rawBlock as Record<string, unknown>;
+        const blockHighlights = Array.isArray(block.highlights)
+          ? block.highlights
+              .map((item) => mapHighlightValue(item))
+              .filter(
+                (
+                  item
+                ): item is NonNullable<ReturnType<typeof mapHighlightValue>> =>
+                  item !== null
+              )
+          : [];
+        const blockActions = Array.isArray(block.actions)
+          ? block.actions
+              .map((item) => mapRecommendationValue(item))
+              .filter(
+                (
+                  item
+                ): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
+                  item !== null
+              )
+          : [];
+
+        const insightRecommendation =
+          block.insight_recommendation &&
+          typeof block.insight_recommendation === "object" &&
+          !Array.isArray(block.insight_recommendation)
+            ? (block.insight_recommendation as Record<string, unknown>)
+            : null;
+        if (insightRecommendation && Array.isArray(insightRecommendation.items)) {
+          for (const rawItem of insightRecommendation.items) {
+            if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) {
+              continue;
+            }
+            const item = rawItem as Record<string, unknown>;
+            const itemType = toDisplayString(item.item_type).toLowerCase().trim();
+            const itemSummary =
+              toNonEmptyString(item.summary) ||
+              toNonEmptyString(item.rationale) ||
+              toNonEmptyString(item.description) ||
+              toNonEmptyString(item.text);
+            if (!itemSummary) continue;
+
+            if (itemType === "question") {
+              blockDerivedQuestions.push(itemSummary);
+              continue;
+            }
+
+            const mappedRecommendation = mapRecommendationValue({
+              ...item,
+              title:
+                toNonEmptyString(item.title) ||
+                toNonEmptyString(item.action) ||
+                "Recommendation",
+              rationale: itemSummary,
+            });
+            if (
+              mappedRecommendation &&
+              (itemType === "recommendation" ||
+                itemType === "action" ||
+                itemType === "opportunity" ||
+                itemType === "risk")
+            ) {
+              blockActions.push(mappedRecommendation);
+              blockDerivedRecommendations.push(mappedRecommendation);
+              continue;
+            }
+
+            const mappedHighlight = mapHighlightValue({
+              ...item,
+              text: itemSummary,
+              title: toNonEmptyString(item.title) || undefined,
+            });
+            if (mappedHighlight) {
+              blockHighlights.push(mappedHighlight);
+            }
+          }
+        }
+
+        const blockData =
+          block.data && typeof block.data === "object" && !Array.isArray(block.data)
+            ? (block.data as Record<string, unknown>)
+            : null;
+        const blockTable =
+          blockData &&
+          ((Array.isArray(blockData.headers) && Array.isArray(blockData.rows)) ||
+            (Array.isArray(blockData.columns) && Array.isArray(blockData.rows)))
+            ? {
+                title:
+                  (typeof block.title === "string" && block.title) ||
+                  (typeof blockData.title === "string" ? blockData.title : undefined),
+                headers: (
+                  Array.isArray(blockData.headers)
+                    ? blockData.headers
+                    : Array.isArray(blockData.columns)
+                      ? blockData.columns
+                      : []
+                ).map((header) => toDisplayString(header)),
+                rows: (blockData.rows as unknown[]).map((row) =>
+                  Array.isArray(row)
+                    ? row.map((cell) => toDisplayString(cell))
+                    : row && typeof row === "object"
+                      ? row
+                      : [toDisplayString(row)]
+                ),
+              }
+            : null;
+
+        const sectionGraphs = [
+          ...(block.graph ? [block.graph] : []),
+          ...(Array.isArray(block.graphs) ? block.graphs : []),
+          ...(Array.isArray(block.charts) ? block.charts : []),
+        ].flatMap((graph) => parseGraphsFromInput(graph));
+
+        sections.push({
+          heading:
+            (typeof block.title === "string" && block.title) || "Analysis",
+          scope:
+            (typeof block.scope === "string" && block.scope) || "account",
+          summary:
+            (typeof block.summary === "string" && block.summary) ||
+            (typeof block.content === "string" && block.content) ||
+            "",
+          highlights: blockHighlights,
+          tables: blockTable ? [blockTable] : [],
+          actions: blockActions,
+          confidence:
+            (typeof block.confidence === "string" && block.confidence) || null,
+          cached_sources: Array.isArray(block.cached_sources)
+            ? block.cached_sources.map((item) => toDisplayString(item))
             : [],
           graphs: sectionGraphs,
         });
@@ -1772,11 +2505,11 @@ export const reportPayloadSchema = z.union([
       if (!Array.isArray(sourceInsights)) continue;
       topLevelHighlights.push(
         ...sourceInsights
-          .map((item) => mapHighlight(item))
+          .map((item) => mapHighlightValue(item))
           .filter(
             (
               item
-            ): item is NonNullable<ReturnType<typeof mapHighlight>> =>
+            ): item is NonNullable<ReturnType<typeof mapHighlightValue>> =>
               item !== null
           )
       );
@@ -1833,14 +2566,17 @@ export const reportPayloadSchema = z.union([
       if (!Array.isArray(recommendationSource)) continue;
       strategicRecommendations.push(
         ...recommendationSource
-          .map((item) => mapRecommendation(item))
+          .map((item) => mapRecommendationValue(item))
           .filter(
             (
               item
-            ): item is NonNullable<ReturnType<typeof mapRecommendation>> =>
+            ): item is NonNullable<ReturnType<typeof mapRecommendationValue>> =>
               item !== null
           )
       );
+    }
+    if (blockDerivedRecommendations.length > 0) {
+      strategicRecommendations.push(...blockDerivedRecommendations);
     }
     if (strategicRecommendations.length === 0) {
       for (const section of sections) {
@@ -1854,12 +2590,73 @@ export const reportPayloadSchema = z.union([
       (typeof source.executive_summary === "string" && source.executive_summary) ||
       (typeof summaryObject?.overview === "string" && summaryObject.overview) ||
       (typeof source.summary === "string" && source.summary) ||
+      (Array.isArray(source.blocks) &&
+      source.blocks[0] &&
+      typeof source.blocks[0] === "object" &&
+      !Array.isArray(source.blocks[0]) &&
+      typeof (source.blocks[0] as Record<string, unknown>).summary === "string"
+        ? ((source.blocks[0] as Record<string, unknown>).summary as string)
+        : "") ||
       (typeof source.title === "string" && source.title) ||
       "";
     const reportTitle =
+      (typeof reportMetadata?.title === "string" && reportMetadata.title) ||
       (typeof summaryObject?.title === "string" && summaryObject.title) ||
       (typeof source.title === "string" && source.title) ||
       "";
+    const followUpQuestions = [
+      ...(Array.isArray(source.follow_up_questions)
+        ? source.follow_up_questions
+        : []),
+      ...blockDerivedQuestions,
+    ].map((question) => toDisplayString(question));
+    const explicitCachedSources = Array.isArray(source.cached_sources)
+      ? source.cached_sources
+      : [];
+    const incomingBlocks = normalizeIncomingBlocks(source.blocks);
+    const resolvedBlocks =
+      incomingBlocks.length > 0
+        ? incomingBlocks
+        : buildBlocksFromLegacyFields({
+            performance_snapshot: performanceSnapshot,
+            sections,
+            strategic_recommendations: strategicRecommendations,
+            follow_up_questions: followUpQuestions,
+            graphs: allGraphs,
+            cached_sources: explicitCachedSources,
+          });
+    const hasIncomingBlocks = incomingBlocks.length > 0;
+    const legacyFromIncomingBlocks = hasIncomingBlocks
+      ? deriveLegacyFieldsFromBlocks(incomingBlocks)
+      : null;
+    const resolvedPerformanceSnapshot =
+      legacyFromIncomingBlocks && legacyFromIncomingBlocks.performance_snapshot.length > 0
+        ? legacyFromIncomingBlocks.performance_snapshot
+        : performanceSnapshot;
+    const resolvedSections =
+      legacyFromIncomingBlocks && legacyFromIncomingBlocks.sections.length > 0
+        ? legacyFromIncomingBlocks.sections
+        : sections;
+    const resolvedStrategicRecommendations =
+      legacyFromIncomingBlocks &&
+      legacyFromIncomingBlocks.strategic_recommendations.length > 0
+        ? legacyFromIncomingBlocks.strategic_recommendations
+        : strategicRecommendations;
+    const resolvedFollowUpQuestions =
+      legacyFromIncomingBlocks &&
+      legacyFromIncomingBlocks.follow_up_questions.length > 0
+        ? legacyFromIncomingBlocks.follow_up_questions
+        : followUpQuestions;
+    const resolvedGraphs =
+      legacyFromIncomingBlocks && legacyFromIncomingBlocks.graphs.length > 0
+        ? legacyFromIncomingBlocks.graphs
+        : allGraphs;
+    const resolvedCachedSources = Array.from(
+      new Set([
+        ...explicitCachedSources,
+        ...(legacyFromIncomingBlocks?.cached_sources ?? []),
+      ])
+    );
 
     return {
       language:
@@ -1867,26 +2664,31 @@ export const reportPayloadSchema = z.union([
       report_title: reportTitle,
       executive_summary: executiveSummary,
       budget,
-      performance_snapshot: performanceSnapshot,
-      sections,
-      strategic_recommendations: strategicRecommendations,
-      follow_up_questions: Array.isArray(source.follow_up_questions)
-        ? source.follow_up_questions
-        : [],
+      performance_snapshot: resolvedPerformanceSnapshot,
+      blocks: resolvedBlocks,
+      sections: resolvedSections,
+      strategic_recommendations: resolvedStrategicRecommendations,
+      follow_up_questions: resolvedFollowUpQuestions,
       handoff_trace: Array.isArray(source.handoff_trace) ? source.handoff_trace : [],
       execution_objectives: Array.isArray(source.execution_objectives)
         ? source.execution_objectives
         : [],
-      cached_sources: Array.isArray(source.cached_sources) ? source.cached_sources : [],
-      graphs: allGraphs,
+      cached_sources: resolvedCachedSources,
+      graphs: resolvedGraphs,
       summary: executiveSummary,
-      charts: allGraphs,
-      priority_recommendations: strategicRecommendations,
+      charts: resolvedGraphs,
+      priority_recommendations: resolvedStrategicRecommendations,
       strategic_insights: topLevelHighlights,
       title: (typeof source.title === "string" && source.title) || "",
       data_integrity_notes: [
         "Date Range",
-        `Date Range: ${typeof source.date_range === "string" ? source.date_range : "N/A"}`,
+        `Date Range: ${
+          typeof source.date_range === "string"
+            ? source.date_range
+            : typeof reportMetadata?.date_range === "string"
+              ? reportMetadata.date_range
+              : "N/A"
+        }`,
       ],
     };
   }),
@@ -1912,6 +2714,7 @@ export function hasReportContent(
   return !!(
     r.executive_summary ||
     r.performance_snapshot?.length ||
+    r.blocks?.length ||
     r.sections?.length ||
     r.strategic_recommendations?.length ||
     r.graphs?.length

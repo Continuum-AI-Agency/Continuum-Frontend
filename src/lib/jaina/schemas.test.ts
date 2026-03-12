@@ -11,6 +11,7 @@ import {
   responsePlanDecisionSchema,
   responsePlanRequestedSchema,
   frontendCheckpointReportSchema,
+  reportPayloadSchema,
   handoffTraceEntrySchema,
   responseObjectiveUpdatedSchema,
   responseObjectivesSchema,
@@ -30,7 +31,7 @@ describe("jainaChatRequestSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("accepts optional canvas fields", () => {
+  it("accepts optional canvas flags", () => {
     const result = jainaChatRequestSchema.safeParse({
       query: "Analyze my campaigns",
       canvas: true,
@@ -38,9 +39,6 @@ describe("jainaChatRequestSchema", () => {
         adAccountId: "act_123",
         brandId: "brand_456",
         canvas: true,
-        campaignCanvas: {
-          nodes: [],
-        },
       },
     });
 
@@ -84,6 +82,7 @@ describe("frontendCheckpointReportSchema Resilience", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.language).toBe("en");
+      expect(result.data.blocks).toEqual([]);
       expect(result.data.sections).toEqual([]);
       expect(result.data.strategic_recommendations).toEqual([]);
     }
@@ -106,9 +105,59 @@ describe("frontendCheckpointReportSchema Resilience", () => {
       expect(result.data.sections).toBeDefined();
       expect(Array.isArray(result.data.sections)).toBe(true);
       expect(result.data.sections.length).toBe(0);
+      expect(result.data.blocks).toEqual([]);
       expect(result.data.performance_snapshot).toEqual([]);
       expect(result.data.execution_objectives).toEqual([]);
     }
+  });
+});
+
+describe("reportPayloadSchema checkpoint wrappers", () => {
+  it("parses checkpoint_report wrapper payloads with block-based sections", () => {
+    const result = reportPayloadSchema.safeParse({
+      checkpoint_report: {
+        report_metadata: {
+          title: "Weekly Campaign Performance & Budget Analysis",
+          date_range: "Last 7 Days",
+        },
+        blocks: [
+          {
+            scope: "account",
+            title: "Account Performance Summary",
+            summary: "ROAS is stable at high spend levels.",
+            data: {
+              headers: ["Metric", "Value"],
+              rows: [["Total Spend", "$151,593.91"]],
+            },
+          },
+          {
+            scope: "analysis",
+            title: "Key Insights & Recommendations",
+            summary: "Strategic shifts are required.",
+            insight_recommendation: {
+              items: [
+                {
+                  item_type: "action",
+                  title: "Pause Non-Performing IOS Campaigns",
+                  summary: "IOS self-service has no purchases.",
+                  rationale: "Budget is being wasted.",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    if ("type" in result.data) {
+      throw new Error("Expected structured report payload");
+    }
+    expect(result.data.report_title).toBe("Weekly Campaign Performance & Budget Analysis");
+    expect(result.data.sections.length).toBeGreaterThan(0);
+    expect(result.data.sections[0]?.heading).toBe("Account Performance Summary");
+    expect(result.data.strategic_recommendations.length).toBeGreaterThan(0);
   });
 });
 
@@ -379,5 +428,28 @@ describe("hasReportContent helper", () => {
 
   it("returns true if performance_snapshot has items", () => {
     expect(hasReportContent({ executive_summary: "", performance_snapshot: [{ metric: "M", value: 1 }], sections: [], strategic_recommendations: [], graphs: [] })).toBe(true);
+  });
+
+  it("returns true if blocks has items", () => {
+    expect(
+      hasReportContent({
+        executive_summary: "",
+        performance_snapshot: [],
+        blocks: [
+          {
+            block_id: "b1",
+            category: "graph",
+            scope: "account",
+            title: "Trend",
+            summary: "Trend summary",
+            cached_sources: [],
+            graphs: [{ title: "ROAS", type: "line", data: [{ label: "Mon", value: 1.2 }] }],
+          },
+        ],
+        sections: [],
+        strategic_recommendations: [],
+        graphs: [],
+      })
+    ).toBe(true);
   });
 });
