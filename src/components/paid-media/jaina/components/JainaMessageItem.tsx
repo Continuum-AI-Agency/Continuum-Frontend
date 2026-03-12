@@ -55,7 +55,11 @@ import {
   type ToolResultEventData,
 } from "@/lib/jaina/schemas";
 import type { JainaProgressEntry, JainaStreamState } from "@/lib/jaina/stream";
-import { formatToolLabel } from "../jainaUtils";
+import {
+  extractRenderableFallbackFromReport,
+  extractRenderableFallbackFromStructuredContent,
+  formatToolLabel,
+} from "../jainaUtils";
 import { ThinkingStatusGrid } from "./ThinkingStatusGrid";
 import { CreativeCard } from "./CreativeCard";
 import { JainaInlineReport } from "./JainaInlineReport";
@@ -719,8 +723,19 @@ export function JainaMessageItem({
   const shouldRenderInlineReport = Boolean(
     structuredReport && hasReportContent(structuredReport)
   );
-  const shouldHideMarkdownContent =
-    shouldRenderInlineReport && isLikelyStructuredJsonMessage(message.content);
+  const isStructuredJsonContent = isLikelyStructuredJsonMessage(message.content);
+  const shouldHideMarkdownContent = isStructuredJsonContent;
+  const structuredFallbackContent = React.useMemo(() => {
+    if (shouldRenderInlineReport) return null;
+    return (
+      extractRenderableFallbackFromReport(report ?? null) ??
+      (isStructuredJsonContent
+        ? extractRenderableFallbackFromStructuredContent(message.content)
+        : null)
+    );
+  }, [isStructuredJsonContent, message.content, report, shouldRenderInlineReport]);
+  const shouldShowStructuredFallback =
+    isStructuredJsonContent && !shouldRenderInlineReport && !structuredFallbackContent;
 
   const artifacts = isStreaming ? state.artifacts : message.artifacts;
   const artifactCreatives = artifacts?.creatives ?? [];
@@ -755,6 +770,21 @@ export function JainaMessageItem({
                 mode={isStreaming ? "streaming" : "static"}
                 isAnimating={isStreaming}
               />
+            ) : null}
+
+            {structuredFallbackContent ? (
+              <SafeMarkdown
+                content={structuredFallbackContent}
+                className="text-[15px] leading-7 text-foreground"
+                mode="static"
+                isAnimating={false}
+              />
+            ) : null}
+
+            {shouldShowStructuredFallback ? (
+              <Text size="2" className="text-muted-foreground">
+                Structured analysis generated, but report blocks could not be rendered.
+              </Text>
             ) : null}
 
             {message.pendingClarification ? (

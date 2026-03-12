@@ -43,7 +43,14 @@ import { JainaHeader } from "./components/JainaHeader";
 import { JainaEmptyState } from "./components/JainaEmptyState";
 import { JainaMessageItem } from "./components/JainaMessageItem";
 import { JainaConversationSidebar } from "./components/JainaConversationSidebar";
-import { getFinalThought, getReportSummary, resolveReportSignal, hasReportContent } from "./jainaUtils";
+import {
+  extractRenderableFallbackFromStructuredContent,
+  getFinalThought,
+  getReportSummary,
+  hasReportContent,
+  isLikelyStructuredJsonContent,
+  resolveReportSignal,
+} from "./jainaUtils";
 import { parsePersistedReportValue } from "./persistedReport";
 import type { CampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
@@ -233,7 +240,10 @@ function mapConversationMessageToChatMessage(
     report: persistedReport,
   });
   const content =
-    persistedReport && isFallbackCheckpointMessage(message.content)
+    persistedReport &&
+    (isFallbackCheckpointMessage(message.content) ||
+      isPersistedErrorMessage(message.content) ||
+      isLikelyStructuredJsonContent(message.content))
       ? resolveReportSummaryForMessage(persistedReport) || message.content
       : message.content;
 
@@ -289,6 +299,30 @@ function isFallbackCheckpointMessage(content: string): boolean {
   return /synthesis summary unavailable/i.test(content);
 }
 
+function isPersistedErrorMessage(content: string): boolean {
+  const normalized = content.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized === "stream error" ||
+    normalized.startsWith("jaina error") ||
+    normalized.startsWith("malformed ") ||
+    normalized.startsWith("invalid ") ||
+    normalized.includes("failed to parse jaina stream event json")
+  );
+}
+
+function isStreamingPlaceholderMessage(content: string): boolean {
+  const normalized = content.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized === "thinking through your request…" ||
+    normalized === "processing your clarification…" ||
+    normalized === "building checkpoint report…" ||
+    normalized === "generating analysis..." ||
+    normalized === "working through objectives…"
+  );
+}
+
 function mergePersistedMessagesWithLocal(
   persistedMessages: JainaChatMessage[],
   localMessages: JainaChatMessage[]
@@ -327,7 +361,10 @@ function mergePersistedMessagesWithLocal(
   }
 
   const persistedAssistant = persistedMessages[persistedAssistantIndex];
-  if (!isFallbackCheckpointMessage(persistedAssistant.content)) {
+  if (
+    !isFallbackCheckpointMessage(persistedAssistant.content) &&
+    !isPersistedErrorMessage(persistedAssistant.content)
+  ) {
     return persistedMessages;
   }
 
@@ -448,9 +485,21 @@ export function JainaChatSurface({
   }, [prefersReducedMotion, shaderState]);
 
   const updateMessage = React.useCallback(
-    (id: string, update: Partial<JainaChatMessage>) => {
+    (
+      id: string,
+      update:
+        | Partial<JainaChatMessage>
+        | ((message: JainaChatMessage) => Partial<JainaChatMessage>)
+    ) => {
       setMessages((prev) =>
-        prev.map((msg) => (msg.id === id ? { ...msg, ...update } : msg))
+        prev.map((msg) =>
+          msg.id === id
+            ? {
+                ...msg,
+                ...(typeof update === "function" ? update(msg) : update),
+              }
+            : msg
+        )
       );
     },
     []
@@ -682,6 +731,9 @@ export function JainaChatSurface({
     if (state.status === "complete") {
       const completedResponseId = activeResponseId;
       const finalThought = getFinalThought(state.progress);
+      const safeResponseText = isLikelyStructuredJsonContent(state.responseText)
+        ? extractRenderableFallbackFromStructuredContent(state.responseText) || ""
+        : state.responseText;
       const reportSummary = resolveReportSummaryForMessage(state.report ?? undefined);
       const checkpointSummary =
         state.checkpointSummarySource !== "default_unavailable"
@@ -702,7 +754,7 @@ export function JainaChatSurface({
           (Boolean(state.report) && state.lastEventType === "response.content_part.done"));
       const content = shouldPreferReport
         ? resolvedSummary || "Report ready."
-        : state.responseText ||
+        : safeResponseText ||
           state.pendingClarification?.question ||
           finalThought ||
           resolvedSummary ||
@@ -744,9 +796,30 @@ export function JainaChatSurface({
     if (state.status === "error" && state.error) {
       const failedResponseId = activeResponseId;
       const reportHasContent = hasReportContent(state.report);
-      updateMessage(failedResponseId, {
+      const safeResponseText = isLikelyStructuredJsonContent(state.responseText)
+        ? extractRenderableFallbackFromStructuredContent(state.responseText) || ""
+        : state.responseText;
+      const reportSummary = resolveReportSummaryForMessage(state.report ?? undefined);
+      const checkpointSummary =
+        state.checkpointSummarySource !== "default_unavailable"
+          ? state.latestCheckpointSummary?.trim() ?? ""
+          : "";
+      const finalThought = getFinalThought(state.progress);
+      const derivedErrorContent =
+        reportSummary ||
+        checkpointSummary ||
+        safeResponseText ||
+        state.pendingClarification?.question ||
+        finalThought ||
+        "";
+      updateMessage(failedResponseId, (previousMessage) => ({
         status: "error",
-        content: state.error,
+        content:
+          derivedErrorContent ||
+          (!isStreamingPlaceholderMessage(previousMessage.content) &&
+          previousMessage.content.trim().length > 0
+            ? previousMessage.content
+            : state.error || previousMessage.content),
         title: "Jaina error",
         report: state.report ?? undefined,
         reportAssembly: state.reportAssembly ?? undefined,
@@ -757,8 +830,9 @@ export function JainaChatSurface({
         toolCalls: state.toolCalls,
         toolResults: state.toolResults,
         artifacts: state.artifacts,
+        pendingClarification: state.pendingClarification ?? undefined,
         objectives: state.objectives,
-      });
+      }));
 
       persistedAssistantResponseIdsRef.current.add(failedResponseId);
       void refreshConversationSnapshot(sessionId);

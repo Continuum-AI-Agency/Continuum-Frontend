@@ -461,6 +461,32 @@ describe("reduceJainaStreamEvent text deltas", () => {
     expect(state.report).toBeNull();
     expect(state.responseText).toContain("7 active campaigns");
   });
+
+  it("does not append structured JSON deltas into responseText fallback", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_text_json",
+        part_id: "part_text_json",
+        delta: "High-level summary before structured report.",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_text_json",
+        part_id: "part_text_json",
+        delta:
+          '{"executive_summary":"Structured summary","performance_snapshot":[{"metric":"Spend","value":1200}]}',
+      },
+    } as any);
+
+    expect(state.responseText).toBe("High-level summary before structured report.");
+    expect(state.report).not.toBeNull();
+  });
 });
 
 describe("reduceJainaStreamEvent canonical report events", () => {
@@ -551,6 +577,57 @@ describe("reduceJainaStreamEvent canonical report events", () => {
     expect(state.responseId).toBe("resp_current");
     expect(state.responseText).toContain("still streaming current response");
     expect(state.status).toBe("streaming");
+  });
+
+  it("does not clear accumulated content when a foreign response.created arrives after an error", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_primary",
+        object: "realtime.response",
+        status: "in_progress",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_primary",
+        part_id: "part_primary",
+        delta: "Recovered analysis content that should stay visible.",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_primary",
+        object: "realtime.response",
+        status: "failed",
+        status_details: {
+          message: "One tool failed after content was generated",
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: {
+        id: "resp_secondary",
+        object: "realtime.response",
+        status: "in_progress",
+        status_details: null,
+        output: [],
+      },
+    } as any);
+
+    expect(state.responseId).toBe("resp_primary");
+    expect(state.responseText).toContain("Recovered analysis content");
+    expect(state.status).toBe("error");
   });
 
   it("ignores response.done events for a different response id", () => {

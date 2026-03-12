@@ -72,24 +72,75 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function extractJsonObjectCandidate(value: string): unknown {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
+function collectBalancedJsonObjectCandidates(value: string): string[] {
+  const candidates: string[] = [];
+  let depth = 0;
+  let segmentStart = -1;
+  let inString = false;
+  let isEscaped = false;
 
-  const candidates = [trimmed];
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        isEscaped = true;
+        continue;
+      }
+      if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (char === "{") {
+      if (depth === 0) {
+        segmentStart = index;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && segmentStart >= 0) {
+        candidates.push(value.slice(segmentStart, index + 1));
+        segmentStart = -1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function extractJsonObjectCandidates(value: string): unknown[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  const rawCandidates = [trimmed];
   const firstBraceIndex = trimmed.indexOf("{");
   const lastBraceIndex = trimmed.lastIndexOf("}");
   if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
     const sliced = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
-    if (sliced !== trimmed) candidates.push(sliced);
+    if (sliced !== trimmed) rawCandidates.push(sliced);
   }
+  rawCandidates.push(...collectBalancedJsonObjectCandidates(trimmed));
 
-  for (const candidate of candidates) {
+  const parsedCandidates: unknown[] = [];
+  for (const candidate of rawCandidates) {
     const parsed = parseJsonCandidate(candidate);
-    if (parsed) return parsed;
+    if (parsed != null) parsedCandidates.push(parsed);
   }
-
-  return null;
+  return parsedCandidates;
 }
 
 function parseReportPayload(value: unknown): ReportPayload | undefined {
@@ -102,9 +153,12 @@ function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | unde
   if (depth > 6 || value == null) return undefined;
 
   if (typeof value === "string") {
-    const embedded = extractJsonObjectCandidate(value);
-    if (!embedded) return undefined;
-    return parseReportFromUnknown(embedded, depth + 1);
+    const embeddedCandidates = extractJsonObjectCandidates(value);
+    for (const embedded of embeddedCandidates) {
+      const parsed = parseReportFromUnknown(embedded, depth + 1);
+      if (parsed) return parsed;
+    }
+    return undefined;
   }
 
   const direct = parseReportPayload(value);

@@ -1,5 +1,6 @@
 import { hasReportContent, type ReportPayload, type FrontendCheckpointReport } from "@/lib/jaina/schemas";
 import type { JainaChatMessage } from "./types";
+import { parsePersistedReportValue } from "./persistedReport";
 
 const reportSignalKeys = [
   "render_as",
@@ -59,6 +60,295 @@ export const getReportSummary = (report: ReportPayload | null) => {
   const r = report as FrontendCheckpointReport;
   return r.executive_summary || "";
 };
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function toNonEmptyString(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return null;
+}
+
+function collectBalancedJsonObjectCandidates(value: string): string[] {
+  const candidates: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        isEscaped = true;
+        continue;
+      }
+      if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(value.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function parseJsonCandidate(candidate: string): unknown {
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function extractJsonObjectCandidates(value: string): unknown[] {
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+  const rawCandidates = [trimmed];
+  const firstBraceIndex = trimmed.indexOf("{");
+  const lastBraceIndex = trimmed.lastIndexOf("}");
+  if (firstBraceIndex >= 0 && lastBraceIndex > firstBraceIndex) {
+    const sliced = trimmed.slice(firstBraceIndex, lastBraceIndex + 1);
+    if (sliced !== trimmed) rawCandidates.push(sliced);
+  }
+  rawCandidates.push(...collectBalancedJsonObjectCandidates(trimmed));
+  return rawCandidates
+    .map((candidate) => parseJsonCandidate(candidate))
+    .filter((candidate) => candidate != null);
+}
+
+function extractHighlightText(value: unknown): string | null {
+  const direct = toNonEmptyString(value);
+  if (direct) return direct;
+  const record = asRecord(value);
+  if (!record) return null;
+  return (
+    toNonEmptyString(record.text) ??
+    toNonEmptyString(record.title) ??
+    toNonEmptyString(record.summary)
+  );
+}
+
+function extractRecommendationText(value: unknown): string | null {
+  const direct = toNonEmptyString(value);
+  if (direct) return direct;
+  const record = asRecord(value);
+  if (!record) return null;
+  const title = toNonEmptyString(record.title) ?? toNonEmptyString(record.action);
+  const rationale =
+    toNonEmptyString(record.rationale) ??
+    toNonEmptyString(record.description) ??
+    toNonEmptyString(record.summary);
+  if (title && rationale) return `${title}: ${rationale}`;
+  return title ?? rationale;
+}
+
+function extractMetricText(value: unknown): string | null {
+  const record = asRecord(value);
+  if (!record) return toNonEmptyString(value);
+  const label =
+    toNonEmptyString(record.metric) ??
+    toNonEmptyString(record.label) ??
+    toNonEmptyString(record.name) ??
+    toNonEmptyString(record.title);
+  const metricValue =
+    toNonEmptyString(record.value) ??
+    toNonEmptyString(record.actual) ??
+    toNonEmptyString(record.current);
+  if (label && metricValue) return `${label}: ${metricValue}`;
+  return label ?? metricValue;
+}
+
+function pushUniqueLine(lines: string[], line: string): void {
+  const normalized = line.trim();
+  if (!normalized) return;
+  if (!lines.includes(normalized)) lines.push(normalized);
+}
+
+function extractRenderableLinesFromRecord(record: Record<string, unknown>): string[] {
+  const lines: string[] = [];
+  const title =
+    toNonEmptyString(record.report_title) ??
+    toNonEmptyString(record.title) ??
+    (() => {
+      const summaryRecord = asRecord(record.summary);
+      return summaryRecord ? toNonEmptyString(summaryRecord.title) : null;
+    })();
+  if (title) pushUniqueLine(lines, `### ${title}`);
+
+  const summary =
+    toNonEmptyString(record.executive_summary) ??
+    toNonEmptyString(record.summary) ??
+    toNonEmptyString(record.narrative) ??
+    toNonEmptyString(record.message) ??
+    toNonEmptyString(record.content) ??
+    (() => {
+      const summaryRecord = asRecord(record.summary);
+      return summaryRecord
+        ? toNonEmptyString(summaryRecord.narrative) ??
+            toNonEmptyString(summaryRecord.overview) ??
+            toNonEmptyString(summaryRecord.summary)
+        : null;
+    })();
+  if (summary) pushUniqueLine(lines, summary);
+
+  const metricCandidates = [
+    ...(Array.isArray(record.performance_snapshot) ? record.performance_snapshot : []),
+    ...(Array.isArray(record.metrics) ? record.metrics : []),
+    ...(Array.isArray(record.kpis) ? record.kpis : []),
+  ]
+    .map(extractMetricText)
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .slice(0, 4);
+  if (metricCandidates.length > 0) {
+    pushUniqueLine(lines, "**Performance snapshot**");
+    for (const metric of metricCandidates) {
+      pushUniqueLine(lines, `- ${metric}`);
+    }
+  }
+
+  const sections = Array.isArray(record.sections) ? record.sections : [];
+  for (const sectionValue of sections.slice(0, 3)) {
+    const sectionRecord = asRecord(sectionValue);
+    if (!sectionRecord) continue;
+    const heading =
+      toNonEmptyString(sectionRecord.heading) ??
+      toNonEmptyString(sectionRecord.title) ??
+      "Section";
+    const sectionSummary =
+      toNonEmptyString(sectionRecord.summary) ??
+      toNonEmptyString(sectionRecord.content) ??
+      toNonEmptyString(sectionRecord.description);
+    pushUniqueLine(lines, `**${heading}**`);
+    if (sectionSummary) pushUniqueLine(lines, sectionSummary);
+
+    const highlights = Array.isArray(sectionRecord.highlights)
+      ? sectionRecord.highlights
+      : [];
+    for (const highlight of highlights.slice(0, 2)) {
+      const text = extractHighlightText(highlight);
+      if (text) pushUniqueLine(lines, `- ${text}`);
+    }
+  }
+
+  const recommendationCandidates = [
+    ...(Array.isArray(record.strategic_recommendations)
+      ? record.strategic_recommendations
+      : []),
+    ...(Array.isArray(record.recommendations) ? record.recommendations : []),
+    ...(Array.isArray(record.actions) ? record.actions : []),
+  ]
+    .map(extractRecommendationText)
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .slice(0, 4);
+  if (recommendationCandidates.length > 0) {
+    pushUniqueLine(lines, "**Recommended actions**");
+    for (const recommendation of recommendationCandidates) {
+      pushUniqueLine(lines, `- ${recommendation}`);
+    }
+  }
+
+  const followUpQuestions = (Array.isArray(record.follow_up_questions)
+    ? record.follow_up_questions
+    : [])
+    .map((candidate) => toNonEmptyString(candidate))
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .slice(0, 3);
+  if (followUpQuestions.length > 0) {
+    pushUniqueLine(lines, "**Follow-up questions**");
+    for (const question of followUpQuestions) {
+      pushUniqueLine(lines, `- ${question}`);
+    }
+  }
+
+  return lines;
+}
+
+export function extractRenderableFallbackFromReport(
+  report: ReportPayload | null | undefined
+): string | null {
+  if (!report) return null;
+  if ("type" in report && report.type === "direct_answer") {
+    return toNonEmptyString(report.content);
+  }
+  const lines = extractRenderableLinesFromRecord(report as unknown as Record<string, unknown>);
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+export function isLikelyStructuredJsonContent(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed) return false;
+  if (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  ) {
+    return true;
+  }
+  return (
+    trimmed.includes("\"executive_summary\"") ||
+    trimmed.includes("\"performance_snapshot\"") ||
+    trimmed.includes("\"sections\"") ||
+    trimmed.includes("\"strategic_recommendations\"") ||
+    trimmed.includes("\"checkpoint_report\"")
+  );
+}
+
+export function extractRenderableFallbackFromStructuredContent(
+  content: string
+): string | null {
+  const parsedReport = parsePersistedReportValue({
+    report: undefined,
+    content,
+  });
+  const reportFallback = extractRenderableFallbackFromReport(parsedReport);
+  if (reportFallback) return reportFallback;
+
+  const candidates = extractJsonObjectCandidates(content);
+  let bestFallback: string | null = null;
+  let bestScore = 0;
+  for (const candidate of candidates) {
+    const record = asRecord(candidate);
+    if (!record) continue;
+    const lines = extractRenderableLinesFromRecord(record);
+    if (lines.length === 0) continue;
+    const fallback = lines.join("\n");
+    const score = fallback.length;
+    if (score > bestScore) {
+      bestFallback = fallback;
+      bestScore = score;
+    }
+  }
+
+  return bestFallback;
+}
 
 export const formatStageLabel = (stage: string) => {
   if (stage === "router" || stage === "routing") {

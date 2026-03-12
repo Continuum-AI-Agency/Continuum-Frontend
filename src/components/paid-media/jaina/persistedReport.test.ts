@@ -121,4 +121,33 @@ describe("parsePersistedReportValue", () => {
 
     expect(parsed?.executive_summary).toBe("Recovered from reasoning payload");
   });
+
+  it("parses report JSON embedded after error text and non-report JSON fragments", () => {
+    const content = [
+      "Tool execution warning: partial timeout",
+      '{"error":"timeout","scope":"tool"}',
+      "Recovered checkpoint payload follows:",
+      JSON.stringify({
+        type: "checkpoint_report",
+        report: {
+          executive_summary: "Recovered after tool timeout",
+          sections: [],
+          performance_snapshot: [],
+          strategic_recommendations: [],
+          follow_up_questions: [],
+          handoff_trace: [],
+          execution_objectives: [],
+          cached_sources: [],
+          graphs: [],
+        },
+      }),
+    ].join("\n");
+
+    const parsed = parsePersistedReportValue({
+      report: undefined,
+      content,
+    });
+
+    expect(parsed?.executive_summary).toBe("Recovered after tool timeout");
+  });
 });

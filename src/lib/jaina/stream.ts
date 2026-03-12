@@ -1957,7 +1957,16 @@ export function reduceJainaStreamEvent(
       const hasActiveResponse =
         Boolean(state.responseId) &&
         state.responseId !== incomingResponseId;
-      if (isInFlight && hasActiveResponse) {
+      const hasStreamingOutput =
+        state.responseText.trim().length > 0 ||
+        state.reportJson.trim().length > 0 ||
+        Boolean(state.report) ||
+        Boolean(state.reportAssembly) ||
+        state.progress.length > 0 ||
+        state.objectives.length > 0 ||
+        state.toolCalls.length > 0 ||
+        state.toolResults.length > 0;
+      if (hasActiveResponse && (isInFlight || hasStreamingOutput || state.status === "error")) {
         return nextBase;
       }
       return {
@@ -2548,12 +2557,15 @@ export function reduceJainaStreamEvent(
         return { ...nextBase, status: "error", error: "Malformed response.output_text.delta event" };
       }
       if (state.hasCanonicalCheckpointReport) {
+        const appendCanonicalDelta = !looksLikeStructuredReportDelta(payload.delta);
         return {
           ...nextBase,
           ...(payload.item_id && !nextBase.outputItemId
             ? { outputItemId: payload.item_id }
             : {}),
-          responseText: `${state.responseText}${payload.delta}`,
+          responseText: appendCanonicalDelta
+            ? `${state.responseText}${payload.delta}`
+            : state.responseText,
         };
       }
       const partKind = payload.part_id
@@ -2571,6 +2583,10 @@ export function reduceJainaStreamEvent(
         ? parseReportFromAccumulatedText(nextReportJson) ??
           parsePartialReportFromAccumulatedText(nextReportJson)
         : null;
+      const shouldAppendDeltaToResponseText =
+        !shouldParseAsReport &&
+        state.reportJson.trim().length === 0 &&
+        !looksLikeStructuredReportDelta(payload.delta);
 
       return {
         ...nextBase,
@@ -2578,7 +2594,9 @@ export function reduceJainaStreamEvent(
           ? { outputItemId: payload.item_id }
           : {}),
         reportJson: nextReportJson,
-        responseText: `${state.responseText}${payload.delta}`,
+        responseText: shouldAppendDeltaToResponseText
+          ? `${state.responseText}${payload.delta}`
+          : state.responseText,
         report: pickRicherReport(state.report, parsedReport),
         reportSourceEventId: parsedReport ? undefined : state.reportSourceEventId,
       };
