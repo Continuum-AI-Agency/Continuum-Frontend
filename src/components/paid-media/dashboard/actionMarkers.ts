@@ -5,7 +5,7 @@ import type {
 } from "./ObservabilityLightweightChart";
 
 export type MarkerResolution = "daily" | "hourly";
-export type MarkerViewLayer = "campaign" | "adset";
+export type MarkerViewLayer = "campaign" | "adset" | "ad";
 
 type MarkerMappingOptions = {
   maxMarkers?: number;
@@ -96,7 +96,8 @@ function strongestStatus(logs: ActionLog[]): ActionStatus {
 
 function matchesViewLayer(scopeType: ActionLog["scopeType"], viewLayer: MarkerViewLayer): boolean {
   if (viewLayer === "campaign") return scopeType === "CAMPAIGN";
-  return scopeType === "ADSET";
+  if (viewLayer === "adset") return scopeType === "ADSET";
+  return scopeType === "AD";
 }
 
 export function mapActionLogsToTimelineMarkers(
@@ -161,6 +162,15 @@ export function mapActionLogsToTimelineMarkers(
             : latest.scopeType === "AD"
               ? latest.metaAdId ?? latest.scopeId
             : latest.scopeId;
+      const campaignId =
+        latest.metaCampaignId ??
+        (latest.scopeType === "CAMPAIGN" && latest.scopeId ? latest.scopeId : null);
+      const adSetId =
+        latest.metaAdsetId ??
+        (latest.scopeType === "ADSET" && latest.scopeId ? latest.scopeId : null);
+      const adId =
+        latest.metaAdId ??
+        (latest.scopeType === "AD" && latest.scopeId ? latest.scopeId : null);
 
       return {
         id: `marker:${group.scopeType}:${group.time}`,
@@ -173,6 +183,10 @@ export function mapActionLogsToTimelineMarkers(
         shape: "square",
         position: group.position,
         scopeType: latest.scopeType,
+        scopeId: latest.scopeId,
+        campaignId,
+        adSetId,
+        adId,
         actionCount: count,
         status,
       };

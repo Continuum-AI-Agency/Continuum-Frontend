@@ -94,13 +94,14 @@ describe("buildAggregatedMetricsContext", () => {
           roas: 2,
           ctr: 1.2,
           cpc: 1.5,
+          cpa: 8.3,
           impressions: 1000,
           clicks: 120,
         },
         comparison: {
           spend: { current: 100, previous: 80, percentageChange: 25 },
         },
-        trends: [{ date: "2026-01-01", spend: 100, roas: 2, ctr_pct: 1.2, cpc: 1.5, impressions: 1000, clicks: 120 }],
+        trends: [{ date: "2026-01-01", spend: 100, roas: 2, ctr_pct: 1.2, cpc: 1.5, cpa: 8.3, impressions: 1000, clicks: 120 }],
       },
       {
         metrics: {
@@ -108,13 +109,14 @@ describe("buildAggregatedMetricsContext", () => {
           roas: 4,
           ctr: 2.4,
           cpc: 3.5,
+          cpa: 12.5,
           impressions: 3000,
           clicks: 240,
         },
         comparison: {
           spend: { current: 300, previous: 240, percentageChange: 25 },
         },
-        trends: [{ date: "2026-01-01", spend: 300, roas: 4, ctr_pct: 2.4, cpc: 3.5, impressions: 3000, clicks: 240 }],
+        trends: [{ date: "2026-01-01", spend: 300, roas: 4, ctr_pct: 2.4, cpc: 3.5, cpa: 12.5, impressions: 3000, clicks: 240 }],
       },
     ]);
 

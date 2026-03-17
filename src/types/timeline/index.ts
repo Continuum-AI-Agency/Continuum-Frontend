@@ -46,6 +46,7 @@ export interface DailyMetric {
     roas?: number;
     ctr_pct?: number;
     cpc?: number;
+    cpa?: number;
     revenue?: number;
     impressions?: number;
     clicks?: number;

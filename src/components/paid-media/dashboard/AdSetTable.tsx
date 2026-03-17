@@ -29,6 +29,7 @@ export type AdSet = {
     roas: number;
     ctr: number;
     cpc: number;
+    cpa: number;
     impressions: number;
     clicks: number;
   };
@@ -47,6 +48,7 @@ export type MetaAd = {
     roas: number;
     ctr: number;
     cpc: number;
+    cpa: number;
     impressions: number;
     clicks: number;
   } | null;

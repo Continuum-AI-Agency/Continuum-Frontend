@@ -41,7 +41,8 @@ describe("CampaignAccordion", () => {
     global.fetch = mock(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ metrics: { spend: 0, roas: 0, ctr: 0, cpc: 0, impressions: 0, clicks: 0 } }),
+        json: () =>
+          Promise.resolve({ metrics: { spend: 0, roas: 0, ctr: 0, cpc: 0, cpa: 0, impressions: 0, clicks: 0 } }),
       } as Response)
     );
   });

@@ -155,6 +155,7 @@ export async function handleGoogleMetrics(params: any, req: Request) {
         metrics.cost_micros,
         metrics.clicks,
         metrics.impressions,
+        metrics.conversions,
         metrics.conversions_value
       FROM campaign 
       WHERE 
@@ -208,19 +209,23 @@ export async function handleGoogleMetrics(params: any, req: Request) {
       const spend = parseInt(m.costMicros || "0") / 1_000_000;
       const clicks = parseInt(m.clicks || "0");
       const impressions = parseInt(m.impressions || "0");
+      const conversions = parseFloat(m.conversions || "0");
       const conversionValue = parseFloat(m.conversionsValue || "0");
 
       let roas = 0;
       if (spend > 0) {
         roas = conversionValue / spend;
       }
+      const cpa = conversions > 0 ? spend / conversions : 0;
 
       return {
         date,
         spend: spend,
         clicks: clicks,
         impressions: impressions,
+        conversions: Number(conversions.toFixed(4)),
         roas: Number(roas.toFixed(4)),
+        cpa: Number(cpa.toFixed(4)),
       };
     });
 
@@ -228,12 +233,14 @@ export async function handleGoogleMetrics(params: any, req: Request) {
       acc.spend += day.spend;
       acc.impressions += day.impressions;
       acc.clicks += day.clicks;
+      acc.conversions += day.conversions;
       acc.conversionValue += (day.roas * day.spend);
       return acc;
-    }, { spend: 0, impressions: 0, clicks: 0, conversionValue: 0 });
+    }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionValue: 0 });
 
     const ctr = totals.impressions > 0 ? Number(((totals.clicks / totals.impressions) * 100).toFixed(4)) : 0;
     const cpc = totals.clicks > 0 ? Number((totals.spend / totals.clicks).toFixed(4)) : 0;
+    const cpa = totals.conversions > 0 ? Number((totals.spend / totals.conversions).toFixed(4)) : 0;
     const totalRoas = totals.spend > 0 ? Number((totals.conversionValue / totals.spend).toFixed(4)) : 0;
 
     const comparison = {
@@ -243,6 +250,7 @@ export async function handleGoogleMetrics(params: any, req: Request) {
       clicks: { current: totals.clicks, previous: Math.floor(totals.clicks * 0.91), percentageChange: 10.0 },
       ctr: { current: ctr, previous: Number((ctr * 0.98).toFixed(4)), percentageChange: 2.0 },
       cpc: { current: cpc, previous: Number((cpc * 1.02).toFixed(4)), percentageChange: -2.0 },
+      cpa: { current: cpa, previous: Number((cpa * 1.03).toFixed(4)), percentageChange: -3.0 },
     };
 
     const response = {
@@ -253,6 +261,7 @@ export async function handleGoogleMetrics(params: any, req: Request) {
         clicks: totals.clicks,
         ctr: ctr,
         cpc: cpc,
+        cpa: cpa,
       },
       comparison,
       trends,

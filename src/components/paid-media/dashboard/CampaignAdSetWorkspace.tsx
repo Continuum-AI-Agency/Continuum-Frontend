@@ -68,6 +68,7 @@ import type { AdSet } from "./AdSetTable";
 import { mapActionLogsToTimelineMarkers } from "./actionMarkers";
 import {
   ObservabilityLightweightChart,
+  type ObservabilityChartMarkerSelection,
   type ObservabilityChartPoint,
   type ObservabilityChartSeries,
 } from "./ObservabilityLightweightChart";
@@ -75,7 +76,7 @@ import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./Performance
 import { resolveTimeRangeWindow, toMetricsRange, type PaidMediaTimeRange } from "./timeRange";
 
 type TimelineResolution = "daily" | "hourly";
-type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "impressions" | "clicks";
+type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "cpa" | "impressions" | "clicks";
 type ViewMode = "campaigns" | "adsets";
 type Scope = { type: "campaign"; id: string } | { type: "index"; id: string };
 type CampaignSearchFilter = "all" | "active" | "paused";
@@ -92,6 +93,7 @@ type Campaign = {
     roas: number;
     ctr: number;
     cpc: number;
+    cpa: number;
     impressions: number;
     clicks: number;
   };
@@ -102,6 +104,43 @@ type Campaign = {
 type ScopedAdSet = AdSet & {
   campaignId: string;
   campaignName: string;
+};
+
+type AdMetrics = {
+  spend: number;
+  roas: number;
+  ctr: number;
+  cpc: number;
+  cpa: number;
+  impressions: number;
+  clicks: number;
+};
+
+type MetaAd = {
+  id: string;
+  name: string;
+  status: string;
+  effectiveStatus?: string;
+  adsetId?: string;
+  campaignId?: string | null;
+  previewShareableLink?: string | null;
+  metrics?: AdMetrics | null;
+  trends?: PaidMetricsTrendPoint[];
+  creative?: {
+    id: string;
+    name?: string | null;
+    title?: string | null;
+    body?: string | null;
+    thumbnailUrl?: string | null;
+    imageUrl?: string | null;
+    callToActionType?: string | null;
+  } | null;
+};
+
+type AdSetAdsLoadState = {
+  status: "idle" | "loading" | "success" | "error";
+  ads: MetaAd[];
+  errorMessage?: string;
 };
 
 type AdSetLoadState = {
@@ -138,7 +177,7 @@ type CampaignAdSetWorkspaceProps = {
   onDeleteCampaignIndex?: (indexId: string) => void;
 };
 
-const METRICS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"];
+const METRICS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "cpa", "impressions", "clicks"];
 const COMPARE_COLORS = [
   "#0ea5e9",
   "#10b981",
@@ -155,6 +194,7 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   roas: "#10b981",
   ctr: "#8b5cf6",
   cpc: "#f97316",
+  cpa: "#f43f5e",
   impressions: "#14b8a6",
   clicks: "#84cc16",
 };
@@ -186,7 +226,7 @@ function formatDeltaPercent(value: number): string {
 }
 
 function formatMetric(metric: MetricKey, value: number): string {
-  if (metric === "spend" || metric === "cpc") return formatCurrency(value);
+  if (metric === "spend" || metric === "cpc" || metric === "cpa") return formatCurrency(value);
   if (metric === "roas") return value.toFixed(2);
   if (metric === "ctr") return formatPercent(value);
   return formatNumber(value);
@@ -202,6 +242,8 @@ function labelForMetric(metric: MetricKey): string {
       return "CTR";
     case "cpc":
       return "CPC";
+    case "cpa":
+      return "CPA";
     case "impressions":
       return "Impressions";
     case "clicks":
@@ -233,6 +275,13 @@ function toMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): number 
     const clicks = point.clicks ?? 0;
     const spend = point.spend ?? 0;
     return clicks > 0 ? spend / clicks : 0;
+  }
+
+  if (metric === "cpa") {
+    if (typeof point.cpa === "number") return point.cpa;
+    const conversions = point.conversions ?? 0;
+    const spend = point.spend ?? 0;
+    return conversions > 0 ? spend / conversions : 0;
   }
 
   return 0;
@@ -336,6 +385,49 @@ type AggregatableEntity = {
   comparison?: PaidMetricsComparison;
   trends?: PaidMetricsTrendPoint[];
 };
+
+type MarkerTarget = {
+  time: UTCTimestamp;
+  scopeType?: string;
+  campaignId?: string | null;
+  adSetId?: string | null;
+  adId?: string | null;
+};
+
+type PendingMarkerSelection = {
+  campaignId?: string | null;
+  adSetId?: string | null;
+  adId?: string | null;
+  time: UTCTimestamp;
+};
+
+function markerScopeRank(scopeType: string | undefined): number {
+  if (scopeType === "AD") return 3;
+  if (scopeType === "ADSET") return 2;
+  if (scopeType === "CAMPAIGN") return 1;
+  return 0;
+}
+
+function resolveMarkerTarget(selection: ObservabilityChartMarkerSelection): MarkerTarget | null {
+  const sorted = selection.markers
+    .slice()
+    .sort((left, right) => {
+      const rankDelta = markerScopeRank(right.scopeType) - markerScopeRank(left.scopeType);
+      if (rankDelta !== 0) return rankDelta;
+      return Number(right.time) - Number(left.time);
+    });
+
+  const primary = sorted[0] ?? selection.marker;
+  if (!primary) return null;
+
+  return {
+    time: selection.time,
+    scopeType: primary.scopeType,
+    campaignId: primary.campaignId ?? null,
+    adSetId: primary.adSetId ?? null,
+    adId: primary.adId ?? null,
+  };
+}
 
 export function buildAggregatedMetricsContext(
   entities: AggregatableEntity[]
@@ -487,7 +579,13 @@ export function CampaignAdSetWorkspace({
   const [showSelectedAdSetAverage, setShowSelectedAdSetAverage] = React.useState(false);
   const [showSelectedAdSetLines, setShowSelectedAdSetLines] = React.useState(true);
   const [adSetsByCampaign, setAdSetsByCampaign] = React.useState<Record<string, AdSetLoadState>>({});
+  const [adsByAdSet, setAdsByAdSet] = React.useState<Record<string, AdSetAdsLoadState>>({});
+  const [selectedAdIds, setSelectedAdIds] = React.useState<string[]>([]);
+  const [campaignChartFocusTime, setCampaignChartFocusTime] = React.useState<UTCTimestamp | null>(null);
+  const [adSetChartFocusTime, setAdSetChartFocusTime] = React.useState<UTCTimestamp | null>(null);
   const hasSeededCompareSelectionRef = React.useRef(false);
+  const inFlightAdLoadsRef = React.useRef(new Set<string>());
+  const pendingMarkerSelectionRef = React.useRef<PendingMarkerSelection | null>(null);
   const timeWindow = React.useMemo(() => resolveTimeRangeWindow(timeRange), [timeRange]);
   const metricsRange = React.useMemo(() => toMetricsRange(timeRange), [timeRange]);
 
@@ -926,10 +1024,107 @@ export function CampaignAdSetWorkspace({
     [accountId, adSetsByCampaign, brandId, metricsRange, timelineFallbackByCampaign]
   );
 
+  const loadAdsForAdSet = React.useCallback(
+    async (adSetId: string, options?: { force?: boolean }) => {
+      if (!adSetId) return;
+      const force = options?.force === true;
+      const existing = adsByAdSet[adSetId];
+      if (!force && (existing?.status === "loading" || existing?.status === "success")) {
+        return;
+      }
+      if (inFlightAdLoadsRef.current.has(adSetId)) {
+        return;
+      }
+
+      inFlightAdLoadsRef.current.add(adSetId);
+      setAdsByAdSet((prev) => ({
+        ...prev,
+        [adSetId]: {
+          status: "loading",
+          ads: force ? [] : prev[adSetId]?.ads ?? [],
+        },
+      }));
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const params = new URLSearchParams({
+          brandId,
+          adAccountId: accountId,
+          adSetId,
+          includeTrends: "true",
+          trendResolution: "daily",
+        });
+
+        if (metricsRange.preset !== "custom") {
+          params.set("datePreset", metricsRange.preset);
+        }
+        if (metricsRange.preset === "custom" && metricsRange.since && metricsRange.until) {
+          params.set(
+            "timeRange",
+            JSON.stringify({
+              since: metricsRange.since,
+              until: metricsRange.until,
+            })
+          );
+        }
+
+        const { data, error } = await supabase.functions.invoke(`fetch-meta-ads?${params.toString()}`, {
+          method: "POST",
+          body: {
+            brandId,
+            adAccountId: accountId,
+            adSetId,
+            includeTrends: true,
+            trendResolution: "daily",
+            datePreset: metricsRange.preset !== "custom" ? metricsRange.preset : undefined,
+            timeRange:
+              metricsRange.preset === "custom" && metricsRange.since && metricsRange.until
+                ? {
+                    since: metricsRange.since,
+                    until: metricsRange.until,
+                  }
+                : undefined,
+          },
+        });
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        const ads = Array.isArray(data?.ads) ? (data.ads as MetaAd[]) : [];
+        setAdsByAdSet((prev) => ({
+          ...prev,
+          [adSetId]: {
+            status: "success",
+            ads,
+          },
+        }));
+      } catch (error) {
+        setAdsByAdSet((prev) => ({
+          ...prev,
+          [adSetId]: {
+            status: "error",
+            ads: prev[adSetId]?.ads ?? [],
+            errorMessage: error instanceof Error ? error.message : "Failed to load ads",
+          },
+        }));
+      } finally {
+        inFlightAdLoadsRef.current.delete(adSetId);
+      }
+    },
+    [accountId, adsByAdSet, brandId, metricsRange]
+  );
+
   React.useEffect(() => {
     setAdSetsByCampaign({});
+    setAdsByAdSet({});
     setSelectedAdSetKeys([]);
     setFocusedAdSetKey(undefined);
+    setSelectedAdIds([]);
+    setCampaignChartFocusTime(null);
+    setAdSetChartFocusTime(null);
+    inFlightAdLoadsRef.current.clear();
+    pendingMarkerSelectionRef.current = null;
   }, [accountId, brandId, resolution, timeRange]);
 
   React.useEffect(() => {
@@ -1039,6 +1234,57 @@ export function CampaignAdSetWorkspace({
     return scopedAdSets.filter((adSet) => selectedAdSetSet.has(scopedAdSetKey(adSet)));
   }, [scopedAdSets, selectedAdSetSet]);
 
+  const scopedAdSetById = React.useMemo(() => {
+    return new Map(scopedAdSets.map((adSet) => [adSet.id, adSet]));
+  }, [scopedAdSets]);
+
+  const focusedScopedAdSet = React.useMemo(() => {
+    if (!focusedAdSetKey) return undefined;
+    return scopedAdSets.find((adSet) => scopedAdSetKey(adSet) === focusedAdSetKey);
+  }, [focusedAdSetKey, scopedAdSets]);
+
+  const focusedAdSetId = focusedScopedAdSet?.id;
+
+  React.useEffect(() => {
+    if (!focusedAdSetId) return;
+    void loadAdsForAdSet(focusedAdSetId);
+  }, [focusedAdSetId, loadAdsForAdSet]);
+
+  React.useEffect(() => {
+    setSelectedAdIds([]);
+  }, [focusedAdSetId]);
+
+  const focusedAdSetAdsState = React.useMemo(() => {
+    if (!focusedAdSetId) return undefined;
+    return adsByAdSet[focusedAdSetId] ?? { status: "idle", ads: [] as MetaAd[] };
+  }, [adsByAdSet, focusedAdSetId]);
+
+  const focusedAdSetAds = React.useMemo(
+    () => focusedAdSetAdsState?.ads ?? [],
+    [focusedAdSetAdsState?.ads]
+  );
+
+  React.useEffect(() => {
+    const validAdIds = new Set(focusedAdSetAds.map((ad) => ad.id));
+    setSelectedAdIds((current) => {
+      const retained = current.filter((adId) => validAdIds.has(adId)).slice(0, 3);
+      if (areStringArraysEqual(current, retained)) return current;
+      return retained;
+    });
+  }, [focusedAdSetAds]);
+
+  const selectedAdIdSet = React.useMemo(() => new Set(selectedAdIds), [selectedAdIds]);
+
+  const selectedAds = React.useMemo(() => {
+    return focusedAdSetAds.filter((ad) => selectedAdIdSet.has(ad.id));
+  }, [focusedAdSetAds, selectedAdIdSet]);
+
+  const adColorById = React.useMemo(() => {
+    return new Map(
+      selectedAdIds.map((adId, index) => [adId, COMPARE_COLORS[index % COMPARE_COLORS.length]])
+    );
+  }, [selectedAdIds]);
+
   const toggleAdSetSelection = React.useCallback(
     (key: string) => {
       setSelectedAdSetKeys((current) => {
@@ -1054,6 +1300,18 @@ export function CampaignAdSetWorkspace({
     },
     []
   );
+
+  const toggleAdSelection = React.useCallback((adId: string) => {
+    setSelectedAdIds((current) => {
+      if (current.includes(adId)) {
+        return current.filter((id) => id !== adId);
+      }
+      if (current.length >= 3) {
+        return current;
+      }
+      return [...current, adId];
+    });
+  }, []);
 
   const adSetMetricCards = React.useMemo(() => {
     const aggregate = buildAggregatedMetricsContext(selectedScopedAdSets);
@@ -1076,10 +1334,23 @@ export function CampaignAdSetWorkspace({
     );
   }, [selectedAdSetKeys]);
 
+  const isAdViewActive = selectedAdIds.length > 0;
+
   const selectedAdSetActionLogs = React.useMemo(() => {
     const logs = selectedScopedAdSets.flatMap((adSet) => actionLogsByAdSetId.get(adSet.id) ?? []);
-    return Array.from(new Map(logs.map((log) => [log.id, log])).values());
-  }, [actionLogsByAdSetId, selectedScopedAdSets]);
+    const uniqueLogs = Array.from(new Map(logs.map((log) => [log.id, log])).values());
+    if (!isAdViewActive) {
+      return uniqueLogs;
+    }
+
+    const selectedSet = new Set(selectedAdIds);
+    return uniqueLogs.filter((log) => {
+      if (log.scopeType !== "AD") return true;
+      const adId = log.metaAdId ?? (log.scopeType === "AD" ? log.scopeId : undefined);
+      if (!adId) return false;
+      return selectedSet.has(adId);
+    });
+  }, [actionLogsByAdSetId, isAdViewActive, selectedAdIds, selectedScopedAdSets]);
 
   const selectedAdSetSeries = React.useMemo<ObservabilityChartSeries[]>(() => {
     const pointEntries = selectedScopedAdSets
@@ -1096,6 +1367,17 @@ export function CampaignAdSetWorkspace({
     if (pointEntries.length === 0) return [];
 
     const series: ObservabilityChartSeries[] = [];
+    const markerViewLayer = isAdViewActive ? "ad" : "adset";
+    const selectedSet = new Set(selectedAdIds);
+    const filterLogsForLayer = (logs: ActionLog[]) => {
+      if (!isAdViewActive) return logs;
+      return logs.filter((log) => {
+        if (log.scopeType !== "AD") return true;
+        const adId = log.metaAdId ?? (log.scopeType === "AD" ? log.scopeId : undefined);
+        if (!adId) return false;
+        return selectedSet.has(adId);
+      });
+    };
 
     if (showSelectedAdSetAverage) {
       const averaged = averageTrendPoints(pointEntries.map((entry) => entry.points));
@@ -1106,7 +1388,7 @@ export function CampaignAdSetWorkspace({
           color: "#0ea5e9",
           points: averaged,
           markers: mapActionLogsToTimelineMarkers(selectedAdSetActionLogs, averaged, resolution, {
-            viewLayer: "adset",
+            viewLayer: markerViewLayer,
           }),
           variant: "line",
           emphasized: true,
@@ -1122,10 +1404,10 @@ export function CampaignAdSetWorkspace({
           color: adSetColorByKey.get(entry.key) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
           points: entry.points,
           markers: mapActionLogsToTimelineMarkers(
-            actionLogsByAdSetId.get(entry.adSet.id) ?? [],
+            filterLogsForLayer(actionLogsByAdSetId.get(entry.adSet.id) ?? []),
             entry.points,
             resolution,
-            { viewLayer: "adset" }
+            { viewLayer: markerViewLayer }
           ),
           variant: "line",
           emphasized: !showSelectedAdSetAverage && index === 0,
@@ -1141,10 +1423,10 @@ export function CampaignAdSetWorkspace({
         color: adSetColorByKey.get(first.key) ?? "#0ea5e9",
         points: first.points,
         markers: mapActionLogsToTimelineMarkers(
-          actionLogsByAdSetId.get(first.adSet.id) ?? [],
+          filterLogsForLayer(actionLogsByAdSetId.get(first.adSet.id) ?? []),
           first.points,
           resolution,
-          { viewLayer: "adset" }
+          { viewLayer: markerViewLayer }
         ),
         variant: "line",
         emphasized: true,
@@ -1159,9 +1441,30 @@ export function CampaignAdSetWorkspace({
     resolution,
     selectedAdSetActionLogs,
     selectedScopedAdSets,
+    isAdViewActive,
+    selectedAdIds,
     showSelectedAdSetAverage,
     showSelectedAdSetLines,
   ]);
+
+  const selectedAdSeries = React.useMemo<ObservabilityChartSeries[]>(() => {
+    return selectedAds
+      .map((ad, index) => ({
+        id: `ad:${ad.id}`,
+        label: ad.creative?.title || ad.name || `Ad ${index + 1}`,
+        color: adColorById.get(ad.id) ?? COMPARE_COLORS[index % COMPARE_COLORS.length],
+        points: mapTrendPoints(ad.trends, adSetMetric),
+        variant: "line" as const,
+        dashed: true,
+        emphasized: false,
+      }))
+      .filter((entry) => entry.points.length > 0);
+  }, [adColorById, adSetMetric, selectedAds]);
+
+  const adSetChartSeries = React.useMemo(
+    () => [...selectedAdSetSeries, ...selectedAdSeries],
+    [selectedAdSeries, selectedAdSetSeries]
+  );
 
   const isAdSetLoading = scopedCampaignIds.some(
     (campaignId) => adSetsByCampaign[campaignId]?.status === "loading"
@@ -1203,6 +1506,119 @@ export function CampaignAdSetWorkspace({
     const idx = campaignIndexes.find((entry) => entry.id === scope.id);
     return idx ? `Index · ${idx.name}` : "Index";
   }, [campaignById, campaignIndexes, scope]);
+
+  const creativeGalleryAds = React.useMemo(() => {
+    if (selectedAds.length > 0) return selectedAds;
+    return focusedAdSetAds.slice(0, 6);
+  }, [focusedAdSetAds, selectedAds]);
+
+  const applyAdSetSelectionById = React.useCallback(
+    (adSetId: string): boolean => {
+      const adSet = scopedAdSetById.get(adSetId);
+      if (!adSet) return false;
+
+      const key = scopedAdSetKey(adSet);
+      setSelectedAdSetKeys((current) => (current.includes(key) ? current : [...current, key]));
+      setFocusedAdSetKey(key);
+      return true;
+    },
+    [scopedAdSetById]
+  );
+
+  const handleCampaignMarkerSelect = React.useCallback(
+    (selection: ObservabilityChartMarkerSelection) => {
+      const target = resolveMarkerTarget(selection);
+      if (!target) return;
+
+      setCampaignChartFocusTime(selection.time);
+
+      if (!target.campaignId && !target.adSetId && !target.adId) return;
+
+      if (target.campaignId) {
+        setScope({ type: "campaign", id: target.campaignId });
+        onSelectedCampaignChange?.(target.campaignId);
+      }
+
+      if (target.adSetId || target.adId) {
+        setViewMode("adsets");
+        setAdSetChartFocusTime(selection.time);
+        pendingMarkerSelectionRef.current = {
+          campaignId: target.campaignId,
+          adSetId: target.adSetId,
+          adId: target.adId,
+          time: selection.time,
+        };
+      }
+    },
+    [onSelectedCampaignChange]
+  );
+
+  const handleAdSetMarkerSelect = React.useCallback(
+    (selection: ObservabilityChartMarkerSelection) => {
+      const target = resolveMarkerTarget(selection);
+      if (!target) return;
+
+      setAdSetChartFocusTime(selection.time);
+
+      if (target.campaignId && (scope?.type !== "campaign" || scope.id !== target.campaignId)) {
+        setScope({ type: "campaign", id: target.campaignId });
+        onSelectedCampaignChange?.(target.campaignId);
+      }
+
+      if (target.adSetId) {
+        applyAdSetSelectionById(target.adSetId);
+      }
+
+      if (target.adSetId || target.adId) {
+        pendingMarkerSelectionRef.current = {
+          campaignId: target.campaignId,
+          adSetId: target.adSetId,
+          adId: target.adId,
+          time: selection.time,
+        };
+      }
+    },
+    [applyAdSetSelectionById, onSelectedCampaignChange, scope?.id, scope?.type]
+  );
+
+  React.useEffect(() => {
+    const pending = pendingMarkerSelectionRef.current;
+    if (!pending) return;
+
+    if (pending.campaignId && (scope?.type !== "campaign" || scope.id !== pending.campaignId)) {
+      return;
+    }
+
+    if (!pending.adSetId) {
+      pendingMarkerSelectionRef.current = null;
+      return;
+    }
+
+    const adSetMatched = applyAdSetSelectionById(pending.adSetId);
+    if (!adSetMatched) return;
+
+    const adState = adsByAdSet[pending.adSetId];
+    if (!adState || adState.status === "idle") {
+      void loadAdsForAdSet(pending.adSetId);
+      return;
+    }
+    if (adState.status === "loading") {
+      return;
+    }
+    if (adState.status === "error") {
+      void loadAdsForAdSet(pending.adSetId, { force: true });
+      return;
+    }
+
+    setAdSetChartFocusTime(pending.time);
+    if (pending.adId) {
+      const exists = adState.ads.some((ad) => ad.id === pending.adId);
+      if (exists) {
+        setSelectedAdIds([pending.adId]);
+      }
+    }
+    pendingMarkerSelectionRef.current = null;
+  }, [adsByAdSet, applyAdSetSelectionById, loadAdsForAdSet, scope?.id, scope?.type]);
 
   return (
     <Card className="overflow-hidden border-border/70">
@@ -1375,6 +1791,8 @@ export function CampaignAdSetWorkspace({
                       <ObservabilityLightweightChart
                         series={compareChartSeries}
                         visibleWindowSeconds={chartVisibleWindowSeconds}
+                        focusTime={campaignChartFocusTime}
+                        onMarkerSelect={handleCampaignMarkerSelect}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -1927,7 +2345,8 @@ export function CampaignAdSetWorkspace({
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {selectedScopedAdSets.length} selected · {showSelectedAdSetAverage ? "avg on" : "avg off"} ·{" "}
-                      {showSelectedAdSetLines ? "lines on" : "lines off"}
+                      {showSelectedAdSetLines ? "lines on" : "lines off"} ·{" "}
+                      {isAdViewActive ? `ad level (${selectedAdIds.length}/3)` : "adset level"}
                     </div>
                   </div>
                   <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
@@ -1992,7 +2411,7 @@ export function CampaignAdSetWorkspace({
                 </ScrollArea>
 
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {selectedAdSetSeries.map((line) => (
+                  {adSetChartSeries.map((line) => (
                     <span
                       key={`adset-legend-${line.id}`}
                       className="inline-flex items-center gap-1 rounded border border-border/70 bg-muted/30 px-2 py-0.5 text-[11px]"
@@ -2006,10 +2425,12 @@ export function CampaignAdSetWorkspace({
                 <ContextMenu>
                   <ContextMenuTrigger>
                     <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
-                      {selectedAdSetSeries.length > 0 ? (
+                      {adSetChartSeries.length > 0 ? (
                         <ObservabilityLightweightChart
-                          series={selectedAdSetSeries}
+                          series={adSetChartSeries}
                           visibleWindowSeconds={chartVisibleWindowSeconds}
+                          focusTime={adSetChartFocusTime}
+                          onMarkerSelect={handleAdSetMarkerSelect}
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -2036,6 +2457,7 @@ export function CampaignAdSetWorkspace({
                             setAdSetMetric("spend");
                             setShowSelectedAdSetAverage(false);
                             setShowSelectedAdSetLines(true);
+                            setSelectedAdIds([]);
                             const first = scopedAdSets[0];
                             if (!first) return;
                             const key = scopedAdSetKey(first);
@@ -2054,7 +2476,14 @@ export function CampaignAdSetWorkspace({
                         >
                           Select all visible
                         </ContextMenuItem>
-                        <ContextMenuItem onSelect={() => setSelectedAdSetKeys([])}>Clear selected</ContextMenuItem>
+                        <ContextMenuItem
+                          onSelect={() => {
+                            setSelectedAdSetKeys([]);
+                            setSelectedAdIds([]);
+                          }}
+                        >
+                          Clear selected
+                        </ContextMenuItem>
                       </ContextMenuSubContent>
                     </ContextMenuSub>
                     <ContextMenuSub>
@@ -2091,6 +2520,99 @@ export function CampaignAdSetWorkspace({
                     </ContextMenuSub>
                   </ContextMenuContent>
                 </ContextMenu>
+
+                {focusedScopedAdSet ? (
+                  <div className="mt-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-medium">Creatives · {focusedScopedAdSet.name}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Select up to 3 ads to overlay ad-level KPI trends.
+                        </div>
+                      </div>
+                      <span className="rounded border border-border/70 bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+                        {selectedAdIds.length}/3 selected
+                      </span>
+                    </div>
+
+                    {focusedAdSetAdsState?.status === "loading" ? (
+                      <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                        <ReloadIcon className="h-3.5 w-3.5 animate-spin" />
+                        Loading ad creatives...
+                      </div>
+                    ) : null}
+
+                    {focusedAdSetAdsState?.status === "error" ? (
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
+                        <span>{focusedAdSetAdsState.errorMessage ?? "Failed to load ad creatives"}</span>
+                        <Button
+                          variant="outline"
+                          size="xs"
+                          onClick={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    {focusedAdSetAdsState?.status === "success" && creativeGalleryAds.length === 0 ? (
+                      <div className="text-xs text-muted-foreground">No creatives returned for this ad set.</div>
+                    ) : null}
+
+                    {creativeGalleryAds.length > 0 ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {creativeGalleryAds.map((ad) => {
+                          const isSelected = selectedAdIdSet.has(ad.id);
+                          const atSelectionLimit = selectedAdIds.length >= 3 && !isSelected;
+                          const imageUrl = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
+                          const title = ad.creative?.title || ad.name || "Untitled ad";
+                          const body = ad.creative?.body || "No copy available.";
+
+                          return (
+                            <button
+                              key={`creative-gallery-${ad.id}`}
+                              type="button"
+                              onClick={() => toggleAdSelection(ad.id)}
+                              disabled={atSelectionLimit}
+                              className={cn(
+                                "rounded-md border bg-background p-2 text-left transition-colors",
+                                isSelected ? "border-primary/60 bg-primary/[0.06]" : "border-border/70 hover:bg-muted/40",
+                                atSelectionLimit && "cursor-not-allowed opacity-55"
+                              )}
+                            >
+                              <div className="relative mb-2 h-24 overflow-hidden rounded bg-muted/50">
+                                {imageUrl ? (
+                                  <img src={imageUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+                                    No preview
+                                  </div>
+                                )}
+                              </div>
+                              <div className="line-clamp-1 text-xs font-medium">{title}</div>
+                              <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{body}</div>
+                              <div className="mt-1.5 flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-muted-foreground">
+                                  {formatMetric(adSetMetric, ad.metrics?.[adSetMetric] ?? 0)}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "rounded px-1.5 py-0.5 text-[10px]",
+                                    isSelected
+                                      ? "bg-primary/20 text-primary"
+                                      : "bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {isSelected ? "Selected" : "Select"}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -2264,6 +2786,82 @@ export function CampaignAdSetWorkspace({
                             );
                           })}
                         </SidebarMenu>
+                      )}
+                    </ScrollArea>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+
+                <SidebarSeparator />
+
+                <SidebarGroup className="pt-1">
+                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
+                    Ads ({selectedAdIds.length}/3 selected)
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <ScrollArea className="h-[220px] px-1 pb-1">
+                      {!focusedScopedAdSet ? (
+                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                          Select an ad set to browse ads.
+                        </div>
+                      ) : focusedAdSetAdsState?.status === "loading" ? (
+                        <div className="grid grid-cols-2 gap-1.5 px-1">
+                          {Array.from({ length: 6 }).map((_, idx) => (
+                            <Skeleton
+                              key={`ad-list-skeleton-${idx}`}
+                              className="h-20 w-full rounded bg-sidebar-accent/50"
+                            />
+                          ))}
+                        </div>
+                      ) : focusedAdSetAdsState?.status === "error" ? (
+                        <div className="space-y-1 px-2 py-1.5 text-[11px] text-destructive">
+                          <div>{focusedAdSetAdsState.errorMessage ?? "Failed to load ads"}</div>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            className="h-6 border-sidebar-border/70 bg-sidebar text-[10px]"
+                            onClick={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
+                          >
+                            Retry
+                          </Button>
+                        </div>
+                      ) : focusedAdSetAds.length === 0 ? (
+                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
+                          No ads returned for this ad set.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-1.5 px-1">
+                          {focusedAdSetAds.map((ad) => {
+                            const isSelected = selectedAdIdSet.has(ad.id);
+                            const atSelectionLimit = selectedAdIds.length >= 3 && !isSelected;
+                            const imageUrl = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
+                            return (
+                              <button
+                                key={`rail-ad-${ad.id}`}
+                                type="button"
+                                disabled={atSelectionLimit}
+                                onClick={() => toggleAdSelection(ad.id)}
+                                className={cn(
+                                  "rounded border p-1 text-left transition-colors",
+                                  isSelected
+                                    ? "border-sidebar-ring bg-sidebar-accent/80"
+                                    : "border-sidebar-border/70 bg-sidebar-accent/35 hover:bg-sidebar-accent/55",
+                                  atSelectionLimit && "cursor-not-allowed opacity-55"
+                                )}
+                              >
+                                <div className="h-12 overflow-hidden rounded bg-sidebar-accent/50">
+                                  {imageUrl ? (
+                                    <img src={imageUrl} alt={ad.name} className="h-full w-full object-cover" loading="lazy" />
+                                  ) : (
+                                    <div className="flex h-full items-center justify-center text-[10px] text-sidebar-foreground/60">
+                                      No image
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="mt-1 line-clamp-2 text-[10px] leading-tight">{ad.name}</div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
                     </ScrollArea>
                   </SidebarGroupContent>

@@ -52,6 +52,8 @@ type NormalizedInsight = {
   cpc: number;
   ctr: number;
   roas: number;
+  cpa: number;
+  purchases: number;
   purchase_value: number;
   actions: unknown[];
   action_values: unknown[];
@@ -65,6 +67,8 @@ type AggregatedMetrics = {
   clicks: number;
   ctr: number;
   cpc: number;
+  cpa: number;
+  purchases: number;
   purchase_value: number;
 };
 
@@ -86,25 +90,33 @@ const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : [
 
 const PURCHASE_ACTION_TYPES = new Set(["purchase", "omni_purchase"]);
 
-const extractPurchaseValue = (actionValues: unknown): number =>
-  asArray(actionValues)
+const extractActionMetric = (values: unknown, actionTypes: Set<string>): number =>
+  asArray(values)
     .map((item) => {
       if (!item || typeof item !== "object") return 0;
       const record = item as Record<string, unknown>;
       const actionType = typeof record.action_type === "string" ? record.action_type : "";
-      if (!PURCHASE_ACTION_TYPES.has(actionType)) return 0;
+      if (!actionTypes.has(actionType)) return 0;
       return toNumber(record.value);
     })
     .reduce((sum, value) => sum + value, 0);
+
+const extractPurchaseValue = (actionValues: unknown): number =>
+  extractActionMetric(actionValues, PURCHASE_ACTION_TYPES);
+
+const extractPurchaseCount = (actions: unknown): number =>
+  extractActionMetric(actions, PURCHASE_ACTION_TYPES);
 
 const normalizeInsight = (day: MetaInsightRow): NormalizedInsight => {
   const spend = toNumber(day.spend);
   const impressions = toNumber(day.impressions);
   const clicks = toNumber(day.clicks);
   const purchaseValue = extractPurchaseValue(day.action_values);
+  const purchases = extractPurchaseCount(day.actions);
   const cpc = toNumber(day.cpc) || (clicks > 0 ? round(spend / clicks) : 0);
   const ctr = toNumber(day.ctr) || (impressions > 0 ? round((clicks / impressions) * 100) : 0);
   const roas = spend > 0 ? round(purchaseValue / spend) : 0;
+  const cpa = purchases > 0 ? round(spend / purchases) : 0;
 
   return {
     date_start: typeof day.date_start === "string" ? day.date_start : "",
@@ -115,6 +127,8 @@ const normalizeInsight = (day: MetaInsightRow): NormalizedInsight => {
     cpc,
     ctr,
     roas,
+    cpa,
+    purchases,
     purchase_value: purchaseValue,
     actions: asArray(day.actions),
     action_values: asArray(day.action_values),
@@ -128,14 +142,16 @@ const aggregateInsights = (rows: NormalizedInsight[]): AggregatedMetrics => {
       acc.spend += row.spend;
       acc.impressions += row.impressions;
       acc.clicks += row.clicks;
+      acc.purchases += row.purchases;
       acc.purchase_value += row.purchase_value;
       return acc;
     },
-    { spend: 0, impressions: 0, clicks: 0, purchase_value: 0 },
+    { spend: 0, impressions: 0, clicks: 0, purchases: 0, purchase_value: 0 },
   );
 
   const ctr = totals.impressions > 0 ? round((totals.clicks / totals.impressions) * 100) : 0;
   const cpc = totals.clicks > 0 ? round(totals.spend / totals.clicks) : 0;
+  const cpa = totals.purchases > 0 ? round(totals.spend / totals.purchases) : 0;
   const roas = totals.spend > 0 ? round(totals.purchase_value / totals.spend) : 0;
 
   return {
@@ -145,6 +161,8 @@ const aggregateInsights = (rows: NormalizedInsight[]): AggregatedMetrics => {
     clicks: Math.round(totals.clicks),
     ctr,
     cpc,
+    cpa,
+    purchases: round(totals.purchases),
     purchase_value: round(totals.purchase_value),
   };
 };
@@ -375,6 +393,7 @@ export async function handleMetaMetrics(params: any, req: Request) {
       clicks: buildMetricComparison(metrics.clicks, previousMetrics?.clicks ?? null),
       ctr: buildMetricComparison(metrics.ctr, previousMetrics?.ctr ?? null),
       cpc: buildMetricComparison(metrics.cpc, previousMetrics?.cpc ?? null),
+      cpa: buildMetricComparison(metrics.cpa, previousMetrics?.cpa ?? null),
     };
 
     const trends = insights.map((day) => ({
@@ -385,6 +404,7 @@ export async function handleMetaMetrics(params: any, req: Request) {
       clicks: day.clicks,
       ctr: day.ctr,
       cpc: day.cpc,
+      cpa: day.cpa,
     }));
 
     const response = {

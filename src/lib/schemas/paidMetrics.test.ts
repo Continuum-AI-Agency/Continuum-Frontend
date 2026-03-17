@@ -10,6 +10,7 @@ const basePayload = {
     clicks: 100,
     ctr: 10,
     cpc: 1,
+    cpa: 10,
   },
   trends: [
     {
@@ -20,6 +21,7 @@ const basePayload = {
       clicks: 100,
       ctr: 10,
       cpc: 1,
+      cpa: 10,
     },
   ],
   range: {
@@ -91,6 +93,8 @@ describe("PaidMetricsResponseSchema", () => {
           date_stop: "2026-02-28",
           spend: 100,
           roas: 1.5,
+          cpa: 10,
+          purchases: 10,
           purchase_value: 150,
           actions: [],
           action_values: [],
@@ -104,5 +108,23 @@ describe("PaidMetricsResponseSchema", () => {
       until: "2026-02-21",
     });
     expect(parsed.insights?.[0]?.purchase_value).toBe(150);
+    expect(parsed.insights?.[0]?.cpa).toBe(10);
+    expect(parsed.insights?.[0]?.purchases).toBe(10);
+  });
+
+  it("defaults cpa to 0 when omitted for backward-compatible cached payloads", () => {
+    const parsed = PaidMetricsResponseSchema.parse({
+      ...basePayload,
+      metrics: {
+        spend: 100,
+        roas: 1.5,
+        impressions: 1000,
+        clicks: 100,
+        ctr: 10,
+        cpc: 1,
+      },
+    });
+
+    expect(parsed.metrics.cpa).toBe(0);
   });
 });

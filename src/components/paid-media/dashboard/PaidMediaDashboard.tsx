@@ -45,6 +45,7 @@ type Campaign = {
     roas: number;
     ctr: number;
     cpc: number;
+    cpa: number;
     impressions: number;
     clicks: number;
   };

@@ -19,6 +19,7 @@ describe("AdSetTable", () => {
         roas: 2.4,
         ctr: 1.2,
         cpc: 2.1,
+        cpa: 10.4,
         impressions: 10000,
         clicks: 120,
       },

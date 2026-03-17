@@ -87,6 +87,7 @@ const METRIC_LABELS: Record<MetricKey, string> = {
   clicks: "Clicks",
   ctr: "CTR",
   cpc: "CPC",
+  cpa: "CPA",
 };
 
 function formatValue(value: number, type: "currency" | "number" | "percent") {

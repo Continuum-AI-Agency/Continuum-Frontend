@@ -37,7 +37,7 @@ import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./Performance
 type TimelineResolution = "daily" | "hourly";
 type TimePreset = "last_7d" | "last_14d" | "last_30d";
 type SortDirection = "desc" | "asc";
-type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "impressions" | "clicks";
+type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "cpa" | "impressions" | "clicks";
 
 type Campaign = {
   id: string;
@@ -51,6 +51,7 @@ type Campaign = {
     roas: number;
     ctr: number;
     cpc: number;
+    cpa: number;
     impressions: number;
     clicks: number;
   };
@@ -71,6 +72,7 @@ type AdMetrics = {
   roas: number;
   ctr: number;
   cpc: number;
+  cpa: number;
   impressions: number;
   clicks: number;
 };
@@ -171,7 +173,7 @@ type ChartZoomRange = {
   endIndex: number;
 };
 
-const KPI_COLUMNS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"];
+const KPI_COLUMNS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "cpa", "impressions", "clicks"];
 
 const radarConfig = {
   baseline: {
@@ -250,7 +252,7 @@ function formatRelativeTime(timestamp: string): string {
 }
 
 function formatMetricValue(metric: MetricKey, value: number): string {
-  if (metric === "spend" || metric === "cpc") return formatCurrency(value);
+  if (metric === "spend" || metric === "cpc" || metric === "cpa") return formatCurrency(value);
   if (metric === "ctr") return formatPercent(value);
   if (metric === "roas") return value.toFixed(2);
   return formatNumber(value);
@@ -266,6 +268,8 @@ function labelForMetric(metric: MetricKey): string {
       return "CTR";
     case "cpc":
       return "CPC";
+    case "cpa":
+      return "CPA";
     case "impressions":
       return "Impr.";
     case "clicks":
@@ -324,7 +328,7 @@ function parseNumericRowValue(row: Record<string, unknown>, key: string | undefi
 
 function formatAdMetricValue(metric: keyof AdMetrics, value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "--";
-  if (metric === "spend" || metric === "cpc") return formatCurrency(value);
+  if (metric === "spend" || metric === "cpc" || metric === "cpa") return formatCurrency(value);
   if (metric === "ctr") return formatPercent(value);
   if (metric === "roas") return value.toFixed(2);
   return formatNumber(value);
@@ -449,6 +453,13 @@ function getTrendMetricValue(point: PaidMetricsTrendPoint, metric: MetricKey): n
     const clicks = point.clicks ?? 0;
     const spend = point.spend ?? 0;
     return clicks > 0 ? spend / clicks : 0;
+  }
+
+  if (metric === "cpa") {
+    if (typeof point.cpa === "number") return point.cpa;
+    const conversions = point.conversions ?? 0;
+    const spend = point.spend ?? 0;
+    return conversions > 0 ? spend / conversions : 0;
   }
 
   return 0;
@@ -1106,6 +1117,7 @@ export function CampaignTimelineWorkspace({
       roas: toNumber(summary.avg_roas),
       ctr: toNumber(summary.avg_ctr_pct),
       cpc: toNumber(summary.avg_cpc),
+      cpa: toNumber(summary.total_conversions) > 0 ? toNumber(summary.total_spend) / toNumber(summary.total_conversions) : 0,
       impressions: toNumber(summary.total_impressions),
       clicks: toNumber(summary.total_clicks),
     };
@@ -1646,6 +1658,7 @@ export function CampaignTimelineWorkspace({
           roas: toNumber(summary.avg_roas),
           ctr: toNumber(summary.avg_ctr_pct),
           cpc: toNumber(summary.avg_cpc),
+          cpa: toNumber(summary.total_conversions) > 0 ? toNumber(summary.total_spend) / toNumber(summary.total_conversions) : 0,
           impressions: toNumber(summary.total_impressions),
           clicks: toNumber(summary.total_clicks),
         };
@@ -2011,6 +2024,7 @@ export function CampaignTimelineWorkspace({
         { metric: "spend" as const, label: "Spend" },
         { metric: "roas" as const, label: "ROAS" },
         { metric: "ctr" as const, label: "CTR" },
+        { metric: "cpa" as const, label: "CPA" },
         { metric: "clicks" as const, label: "Clicks" },
       ].map((item) => ({
         ...item,

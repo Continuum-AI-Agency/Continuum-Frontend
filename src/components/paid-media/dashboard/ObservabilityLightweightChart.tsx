@@ -44,8 +44,19 @@ export type ObservabilityChartMarker = {
   shape?: "circle" | "square" | "arrowUp" | "arrowDown";
   position?: "aboveBar" | "belowBar" | "inBar";
   scopeType?: string;
+  scopeId?: string | null;
+  campaignId?: string | null;
+  adSetId?: string | null;
+  adId?: string | null;
   actionCount?: number;
   status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
+};
+
+export type ObservabilityChartMarkerSelection = {
+  kind: "marker" | "bookmark";
+  time: UTCTimestamp;
+  marker: ObservabilityChartMarker;
+  markers: ObservabilityChartMarker[];
 };
 
 type ObservabilityLightweightChartProps = {
@@ -53,6 +64,8 @@ type ObservabilityLightweightChartProps = {
   className?: string;
   compact?: boolean;
   visibleWindowSeconds?: number | null;
+  focusTime?: UTCTimestamp | null;
+  onMarkerSelect?: (selection: ObservabilityChartMarkerSelection) => void;
 };
 
 type SupportedSeriesType = "Line";
@@ -79,13 +92,17 @@ type OverlayMarker = {
   scopeType?: string;
   actionCount: number;
   status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
+  source: ObservabilityChartMarker;
 };
 
 type OverlayBookmark = {
   key: string;
   x: number;
+  time: UTCTimestamp;
   label: string;
   detail?: string;
+  marker: ObservabilityChartMarker;
+  markers: ObservabilityChartMarker[];
 };
 
 type OverlayGeometry = {
@@ -199,12 +216,18 @@ function buildBottomBookmarks(markers: OverlayMarker[], minSpacingPx: number): O
     const x = cluster.weightedX / Math.max(1, cluster.weight);
     const label = `${cluster.count} action${cluster.count === 1 ? "" : "s"} in ${scopeLabel}`;
     const details = Array.from(new Set(cluster.markers.map((marker) => marker.label))).slice(0, 3).join("\n");
+    const sortedMarkers = cluster.markers.slice().sort((left, right) => left.time - right.time);
+    const primary = sortedMarkers[sortedMarkers.length - 1] ?? cluster.markers[0];
+    const sourceMarkers = sortedMarkers.map((marker) => marker.source);
 
     return {
       key: `bookmark:${index}:${Math.round(x)}`,
       x,
+      time: primary.time,
       label,
       detail: details || undefined,
+      marker: primary.source,
+      markers: sourceMarkers,
     };
   });
 }
@@ -214,6 +237,8 @@ export function ObservabilityLightweightChart({
   className,
   compact = false,
   visibleWindowSeconds = null,
+  focusTime = null,
+  onMarkerSelect,
 }: ObservabilityLightweightChartProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const chartRef = React.useRef<IChartApi | null>(null);
@@ -256,6 +281,7 @@ export function ObservabilityLightweightChart({
           scopeType: marker.scopeType,
           actionCount: Math.max(1, marker.actionCount ?? 1),
           status: marker.status,
+          source: marker,
         });
       });
     });
@@ -412,6 +438,38 @@ export function ObservabilityLightweightChart({
 
   React.useEffect(() => {
     const chart = chartRef.current;
+    if (!chart || compact || focusTime == null) return;
+
+    const bounds = getSeriesTimeBounds(series);
+    if (!bounds) return;
+
+    const currentRange = chart.timeScale().getVisibleRange();
+    const currentSpan =
+      currentRange && typeof currentRange.from === "number" && typeof currentRange.to === "number"
+        ? Math.max(1, Math.floor((Number(currentRange.to) - Number(currentRange.from)) / 2))
+        : null;
+    const windowSpan =
+      typeof visibleWindowSeconds === "number" && visibleWindowSeconds > 0
+        ? Math.max(1, Math.floor(visibleWindowSeconds / 2))
+        : null;
+    const fallbackSpan = Math.max(60 * 60 * 6, Math.floor((bounds.max - bounds.min) / 2));
+    const halfSpan = currentSpan ?? windowSpan ?? fallbackSpan;
+
+    const centeredFrom = Number(focusTime) - halfSpan;
+    const centeredTo = Number(focusTime) + halfSpan;
+    const from = Math.max(bounds.min, centeredFrom);
+    const to = Math.max(from + 1, Math.min(bounds.max, centeredTo));
+
+    chart.timeScale().setVisibleRange({
+      from: from as UTCTimestamp,
+      to: to as UTCTimestamp,
+    });
+
+    recalcOverlays();
+  }, [compact, focusTime, recalcOverlays, series, visibleWindowSeconds]);
+
+  React.useEffect(() => {
+    const chart = chartRef.current;
     const container = containerRef.current;
     if (!chart || !container || compact) {
       return;
@@ -533,6 +591,14 @@ export function ObservabilityLightweightChart({
                   borderColor: marker.color,
                 }}
                 aria-label={marker.label}
+                onClick={() => {
+                  onMarkerSelect?.({
+                    kind: "marker",
+                    time: marker.time,
+                    marker: marker.source,
+                    markers: [marker.source],
+                  });
+                }}
                 onMouseEnter={() => {
                   setAnnotationHover({
                     id: marker.key,
@@ -569,6 +635,14 @@ export function ObservabilityLightweightChart({
               style={{
                 left: bookmark.x,
                 top: overlayGeometry.lineBottom + 4,
+              }}
+              onClick={() => {
+                onMarkerSelect?.({
+                  kind: "bookmark",
+                  time: bookmark.time,
+                  marker: bookmark.marker,
+                  markers: bookmark.markers,
+                });
               }}
               onMouseEnter={() => {
                 const containerWidth = containerRef.current?.clientWidth ?? 0;

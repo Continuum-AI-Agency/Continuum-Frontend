@@ -95,6 +95,9 @@ describe("mapActionLogsToTimelineMarkers", () => {
     expect(markers[0]?.label).toContain("FAILED");
     expect(markers[0]?.shape).toBe("square");
     expect(markers[0]?.scopeType).toBe("CAMPAIGN");
+    expect(markers[0]?.campaignId).toBe("cmp_1");
+    expect(markers[0]?.adSetId).toBeNull();
+    expect(markers[0]?.adId).toBeNull();
     expect(markers[0]?.actionCount).toBe(2);
     expect(markers[0]?.status).toBe("FAILED");
     expect(markers[1]?.time).toBe(1738407600);
@@ -184,5 +187,62 @@ describe("mapActionLogsToTimelineMarkers", () => {
     const adMarker = markers.find((marker) => marker.scopeType === "AD");
     expect(campaignMarker?.position).toBe("aboveBar");
     expect(adMarker?.position).toBe("belowBar");
+    expect(campaignMarker?.campaignId).toBe("cmp_1");
+    expect(adMarker?.adSetId).toBe("adset_1");
+    expect(adMarker?.adId).toBe("ad_1");
+  });
+
+  it("promotes ad-scope markers when ad layer is active", () => {
+    const points = [
+      { time: 1738404000, value: 10 }, // 2025-02-01T10:00:00.000Z
+      { time: 1738407600, value: 11 }, // 2025-02-01T11:00:00.000Z
+    ] as const;
+
+    const logs: ActionLog[] = [
+      {
+        id: "campaign-2",
+        brandId: "brand-1",
+        metaAccountId: "act_123",
+        metaCampaignId: "cmp_2",
+        metaAdsetId: "adset_2",
+        metaAdId: null,
+        actionType: "PAUSE_CAMPAIGN",
+        status: "SUCCESS",
+        scopeType: "CAMPAIGN",
+        scopeId: "cmp_2",
+        occurredAt: "2025-02-01T10:10:00.000Z",
+        actionPayload: {},
+        paramsChanged: {},
+        result: {},
+        decisionNote: null,
+        error: null,
+      },
+      {
+        id: "ad-2",
+        brandId: "brand-1",
+        metaAccountId: "act_123",
+        metaCampaignId: "cmp_2",
+        metaAdsetId: "adset_2",
+        metaAdId: "ad_2",
+        actionType: "SWITCH_CREATIVE",
+        status: "PENDING",
+        scopeType: "AD",
+        scopeId: "ad_2",
+        occurredAt: "2025-02-01T10:20:00.000Z",
+        actionPayload: {},
+        paramsChanged: {},
+        result: {},
+        decisionNote: null,
+        error: null,
+      },
+    ];
+
+    const markers = mapActionLogsToTimelineMarkers(logs, [...points], "hourly", { viewLayer: "ad" });
+    expect(markers).toHaveLength(2);
+
+    const campaignMarker = markers.find((marker) => marker.scopeType === "CAMPAIGN");
+    const adMarker = markers.find((marker) => marker.scopeType === "AD");
+    expect(campaignMarker?.position).toBe("belowBar");
+    expect(adMarker?.position).toBe("aboveBar");
   });
 });

@@ -36,6 +36,7 @@ export const PaidMetricsResponseSchema = z.object({
     clicks: z.number(),
     ctr: z.number(),
     cpc: z.number(),
+    cpa: z.number().default(0),
   }),
   comparison: comparisonRecordSchema,
   trends: z.array(
@@ -47,6 +48,7 @@ export const PaidMetricsResponseSchema = z.object({
       clicks: z.number().optional(),
       ctr: z.number().optional(),
       cpc: z.number().optional(),
+      cpa: z.number().optional(),
     })
   ),
   range: z.object({
@@ -71,7 +73,9 @@ export const PaidMetricsResponseSchema = z.object({
         cpc: z.number().optional(),
         ctr: z.number().optional(),
         roas: z.number().optional(),
+        cpa: z.number().optional(),
         purchase_value: z.number().optional(),
+        purchases: z.number().optional(),
         actions: z.array(z.unknown()).optional(),
         action_values: z.array(z.unknown()).optional(),
         cost_per_action_type: z.array(z.unknown()).optional(),

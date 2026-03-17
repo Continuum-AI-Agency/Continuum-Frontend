@@ -7,6 +7,7 @@ type CampaignMetrics = {
   roas: number;
   ctr: number;
   cpc: number;
+  cpa: number;
   impressions: number;
   clicks: number;
 };
@@ -18,7 +19,7 @@ type CampaignLike = {
   trends?: PaidMetricsTrendPoint[];
 };
 
-const COMPARISON_KEYS = ["spend", "roas", "ctr", "cpc", "impressions", "clicks"] as const;
+const COMPARISON_KEYS = ["spend", "roas", "ctr", "cpc", "cpa", "impressions", "clicks"] as const;
 
 export const campaignIndexCreateSchema = z.object({
   brandId: z.string().min(1),
@@ -68,6 +69,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
     roas: [],
     ctr: [],
     cpc: [],
+    cpa: [],
     impressions: [],
     clicks: [],
   };
@@ -87,6 +89,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
       roas: number[];
       ctr_pct: number[];
       cpc: number[];
+      cpa: number[];
       impressions: number[];
       clicks: number[];
       conversions: number[];
@@ -131,6 +134,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
         roas: [],
         ctr_pct: [],
         cpc: [],
+        cpa: [],
         impressions: [],
         clicks: [],
         conversions: [],
@@ -141,6 +145,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
       const roas = numeric(trend.roas);
       const ctr = numeric(trend.ctr_pct);
       const cpc = numeric(trend.cpc);
+      const cpa = numeric(trend.cpa);
       const impressions = numeric(trend.impressions);
       const clicks = numeric(trend.clicks);
       const conversions = numeric(trend.conversions);
@@ -150,6 +155,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
       if (roas !== null) existing.roas.push(roas);
       if (ctr !== null) existing.ctr_pct.push(ctr);
       if (cpc !== null) existing.cpc.push(cpc);
+      if (cpa !== null) existing.cpa.push(cpa);
       if (impressions !== null) existing.impressions.push(impressions);
       if (clicks !== null) existing.clicks.push(clicks);
       if (conversions !== null) existing.conversions.push(conversions);
@@ -164,6 +170,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
     roas: average(metricsByKey.roas),
     ctr: average(metricsByKey.ctr),
     cpc: average(metricsByKey.cpc),
+    cpa: average(metricsByKey.cpa),
     impressions: average(metricsByKey.impressions),
     clicks: average(metricsByKey.clicks),
   };
@@ -187,6 +194,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
       roas: value.roas.length > 0 ? average(value.roas) : undefined,
       ctr_pct: value.ctr_pct.length > 0 ? average(value.ctr_pct) : undefined,
       cpc: value.cpc.length > 0 ? average(value.cpc) : undefined,
+      cpa: value.cpa.length > 0 ? average(value.cpa) : undefined,
       impressions: value.impressions.length > 0 ? average(value.impressions) : undefined,
       clicks: value.clicks.length > 0 ? average(value.clicks) : undefined,
       conversions: value.conversions.length > 0 ? average(value.conversions) : undefined,

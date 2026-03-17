@@ -34,6 +34,7 @@ const COMPARISON_LABELS: Record<string, string> = {
   roas: "ROAS",
   ctr: "CTR",
   cpc: "CPC",
+  cpa: "CPA",
   impressions: "Impr.",
   clicks: "Clicks",
 };
@@ -56,7 +57,7 @@ function formatPercent(value: number): string {
 }
 
 function renderMetricValue(metricKey: string, value: number): string {
-  if (metricKey === "spend" || metricKey === "cpc") {
+  if (metricKey === "spend" || metricKey === "cpc" || metricKey === "cpa") {
     return formatCurrency(value);
   }
 

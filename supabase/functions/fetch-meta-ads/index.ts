@@ -42,6 +42,8 @@ type MetaActionValue = {
 
 type MetaAdInsight = {
   ad_id?: string;
+  date_start?: string;
+  date_stop?: string;
   spend?: string;
   impressions?: string;
   clicks?: string;
@@ -49,6 +51,17 @@ type MetaAdInsight = {
   ctr?: string;
   actions?: MetaActionValue[];
   action_values?: MetaActionValue[];
+};
+
+type MetaAdTrendPoint = {
+  date: string;
+  spend: number;
+  roas: number;
+  ctr_pct: number;
+  cpc: number;
+  cpa: number;
+  impressions: number;
+  clicks: number;
 };
 
 function toNumber(value: unknown): number {
@@ -68,6 +81,15 @@ function readActionValue(values: MetaActionValue[] | undefined, actionTypes: str
   return toNumber(action?.value);
 }
 
+function readBooleanFlag(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return null;
+}
+
 serve(async (req: Request) => {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
@@ -83,6 +105,8 @@ serve(async (req: Request) => {
     let adSetId: string | null = null;
     let datePreset: string | null = null;
     let timeRange: string | null = null;
+    let includeTrends = false;
+    let trendResolution = "daily" as const;
 
     const url = new URL(req.url);
     brandId = url.searchParams.get("brandId") || url.searchParams.get("brandProfileId");
@@ -97,6 +121,7 @@ serve(async (req: Request) => {
       url.searchParams.get("adset_id");
     datePreset = url.searchParams.get("date_preset") || url.searchParams.get("datePreset");
     timeRange = url.searchParams.get("time_range") || url.searchParams.get("timeRange");
+    includeTrends = readBooleanFlag(url.searchParams.get("includeTrends")) ?? includeTrends;
 
     if (req.method === "POST") {
       try {
@@ -115,13 +140,29 @@ serve(async (req: Request) => {
           if (!timeRange && body.timeRange) {
             timeRange = JSON.stringify(body.timeRange);
           }
+          includeTrends =
+            readBooleanFlag(body.includeTrends) ??
+            readBooleanFlag(body.include_trends) ??
+            includeTrends;
+          const bodyTrendResolution = body.trendResolution ?? body.trend_resolution;
+          if (bodyTrendResolution === "daily") {
+            trendResolution = "daily";
+          }
         }
       } catch (e) {
         log("Error parsing body text as JSON", e);
       }
     }
 
-    log("Final extracted params:", { brandId, adAccountId, adSetId, datePreset, timeRange });
+    log("Final extracted params:", {
+      brandId,
+      adAccountId,
+      adSetId,
+      datePreset,
+      timeRange,
+      includeTrends,
+      trendResolution,
+    });
 
     if (!brandId || !adAccountId || !adSetId) {
       return new Response(
@@ -162,7 +203,12 @@ serve(async (req: Request) => {
 
     log("Looking for access token for ad account:", adAccountId);
 
-    const cacheScopeSuffix = datePreset || timeRange ? `${datePreset ?? "none"}:${timeRange ?? "none"}` : "default";
+    const cacheScopeSuffix = [
+      datePreset ?? "none",
+      timeRange ?? "none",
+      includeTrends ? "trends:1" : "trends:0",
+      `trend_res:${trendResolution}`,
+    ].join(":");
     const cacheKey = buildMetaEdgeCacheKey({
       resource: "ads",
       adAccountId,
@@ -234,10 +280,12 @@ serve(async (req: Request) => {
         roas: number;
         ctr: number;
         cpc: number;
+        cpa: number;
         impressions: number;
         clicks: number;
       }
     >();
+    const adTrendsById = new Map<string, MetaAdTrendPoint[]>();
 
     try {
       const insightsParams = new URLSearchParams({
@@ -270,14 +318,17 @@ serve(async (req: Request) => {
           const impressions = toNumber(row.impressions);
           const ctr = toNumber(row.ctr);
           const cpc = toNumber(row.cpc);
+          const purchases = readActionValue(row.actions, ["purchase", "omni_purchase"]);
           const purchaseValue = readActionValue(row.action_values, ["purchase", "omni_purchase"]);
           const roas = spend > 0 ? purchaseValue / spend : 0;
+          const cpa = purchases > 0 ? spend / purchases : 0;
 
           adMetricsById.set(adId, {
             spend,
             roas,
             ctr,
             cpc,
+            cpa,
             impressions,
             clicks,
           });
@@ -285,6 +336,77 @@ serve(async (req: Request) => {
       } else {
         const insightsError = await insightsResponse.json();
         log("Meta ad insights API error", { status: insightsResponse.status, error: insightsError });
+      }
+
+      if (includeTrends) {
+        const trendInsightsParams = new URLSearchParams({
+          fields: "ad_id,date_start,spend,impressions,clicks,cpc,ctr,actions,action_values",
+          level: "ad",
+          time_increment: "1",
+          limit: "500",
+          access_token: accessToken,
+        });
+
+        if (datePreset) {
+          trendInsightsParams.set("date_preset", datePreset);
+        }
+
+        if (timeRange) {
+          trendInsightsParams.set("time_range", timeRange);
+        }
+
+        const trendInsightsEndpoint = `https://graph.facebook.com/v23.0/${adSetId}/insights`;
+        const trendInsightsResponse = await fetch(`${trendInsightsEndpoint}?${trendInsightsParams.toString()}`);
+        if (trendInsightsResponse.ok) {
+          const trendInsightsPayload = await trendInsightsResponse.json();
+          const trendRows: MetaAdInsight[] = Array.isArray(trendInsightsPayload?.data)
+            ? trendInsightsPayload.data
+            : [];
+
+          const trendRowsByAdId = new Map<string, Map<string, MetaAdTrendPoint>>();
+
+          trendRows.forEach((row) => {
+            const adId = row.ad_id;
+            const date = row.date_start;
+            if (!adId || !date) return;
+
+            const spend = toNumber(row.spend);
+            const clicks = toNumber(row.clicks);
+            const impressions = toNumber(row.impressions);
+            const ctr = toNumber(row.ctr);
+            const cpc = toNumber(row.cpc);
+            const purchases = readActionValue(row.actions, ["purchase", "omni_purchase"]);
+            const purchaseValue = readActionValue(row.action_values, ["purchase", "omni_purchase"]);
+            const roas = spend > 0 ? purchaseValue / spend : 0;
+            const cpa = purchases > 0 ? spend / purchases : 0;
+
+            const current = trendRowsByAdId.get(adId) ?? new Map<string, MetaAdTrendPoint>();
+            current.set(date, {
+              date,
+              spend,
+              roas,
+              ctr_pct: ctr,
+              cpc,
+              cpa,
+              impressions,
+              clicks,
+            });
+            trendRowsByAdId.set(adId, current);
+          });
+
+          trendRowsByAdId.forEach((dailyRows, adId) => {
+            const normalized = Array.from(dailyRows.values()).sort((left, right) =>
+              left.date.localeCompare(right.date)
+            );
+            adTrendsById.set(adId, normalized);
+          });
+        } else {
+          const trendInsightsError = await trendInsightsResponse.json();
+          log("Meta ad trend insights API error", {
+            status: trendInsightsResponse.status,
+            error: trendInsightsError,
+          });
+        }
       }
     } catch (insightsError) {
       log("Failed to load ad insights", insightsError);
@@ -339,6 +461,7 @@ serve(async (req: Request) => {
         updatedTime: ad.updated_time ?? null,
         creativeId: creativeId ?? null,
         metrics: adMetricsById.get(ad.id) ?? null,
+        trends: includeTrends ? adTrendsById.get(ad.id) ?? [] : undefined,
         creative: creative
           ? {
               id: creative.id,
@@ -357,6 +480,8 @@ serve(async (req: Request) => {
       adCount: hydratedAds.length,
       creativeCount: uniqueCreativeIds.length,
       metricsCount: adMetricsById.size,
+      trendsEnabled: includeTrends,
+      trendAdCount: adTrendsById.size,
       adSetId,
       adAccountId,
     });
