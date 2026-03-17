@@ -41,6 +41,22 @@ const PLACEHOLDER_MEDIA: Record<string, string> = Object.entries(MEDIA_TEMPLATES
   {} as Record<string, string>
 )
 
+export function resolveMediaTemplate(platform: string): MediaTemplate {
+  return MEDIA_TEMPLATES[platform] ?? MEDIA_TEMPLATES.instagram
+}
+
+export function resolvePreviewAspectRatio(platform: string): number {
+  const template = resolveMediaTemplate(platform)
+  return template.width / template.height
+}
+
+export function resolvePreviewMaxWidth(platform: string): number {
+  const template = resolveMediaTemplate(platform)
+  if (template.width <= 1080) return 440
+  if (template.width <= 1200) return 500
+  return 560
+}
+
 export function resolveMediaSource(platform: string, mediaUrl: string | undefined): string {
   const trimmed = mediaUrl?.trim()
   if (trimmed) return trimmed

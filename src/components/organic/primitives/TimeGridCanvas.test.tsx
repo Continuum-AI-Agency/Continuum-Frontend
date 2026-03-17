@@ -17,6 +17,13 @@ vi.mock("@dnd-kit/core", () => ({
     setNodeRef: vi.fn(),
     isOver: false,
   }),
+  useDraggable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    isDragging: false,
+  }),
 }))
 
 function buildWeekDays(): OrganicCalendarDay[] {
@@ -82,7 +89,7 @@ describe("TimeGridCanvas", () => {
     cleanup()
   })
 
-  it("calls onCreatePost from header button", () => {
+  it("calls onCreatePost from header plus button", () => {
     const onCreatePost = vi.fn()
 
     render(
@@ -104,9 +111,9 @@ describe("TimeGridCanvas", () => {
       />
     )
 
-    fireEvent.click(screen.getByText("Create Post"))
+    fireEvent.click(screen.getByRole("button", { name: /add placeholder/i }))
 
-    expect(onCreatePost).toHaveBeenCalledWith({ status: "draft" })
+    expect(onCreatePost).toHaveBeenCalledWith({ status: "placeholder" })
   })
 
   it("calls onCreatePost with day and platform when clicking an empty cell", () => {
@@ -131,12 +138,14 @@ describe("TimeGridCanvas", () => {
       />
     )
 
-    fireEvent.click(screen.getAllByText("+ Add post")[0])
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add placeholder for 2026-02-23 Instagram" })
+    )
 
     expect(onCreatePost).toHaveBeenCalledWith({
       dayId: "2026-02-23",
       platform: "instagram",
-      status: "draft",
+      status: "placeholder",
     })
   })
 
@@ -209,12 +218,14 @@ describe("TimeGridCanvas", () => {
       />
     )
 
-    fireEvent.click(screen.getAllByText("+ Add post")[0])
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add placeholder for 2026-02-23 Instagram" })
+    )
 
     expect(onCreatePost).toHaveBeenCalledWith({
       dayId: "2026-02-23",
       platform: "instagram",
-      status: "draft",
+      status: "placeholder",
     })
   })
 })

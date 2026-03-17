@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Tabs } from "@radix-ui/themes";
 
 type Props = {
@@ -9,12 +10,34 @@ type Props = {
 };
 
 export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
-  const [activeView, setActiveView] = React.useState<"planner" | "metrics">("metrics");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const tabParam = searchParams.get("tab");
+  const initialView: "planner" | "metrics" = tabParam === "planner" ? "planner" : "metrics";
+  const [activeView, setActiveView] = React.useState<"planner" | "metrics">(initialView);
+
+  React.useEffect(() => {
+    const nextView: "planner" | "metrics" = tabParam === "planner" ? "planner" : "metrics";
+    if (nextView !== activeView) {
+      setActiveView(nextView);
+    }
+  }, [activeView, tabParam]);
+
+  const handleValueChange = React.useCallback(
+    (value: string) => {
+      const nextView: "planner" | "metrics" = value === "planner" ? "planner" : "metrics";
+      setActiveView(nextView);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("tab", nextView);
+      router.push(`?${params.toString()}`);
+    },
+    [router, searchParams]
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
       <div className="shrink-0 px-1 pb-1">
-        <Tabs.Root value={activeView} onValueChange={(value) => setActiveView(value as "planner" | "metrics")}>
+        <Tabs.Root value={activeView} onValueChange={handleValueChange}>
           <Tabs.List>
             <Tabs.Trigger value="planner">Planner</Tabs.Trigger>
             <Tabs.Trigger value="metrics">Metrics Dashboard</Tabs.Trigger>

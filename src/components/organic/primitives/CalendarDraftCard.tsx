@@ -156,19 +156,22 @@ export function CalendarDraftCard({
                   platformHover: isSelected ? "none" : platform,
                 }),
                 isHovered &&
-                  !isSelected &&
-                  "scale-[1.015] -translate-y-0.5 border-sky-400/30 shadow-[0_10px_26px_rgba(14,165,233,.18)]",
+                !isSelected &&
+                  "scale-[1.015] -translate-y-0.5 shadow-[0_10px_26px_rgba(14,165,233,.18)]",
                 draft.status === "placeholder" && "opacity-80 grayscale-[0.5]"
               )}
             >
               {isStreaming && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-500/10 to-transparent animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent animate-shimmer"
+                style={{ backgroundSize: "200% 100%" }}
+              />
               )}
               
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-wider text-secondary/60 font-bold">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
                       {draft.timeLabel}
                     </span>
                     {draft.titleTopic && (
@@ -180,12 +183,15 @@ export function CalendarDraftCard({
                               onClick={(e) => e.stopPropagation()}
                             >
                               <QuestionMarkCircledIcon 
-                                className="w-3.5 h-3.5 text-secondary/40 hover:text-brand-primary transition-colors" 
+                                className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" 
                               />
                             </div>
                           </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[200px] text-[11px] bg-slate-900 border-slate-800 text-slate-200">
-                            <p className="font-bold mb-1 text-brand-primary/90">Post Idea</p>
+                          <TooltipContent
+                            side="top"
+                            className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-[11px]"
+                          >
+                            <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
                             {draft.titleTopic}
                           </TooltipContent>
                         </Tooltip>
@@ -195,7 +201,7 @@ export function CalendarDraftCard({
                   <div className="flex items-center gap-1.5">
                     {isMultiSelected && (
                       <div className="w-3.5 h-3.5 bg-brand-primary rounded-full flex items-center justify-center">
-                        <CheckIcon className="w-2.5 h-2.5 text-white" />
+                        <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
                       </div>
                     )}
                     {onRegenerate && draft.status !== "streaming" && (
@@ -218,19 +224,19 @@ export function CalendarDraftCard({
                         <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
                       </span>
                     )}
-                    <StatusBadge status={draft.status} format={draft.format} />
-                  </div>
-                </div>
+                        <StatusBadge status={draft.status} format={draft.format} />
+                      </div>
+                    </div>
 
                 <p className={cn(
-                  "text-sm font-bold text-primary line-clamp-2 leading-tight tracking-tight font-serif",
+                  "text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif",
                   isStreaming && "animate-pulse opacity-70"
                 )}>
                   {draft.creativeIdea || draft.title}
                 </p>
                 
                 <p className={cn(
-                  "mt-1 text-[11px] text-secondary leading-snug opacity-70 font-medium transition-all",
+                  "mt-1 text-[11px] text-muted-foreground leading-snug font-medium transition-all",
                   isHovered ? "line-clamp-3" : "line-clamp-2"
                 )}>
                   {draft.captionPreview}
@@ -242,11 +248,11 @@ export function CalendarDraftCard({
                     isHovered ? "mt-2 max-h-16 opacity-100" : "max-h-0 opacity-0 overflow-hidden"
                   )}
                 >
-                  <div className="rounded border border-slate-700/80 bg-slate-900/70 px-2 py-1.5">
-                    <p className="font-mono text-[9px] uppercase tracking-widest text-slate-400">
+                  <div className="rounded border border-border/70 bg-muted/60 px-2 py-1.5">
+                    <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
                       Quick Preview
                     </p>
-                    <p className="mt-1 line-clamp-2 text-[10px] text-slate-200">
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-foreground">
                       {draft.objective}
                       {draft.cta ? ` • CTA: ${draft.cta}` : ""}
                     </p>
@@ -259,27 +265,27 @@ export function CalendarDraftCard({
                       <PlatformBadge key={p} platform={p} />
                     ))}
                   </div>
-                  <span className="text-[10px] text-secondary font-bold uppercase tracking-widest opacity-40">
+                  <span className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest">
                     {draft.format}
                   </span>
                 </div>
 
                 {typeof draft.progress === "number" ? (
                   <div className="mt-3 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-secondary uppercase tracking-tighter">
-                      <span className="text-amber-500 animate-pulse">GENERATING</span>
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
+                      <span className="text-primary animate-pulse">GENERATING</span>
                       <span>{draft.progress}%</span>
                     </div>
-                    <Progress value={draft.progress} className="h-1 bg-slate-800" />
+                    <Progress value={draft.progress} className="h-1" />
                   </div>
                 ) : null}
 
                 {isFailed && draft.generationError ? (
-                  <div className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-red-100">
+                  <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
                       Generation failed
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[10px] text-red-100/90">
+                    <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive/90">
                       {draft.generationError}
                     </p>
                     <div className="mt-2 flex items-center gap-2">
@@ -287,7 +293,7 @@ export function CalendarDraftCard({
                         <span
                           role="button"
                           tabIndex={0}
-                          className="inline-flex items-center gap-1 rounded border border-red-300/40 px-2 py-0.5 text-[10px] text-red-100 hover:bg-red-500/20"
+                          className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
                           onClick={(event) => {
                             event.stopPropagation();
                             onRegenerate(draft.id);
@@ -307,7 +313,7 @@ export function CalendarDraftCard({
                       <span
                         role="button"
                         tabIndex={0}
-                        className="inline-flex items-center gap-1 rounded border border-red-300/40 px-2 py-0.5 text-[10px] text-red-100 hover:bg-red-500/20"
+                        className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
                         onClick={(event) => {
                           event.stopPropagation();
                           clearFailure();

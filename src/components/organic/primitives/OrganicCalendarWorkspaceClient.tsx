@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Cross2Icon,
   LightningBoltIcon,
+  PlusIcon,
   RocketIcon,
   TrashIcon,
 } from "@radix-ui/react-icons"
@@ -37,6 +38,7 @@ import { BulkActionToolbar } from "./BulkActionToolbar"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -78,6 +80,26 @@ function isSchedulablePlannerPlatform(
   return platform === "instagram" || platform === "linkedin"
 }
 
+const AI_STUDIO_CONTEXT_STORAGE_PREFIX = "continuum:organic-planner:ai-studio-context"
+const AI_STUDIO_LAST_DRAFT_STORAGE_KEY = `${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:last-draft-id`
+
+type PlannerAiStudioContext = {
+  draftId: string
+  brandProfileId?: string
+  weekStartId: string
+  title: string
+  summary: string
+  captionPreview: string
+  seedTrendId?: string
+  creativeDirectionPrompt?: string
+  thumbnailPrompt?: string
+  updatedAt: string
+}
+
+function buildAiStudioStorageKey(draftId: string) {
+  return `${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:${draftId}`
+}
+
 export function OrganicCalendarWorkspaceClient({
   days: initialDays,
   trendTypes,
@@ -87,15 +109,21 @@ export function OrganicCalendarWorkspaceClient({
   maxTrendSelections,
   brandProfileId,
   initialWeekStart,
+  initialSelectedDraftId,
 }: OrganicCalendarWorkspaceClientProps) {
   const {
     days: calendarDays,
     setDays: setCalendarDays,
+    persistedWeekStartId,
+    setPersistedWeekStartId,
     toggleTrend,
     bulkMoveDrafts,
     bulkDeleteDrafts,
     clearCalendar,
+    setSelectedDraftId,
+    setSelectedDraftIds,
     selectedTrendIds,
+    gridProgress,
     viewMode,
     setViewMode,
     addDraft,
@@ -134,25 +162,49 @@ export function OrganicCalendarWorkspaceClient({
         return startOfWeek(parsed)
       }
     }
+    if (persistedWeekStartId) {
+      const parsed = new Date(persistedWeekStartId)
+      if (!Number.isNaN(parsed.getTime())) {
+        return startOfWeek(parsed)
+      }
+    }
     return startOfWeek(new Date())
-  }, [initialWeekStart])
+  }, [initialWeekStart, persistedWeekStartId])
+  const resolvedInitialWeekStartId = React.useMemo(
+    () => formatDayId(resolvedInitialWeekStart),
+    [resolvedInitialWeekStart]
+  )
 
   const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart)
   const weekStartId = formatDayId(weekStart)
   const weekCacheRef = React.useRef<Record<string, OrganicCalendarDay[]>>({})
 
   React.useEffect(() => {
-    if (calendarDays.length === 0) {
-      setCalendarDays(initialDays)
-      weekCacheRef.current[weekStartId] = initialDays
-    }
-  }, [initialDays, calendarDays.length, setCalendarDays, weekStartId])
+    setPersistedWeekStartId(weekStartId)
+  }, [setPersistedWeekStartId, weekStartId])
 
   React.useEffect(() => {
     if (calendarDays.length > 0) {
       weekCacheRef.current[weekStartId] = calendarDays
+      return
     }
-  }, [calendarDays, weekStartId])
+
+    const cachedWeek = weekCacheRef.current[weekStartId]
+    const fallbackDays =
+      cachedWeek ??
+      (weekStartId === resolvedInitialWeekStartId
+        ? initialDays
+        : buildWeekDays(weekStart))
+    setCalendarDays(fallbackDays)
+    weekCacheRef.current[weekStartId] = fallbackDays
+  }, [
+    calendarDays,
+    initialDays,
+    resolvedInitialWeekStartId,
+    setCalendarDays,
+    weekStart,
+    weekStartId,
+  ])
 
   const handleWeekChange = React.useCallback(
     (date: Date) => {
@@ -190,6 +242,36 @@ export function OrganicCalendarWorkspaceClient({
     return drafts.find((draft) => draft.id === selectedId) ?? null
   }, [drafts, selectedId])
 
+  const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts])
+
+  React.useEffect(() => {
+    if (selectedId && !allDraftIds.has(selectedId)) {
+      setSelectedDraftId(null)
+    }
+
+    const nextSelectedIds = selectedIds.filter((id) => allDraftIds.has(id))
+    if (nextSelectedIds.length !== selectedIds.length) {
+      setSelectedDraftIds(nextSelectedIds)
+    }
+  }, [allDraftIds, selectedId, selectedIds, setSelectedDraftId, setSelectedDraftIds])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    if (selectedId) return
+
+    const preferredDraftId =
+      initialSelectedDraftId ??
+      window.localStorage.getItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY)
+    if (!preferredDraftId || !allDraftIds.has(preferredDraftId)) return
+
+    setSelectedDraftId(preferredDraftId)
+  }, [
+    allDraftIds,
+    initialSelectedDraftId,
+    selectedId,
+    setSelectedDraftId,
+  ])
+
   const {
     activeDragDraft,
     handleDragStart,
@@ -200,8 +282,7 @@ export function OrganicCalendarWorkspaceClient({
   const {
     seededDraftCount,
     gridStatus,
-    handleAutoSort,
-    handleGenerateGridJob,
+    handleGenerateDrafts,
     handleRegenerate,
     handleClearFailure,
   } = useDraftGeneration({
@@ -248,10 +329,11 @@ export function OrganicCalendarWorkspaceClient({
       const targetDay = context?.dayId
         ? calendarDays.find((day) => day.id === context.dayId) ?? null
         : (calendarDays[0] ?? null)
-      if (!targetDay) return
+      if (!targetDay) return null
       const requestedStatus = context?.status ?? "draft"
       const status = requestedStatus
-      const trendTag = context?.trendId ?? selectedTrendIds[0]
+      const trendTag = context?.trendId
+      const targetAccountId = platformAccountIds[selectedPlatform as OrganicPlatformKey]
 
       const draftId =
         typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -264,94 +346,96 @@ export function OrganicCalendarWorkspaceClient({
           status === "placeholder"
             ? "Content idea"
             : `New ${selectedPlatform[0].toUpperCase()}${selectedPlatform.slice(1)} post`,
-        summary: "Quick draft created from planner.",
+        summary: "",
         timeLabel: targetDay?.suggestedTimes[0] ?? "9:00 AM",
         dateLabel: `${targetDay.label}, ${targetDay.dateLabel}`,
         status,
         platforms: [selectedPlatform],
         format: "Post",
-        objective: "Engagement",
-        captionPreview:
-          status === "placeholder"
-            ? "Use this as a seed before generation."
-            : "Draft your hook, value, and CTA.",
+        objective: "Draft",
+        creativeIdea: "",
+        captionPreview: "",
         tags: [],
         mediaCount: 1,
         seedTrendId: status === "placeholder" ? trendTag : undefined,
+        targetAccountId,
       }
 
       addDraft(targetDay.id, nextDraft)
       handleSelect(draftId, false)
+      return draftId
     },
-    [activePlatforms, addDraft, calendarDays, handleSelect, selectedTrendIds]
+    [activePlatforms, addDraft, calendarDays, handleSelect, platformAccountIds]
   )
 
-  const handleSeedAndFill = React.useCallback(async () => {
-    await handleAutoSort()
-    await handleGenerateGridJob({
-      language: "English",
-      userPrompt: "Fill the week from selected trends.",
-    })
-  }, [handleAutoSort, handleGenerateGridJob])
-
-  const setTrendSelection = React.useCallback(
-    (trendIds: string[]) => {
-      const next = new Set(trendIds)
-      selectedTrendIds.forEach((trendId) => {
-        if (!next.has(trendId)) {
-          toggleTrend(trendId, maxTrendSelections)
-        }
-      })
-      trendIds.forEach((trendId) => {
-        if (!selectedTrendIds.includes(trendId)) {
-          toggleTrend(trendId, maxTrendSelections)
-        }
-      })
-    },
-    [maxTrendSelections, selectedTrendIds, toggleTrend]
-  )
-
-  const resolveTrendPlatform = React.useCallback(
-    (trend: Trend): PlannerPlatformKey | undefined => {
-      const firstSupported = trend.platforms.find(
-        (platform): platform is OrganicPlatformTag =>
-          platform === "instagram" || platform === "linkedin"
-      )
-      if (firstSupported) return firstSupported
-
-      const fallback = activePlatforms.find(
-        (platform): platform is OrganicPlatformTag =>
-          platform === "instagram" || platform === "linkedin"
-      )
-      return fallback
-    },
-    [activePlatforms]
-  )
-
-  const handleSeedSingleTrend = React.useCallback(
-    (trend: Trend) => {
-      setTrendSelection([trend.id])
-      createQuickDraft({
-        dayId: calendarDays[0]?.id,
-        platform: resolveTrendPlatform(trend),
+  const handleGoDraft = React.useCallback(
+    (context?: {
+      dayId?: string
+      platform?: PlannerPlatformKey
+      trendId?: string
+    }) => {
+      const createdDraftId = createQuickDraft({
+        dayId: context?.dayId,
+        platform: context?.platform,
         status: "placeholder",
-        trendId: trend.id,
+        trendId: context?.trendId,
       })
+      if (!createdDraftId) return
     },
-    [calendarDays, createQuickDraft, resolveTrendPlatform, setTrendSelection]
+    [createQuickDraft]
   )
 
-  const handleSeedAndFillFromTrend = React.useCallback(
-    async (trend: Trend) => {
-      setTrendSelection([trend.id])
-      await handleAutoSort()
-      await handleGenerateGridJob({
-        language: "English",
-        userPrompt: `Fill the week prioritizing trend: ${trend.title}`,
-      })
+  const handleGenerateSelectedDrafts = React.useCallback(() => {
+    void handleGenerateDrafts()
+  }, [handleGenerateDrafts])
+
+  const deriveAiStudioPrompts = React.useCallback((draft: OrganicCalendarDraft) => {
+    const creativeDirectionPrompt =
+      draft.creativeDirectionPrompt?.trim() ||
+      draft.creativeIdea?.trim() ||
+      draft.summary?.trim() ||
+      draft.title.trim()
+
+    const thumbnailPrompt =
+      draft.thumbnailPrompt?.trim() ||
+      draft.mediaSuggestion?.prompt?.trim() ||
+      draft.assetHints?.[0]?.suggestion?.trim() ||
+      ""
+
+    return {
+      creativeDirectionPrompt,
+      thumbnailPrompt,
+    }
+  }, [])
+
+  const buildAiStudioContext = React.useCallback(
+    (draft: OrganicCalendarDraft): PlannerAiStudioContext => {
+      const prompts = deriveAiStudioPrompts(draft)
+      return {
+        draftId: draft.id,
+        brandProfileId,
+        weekStartId,
+        title: draft.title,
+        summary: draft.summary,
+        captionPreview: draft.captionPreview,
+        seedTrendId: draft.seedTrendId,
+        creativeDirectionPrompt: prompts.creativeDirectionPrompt,
+        thumbnailPrompt: prompts.thumbnailPrompt,
+        updatedAt: new Date().toISOString(),
+      }
     },
-    [handleAutoSort, handleGenerateGridJob, setTrendSelection]
+    [brandProfileId, deriveAiStudioPrompts, weekStartId]
   )
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !selectedDraft) return
+    const payload = buildAiStudioContext(selectedDraft)
+    window.localStorage.setItem(
+      buildAiStudioStorageKey(selectedDraft.id),
+      JSON.stringify(payload)
+    )
+    window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, selectedDraft.id)
+  }, [buildAiStudioContext, selectedDraft])
 
   const handleBulkDelete = React.useCallback(() => {
     bulkDeleteDrafts(selectedIds)
@@ -364,6 +448,20 @@ export function OrganicCalendarWorkspaceClient({
   }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll])
 
   const isGenerating = gridStatus === "running"
+  const slotProgress = React.useMemo(() => {
+    const completed = gridProgress.completed
+    const total = gridProgress.total
+    if (typeof completed !== "number" || typeof total !== "number" || total <= 0) {
+      return null
+    }
+    const failed = typeof gridProgress.failed === "number" ? Math.max(0, gridProgress.failed) : 0
+    return {
+      completed: Math.max(0, Math.min(completed, total)),
+      total,
+      failed,
+    }
+  }, [gridProgress.completed, gridProgress.failed, gridProgress.total])
+
   const layoutTransition = React.useMemo(
     () => ({
       duration: 0.28,
@@ -415,48 +513,71 @@ export function OrganicCalendarWorkspaceClient({
             <motion.div layout transition={layoutTransition}>
               <ContextMenu>
                 <ContextMenuTrigger asChild>
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                        {selectedTrendIds.length}
-                        {typeof maxTrendSelections === "number"
-                          ? `/${maxTrendSelections}`
-                          : ""}{" "}
-                        trends
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                        {seededDraftCount} seeded
-                      </Badge>
+                  <div className="rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                          {selectedTrendIds.length}
+                          {typeof maxTrendSelections === "number"
+                            ? `/${maxTrendSelections}`
+                            : ""}{" "}
+                          trends
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                          {seededDraftCount} placeholders
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="outline"
+                          aria-label="Add placeholder"
+                          disabled={isGenerating}
+                          onClick={() => {
+                            handleGoDraft()
+                          }}
+                        >
+                          <PlusIcon className={isGenerating ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          disabled={isGenerating || seededDraftCount === 0}
+                          onClick={handleGenerateSelectedDrafts}
+                        >
+                          {isGenerating ? (
+                            <LightningBoltIcon className="mr-1 h-3.5 w-3.5 animate-pulse" />
+                          ) : (
+                            <RocketIcon className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          Generate
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="bg-orange-500 text-white hover:bg-orange-500/90"
-                        disabled={isGenerating}
-                        onClick={() => {
-                          void handleSeedAndFill()
-                        }}
-                      >
-                        {isGenerating ? (
-                          <LightningBoltIcon className="mr-1 h-3.5 w-3.5 animate-pulse" />
-                        ) : (
-                          <RocketIcon className="mr-1 h-3.5 w-3.5" />
-                        )}
-                        Seed / Fill Posts
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isGenerating}
-                        onClick={() => {
-                          void handleAutoSort()
-                        }}
-                      >
-                        Seed only
-                      </Button>
-                    </div>
+
+                    {slotProgress ? (
+                      <div className="mt-2 space-y-1">
+                        <div className="space-y-0.5">
+                          <p className="text-[11px] font-medium text-muted-foreground">
+                            {slotProgress.completed}/{slotProgress.total} completed
+                            {slotProgress.failed > 0 ? ` • ${slotProgress.failed} failed` : ""}
+                          </p>
+                          {gridProgress.stage ? (
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                              {gridProgress.stage}
+                            </p>
+                          ) : null}
+                          {gridProgress.message ? (
+                            <p className="line-clamp-2 text-[11px] text-muted-foreground/80">
+                              {gridProgress.message}
+                            </p>
+                          ) : null}
+                        </div>
+                        <Progress value={gridProgress.percent} className="h-1.5 bg-muted/70" />
+                      </div>
+                    ) : null}
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -464,17 +585,16 @@ export function OrganicCalendarWorkspaceClient({
                   <ContextMenuSeparator />
                   <ContextMenuItem
                     onSelect={() => {
-                      void handleSeedAndFill()
+                      handleGoDraft()
                     }}
                   >
-                    Seed + fill posts
+                    Plus
                   </ContextMenuItem>
                   <ContextMenuItem
-                    onSelect={() => {
-                      void handleAutoSort()
-                    }}
+                    disabled={seededDraftCount === 0}
+                    onSelect={handleGenerateSelectedDrafts}
                   >
-                    Seed placeholders only
+                    Generate placeholders
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                   <ContextMenuItem
@@ -504,10 +624,9 @@ export function OrganicCalendarWorkspaceClient({
                       onPreviousWeek={handlePreviousWeek}
                       onNextWeek={handleNextWeek}
                       onCreatePost={(context) =>
-                        createQuickDraft({
+                        handleGoDraft({
                           dayId: context?.dayId,
                           platform: context?.platform,
-                          status: context?.status,
                         })
                       }
                       onSelectDraft={(id) => handleSelect(id, false)}
@@ -528,18 +647,7 @@ export function OrganicCalendarWorkspaceClient({
                       selectedTrendIds={selectedTrendIds}
                       activePlatforms={activePlatforms}
                       maxSelections={maxTrendSelections}
-                      isGenerating={isGenerating}
                       onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-                      onSeedSelected={() => {
-                        void handleAutoSort()
-                      }}
-                      onSeedAndFill={() => {
-                        void handleSeedAndFill()
-                      }}
-                      onSeedSingleTrend={handleSeedSingleTrend}
-                      onSeedAndFillFromTrend={(trend) => {
-                        void handleSeedAndFillFromTrend(trend)
-                      }}
                     />
                   </div>
                 </ResizablePanel>
@@ -556,7 +664,7 @@ export function OrganicCalendarWorkspaceClient({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}
                 transition={previewTransition}
-                className="h-[50dvh] min-h-[20rem] overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[28rem] lg:shrink-0"
+                className="h-[55dvh] min-h-[22rem] overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[42rem] lg:shrink-0 xl:w-[46rem]"
               >
                 <div className="mb-2 flex items-center justify-between pb-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -572,8 +680,11 @@ export function OrganicCalendarWorkspaceClient({
                     <Cross2Icon className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+
                 <div className="h-[calc(100%-2rem)] overflow-hidden rounded-md bg-background/85">
-                  <OrganicDraftPreview draft={selectedDraft} />
+                  <div className="h-full min-h-0 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                    <OrganicDraftPreview draft={selectedDraft} />
+                  </div>
                 </div>
               </motion.aside>
             ) : null}

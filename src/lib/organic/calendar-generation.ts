@@ -336,22 +336,83 @@ const placementContentSchema = z.object({
   numSlides: z.number().optional().nullable(),
 });
 
+const mediaSuggestionGenerationContextSchema = z
+  .object({
+    sourceAgent: z.string().nullish(),
+    finalPrompt: z.string().nullish(),
+    request: z
+      .object({
+        provider: z.string().nullish(),
+        model: z.string().nullish(),
+        imageSize: z.string().nullish(),
+      })
+      .nullish(),
+    placement: z
+      .object({
+        placementId: z.string().nullish(),
+        dayId: z.string().nullish(),
+        scheduledAt: z.string().nullish(),
+      })
+      .nullish(),
+    strategist: z
+      .object({
+        objective: z.string().nullish(),
+        funnel: z.string().nullish(),
+        funnelStage: z.string().nullish(),
+        targetAudience: z.string().nullish(),
+        tone: z.string().nullish(),
+        angle: z.string().nullish(),
+        postType: z.string().nullish(),
+        postSize: z.string().nullish(),
+      })
+      .passthrough()
+      .nullish(),
+    creativeDirection: z
+      .object({
+        title: z.string().nullish(),
+        conceptTitle: z.string().nullish(),
+        direction: z.string().nullish(),
+        creativeDirection: z.string().nullish(),
+        hook: z.string().nullish(),
+        storyHook: z.string().nullish(),
+        trendIntegration: z.string().nullish(),
+        modes: z.array(z.string()).nullish(),
+        visualMode: z.string().nullish(),
+        audioMode: z.string().nullish(),
+        notes: z.string().nullish(),
+        productionNotes: z.array(z.string()).nullish(),
+      })
+      .passthrough()
+      .nullish(),
+    trend: z
+      .object({
+        trendId: z.string().nullish(),
+        seedSource: z.enum(["trend", "question", "event", "manual"]).nullish(),
+      })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough()
+  .nullish();
+
 const placementCreativeSchema = z
   .object({
     creativeIdea: z.string().optional().nullable(),
     assetIds: z.array(z.string()).optional(),
     mediaSuggestion: z
       .object({
-        provider: z.string().optional(),
-        model: z.string().optional(),
-        kind: z.string().optional(),
-        prompt: z.string().optional(),
-        width: z.number().optional(),
-        height: z.number().optional(),
-        assetUrl: z.string().optional(),
-        alt: z.string().optional(),
+        provider: z.string().nullish(),
+        model: z.string().nullish(),
+        kind: z.string().nullish(),
+        prompt: z.string().nullish(),
+        width: z.number().nullish(),
+        height: z.number().nullish(),
+        assetUrl: z.string().nullish(),
+        alt: z.string().nullish(),
+        assetBase64: z.string().nullish(),
+        generationContext: mediaSuggestionGenerationContextSchema.nullish(),
       })
-      .optional(),
+      .nullish(),
     assetHints: z
       .array(
         z.object({

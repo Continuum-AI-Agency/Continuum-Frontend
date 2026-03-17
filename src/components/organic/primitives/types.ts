@@ -26,6 +26,8 @@ export type OrganicCalendarDraft = {
   progress?: number
   captionPreview: string
   tags: string[]
+  creativeDirectionPrompt?: string
+  thumbnailPrompt?: string
   location?: string
   mediaCount: number
   seedTrendId?: string
@@ -39,14 +41,57 @@ export type OrganicCalendarDraft = {
   generationError?: string
   generationAttempts?: number
   mediaSuggestion?: {
-    provider?: string
-    model?: string
-    kind?: string
-    prompt?: string
-    width?: number
-    height?: number
-    assetUrl?: string
-    alt?: string
+    provider?: string | null
+    model?: string | null
+    kind?: string | null
+    prompt?: string | null
+    width?: number | null
+    height?: number | null
+    assetUrl?: string | null
+    alt?: string | null
+    assetBase64?: string | null
+    generationContext?: {
+      sourceAgent?: string | null
+      finalPrompt?: string | null
+      request?: {
+        provider?: string | null
+        model?: string | null
+        imageSize?: string | null
+      } | null
+      placement?: {
+        placementId?: string | null
+        dayId?: string | null
+        scheduledAt?: string | null
+      } | null
+      strategist?: {
+        objective?: string | null
+        funnel?: string | null
+        funnelStage?: string | null
+        targetAudience?: string | null
+        tone?: string | null
+        angle?: string | null
+        postType?: string | null
+        postSize?: string | null
+      } | null
+      creativeDirection?: {
+        title?: string | null
+        conceptTitle?: string | null
+        direction?: string | null
+        creativeDirection?: string | null
+        hook?: string | null
+        storyHook?: string | null
+        trendIntegration?: string | null
+        modes?: string[] | null
+        visualMode?: string | null
+        audioMode?: string | null
+        notes?: string | null
+        productionNotes?: string[] | null
+      } | null
+      trend?: {
+        trendId?: string | null
+        seedSource?: "trend" | "question" | "event" | "manual" | null
+      } | null
+    } | null
   }
   assetHints?: Array<{
     role: string

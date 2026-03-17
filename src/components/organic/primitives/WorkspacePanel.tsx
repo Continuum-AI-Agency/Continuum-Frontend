@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   ArchiveIcon,
   EyeOpenIcon,
-  LightningBoltIcon,
   RocketIcon,
   TrashIcon,
   UpdateIcon,
@@ -79,7 +78,6 @@ export function WorkspacePanel({
   maxTrendSelections,
   onToggleTrend,
   onGenerateGrid,
-  onAutoSort,
   onClearAll,
   onSelectDraft,
   onToggleSelection,
@@ -99,7 +97,6 @@ export function WorkspacePanel({
   maxTrendSelections?: number;
   onToggleTrend: (trendId: string) => void;
   onGenerateGrid: (values: GenerationControlValues) => Promise<void> | void;
-  onAutoSort: () => void;
   onClearAll: () => void;
   onSelectDraft: (id: string) => void;
   onToggleSelection: (id: string) => void;
@@ -156,21 +153,21 @@ export function WorkspacePanel({
       {showGenerationControls ? (
         <Card
           className={cn(
-            "relative z-10 gap-0 border border-slate-600/70 bg-slate-950/35 py-0 shadow-none",
+            "relative z-10 gap-0 border border-border/50 bg-card/85 py-0 shadow-none",
             isGenerationSidebar && "flex min-h-0 flex-1 flex-col"
           )}
         >
-        <CardHeader className="border-b border-slate-600/60 px-3 py-3">
+        <CardHeader className="border-b border-border/50 px-3 py-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <CardDescription className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-700">
+              <CardDescription className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
                 Generation Control
               </CardDescription>
-              <CardTitle className="text-sm font-semibold text-slate-900">
+              <CardTitle className="text-sm font-semibold text-foreground">
                 Weekly Content Initiation
               </CardTitle>
             </div>
-            <div className="rounded border border-sky-400/70 bg-sky-200/40 px-2 py-1 font-mono text-[10px] text-sky-900">
+            <div className="rounded border border-primary/25 bg-primary/10 px-2 py-1 font-mono text-[10px] text-primary">
               {selectedTrendIds.length}/{maxTrendSelections ?? 5} trends
             </div>
           </div>
@@ -184,44 +181,44 @@ export function WorkspacePanel({
         >
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-slate-700">Language</Label>
+              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Language</Label>
               <Input
                 value={language}
                 onChange={(event) => setLanguage(event.target.value)}
                 placeholder="English"
-                className="h-8 border-slate-400/80 bg-white/90 text-xs text-slate-900 placeholder:text-slate-500"
+                className="h-8 border-input bg-background text-xs text-foreground placeholder:text-muted-foreground"
               />
             </div>
             <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-slate-700">Platforms</Label>
-              <div className="flex h-8 items-center rounded-md border border-slate-400/80 bg-white/90 px-2 font-mono text-[10px] text-slate-900">
+              <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Platforms</Label>
+              <div className="flex h-8 items-center rounded-md border border-input bg-background px-2 font-mono text-[10px] text-foreground">
                 Instagram, LinkedIn
               </div>
             </div>
           </div>
 
           <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase tracking-widest text-slate-700">User Prompt</Label>
+            <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">User Prompt</Label>
             <Textarea
               value={userPrompt}
               onChange={(event) => setUserPrompt(event.target.value)}
-              className="min-h-[68px] border-slate-400/80 bg-white/90 text-xs text-slate-900 placeholder:text-slate-500"
+              className="min-h-[68px] border-input bg-background text-xs text-foreground placeholder:text-muted-foreground"
               placeholder="Optional focus for this week"
             />
           </div>
 
           <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase tracking-widest text-slate-700">Additional Guidance</Label>
+            <Label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Additional Guidance</Label>
             <Textarea
               value={generationPrompt}
               onChange={(event) => setGenerationPrompt(event.target.value)}
-              className="min-h-[56px] border-slate-400/80 bg-white/90 text-xs text-slate-900 placeholder:text-slate-500"
+              className="min-h-[56px] border-input bg-background text-xs text-foreground placeholder:text-muted-foreground"
               placeholder="Brand voice, campaign constraints, or CTA requirements"
             />
           </div>
           <ScrollArea
             className={cn(
-              "rounded border border-slate-500/70 bg-slate-950/65 p-2",
+              "rounded border border-border/60 bg-muted/30 p-2",
               isGenerationSidebar ? "min-h-0 flex-1" : "h-44 lg:h-48"
             )}
           >
@@ -242,22 +239,10 @@ export function WorkspacePanel({
           </ScrollArea>
 
           <div className="flex items-center gap-2">
-            <Button
-              className="h-8 px-2"
-              variant="ghost"
-              size="sm"
-              type="button"
-              onClick={onAutoSort}
-              disabled={isGenerating}
-              title="Auto-seed the week"
-            >
-              <LightningBoltIcon className="mr-1 h-3 w-3" />
-              Auto-seed
-            </Button>
             <AlertDialog>
-              <AlertDialogTrigger asChild>
+                <AlertDialogTrigger asChild>
                 <Button
-                className="h-8 px-2 text-slate-700 hover:text-destructive"
+                className="h-8 px-2"
                 variant="ghost"
                 size="sm"
                 type="button"
@@ -284,7 +269,8 @@ export function WorkspacePanel({
               </AlertDialogContent>
             </AlertDialog>
             <Button
-              className="ml-auto h-8 rounded-md border border-sky-300/80 bg-sky-700 text-xs text-white shadow-[0_0_20px_rgba(14,165,233,.2)] transition-colors hover:bg-sky-600"
+              className="ml-auto h-8"
+              variant="default"
               onClick={handleGenerate}
               disabled={isGenerating}
               type="button"
@@ -298,27 +284,27 @@ export function WorkspacePanel({
             </Button>
           </div>
 
-          <p className="font-mono text-[10px] uppercase tracking-widest text-slate-700">
-            {seedCount > 0 ? `${seedCount} seeded drafts in queue` : "Select trends and generate from backend"}
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            {seedCount > 0 ? `${seedCount} placeholders in queue` : "No placeholders yet"}
           </p>
         </CardContent>
       </Card>
       ) : null}
 
       {showPreview ? (
-        <Card className="relative z-10 min-h-0 flex-1 gap-0 border border-slate-600/70 bg-slate-950/35 py-0 shadow-none">
-        <CardHeader className="border-b border-slate-600/60 px-3 py-2">
+        <Card className="relative z-10 min-h-0 flex-1 gap-0 border border-border/60 bg-card/85 py-0 shadow-none">
+        <CardHeader className="border-b border-border/50 px-3 py-2">
           <div className="flex items-center justify-between">
-            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-slate-700">
+            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">
               Selected Post
             </CardDescription>
             {selectedDraft ? (
-              <p className="font-mono text-[10px] text-slate-900">{selectedDraft.timeLabel}</p>
+              <p className="font-mono text-[10px] text-foreground">{selectedDraft.timeLabel}</p>
             ) : null}
           </div>
         </CardHeader>
         <CardContent className="flex-1 min-h-0 px-2 py-2">
-          <div className="h-full min-h-[240px] overflow-hidden rounded-lg border border-slate-500/70 bg-slate-950/65">
+          <div className="h-full min-h-[240px] overflow-hidden rounded-lg border border-border/60 bg-muted/20">
             {selectedDraft ? (
               <OrganicDraftPreview draft={selectedDraft} />
             ) : (
@@ -340,9 +326,9 @@ export function WorkspacePanel({
       ) : null}
 
       {showGenerationControls && assignmentDays.length > 0 ? (
-        <Card className="relative z-10 gap-0 border border-slate-600/70 bg-slate-950/35 py-0 shadow-none">
-          <CardHeader className="border-b border-slate-600/60 px-3 py-2">
-            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-slate-700">
+        <Card className="relative z-10 gap-0 border border-border/50 bg-card/85 py-0 shadow-none">
+          <CardHeader className="border-b border-border/50 px-3 py-2">
+            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">
               Day Assignments
             </CardDescription>
           </CardHeader>
@@ -351,11 +337,11 @@ export function WorkspacePanel({
               {assignmentDays.map((day) => (
                 <div
                   key={day.id}
-                  className="rounded-md border border-slate-500/70 bg-slate-950/70 px-2 py-2"
+                  className="rounded-md border border-border/60 bg-muted/30 px-2 py-2"
                 >
-                  <p className="font-mono text-[10px] uppercase tracking-wide text-slate-700">{day.label}</p>
-                  <p className="text-[11px] text-slate-700">{day.dateLabel}</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-900">{day.draftCount} posts</p>
+                  <p className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">{day.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{day.dateLabel}</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">{day.draftCount} posts</p>
                 </div>
               ))}
             </div>
@@ -364,24 +350,24 @@ export function WorkspacePanel({
       ) : null}
 
       {showUnscheduledPool ? (
-        <Card className="relative z-10 h-auto min-h-[180px] max-h-[240px] shrink-0 gap-0 border border-slate-600/70 bg-slate-950/35 py-0 shadow-none">
-        <CardHeader className="border-b border-slate-600/60 px-3 py-2">
+        <Card className="relative z-10 h-auto min-h-[180px] max-h-[240px] shrink-0 gap-0 border border-border/50 bg-card/85 py-0 shadow-none">
+        <CardHeader className="border-b border-border/50 px-3 py-2">
           <div className="flex items-center justify-between">
-            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-slate-700">
+            <CardDescription className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">
               Unscheduled Pool
             </CardDescription>
             <div className="flex items-center gap-2">
-              <p className="font-mono text-[10px] text-slate-700">{unscheduledDrafts.length} drafts</p>
+              <p className="font-mono text-[10px] text-muted-foreground">{unscheduledDrafts.length} drafts</p>
               <RelativeTime
                 className="gap-0"
                 defaultTime={new Date()}
                 timeFormatOptions={{ hour: "2-digit", minute: "2-digit" }}
               >
                 <RelativeTimeZone className="justify-start gap-1" zone={localTimeZone}>
-                  <RelativeTimeZoneLabel className="h-4 rounded-sm bg-slate-200 px-1 text-[9px] uppercase tracking-wide text-slate-800">
+                  <RelativeTimeZoneLabel className="h-4 rounded-sm bg-muted px-1 text-[9px] uppercase tracking-wide text-muted-foreground">
                     Local
                   </RelativeTimeZoneLabel>
-                  <RelativeTimeZoneDisplay className="pl-0 text-[10px] text-slate-700" />
+                  <RelativeTimeZoneDisplay className="pl-0 text-[10px] text-foreground" />
                 </RelativeTimeZone>
               </RelativeTime>
             </div>

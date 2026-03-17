@@ -45,20 +45,20 @@ function buildSeededDraft({
   platform: OrganicPlatformTag
   platformAccountIds: Partial<Record<OrganicPlatformKey, string>>
 }): OrganicCalendarDraft {
-  const trendTitle = data.title || "Selected topic"
   const trendId = data.trendId
 
   return {
     id: `seeded-${Date.now()}`,
-    title: trendTitle,
-    summary: `Queued for generation from "${trendTitle}".`,
+    title: "Draft",
+    summary: "",
     timeLabel: formatTimeLabel(time),
     dateLabel: day ? `${day.label}, ${day.dateLabel}` : "Unassigned",
     status: "placeholder",
     platforms: [platform],
     format: "Post",
-    objective: "Generation Seed",
-    captionPreview: "Click Generate to construct this post.",
+    objective: "Draft",
+    creativeIdea: "",
+    captionPreview: "",
     tags: [],
     mediaCount: 1,
     seedTrendId: trendId,

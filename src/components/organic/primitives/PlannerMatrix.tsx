@@ -51,7 +51,7 @@ function DayHeader({
         {label}
       </p>
       {isToday ? (
-        <span className="mt-1 inline-flex size-6 items-center justify-center rounded-full bg-orange-500 text-xs font-semibold text-white">
+        <span className="mt-1 inline-flex size-6 items-center justify-center rounded-full border border-primary/30 bg-primary/15 text-xs font-semibold text-primary">
           {dayNumber}
         </span>
       ) : (
@@ -120,7 +120,7 @@ export function PlannerMatrix({
                 {platform.comingSoon ? (
                   <Badge
                     variant="outline"
-                    className="h-4 border-orange-500/30 bg-orange-500/10 px-1 text-[8px] text-orange-600"
+                    className="h-4 border-muted-foreground/30 bg-muted px-1 text-[8px] text-muted-foreground"
                   >
                     soon
                   </Badge>

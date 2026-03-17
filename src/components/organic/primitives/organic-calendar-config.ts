@@ -1,7 +1,7 @@
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 
 export const ORGANIC_CALENDAR_API = {
-  generateCalendar: "/api/organic/generate-calendar",
+  generateRun: "/api/organic/runs",
 } as const;
 
 export const ORGANIC_BETA_LAUNCH_SCHEDULE: Record<

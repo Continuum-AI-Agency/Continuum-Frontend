@@ -16,7 +16,7 @@ export function PlatformBadge({ platform }: { platform: OrganicPlatformTag }) {
 export function StatusBadge({ status, format }: { status: OrganicCalendarDraft["status"], format?: string }) {
   if (format === "Newsletter") {
     return (
-      <span className="inline-flex items-center rounded-full border border-orange-500/30 bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-100">
+      <span className="inline-flex items-center rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-destructive">
         Newsletter
       </span>
     );

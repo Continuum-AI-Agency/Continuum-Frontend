@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import {
+  calendarPlacementSchema,
   calendarGenerationRequestSchema,
   toBackendCalendarGenerationRequest,
 } from "./calendar-generation";
@@ -80,6 +81,121 @@ describe("calendarGenerationRequestSchema", () => {
       ],
     });
     assert.equal(parsed.success, false);
+  });
+
+  test("accepts mediaSuggestion generationContext payload", () => {
+    const parsed = calendarPlacementSchema.safeParse({
+      placementId: "seed-1",
+      schedule: {
+        dayId: "2026-02-23",
+        scheduledAt: "2026-02-23T14:00:00.000Z",
+      },
+      platform: {
+        name: "instagram",
+      },
+      seed: {
+        source: "manual",
+      },
+      content: {
+        format: "FeedPost",
+      },
+      creative: {
+        mediaSuggestion: {
+          kind: "carousel",
+          assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+          generationContext: {
+            sourceAgent: "creative-director",
+            finalPrompt: "Generate the hero slide",
+            request: {
+              provider: "nano-banana",
+              model: "2-flash",
+              imageSize: "500x500",
+            },
+            placement: {
+              placementId: "seed-1",
+              dayId: "2026-02-23",
+              scheduledAt: "2026-02-23T14:00:00.000Z",
+            },
+            strategist: {
+              objective: "Awareness",
+              funnel: "TOFU",
+              funnelStage: "middle",
+              targetAudience: "Families",
+              tone: "Direct",
+              angle: "Pain-point",
+              postType: "Post",
+              postSize: "Square",
+            },
+            creativeDirection: {
+              title: "Monday Momentum",
+              conceptTitle: "Monday Momentum",
+              direction: "Fast-paced",
+              creativeDirection: "Focus on family dinner relief",
+              hook: "60-second save",
+              storyHook: "Dinner solved in one tap",
+              trendIntegration: "Tie to weekly trend",
+              modes: ["carousel", "static"],
+              visualMode: "carousel",
+              audioMode: "music-led",
+              notes: "High contrast visuals",
+              productionNotes: ["Use warm natural light"],
+            },
+            trend: {
+              trendId: "trend-42",
+              seedSource: "trend",
+            },
+          },
+        },
+      },
+    });
+
+    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    if (parsed.success) {
+      assert.equal(parsed.data.creative?.mediaSuggestion?.generationContext?.strategist?.funnelStage, "middle");
+      assert.equal(
+        parsed.data.creative?.mediaSuggestion?.generationContext?.creativeDirection?.conceptTitle,
+        "Monday Momentum"
+      );
+      assert.equal(
+        parsed.data.creative?.mediaSuggestion?.generationContext?.creativeDirection?.storyHook,
+        "Dinner solved in one tap"
+      );
+    }
+  });
+
+  test("accepts nullable mediaSuggestion fields from streaming payloads", () => {
+    const parsed = calendarPlacementSchema.safeParse({
+      placementId: "seed-2",
+      schedule: {
+        dayId: "2026-02-24",
+        scheduledAt: "2026-02-24T14:00:00.000Z",
+      },
+      platform: {
+        name: "instagram",
+      },
+      seed: {
+        source: "manual",
+      },
+      content: {
+        format: "FeedPost",
+      },
+      creative: {
+        mediaSuggestion: {
+          provider: "nano-banana",
+          model: "2-flash",
+          kind: "carousel",
+          prompt: "Prompt",
+          width: 512,
+          height: 512,
+          assetUrl: null,
+          assetBase64: null,
+          alt: null,
+          generationContext: null,
+        },
+      },
+    });
+
+    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
   });
 
 });

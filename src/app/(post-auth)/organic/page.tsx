@@ -195,7 +195,7 @@ export default async function OrganicPage() {
           brandId={brandProfileId}
           shouldGenerate={shouldAutoGenerateInsights}
         />
-        <Heading size="5" className="text-white">
+        <Heading size="5" className="text-foreground">
           Organic Planner
         </Heading>
         {insightsError ? (

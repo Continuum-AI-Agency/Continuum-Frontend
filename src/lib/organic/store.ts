@@ -74,10 +74,15 @@ interface CalendarState {
   selectedDraftId: string | null;
   selectedDraftIds: string[];
   selectedTrendIds: string[];
+  persistedWeekStartId: string | null;
   gridStatus: GridStatus;
   gridProgress: {
     percent: number;
     message?: string;
+    completed?: number;
+    total?: number;
+    failed?: number;
+    stage?: string;
   };
   gridError: string | null;
   gridJobId: string | null;
@@ -93,11 +98,20 @@ interface CalendarState {
   addDraft: (dayId: string, draft: OrganicCalendarDraft) => void;
   bulkDeleteDrafts: (draftIds: string[]) => void;
   setSelectedDraftId: (id: string | null) => void;
+  setSelectedDraftIds: (ids: string[]) => void;
   toggleDraftSelection: (id: string) => void;
   clearDraftSelection: () => void;
+  setPersistedWeekStartId: (weekStartId: string | null) => void;
   toggleTrend: (trendId: string, maxSelections?: number) => void;
   setGridStatus: (status: GridStatus) => void;
-  setGridProgress: (progress: { percent: number; message?: string }) => void;
+  setGridProgress: (progress: {
+    percent: number;
+    message?: string;
+    completed?: number;
+    total?: number;
+    failed?: number;
+    stage?: string;
+  }) => void;
   setGridError: (error: string | null) => void;
   setGridJobId: (jobId: string | null) => void;
   setGhosts: (dayId: string, count: number) => void;
@@ -120,6 +134,7 @@ export const useCalendarStore = create<CalendarState>()(
       selectedDraftId: null,
       selectedDraftIds: [],
       selectedTrendIds: [],
+      persistedWeekStartId: null,
       gridStatus: "idle",
       gridProgress: { percent: 0 },
       gridError: null,
@@ -220,6 +235,8 @@ export const useCalendarStore = create<CalendarState>()(
         }),
 
       setSelectedDraftId: (id) => set({ selectedDraftId: id }),
+      setSelectedDraftIds: (ids) => set({ selectedDraftIds: ids }),
+      setPersistedWeekStartId: (weekStartId) => set({ persistedWeekStartId: weekStartId }),
       
       toggleDraftSelection: (id) => set((state) => {
         const next = new Set(state.selectedDraftIds);
@@ -331,6 +348,10 @@ export const useCalendarStore = create<CalendarState>()(
       name: "organic-calendar-storage",
       partialize: (state) => ({ 
         selectedTrendIds: state.selectedTrendIds,
+        selectedDraftId: state.selectedDraftId,
+        selectedDraftIds: state.selectedDraftIds,
+        days: state.days,
+        persistedWeekStartId: state.persistedWeekStartId,
         scheduledEvents: state.scheduledEvents,
         viewMode: state.viewMode,
       }),

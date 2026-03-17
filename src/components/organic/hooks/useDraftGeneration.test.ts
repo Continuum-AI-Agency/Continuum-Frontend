@@ -33,6 +33,7 @@ describe("useDraftGeneration", () => {
     setGridProgress: vi.fn(),
     setGridError: vi.fn(),
     addDraft: vi.fn(),
+    bulkDeleteDrafts: vi.fn(),
     updateDraft: vi.fn(),
     setGhosts: vi.fn(),
     addEvent: vi.fn(),
@@ -132,12 +133,276 @@ describe("useDraftGeneration", () => {
     expect(mockStore.addDraft).toHaveBeenCalledWith(
       "2026-01-26",
       expect.objectContaining({
-        id: "p1",
+        id: "seed-1",
         title: "Test Title",
         captionPreview: "Test Caption\n\n#test",
       })
     );
     expect(mockStore.setGridStatus).toHaveBeenCalledWith("complete");
+  });
+
+  it("replaces seeded draft in place when backend emits a new placement id", async () => {
+    const { result } = renderHook(() => useDraftGeneration(defaultProps));
+
+    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
+        onEvent({
+          type: "slot_completed",
+          placement: {
+            placementId: "draft-remote-1",
+            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00.000Z" },
+            platform: { name: "instagram" },
+            seed: { source: "trend", trendId: "trend-1" },
+            content: { titleTopic: "Generated Title", format: "Post" },
+            creative: {
+              creativeIdea: "Generated idea",
+              mediaSuggestion: {
+                kind: "carousel",
+                assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+                generationContext: {
+                  sourceAgent: "asset_producer",
+                  strategist: {
+                    objective: "Engagement",
+                    funnelStage: "middle",
+                    targetAudience: "Families",
+                  },
+                  creativeDirection: {
+                    conceptTitle: "Family-first dinner",
+                    storyHook: "Dinner together",
+                    visualMode: "carousel",
+                    productionNotes: ["Use warm tones"],
+                  },
+                },
+              },
+            },
+            copy: { caption: "Generated caption" },
+          },
+        });
+        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
+      }
+    );
+
+    await act(async () => {
+      await result.current.handleGenerateDrafts();
+    });
+
+    expect(mockStore.bulkDeleteDrafts).toHaveBeenCalledWith(["seed-1", "draft-remote-1"]);
+    expect(mockStore.addDraft).toHaveBeenCalledWith(
+      "2026-01-26",
+      expect.objectContaining({
+        id: "seed-1",
+        title: "Generated Title",
+        mediaSuggestion: expect.objectContaining({
+          assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+          assetUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA",
+          generationContext: expect.objectContaining({
+            strategist: expect.objectContaining({
+              funnelStage: "middle",
+              targetAudience: "Families",
+            }),
+            creativeDirection: expect.objectContaining({
+              conceptTitle: "Family-first dinner",
+              storyHook: "Dinner together",
+            }),
+          }),
+        }),
+      })
+    );
+  });
+
+  it("sends all placeholder slots in the request payload", async () => {
+    const props: HookProps = {
+      ...defaultProps,
+      calendarDays: [
+        {
+          id: "2026-01-26",
+          label: "Mon",
+          dateLabel: "Jan 26",
+          suggestedTimes: ["9:00 AM", "1:00 PM"],
+          slots: [
+            {
+              id: "seed-1",
+              title: "Seed 1",
+              summary: "Ready",
+              timeLabel: "9:00 AM",
+              dateLabel: "Mon, Jan 26",
+              status: "placeholder",
+              platforms: ["instagram"],
+              format: "Post",
+              objective: "Generation Seed",
+              captionPreview: "Generate me",
+              tags: [],
+              mediaCount: 1,
+              seedTrendId: "trend-1",
+            },
+            {
+              id: "already-generated",
+              title: "Existing",
+              summary: "Done",
+              timeLabel: "1:00 PM",
+              dateLabel: "Mon, Jan 26",
+              status: "draft",
+              platforms: ["instagram"],
+              format: "Post",
+              objective: "Awareness",
+              captionPreview: "Already generated",
+              tags: [],
+              mediaCount: 1,
+            },
+          ],
+        },
+        {
+          id: "2026-01-27",
+          label: "Tue",
+          dateLabel: "Jan 27",
+          suggestedTimes: ["9:00 AM", "1:00 PM"],
+          slots: [
+            {
+              id: "seed-2",
+              title: "Seed 2",
+              summary: "Ready",
+              timeLabel: "1:00 PM",
+              dateLabel: "Tue, Jan 27",
+              status: "placeholder",
+              platforms: ["instagram"],
+              format: "Carousel",
+              objective: "Generation Seed",
+              captionPreview: "Generate me too",
+              tags: [],
+              mediaCount: 1,
+              seedTrendId: "trend-2",
+            },
+          ],
+        },
+      ],
+      drafts: [
+        ...defaultProps.drafts,
+        {
+          id: "seed-2",
+          title: "Seed 2",
+          summary: "Ready",
+          timeLabel: "1:00 PM",
+          dateLabel: "Tue, Jan 27",
+          status: "placeholder",
+          platforms: ["instagram"],
+          format: "Carousel",
+          objective: "Generation Seed",
+          captionPreview: "Generate me too",
+          tags: [],
+          mediaCount: 1,
+          seedTrendId: "trend-2",
+        },
+      ],
+      selectedTrendIds: ["trend-1", "trend-2"],
+    };
+
+    const { result } = renderHook(() => useDraftGeneration(props));
+
+    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
+        onEvent({ type: "complete", summary: { total: 2, succeeded: 2, failed: 0 } });
+      }
+    );
+
+    await act(async () => {
+      await result.current.handleGenerateDrafts();
+    });
+
+    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(streamCalls).toHaveLength(1);
+    const firstPayload = streamCalls[0][0] as { placements: Array<{ placementId: string }> };
+    expect(firstPayload.placements).toHaveLength(2);
+    expect(firstPayload.placements.map((placement) => placement.placementId).sort()).toEqual([
+      "seed-1",
+      "seed-2",
+    ]);
+  });
+
+  it("sends creative direction and thumbnail metadata with each placeholder", async () => {
+    const props: HookProps = {
+      ...defaultProps,
+      calendarDays: [
+        {
+          id: "2026-01-26",
+          label: "Mon",
+          dateLabel: "Jan 26",
+          suggestedTimes: ["9:00 AM", "1:00 PM"],
+          slots: [
+            {
+              id: "seed-meta",
+              title: "Seeded topic",
+              summary: "Ready",
+              timeLabel: "9:00 AM",
+              dateLabel: "Mon, Jan 26",
+              status: "placeholder",
+              platforms: ["instagram"],
+              format: "Post",
+              objective: "Generation Seed",
+              captionPreview: "Generate me",
+              tags: [],
+              mediaCount: 1,
+              seedTrendId: "trend-1",
+              creativeDirectionPrompt: "Use a bright, playful opener",
+              thumbnailPrompt: "Minimal white product shot",
+            },
+          ],
+        },
+      ],
+      drafts: [
+        {
+          id: "seed-meta",
+          title: "Seeded topic",
+          summary: "Ready",
+          timeLabel: "9:00 AM",
+          dateLabel: "Mon, Jan 26",
+          status: "placeholder",
+          platforms: ["instagram"],
+          format: "Post",
+          objective: "Generation Seed",
+          captionPreview: "Generate me",
+          tags: [],
+          mediaCount: 1,
+          seedTrendId: "trend-1",
+          creativeDirectionPrompt: "Use a bright, playful opener",
+          thumbnailPrompt: "Minimal white product shot",
+        },
+      ],
+      selectedTrendIds: ["trend-1"],
+    };
+
+    const { result } = renderHook(() => useDraftGeneration(props));
+
+    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
+        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
+      }
+    );
+
+    await act(async () => {
+      await result.current.handleGenerateDrafts();
+    });
+
+    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(streamCalls).toHaveLength(1);
+    const firstPayload = streamCalls[0][0] as {
+      placements: Array<{ placementId: string; metadata?: Record<string, string> }>;
+    };
+    expect(firstPayload.placements[0]?.metadata).toMatchObject({
+      creativeDirectionPrompt: "Use a bright, playful opener",
+      thumbnailPrompt: "Minimal white product shot",
+    });
+  });
+
+  it("does not auto-sort when no trends are selected", () => {
+    const props: HookProps = {
+      ...defaultProps,
+      selectedTrendIds: [],
+    };
+    const { result } = renderHook(() => useDraftGeneration(props));
+
+    result.current.handleAutoSort();
+
+    expect(mockStore.addDraft).not.toHaveBeenCalled();
   });
 
   it("handles generation error flow", async () => {

@@ -49,7 +49,6 @@ describe("WorkspacePanel", () => {
     maxTrendSelections: 5,
     onToggleTrend: vi.fn(),
     onGenerateGrid: vi.fn(),
-    onAutoSort: vi.fn(),
     onClearAll: vi.fn(),
     onSelectDraft: vi.fn(),
     onToggleSelection: vi.fn(),
@@ -71,17 +70,16 @@ describe("WorkspacePanel", () => {
     expect(screen.getByTestId("trend-selector")).toBeDefined();
   });
 
-  it("shows seed count when seeded drafts exist", () => {
+  it("shows placeholder count when placeholders exist", () => {
     render(<WorkspacePanel {...defaultProps} seedCount={3} />);
 
-    expect(screen.getByText("3 seeded drafts in queue")).toBeDefined();
+    expect(screen.getByText("3 placeholders in queue")).toBeDefined();
   });
 
   it("disables actions while generating", () => {
     render(<WorkspacePanel {...defaultProps} gridStatus="running" />);
 
     expect(screen.getByText("Generating").closest("button")).toHaveProperty("disabled", true);
-    expect(screen.getByText("Auto-seed").closest("button")).toHaveProperty("disabled", true);
     expect(screen.getByText("Clear").closest("button")).toHaveProperty("disabled", true);
   });
 
@@ -105,14 +103,12 @@ describe("WorkspacePanel", () => {
     );
   });
 
-  it("calls onAutoSort and onClearAll", () => {
+  it("calls onClearAll", () => {
     render(<WorkspacePanel {...defaultProps} />);
 
-    fireEvent.click(screen.getByText("Auto-seed"));
     fireEvent.click(screen.getByText("Clear"));
     fireEvent.click(screen.getByText("Clear Week"));
 
-    expect(defaultProps.onAutoSort).toHaveBeenCalled();
     expect(defaultProps.onClearAll).toHaveBeenCalled();
   });
 

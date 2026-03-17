@@ -57,12 +57,90 @@ type GridPlacement = {
   draft: OrganicCalendarDraft;
 };
 
+type PlacementMediaSuggestion = NonNullable<
+  NonNullable<CalendarPlacement["creative"]>["mediaSuggestion"]
+>;
+
+function normalizeTimestamp(value?: string): string {
+  if (!value) return "";
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? value : new Date(parsed).toISOString();
+}
+
+function buildSeedScheduleKey({
+  dayId,
+  scheduledAt,
+  platform,
+}: {
+  dayId: string;
+  scheduledAt?: string;
+  platform: string;
+}) {
+  const normalizedDayId = dayId || (scheduledAt ? formatDayIdFromIso(scheduledAt) : "") || "";
+  const normalizedScheduledAt = normalizeTimestamp(scheduledAt);
+  return `${platform}::${normalizedDayId}::${normalizedScheduledAt}`;
+}
+
 function resolvePlacementScheduledAt(dayId: string, timeLabel: string) {
   return buildScheduledAt(dayId, timeLabel) ?? `${dayId}T09:00:00.000Z`;
 }
 
+function normalizeMediaSuggestionAssetUrl(
+  mediaSuggestion?: PlacementMediaSuggestion | null
+): PlacementMediaSuggestion | undefined {
+  if (!mediaSuggestion) return undefined;
+  const rawAssetUrl =
+    typeof mediaSuggestion.assetUrl === "string" ? mediaSuggestion.assetUrl.trim() : "";
+  if (rawAssetUrl.length > 0) {
+    return {
+      ...mediaSuggestion,
+      assetUrl: rawAssetUrl,
+    };
+  }
+
+  const rawBase64 =
+    typeof mediaSuggestion.assetBase64 === "string" ? mediaSuggestion.assetBase64.trim() : "";
+  if (!rawBase64) return mediaSuggestion;
+
+  const assetUrl = rawBase64.startsWith("data:image/")
+    ? rawBase64
+    : `data:image/png;base64,${rawBase64}`;
+
+  return {
+    ...mediaSuggestion,
+    assetUrl,
+  };
+}
+
 function normalizeDayToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function resolveProgressStageFloor(stage?: string): number {
+  if (stage === "analyzing") return 14;
+  if (stage === "optimizing") return 24;
+  if (stage === "drafting") return 56;
+  if (stage === "matching") return 72;
+  if (stage === "finalizing") return 90;
+  return 10;
+}
+
+function formatGridProgressMessage({
+  platform,
+  stage,
+  message,
+}: {
+  platform: string;
+  stage?: string;
+  message?: string;
+}) {
+  const prefix = `[${platform.toUpperCase()}]`;
+  const stageLabel = stage ? `${stage.toUpperCase()} • ` : "";
+  const detail = message?.trim();
+  if (detail) {
+    return `${prefix} ${stageLabel}${detail}`;
+  }
+  return stage ? `${prefix} ${stage.toUpperCase()}` : prefix;
 }
 
 function resolveGridPlatformOrder(activePlatforms: OrganicPlatformKey[]) {
@@ -245,6 +323,7 @@ export function useDraftGeneration({
     setGridProgress,
     setGridError,
     addDraft,
+    bulkDeleteDrafts,
     updateDraft: updateDraftById,
     setGhosts,
     addEvent,
@@ -294,7 +373,11 @@ export function useDraftGeneration({
   );
 
   const mapPlacementToDraft = React.useCallback(
-    (placement: CalendarPlacement, existing?: OrganicCalendarDraft | null): OrganicCalendarDraft => {
+    (
+      placement: CalendarPlacement,
+      existing?: OrganicCalendarDraft | null,
+      draftIdOverride?: string
+    ): OrganicCalendarDraft => {
       const day = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
       const timeLabel =
         formatTimeLabelFromIso(placement.schedule.scheduledAt) ??
@@ -313,9 +396,10 @@ export function useDraftGeneration({
           finalCaption = `${caption}\n\n${allTags.join(" ")}`;
         }
       }
+      const mediaSuggestion = normalizeMediaSuggestionAssetUrl(placement.creative?.mediaSuggestion);
 
       return {
-        id: placement.placementId,
+        id: draftIdOverride ?? existing?.id ?? placement.placementId,
         title,
         summary,
         timeLabel,
@@ -335,13 +419,29 @@ export function useDraftGeneration({
         tone: content.tone ?? undefined,
         cta: content.cta ?? undefined,
         creativeIdea: placement.creative?.creativeIdea ?? undefined,
-        mediaSuggestion: placement.creative?.mediaSuggestion ?? undefined,
+        mediaSuggestion,
         assetHints: placement.creative?.assetHints ?? undefined,
         hashtags: placement.copy?.hashtags ?? undefined,
+        creativeDirectionPrompt: existing?.creativeDirectionPrompt,
+        thumbnailPrompt: existing?.thumbnailPrompt,
       };
     },
     [resolveDayMeta]
   );
+
+  const buildDraftMetadata = React.useCallback((draft: OrganicCalendarDraft) => {
+    const metadata: Record<string, string> = {};
+
+    if (draft.creativeDirectionPrompt?.trim()) {
+      metadata.creativeDirectionPrompt = draft.creativeDirectionPrompt.trim();
+    }
+
+    if (draft.thumbnailPrompt?.trim()) {
+      metadata.thumbnailPrompt = draft.thumbnailPrompt.trim();
+    }
+
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  }, []);
 
   const hydrateCalendarFromGrid = React.useCallback(
     (weeklyGrid: WeeklyGrid) => {
@@ -362,6 +462,8 @@ export function useDraftGeneration({
       setGridProgress({
         percent: 100,
         message: `Placed ${placements.length} planned posts on this week.`,
+        completed: placements.length,
+        total: placements.length,
       });
       setGridStatus("complete");
     },
@@ -380,10 +482,6 @@ export function useDraftGeneration({
   const handleAutoSort = React.useCallback(async () => {
     let trendIndex = 0;
     const itemsToSchedule = [...selectedTrendIds];
-
-    if (itemsToSchedule.length === 0 && trends.length > 0) {
-      itemsToSchedule.push(...trends.slice(0, 6).map((trend) => trend.id));
-    }
 
     if (itemsToSchedule.length === 0) return;
 
@@ -440,11 +538,18 @@ export function useDraftGeneration({
         trendIndex = (trendIndex + 1) % itemsToSchedule.length;
       }
     }
-  }, [calendarDays, selectedTrendIds, trends, addDraft, platformAccountIds]);
+  }, [calendarDays, selectedTrendIds, addDraft, platformAccountIds]);
 
   const handleGenerateDrafts = React.useCallback(async () => {
     setGridStatus("running");
-    setGridProgress({ percent: 0, message: "Preparing calendar seeds..." });
+    setGridProgress({
+      percent: 0,
+      message: "Preparing calendar seeds...",
+      completed: 0,
+      total: 0,
+      failed: 0,
+      stage: "analyzing",
+    });
     setGridError(null);
 
     if (!brandProfileId) {
@@ -455,10 +560,9 @@ export function useDraftGeneration({
 
     const seeds = calendarDays.flatMap((day) =>
       day.slots
-        .filter((draft) => draft.status === "placeholder" && Boolean(draft.seedTrendId))
+        .filter((draft) => draft.status === "placeholder")
         .map((draft) => {
           const trendId = draft.seedTrendId;
-          if (!trendId) return null;
 
           return {
             placementId: draft.id,
@@ -472,23 +576,36 @@ export function useDraftGeneration({
               accountId:
                 draft.targetAccountId ?? platformAccountIds[draft.platforms[0] as OrganicPlatformKey],
             },
-            seed: {
-              source: "trend" as const,
-              trendId,
-            },
+            seed: trendId
+              ? {
+                  source: "trend" as const,
+                  trendId,
+                }
+              : {
+                  source: "manual" as const,
+                },
             content: {
               format: draft.format,
             },
+            metadata: buildDraftMetadata(draft),
           };
         })
-        .filter(Boolean)
     );
 
     if (seeds.length === 0) {
       setGridStatus("error");
-      setGridError("Place at least one trend on the calendar before generating.");
+      setGridError("Create at least one draft placeholder before generating.");
       return;
     }
+
+    setGridProgress({
+      percent: 10,
+      message: `0/${seeds.length} completed`,
+      completed: 0,
+      total: seeds.length,
+      failed: 0,
+      stage: "analyzing",
+    });
 
     let resolvedTz = "UTC";
     try {
@@ -523,11 +640,38 @@ export function useDraftGeneration({
         seedsByPlatform.set(platform, existing);
       }
 
-      const updateGlobalProgress = (message?: string) => {
+      const updateGlobalProgress = ({
+        message,
+        stage,
+        backendCompleted,
+        backendTotal,
+      }: {
+        message?: string;
+        stage?: string;
+        backendCompleted?: number;
+        backendTotal?: number;
+      } = {}) => {
         const processed = completedPlacementIds.size + failedPlacementIds.size;
+        const completedCount = completedPlacementIds.size;
+        const failedCount = failedPlacementIds.size;
+        const slotPercent = Math.round((processed / totalPlacements) * 100);
+        const backendPercent =
+          typeof backendCompleted === "number" &&
+          typeof backendTotal === "number" &&
+          backendTotal > 0
+            ? Math.round((backendCompleted / backendTotal) * 100)
+            : 0;
+
         setGridProgress({
-          percent: Math.min(99, Math.max(10, Math.round((processed / totalPlacements) * 100))),
+          percent: Math.min(
+            99,
+            Math.max(10, slotPercent, backendPercent, resolveProgressStageFloor(stage))
+          ),
           message,
+          completed: completedCount,
+          total: totalPlacements,
+          failed: failedCount,
+          stage,
         });
       };
 
@@ -564,6 +708,47 @@ export function useDraftGeneration({
           },
         };
 
+        const unresolvedSeedIds = new Set(platformSeeds.map((seed) => seed.placementId));
+        const generatedToSeedPlacementId = new Map<string, string>();
+        const seedByScheduleKey = new Map<string, CalendarPlacementSeed>();
+
+        platformSeeds.forEach((seed) => {
+          const key = buildSeedScheduleKey({
+            dayId: seed.schedule.dayId,
+            scheduledAt: seed.schedule.scheduledAt,
+            platform: seed.platform.name,
+          });
+          if (!seedByScheduleKey.has(key)) {
+            seedByScheduleKey.set(key, seed);
+          }
+        });
+
+        const resolveSeedPlacementId = (placement: {
+          placementId: string;
+          schedule: { dayId: string; scheduledAt?: string };
+          platform: { name: string };
+        }): string | null => {
+          const mapped = generatedToSeedPlacementId.get(placement.placementId);
+          if (mapped) return mapped;
+          if (unresolvedSeedIds.has(placement.placementId)) return placement.placementId;
+
+          const scheduleKey = buildSeedScheduleKey({
+            dayId: placement.schedule.dayId,
+            scheduledAt: placement.schedule.scheduledAt,
+            platform: placement.platform.name,
+          });
+          const scheduleMatch = seedByScheduleKey.get(scheduleKey);
+          if (scheduleMatch && unresolvedSeedIds.has(scheduleMatch.placementId)) {
+            generatedToSeedPlacementId.set(placement.placementId, scheduleMatch.placementId);
+            return scheduleMatch.placementId;
+          }
+
+          const fallback = platformSeeds.find((seed) => unresolvedSeedIds.has(seed.placementId));
+          if (!fallback) return null;
+          generatedToSeedPlacementId.set(placement.placementId, fallback.placementId);
+          return fallback.placementId;
+        };
+
         await streamCalendarGeneration(payload, (event) => {
           addEvent({
             id: crypto.randomUUID(),
@@ -573,15 +758,29 @@ export function useDraftGeneration({
           });
 
           if (event.type === "progress") {
-            const message = event.stage
-              ? `[${platform.toUpperCase()}][${event.stage.toUpperCase()}] ${event.message ?? "Generating..."}`
-              : `[${platform.toUpperCase()}] ${event.message ?? "Generating content..."}`;
-            updateGlobalProgress(message);
+            updateGlobalProgress({
+              message: formatGridProgressMessage({
+                platform,
+                stage: event.stage,
+                message: event.message ?? "Generating content...",
+              }),
+              stage: event.stage,
+              backendCompleted: event.completed,
+              backendTotal: event.total,
+            });
             return;
           }
 
           if (event.type === "slot_started") {
-            updateDraftById(event.placementId, (draft) => ({
+            const seedPlacementId =
+              generatedToSeedPlacementId.get(event.placementId) ??
+              (unresolvedSeedIds.has(event.placementId)
+                ? event.placementId
+                : platformSeeds.find((seed) => unresolvedSeedIds.has(seed.placementId))?.placementId);
+            if (seedPlacementId && seedPlacementId !== event.placementId) {
+              generatedToSeedPlacementId.set(event.placementId, seedPlacementId);
+            }
+            updateDraftById(seedPlacementId ?? event.placementId, (draft) => ({
               ...draft,
               status: "streaming",
               generationError: undefined,
@@ -590,38 +789,69 @@ export function useDraftGeneration({
           }
 
           if (event.type === "slot_failed") {
-            if (!completedPlacementIds.has(event.placementId) && !failedPlacementIds.has(event.placementId)) {
-              failedPlacementIds.add(event.placementId);
+            const seedPlacementId =
+              generatedToSeedPlacementId.get(event.placementId) ??
+              (unresolvedSeedIds.has(event.placementId)
+                ? event.placementId
+                : platformSeeds.find((seed) => unresolvedSeedIds.has(seed.placementId))?.placementId) ??
+              event.placementId;
+            unresolvedSeedIds.delete(seedPlacementId);
+            if (!completedPlacementIds.has(seedPlacementId) && !failedPlacementIds.has(seedPlacementId)) {
+              failedPlacementIds.add(seedPlacementId);
             }
-            updateDraftById(event.placementId, (draft) => ({
+            updateDraftById(seedPlacementId, (draft) => ({
               ...draft,
               status: "failed",
               generationError: event.message,
               generationAttempts: event.attempts ?? draft.generationAttempts,
             }));
-            updateGlobalProgress(
-              `${completedPlacementIds.size}/${totalPlacements} generated, ${failedPlacementIds.size} failed.`
-            );
+            updateGlobalProgress({
+              message: formatGridProgressMessage({
+                platform,
+                stage: "drafting",
+                message: `Placement failed for ${seedPlacementId}.`,
+              }),
+              stage: "drafting",
+            });
             return;
           }
 
           if (event.type === "slot_completed" || event.type === "placement") {
             const placement = event.placement;
-            if (completedPlacementIds.has(placement.placementId)) {
+            const seedPlacementId =
+              resolveSeedPlacementId({
+                placementId: placement.placementId,
+                schedule: placement.schedule,
+                platform: placement.platform,
+              }) ?? placement.placementId;
+            if (completedPlacementIds.has(seedPlacementId)) {
               return;
             }
-            completedPlacementIds.add(placement.placementId);
-            const existing = drafts.find((draft) => draft.id === placement.placementId) ?? null;
-            const nextDraft = mapPlacementToDraft(placement, existing);
+            completedPlacementIds.add(seedPlacementId);
+            unresolvedSeedIds.delete(seedPlacementId);
+            const existing = drafts.find((draft) => draft.id === seedPlacementId) ?? null;
+            const nextDraft = mapPlacementToDraft(placement, existing, seedPlacementId);
 
             const targetDay = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
             if (targetDay) {
+              // Remove any existing placeholder/draft instance first so placement updates
+              // replace globally (including cross-day schedule adjustments).
+              const idsToDelete =
+                seedPlacementId === placement.placementId
+                  ? [seedPlacementId]
+                  : [seedPlacementId, placement.placementId];
+              bulkDeleteDrafts(idsToDelete);
               addDraft(targetDay.id, nextDraft);
               setGhosts(targetDay.id, 0);
             }
-            updateGlobalProgress(
-              `${completedPlacementIds.size}/${totalPlacements} generated, ${failedPlacementIds.size} failed.`
-            );
+            updateGlobalProgress({
+              message: formatGridProgressMessage({
+                platform,
+                stage: "drafting",
+                message: `Placement completed for ${seedPlacementId}.`,
+              }),
+              stage: "drafting",
+            });
             return;
           }
 
@@ -643,6 +873,10 @@ export function useDraftGeneration({
         message: hasFailures
           ? `Generated ${succeeded}/${totalPlacements} posts. ${failed} failed and can be retried.`
           : `Generated ${succeeded}/${totalPlacements} posts.`,
+        completed: succeeded,
+        total: totalPlacements,
+        failed,
+        stage: "finalizing",
       });
       setGridStatus(hasFailures ? "complete_with_errors" : "complete");
       setGridError(null);
@@ -655,7 +889,9 @@ export function useDraftGeneration({
     addDraft,
     addEvent,
     brandProfileId,
+    bulkDeleteDrafts,
     calendarDays,
+    buildDraftMetadata,
     drafts,
     mapPlacementToDraft,
     platformAccountIds,
@@ -673,7 +909,14 @@ export function useDraftGeneration({
       closeGridStream();
       setGridError(null);
       setGridStatus("running");
-      setGridProgress({ percent: 5, message: "Queuing weekly grid generation..." });
+      setGridProgress({
+        percent: 5,
+        message: "Queuing weekly grid generation...",
+        completed: 0,
+        total: 0,
+        failed: 0,
+        stage: "analyzing",
+      });
 
       if (!brandProfileId) {
         setGridStatus("error");
@@ -714,7 +957,14 @@ export function useDraftGeneration({
 
       try {
         const jobId = await queueGridJob(payload);
-        setGridProgress({ percent: 10, message: "Generation job queued. Waiting for stream..." });
+        setGridProgress({
+          percent: 10,
+          message: "Generation job queued. Waiting for stream...",
+          completed: 0,
+          total: 0,
+          failed: 0,
+          stage: "analyzing",
+        });
 
         const source = new EventSource(
           `/api/organic/generate-grid/events?job_id=${encodeURIComponent(jobId)}`
@@ -745,6 +995,10 @@ export function useDraftGeneration({
           setGridProgress({
             percent,
             message: payload?.message ?? payload?.detail ?? "Generating weekly grid...",
+            completed: typeof completed === "number" ? completed : undefined,
+            total: typeof total === "number" ? total : undefined,
+            failed: 0,
+            stage: "drafting",
           });
         });
 
@@ -851,6 +1105,7 @@ export function useDraftGeneration({
                 content: {
                   format: draft.format,
                 },
+                metadata: buildDraftMetadata(draft),
               },
             ],
             platformAccountIds: {
@@ -888,8 +1143,19 @@ export function useDraftGeneration({
                 return;
               }
               completedPlacementIds.add(event.placement.placementId);
-              const next = mapPlacementToDraft(event.placement, draft);
-              addDraft(dayId, next);
+              const next = mapPlacementToDraft(event.placement, draft, draftId);
+              const targetDay = resolveDayMeta(
+                event.placement.schedule.dayId,
+                event.placement.schedule.scheduledAt
+              );
+              if (targetDay) {
+                const idsToDelete =
+                  event.placement.placementId === draftId
+                    ? [draftId]
+                    : [draftId, event.placement.placementId];
+                bulkDeleteDrafts(idsToDelete);
+                addDraft(targetDay.id, next);
+              }
               return;
             }
             if (event.type === "error") {
@@ -909,10 +1175,12 @@ export function useDraftGeneration({
       addDraft,
       addEvent,
       brandProfileId,
+      bulkDeleteDrafts,
       calendarDays,
       drafts,
       mapPlacementToDraft,
       platformAccountIds,
+      resolveDayMeta,
       setGridError,
       updateDraftById,
       weekStartId,
@@ -923,7 +1191,7 @@ export function useDraftGeneration({
     (draftId: string) => {
       updateDraftById(draftId, (draft) => ({
         ...draft,
-        status: draft.seedTrendId ? "placeholder" : "draft",
+        status: "placeholder",
         generationError: undefined,
       }));
     },

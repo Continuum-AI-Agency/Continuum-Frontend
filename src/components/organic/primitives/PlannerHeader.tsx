@@ -1,14 +1,6 @@
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
 
 type PlannerViewMode = "day" | "week" | "month"
@@ -48,22 +40,23 @@ export function PlannerHeader({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+        <div className="inline-flex items-center rounded-lg border border-border bg-muted/35 p-0.5">
           {VIEW_MODE_OPTIONS.map((option) => (
-            <button
+            <Button
               key={option.value}
               type="button"
+              size="sm"
+              variant={viewMode === option.value ? "secondary" : "ghost"}
+              className={cn(
+                viewMode === option.value
+                  ? "h-8 rounded-md px-3"
+                  : "h-8 rounded-md px-3 text-muted-foreground hover:text-foreground"
+              )}
               aria-pressed={viewMode === option.value}
               onClick={() => onViewModeChange(option.value)}
-              className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                viewMode === option.value
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
             >
               {option.label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -87,32 +80,15 @@ export function PlannerHeader({
           <ChevronRight className="size-4" />
         </Button>
 
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-orange-500 text-white hover:bg-orange-500/90"
-              onClick={() => onCreatePost({ status: "draft" })}
-            >
-              <Plus className="size-4" />
-              Create Post
-            </Button>
-          </ContextMenuTrigger>
-          <ContextMenuContent>
-            <ContextMenuLabel>Quick Add</ContextMenuLabel>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={() => onCreatePost({ status: "draft" })}>
-              Add draft
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={() => onCreatePost({ status: "scheduled" })}>
-              Add scheduled post
-            </ContextMenuItem>
-            <ContextMenuItem onSelect={() => onCreatePost({ status: "placeholder" })}>
-              Add idea placeholder
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="outline"
+          aria-label="Add placeholder"
+          onClick={() => onCreatePost({ status: "placeholder" })}
+        >
+          <Plus className="size-4" />
+        </Button>
       </div>
     </header>
   )

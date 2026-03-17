@@ -7,12 +7,18 @@ export const platformBadgeVariants = cva(
   {
     variants: {
       platform: {
-        instagram: "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-100 shadow-sm shadow-fuchsia-500/10",
-        linkedin: "border-sky-500/40 bg-sky-500/15 text-sky-100 shadow-sm shadow-sky-500/10",
-        facebook: "border-blue-600/40 bg-blue-600/15 text-blue-100",
-        tiktok: "border-zinc-500/40 bg-zinc-500/15 text-zinc-100",
-        youtube: "border-red-500/40 bg-red-500/15 text-red-100",
-        twitter: "border-slate-500/40 bg-slate-500/15 text-slate-100",
+        instagram:
+          "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-950 dark:text-fuchsia-100 shadow-sm shadow-fuchsia-500/10",
+        linkedin:
+          "border-sky-500/40 bg-sky-500/15 text-sky-950 dark:text-sky-100 shadow-sm shadow-sky-500/10",
+        facebook:
+          "border-blue-600/40 bg-blue-600/15 text-blue-950 dark:text-blue-100",
+        tiktok:
+          "border-zinc-500/40 bg-zinc-500/15 text-zinc-900 dark:text-zinc-100",
+        youtube:
+          "border-red-500/40 bg-red-500/15 text-red-900 dark:text-red-100",
+        twitter:
+          "border-slate-500/40 bg-slate-500/15 text-slate-900 dark:text-slate-100",
       },
     },
     defaultVariants: {
@@ -27,9 +33,9 @@ export const statusBadgeVariants = cva(
     variants: {
       status: {
         draft: "border-muted bg-muted/60 text-muted-foreground",
-        scheduled: "border-emerald-500/30 bg-emerald-500/15 text-emerald-100",
-        streaming: "border-amber-500/30 bg-amber-500/15 text-amber-100 animate-pulse",
-        failed: "border-red-500/30 bg-red-500/15 text-red-100",
+        scheduled: "border-emerald-500/30 bg-emerald-500/15 text-emerald-900 dark:text-emerald-100",
+        streaming: "border-amber-500/30 bg-amber-500/15 text-amber-900 dark:text-amber-100 animate-pulse",
+        failed: "border-destructive/30 bg-destructive/15 text-destructive",
         placeholder: "border-brand-primary/30 bg-brand-primary/10 text-brand-primary",
       },
     },

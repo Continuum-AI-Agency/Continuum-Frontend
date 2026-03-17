@@ -1,440 +1,419 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import { 
-  PlayIcon,
-  DotsHorizontalIcon,
-  Pencil1Icon,
-  CheckIcon
-} from "@radix-ui/react-icons";
-import { cn } from "@/lib/utils";
-import type { OrganicCalendarDraft } from "./types";
-import { useCalendarStore } from "@/lib/organic/store";
-import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import * as React from "react"
+import Image from "next/image"
+import { PlayIcon } from "@radix-ui/react-icons"
+
+import { cn } from "@/lib/utils"
+import type { OrganicCalendarDraft } from "./types"
+import { useCalendarStore } from "@/lib/organic/store"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { isOrganicPlatformKey } from "@/lib/organic/platforms";
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { isOrganicPlatformKey } from "@/lib/organic/platforms"
+import {
+  resolvePreviewAspectRatio,
+  resolvePreviewMaxWidth,
+} from "./social-preview-utils"
 
 interface OrganicDraftPreviewProps {
-  draft: OrganicCalendarDraft;
+  draft: OrganicCalendarDraft
+}
+
+type SocialPreviewProps = {
+  draft: OrganicCalendarDraft
+  mediaAspectRatio: number
+  onCaptionChange: (value: string) => void
+  thumbnailDirection: string
+}
+
+function resolveDraftMediaAssetUrl(draft: OrganicCalendarDraft): string | null {
+  const mediaSuggestion = draft.mediaSuggestion
+  if (!mediaSuggestion) return null
+
+  const assetUrl =
+    typeof mediaSuggestion.assetUrl === "string" ? mediaSuggestion.assetUrl.trim() : ""
+  if (assetUrl.length > 0) return assetUrl
+
+  const assetBase64 =
+    typeof mediaSuggestion.assetBase64 === "string" ? mediaSuggestion.assetBase64.trim() : ""
+  if (!assetBase64) return null
+
+  return assetBase64.startsWith("data:image/")
+    ? assetBase64
+    : `data:image/png;base64,${assetBase64}`
+}
+
+function resolveDraftMediaAltText(draft: OrganicCalendarDraft): string {
+  const candidate =
+    typeof draft.mediaSuggestion?.alt === "string"
+      ? draft.mediaSuggestion.alt.trim()
+      : ""
+  if (candidate.length > 0) return candidate
+  return draft.title || "Generated draft image"
+}
+
+function resolveCreativeDirection(draft: OrganicCalendarDraft): string {
+  return (
+    draft.creativeDirectionPrompt?.trim() ||
+    draft.creativeIdea?.trim() ||
+    draft.summary?.trim() ||
+    draft.title
+  )
+}
+
+function resolveThumbnailDirection(draft: OrganicCalendarDraft): string {
+  return (
+    draft.thumbnailPrompt?.trim() ||
+    draft.mediaSuggestion?.prompt?.trim() ||
+    draft.assetHints?.[0]?.suggestion?.trim() ||
+    ""
+  )
+}
+
+function InlinePreviewTextarea({
+  className,
+  ...props
+}: React.ComponentProps<typeof Textarea>) {
+  return (
+    <Textarea
+      {...props}
+      className={cn(
+        "resize-none border-border/60 bg-muted/25 text-foreground placeholder:text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring/40",
+        className
+      )}
+    />
+  )
 }
 
 export function OrganicDraftPreview({ draft }: OrganicDraftPreviewProps) {
-  const platform = draft.platforms[0] || "instagram";
-  const [isEditing, setIsEditing] = React.useState(false);
-  const updateDraft = useCalendarStore((s) => s.updateDraft);
+  const updateDraft = useCalendarStore((state) => state.updateDraft)
+  const selectedPlatform = draft.platforms[0] || "instagram"
+  const previewMaxWidth = resolvePreviewMaxWidth(selectedPlatform)
+  const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform)
+  const creativeDirection = resolveCreativeDirection(draft)
+  const thumbnailDirection = resolveThumbnailDirection(draft)
 
-  const [localDraft, setLocalDraft] = React.useState(draft);
-
-  React.useEffect(() => {
-    setLocalDraft(draft);
-  }, [draft]);
-
-  const selectedPlatform = localDraft.platforms[0] || "instagram";
-
-  const handleSave = () => {
-    updateDraft(draft.id, (d) => ({
-      ...d,
-      titleTopic: localDraft.titleTopic,
-      captionPreview: localDraft.captionPreview,
-      creativeIdea: localDraft.creativeIdea,
-      format: localDraft.format,
-      objective: localDraft.objective,
-      tone: localDraft.tone,
-      target: localDraft.target,
-      cta: localDraft.cta,
-      timeLabel: localDraft.timeLabel,
-      platforms: localDraft.platforms,
-    }));
-    setIsEditing(false);
-  };
+  const patchDraft = React.useCallback(
+    (patch: Partial<OrganicCalendarDraft>) => {
+      updateDraft(draft.id, (current) => ({
+        ...current,
+        ...patch,
+      }))
+    },
+    [draft.id, updateDraft]
+  )
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-sky-500/20 bg-slate-950/85 shadow-[6px_6px_0_0_rgba(14,116,144,.2)]">
-      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950 p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-brand-primary/20 flex items-center justify-center border border-brand-primary/30">
-             <span className="text-[10px] font-bold text-brand-primary uppercase">{platform.slice(0, 2)}</span>
-          </div>
-          <div>
-            <p className="text-xs font-bold tracking-tight text-slate-100">{draft.format}</p>
-            <p className="font-mono text-[10px] font-medium uppercase tracking-widest text-slate-400">{platform}</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-            <Button
-                variant="ghost"
-                size="sm"
-                className={cn(
-                    "h-8 px-3 text-xs font-bold transition-all",
-                    isEditing ? "text-emerald-400 hover:text-emerald-300" : "text-secondary hover:text-primary"
-                )}
-                onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            >
-                {isEditing ? (
-                    <><CheckIcon className="mr-2 h-3.5 w-3.5" /> Save</>
-                ) : (
-                    <><Pencil1Icon className="mr-2 h-3.5 w-3.5" /> Edit</>
-                )}
-            </Button>
-        </div>
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-muted/55 p-3">
+        <Select
+          value={selectedPlatform}
+          onValueChange={(value) => {
+            if (!isOrganicPlatformKey(value)) return
+            patchDraft({ platforms: [value] })
+          }}
+        >
+          <SelectTrigger className="h-8 w-[9.5rem] border-border/60 bg-background text-xs font-semibold">
+            <SelectValue placeholder="Platform" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="instagram">Instagram</SelectItem>
+            <SelectItem value="facebook">Facebook</SelectItem>
+            <SelectItem value="linkedin">LinkedIn</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Input
+          value={draft.timeLabel}
+          onChange={(event) => patchDraft({ timeLabel: event.target.value })}
+          placeholder="9:00 AM"
+          className="h-8 w-[8rem] border-border/60 bg-background text-xs font-medium"
+        />
+
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {draft.format}
+        </p>
       </div>
 
-      <ScrollArea className="flex-1 bg-slate-950/70 p-6">
-        <div className="w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
-            <div className="flex-shrink-0">
-                {platform === "instagram" && (
-                    <InstagramMobilePreview draft={localDraft} />
-                )}
-                {platform === "facebook" && (
-                    <FacebookFeedPreview draft={localDraft} />
-                )}
-                {platform === "linkedin" && (
-                    <LinkedInDesktopPreview draft={localDraft} />
-                )}
-                {platform !== "instagram" && platform !== "facebook" && platform !== "linkedin" && (
-                    <div className="w-[340px] h-[360px] border border-dashed border-slate-800 rounded-2xl">
-                      <Empty className="opacity-50 h-full">
-                        <EmptyHeader>
-                          <EmptyTitle>Preview unavailable</EmptyTitle>
-                          <EmptyDescription>Preview for {platform} coming soon.</EmptyDescription>
-                        </EmptyHeader>
-                      </Empty>
-                    </div>
-                )}
-            </div>
+      <ScrollArea className="flex-1 bg-muted/10 p-3">
+        <div className="mx-auto flex w-full max-w-[48rem] flex-col gap-3">
+          <div className="mx-auto w-full" style={{ maxWidth: `${previewMaxWidth}px` }}>
+            {selectedPlatform === "instagram" ? (
+              <InstagramMobilePreview
+                draft={draft}
+                mediaAspectRatio={mediaAspectRatio}
+                onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                thumbnailDirection={thumbnailDirection}
+              />
+            ) : null}
 
-            {isEditing && (
-                <div className="flex-1 w-full max-w-md space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Title / Topic</Label>
-                        <Input
-                            value={localDraft.titleTopic || ""}
-                            onChange={(e) => setLocalDraft((prev) => ({ ...prev, titleTopic: e.target.value }))}
-                            placeholder="Main content topic"
-                            className="bg-slate-900 border-slate-800"
-                        />
-                    </div>
+            {selectedPlatform === "facebook" ? (
+              <FacebookFeedPreview
+                draft={draft}
+                mediaAspectRatio={mediaAspectRatio}
+                onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                thumbnailDirection={thumbnailDirection}
+              />
+            ) : null}
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Platform</Label>
-                            <Select
-                                value={selectedPlatform}
-                                onValueChange={(value) => {
-                                  if (!isOrganicPlatformKey(value)) return;
-                                  setLocalDraft((prev) => ({
-                                    ...prev,
-                                    platforms: [value],
-                                  }));
-                                }}
-                            >
-                              <SelectTrigger className="w-full h-9 text-xs bg-slate-900 border-slate-800">
-                                <SelectValue placeholder="Select platform" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="instagram">Instagram</SelectItem>
-                                <SelectItem value="facebook">Facebook</SelectItem>
-                                <SelectItem value="linkedin">LinkedIn</SelectItem>
-                              </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Time</Label>
-                            <Input
-                                value={localDraft.timeLabel}
-                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, timeLabel: e.target.value }))}
-                                placeholder="e.g. 9:00 AM"
-                                className="bg-slate-900 border-slate-800"
-                            />
-                        </div>
-                    </div>
+            {selectedPlatform === "linkedin" ? (
+              <LinkedInDesktopPreview
+                draft={draft}
+                mediaAspectRatio={mediaAspectRatio}
+                onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                thumbnailDirection={thumbnailDirection}
+              />
+            ) : null}
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Format</Label>
-                            <Input
-                                value={localDraft.format}
-                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, format: e.target.value }))}
-                                className="bg-slate-900 border-slate-800"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Objective</Label>
-                            <Input
-                                value={localDraft.objective}
-                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, objective: e.target.value }))}
-                                className="bg-slate-900 border-slate-800"
-                            />
-                        </div>
-                    </div>
+            {selectedPlatform !== "instagram" &&
+            selectedPlatform !== "facebook" &&
+            selectedPlatform !== "linkedin" ? (
+              <div className="flex min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-10">
+                <p className="text-sm text-muted-foreground">
+                  Preview for {selectedPlatform} is coming soon.
+                </p>
+              </div>
+            ) : null}
+          </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Tone</Label>
-                            <Input
-                                value={localDraft.tone || ""}
-                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, tone: e.target.value }))}
-                                className="bg-slate-900 border-slate-800"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Target</Label>
-                            <Input
-                                value={localDraft.target || ""}
-                                onChange={(e) => setLocalDraft((prev) => ({ ...prev, target: e.target.value }))}
-                                className="bg-slate-900 border-slate-800"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Call To Action</Label>
-                        <Input
-                            value={localDraft.cta || ""}
-                            onChange={(e) => setLocalDraft((prev) => ({ ...prev, cta: e.target.value }))}
-                            className="bg-slate-900 border-slate-800"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Creative Direction</Label>
-                        <Textarea
-                            value={localDraft.creativeIdea || localDraft.title}
-                            onChange={(e) => setLocalDraft(prev => ({ ...prev, creativeIdea: e.target.value }))}
-                            className="h-24 bg-slate-900 border-slate-800 text-sm resize-none"
-                            placeholder="What's the creative hook?"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-widest text-secondary">Post Caption</Label>
-                        <Textarea
-                            value={localDraft.captionPreview}
-                            onChange={(e) => setLocalDraft(prev => ({ ...prev, captionPreview: e.target.value }))}
-                            className="h-64 bg-slate-900 border-slate-800 text-sm resize-none"
-                            placeholder="Write your caption here..."
-                        />
-                    </div>
-                    
-                    <div className="rounded-lg border border-sky-500/25 bg-sky-950/20 p-4">
-                        <p className="mb-2 font-mono text-[10px] font-bold uppercase tracking-wider text-sky-300">Editor Note</p>
-                        <p className="text-xs leading-relaxed text-slate-300">
-                            Changes made here will be reflected in the calendar immediately after saving. 
-                            AI hints for scenes are preserved but not directly editable yet.
-                        </p>
-                    </div>
-                </div>
-            )}
+          <div
+            className="mx-auto w-full rounded-xl border border-border/70 bg-background/90 p-3"
+            style={{ maxWidth: `${previewMaxWidth}px` }}
+          >
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Creative direction prompt
+            </p>
+            <InlinePreviewTextarea
+              value={creativeDirection}
+              onChange={(event) =>
+                patchDraft({
+                  creativeDirectionPrompt: event.target.value,
+                  creativeIdea: event.target.value,
+                })
+              }
+              placeholder="Describe the hook, visual intent, and mood."
+              className="min-h-[5.25rem] text-sm leading-relaxed"
+            />
+          </div>
         </div>
       </ScrollArea>
     </div>
-  );
+  )
 }
 
-function InstagramMobilePreview({ draft }: { draft: OrganicCalendarDraft }) {
+function InstagramMobilePreview({
+  draft,
+  mediaAspectRatio,
+  onCaptionChange,
+  thumbnailDirection,
+}: SocialPreviewProps) {
+  const mediaAssetUrl = resolveDraftMediaAssetUrl(draft)
+  const mediaAltText = resolveDraftMediaAltText(draft)
+
   return (
-    <div className="w-full max-w-[340px] bg-white dark:bg-black rounded-lg shadow-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden text-black dark:text-white">
-        <div className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-zinc-800">
-            <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-600 p-[2px]">
-                    <div className="w-full h-full rounded-full bg-white dark:bg-black flex items-center justify-center">
-                         <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-zinc-800 flex items-center justify-center text-[8px] text-zinc-500">PT</div>
-                    </div>
-                </div>
-                <div className="flex flex-col">
-                    <span className="text-sm font-semibold leading-none tracking-tight">thepizzatest</span>
-                    <span className="text-[10px] text-zinc-500 mt-1">Sponsored</span>
-                </div>
+    <div className="w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+      <div className="flex items-center p-3 border-b border-border/70">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary/70 via-accent/70 to-secondary/70 p-[2px] flex items-center justify-center text-[10px] font-bold text-foreground">
+            <div className="flex h-full w-full items-center justify-center rounded-full bg-background">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[8px] text-muted-foreground">
+                PT
+              </div>
             </div>
-            <button aria-label="More options">
-                <DotsHorizontalIcon className="w-5 h-5" />
-            </button>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold leading-none tracking-tight">
+              thepizzatest
+            </span>
+            <span className="mt-1 text-[10px] text-muted-foreground">Sponsored</span>
+          </div>
         </div>
+      </div>
 
-        <div className="aspect-square bg-zinc-100 dark:bg-zinc-900 relative flex flex-col items-center justify-center text-center p-8 border-b border-gray-100 dark:border-zinc-800">
-            <div className="absolute inset-0 bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-zinc-800" />
-            
-            <div className="relative z-10 flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md flex items-center justify-center mb-4 border border-white/20 shadow-lg">
-                    <PlayIcon className="w-8 h-8 text-zinc-600 dark:text-zinc-400" />
-                </div>
-                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-100 leading-tight max-w-[200px]">
-                    {draft.creativeIdea || draft.title}
-                </p>
-                {draft.assetHints && draft.assetHints[0] && (
-                    <p className="mt-2 text-[10px] text-zinc-500 line-clamp-2 px-4 italic">
-                        Visualizing: {draft.assetHints[0].suggestion}
-                    </p>
-                )}
+      <div className="relative border-b border-border/70 bg-muted" style={{ aspectRatio: mediaAspectRatio }}>
+        {mediaAssetUrl ? (
+          <Image
+            src={mediaAssetUrl}
+            alt={mediaAltText}
+            fill
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 560px"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-background">
+                <PlayIcon className="h-6 w-6" />
+              </div>
+              <p className="text-xs">No thumbnail yet</p>
             </div>
+          </div>
+        )}
+      </div>
 
-            <div className="absolute bottom-4 left-0 right-0 px-4">
-                <div className="bg-blue-500 hover:bg-blue-600 text-white text-[11px] font-bold py-1.5 rounded-md transition-colors shadow-lg">
-                    Order Now
-                </div>
-            </div>
+      {thumbnailDirection ? (
+        <div className="border-b border-border/70 px-3 py-2">
+          <p className="line-clamp-2 text-[11px] text-muted-foreground">
+            Thumbnail: {thumbnailDirection}
+          </p>
         </div>
+      ) : null}
 
-        <div className="flex justify-between items-center p-3 pb-2">
-            <div className="flex space-x-4">
-                <button aria-label="Like post" className="hover:opacity-50 transition-opacity">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
-                </button>
-                <button aria-label="Comment on post" className="hover:opacity-50 transition-opacity">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
-                </button>
-                <button aria-label="Share post" className="hover:opacity-50 transition-opacity">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg>
-                </button>
-            </div>
-            <button aria-label="Save post" className="hover:opacity-50 transition-opacity">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
-            </button>
-        </div>
+      <div className="px-3 pb-2 pt-3">
+        <p className="text-xs font-bold">1,234 likes</p>
+      </div>
 
-        <div className="px-3 pb-1">
-            <p className="text-xs font-bold">1,234 likes</p>
-        </div>
-
-        <div className="px-3 pb-2 max-h-[100px] overflow-y-auto">
-            <p className="text-xs leading-relaxed">
-                <span className="font-bold mr-2 hover:underline cursor-pointer">thepizzatest</span>
-                {draft.captionPreview}
-            </p>
-        </div>
-
-        <div className="px-3 pb-3">
-            <p className="text-[10px] text-zinc-500 hover:underline cursor-pointer">
-                View all 56 comments
-            </p>
-        </div>
-
-        <div className="px-3 py-3 border-t border-gray-100 dark:border-zinc-800">
-            <div className="flex items-center space-x-3">
-                <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-[8px] text-zinc-500 font-bold">PT</div>
-                <p className="text-[11px] text-zinc-400 flex-grow">Add a comment...</p>
-                <button className="text-[11px] font-bold text-blue-500 opacity-50 cursor-not-allowed">Post</button>
-            </div>
-        </div>
+      <div className="px-3 pb-3">
+        <p className="mb-1 text-xs font-bold">thepizzatest</p>
+        <InlinePreviewTextarea
+          value={draft.captionPreview}
+          onChange={(event) => onCaptionChange(event.target.value)}
+          aria-label="Instagram caption"
+          className="min-h-[7rem] border-0 bg-transparent p-0 text-xs leading-relaxed focus-visible:ring-0"
+          placeholder="Write your caption..."
+        />
+      </div>
     </div>
-  );
+  )
 }
 
-function FacebookFeedPreview({ draft }: { draft: OrganicCalendarDraft }) {
+function FacebookFeedPreview({
+  draft,
+  mediaAspectRatio,
+  onCaptionChange,
+  thumbnailDirection,
+}: SocialPreviewProps) {
+  const mediaAssetUrl = resolveDraftMediaAssetUrl(draft)
+  const mediaAltText = resolveDraftMediaAltText(draft)
+
   return (
-    <div className="w-full bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg shadow-2xl text-black dark:text-white overflow-hidden max-w-[500px]">
-      <div className="p-3 flex items-center justify-between border-b border-gray-100 dark:border-zinc-900">
+    <div className="w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+      <div className="p-3 flex items-center border-b border-border/70">
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-primary/30 bg-primary/15 font-bold text-primary">
             f
           </div>
           <div>
             <p className="text-sm font-bold tracking-tight">The Pizza Test</p>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Sponsored · 1h</p>
+            <p className="text-[11px] text-muted-foreground">Sponsored · 1h</p>
           </div>
         </div>
-        <button className="text-xs font-semibold text-zinc-500">···</button>
       </div>
 
       <div className="px-4 py-3 space-y-2">
-        <p className="text-sm whitespace-pre-wrap leading-relaxed">
-          {draft.captionPreview}
-        </p>
+        <InlinePreviewTextarea
+          value={draft.captionPreview}
+          onChange={(event) => onCaptionChange(event.target.value)}
+          aria-label="Facebook post copy"
+          className="min-h-[7rem] border-0 bg-transparent p-0 text-sm leading-relaxed focus-visible:ring-0"
+          placeholder="Write your post copy..."
+        />
       </div>
 
-      <div className="aspect-video bg-zinc-100 dark:bg-zinc-900 relative border-y border-gray-100 dark:border-zinc-800">
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-blue-50 to-slate-100 dark:from-zinc-900 dark:to-zinc-950">
-          <div className="w-16 h-16 rounded-full bg-white dark:bg-zinc-800 shadow-lg flex items-center justify-center mb-4 border border-gray-100 dark:border-zinc-700">
-            <PlayIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+      <div className="relative border-y border-border/70 bg-muted" style={{ aspectRatio: mediaAspectRatio }}>
+        {mediaAssetUrl ? (
+          <Image
+            src={mediaAssetUrl}
+            alt={mediaAltText}
+            fill
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 560px"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-background">
+                <PlayIcon className="h-6 w-6" />
+              </div>
+              <p className="text-xs">No thumbnail yet</p>
+            </div>
           </div>
-          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-            {draft.creativeIdea || draft.title}
+        )}
+      </div>
+
+      {thumbnailDirection ? (
+        <div className="border-t border-border/70 px-4 py-2">
+          <p className="line-clamp-2 text-[11px] text-muted-foreground">
+            Thumbnail: {thumbnailDirection}
           </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function LinkedInDesktopPreview({
+  draft,
+  mediaAspectRatio,
+  onCaptionChange,
+  thumbnailDirection,
+}: SocialPreviewProps) {
+  const mediaAssetUrl = resolveDraftMediaAssetUrl(draft)
+  const mediaAltText = resolveDraftMediaAltText(draft)
+
+  return (
+    <div className="w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+      <div className="p-3 flex items-center justify-between border-b border-border/70">
+        <div className="flex items-center gap-2">
+          <div className="flex h-11 w-11 items-center justify-center rounded border border-primary/30 bg-primary/15 text-xl font-bold text-primary">
+            in
+          </div>
+          <div>
+            <p className="text-sm font-bold tracking-tight">The Pizza Test</p>
+            <p className="text-[11px] text-muted-foreground">12,450 followers</p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 text-[12px] text-zinc-600 dark:text-zinc-400 border-t border-gray-100 dark:border-zinc-900">
-        <div className="py-2 text-center font-semibold">Like</div>
-        <div className="py-2 text-center font-semibold">Comment</div>
-        <div className="py-2 text-center font-semibold">Share</div>
+      <div className="px-4 py-3">
+        <InlinePreviewTextarea
+          value={draft.captionPreview}
+          onChange={(event) => onCaptionChange(event.target.value)}
+          aria-label="LinkedIn post copy"
+          className="min-h-[7rem] border-0 bg-transparent p-0 text-sm leading-relaxed focus-visible:ring-0"
+          placeholder="Write your post copy..."
+        />
       </div>
-    </div>
-  );
-}
 
-function LinkedInDesktopPreview({ draft }: { draft: OrganicCalendarDraft }) {
-  return (
-    <div className="w-full bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg shadow-2xl text-black dark:text-white overflow-hidden max-w-[500px]">
-       <div className="p-3 flex items-center justify-between border-b border-gray-100 dark:border-zinc-900">
-          <div className="flex items-center gap-2">
-             <div className="w-12 h-12 bg-blue-600 rounded flex items-center justify-center text-white text-xl font-bold">in</div>
-             <div>
-                <p className="text-sm font-bold tracking-tight">The Pizza Test</p>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">12,450 followers</p>
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase font-bold tracking-widest mt-0.5">Promoted</p>
-             </div>
-          </div>
-          <button className="text-blue-600 dark:text-blue-400 text-sm font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-1.5 rounded-full border border-blue-600 dark:border-blue-400 transition-colors">
-            + Follow
-          </button>
-       </div>
-
-       <div className="px-4 py-4 space-y-3">
-          <p className="text-sm whitespace-pre-wrap leading-relaxed italic border-l-4 border-blue-500/30 pl-4 py-2 bg-blue-50/20 dark:bg-blue-900/10 rounded-r-md">
-            {draft.creativeIdea || draft.title}
-          </p>
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">
-            {draft.captionPreview}
-          </p>
-       </div>
-
-       <div className="aspect-video bg-zinc-100 dark:bg-zinc-900 relative border-y border-gray-100 dark:border-zinc-800">
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-zinc-900 dark:to-zinc-950">
-             <div className="w-20 h-20 rounded-2xl bg-white dark:bg-zinc-800 shadow-xl flex items-center justify-center mb-4 border border-gray-100 dark:border-zinc-700">
-                <PlayIcon className="w-10 h-10 text-blue-600 dark:text-blue-400" />
-             </div>
-             <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                {draft.format} Direction
-             </p>
-             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-                Visualizing: {draft.creativeIdea}
-             </p>
-          </div>
-       </div>
-
-       <div className="px-4 py-2 border-b border-gray-100 dark:border-zinc-900 flex items-center justify-between">
-          <div className="flex items-center -space-x-1">
-             <div className="w-4 h-4 rounded-full bg-blue-500 border border-white dark:border-zinc-950 flex items-center justify-center text-[8px] text-white">👍</div>
-             <div className="w-4 h-4 rounded-full bg-red-500 border border-white dark:border-zinc-950 flex items-center justify-center text-[8px] text-white">❤️</div>
-             <div className="w-4 h-4 rounded-full bg-yellow-500 border border-white dark:border-zinc-950 flex items-center justify-center text-[8px] text-white">💡</div>
-             <span className="text-[11px] text-zinc-500 dark:text-zinc-400 ml-4 font-medium">42 comments • 12 reposts</span>
-          </div>
-       </div>
-
-       <div className="px-2 py-1 flex items-center justify-between text-zinc-600 dark:text-zinc-400">
-          {['Like', 'Comment', 'Repost', 'Send'].map((action) => (
-            <div key={action} className="flex-1 flex items-center justify-center py-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded transition-colors font-bold text-xs cursor-pointer">
-                {action}
+      <div className="relative border-y border-border/70 bg-muted" style={{ aspectRatio: mediaAspectRatio }}>
+        {mediaAssetUrl ? (
+          <Image
+            src={mediaAssetUrl}
+            alt={mediaAltText}
+            fill
+            unoptimized
+            sizes="(max-width: 768px) 100vw, 620px"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/70 bg-background">
+                <PlayIcon className="h-7 w-7 text-primary" />
+              </div>
+              <p className="text-xs">No thumbnail yet</p>
             </div>
-          ))}
-       </div>
+          </div>
+        )}
+      </div>
+
+      {thumbnailDirection ? (
+        <div className="border-t border-border/70 px-4 py-2">
+          <p className="line-clamp-2 text-[11px] text-muted-foreground">
+            Thumbnail: {thumbnailDirection}
+          </p>
+        </div>
+      ) : null}
     </div>
-  );
+  )
 }
