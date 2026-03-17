@@ -67,8 +67,8 @@ export default async function PrimitivesPage() {
           Primitives
         </Heading>
         <Text color="gray">
-          Building blocks reused across the app (creative, onboarding, paid). Audience Builder and Brand Guidelines are
-          in progress; Personas are coming soon.
+          Building blocks reused across the app (creative, onboarding, paid). Audience Builder, Brand Guidelines, and
+          Product Catalog Manager are in progress; Personas are coming soon.
         </Text>
       </Flex>
 

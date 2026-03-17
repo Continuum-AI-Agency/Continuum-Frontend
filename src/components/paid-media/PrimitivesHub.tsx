@@ -1,9 +1,11 @@
 "use client";
 
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Badge, Box, Button, Card, Flex, Grid, Heading, Text } from "@radix-ui/themes";
 import {
   ArrowLeftIcon,
+  Component1Icon,
   FileTextIcon,
   MixerHorizontalIcon,
   PersonIcon,
@@ -14,8 +16,9 @@ import type { BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
 import { AudienceBuilderPrimitive } from "./primitives/AudienceBuilderPrimitive";
 import { BrandGuidelinesPrimitive } from "./primitives/Brand-Guidelines/BrandGuidelinesPrimitive";
 import { BrandPersonasPrimitive } from "./primitives/BrandPersonasPrimitive";
+import { ProductCatalogManagerPrimitive } from "./primitives/ProductCatalogManagerPrimitive";
 
-type PrimitiveId = "audience" | "guidelines" | "personas";
+type PrimitiveId = "audience" | "guidelines" | "catalogs" | "personas";
 
 type PrimitiveCardConfig = {
   id: PrimitiveId;
@@ -42,6 +45,14 @@ const primitiveCards: PrimitiveCardConfig[] = [
     summary: "Purpose-driven brand books with approvals, tags, and reusable context.",
     icon: <FileTextIcon />,
     accent: "linear-gradient(135deg, rgba(34,197,94,0.32), rgba(59,130,246,0.28))",
+  },
+  {
+    id: "catalogs",
+    title: "Product Catalog Manager",
+    status: "under-construction",
+    summary: "Catalog CRUD for DCO feeds, ad-object mapping, and product-tagging metric integrity.",
+    icon: <Component1Icon />,
+    accent: "linear-gradient(135deg, rgba(99,102,241,0.40), rgba(16,185,129,0.34))",
   },
   {
     id: "personas",
@@ -122,9 +133,52 @@ const EMPTY_QUESTIONS_BY_NICHE: BrandInsightsQuestionsByNiche = {
   generatedAt: undefined,
 };
 
+const TAB_TO_PRIMITIVE_ID: Record<string, PrimitiveId> = {
+  audience: "audience",
+  audiences: "audience",
+  guidelines: "guidelines",
+  personas: "personas",
+  persona: "personas",
+  catalogs: "catalogs",
+  products: "catalogs",
+  "product-catalogs": "catalogs",
+};
+
+const PRIMITIVE_ID_TO_TAB: Record<PrimitiveId, string> = {
+  audience: "audiences",
+  guidelines: "guidelines",
+  catalogs: "products",
+  personas: "personas",
+};
+
 export function PrimitivesHub({ brandId, initialGuidelines, questionsByNiche, questionsError }: PrimitivesHubProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const safeQuestionsByNiche = questionsByNiche ?? EMPTY_QUESTIONS_BY_NICHE;
   const [active, setActive] = useState<PrimitiveId | null>(null);
+  const tabValue = searchParams.get("tab");
+  const activeFromUrl = useMemo(() => {
+    if (!tabValue) return null;
+    return TAB_TO_PRIMITIVE_ID[tabValue.toLowerCase()] ?? null;
+  }, [tabValue]);
+
+  useEffect(() => {
+    setActive(activeFromUrl);
+  }, [activeFromUrl]);
+
+  const setActiveWithUrl = (nextActive: PrimitiveId | null) => {
+    setActive(nextActive);
+    const params = new URLSearchParams(searchParams.toString());
+    if (!nextActive) {
+      params.delete("tab");
+    } else {
+      params.set("tab", PRIMITIVE_ID_TO_TAB[nextActive]);
+    }
+    const nextQuery = params.toString();
+    router.replace(nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+  };
+
   const activeCard = primitiveCards.find((card) => card.id === active);
 
   return (
@@ -135,7 +189,7 @@ export function PrimitivesHub({ brandId, initialGuidelines, questionsByNiche, qu
             <Button
               size="1"
               variant="ghost"
-              onClick={() => setActive(null)}
+              onClick={() => setActiveWithUrl(null)}
               className="bg-transparent text-slate-200 hover:bg-white/5"
             >
               <ArrowLeftIcon /> Back
@@ -173,6 +227,8 @@ export function PrimitivesHub({ brandId, initialGuidelines, questionsByNiche, qu
             />
           ) : active === "guidelines" ? (
             <BrandGuidelinesPrimitive brandId={brandId} initialGuidelines={initialGuidelines} />
+          ) : active === "catalogs" ? (
+            <ProductCatalogManagerPrimitive brandId={brandId} />
           ) : (
             <BrandPersonasPrimitive />
           )}
@@ -184,7 +240,7 @@ export function PrimitivesHub({ brandId, initialGuidelines, questionsByNiche, qu
               <GlassCardButton
                 key={card.id}
                 config={card}
-                onSelect={setActive}
+                onSelect={setActiveWithUrl}
                 disabled={card.status === "coming-soon"}
               />
             ))}
