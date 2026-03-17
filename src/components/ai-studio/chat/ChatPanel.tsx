@@ -11,8 +11,10 @@ import type { PromptTemplate, PromptTemplateCreateInput, PromptTemplateUpdateInp
 import { PromptTemplatePicker } from "./PromptTemplatePicker";
 import { z } from "zod";
 
+type ChatPanelModel = Exclude<SupportedModel, "kling-omni">;
+
 type FormValues = {
-  model: SupportedModel;
+  model: ChatPanelModel;
   prompt: string;
   aspectRatio?: string;
   durationSeconds?: number;
@@ -45,7 +47,7 @@ type ChatPanelProps = {
   enrichedValue?: string | null;
   onSubmit: (values: FormValues) => void;
   onCancel: () => void;
-  onModelChange?: (model: SupportedModel) => void;
+  onModelChange?: (model: ChatPanelModel) => void;
   getAspectsForModel: typeof getAspectsForModel;
   mediumForModel: typeof getMediumForModel;
   hasAnyReferences?: boolean;
@@ -59,7 +61,7 @@ type ChatPanelProps = {
   };
 };
 
-const MODEL_OPTIONS: { value: SupportedModel; label: string; disabled?: boolean }[] = [
+const MODEL_OPTIONS: { value: ChatPanelModel; label: string; disabled?: boolean }[] = [
   { value: "nano-banana", label: "Nano Banana (Gemini 2.5 Flash Image)" },
   { value: "gemini-3-pro-image-preview", label: "Nano Banana Pro (Gemini 3 Pro Image Preview)" },
   { value: "veo-3-1", label: "Veo 3.1 (Video)" },
@@ -175,9 +177,9 @@ export function ChatPanel({
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); handleSubmit(e); }}>
         <div className="space-y-1">
           <Text size="1" color="gray">Model</Text>
-          <Select.Root
+            <Select.Root
             value={model}
-            onValueChange={(value) => form.setValue("model", value as SupportedModel)}
+            onValueChange={(value) => form.setValue("model", value as ChatPanelModel)}
             disabled={disabled || isStreaming}
           >
             <Select.Trigger className="w-full" />

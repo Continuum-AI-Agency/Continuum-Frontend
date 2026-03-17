@@ -4,6 +4,12 @@ import { EnrichPromptPayload, ExtendVideoInput, ExtendVideoPayload, GenerationPa
 import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from '@/lib/types/chatImage';
 import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData, StringNodeData, ImageNodeData } from '../types';
 import { parseDataUrl } from './dataUrl';
+import {
+  getVideoGeneratorBackendModel,
+  getVideoGeneratorReferenceMode,
+  isVideoGeneratorNodeType,
+  resolveVideoGeneratorModel,
+} from './videoModel';
 
 function resolveInputValue(
   nodeId: string,
@@ -127,7 +133,7 @@ function resolveExtendVideoInput(
     return undefined;
   }
 
-  if (sourceNode?.type === 'veoDirector' || sourceNode?.type === 'veoFast' || sourceNode?.type === 'extendVideo') {
+  if (isVideoGeneratorNodeType(sourceNode?.type) || sourceNode?.type === 'extendVideo') {
     const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
     const parsed = parseDataUrl(generatedVideo);
     if (parsed?.base64) {
@@ -368,6 +374,8 @@ export function buildVeoPayload(
   brandId: string
 ): GenerationPayload | null {
   const data = node.data as VideoGenNodeData;
+  const model = resolveVideoGeneratorModel(node);
+  const referenceMode = getVideoGeneratorReferenceMode(model);
 
   let prompt = data.prompt || "";
   const promptInput = resolveInputValue(node.id, 'prompt', resolvedData, allNodes, allEdges) || resolveInputValue(node.id, 'prompt-in', resolvedData, allNodes, allEdges);
@@ -385,9 +393,9 @@ export function buildVeoPayload(
     return null;
   }
 
-  const referenceMode = data.referenceMode ?? 'images';
   let firstFrame: GenerationPayload['firstFrame'] = undefined;
   let lastFrame: GenerationPayload['lastFrame'] = undefined;
+  let referenceVideo: GenerationPayload['referenceVideo'] = undefined;
 
   if (referenceMode === 'frames') {
     const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
@@ -425,7 +433,18 @@ export function buildVeoPayload(
     }
   }
 
-  const referenceImages = referenceMode === 'images'
+  if (model === 'kling-omni') {
+    const refVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
+    if (refVideoInput?.data) {
+      referenceVideo = {
+        data: refVideoInput.data,
+        mimeType: refVideoInput.mimeType,
+        filename: refVideoInput.filename || 'reference-video.mp4',
+      };
+    }
+  }
+
+  const referenceImages = referenceMode === 'images' || model === 'kling-omni'
     ? (() => {
         const edges = allEdges.filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'));
         const injectionParts: string[] = [];
@@ -464,9 +483,7 @@ export function buildVeoPayload(
     })()
     : undefined;
 
-  const backendModel = (data.model === 'veo-3.1-fast' || node.type === 'veoFast')
-    ? 'veo-3.1-fast-generate-preview'
-    : 'veo-3.1-generate-preview';
+  const backendModel = getVideoGeneratorBackendModel(model);
 
   return {
     brandId,
@@ -479,6 +496,7 @@ export function buildVeoPayload(
     durationSeconds: data.durationSeconds ? Number(data.durationSeconds) : 8,
     firstFrame,
     lastFrame,
+    referenceVideo,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
 }
@@ -527,6 +545,9 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       : undefined,
     last_frame: payload.lastFrame
       ? { data: payload.lastFrame.data, mime_type: payload.lastFrame.mimeType, filename: payload.lastFrame.filename }
+      : undefined,
+    reference_video: payload.referenceVideo
+      ? { data: payload.referenceVideo.data, mime_type: payload.referenceVideo.mimeType, filename: payload.referenceVideo.filename }
       : undefined,
     reference_images: payload.referenceImages?.map((img) => ({
       data: img.data,

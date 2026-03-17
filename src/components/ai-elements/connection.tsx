@@ -26,7 +26,7 @@ const resolveConnectionColor = (handleId?: string | null) => {
   if (IMAGE_CONNECTION_HANDLES.has(handleId)) {
     return "var(--edge-image)";
   }
-  if (handleId === "video") {
+  if (handleId === "video" || handleId === "ref-video") {
     return "var(--edge-video)";
   }
   if (handleId === "audio") {

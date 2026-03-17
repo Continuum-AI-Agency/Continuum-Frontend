@@ -3,13 +3,21 @@ import { z } from "zod";
 import { providerAspectRatioOptions } from "@/lib/schemas/aiStudio";
 import type { SupportedModel } from "@/lib/types/chatImage";
 
-export const supportedModels = ["nano-banana", "gemini-3-pro-image-preview", "veo-3-1", "veo-3-1-fast", "sora-2"] as const satisfies ReadonlyArray<SupportedModel>;
+export const supportedModels = [
+  "nano-banana",
+  "gemini-3-pro-image-preview",
+  "veo-3-1",
+  "veo-3-1-fast",
+  "kling-omni",
+  "sora-2",
+] as const satisfies ReadonlyArray<SupportedModel>;
 
 const modelMedium: Record<SupportedModel, "image" | "video"> = {
   "nano-banana": "image",
   "gemini-3-pro-image-preview": "image",
   "veo-3-1": "video",
   "veo-3-1-fast": "video",
+  "kling-omni": "video",
   "sora-2": "video",
 };
 
@@ -67,14 +75,6 @@ export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, c
     });
   }
 
-  if (medium === "video" && value.refs && value.refs.length > 3) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["refs"],
-      message: "Veo/Sora currently support up to 3 reference images.",
-    });
-  }
-
   if (value.model === "veo-3-1-fast" && value.refs && value.refs.length > 0) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -88,6 +88,33 @@ export const chatImageRequestSchema = chatImageRequestBase.superRefine((value, c
       code: z.ZodIssueCode.custom,
       path: ["firstFrame"],
       message: "Veo Standard does not support Image-to-Video (First/Last frame). Use Veo Fast.",
+    });
+  }
+
+  if (value.model === "kling-omni") {
+    if (value.firstFrame || value.lastFrame) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["firstFrame"],
+        message: "Kling Omni uses reference video/images, not first/last frame inputs.",
+      });
+    }
+
+    const maxRefs = value.referenceVideo ? 4 : 7;
+    if (value.refs && value.refs.length > maxRefs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["refs"],
+        message: value.referenceVideo
+          ? "Kling Omni allows up to 4 reference images when a reference video is provided."
+          : "Kling Omni allows up to 7 reference images when no reference video is provided.",
+      });
+    }
+  } else if (medium === "video" && value.refs && value.refs.length > 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["refs"],
+      message: "Veo/Sora currently support up to 3 reference images.",
     });
   }
 
@@ -154,7 +181,7 @@ export function getMediumForModel(model: SupportedModel): "image" | "video" {
 export function getAspectsForModel(model: SupportedModel, hasReferences: boolean = false): readonly string[] {
   const medium = modelMedium[model];
 
-  if (model === "veo-3-1" || model === "veo-3-1-fast") {
+  if (model === "veo-3-1" || model === "veo-3-1-fast" || model === "kling-omni") {
     return ["16:9", "9:16"] as const;
   }
 

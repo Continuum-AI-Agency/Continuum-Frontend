@@ -77,14 +77,14 @@ export interface DocumentNodeData extends BaseNodeData {
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
-  model: 'veo-3.1' | 'veo-3.1-fast';
+  model: 'veo-3.1' | 'veo-3.1-fast' | 'kling-omni';
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
   aspectRatio?: '16:9' | '9:16';
   resolution?: '720p' | '1080p';
   durationSeconds?: 4 | 6 | 8;
-  referenceMode?: 'images' | 'frames';
+  referenceMode?: 'images' | 'frames' | 'omni';
   frameList?: FrameSlot[];
   generatedVideo?: string | Blob;
 }

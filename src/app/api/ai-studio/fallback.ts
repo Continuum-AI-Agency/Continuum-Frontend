@@ -113,6 +113,17 @@ const SAMPLE_ARTIFACTS: Record<AiStudioProvider, AiStudioArtifact> = {
     metadata: { source: "fallback" },
     createdAt: new Date().toISOString(),
   },
+  "kling-omni": {
+    id: "sample-kling-artifact",
+    uri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
+    previewUri: "https://storage.googleapis.com/continuum-fallback-assets/veo-demo.mp4",
+    mimeType: "video/mp4",
+    medium: "video",
+    fileName: "continuum-kling-demo.mp4",
+    sizeBytes: 6_200_000,
+    metadata: { source: "fallback" },
+    createdAt: new Date().toISOString(),
+  },
   "sora-2": {
     id: "sample-sora-artifact",
     uri: "https://storage.googleapis.com/continuum-fallback-assets/sora-demo.mp4",

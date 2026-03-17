@@ -5,15 +5,15 @@ import { StudioNode } from "../types";
 import { NodeOutput } from "../types/execution";
 import { useStudioStore } from "../stores/useStudioStore";
 import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload, toBackendExtendVideoPayload, toBackendPayload } from "./buildNodePayload";
-import type { ExtendVideoPayload } from "../types/execution";
 import { buildDataUrl, parseDataUrl } from "./dataUrl";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
 import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
+import { resolveVideoGeneratorModel, isVideoGeneratorNodeType } from "./videoModel";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
 const MAX_CONCURRENT_EXECUTIONS = 3;
-const MEDIA_NODE_TYPES = new Set(['nanoGen', 'veoDirector', 'veoFast', 'extendVideo']);
+const MEDIA_NODE_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo']);
 
 const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
   typeof nodeType === 'string' && MEDIA_NODE_TYPES.has(nodeType);
@@ -116,7 +116,7 @@ const resolveVideoInput = (
     }
   }
 
-  if (allowUri && (sourceNode?.type === 'veoDirector' || sourceNode?.type === 'veoFast' || sourceNode?.type === 'extendVideo')) {
+  if (allowUri && (isVideoGeneratorNodeType(sourceNode?.type) || sourceNode?.type === 'extendVideo')) {
     const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
     const parsed = parseDataUrl(generatedVideo);
     if (parsed?.base64) {
@@ -170,7 +170,7 @@ const getPromptValue = (
   nodeById: Map<string, StudioNode>,
   allEdges: Edge[]
 ): { value?: string; fromEdge: boolean } => {
-  const promptHandles = (node.type === 'veoDirector' || node.type === 'veoFast') ? ['prompt-in', 'prompt'] : ['prompt'];
+  const promptHandles = isVideoGeneratorNodeType(node.type) ? ['prompt-in', 'prompt'] : ['prompt'];
   const promptEdges = incomingEdges.filter((edge) => promptHandles.includes(edge.targetHandle ?? ""));
 
   if (promptEdges.length > 0) {
@@ -207,8 +207,8 @@ const findMissingOptionalInput = (
     return undefined;
   }
 
-  if (node.type === 'veoDirector' || node.type === 'veoFast') {
-    const referenceMode = ((node.data as { referenceMode?: 'images' | 'frames' }).referenceMode ?? 'images');
+  if (isVideoGeneratorNodeType(node.type)) {
+    const videoModel = resolveVideoGeneratorModel(node);
     for (const edge of incomingEdges) {
       const handle = edge.targetHandle ?? "";
       if (handle === 'negative') {
@@ -216,11 +216,15 @@ const findMissingOptionalInput = (
           return handle;
         }
       } else if (handle === 'ref-image' || handle === 'ref-images') {
-        if (node.type === 'veoDirector' && referenceMode === 'images' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+        if (videoModel !== 'veo-3.1-fast' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+          return handle;
+        }
+      } else if (handle === 'ref-video') {
+        if (videoModel === 'kling-omni' && !resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: false })) {
           return handle;
         }
       } else if (handle === 'first-frame' || handle === 'last-frame' || handle.startsWith('frame-')) {
-        if ((node.type === 'veoFast' || referenceMode === 'frames') && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+        if (videoModel === 'veo-3.1-fast' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
       }
@@ -403,7 +407,7 @@ export async function executeWorkflow(
                 resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
             }
          }
-      } else if (node.type === 'veoDirector' || node.type === 'veoFast' || node.type === 'extendVideo') {
+      } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo') {
          const genVideo = (node.data as any).generatedVideo as string;
          if (genVideo) {
              resolvedOutputs.set(node.id, { type: 'video', url: genVideo });
@@ -656,7 +660,7 @@ export async function executeWorkflow(
 
       if (node.type === 'nanoGen') {
         payload = buildNanoGenPayload(node, resolvedOutputs, nodes, edges, brandId);
-      } else if (node.type === 'veoDirector' || node.type === 'veoFast') {
+      } else if (isVideoGeneratorNodeType(node.type)) {
         payload = buildVeoPayload(node, resolvedOutputs, nodes, edges, brandId);
       }
 

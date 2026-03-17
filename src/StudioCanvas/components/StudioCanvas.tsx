@@ -34,7 +34,6 @@ import { useStudioStore } from '../stores/useStudioStore';
 import { StringNode } from '../nodes/StringNode';
 import { ImageGenBlock } from '../nodes/ImageGenBlock';
 import { VideoGenBlock } from '../nodes/VideoGenBlock';
-import { VeoFastBlock } from '../nodes/VeoFastBlock';
 import { ExtendVideoBlock } from '../nodes/ExtendVideoBlock';
 import { ImageNode } from '../nodes/ImageNode';
 import { AudioNode } from '../nodes/AudioNode';
@@ -59,12 +58,19 @@ import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { CanvasMediaLoader } from '@/components/ai-studio/CanvasMediaLoader';
 import { StudioNode } from '../types';
+import {
+  DEFAULT_VIDEO_GENERATOR_MODEL,
+  VIDEO_GENERATOR_MODEL_LABELS,
+  VIDEO_GENERATOR_MODELS,
+  type VideoGeneratorModel,
+} from '../utils/videoModel';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
 
 type StudioCanvasNodeType =
   | 'nanoGen'
+  | 'videoGen'
   | 'veoDirector'
   | 'veoFast'
   | 'extendVideo'
@@ -79,6 +85,7 @@ type LibraryItem = {
   label: string;
   desc: string;
   tag: string;
+  modelOptions?: readonly VideoGeneratorModel[];
   disabled?: boolean;
 };
 
@@ -86,6 +93,15 @@ type LibrarySection = {
   value: string;
   label: string;
   items: LibraryItem[];
+};
+
+type OrganicPlannerSeedContext = {
+  draftId: string;
+  title: string;
+  summary: string;
+  captionPreview: string;
+  creativeDirectionPrompt?: string;
+  thumbnailPrompt?: string;
 };
 
 const LIBRARY_SECTIONS: LibrarySection[] = [
@@ -112,16 +128,11 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
     label: 'Video',
     items: [
       {
-        type: 'veoDirector',
-        label: 'Veo 3.1',
-        desc: 'Cinematic video generation',
+        type: 'videoGen',
+        label: 'Video Generation',
+        desc: 'Generate clips with selectable models',
         tag: 'Creative',
-      },
-      {
-        type: 'veoFast',
-        label: 'Veo 3.1 Fast',
-        desc: 'Fast social video generation',
-        tag: 'Creative',
+        modelOptions: VIDEO_GENERATOR_MODELS,
       },
       {
         type: 'extendVideo',
@@ -165,6 +176,7 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
 
 const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'nanoGen',
+  'videoGen',
   'veoDirector',
   'veoFast',
   'extendVideo',
@@ -178,7 +190,10 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
 const isStudioCanvasNodeType = (value: string): value is StudioCanvasNodeType =>
   NODE_TYPES.has(value as StudioCanvasNodeType);
 
-const createNodeConfig = (type: StudioCanvasNodeType): { data: Record<string, unknown>; style?: Record<string, number> } => {
+const createNodeConfig = (
+  type: StudioCanvasNodeType,
+  options?: { model?: VideoGeneratorModel }
+): { data: Record<string, unknown>; style?: Record<string, number> } => {
   if (type === 'nanoGen') {
     return {
       data: { model: 'nano-banana-2', imageSize: '512px', positivePrompt: '', aspectRatio: '16:9' },
@@ -186,16 +201,13 @@ const createNodeConfig = (type: StudioCanvasNodeType): { data: Record<string, un
     };
   }
 
-  if (type === 'veoDirector') {
+  if (type === 'videoGen' || type === 'veoDirector' || type === 'veoFast') {
+    const model =
+      options?.model ??
+      (type === 'veoDirector' ? 'veo-3.1' : type === 'veoFast' ? 'veo-3.1-fast' : DEFAULT_VIDEO_GENERATOR_MODEL);
+    const referenceMode = model === 'veo-3.1-fast' ? 'frames' : model === 'kling-omni' ? 'omni' : 'images';
     return {
-      data: { model: 'veo-3.1', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'images' },
-      style: { width: 512, height: 288 },
-    };
-  }
-
-  if (type === 'veoFast') {
-    return {
-      data: { model: 'veo-3.1-fast', prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode: 'frames' },
+      data: { model, prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode },
       style: { width: 512, height: 288 },
     };
   }
@@ -240,8 +252,9 @@ const createNodeConfig = (type: StudioCanvasNodeType): { data: Record<string, un
 
 const nodeTypes = {
   nanoGen: ImageGenBlock,
+  videoGen: VideoGenBlock,
   veoDirector: VideoGenBlock,
-  veoFast: VeoFastBlock,
+  veoFast: VideoGenBlock,
   extendVideo: ExtendVideoBlock,
   string: StringNode,
   image: ImageNode,
@@ -259,10 +272,12 @@ function Flow({
   brandProfileId,
   realtime,
   activeRoomId,
+  organicPlannerSeed,
 }: {
   brandProfileId?: string;
   realtime: ReturnType<typeof useCanvasRealtime>;
   activeRoomId?: string;
+  organicPlannerSeed?: OrganicPlannerSeedContext | null;
 }) {
   const {
     nodes,
@@ -297,6 +312,7 @@ function Flow({
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
+  const hydratedPlannerSeedRef = useRef<string | null>(null);
 
   const handleMouseMove = useCallback(
     (event: React.MouseEvent) => {
@@ -309,15 +325,17 @@ function Flow({
   );
 
   const addNodeAtPointer = useCallback(
-    (type: StudioCanvasNodeType) => {
+    (type: StudioCanvasNodeType, options?: { model?: VideoGeneratorModel }) => {
       takeSnapshot();
       const anchorPosition = contextMenuAnchorRef.current ?? lastMousePositionRef.current;
       const position = screenToFlowPosition(anchorPosition);
-      const { data, style } = createNodeConfig(type);
+      const canonicalType: StudioCanvasNodeType =
+        type === 'veoDirector' || type === 'veoFast' ? 'videoGen' : type;
+      const { data, style } = createNodeConfig(canonicalType, options);
 
       const newNode: StudioNode = {
         id: uuidv4(),
-        type,
+        type: canonicalType,
         position,
         data: data as StudioNode['data'],
         style,
@@ -345,6 +363,84 @@ function Flow({
     setEdges([]);
     triggerSave();
   }, [setEdges, setNodes, takeSnapshot, triggerSave]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!organicPlannerSeed) return;
+    if (nodes.length > 0 || edges.length > 0) return;
+
+    const roomScope = activeRoomId ?? 'default-room';
+    const hydrationKey = `${roomScope}:${organicPlannerSeed.draftId}`;
+    if (hydratedPlannerSeedRef.current === hydrationKey) return;
+
+    const promptSections = [
+      organicPlannerSeed.title ? `Title: ${organicPlannerSeed.title}` : '',
+      organicPlannerSeed.summary ? `Summary: ${organicPlannerSeed.summary}` : '',
+      organicPlannerSeed.captionPreview ? `Draft caption:\n${organicPlannerSeed.captionPreview}` : '',
+      organicPlannerSeed.creativeDirectionPrompt
+        ? `Creative direction:\n${organicPlannerSeed.creativeDirectionPrompt}`
+        : '',
+      organicPlannerSeed.thumbnailPrompt
+        ? `Thumbnail direction:\n${organicPlannerSeed.thumbnailPrompt}`
+        : '',
+      'Goal: Generate a clean social thumbnail concept with clear hierarchy and one focal subject.',
+    ].filter(Boolean);
+
+    const textNodeId = `organic-seed-text-${organicPlannerSeed.draftId}`;
+    const imageGenNodeId = `organic-seed-image-${organicPlannerSeed.draftId}`;
+
+    const starterNodes: StudioNode[] = [
+      {
+        id: textNodeId,
+        type: 'string',
+        position: { x: 120, y: 160 },
+        data: {
+          value: promptSections.join('\n\n'),
+        },
+        style: { width: 420, height: 240 },
+      } as StudioNode,
+      {
+        id: imageGenNodeId,
+        type: 'nanoGen',
+        position: { x: 620, y: 190 },
+        data: {
+          model: 'nano-banana-2',
+          positivePrompt: '',
+          aspectRatio: '1:1',
+          imageSize: '1K',
+        },
+        style: { width: 420, height: 420 },
+      } as StudioNode,
+    ];
+
+    const starterEdges: Edge[] = [
+      {
+        id: `e-${textNodeId}-${imageGenNodeId}-prompt`,
+        source: textNodeId,
+        sourceHandle: 'text',
+        target: imageGenNodeId,
+        targetHandle: 'prompt',
+        type: 'dataType',
+        data: { dataType: 'text', pathType: 'bezier' },
+      },
+    ];
+
+    takeSnapshot();
+    setNodes(starterNodes);
+    setEdges(starterEdges);
+    triggerSave();
+    hydratedPlannerSeedRef.current = hydrationKey;
+  }, [
+    activeRoomId,
+    edges.length,
+    isLoading,
+    nodes.length,
+    organicPlannerSeed,
+    setEdges,
+    setNodes,
+    takeSnapshot,
+    triggerSave,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -408,7 +504,7 @@ function Flow({
         return hasPromptEdge || !!promptValue;
       }
 
-      if (node.type === 'veoDirector' || node.type === 'veoFast') {
+      if (node.type === 'videoGen' || node.type === 'veoDirector' || node.type === 'veoFast') {
         const hasPromptEdge = edges.some((edge) => edge.target === node.id && edge.targetHandle === 'prompt-in');
         const promptValue =
           typeof (node.data as { prompt?: string }).prompt === 'string'
@@ -452,7 +548,11 @@ function Flow({
     return edges.map((edge) => {
       const dataType = resolveDataType(edge);
       const targetType = nodeTypeById.get(edge.target);
-      const isTargetGenerator = targetType === 'nanoGen' || targetType === 'veoDirector' || targetType === 'veoFast';
+      const isTargetGenerator =
+        targetType === 'nanoGen' ||
+        targetType === 'videoGen' ||
+        targetType === 'veoDirector' ||
+        targetType === 'veoFast';
       const isActive = isTargetGenerator && readyNodeIds.has(edge.target);
       const isDotted = isTargetGenerator && !readyNodeIds.has(edge.target);
       const pathType = resolvePathType(edge);
@@ -505,10 +605,12 @@ function Flow({
       });
 
       if (isStudioCanvasNodeType(droppedType)) {
-        const { data, style } = createNodeConfig(droppedType);
+        const canonicalType: StudioCanvasNodeType =
+          droppedType === 'veoDirector' || droppedType === 'veoFast' ? 'videoGen' : droppedType;
+        const { data, style } = createNodeConfig(canonicalType);
         const newNode: StudioNode = {
           id: uuidv4(),
-          type: droppedType,
+          type: canonicalType,
           position,
           data: data as StudioNode['data'],
           style,
@@ -648,19 +750,39 @@ function Flow({
                 <ContextMenuSub key={section.value}>
                   <ContextMenuSubTrigger inset>{section.label}</ContextMenuSubTrigger>
                   <ContextMenuSubContent className="w-72">
-                    {section.items.map((item) => (
-                      <ContextMenuItem
-                        key={item.type}
-                        disabled={Boolean(item.disabled)}
-                        onClick={() => addNodeAtPointer(item.type)}
-                      >
-                        <div className="flex min-w-0 flex-col">
-                          <span>{item.label}</span>
-                          <span className="text-xs text-muted-foreground">{item.desc}</span>
-                        </div>
-                        <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
-                      </ContextMenuItem>
-                    ))}
+                    {section.items.map((item) =>
+                      item.modelOptions ? (
+                        <ContextMenuSub key={`${item.type}-models`}>
+                          <ContextMenuSubTrigger inset>{item.label}</ContextMenuSubTrigger>
+                          <ContextMenuSubContent className="w-56">
+                            {item.modelOptions.map((model) => (
+                              <ContextMenuItem
+                                key={`${item.type}-${model}`}
+                                onClick={() => addNodeAtPointer(item.type, { model })}
+                              >
+                                <div className="flex min-w-0 flex-col">
+                                  <span>{VIDEO_GENERATOR_MODEL_LABELS[model]}</span>
+                                  <span className="text-xs text-muted-foreground">{item.desc}</span>
+                                </div>
+                                <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                              </ContextMenuItem>
+                            ))}
+                          </ContextMenuSubContent>
+                        </ContextMenuSub>
+                      ) : (
+                        <ContextMenuItem
+                          key={item.type}
+                          disabled={Boolean(item.disabled)}
+                          onClick={() => addNodeAtPointer(item.type)}
+                        >
+                          <div className="flex min-w-0 flex-col">
+                            <span>{item.label}</span>
+                            <span className="text-xs text-muted-foreground">{item.desc}</span>
+                          </div>
+                          <ContextMenuShortcut>{item.tag}</ContextMenuShortcut>
+                        </ContextMenuItem>
+                      )
+                    )}
                   </ContextMenuSubContent>
                 </ContextMenuSub>
               ))}
@@ -723,9 +845,14 @@ function Flow({
 interface StudioCanvasProps {
   embedded?: boolean;
   brandProfileId?: string;
+  organicPlannerSeed?: OrganicPlannerSeedContext | null;
 }
 
-export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasProps) {
+export function StudioCanvas({
+  embedded = false,
+  brandProfileId,
+  organicPlannerSeed,
+}: StudioCanvasProps) {
   const { rooms } = useCanvasRooms(brandProfileId || '');
   const [activeRoomId, setActiveRoomId] = useState<string | undefined>(undefined);
 
@@ -770,7 +897,12 @@ export function StudioCanvas({ embedded = false, brandProfileId }: StudioCanvasP
         )}
 
         <main className="relative flex-1 min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
-          <Flow brandProfileId={brandProfileId} realtime={realtime} activeRoomId={activeRoomId} />
+          <Flow
+            brandProfileId={brandProfileId}
+            realtime={realtime}
+            activeRoomId={activeRoomId}
+            organicPlannerSeed={organicPlannerSeed}
+          />
         </main>
       </div>
     </ReactFlowProvider>

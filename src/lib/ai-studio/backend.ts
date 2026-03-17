@@ -19,6 +19,8 @@ const timestampSchema = z.string().refine((val) => !isNaN(Date.parse(val)), {
   message: "Invalid ISO timestamp",
 });
 
+const backendProviderSchema = z.string().min(1);
+
 const backendArtifactSchema = z.object({
   id: z.string(),
   uri: z.string().min(1),
@@ -34,7 +36,7 @@ const backendArtifactSchema = z.object({
 const backendJobSchema = z.object({
   id: z.string(),
   brand_profile_id: z.string(),
-  provider: aiStudioProviderSchema,
+  provider: backendProviderSchema,
   medium: aiStudioMediumSchema,
   template_id: z.string().nullish(),
   prompt: z.string(),
@@ -64,7 +66,7 @@ const backendTemplateSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string().nullish(),
-  provider: aiStudioProviderSchema,
+  provider: backendProviderSchema,
   medium: aiStudioMediumSchema,
   aspect_ratio: z.string().nullish(),
   default_prompt: z.string().nullish(),
@@ -95,11 +97,21 @@ function mapArtifact(artifact: z.infer<typeof backendArtifactSchema>) {
   };
 }
 
+function normalizeProvider(provider: string): z.infer<typeof aiStudioProviderSchema> {
+  if (provider === "kling-omni-video" || provider === "kling-omni-v1") {
+    return "kling-omni";
+  }
+  if (provider === "veo-3-1-fast") {
+    return "veo-3-1";
+  }
+  return aiStudioProviderSchema.parse(provider);
+}
+
 function mapJob(job: z.infer<typeof backendJobSchema>): AiStudioJob {
   const mapped = {
     id: job.id,
     brandProfileId: job.brand_profile_id,
-    provider: job.provider,
+    provider: normalizeProvider(job.provider),
     medium: job.medium,
     templateId: job.template_id ?? undefined,
     prompt: job.prompt,
@@ -129,7 +141,7 @@ function mapTemplate(template: z.infer<typeof backendTemplateSchema>): AiStudioT
     id: template.id,
     name: template.name,
     description: template.description ?? undefined,
-    provider: template.provider,
+    provider: normalizeProvider(template.provider),
     medium: template.medium,
     aspectRatio: template.aspect_ratio ?? undefined,
     defaultPrompt: template.default_prompt ?? undefined,

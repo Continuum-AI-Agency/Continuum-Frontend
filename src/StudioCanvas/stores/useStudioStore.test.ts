@@ -230,4 +230,39 @@ describe('useStudioStore', () => {
     });
     expect(useStudioStore.getState().edges).toHaveLength(14);
   });
+
+  it('should cap Kling Omni image references to 4 when ref video is connected', () => {
+    const nodes: StudioNode[] = [
+      { id: 'kling', position: { x: 0, y: 0 }, data: { model: 'kling-omni', prompt: '' }, type: 'videoGen' } as any,
+      { id: 'videoRef', position: { x: 0, y: 0 }, data: { video: '' }, type: 'video' },
+      { id: 'img1', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
+      { id: 'img2', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
+      { id: 'img3', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
+      { id: 'img4', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
+      { id: 'img5', position: { x: 0, y: 0 }, data: { image: '' }, type: 'image' },
+    ];
+    useStudioStore.getState().setNodes(nodes);
+
+    useStudioStore.getState().onConnect({
+      source: 'videoRef',
+      sourceHandle: 'video',
+      target: 'kling',
+      targetHandle: 'ref-video',
+    });
+
+    ['img1', 'img2', 'img3', 'img4', 'img5'].forEach((id) => {
+      useStudioStore.getState().onConnect({
+        source: id,
+        sourceHandle: 'image',
+        target: 'kling',
+        targetHandle: 'ref-images',
+      });
+    });
+
+    const refVideoEdges = useStudioStore.getState().edges.filter((edge) => edge.targetHandle === 'ref-video');
+    const refImageEdges = useStudioStore.getState().edges.filter((edge) => edge.targetHandle === 'ref-images');
+
+    expect(refVideoEdges).toHaveLength(1);
+    expect(refImageEdges).toHaveLength(4);
+  });
 });

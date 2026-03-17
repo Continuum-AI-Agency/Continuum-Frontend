@@ -1,12 +1,19 @@
 // Shared types for chat-based image/video generation in AI Studio.
 
-export type SupportedModel = "nano-banana" | "gemini-3-pro-image-preview" | "veo-3-1" | "veo-3-1-fast" | "sora-2";
+export type SupportedModel =
+  | "nano-banana"
+  | "gemini-3-pro-image-preview"
+  | "veo-3-1"
+  | "veo-3-1-fast"
+  | "kling-omni"
+  | "sora-2";
 
 // Models accepted by the backend generation services (may include provider-specific aliases).
 export type SupportedBackendModel =
   | SupportedModel
   | "veo-3.1-generate-preview"
   | "veo-3.1-fast-generate-preview"
+  | "kling-omni"
   | "gemini-2.5-flash-image";
 
 export const modelMediumMap: Record<SupportedModel, "image" | "video"> = {
@@ -14,6 +21,7 @@ export const modelMediumMap: Record<SupportedModel, "image" | "video"> = {
   "gemini-3-pro-image-preview": "image",
   "veo-3-1": "video",
   "veo-3-1-fast": "video",
+  "kling-omni": "video",
   "sora-2": "video",
 };
 

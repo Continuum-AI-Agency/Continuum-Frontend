@@ -13,8 +13,14 @@ import {
   EdgeChange,
 } from '@xyflow/react';
 import { StudioNode } from '../types';
-import { isValidConnection, getAllowedTargetHandles, getAllowedSourceHandles } from '../utils/isValidConnection';
+import {
+  isValidConnection,
+  getAllowedTargetHandles,
+  getAllowedSourceHandles,
+  getTargetHandleConnectionLimit,
+} from '../utils/isValidConnection';
 import { resolveCollisions } from '../utils/nodeCollisions';
+import { isVideoGeneratorNodeType } from '../utils/videoModel';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 export type InteractionMode = 'pan' | 'select';
@@ -60,12 +66,11 @@ interface StudioState {
 type DataType = 'text' | 'image' | 'video';
 
 const getDataTypeFromHandle = (handleId: string | null): DataType => {
-  switch (handleId) {
-    case 'text': return 'text';
-    case 'image': return 'image';
-    case 'video': return 'video';
-    default: return 'text';
-  }
+  if (!handleId) return 'text';
+  if (handleId === 'video' || handleId === 'ref-video') return 'video';
+  if (handleId.includes('image') || handleId.includes('frame')) return 'image';
+  if (handleId === 'text' || handleId.includes('prompt') || handleId === 'negative') return 'text';
+  return 'text';
 };
 
 const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): Connection => {
@@ -79,7 +84,7 @@ const normalizeFrameConnection = (connection: Connection, nodes: StudioNode[]): 
   const isFrameHandle = ['first-frame', 'last-frame', 'ref-image', 'ref-images'].includes(sourceHandle);
   const isImageSource = targetHandle === 'image' && (targetNode.type === 'image' || targetNode.type === 'nanoGen');
 
-  if (sourceNode.type === 'veoDirector' && isFrameHandle && isImageSource) {
+  if (isVideoGeneratorNodeType(sourceNode.type) && isFrameHandle && isImageSource) {
     return {
       ...connection,
       source: connection.target,
@@ -106,7 +111,7 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
   
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
 
-  return edges.flatMap((edge) => {
+  const normalizedCandidates = edges.flatMap((edge) => {
     const targetNode = nodeById.get(edge.target);
     if (!targetNode || !edge.targetHandle) return edge;
 
@@ -114,16 +119,16 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
     if (targetHandle === 'text') {
       if (targetNode.type === 'nanoGen') {
         targetHandle = 'prompt';
-      } else if (targetNode.type === 'veoDirector') {
+      } else if (isVideoGeneratorNodeType(targetNode.type)) {
         targetHandle = 'prompt-in';
       }
     }
 
-    if (targetHandle === 'prompt' && targetNode.type === 'veoDirector') {
+    if (targetHandle === 'prompt' && isVideoGeneratorNodeType(targetNode.type)) {
       targetHandle = 'prompt-in';
     }
 
-    if (targetHandle === 'ref-image' && targetNode.type === 'veoDirector') {
+    if (targetHandle === 'ref-image' && isVideoGeneratorNodeType(targetNode.type)) {
       targetHandle = 'ref-images';
     }
 
@@ -150,6 +155,56 @@ const normalizeEdges = (edges: Edge[], nodes: StudioNode[]): Edge[] => {
       targetHandle,
     };
   });
+
+  const nextEdges: Edge[] = [];
+
+  for (const edge of normalizedCandidates) {
+    if (!edge.targetHandle) {
+      nextEdges.push(edge);
+      continue;
+    }
+
+    const targetNode = nodeById.get(edge.target);
+    if (!targetNode) continue;
+
+    const limit = getTargetHandleConnectionLimit(targetNode, edge.targetHandle, nextEdges);
+    if (limit === undefined) {
+      nextEdges.push(edge);
+      continue;
+    }
+
+    if (limit <= 0) {
+      continue;
+    }
+
+    const existingForHandle = nextEdges.filter(
+      (candidate) => candidate.target === edge.target && candidate.targetHandle === edge.targetHandle
+    ).length;
+
+    const shouldCountAsImageReference =
+      edge.targetHandle === 'ref-image' || edge.targetHandle === 'ref-images';
+
+    if (shouldCountAsImageReference) {
+      const imageReferenceCount = nextEdges.filter(
+        (candidate) =>
+          candidate.target === edge.target &&
+          (candidate.targetHandle === 'ref-image' || candidate.targetHandle === 'ref-images')
+      ).length;
+      if (imageReferenceCount >= limit) {
+        continue;
+      }
+      nextEdges.push(edge);
+      continue;
+    }
+
+    if (existingForHandle >= limit) {
+      continue;
+    }
+
+    nextEdges.push(edge);
+  }
+
+  return nextEdges;
 };
 
 export const useStudioStore = create<StudioState>((set, get) => ({

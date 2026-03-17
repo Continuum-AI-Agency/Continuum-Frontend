@@ -95,5 +95,35 @@ describe("chatImageRequestSchema", () => {
     });
     assert.ok(!parsed.success);
   });
-});
 
+  test("kling-omni allows up to 7 refs without reference video", () => {
+    const refs = Array.from({ length: 7 }, (_, i) => ({ ...baseRef, id: `k${i}` }));
+    const parsed = chatImageRequestSchema.safeParse({
+      brandProfileId: "brand-1",
+      model: "kling-omni",
+      prompt: "test",
+      aspectRatio: "16:9",
+      resolution: "720p",
+      refs,
+    });
+    assert.ok(parsed.success, parsed.success ? "" : parsed.error.message);
+  });
+
+  test("kling-omni limits refs to 4 when reference video is provided", () => {
+    const refs = Array.from({ length: 5 }, (_, i) => ({ ...baseRef, id: `kref${i}` }));
+    const parsed = chatImageRequestSchema.safeParse({
+      brandProfileId: "brand-1",
+      model: "kling-omni",
+      prompt: "test",
+      aspectRatio: "16:9",
+      resolution: "720p",
+      referenceVideo: {
+        id: "vid-1",
+        mime: "video/mp4",
+        base64: "dmlkZW8=",
+      },
+      refs,
+    });
+    assert.ok(!parsed.success);
+  });
+});

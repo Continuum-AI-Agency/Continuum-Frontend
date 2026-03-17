@@ -5,8 +5,12 @@ import { useReactFlow, type XYPosition, type Node, type Edge, useStoreApi, type 
 import { v4 as uuidv4 } from 'uuid';
 import { canAcceptSingleTextInput } from '../utils/connectionValidation';
 import { useStudioStore } from '../stores/useStudioStore';
+import {
+  DEFAULT_VIDEO_GENERATOR_MODEL,
+  getVideoGeneratorReferenceMode,
+} from '../utils/videoModel';
 
-export type NodeType = 'nanoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video' | 'audio' | 'document';
+export type NodeType = 'nanoGen' | 'videoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video' | 'audio' | 'document';
 
 export interface SmartNodeContext {
   sourceHandle: string | null;
@@ -23,6 +27,7 @@ export function determineBestNodeType(context: SmartNodeContext): NodeType {
       if (sourceHandle === 'image') return 'image';
       if (sourceHandle === 'audio') return 'audio';
       if (sourceHandle === 'video') return 'video';
+      if (sourceHandle === 'ref-video') return 'video';
       if (sourceHandle === 'document') return 'document';
       if (sourceHandle === 'ref-image' || sourceHandle === 'ref-images') return 'image';
       if (sourceHandle === 'first-frame' || sourceHandle === 'last-frame') return 'image';
@@ -67,13 +72,14 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
         },
         style: { width: 400, height: 225 }
       };
+    case 'videoGen':
     case 'veoDirector':
       return {
         data: {
-            model: 'veo-3.1-fast',
+            model: DEFAULT_VIDEO_GENERATOR_MODEL,
             prompt: '',
             enhancePrompt: false,
-            referenceMode: 'images',
+            referenceMode: getVideoGeneratorReferenceMode(DEFAULT_VIDEO_GENERATOR_MODEL),
             label: 'Video Block',
         },
         style: { width: 512, height: 288 }
@@ -155,8 +161,15 @@ function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | n
     }
 
     if (nodeType === 'extendVideo') {
-        if (sourceHandle === 'video') return 'video';
-        return 'prompt';
+      if (sourceHandle === 'video') return 'video';
+      return 'prompt';
+    }
+
+    if (nodeType === 'videoGen' || nodeType === 'veoDirector') {
+      if (sourceHandle === 'text') return 'prompt-in';
+      if (sourceHandle === 'video') return 'ref-video';
+      if (sourceHandle === 'image') return 'ref-images';
+      return 'prompt-in';
     }
 
     if (nodeType === 'nanoGen') {
@@ -174,7 +187,7 @@ export function useEdgeDropNode() {
   const connectionStartRef = useRef<{ nodeId: string; handleId: string; handleType: 'source' | 'target' } | null>(null);
 
   const resolveDataType = useCallback((handleId?: string | null) => {
-    if (handleId === 'video') return 'video';
+    if (handleId === 'video' || handleId === 'ref-video') return 'video';
     if (handleId === 'text') return 'text';
     if (handleId === 'audio') return 'audio';
     if (handleId === 'document') return 'document';
@@ -229,9 +242,11 @@ export function useEdgeDropNode() {
              
              const { data, style } = getDefaultNodeData(nodeType);
              
+             const canonicalNodeType = nodeType === 'veoDirector' ? 'videoGen' : nodeType;
+
              const newNode: Node = {
                 id: newNodeId,
-                type: nodeType,
+                type: canonicalNodeType,
                 position: { x: position.x - 100, y: position.y - 50 }, 
                 data,
                 style,
@@ -244,7 +259,7 @@ export function useEdgeDropNode() {
                       connectionStartRef.current = null;
                       return;
                   }
-                  const resolvedSourceHandle = getTargetHandleForNodeType(nodeType, startParams.handleId);
+                  const resolvedSourceHandle = getTargetHandleForNodeType(canonicalNodeType, startParams.handleId);
                   newEdge = {
                       id: `e-${newNodeId}-${startParams.nodeId}-${Date.now()}`,
                       source: newNodeId,
@@ -264,7 +279,7 @@ export function useEdgeDropNode() {
                       source: startParams.nodeId,
                       sourceHandle: startParams.handleId,
                       target: newNodeId,
-                      targetHandle: getTargetHandleForNodeType(nodeType, startParams.handleId), 
+                      targetHandle: getTargetHandleForNodeType(canonicalNodeType, startParams.handleId), 
                       type: 'dataType',
                       className: 'studio-edge studio-edge--connected',
                       data: { 
@@ -357,7 +372,13 @@ export function useProximityConnect() {
         if (sourceNode.type === 'string') sourceHandle = 'text';
         if (targetNode.type === 'string') targetHandle = 'input'; 
         
-        if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector') {
+        if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector' || targetNode.type === 'videoGen') {
+             const targetVideoModel =
+               targetNode.type === 'veoDirector'
+                 ? 'veo-3.1'
+                 : targetNode.type === 'videoGen'
+                   ? DEFAULT_VIDEO_GENERATOR_MODEL
+                   : null;
              if (sourceNode.type === 'string') {
                  const currentEdges = getEdges();
                  const isPromptFilled = currentEdges.some(
@@ -375,11 +396,15 @@ export function useProximityConnect() {
                          return null;
                      }
                  } else {
-                     targetHandle = targetNode.type === 'veoDirector' ? 'prompt-in' : 'prompt';
+                     targetHandle = targetNode.type === 'nanoGen' ? 'prompt' : 'prompt-in';
                  }
              }
              if (sourceNode.type === 'image') {
-                 targetHandle = targetNode.type === 'veoDirector' ? 'first-frame' : 'ref-image';
+                 if (targetNode.type === 'nanoGen') {
+                   targetHandle = 'ref-image';
+                 } else {
+                   targetHandle = targetVideoModel === 'veo-3.1-fast' ? 'first-frame' : 'ref-images';
+                 }
              }
         }
 

@@ -182,7 +182,7 @@ describe('buildNodePayload', () => {
         id: 'veo',
         type: 'veoDirector',
         position: { x: 0, y: 0 },
-        data: { prompt: 'video', referenceMode: 'frames' },
+        data: { model: 'veo-3.1-fast', prompt: 'video', referenceMode: 'frames' },
       };
 
       const edges: Edge[] = [
@@ -199,6 +199,34 @@ describe('buildNodePayload', () => {
       expect(payload?.lastFrame).toBeDefined();
       expect(payload?.firstFrame?.data).toBe('first_base64');
       expect(payload?.lastFrame?.data).toBe('last_base64');
+    });
+
+    it('should include Kling Omni reference video with image references', () => {
+      const node: StudioNode = {
+        id: 'kling',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'kling-omni',
+          prompt: 'Stylized product reveal',
+          enhancePrompt: false,
+        } as any,
+      };
+
+      const edges: Edge[] = [
+        { id: 'v1', source: 'video-ref', target: 'kling', sourceHandle: 'video', targetHandle: 'ref-video' },
+        { id: 'i1', source: 'img-ref', target: 'kling', sourceHandle: 'image', targetHandle: 'ref-images' },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('video-ref', { type: 'video', url: 'data:video/mp4;base64,video_ref_data' });
+      resolvedData.set('img-ref', { type: 'image', base64: 'img_ref_data', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+
+      expect(payload?.model).toBe('kling-omni');
+      expect(payload?.referenceVideo?.data).toBe('video_ref_data');
+      expect(payload?.referenceImages?.[0]?.data).toBe('img_ref_data');
     });
   });
 
@@ -314,7 +342,7 @@ describe('buildNodePayload', () => {
       expect(payload?.context?.documents?.[0].content).toBe('doc content');
     });
 
-    it('should return null if no prompt and no inputs', () => {
+    it('should return an empty payload if no prompt and no inputs', () => {
         const node: StudioNode = {
             id: 'string',
             type: 'string',
@@ -322,7 +350,8 @@ describe('buildNodePayload', () => {
             data: { value: '' },
         };
         const payload = buildEnrichPayload(node, new Map(), [], []);
-        expect(payload).toBeNull();
+        expect(payload).not.toBeNull();
+        expect(payload?.prompt).toBe('');
     });
   });
 });

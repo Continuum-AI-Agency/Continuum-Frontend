@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import React from "react";
@@ -26,6 +25,46 @@ type AIStudioClientProps = {
   promptTemplates?: import("@/lib/schemas/promptTemplates").PromptTemplate[];
 };
 
+type OrganicPlannerSeedContext = {
+  draftId: string;
+  title: string;
+  summary: string;
+  captionPreview: string;
+  creativeDirectionPrompt?: string;
+  thumbnailPrompt?: string;
+};
+
+const ORGANIC_CONTEXT_STORAGE_PREFIX = "continuum:organic-planner:ai-studio-context";
+
+function readOrganicPlannerSeedContext(draftId: string): OrganicPlannerSeedContext | null {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.localStorage.getItem(`${ORGANIC_CONTEXT_STORAGE_PREFIX}:${draftId}`);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<OrganicPlannerSeedContext>;
+    if (typeof parsed.draftId !== "string" || parsed.draftId.trim().length === 0) {
+      return null;
+    }
+
+    return {
+      draftId: parsed.draftId,
+      title: typeof parsed.title === "string" ? parsed.title : "",
+      summary: typeof parsed.summary === "string" ? parsed.summary : "",
+      captionPreview: typeof parsed.captionPreview === "string" ? parsed.captionPreview : "",
+      creativeDirectionPrompt:
+        typeof parsed.creativeDirectionPrompt === "string"
+          ? parsed.creativeDirectionPrompt
+          : undefined,
+      thumbnailPrompt:
+        typeof parsed.thumbnailPrompt === "string" ? parsed.thumbnailPrompt : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function AIStudioClient({
   brandProfileId,
   brandName,
@@ -36,7 +75,19 @@ export default function AIStudioClient({
   const router = useRouter();
   
   const mode = searchParams.get("mode") as "chat" | "canvas" | null;
+  const source = searchParams.get("source");
+  const draftId = searchParams.get("draftId");
   const activeTab = mode === "chat" ? "chat" : "canvas";
+  const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<OrganicPlannerSeedContext | null>(null);
+
+  React.useEffect(() => {
+    if (source !== "organic-planner" || !draftId) {
+      setOrganicPlannerSeed(null);
+      return;
+    }
+
+    setOrganicPlannerSeed(readOrganicPlannerSeedContext(draftId));
+  }, [draftId, source]);
 
   const setActiveTab = (tab: "chat" | "canvas") => {
     const params = new URLSearchParams(searchParams);
@@ -155,7 +206,10 @@ export default function AIStudioClient({
         ) : (
           <div className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
             <div className="h-full w-full">
-              <StudioCanvas brandProfileId={brandProfileId} />
+              <StudioCanvas
+                brandProfileId={brandProfileId}
+                organicPlannerSeed={organicPlannerSeed}
+              />
             </div>
           </div>
         )}

@@ -15,6 +15,7 @@ describe('isValidConnection', () => {
     { id: 'nano1', type: 'nanoGen', position: { x: 0, y: 0 }, data: { prompt: '' } },
     { id: 'video1', type: 'video', position: { x: 0, y: 0 }, data: { video: '' } },
     { id: 'extend1', type: 'extendVideo', position: { x: 0, y: 0 }, data: { prompt: '' } },
+    { id: 'videoGen1', type: 'videoGen', position: { x: 0, y: 0 }, data: { model: 'kling-omni', prompt: '' } as any },
   ];
 
   it('should allow connecting Image to String node', () => {
@@ -166,6 +167,40 @@ describe('isValidConnection', () => {
         [],
         nodes
     );
+    expect(valid).toBe(false);
+  });
+
+  it('should allow connecting video references to Kling Omni ref-video', () => {
+    const valid = isValidConnection(
+      { source: 'video1', sourceHandle: 'video', target: 'videoGen1', targetHandle: 'ref-video' },
+      [],
+      nodes
+    );
+    expect(valid).toBe(true);
+  });
+
+  it('should enforce Kling Omni image limit with reference video', () => {
+    const nodesWithImages = [
+      ...nodes,
+      { id: 'image2', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } } as any,
+      { id: 'image3', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } } as any,
+      { id: 'image4', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } } as any,
+      { id: 'image5', type: 'image', position: { x: 0, y: 0 }, data: { image: '' } } as any,
+    ];
+    const edges: Edge[] = [
+      { id: 'ref-video', source: 'video1', sourceHandle: 'video', target: 'videoGen1', targetHandle: 'ref-video' },
+      { id: 'img-1', source: 'image1', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
+      { id: 'img-2', source: 'image2', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
+      { id: 'img-3', source: 'image3', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
+      { id: 'img-4', source: 'image4', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
+    ];
+
+    const valid = isValidConnection(
+      { source: 'image5', sourceHandle: 'image', target: 'videoGen1', targetHandle: 'ref-images' },
+      edges,
+      nodesWithImages as StudioNode[]
+    );
+
     expect(valid).toBe(false);
   });
 });

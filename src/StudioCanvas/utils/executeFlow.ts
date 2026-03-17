@@ -47,7 +47,7 @@ export async function executeFlow() {
   }
 
   // Find Veo Nodes
-  const veoNodes = nodes.filter(n => n.type === 'veoDirector');
+  const veoNodes = nodes.filter(n => n.type === 'videoGen' || n.type === 'veoDirector');
 
   for (const node of veoNodes) {
      console.log(`Executing Veo Director: ${node.id}`);

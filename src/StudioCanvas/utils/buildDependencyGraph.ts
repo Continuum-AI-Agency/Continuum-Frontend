@@ -3,7 +3,7 @@ import { StudioNode } from '../types';
 import { DependencyGraph } from '../types/execution';
 
 function isExecutableNode(node: StudioNode, edges: Edge[]): boolean {
-  if (['nanoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(node.type || '')) {
+  if (['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo', 'string'].includes(node.type || '')) {
     return true;
   }
 
