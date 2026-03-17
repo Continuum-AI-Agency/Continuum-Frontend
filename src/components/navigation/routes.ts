@@ -6,10 +6,15 @@ import {
   Sparkles,
   Sprout,
   Target,
+  Activity,
+  Bot,
+  CalendarDays,
+  ChartColumn,
   Blocks,
   Users,
   FileText,
   User,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 
@@ -17,6 +22,7 @@ export type AppNavigationItem = {
   label: string;
   href: string;
   icon: LucideIcon;
+  quickTabs?: boolean;
   badge?: {
     label: string;
     tone?: "green" | "red" | "blue" | "violet";
@@ -45,15 +51,41 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     label: "Organic Content",
     href: "/organic",
     icon: Sprout,
+    quickTabs: true,
+    items: [
+      {
+        label: "Metrics Dashboard",
+        href: "/organic?tab=metrics",
+        icon: ChartColumn,
+      },
+      {
+        label: "Planner",
+        href: "/organic?tab=planner",
+        icon: CalendarDays,
+      },
+    ],
   },
   {
     label: "Campaigns",
     href: "/paid-media",
     icon: Target,
+    quickTabs: true,
     badge: {
       label: "Beta",
       tone: "violet",
     },
+    items: [
+      {
+        label: "Observability",
+        href: "/paid-media?tab=dashboard",
+        icon: Activity,
+      },
+      {
+        label: "Jaina",
+        href: "/paid-media?tab=jaina",
+        icon: Bot,
+      },
+    ],
   },
   {
     label: "Primitives",
@@ -79,6 +111,11 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
         label: "Personas",
         href: "/primitives?tab=personas",
         icon: User,
+      },
+      {
+        label: "Products",
+        href: "/primitives?tab=products",
+        icon: Package,
       },
     ],
   },

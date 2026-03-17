@@ -33,8 +33,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { BrandSwitcher } from "./BrandSwitcher";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { isPointerInDeepSidebarZone } from "./sidebarHoverIntent";
 
@@ -109,6 +110,7 @@ export function AppSidebar() {
   const { appearance, toggle } = useTheme();
   const isAdmin = isAdminUser(user);
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
+  const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
   const wasAutoExpandedRef = useRef(false);
 
   const handleSidebarMouseMove = useCallback(
@@ -165,17 +167,114 @@ export function AppSidebar() {
         </button>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-6">
-        <SidebarGroup>
+      <SidebarContent className="px-3 py-4">
+        <SidebarGroup className="p-1">
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
+            <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
               {APP_NAVIGATION.map((item) => {
                 const active = isRouteActive(pathname, searchParams, item);
                 const hasSubItems = item.items && item.items.length > 0;
+                const isSubActive = item.items?.some((sub) => isRouteActive(pathname, searchParams, sub)) ?? false;
+
+                if (hasSubItems && item.quickTabs) {
+                  const showQuickTabs = state !== "collapsed" && hoveredQuickTabs === item.href;
+
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <div
+                        onMouseEnter={() => setHoveredQuickTabs(item.href)}
+                        onMouseLeave={() => setHoveredQuickTabs((current) => (current === item.href ? null : current))}
+                        onFocusCapture={() => setHoveredQuickTabs(item.href)}
+                        onBlurCapture={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setHoveredQuickTabs((current) => (current === item.href ? null : current));
+                          }
+                        }}
+                        className="group/quick-tabs"
+                      >
+                        <SidebarMenuButton
+                          asChild
+                          isActive={active || isSubActive}
+                          tooltip={item.label}
+                          size="default"
+                          onMouseEnter={() => setHoveredHref(item.href)}
+                          onMouseLeave={() => setHoveredHref(null)}
+                          className={cn(
+                            "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                            (active || isSubActive)
+                              ? "text-[var(--sidebar-foreground)]"
+                              : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
+                          )}
+                        >
+                          <Link href={item.href}>
+                            {active || isSubActive ? (
+                              <span
+                                className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                            <AnimatedIcon
+                              icon={item.icon}
+                              isHovered={hoveredHref === item.href}
+                              active={active || isSubActive}
+                            />
+                            <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                              {item.label}
+                            </span>
+                          </Link>
+                        </SidebarMenuButton>
+                        <AnimatePresence initial={false}>
+                          {showQuickTabs ? (
+                            <motion.div
+                              key={`${item.href}-quick-tabs`}
+                              initial={{ opacity: 0, y: -6, height: 0 }}
+                              animate={{ opacity: 1, y: 0, height: "auto" }}
+                              exit={{ opacity: 0, y: -6, height: 0 }}
+                              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                              className="overflow-hidden pl-9 pr-1 pt-1 group-data-[collapsible=icon]:hidden"
+                            >
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.items?.map((subItem) => {
+                                  const subActive = isRouteActive(pathname, searchParams, subItem);
+                                  return (
+                                    <Button
+                                      key={subItem.href}
+                                      asChild
+                                      size="sm"
+                                      variant={subActive ? "secondary" : "outline"}
+                                      className={cn(
+                                        "h-6 rounded-md px-2 text-[0.65rem] font-medium tracking-[0.01em]",
+                                        subActive
+                                          ? "border-[color-mix(in_srgb,var(--ring)_36%,transparent)] bg-[color-mix(in_srgb,var(--ring)_16%,transparent)] text-[var(--sidebar-foreground)]"
+                                          : "border-[color-mix(in_srgb,var(--sidebar-foreground)_18%,transparent)] bg-transparent text-[color-mix(in_srgb,var(--sidebar-foreground)_76%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
+                                      )}
+                                    >
+                                      <Link href={subItem.href}>{subItem.label}</Link>
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+                      </div>
+                      {item.badge ? (
+                        <SidebarMenuBadge className="pointer-events-none">
+                          <Badge
+                            size="1"
+                            color={item.badge.tone ?? "violet"}
+                            radius="full"
+                            variant="surface"
+                          >
+                            {item.badge.label}
+                          </Badge>
+                        </SidebarMenuBadge>
+                      ) : null}
+                    </SidebarMenuItem>
+                  );
+                }
 
                 if (hasSubItems) {
-                  const isSubActive = item.items?.some(sub => isRouteActive(pathname, searchParams, sub));
-                  
                   return (
                     <Collapsible
                       key={item.href}
@@ -188,7 +287,7 @@ export function AppSidebar() {
                           <TooltipTrigger asChild>
                             <CollapsibleTrigger asChild>
                               <SidebarMenuButton
-                                size="lg"
+                                size="default"
                                 isActive={active || isSubActive}
                                 onMouseEnter={() => setHoveredHref(item.href)}
                                 onMouseLeave={() => setHoveredHref(null)}
@@ -277,7 +376,7 @@ export function AppSidebar() {
                       asChild
                       isActive={active}
                       tooltip={item.label}
-                      size="lg"
+                      size="default"
                       onMouseEnter={() => setHoveredHref(item.href)}
                       onMouseLeave={() => setHoveredHref(null)}
                       className={cn(
@@ -322,8 +421,8 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-3 pb-4">
-        <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
+      <SidebarFooter className="px-3 pb-3">
+        <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
           {APP_NAVIGATION_FOOTER.map((item) => {
             if (item.adminOnly && !isAdmin) return null;
             const active = isRouteActive(pathname, searchParams, item);
@@ -334,7 +433,7 @@ export function AppSidebar() {
                   asChild
                   isActive={active}
                   tooltip={item.label}
-                  size="lg"
+                  size="default"
                   onMouseEnter={() => setHoveredHref(item.href)}
                   onMouseLeave={() => setHoveredHref(null)}
                   className={cn(
@@ -366,7 +465,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Sign out"
-              size="lg"
+              size="default"
               disabled={isPending}
               onClick={() => logout()}
               onMouseEnter={() => setHoveredHref("sign-out")}
@@ -386,11 +485,11 @@ export function AppSidebar() {
         </SidebarMenu>
 
         <SidebarSeparator className="my-2 bg-[var(--color-border)]" />
-        <SidebarMenu className="gap-2 group-data-[collapsible=icon]:items-center">
+        <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip={appearance === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              size="lg"
+              size="default"
               onClick={toggle}
               onMouseEnter={() => setHoveredHref("theme-toggle")}
               onMouseLeave={() => setHoveredHref(null)}

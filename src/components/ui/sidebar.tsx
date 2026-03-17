@@ -79,7 +79,6 @@ const SidebarProvider = React.forwardRef<
       "--sidebar-width"?: string
       "--sidebar-width-icon"?: string
     }
-    const providedSidebarWidth = cssVars["--sidebar-width"] ?? SIDEBAR_WIDTH
     const providedSidebarWidthIcon =
       cssVars["--sidebar-width-icon"] ?? SIDEBAR_WIDTH_ICON
 
@@ -130,13 +129,9 @@ const SidebarProvider = React.forwardRef<
     const state = open ? "expanded" : "collapsed"
 
     React.useEffect(() => {
-      const nextWidth = isMobile
-        ? "0px"
-        : open
-          ? providedSidebarWidth
-          : providedSidebarWidthIcon
+      const nextWidth = isMobile ? "0px" : providedSidebarWidthIcon
       document.documentElement.style.setProperty("--app-sidebar-width", nextWidth)
-    }, [isMobile, open, providedSidebarWidth, providedSidebarWidthIcon])
+    }, [isMobile, providedSidebarWidthIcon])
 
     React.useEffect(() => {
       return () => {
@@ -212,6 +207,7 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const isIconCollapsible = collapsible === "icon"
 
     if (collapsible === "none") {
       return (
@@ -264,12 +260,17 @@ const Sidebar = React.forwardRef<
         {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
-            "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-            "group-data-[collapsible=offcanvas]:w-0",
+            "relative bg-transparent",
+            isIconCollapsible
+              ? variant === "floating" || variant === "inset"
+                ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+                : "w-(--sidebar-width-icon)"
+              : "w-(--sidebar-width) transition-[width] duration-200 ease-linear",
+            !isIconCollapsible && "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
+            !isIconCollapsible && (variant === "floating" || variant === "inset")
               ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+              : !isIconCollapsible && "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
           )}
         />
         <div
