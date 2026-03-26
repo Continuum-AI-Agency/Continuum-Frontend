@@ -18,6 +18,8 @@ type CanvasSession = {
   deleted_node_ids?: string[];
   deleted_edge_ids?: string[];
   updated_at: string;
+  revision?: number | null;
+  editor_session_id?: string | null;
 };
 
 type PresenceUser = {
@@ -38,10 +40,30 @@ type CanvasUpdatePayload = {
   deleted_node_ids?: string[];
   deleted_edge_ids?: string[];
   updated_at: string;
+  revision?: number | null;
+  editor_session_id?: string | null;
 };
+type RemoteUpdateSource = "realtime" | "catchup";
 
 const normalizeRealtimeStatus = (value: string): RealtimeStatus =>
   value === "CHANNEL_ERROR" ? "ERROR" : (value as RealtimeStatus);
+
+const toStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+
+const toFiniteNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string" && value.trim().length > 0 && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
+
+const buildCanvasSessionId = (): string => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `canvas-session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const supabase = createSupabaseBrowserClient();
@@ -56,7 +78,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
 
+  const localSessionIdRef = useRef<string>(buildCanvasSessionId());
   const lastUpdateRef = useRef<string | null>(null);
+  const lastRevisionRef = useRef<number | null>(null);
   const isRemoteChangeRef = useRef<boolean>(false);
   const broadcastChannelRef = useRef<any>(null);
   const dbChannelRef = useRef<any>(null);
@@ -66,50 +90,106 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const pendingSaveRef = useRef<boolean>(false);
   const saveInFlightRef = useRef<boolean>(false);
   const pendingBroadcastPayloadRef = useRef<CanvasUpdatePayload | null>(null);
+  const syncLatestCanvasSessionRef = useRef<(() => Promise<void>) | null>(null);
 
-  const handleRemoteUpdate = useCallback((payload: CanvasUpdatePayload) => {
-    const remoteTimestamp = payload.updated_at;
-    const localTimestamp = lastUpdateRef.current;
+  const handleRemoteUpdate = useCallback(
+    (payload: CanvasUpdatePayload, source: RemoteUpdateSource = "realtime") => {
+      const remoteTimestamp = payload.updated_at;
+      const localTimestamp = lastUpdateRef.current;
+      const remoteRevision = toFiniteNumber(payload.revision);
+      const localRevision = lastRevisionRef.current;
+      const hasNodeArray = Array.isArray(payload.nodes);
+      const hasEdgeArray = Array.isArray(payload.edges);
+      if (!hasNodeArray || !hasEdgeArray) {
+        console.warn("[Canvas Sync] Ignoring malformed payload and requesting catch-up", {
+          source,
+          hasNodeArray,
+          hasEdgeArray,
+          timestamp: remoteTimestamp,
+        });
+        if (source === "realtime") {
+          void syncLatestCanvasSessionRef.current?.();
+        }
+        return;
+      }
 
-    if (remoteTimestamp && localTimestamp && remoteTimestamp === localTimestamp) {
-      return;
-    }
+      const remoteNodes = payload.nodes as StudioNode[];
+      const remoteEdges = payload.edges as Edge[];
+      const remoteDeletedNodeIds = toStringArray(payload.deleted_node_ids);
+      const remoteDeletedEdgeIds = toStringArray(payload.deleted_edge_ids);
 
-    const isRemoteNewer = !localTimestamp || new Date(remoteTimestamp) >= new Date(localTimestamp);
-    if (!isRemoteNewer) return;
+      if (remoteRevision !== null && localRevision !== null) {
+        if (remoteRevision < localRevision) {
+          return;
+        }
+        if (remoteRevision === localRevision) {
+          return;
+        }
+      }
 
-    const store = useStudioStore.getState();
-    
-    const mergedNodes = mergeNodes(
-      store.nodes,
-      (payload.nodes || []) as StudioNode[],
-      (payload.deleted_node_ids || []) as string[],
-      lastRemoteNodeIdsRef.current
-    );
-    const mergedEdges = mergeEdges(
-      store.edges,
-      (payload.edges || []) as Edge[],
-      (payload.deleted_edge_ids || []) as string[],
-      lastRemoteEdgeIdsRef.current
-    );
+      if (remoteRevision === null) {
+        if (remoteTimestamp && localTimestamp && remoteTimestamp === localTimestamp) {
+          return;
+        }
 
-    console.log("[Canvas Sync] State merged", {
-      nodes: mergedNodes.length,
-      timestamp: remoteTimestamp
-    });
+        const isRemoteNewer = !localTimestamp || new Date(remoteTimestamp) >= new Date(localTimestamp);
+        if (!isRemoteNewer) return;
+      }
 
-    isRemoteChangeRef.current = true;
-    store.setNodes(mergedNodes);
-    store.setEdges(mergedEdges);
-    lastUpdateRef.current = remoteTimestamp;
-    
-    lastRemoteNodeIdsRef.current = new Set((payload.nodes || []).map((n: any) => n.id));
-    lastRemoteEdgeIdsRef.current = new Set((payload.edges || []).map((e: any) => e.id));
-    
-    setTimeout(() => {
-      isRemoteChangeRef.current = false;
-    }, 100);
-  }, []);
+      const store = useStudioStore.getState();
+
+      const hasDeleteSignal = remoteDeletedNodeIds.length > 0 || remoteDeletedEdgeIds.length > 0;
+      const violatesClearInvariant =
+        source === "realtime" &&
+        remoteNodes.length === 0 &&
+        remoteEdges.length === 0 &&
+        !hasDeleteSignal &&
+        (store.nodes.length > 0 || store.edges.length > 0) &&
+        (lastRemoteNodeIdsRef.current.size > 0 || lastRemoteEdgeIdsRef.current.size > 0);
+
+      if (violatesClearInvariant) {
+        console.warn("[Canvas Sync] Ignoring invalid clear event and requesting catch-up", {
+          timestamp: remoteTimestamp,
+          revision: remoteRevision,
+        });
+        void syncLatestCanvasSessionRef.current?.();
+        return;
+      }
+
+      const mergedNodes = mergeNodes(
+        store.nodes,
+        remoteNodes,
+        remoteDeletedNodeIds,
+        lastRemoteNodeIdsRef.current
+      );
+      const mergedEdges = mergeEdges(
+        store.edges,
+        remoteEdges,
+        remoteDeletedEdgeIds,
+        lastRemoteEdgeIdsRef.current
+      );
+
+      console.log("[Canvas Sync] State merged", {
+        nodes: mergedNodes.length,
+        timestamp: remoteTimestamp,
+        revision: remoteRevision ?? "legacy",
+      });
+
+      isRemoteChangeRef.current = true;
+      store.setNodes(mergedNodes);
+      store.setEdges(mergedEdges);
+      lastUpdateRef.current = remoteTimestamp;
+      lastRevisionRef.current = remoteRevision;
+
+      lastRemoteNodeIdsRef.current = new Set(remoteNodes.map((n: any) => n.id));
+      lastRemoteEdgeIdsRef.current = new Set(remoteEdges.map((e: any) => e.id));
+
+      setTimeout(() => {
+        isRemoteChangeRef.current = false;
+      }, 100);
+    },
+    []
+  );
 
   const syncLatestCanvasSession = useCallback(async () => {
     if (!brandProfileId || !roomId) return;
@@ -135,13 +215,23 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       deleted_node_ids: session.deleted_node_ids || [],
       deleted_edge_ids: session.deleted_edge_ids || [],
       updated_at: session.updated_at,
-    });
+      revision: session.revision ?? null,
+      editor_session_id: session.editor_session_id ?? null,
+    }, "catchup");
   }, [brandProfileId, roomId, supabase, handleRemoteUpdate]);
+
+  useEffect(() => {
+    syncLatestCanvasSessionRef.current = syncLatestCanvasSession;
+    return () => {
+      syncLatestCanvasSessionRef.current = null;
+    };
+  }, [syncLatestCanvasSession]);
 
   useEffect(() => {
     if (!brandProfileId || !roomId) {
       pendingBroadcastPayloadRef.current = null;
       pendingSaveRef.current = false;
+      lastRevisionRef.current = null;
       if (!roomId) setIsLoading(false);
       return;
     }
@@ -174,6 +264,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         store.setNodes((session.nodes || []) as StudioNode[]);
         store.setEdges((session.edges || []) as Edge[]);
         lastUpdateRef.current = session.updated_at;
+        lastRevisionRef.current = toFiniteNumber(session.revision);
         
         lastRemoteNodeIdsRef.current = new Set((session.nodes || []).map((n: any) => n.id));
         lastRemoteEdgeIdsRef.current = new Set((session.edges || []).map((e: any) => e.id));
@@ -185,6 +276,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       } else {
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
+        lastRevisionRef.current = null;
         const store = useStudioStore.getState();
         store.setNodes([]);
         store.setEdges([]);
@@ -282,7 +374,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
               edges: payload.new.edges,
               deleted_node_ids: payload.new.deleted_node_ids,
               deleted_edge_ids: payload.new.deleted_edge_ids,
-              updated_at: payload.new.updated_at
+              updated_at: payload.new.updated_at,
+              revision: payload.new.revision,
+              editor_session_id: payload.new.editor_session_id,
             });
           } else if (payload.eventType === "DELETE") {
             window.location.reload();
@@ -354,24 +448,32 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
             edges: serialized.edges as any,
             deleted_node_ids: deletedNodeIds,
             deleted_edge_ids: deletedEdgeIds,
-            updated_at: new Date().toISOString(),
+            editor_session_id: localSessionIdRef.current,
+            editor_user_id: user?.id ?? null,
           },
           { onConflict: "brand_profile_id,room_id" }
         )
-        .select("updated_at")
+        .select("updated_at, revision, editor_session_id")
         .single();
 
       if (error) {
         console.error("[Canvas Sync] Save failed", error);
       } else if (data) {
-        lastUpdateRef.current = (data as any).updated_at;
+        const resolvedTimestamp = (data as any).updated_at as string;
+        const resolvedRevision = toFiniteNumber((data as any).revision);
+        const resolvedEditorSessionId = ((data as any).editor_session_id ?? localSessionIdRef.current) as string;
+
+        lastUpdateRef.current = resolvedTimestamp;
+        lastRevisionRef.current = resolvedRevision;
 
         const syncPayload: CanvasUpdatePayload = {
           nodes: currentNodes as any[],
           edges: currentEdges as any[],
           deleted_node_ids: deletedNodeIds,
           deleted_edge_ids: deletedEdgeIds,
-          updated_at: lastUpdateRef.current as string,
+          updated_at: resolvedTimestamp,
+          revision: resolvedRevision,
+          editor_session_id: resolvedEditorSessionId,
         };
 
         lastRemoteNodeIdsRef.current = new Set(serialized.nodes.map((n: any) => n.id));
@@ -399,7 +501,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         void saveCanvasToDatabase();
       }
     }
-  }, [brandProfileId, roomId, supabase, status]);
+  }, [brandProfileId, roomId, supabase, status, user?.id]);
 
   const saveTrigger = useStudioStore((state) => state.saveTrigger);
   useEffect(() => {

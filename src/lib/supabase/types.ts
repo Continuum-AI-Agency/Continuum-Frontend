@@ -531,8 +531,11 @@ export type Database = {
           created_at: string
           deleted_edge_ids: Json | null
           deleted_node_ids: Json | null
+          editor_session_id: string | null
+          editor_user_id: string | null
           edges: Json
           nodes: Json
+          revision: number
           room_id: string
           updated_at: string
         }
@@ -541,8 +544,11 @@ export type Database = {
           created_at?: string
           deleted_edge_ids?: Json | null
           deleted_node_ids?: Json | null
+          editor_session_id?: string | null
+          editor_user_id?: string | null
           edges?: Json
           nodes?: Json
+          revision?: number
           room_id: string
           updated_at?: string
         }
@@ -551,8 +557,11 @@ export type Database = {
           created_at?: string
           deleted_edge_ids?: Json | null
           deleted_node_ids?: Json | null
+          editor_session_id?: string | null
+          editor_user_id?: string | null
           edges?: Json
           nodes?: Json
+          revision?: number
           room_id?: string
           updated_at?: string
         }

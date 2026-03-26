@@ -312,4 +312,186 @@ describe("useCanvasRealtime", () => {
     expect(mergedGenerator?.position).toEqual({ x: 12, y: 12 });
     expect(mergedReference?.position).toEqual({ x: 18, y: 18 });
   });
+
+  it("requests catch-up instead of clearing when DB payload is malformed", async () => {
+    const initialNodes = [
+      {
+        id: "node-1",
+        type: "string",
+        position: { x: 0, y: 0 },
+        data: { value: "keep me" },
+      },
+    ];
+
+    mockStore.nodes = initialNodes as any;
+    maybeSingleResponses = [
+      { nodes: initialNodes, edges: [], updated_at: "2026-02-18T10:00:00.000Z" },
+      { nodes: initialNodes, edges: [], updated_at: "2026-02-18T10:00:01.000Z" },
+      { nodes: initialNodes, edges: [], updated_at: "2026-02-18T10:00:03.000Z" },
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+
+    const calls = (mockChannel.on as any).mock.calls;
+    const dbChangeCall = calls.find((c: any) => c[0] === "postgres_changes");
+    const dbChangeHandler = dbChangeCall[2];
+
+    mockSetNodes.mockClear();
+    const maybeSingleCountBeforeMalformedUpdate = maybeSingleCallCount;
+
+    await act(async () => {
+      dbChangeHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          updated_at: "2026-02-18T10:00:02.000Z",
+        },
+      });
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    expect(maybeSingleCallCount).toBeGreaterThan(maybeSingleCountBeforeMalformedUpdate);
+    const latestSetNodesPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
+    expect(latestSetNodesPayload).toHaveLength(1);
+    expect(latestSetNodesPayload?.[0]?.id).toBe("node-1");
+  });
+
+  it("verifies suspicious empty realtime snapshot before applying a clear", async () => {
+    const initialNodes = [
+      {
+        id: "node-2",
+        type: "string",
+        position: { x: 0, y: 0 },
+        data: { value: "persist until verified" },
+      },
+    ];
+    const catchupNodes = [
+      {
+        id: "node-2",
+        type: "string",
+        position: { x: 24, y: 16 },
+        data: { value: "persist until verified" },
+      },
+    ];
+
+    mockStore.nodes = initialNodes as any;
+    maybeSingleResponses = [
+      { nodes: initialNodes, edges: [], updated_at: "2026-02-18T10:10:00.000Z" },
+      { nodes: initialNodes, edges: [], updated_at: "2026-02-18T10:10:01.000Z" },
+      { nodes: catchupNodes, edges: [], updated_at: "2026-02-18T10:10:03.000Z" },
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+
+    const calls = (mockChannel.on as any).mock.calls;
+    const dbChangeCall = calls.find((c: any) => c[0] === "postgres_changes");
+    const dbChangeHandler = dbChangeCall[2];
+
+    mockSetNodes.mockClear();
+    const maybeSingleCountBeforeSuspiciousUpdate = maybeSingleCallCount;
+
+    await act(async () => {
+      dbChangeHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          nodes: [],
+          edges: [],
+          updated_at: "2026-02-18T10:10:02.000Z",
+        },
+      });
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    expect(maybeSingleCallCount).toBeGreaterThan(maybeSingleCountBeforeSuspiciousUpdate);
+    const latestSetNodesPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
+    expect(latestSetNodesPayload).toHaveLength(1);
+    expect(latestSetNodesPayload?.[0]?.position).toEqual({ x: 24, y: 16 });
+  });
+
+  it("ignores stale revisions even when stale payload has a newer timestamp", async () => {
+    const initialNodes = [
+      {
+        id: "node-rev",
+        type: "string",
+        position: { x: 0, y: 0 },
+        data: { value: "initial" },
+      },
+    ];
+
+    mockStore.nodes = initialNodes as any;
+    maybeSingleResponses = [
+      { nodes: initialNodes, edges: [], updated_at: "2026-02-18T11:00:00.000Z", revision: 1 },
+      null,
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80));
+    });
+
+    const calls = (mockChannel.on as any).mock.calls;
+    const broadcastCall = calls.find((c: any) => c[0] === "broadcast" && c[1]?.event === "canvas_updated");
+    const dbChangeCall = calls.find((c: any) => c[0] === "postgres_changes");
+    const broadcastHandler = broadcastCall[2];
+    const dbChangeHandler = dbChangeCall[2];
+
+    await act(async () => {
+      broadcastHandler({
+        payload: {
+          nodes: [
+            {
+              id: "node-rev",
+              type: "string",
+              position: { x: 30, y: 30 },
+              data: { value: "rev-3" },
+            },
+          ],
+          edges: [],
+          updated_at: "2026-02-18T11:00:02.000Z",
+          revision: 3,
+        },
+      });
+    });
+
+    const setNodesCallCountAfterRevision3 = (mockSetNodes as any).mock.calls.length;
+
+    await act(async () => {
+      dbChangeHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          nodes: [
+            {
+              id: "node-rev",
+              type: "string",
+              position: { x: 10, y: 10 },
+              data: { value: "rev-2-stale" },
+            },
+          ],
+          edges: [],
+          updated_at: "2026-02-18T11:00:09.000Z",
+          revision: 2,
+        },
+      });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect((mockSetNodes as any).mock.calls.length).toBe(setNodesCallCountAfterRevision3);
+    const latestSetNodesPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
+    expect(latestSetNodesPayload?.[0]?.data?.value).toBe("rev-3");
+    expect(latestSetNodesPayload?.[0]?.position).toEqual({ x: 30, y: 30 });
+  });
 });
