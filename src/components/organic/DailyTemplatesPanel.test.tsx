@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, mock } from "bun:test"
 import { fireEvent, render } from "@testing-library/react"
 import type { ReactNode } from "react"
 
 import { DailyTemplatesPanel } from "./DailyTemplatesPanel"
 import type { DetailedPostTemplate } from "@/lib/organic/types"
 
-vi.mock("@radix-ui/themes", () => ({
+mock.module("@radix-ui/themes", () => ({
   Badge: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Box: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Button: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
@@ -31,11 +31,11 @@ vi.mock("@radix-ui/themes", () => ({
   },
 }))
 
-vi.mock("@radix-ui/react-icons", () => ({
+mock.module("@radix-ui/react-icons", () => ({
   ClipboardCopyIcon: () => <span>copy</span>,
 }))
 
-vi.mock("./PlatformPreview", () => ({
+mock.module("./PlatformPreview", () => ({
   PlatformPreview: () => <div data-testid="platform-preview" />,
 }))
 
@@ -80,16 +80,16 @@ const template: DetailedPostTemplate = {
 
 describe("DailyTemplatesPanel scheduling guardrails", () => {
   it("only emits schedule changes for future datetime-local values", () => {
-    const onScheduleChange = vi.fn()
+    const onScheduleChange = mock()
     const { container } = render(
       <DailyTemplatesPanel
         templates={[template]}
         postingState={{ mon_instagram: { ready: false, scheduledAt: "" } }}
         language="English"
-        onCopyCaption={vi.fn()}
-        onToggleReady={vi.fn()}
+        onCopyCaption={mock()}
+        onToggleReady={mock()}
         onScheduleChange={onScheduleChange}
-        onAssetDrop={vi.fn()}
+        onAssetDrop={mock()}
       />
     )
 
@@ -109,16 +109,16 @@ describe("DailyTemplatesPanel scheduling guardrails", () => {
   })
 
   it("allows clearing scheduled value", () => {
-    const onScheduleChange = vi.fn()
+    const onScheduleChange = mock()
     const { container } = render(
       <DailyTemplatesPanel
         templates={[template]}
         postingState={{ mon_instagram: { ready: true, scheduledAt: "2026-03-07T12:00" } }}
         language="English"
-        onCopyCaption={vi.fn()}
-        onToggleReady={vi.fn()}
+        onCopyCaption={mock()}
+        onToggleReady={mock()}
         onScheduleChange={onScheduleChange}
-        onAssetDrop={vi.fn()}
+        onAssetDrop={mock()}
       />
     )
 

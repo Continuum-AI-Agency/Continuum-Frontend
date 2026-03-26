@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "bun:test";
 import { mergeNodes, mergeEdges } from '../merge-strategy';
 import type { StudioNode } from '@/StudioCanvas/types';
 import type { Edge } from '@xyflow/react';

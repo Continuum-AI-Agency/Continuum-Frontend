@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
+import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 import { TimeGridCanvas } from "./TimeGridCanvas"
@@ -8,19 +8,19 @@ const store = {
   ghosts: {},
 }
 
-vi.mock("@/lib/organic/store", () => ({
+mock.module("@/lib/organic/store", () => ({
   useCalendarStore: (selector: (state: typeof store) => unknown) => selector(store),
 }))
 
-vi.mock("@dnd-kit/core", () => ({
+mock.module("@dnd-kit/core", () => ({
   useDroppable: () => ({
-    setNodeRef: vi.fn(),
+    setNodeRef: mock(),
     isOver: false,
   }),
   useDraggable: () => ({
     attributes: {},
     listeners: {},
-    setNodeRef: vi.fn(),
+    setNodeRef: mock(),
     transform: null,
     isDragging: false,
   }),
@@ -82,7 +82,7 @@ function buildWeekDays(): OrganicCalendarDay[] {
 
 describe("TimeGridCanvas", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mock.restore()
   })
 
   afterEach(() => {
@@ -90,7 +90,7 @@ describe("TimeGridCanvas", () => {
   })
 
   it("calls onCreatePost from header plus button", () => {
-    const onCreatePost = vi.fn()
+    const onCreatePost = mock()
 
     render(
       <TimeGridCanvas
@@ -101,13 +101,13 @@ describe("TimeGridCanvas", () => {
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"
-        onViewModeChange={vi.fn()}
-        onPreviousWeek={vi.fn()}
-        onNextWeek={vi.fn()}
+        onViewModeChange={mock()}
+        onPreviousWeek={mock()}
+        onNextWeek={mock()}
         onCreatePost={onCreatePost}
-        onSelectDraft={vi.fn()}
-        onToggleSelection={vi.fn()}
-        onRegenerate={vi.fn()}
+        onSelectDraft={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
       />
     )
 
@@ -117,7 +117,7 @@ describe("TimeGridCanvas", () => {
   })
 
   it("calls onCreatePost with day and platform when clicking an empty cell", () => {
-    const onCreatePost = vi.fn()
+    const onCreatePost = mock()
 
     render(
       <TimeGridCanvas
@@ -128,13 +128,13 @@ describe("TimeGridCanvas", () => {
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"
-        onViewModeChange={vi.fn()}
-        onPreviousWeek={vi.fn()}
-        onNextWeek={vi.fn()}
+        onViewModeChange={mock()}
+        onPreviousWeek={mock()}
+        onNextWeek={mock()}
         onCreatePost={onCreatePost}
-        onSelectDraft={vi.fn()}
-        onToggleSelection={vi.fn()}
-        onRegenerate={vi.fn()}
+        onSelectDraft={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
       />
     )
 
@@ -150,7 +150,7 @@ describe("TimeGridCanvas", () => {
   })
 
   it("updates planner view mode from the segmented controls", () => {
-    const onViewModeChange = vi.fn()
+    const onViewModeChange = mock()
 
     render(
       <TimeGridCanvas
@@ -162,12 +162,12 @@ describe("TimeGridCanvas", () => {
         rangeSubtitle="Week 9"
         viewMode="week"
         onViewModeChange={onViewModeChange}
-        onPreviousWeek={vi.fn()}
-        onNextWeek={vi.fn()}
-        onCreatePost={vi.fn()}
-        onSelectDraft={vi.fn()}
-        onToggleSelection={vi.fn()}
-        onRegenerate={vi.fn()}
+        onPreviousWeek={mock()}
+        onNextWeek={mock()}
+        onCreatePost={mock()}
+        onSelectDraft={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
       />
     )
 
@@ -177,7 +177,7 @@ describe("TimeGridCanvas", () => {
   })
 
   it("still allows adding posts when a cell already has a draft", () => {
-    const onCreatePost = vi.fn()
+    const onCreatePost = mock()
     const days = buildWeekDays()
     days[0] = {
       ...days[0],
@@ -208,13 +208,13 @@ describe("TimeGridCanvas", () => {
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"
-        onViewModeChange={vi.fn()}
-        onPreviousWeek={vi.fn()}
-        onNextWeek={vi.fn()}
+        onViewModeChange={mock()}
+        onPreviousWeek={mock()}
+        onNextWeek={mock()}
         onCreatePost={onCreatePost}
-        onSelectDraft={vi.fn()}
-        onToggleSelection={vi.fn()}
-        onRegenerate={vi.fn()}
+        onSelectDraft={mock()}
+        onToggleSelection={mock()}
+        onRegenerate={mock()}
       />
     )
 

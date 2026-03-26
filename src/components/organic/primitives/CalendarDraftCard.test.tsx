@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, mock } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 
@@ -6,15 +6,15 @@ import { CalendarDraftCard } from "./CalendarDraftCard";
 import type { OrganicCalendarDraft } from "./types";
 
 const store = {
-  updateDraft: vi.fn(),
-  bulkDeleteDrafts: vi.fn(),
+  updateDraft: mock(),
+  bulkDeleteDrafts: mock(),
 };
 
-vi.mock("@/lib/organic/store", () => ({
+mock.module("@/lib/organic/store", () => ({
   useCalendarStore: (selector: (state: typeof store) => unknown) => selector(store),
 }));
 
-vi.mock("@/components/ui/context-menu", () => ({
+mock.module("@/components/ui/context-menu", () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   ContextMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -37,28 +37,28 @@ vi.mock("@/components/ui/context-menu", () => ({
   ),
 }));
 
-vi.mock("@/components/ui/hover-card", () => ({
+mock.module("@/components/ui/hover-card", () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   HoverCardTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   HoverCardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/components/ui/tooltip", () => ({
+mock.module("@/components/ui/tooltip", () => ({
   TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock("@/components/ui/progress", () => ({
+mock.module("@/components/ui/progress", () => ({
   Progress: () => <div data-testid="progress" />,
 }));
 
-vi.mock("./DraftHoverCardContent", () => ({
+mock.module("./DraftHoverCardContent", () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));
 
-vi.mock("./DraftCardBadges", () => ({
+mock.module("./DraftCardBadges", () => ({
   PlatformBadge: ({ platform }: { platform: string }) => <span>{platform}</span>,
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
@@ -80,7 +80,7 @@ const draft: OrganicCalendarDraft = {
 
 describe("CalendarDraftCard", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mock.restore();
   });
 
   afterEach(() => {
@@ -88,14 +88,14 @@ describe("CalendarDraftCard", () => {
   });
 
   it("clicking the card focuses the side editor via onSelect", () => {
-    const onSelect = vi.fn();
+    const onSelect = mock();
     const { container } = render(
       <CalendarDraftCard
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
         onSelect={onSelect}
-        onToggleSelection={vi.fn()}
+        onToggleSelection={mock()}
       />
     );
 
@@ -108,14 +108,14 @@ describe("CalendarDraftCard", () => {
   });
 
   it("quick platform edit updates draft and keeps editor focused", () => {
-    const onSelect = vi.fn();
+    const onSelect = mock();
     render(
       <CalendarDraftCard
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
         onSelect={onSelect}
-        onToggleSelection={vi.fn()}
+        onToggleSelection={mock()}
       />
     );
 
@@ -131,15 +131,15 @@ describe("CalendarDraftCard", () => {
   });
 
   it("retry generation action calls onRegenerate", () => {
-    const onSelect = vi.fn();
-    const onRegenerate = vi.fn();
+    const onSelect = mock();
+    const onRegenerate = mock();
     render(
       <CalendarDraftCard
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
         onSelect={onSelect}
-        onToggleSelection={vi.fn()}
+        onToggleSelection={mock()}
         onRegenerate={onRegenerate}
       />
     );
@@ -151,16 +151,16 @@ describe("CalendarDraftCard", () => {
   });
 
   it("allows custom posting time edits from quick actions", () => {
-    const onSelect = vi.fn();
+    const onSelect = mock();
     const originalPrompt = (window as unknown as { prompt?: unknown }).prompt;
-    (window as unknown as { prompt: () => string }).prompt = vi.fn(() => "11:15 AM");
+    (window as unknown as { prompt: () => string }).prompt = mock(() => "11:15 AM");
     render(
       <CalendarDraftCard
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
         onSelect={onSelect}
-        onToggleSelection={vi.fn()}
+        onToggleSelection={mock()}
       />
     );
 
@@ -177,14 +177,14 @@ describe("CalendarDraftCard", () => {
 
   it("ignores invalid custom posting time edits", () => {
     const originalPrompt = (window as unknown as { prompt?: unknown }).prompt;
-    (window as unknown as { prompt: () => string }).prompt = vi.fn(() => "9 AM");
+    (window as unknown as { prompt: () => string }).prompt = mock(() => "9 AM");
     render(
       <CalendarDraftCard
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
-        onSelect={vi.fn()}
-        onToggleSelection={vi.fn()}
+        onSelect={mock()}
+        onToggleSelection={mock()}
       />
     );
 
@@ -206,8 +206,8 @@ describe("CalendarDraftCard", () => {
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
-        onSelect={vi.fn()}
-        onToggleSelection={vi.fn()}
+        onSelect={mock()}
+        onToggleSelection={mock()}
       />
     );
 
@@ -219,8 +219,8 @@ describe("CalendarDraftCard", () => {
         draft={invalidTimeDraft}
         isSelected={false}
         isMultiSelected={false}
-        onSelect={vi.fn()}
-        onToggleSelection={vi.fn()}
+        onSelect={mock()}
+        onToggleSelection={mock()}
       />
     );
 
@@ -235,15 +235,15 @@ describe("CalendarDraftCard", () => {
       status: "failed",
       generationError: "Failed to generate post",
     };
-    const onClearFailure = vi.fn();
+    const onClearFailure = mock();
 
     render(
       <CalendarDraftCard
         draft={failedDraft}
         isSelected={false}
         isMultiSelected={false}
-        onSelect={vi.fn()}
-        onToggleSelection={vi.fn()}
+        onSelect={mock()}
+        onToggleSelection={mock()}
         onClearFailure={onClearFailure}
       />
     );
@@ -258,8 +258,8 @@ describe("CalendarDraftCard", () => {
         draft={draft}
         isSelected={false}
         isMultiSelected={false}
-        onSelect={vi.fn()}
-        onToggleSelection={vi.fn()}
+        onSelect={mock()}
+        onToggleSelection={mock()}
       />
     );
     const cardButton = container.querySelector("button[aria-pressed]");

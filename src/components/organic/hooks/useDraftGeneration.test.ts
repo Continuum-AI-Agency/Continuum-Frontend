@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
 import { renderHook, act } from "@testing-library/react";
 
 import { useDraftGeneration, mapWeeklyGridToCalendarPlacements } from "./useDraftGeneration";
@@ -6,20 +6,18 @@ import { useCalendarStore } from "@/lib/organic/store";
 import { streamCalendarGeneration } from "../primitives/organic-calendar-api";
 import type { CalendarGenerationEvent } from "@/lib/organic/calendar-generation";
 
-vi.mock("@/lib/organic/store", () => ({
-  useCalendarStore: vi.fn(),
+mock.module("@/lib/organic/store", () => ({
+  useCalendarStore: mock(),
 }));
 
-vi.mock("../primitives/organic-calendar-api", () => ({
-  streamCalendarGeneration: vi.fn(),
+mock.module("../primitives/organic-calendar-api", () => ({
+  streamCalendarGeneration: mock(),
 }));
 
-vi.mock("@/lib/supabase/client", () => ({
+mock.module("@/lib/supabase/client", () => ({
   createSupabaseBrowserClient: () => ({
     auth: {
-      getSession: vi
-        .fn()
-        .mockResolvedValue({ data: { session: { access_token: "test-token" } } }),
+      getSession: mock().mockResolvedValue({ data: { session: { access_token: "test-token" } } }),
     },
   }),
 }));
@@ -29,15 +27,15 @@ describe("useDraftGeneration", () => {
 
   const mockStore = {
     gridStatus: "idle",
-    setGridStatus: vi.fn(),
-    setGridProgress: vi.fn(),
-    setGridError: vi.fn(),
-    addDraft: vi.fn(),
-    bulkDeleteDrafts: vi.fn(),
-    updateDraft: vi.fn(),
-    setGhosts: vi.fn(),
-    addEvent: vi.fn(),
-    setDays: vi.fn(),
+    setGridStatus: mock(),
+    setGridProgress: mock(),
+    setGridError: mock(),
+    addDraft: mock(),
+    bulkDeleteDrafts: mock(),
+    updateDraft: mock(),
+    setGhosts: mock(),
+    addEvent: mock(),
+    setDays: mock(),
   };
 
   const defaultProps: HookProps = {
@@ -92,18 +90,18 @@ describe("useDraftGeneration", () => {
   };
 
   beforeEach(() => {
-    (useCalendarStore as unknown as ReturnType<typeof vi.fn>).mockReturnValue(mockStore);
-    vi.clearAllMocks();
+    (useCalendarStore as unknown as ReturnType<typeof mock>).mockReturnValue(mockStore);
+    mock.restore();
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    mock.restore();
   });
 
   it("handles generation success flow", async () => {
     const { result } = renderHook(() => useDraftGeneration(defaultProps));
 
-    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
       async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
         onEvent({ type: "progress", completed: 1, total: 2, message: "Drafting..." });
         onEvent({ type: "slot_started", placementId: "p1", message: "Building post..." });
@@ -144,7 +142,7 @@ describe("useDraftGeneration", () => {
   it("replaces seeded draft in place when backend emits a new placement id", async () => {
     const { result } = renderHook(() => useDraftGeneration(defaultProps));
 
-    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
       async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
         onEvent({
           type: "slot_completed",
@@ -205,6 +203,67 @@ describe("useDraftGeneration", () => {
               storyHook: "Dinner together",
             }),
           }),
+        }),
+      })
+    );
+  });
+
+  it("uses mediaSuggestion.assets primary image when top-level assetBase64 is missing", async () => {
+    const { result } = renderHook(() => useDraftGeneration(defaultProps));
+
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
+      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
+        onEvent({
+          type: "slot_completed",
+          placement: {
+            placementId: "draft-remote-2",
+            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00.000Z" },
+            platform: { name: "instagram" },
+            seed: { source: "trend", trendId: "trend-1" },
+            content: { titleTopic: "Carousel Title", format: "Carousel" },
+            creative: {
+              creativeIdea: "Carousel idea",
+              mediaSuggestion: {
+                kind: "carousel",
+                assetBase64: null,
+                assets: [
+                  {
+                    role: "slide_1",
+                    order: 1,
+                    assetBase64: "firstslidebase64",
+                    mimeType: "image/webp",
+                    prompt: "Slide 1 prompt",
+                  },
+                  {
+                    role: "slide_2",
+                    order: 2,
+                    error: "generation failed",
+                  },
+                ],
+              },
+            },
+            copy: { caption: "Generated caption" },
+          },
+        });
+        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
+      }
+    );
+
+    await act(async () => {
+      await result.current.handleGenerateDrafts();
+    });
+
+    expect(mockStore.addDraft).toHaveBeenCalledWith(
+      "2026-01-26",
+      expect.objectContaining({
+        id: "seed-1",
+        mediaSuggestion: expect.objectContaining({
+          assetBase64: "firstslidebase64",
+          assetUrl: "data:image/webp;base64,firstslidebase64",
+          assets: expect.arrayContaining([
+            expect.objectContaining({ role: "slide_1", order: 1 }),
+            expect.objectContaining({ role: "slide_2", order: 2, error: "generation failed" }),
+          ]),
         }),
       })
     );
@@ -298,7 +357,7 @@ describe("useDraftGeneration", () => {
 
     const { result } = renderHook(() => useDraftGeneration(props));
 
-    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
       async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
         onEvent({ type: "complete", summary: { total: 2, succeeded: 2, failed: 0 } });
       }
@@ -308,7 +367,7 @@ describe("useDraftGeneration", () => {
       await result.current.handleGenerateDrafts();
     });
 
-    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mock.calls;
     expect(streamCalls).toHaveLength(1);
     const firstPayload = streamCalls[0][0] as { placements: Array<{ placementId: string }> };
     expect(firstPayload.placements).toHaveLength(2);
@@ -372,7 +431,7 @@ describe("useDraftGeneration", () => {
 
     const { result } = renderHook(() => useDraftGeneration(props));
 
-    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
       async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
         onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
       }
@@ -382,7 +441,7 @@ describe("useDraftGeneration", () => {
       await result.current.handleGenerateDrafts();
     });
 
-    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const streamCalls = (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mock.calls;
     expect(streamCalls).toHaveLength(1);
     const firstPayload = streamCalls[0][0] as {
       placements: Array<{ placementId: string; metadata?: Record<string, string> }>;
@@ -408,7 +467,7 @@ describe("useDraftGeneration", () => {
   it("handles generation error flow", async () => {
     const { result } = renderHook(() => useDraftGeneration(defaultProps));
 
-    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockRejectedValue(
       new Error("API Error")
     );
 
@@ -484,7 +543,7 @@ describe("useDraftGeneration", () => {
     };
     const { result } = renderHook(() => useDraftGeneration(props));
 
-    (streamCalendarGeneration as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
       async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
         onEvent({
           type: "slot_failed",

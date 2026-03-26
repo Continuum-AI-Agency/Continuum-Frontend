@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "bun:test";
 
 import { useCalendarStore } from "./store";
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types";

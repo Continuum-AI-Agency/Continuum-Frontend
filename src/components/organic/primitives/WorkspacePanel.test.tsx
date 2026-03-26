@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, afterEach, mock } from "bun:test";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
 
 import { WorkspacePanel } from "./WorkspacePanel";
 
-vi.mock("@/components/organic/TrendSelector", () => ({
+mock.module("@/components/organic/TrendSelector", () => ({
   TrendSelector: () => <div data-testid="trend-selector">TrendSelector</div>,
 }));
 
-vi.mock("@/components/ui/alert-dialog", () => ({
+mock.module("@/components/ui/alert-dialog", () => ({
   AlertDialog: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   AlertDialogTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
   AlertDialogContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -26,17 +26,17 @@ vi.mock("@/components/ui/alert-dialog", () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 
-vi.mock("./DraggableDraftCard", () => ({
+mock.module("./DraggableDraftCard", () => ({
   DraggableDraftCard: () => <div data-testid="draft-card">DraftCard</div>,
 }));
 
-vi.mock("./OrganicDraftPreview", () => ({
+mock.module("./OrganicDraftPreview", () => ({
   OrganicDraftPreview: () => <div data-testid="draft-preview">DraftPreview</div>,
 }));
 
-vi.mock("@dnd-kit/core", () => ({
+mock.module("@dnd-kit/core", () => ({
   useDroppable: () => ({
-    setNodeRef: vi.fn(),
+    setNodeRef: mock(),
     isOver: false,
   }),
 }));
@@ -47,11 +47,11 @@ describe("WorkspacePanel", () => {
     selectedTrendIds: [],
     activePlatforms: ["instagram", "facebook", "linkedin"],
     maxTrendSelections: 5,
-    onToggleTrend: vi.fn(),
-    onGenerateGrid: vi.fn(),
-    onClearAll: vi.fn(),
-    onSelectDraft: vi.fn(),
-    onToggleSelection: vi.fn(),
+    onToggleTrend: mock(),
+    onGenerateGrid: mock(),
+    onClearAll: mock(),
+    onSelectDraft: mock(),
+    onToggleSelection: mock(),
     selectedDraftId: null,
     selectedDraftIds: [],
     seedCount: 0,
@@ -59,7 +59,7 @@ describe("WorkspacePanel", () => {
   };
 
   afterEach(() => {
-    vi.clearAllMocks();
+    mock.restore();
   });
 
   it("renders generation controls", () => {

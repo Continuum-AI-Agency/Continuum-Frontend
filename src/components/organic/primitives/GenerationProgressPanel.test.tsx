@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import { GenerationProgressPanel } from "./GenerationProgressPanel";
 import type { GridStatus } from "@/lib/organic/store";

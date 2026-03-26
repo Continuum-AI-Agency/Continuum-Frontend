@@ -1,12 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
-vi.mock("@/lib/supabase/server", () => ({
+mock.module("@/lib/supabase/server", () => ({
   createSupabaseServerClient: (...args: unknown[]) =>
     (globalThis as { __testCreateSupabaseServerClient?: (...params: unknown[]) => unknown })
       .__testCreateSupabaseServerClient?.(...args),
 }));
 
-vi.mock("@/lib/api/config", () => ({
+mock.module("@/lib/api/config", () => ({
   getApiUrl: (...args: unknown[]) =>
     (globalThis as { __testGetApiUrl?: (...params: unknown[]) => unknown })
       .__testGetApiUrl?.(...args),
@@ -18,19 +18,19 @@ describe("POST /api/organic/generate-grid", () => {
   let originalFetch: typeof globalThis.fetch;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    mock.restore();
     originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    globalThis.fetch = mock() as unknown as typeof fetch;
 
-    const createSupabaseServerClientMock = vi.fn().mockResolvedValue({
+    const createSupabaseServerClientMock = mock().mockResolvedValue({
       auth: {
-        getSession: vi.fn().mockResolvedValue({
+        getSession: mock().mockResolvedValue({
           data: { session: { access_token: "session-token" } },
           error: null,
         }),
       },
     });
-    const getApiUrlMock = vi.fn();
+    const getApiUrlMock = mock();
 
     (
       globalThis as {
@@ -64,11 +64,11 @@ describe("POST /api/organic/generate-grid", () => {
 
   it("transforms camelCase request payload and maps job response shape", async () => {
     const getApiUrlMock = (
-      globalThis as { __testGetApiUrl?: ReturnType<typeof vi.fn> }
-    ).__testGetApiUrl as ReturnType<typeof vi.fn>;
+      globalThis as { __testGetApiUrl?: ReturnType<typeof mock> }
+    ).__testGetApiUrl as ReturnType<typeof mock>;
     getApiUrlMock.mockReturnValue("https://organic.service/api/organic/generate-grid");
 
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
     fetchMock.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -143,11 +143,11 @@ describe("POST /api/organic/generate-grid", () => {
 
   it("streams calendar payloads and forwards flattened placement data", async () => {
     const getApiUrlMock = (
-      globalThis as { __testGetApiUrl?: ReturnType<typeof vi.fn> }
-    ).__testGetApiUrl as ReturnType<typeof vi.fn>;
+      globalThis as { __testGetApiUrl?: ReturnType<typeof mock> }
+    ).__testGetApiUrl as ReturnType<typeof mock>;
     getApiUrlMock.mockReturnValue("https://organic.service/api/organic/generate-calendar");
 
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
     fetchMock.mockResolvedValue(
       new Response('{"type":"complete"}\n', {
         status: 200,

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, mock } from "bun:test";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { PlacementNotificationCard } from "./PlacementNotificationCard";
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
@@ -48,7 +48,7 @@ describe("PlacementNotificationCard", () => {
   });
 
   it("calls onSelect when clicked", () => {
-    const onSelect = vi.fn();
+    const onSelect = mock();
     render(
       <PlacementNotificationCard
         placement={mockPlacement}

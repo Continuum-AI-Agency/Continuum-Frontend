@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
 import { openSpeechRealtimeSession } from "./speechRealtime";
 
-const getBrowserAccessTokenMock = vi.fn<() => Promise<string | null>>();
+const getBrowserAccessTokenMock = mock<() => Promise<string | null>>();
 
-vi.mock("@/lib/auth/getBrowserAccessToken", () => ({
+mock.module("@/lib/auth/getBrowserAccessToken", () => ({
   getBrowserAccessToken: getBrowserAccessTokenMock,
 }));
 
@@ -65,7 +65,7 @@ describe("openSpeechRealtimeSession", () => {
   const originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    mock.restore();
     getBrowserAccessTokenMock.mockReset();
     FakeWebSocket.instances = [];
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";

@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
-vi.mock("@/lib/supabase/server", () => ({
+mock.module("@/lib/supabase/server", () => ({
   createSupabaseServerClient: (...args: unknown[]) =>
     (
       globalThis as {
@@ -18,7 +18,7 @@ describe("POST /api/paid-media/timeline", () => {
   let originalPublishableKey: string | undefined;
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    mock.restore();
     originalFetch = globalThis.fetch;
     originalSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     originalAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -28,11 +28,11 @@ describe("POST /api/paid-media/timeline", () => {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY = "publishable-key";
 
-    globalThis.fetch = vi.fn() as unknown as typeof fetch;
+    globalThis.fetch = mock() as unknown as typeof fetch;
 
-    const createSupabaseServerClientMock = vi.fn().mockResolvedValue({
+    const createSupabaseServerClientMock = mock().mockResolvedValue({
       auth: {
-        getSession: vi.fn().mockResolvedValue({
+        getSession: mock().mockResolvedValue({
           data: { session: { access_token: "session-token" } },
           error: null,
         }),
@@ -75,7 +75,7 @@ describe("POST /api/paid-media/timeline", () => {
   });
 
   it("forwards request to edge function and returns timeline blocks", async () => {
-    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof mock>;
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ blocks: [{ id: "block-1" }] }), {
         status: 200,
@@ -119,11 +119,11 @@ describe("POST /api/paid-media/timeline", () => {
   it("returns 401 when there is no session token", async () => {
     (
       globalThis as {
-        __testCreateSupabaseServerClient?: ReturnType<typeof vi.fn>;
+        __testCreateSupabaseServerClient?: ReturnType<typeof mock>;
       }
-    ).__testCreateSupabaseServerClient = vi.fn().mockResolvedValue({
+    ).__testCreateSupabaseServerClient = mock().mockResolvedValue({
       auth: {
-        getSession: vi.fn().mockResolvedValue({
+        getSession: mock().mockResolvedValue({
           data: { session: null },
           error: null,
         }),

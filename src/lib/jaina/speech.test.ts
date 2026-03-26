@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, spyOn } from "bun:test";
 
 import { streamJainaSpeechToText } from "./speech";
 
@@ -16,8 +16,7 @@ function createSseStream(chunks: string[]): ReadableStream<Uint8Array> {
 
 describe("streamJainaSpeechToText", () => {
   it("accumulates transcript deltas and respects transcript.done payload", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
+    const fetchMock = spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         new Response(
           createSseStream([
@@ -51,7 +50,7 @@ describe("streamJainaSpeechToText", () => {
   });
 
   it("throws when transcription endpoint fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+    spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ error: "Nope" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },

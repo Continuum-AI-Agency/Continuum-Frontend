@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, mock } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { CalendarBody, CalendarProvider } from "@/components/kibo-ui/calendar";
 
@@ -6,9 +6,9 @@ import { WeekPicker } from "./WeekPicker";
 
 describe("WeekPicker", () => {
   it("triggers previous and next week handlers", () => {
-    const onChange = vi.fn();
-    const onPreviousWeek = vi.fn();
-    const onNextWeek = vi.fn();
+    const onChange = mock();
+    const onPreviousWeek = mock();
+    const onNextWeek = mock();
 
     render(
       <WeekPicker
@@ -28,7 +28,7 @@ describe("WeekPicker", () => {
   });
 
   it("selects a day from the kibo calendar body", () => {
-    const onSelectDate = vi.fn();
+    const onSelectDate = mock();
 
     render(
       <CalendarProvider>

@@ -1,11 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it, mock } from "bun:test"
 import type { ReactNode } from "react"
 
 import type { Trend } from "@/lib/organic/trends"
 import { TrendWorkbench } from "./TrendWorkbench"
 
-vi.mock("@/components/ui/command", () => ({
+mock.module("@/components/ui/command", () => ({
   Command: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   CommandEmpty: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   CommandGroup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -78,7 +78,7 @@ const trends: Trend[] = [
 
 describe("TrendWorkbench", () => {
   it("toggles a trend and supports filtering", () => {
-    const onToggleTrend = vi.fn()
+    const onToggleTrend = mock()
 
     render(
       <TrendWorkbench
@@ -107,7 +107,7 @@ describe("TrendWorkbench", () => {
         selectedTrendIds={[]}
         activePlatforms={["instagram", "linkedin"]}
         maxSelections={5}
-        onToggleTrend={vi.fn()}
+        onToggleTrend={mock()}
       />
     )
 
@@ -124,7 +124,7 @@ describe("TrendWorkbench", () => {
         selectedTrendIds={["trend-question"]}
         activePlatforms={["linkedin"]}
         maxSelections={5}
-        onToggleTrend={vi.fn()}
+        onToggleTrend={mock()}
       />
     )
 
