@@ -13,11 +13,11 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get("tab");
-  const initialView: "planner" | "metrics" = tabParam === "planner" ? "planner" : "metrics";
+  const initialView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
   const [activeView, setActiveView] = React.useState<"planner" | "metrics">(initialView);
 
   React.useEffect(() => {
-    const nextView: "planner" | "metrics" = tabParam === "planner" ? "planner" : "metrics";
+    const nextView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
     if (nextView !== activeView) {
       setActiveView(nextView);
     }
@@ -46,12 +46,11 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
       </div>
 
       <div className="flex-1 min-h-0">
-        <div className="h-full w-full" style={{ display: activeView === "planner" ? "block" : "none" }}>
-          {plannerSlot}
-        </div>
-        <div className="h-full w-full" style={{ display: activeView === "metrics" ? "block" : "none" }}>
-          {metricsSlot}
-        </div>
+        {activeView === "planner" ? (
+          <div className="h-full w-full">{plannerSlot}</div>
+        ) : (
+          <div className="h-full w-full">{metricsSlot}</div>
+        )}
       </div>
     </div>
   );

@@ -198,6 +198,66 @@ describe("calendarGenerationRequestSchema", () => {
     assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
   });
 
+  test("accepts mediaSuggestion assets list from v2 slot_completed payloads", () => {
+    const parsed = calendarPlacementSchema.safeParse({
+      placementId: "seed-3",
+      schedule: {
+        dayId: "2026-02-25",
+        scheduledAt: "2026-02-25T14:00:00.000Z",
+      },
+      platform: {
+        name: "instagram",
+      },
+      seed: {
+        source: "manual",
+      },
+      content: {
+        format: "Carousel",
+      },
+      creative: {
+        mediaSuggestion: {
+          provider: "gemini-3.1-flash-image-preview",
+          model: "gemini-3.1-flash-image-preview",
+          kind: "carousel",
+          prompt: "Primary visual prompt",
+          width: 512,
+          height: 512,
+          assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+          generationContext: {
+            sourceAgent: "asset_producer",
+          },
+          assets: [
+            {
+              role: "slide_1",
+              order: 1,
+              provider: "gemini-3.1-flash-image-preview",
+              model: "gemini-3.1-flash-image-preview",
+              prompt: "Slide 1 prompt",
+              width: 512,
+              height: 512,
+              assetBase64: "slide1base64",
+              mimeType: "image/png",
+              generationContext: {
+                sourceAgent: "asset_producer",
+              },
+            },
+            {
+              role: "slide_2",
+              order: 2,
+              error: "generation failed",
+            },
+          ],
+        },
+      },
+    });
+
+    assert.equal(parsed.success, true, parsed.success ? "" : parsed.error.message);
+    if (parsed.success) {
+      assert.equal(parsed.data.creative?.mediaSuggestion?.assets?.[0]?.role, "slide_1");
+      assert.equal(parsed.data.creative?.mediaSuggestion?.assets?.[1]?.error, "generation failed");
+    }
+  });
+
 });
 
 describe("toBackendCalendarGenerationRequest", () => {

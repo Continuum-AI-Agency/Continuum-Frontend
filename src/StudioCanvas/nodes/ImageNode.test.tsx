@@ -100,7 +100,12 @@ describe('ImageNode', () => {
     fireEvent.drop(dropTarget, { dataTransfer });
 
     await waitFor(() => {
-      expect(updateNodeData).toHaveBeenCalledWith('1', { image: dataUrl, fileName: undefined });
+      expect(updateNodeData).toHaveBeenCalledWith('1', {
+        image: dataUrl,
+        fileName: undefined,
+        sourcePath: undefined,
+        sourceUrl: undefined,
+      });
     });
   });
 
@@ -127,6 +132,8 @@ describe('ImageNode', () => {
       expect(updateNodeData).toHaveBeenCalledWith('1', {
         image: undefined,
         fileName: undefined,
+        sourcePath: undefined,
+        sourceUrl: undefined,
         aspectRatio: '1:1',
       });
     });

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Badge, Callout, Card, Flex, Heading, Separator, Text } from "@radix-ui/themes";
+import { Badge, Callout, Flex, Heading, Text } from "@radix-ui/themes";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useForm } from "react-hook-form";
-import { AlertTriangle, Check, ChevronsUpDown, Database, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronsUpDown, Database, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -204,6 +204,15 @@ function catalogLinkToUpsertInput(
       source: "manual",
     },
   };
+}
+
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-white/30">{label}</span>
+      <div className="h-px flex-1 bg-white/[0.06]" />
+    </div>
+  );
 }
 
 export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManagerPrimitiveProps) {
@@ -956,148 +965,147 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     }));
   };
 
+
   return (
     <motion.div
-      className="space-y-4"
+      className="flex flex-col gap-4"
       initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: MOTION_EASE }}
     >
-      <motion.div
-        className="grid grid-cols-1 gap-4 xl:grid-cols-12"
-        initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: MOTION_EASE, delay: shouldReduceMotion ? 0 : 0.08 }}
-      >
-        <Card className="glass-panel p-4 xl:col-span-4">
-          <Flex direction="column" gap="3">
-            <Flex align="center" justify="between" gap="2">
-              <Heading size="4" className="text-white">Catalogs</Heading>
-              <Flex align="center" gap="2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => void refreshCatalogs()}
-                  disabled={isRefreshing || isLoading}
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-                  Refresh
-                </Button>
-                <Button type="button" size="sm" className="h-8" onClick={handleCreateNew}>
-                  <Plus className="h-3.5 w-3.5" />
-                  New
-                </Button>
-              </Flex>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_1fr]">
+        {/* Catalog list */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <Heading size="3" className="text-white">Catalogs</Heading>
+              <Text size="1" color="gray">{catalogs.length} configured</Text>
+            </div>
+            <Flex align="center" gap="2">
+              <button
+                type="button"
+                onClick={() => void refreshCatalogs()}
+                disabled={isRefreshing || isLoading}
+                aria-label="Refresh catalogs"
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-white/10 text-muted-foreground transition-colors hover:border-white/20 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              </button>
+              <Button type="button" size="sm" className="h-8 cursor-pointer gap-1.5" onClick={handleCreateNew}>
+                <Plus className="h-3.5 w-3.5" />
+                New
+              </Button>
             </Flex>
+          </div>
 
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search by name, id, vertical..."
-              inputSize="sm"
-              aria-label="Search product catalogs"
-            />
+          <Input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search catalogs…"
+            inputSize="sm"
+            aria-label="Search product catalogs"
+          />
 
-            <Separator size="4" />
-
-            {isLoading ? (
-              <Card variant="surface" className="border border-[var(--glass-border)] p-4 text-center">
-                <Text size="2" color="gray">Loading catalogs…</Text>
-              </Card>
-            ) : filteredCatalogs.length === 0 ? (
-              <Card variant="surface" className="border border-dashed border-[var(--glass-border)] p-4 text-center">
-                <Flex direction="column" align="center" gap="2">
-                  <Database className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                  <Text size="2" color="gray">No catalogs yet.</Text>
-                  <Text size="1" color="gray">
-                    Create a catalog to manage feeds and product tagging for DCO ad delivery.
-                  </Text>
-                </Flex>
-              </Card>
-            ) : (
-              <div className="max-h-[32rem] overflow-y-auto pr-1">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Products</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <AnimatePresence initial={false}>
-                      {filteredCatalogs.map((catalog) => {
-                        const selected = catalog.id === activeCatalogId;
-                        return (
-                          <motion.tr
-                            key={catalog.id}
-                            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -6 }}
-                            transition={{ duration: shouldReduceMotion ? 0 : 0.16, ease: MOTION_EASE }}
-                            onClick={() => setActiveCatalogId(catalog.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                setActiveCatalogId(catalog.id);
-                              }
-                            }}
-                            tabIndex={0}
-                            className={`cursor-pointer border-b transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                              selected ? "bg-primary/10" : "hover:bg-background/35"
-                            }`}
-                          >
-                            <TableCell className="max-w-[11rem]">
-                              <div className="truncate text-sm font-medium text-white">{catalog.name}</div>
-                              <div className="truncate text-xs text-muted-foreground">
-                                {catalog.externalCatalogId}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge color={SYNC_STATUS_BADGE_COLOR[catalog.syncStatus]} radius="full" variant="surface">
-                                {PRODUCT_CATALOG_SYNC_STATUS_LABELS[catalog.syncStatus]}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="text-sm text-white">{catalog.productCount}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {catalog.linkedAdObjectIds.length} linked
-                              </div>
-                            </TableCell>
-                          </motion.tr>
-                        );
-                      })}
-                    </AnimatePresence>
-                  </TableBody>
-                </Table>
+          {isLoading ? (
+            <div className="space-y-2">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-[52px] animate-pulse rounded-lg border border-white/[0.04] bg-white/[0.03]" />
+              ))}
+            </div>
+          ) : filteredCatalogs.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-white/10 py-10 text-center">
+              <Database className="h-7 w-7 text-white/20" aria-hidden />
+              <div className="space-y-1">
+                <Text size="2" className="font-medium text-white/70">No catalogs</Text>
+                <Text size="1" color="gray" className="mx-auto block max-w-[180px] leading-relaxed">
+                  {searchQuery
+                    ? "No catalogs match your search."
+                    : "Create a catalog to link Meta product feeds to your campaigns."}
+                </Text>
               </div>
-            )}
-          </Flex>
-        </Card>
+              {!searchQuery ? (
+                <Button type="button" size="sm" onClick={handleCreateNew} className="mt-1 cursor-pointer gap-1.5">
+                  <Plus className="h-3.5 w-3.5" />
+                  Create First Catalog
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex max-h-[36rem] flex-col gap-1 overflow-y-auto pr-0.5">
+              <AnimatePresence initial={false}>
+                {filteredCatalogs.map((catalog) => {
+                  const selected = catalog.id === activeCatalogId;
+                  const statusDot =
+                    catalog.syncStatus === "active" ? "bg-green-400"
+                    : catalog.syncStatus === "stale" ? "bg-amber-400"
+                    : catalog.syncStatus === "error" ? "bg-red-400"
+                    : "bg-white/20";
+                  return (
+                    <motion.button
+                      key={catalog.id}
+                      initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
+                      transition={{ duration: shouldReduceMotion ? 0 : 0.16, ease: MOTION_EASE }}
+                      type="button"
+                      onClick={() => setActiveCatalogId(catalog.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveCatalogId(catalog.id);
+                        }
+                      }}
+                      className={`w-full cursor-pointer rounded-lg border px-3 py-2.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                        selected
+                          ? "border-primary/40 bg-primary/[0.12]"
+                          : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.10] hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${statusDot}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium leading-snug text-white">{catalog.name}</div>
+                          <div className="mt-0.5 truncate font-mono text-[11px] leading-tight text-white/40">
+                            {catalog.externalCatalogId || "—"}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-xs font-semibold text-white/80">{catalog.productCount.toLocaleString()}</div>
+                          <div className="text-[10px] text-white/30">{catalog.linkedAdObjectIds.length} linked</div>
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
 
-        <Card className="glass-panel p-4 xl:col-span-8">
+        {/* Detail / form panel */}
+        <div className="glass-panel rounded-xl p-5">
           <Flex direction="column" gap="4">
-            <Flex align="center" justify="between" gap="3" wrap="wrap">
+            <Flex align="start" justify="between" gap="3" wrap="wrap">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={activeCatalog?.id ?? "new"}
-                  initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 8 }}
+                  initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -8 }}
+                  exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -6 }}
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
                   <Heading size="4" className="text-white">
-                    {activeCatalog ? `Edit ${activeCatalog.name}` : "Create Product Catalog"}
+                    {activeCatalog ? activeCatalog.name : "New Product Catalog"}
                   </Heading>
-                  <Text size="2" color="gray">
-                    Manage Meta-aligned catalog identity, feed links, and ad-object mapping for DCO measurement.
+                  <Text size="1" color="gray">
+                    {activeCatalog
+                      ? "Edit catalog settings, feed config, and ad object mapping."
+                      : "Register a Meta-backed product catalog for DCO feed delivery."}
                   </Text>
                 </motion.div>
               </AnimatePresence>
               {activeCatalog ? (
-                <Badge color={SYNC_STATUS_BADGE_COLOR[activeCatalog.syncStatus]} radius="full" variant="surface">
+                <Badge color={SYNC_STATUS_BADGE_COLOR[activeCatalog.syncStatus]} radius="full" variant="soft">
                   {PRODUCT_CATALOG_SYNC_STATUS_LABELS[activeCatalog.syncStatus]}
                 </Badge>
               ) : null}
@@ -1106,696 +1114,229 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
             <AnimatePresence initial={false}>
               {error ? (
                 <motion.div
-                  initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 6 }}
+                  initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -6 }}
+                  exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
                   transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
                 >
                   <Callout.Root color="red" variant="surface">
-                    <Callout.Icon>
-                      <AlertTriangle className="h-4 w-4" />
-                    </Callout.Icon>
+                    <Callout.Icon><AlertTriangle className="h-4 w-4" /></Callout.Icon>
                     <Callout.Text>{error}</Callout.Text>
                   </Callout.Root>
                 </motion.div>
               ) : null}
             </AnimatePresence>
 
-            <form className="space-y-4" onSubmit={(event) => void onSubmit(event)}>
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="catalog-name">Catalog Name</Label>
-                  <Input id="catalog-name" placeholder="Spring Prospecting Catalog" {...form.register("name")} />
-                  {form.formState.errors.name ? (
-                    <Text size="1" color="red">{form.formState.errors.name.message}</Text>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Meta Business</Label>
-                  <Popover open={businessOpen} onOpenChange={setBusinessOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={businessOpen}
-                        className="h-10 w-full justify-between text-left font-normal"
-                        disabled={selectableAssetsQuery.isLoading}
-                      >
-                        <span className="truncate">
-                          {selectedBusinessOption
-                            ? `${selectedBusinessOption.name} (${selectedBusinessOption.id})`
-                            : watchedBusinessId?.trim()
-                              ? watchedBusinessId.trim()
-                              : selectableAssetsQuery.isLoading
-                                ? "Loading businesses…"
-                                : "Select Meta business"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[420px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search businesses by name or id..." className="h-9" />
-                        <CommandList>
-                          <CommandEmpty>No businesses found.</CommandEmpty>
-                          <CommandGroup heading="Businesses">
-                            {metaBusinessOptions.map((business) => (
-                              <CommandItem
-                                key={business.id}
-                                value={`${business.name} ${business.id}`}
-                                keywords={[business.id]}
-                                onSelect={() => {
-                                  form.setValue("businessId", business.id, {
-                                    shouldDirty: true,
-                                    shouldTouch: true,
-                                    shouldValidate: true,
-                                  });
-                                  setBusinessOpen(false);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    watchedBusinessId?.trim() === business.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <span className="truncate">{business.name}</span>
-                                <span className="ml-auto truncate text-xs text-muted-foreground">{business.id}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {form.formState.errors.businessId ? (
-                    <Text size="1" color="red">{form.formState.errors.businessId.message}</Text>
-                  ) : null}
-                  <div className="flex items-center justify-between">
-                    <Text size="1" color="gray">
-                      Select the owning Meta business used for catalog creation.
-                    </Text>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        form.setValue("businessId", "", {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: true,
-                        })
-                      }
-                    >
-                      Clear
-                    </Button>
+            {!isCreateMode && activeCatalog ? (
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
+                {([
+                  { label: "Catalog ID", value: activeCatalog.externalCatalogId || "—", mono: true },
+                  { label: "Products", value: activeCatalog.productCount.toLocaleString(), mono: false },
+                  { label: "Feeds", value: String(activeCatalog.feedCount), mono: false },
+                  { label: "Vertical", value: PRODUCT_CATALOG_VERTICAL_LABELS[activeCatalog.vertical], mono: false },
+                ] as const).map(({ label, value, mono }) => (
+                  <div key={label} className="bg-background/60 px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-white/30">{label}</div>
+                    <div className={`mt-0.5 truncate text-xs text-white/75 ${mono ? "font-mono" : ""}`}>{value}</div>
                   </div>
-                </div>
+                ))}
+              </div>
+            ) : null}
 
-                <div className="space-y-2">
-                  <Label>Catalog Store (Page ID Connector)</Label>
-                  <Popover open={catalogStoreOpen} onOpenChange={setCatalogStoreOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
+            <form className="space-y-5" onSubmit={(event) => void onSubmit(event)}>
+              {/* Identity */}
+              <div className="space-y-4">
+                <SectionDivider label="Identity" />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="catalog-name">Catalog Name</Label>
+                    <Input id="catalog-name" placeholder="Spring Prospecting 2026" {...form.register("name")} />
+                    {form.formState.errors.name ? <Text size="1" color="red">{form.formState.errors.name.message}</Text> : null}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Meta Business</Label>
+                    <Popover open={businessOpen} onOpenChange={setBusinessOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button" variant="outline" role="combobox"
+                          aria-expanded={businessOpen}
+                          className="h-10 w-full cursor-pointer justify-between text-left font-normal"
+                          disabled={selectableAssetsQuery.isLoading}
+                        >
+                          <span className="truncate">
+                            {selectedBusinessOption
+                              ? `${selectedBusinessOption.name} (${selectedBusinessOption.id})`
+                              : watchedBusinessId?.trim() ? watchedBusinessId.trim()
+                              : selectableAssetsQuery.isLoading ? "Loading…"
+                              : "Select business"}
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search by name or ID…" className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No businesses found.</CommandEmpty>
+                            <CommandGroup heading="Businesses">
+                              {metaBusinessOptions.map((business) => (
+                                <CommandItem
+                                  key={business.id}
+                                  value={`${business.name} ${business.id}`}
+                                  keywords={[business.id]}
+                                  onSelect={() => {
+                                    form.setValue("businessId", business.id, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                    setBusinessOpen(false);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", watchedBusinessId?.trim() === business.id ? "opacity-100" : "opacity-0")} />
+                                  <span className="truncate">{business.name}</span>
+                                  <span className="ml-auto truncate pl-2 font-mono text-xs text-muted-foreground">{business.id}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {form.formState.errors.businessId ? <Text size="1" color="red">{form.formState.errors.businessId.message}</Text> : null}
+                    {watchedBusinessId?.trim() ? (
+                      <button
                         type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={catalogStoreOpen}
-                        className="h-10 w-full justify-between text-left font-normal"
-                        disabled={selectableAssetsQuery.isLoading || !watchedBusinessId?.trim()}
+                        onClick={() => form.setValue("businessId", "", { shouldDirty: true, shouldTouch: true, shouldValidate: true })}
+                        className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-white"
                       >
-                        <span className="truncate">
-                          {selectedCatalogStoreOption
-                            ? `${selectedCatalogStoreOption.name} (${selectedCatalogStoreOption.id})`
-                            : watchedCatalogStoreId?.trim()
-                              ? watchedCatalogStoreId.trim()
-                            : !watchedBusinessId?.trim()
-                              ? "Select business first"
-                            : selectableAssetsQuery.isLoading
-                              ? "Loading pages…"
+                        Clear selection
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>
+                      Catalog Store{" "}
+                      <Text size="1" color="gray" className="font-normal">(Page ID Connector)</Text>
+                    </Label>
+                    <Popover open={catalogStoreOpen} onOpenChange={setCatalogStoreOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button" variant="outline" role="combobox"
+                          aria-expanded={catalogStoreOpen}
+                          className="h-10 w-full cursor-pointer justify-between text-left font-normal"
+                          disabled={selectableAssetsQuery.isLoading || !watchedBusinessId?.trim()}
+                        >
+                          <span className="truncate">
+                            {selectedCatalogStoreOption
+                              ? `${selectedCatalogStoreOption.name} (${selectedCatalogStoreOption.id})`
+                              : watchedCatalogStoreId?.trim() ? watchedCatalogStoreId.trim()
+                              : !watchedBusinessId?.trim() ? "Select a business first"
+                              : selectableAssetsQuery.isLoading ? "Loading pages…"
                               : "Select page"}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[420px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search pages by name or id..." className="h-9" />
-                        <CommandList>
-                          <CommandEmpty>No pages found.</CommandEmpty>
-                          <CommandGroup heading="Pages">
-                            {metaPageOptions.map((page) => (
-                              <CommandItem
-                                key={page.id}
-                                value={`${page.name} ${page.id}`}
-                                keywords={[page.id]}
-                                onSelect={() => {
-                                  form.setValue("catalogStoreId", page.id, {
-                                    shouldDirty: true,
-                                    shouldTouch: true,
-                                    shouldValidate: true,
-                                  });
-                                  setCatalogStoreOpen(false);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    watchedCatalogStoreId?.trim() === page.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                <span className="truncate">{page.name}</span>
-                                <span className="ml-auto truncate text-xs text-muted-foreground">{page.id}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  {form.formState.errors.catalogStoreId ? (
-                    <Text size="1" color="red">{form.formState.errors.catalogStoreId.message}</Text>
-                  ) : null}
-                  <div className="flex items-center justify-between">
-                    <Text size="1" color="gray">
-                      Meta page connector for `store_catalog_settings`.
-                    </Text>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        form.setValue("catalogStoreId", "", {
-                          shouldDirty: true,
-                          shouldTouch: true,
-                          shouldValidate: true,
-                        })
-                      }
-                    >
-                      Clear
-                    </Button>
+                          </span>
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search pages…" className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>No pages found.</CommandEmpty>
+                            <CommandGroup heading="Pages">
+                              {metaPageOptions.map((page) => (
+                                <CommandItem
+                                  key={page.id}
+                                  value={`${page.name} ${page.id}`}
+                                  keywords={[page.id]}
+                                  onSelect={() => {
+                                    form.setValue("catalogStoreId", page.id, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                    setCatalogStoreOpen(false);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", watchedCatalogStoreId?.trim() === page.id ? "opacity-100" : "opacity-0")} />
+                                  <span className="truncate">{page.name}</span>
+                                  <span className="ml-auto truncate pl-2 font-mono text-xs text-muted-foreground">{page.id}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {form.formState.errors.catalogStoreId ? <Text size="1" color="red">{form.formState.errors.catalogStoreId.message}</Text> : null}
                   </div>
                 </div>
+
+                {isCreateMode ? (
+                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                    <Text size="1" color="gray">
+                      Meta assigns catalog ID and statistics after creation. Only name, business, and store page are required.
+                    </Text>
+                    {!selectedMetaAccountId && watchedBusinessId?.trim() ? (
+                      <Text size="1" color="red" className="mt-1 block">
+                        No connected Meta ad account found for this business.
+                      </Text>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
-              {isCreateMode ? (
-                <Flex direction="column" gap="1">
-                  <Text size="1" color="gray">
-                    Creation is intentionally minimal. Meta assigns catalog id and count fields after create.
-                  </Text>
-                  {!selectedMetaAccountId ? (
-                    <Text size="1" color="red">
-                      No connected Meta ad account found for this business. Connect one before creating.
-                    </Text>
-                  ) : null}
-                </Flex>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="catalog-external-id">Catalog ID</Label>
-                    <Input
-                      id="catalog-external-id"
-                      value={form.watch("externalCatalogId") ?? ""}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="catalog-meta-product-count">Product Count</Label>
-                    <Input
-                      id="catalog-meta-product-count"
-                      value={String(activeCatalog?.productCount ?? 0)}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="catalog-meta-feed-count">Feed Count</Label>
-                    <Input
-                      id="catalog-meta-feed-count"
-                      value={String(activeCatalog?.feedCount ?? 0)}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="catalog-meta-vertical">Vertical</Label>
-                    <Input
-                      id="catalog-meta-vertical"
-                      value={activeCatalog ? PRODUCT_CATALOG_VERTICAL_LABELS[activeCatalog.vertical] : ""}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                </div>
-              )}
-
+              {/* Feed config — edit only */}
               {!isCreateMode ? (
-                <>
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <div className="space-y-2 lg:col-span-1">
+                <div className="space-y-4">
+                  <SectionDivider label="Feed Configuration" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="space-y-1.5">
                       <Label htmlFor="catalog-feed-url">Feed URL</Label>
                       <Input id="catalog-feed-url" placeholder="https://example.com/feed.xml" {...form.register("feedUrl")} />
-                      {form.formState.errors.feedUrl ? (
-                        <Text size="1" color="red">{form.formState.errors.feedUrl.message}</Text>
-                      ) : null}
+                      {form.formState.errors.feedUrl ? <Text size="1" color="red">{form.formState.errors.feedUrl.message}</Text> : null}
                     </div>
-
-                    <div className="space-y-2 lg:col-span-1">
-                      <Label htmlFor="catalog-default-image">Default Image URL</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catalog-default-image">Default Image</Label>
                       <Input id="catalog-default-image" placeholder="https://cdn.example.com/default.jpg" {...form.register("defaultImageUrl")} />
-                      {form.formState.errors.defaultImageUrl ? (
-                        <Text size="1" color="red">{form.formState.errors.defaultImageUrl.message}</Text>
-                      ) : null}
+                      {form.formState.errors.defaultImageUrl ? <Text size="1" color="red">{form.formState.errors.defaultImageUrl.message}</Text> : null}
                     </div>
-
-                    <div className="space-y-2 lg:col-span-1">
-                      <Label htmlFor="catalog-fallback-image">Fallback Image URL</Label>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catalog-fallback-image">Fallback Image</Label>
                       <Input id="catalog-fallback-image" placeholder="https://cdn.example.com/fallback.jpg" {...form.register("fallbackImageUrl")} />
-                      {form.formState.errors.fallbackImageUrl ? (
-                        <Text size="1" color="red">{form.formState.errors.fallbackImageUrl.message}</Text>
-                      ) : null}
+                      {form.formState.errors.fallbackImageUrl ? <Text size="1" color="red">{form.formState.errors.fallbackImageUrl.message}</Text> : null}
                     </div>
                   </div>
-
-                  <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                    <Flex direction="column" gap="3">
-                      <Flex align="center" gap="2">
-                        <Link2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <Text size="2" weight="medium">Ad Object Mapping</Text>
-                      </Flex>
-
-                      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                        <div className="space-y-2 lg:col-span-1">
-                          <Label htmlFor="catalog-linked-level">Link Level</Label>
-                          <Select
-                            value={watchedLinkedAdObjectLevel}
-                            onValueChange={(value) => {
-                              form.setValue(
-                                "linkedAdObjectLevel",
-                                value as ProductCatalogFormValues["linkedAdObjectLevel"],
-                                { shouldDirty: true, shouldTouch: true, shouldValidate: true }
-                              );
-                              setLinkedAdObjectIds([]);
-                              setCustomLinkedAdObjectId("");
-                            }}
-                          >
-                            <SelectTrigger id="catalog-linked-level" className="w-full">
-                              <SelectValue placeholder="Select link level" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="campaign">Campaign</SelectItem>
-                              <SelectItem value="adset">Ad Set</SelectItem>
-                              <SelectItem value="ad">Ad</SelectItem>
-                            </SelectContent>
-                          </Select>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    {([
+                      { id: "catalog-data-feed-enabled", field: "dataFeedEnabled" as const, label: "Data Feed Enabled", description: "Enable feed ingestion for this catalog" },
+                      { id: "catalog-tagging-enabled", field: "productTaggingEnabled" as const, label: "Product Tagging", description: "Use products for ad-level tagging and metrics" },
+                    ]).map(({ id, field, label, description }) => (
+                      <label key={id} htmlFor={id} className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.04]">
+                        <Checkbox id={id} checked={form.watch(field)} onCheckedChange={(checked) => form.setValue(field, checked === true, { shouldDirty: true })} className="mt-0.5" />
+                        <div>
+                          <div className="text-xs font-medium text-white">{label}</div>
+                          <div className="text-[11px] text-muted-foreground">{description}</div>
                         </div>
-
-                        <div className="space-y-2 lg:col-span-2">
-                          <Label>Linked Ad Object IDs</Label>
-                          <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border border-[var(--glass-border)] bg-background/30 p-3">
-                            {knownAdObjectOptionsForSelectedLevel.length === 0 ? (
-                              <Text size="1" color="gray">
-                                No existing {watchedLinkedAdObjectLevel} IDs found. Add a custom ID below.
-                              </Text>
-                            ) : (
-                              knownAdObjectOptionsForSelectedLevel.map((option) => (
-                                <div key={`${option.level}:${option.id}`} className="flex items-center gap-2">
-                                  <Checkbox
-                                    id={`catalog-linked-id-${option.level}-${option.id}`}
-                                    checked={selectedLinkedAdObjectIds.includes(option.id)}
-                                    onCheckedChange={(checked) =>
-                                      handleLinkedAdObjectSelection(option.id, checked === true)
-                                    }
-                                  />
-                                  <Label
-                                    htmlFor={`catalog-linked-id-${option.level}-${option.id}`}
-                                    className="cursor-pointer text-sm font-normal"
-                                  >
-                                    {option.id}
-                                    {option.name ? ` · ${option.name}` : ""}
-                                  </Label>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              id="catalog-linked-ids-custom"
-                              placeholder={`Add custom ${watchedLinkedAdObjectLevel} id`}
-                              value={customLinkedAdObjectId}
-                              onChange={(event) => setCustomLinkedAdObjectId(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  handleAddCustomLinkedAdObjectId();
-                                }
-                              }}
-                            />
-                            <Button type="button" variant="outline" size="sm" onClick={handleAddCustomLinkedAdObjectId}>
-                              Add
-                            </Button>
-                          </div>
-                          <Text size="1" color="gray">
-                            Select from discovered IDs or add custom IDs used by DCO mapping.
-                          </Text>
-                        </div>
-                      </div>
-                    </Flex>
-                  </Card>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="catalog-last-sync">Last Synced</Label>
-                    <Input id="catalog-last-sync" type="datetime-local" {...form.register("lastSyncedAtLocal")} />
-                  </div>
-                </>)
-              : null}
-
-              {!isCreateMode ? (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div className="flex items-start gap-3 rounded-md border border-[var(--glass-border)] bg-background/20 p-3">
-                    <Checkbox
-                      id="catalog-data-feed-enabled"
-                      checked={form.watch("dataFeedEnabled")}
-                      onCheckedChange={(checked) => form.setValue("dataFeedEnabled", checked === true, { shouldDirty: true })}
-                    />
-                    <div className="space-y-1">
-                      <Label htmlFor="catalog-data-feed-enabled">Data Feed Enabled</Label>
-                      <Text size="1" color="gray">Enable feed ingestion for this catalog.</Text>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 rounded-md border border-[var(--glass-border)] bg-background/20 p-3">
-                    <Checkbox
-                      id="catalog-tagging-enabled"
-                      checked={form.watch("productTaggingEnabled")}
-                      onCheckedChange={(checked) => form.setValue("productTaggingEnabled", checked === true, { shouldDirty: true })}
-                    />
-                    <div className="space-y-1">
-                      <Label htmlFor="catalog-tagging-enabled">Product Tagging Enabled</Label>
-                      <Text size="1" color="gray">Use catalog products for ad-level tagging and metrics.</Text>
-                    </div>
+                      </label>
+                    ))}
                   </div>
                 </div>
               ) : null}
 
+              {/* Ad object mapping — edit only */}
               {!isCreateMode ? (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="catalog-sync-status">Sync Status</Label>
-                    <Select
-                      value={form.watch("syncStatus")}
-                      onValueChange={(value) =>
-                        form.setValue("syncStatus", value as ProductCatalogFormValues["syncStatus"], { shouldDirty: true })
-                      }
-                    >
-                      <SelectTrigger id="catalog-sync-status" className="w-full">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PRODUCT_CATALOG_SYNC_STATUS_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2 lg:col-span-1">
-                    <Label htmlFor="catalog-notes">Notes</Label>
-                    <Textarea
-                      id="catalog-notes"
-                      rows={4}
-                      placeholder="Validation nuances, feed caveats, product set notes..."
-                      {...form.register("notes")}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <Flex align="center" justify="between" wrap="wrap" gap="3">
-                <Text size="1" color="gray">
-                  {activeCatalog
-                    ? `Last updated ${new Date(activeCatalog.updatedAt).toLocaleString()}`
-                    : "Create a catalog, then map feed and tagging settings."}
-                </Text>
-
-                <Flex align="center" gap="2">
-                  {activeCatalog ? (
-                    <Button
-                      type="button"
-                      variant={deleteArmed ? "destructive" : "outline"}
-                      size="sm"
-                      onClick={() => void handleDelete()}
-                      disabled={isDeleting || isSaving}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {isDeleting ? "Deleting..." : deleteArmed ? "Confirm Delete" : "Delete"}
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={isSaving || isDeleting || (isCreateMode && !selectedMetaAccountId)}
-                  >
-                    {isSaving ? "Saving..." : activeCatalog ? "Update Catalog" : "Create Catalog"}
-                  </Button>
-                </Flex>
-              </Flex>
-              {form.formState.isDirty ? (
-                <Text size="1" color="amber">
-                  Unsaved changes
-                </Text>
-              ) : null}
-            </form>
-
-            <Separator size="4" />
-
-            <Flex direction="column" gap="3">
-              <Flex align="center" justify="between" wrap="wrap" gap="2">
-                <Heading size="3" className="text-white">
-                  Product Activity Mapping
-                </Heading>
-                <Flex align="center" gap="2">
-                  <Badge color="gray" radius="full" variant="surface">
-                    {catalogLinkSummary.total} tracked
-                  </Badge>
-                  <Badge color="green" radius="full" variant="surface">
-                    {catalogLinkSummary.active} active
-                  </Badge>
-                  {catalogLinkSummary.inactive > 0 ? (
-                    <Badge color="amber" radius="full" variant="surface">
-                      {catalogLinkSummary.inactive} inactive
-                    </Badge>
-                  ) : null}
-                </Flex>
-              </Flex>
-
-              <Text size="1" color="gray">
-                Track which products are active in campaign, ad set, or ad objects for DCO attribution and feed diagnostics.
-              </Text>
-
-              <AnimatePresence initial={false}>
-                {catalogLinksError ? (
-                  <motion.div
-                    initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -6 }}
-                    transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
-                  >
-                    <Callout.Root color="red" variant="surface">
-                      <Callout.Icon>
-                        <AlertTriangle className="h-4 w-4" />
-                      </Callout.Icon>
-                      <Callout.Text>{catalogLinksError}</Callout.Text>
-                    </Callout.Root>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-
-              {!activeCatalog ? (
-                <Card variant="surface" className="border border-dashed border-[var(--glass-border)] p-4 text-center">
-                  <Text size="2" color="gray">
-                    Save or select a catalog to manage product-to-ad activity mappings.
-                  </Text>
-                </Card>
-              ) : (
-                <>
-                  <Card variant="surface" className="border border-[var(--glass-border)] p-3">
-                    <Flex direction="column" gap="3">
-                      <Flex align="center" justify="between" wrap="wrap" gap="2">
-                        <Text size="2" weight="medium">Catalog Products</Text>
-                        <Badge color="gray" radius="full" variant="surface">
-                          {catalogProducts.length} products
-                        </Badge>
-                      </Flex>
-
-                      {isCatalogLinksLoading ? (
-                        <Text size="1" color="gray">Loading products…</Text>
-                      ) : catalogProducts.length === 0 ? (
-                        <Text size="1" color="gray">No products yet. Add one using the activity form below.</Text>
-                      ) : (
-                        <div className="max-h-56 overflow-y-auto rounded-md border border-[var(--glass-border)]">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Product</TableHead>
-                                <TableHead>Availability</TableHead>
-                                <TableHead>Links</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {catalogProducts.map((product) => (
-                                <TableRow key={product.externalProductId}>
-                                  <TableCell>
-                                    <div className="text-sm font-medium text-white">{product.externalProductId}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {product.title?.trim() || "Untitled product"} · Last seen{" "}
-                                      {product.lastSeenAt ? new Date(product.lastSeenAt).toLocaleString() : "--"}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-sm">{product.availability}</TableCell>
-                                  <TableCell className="text-sm">
-                                    {product.activeLinks}/{product.totalLinks} active
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                      <Input
-                                        value={productRenameDrafts[product.externalProductId] ?? ""}
-                                        onChange={(event) =>
-                                          setProductRenameDrafts((current) => ({
-                                            ...current,
-                                            [product.externalProductId]: event.target.value,
-                                          }))
-                                        }
-                                        placeholder="Rename product"
-                                        className="w-44"
-                                      />
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={isCatalogProductSaving}
-                                        onClick={() => void handleRenameCatalogProduct(product.externalProductId)}
-                                      >
-                                        {isCatalogProductSaving && activeCatalogProductId === product.externalProductId ? "Saving..." : "Rename"}
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="destructive"
-                                        disabled={isCatalogProductSaving}
-                                        onClick={() => void handleRemoveCatalogProduct(product.externalProductId)}
-                                      >
-                                        {isCatalogProductSaving && activeCatalogProductId === product.externalProductId ? "Removing..." : "Remove"}
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </Flex>
-                  </Card>
-
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-product-id-select">Product ID</Label>
-                      <Select value={activityProductSelectValue} onValueChange={handleActivityProductSelection}>
-                        <SelectTrigger id="activity-product-id-select" className="w-full">
-                          <SelectValue placeholder="Choose product ID" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {knownActivityProducts.map((product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.id}{product.title ? ` · ${product.title}` : ""}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value={PRODUCT_SELECT_CUSTOM}>Custom Product ID…</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {activityProductSelectValue === PRODUCT_SELECT_CUSTOM ? (
-                        <Input
-                          id="activity-product-id"
-                          placeholder="sku_12345"
-                          value={linkDraft.product.externalProductId}
-                          onChange={(event) => {
-                            setCustomActivityProductId(event.target.value);
-                            setLinkDraft((current) => ({
-                              ...current,
-                              product: { ...current.product, externalProductId: event.target.value },
-                            }));
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-product-title">Product Title</Label>
-                      <Input
-                        id="activity-product-title"
-                        placeholder="Weekend Hoodie"
-                        value={linkDraft.product.title ?? ""}
-                        onChange={(event) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            product: { ...current.product, title: event.target.value },
-                          }))
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-availability">Availability</Label>
+                <div className="space-y-4">
+                  <SectionDivider label="Ad Object Mapping" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catalog-linked-level">Link Level</Label>
                       <Select
-                        value={linkDraft.product.availability}
-                        onValueChange={(value) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            product: {
-                              ...current.product,
-                              availability: value as LinkDraftInput["product"]["availability"],
-                            },
-                          }))
-                        }
+                        value={watchedLinkedAdObjectLevel}
+                        onValueChange={(value) => {
+                          form.setValue("linkedAdObjectLevel", value as ProductCatalogFormValues["linkedAdObjectLevel"], { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                          setLinkedAdObjectIds([]);
+                          setCustomLinkedAdObjectId("");
+                        }}
                       >
-                        <SelectTrigger id="activity-availability" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unknown">Unknown</SelectItem>
-                          <SelectItem value="in_stock">In Stock</SelectItem>
-                          <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                          <SelectItem value="preorder">Preorder</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-object-type">Ad Object Type</Label>
-                      <Select
-                        value={linkDraft.adObject.objectType}
-                        onValueChange={(value) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            adObject: {
-                              ...current.adObject,
-                              objectType: value as LinkDraftInput["adObject"]["objectType"],
-                              externalObjectId: "",
-                            },
-                          }))
-                        }
-                      >
-                        <SelectTrigger id="activity-object-type" className="w-full">
-                          <SelectValue />
+                        <SelectTrigger id="catalog-linked-level" className="w-full">
+                          <SelectValue placeholder="Select level" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="campaign">Campaign</SelectItem>
@@ -1804,203 +1345,401 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-object-id-select">Ad Object ID</Label>
-                      <Select value={activityAdObjectSelectValue} onValueChange={handleActivityAdObjectSelection}>
-                        <SelectTrigger id="activity-object-id-select" className="w-full">
-                          <SelectValue placeholder="Choose ad object ID" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {knownActivityAdObjectOptions.map((option) => (
-                            <SelectItem key={`${option.level}:${option.id}`} value={option.id}>
-                              {option.id}{option.name ? ` · ${option.name}` : ""}
-                            </SelectItem>
-                          ))}
-                          <SelectItem value={AD_OBJECT_SELECT_CUSTOM}>Custom Ad Object ID…</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {activityAdObjectSelectValue === AD_OBJECT_SELECT_CUSTOM ? (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label>Linked Ad Object IDs</Label>
+                      <div className="max-h-36 space-y-1.5 overflow-y-auto rounded-md border border-white/[0.08] bg-background/30 p-2.5">
+                        {knownAdObjectOptionsForSelectedLevel.length === 0 ? (
+                          <Text size="1" color="gray">No {watchedLinkedAdObjectLevel} IDs found. Add a custom ID below.</Text>
+                        ) : (
+                          knownAdObjectOptionsForSelectedLevel.map((option) => (
+                            <div key={`${option.level}:${option.id}`} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`catalog-linked-id-${option.level}-${option.id}`}
+                                checked={selectedLinkedAdObjectIds.includes(option.id)}
+                                onCheckedChange={(checked) => handleLinkedAdObjectSelection(option.id, checked === true)}
+                              />
+                              <Label htmlFor={`catalog-linked-id-${option.level}-${option.id}`} className="cursor-pointer font-mono text-xs font-normal">
+                                {option.id}{option.name ? ` · ${option.name}` : ""}
+                              </Label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
                         <Input
-                          id="activity-object-id"
-                          placeholder="adset_9876"
-                          value={linkDraft.adObject.externalObjectId}
-                          onChange={(event) => {
-                            setCustomActivityAdObjectId(event.target.value);
-                            setLinkDraft((current) => ({
-                              ...current,
-                              adObject: { ...current.adObject, externalObjectId: event.target.value },
-                            }));
+                          placeholder={`Add custom ${watchedLinkedAdObjectLevel} ID`}
+                          value={customLinkedAdObjectId}
+                          onChange={(event) => setCustomLinkedAdObjectId(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") { event.preventDefault(); handleAddCustomLinkedAdObjectId(); }
                           }}
+                          inputSize="sm"
                         />
-                      ) : null}
+                        <Button type="button" variant="outline" size="sm" onClick={handleAddCustomLinkedAdObjectId} className="cursor-pointer shrink-0">
+                          Add
+                        </Button>
+                      </div>
                     </div>
                   </div>
+                </div>
+              ) : null}
 
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-object-name">Ad Object Name</Label>
-                      <Input
-                        id="activity-object-name"
-                        placeholder="Prospecting - Broad 18-34"
-                        value={linkDraft.adObject.name ?? ""}
-                        onChange={(event) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            adObject: { ...current.adObject, name: event.target.value },
-                          }))
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-object-status">Delivery Status</Label>
+              {/* Status — edit only */}
+              {!isCreateMode ? (
+                <div className="space-y-4">
+                  <SectionDivider label="Status" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catalog-sync-status">Sync Status</Label>
                       <Select
-                        value={(linkDraft.adObject.status ?? "").trim() || "ACTIVE"}
-                        onValueChange={(value) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            adObject: { ...current.adObject, status: value },
-                          }))
-                        }
+                        value={form.watch("syncStatus")}
+                        onValueChange={(value) => form.setValue("syncStatus", value as ProductCatalogFormValues["syncStatus"], { shouldDirty: true })}
                       >
-                        <SelectTrigger id="activity-object-status" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
+                        <SelectTrigger id="catalog-sync-status" className="w-full"><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
-                          {knownActivityStatuses.map((status) => (
-                            <SelectItem key={status} value={status}>
-                              {status}
-                            </SelectItem>
+                          {Object.entries(PRODUCT_CATALOG_SYNC_STATUS_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="activity-source">Source</Label>
-                      <Select
-                        value={(linkDraft.activity.source ?? "").trim() || "manual"}
-                        onValueChange={(value) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            activity: { ...current.activity, source: value },
-                          }))
-                        }
-                      >
-                        <SelectTrigger id="activity-source" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {knownActivitySources.map((source) => (
-                            <SelectItem key={source} value={source}>
-                              {source}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catalog-last-sync">Last Synced</Label>
+                      <Input id="catalog-last-sync" type="datetime-local" {...form.register("lastSyncedAtLocal")} />
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="catalog-notes">Notes</Label>
+                      <Textarea id="catalog-notes" rows={3} placeholder="Feed caveats, validation notes, product set details…" {...form.register("notes")} />
                     </div>
                   </div>
+                </div>
+              ) : null}
 
-                  <Flex align="center" justify="between" wrap="wrap" gap="3">
-                    <div className="flex items-center gap-3 rounded-md border border-[var(--glass-border)] bg-background/20 p-3">
-                      <Checkbox
-                        id="activity-is-active"
-                        checked={linkDraft.activity.isActive}
-                        onCheckedChange={(checked) =>
-                          setLinkDraft((current) => ({
-                            ...current,
-                            activity: { ...current.activity, isActive: checked === true },
-                          }))
-                        }
-                      />
-                      <Label htmlFor="activity-is-active">Mark as active in delivery</Label>
-                    </div>
+              {/* Form actions */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-3">
+                  {activeCatalog ? (
+                    <Text size="1" color="gray">Updated {new Date(activeCatalog.updatedAt).toLocaleString()}</Text>
+                  ) : null}
+                  {form.formState.isDirty ? <Text size="1" color="amber">Unsaved changes</Text> : null}
+                </div>
+                <Flex align="center" gap="2">
+                  {activeCatalog ? (
                     <Button
                       type="button"
+                      variant={deleteArmed ? "destructive" : "outline"}
                       size="sm"
-                      disabled={isCatalogLinkSaving || isCatalogLinksLoading}
-                      onClick={() => void handleCreateCatalogLink()}
+                      onClick={() => void handleDelete()}
+                      disabled={isDeleting || isSaving}
+                      className="cursor-pointer gap-1.5"
                     >
-                      {isCatalogLinkSaving && !activeCatalogLinkId ? "Saving Link..." : "Save Product Activity"}
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {isDeleting ? "Deleting…" : deleteArmed ? "Confirm Delete" : "Delete"}
                     </Button>
-                  </Flex>
-
-                  {isCatalogLinksLoading ? (
-                    <Card variant="surface" className="border border-[var(--glass-border)] p-4 text-center">
-                      <Text size="2" color="gray">Loading product activity…</Text>
-                    </Card>
-                  ) : catalogLinks.length === 0 ? (
-                    <Card variant="surface" className="border border-dashed border-[var(--glass-border)] p-4 text-center">
-                      <Text size="2" color="gray">
-                        No product activity links recorded for this catalog yet.
-                      </Text>
-                    </Card>
-                  ) : (
-                    <div className="max-h-[24rem] overflow-y-auto rounded-md border border-[var(--glass-border)]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Product</TableHead>
-                            <TableHead>Ad Object</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Last Seen</TableHead>
-                            <TableHead className="text-right">Action</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {catalogLinks.map((link) => (
-                            <TableRow key={link.activity.id}>
-                              <TableCell>
-                                <div className="text-sm font-medium text-white">{link.product.externalProductId}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {link.product.title ?? "Untitled product"} · {link.product.availability}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-sm text-white">
-                                  {link.adObject.objectType.toUpperCase()} · {link.adObject.externalObjectId}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {link.adObject.name ?? "Unnamed object"}{link.adObject.status ? ` (${link.adObject.status})` : ""}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  color={link.activity.isActive ? "green" : "gray"}
-                                  radius="full"
-                                  variant="surface"
-                                >
-                                  {link.activity.isActive ? "Active" : "Inactive"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
-                                {new Date(link.activity.lastSeenAt).toLocaleString()}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={isCatalogLinkSaving}
-                                  onClick={() => void handleToggleCatalogLink(link, !link.activity.isActive)}
-                                >
-                                  {isCatalogLinkSaving && activeCatalogLinkId === link.activity.id
-                                    ? "Updating..."
-                                    : link.activity.isActive
-                                      ? "Set Inactive"
-                                      : "Set Active"}
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </>
-              )}
-            </Flex>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={isSaving || isDeleting || (isCreateMode && !selectedMetaAccountId)}
+                    className="cursor-pointer"
+                  >
+                    {isSaving ? "Saving…" : activeCatalog ? "Update Catalog" : "Create Catalog"}
+                  </Button>
+                </Flex>
+              </div>
+            </form>
           </Flex>
-        </Card>
-      </motion.div>
+        </div>
+      </div>
+
+      {/* Product activity — only when a catalog is selected */}
+      {activeCatalog ? (
+        <motion.div
+          className="glass-panel rounded-xl p-5"
+          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: MOTION_EASE, delay: shouldReduceMotion ? 0 : 0.12 }}
+        >
+          <Flex direction="column" gap="4">
+            <Flex align="center" justify="between" wrap="wrap" gap="2">
+              <div>
+                <Heading size="3" className="text-white">Product Activity Mapping</Heading>
+                <Text size="1" color="gray">Link products to campaign objects for DCO attribution and feed diagnostics.</Text>
+              </div>
+              <Flex align="center" gap="2">
+                <Badge color="gray" radius="full" variant="soft">{catalogLinkSummary.total} tracked</Badge>
+                <Badge color="green" radius="full" variant="soft">{catalogLinkSummary.active} active</Badge>
+                {catalogLinkSummary.inactive > 0 ? (
+                  <Badge color="amber" radius="full" variant="soft">{catalogLinkSummary.inactive} inactive</Badge>
+                ) : null}
+              </Flex>
+            </Flex>
+
+            <AnimatePresence initial={false}>
+              {catalogLinksError ? (
+                <motion.div
+                  initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
+                  transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
+                >
+                  <Callout.Root color="red" variant="surface">
+                    <Callout.Icon><AlertTriangle className="h-4 w-4" /></Callout.Icon>
+                    <Callout.Text>{catalogLinksError}</Callout.Text>
+                  </Callout.Root>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
+            {/* Products list */}
+            <div className="space-y-3">
+              <SectionDivider label={`Catalog Products (${catalogProducts.length})`} />
+              {isCatalogLinksLoading ? (
+                <div className="space-y-2">
+                  {[0, 1].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />)}
+                </div>
+              ) : catalogProducts.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-white/[0.08] py-6 text-center">
+                  <Text size="1" color="gray">No products yet. Add one using the activity form below.</Text>
+                </div>
+              ) : (
+                <div className="max-h-56 overflow-y-auto rounded-lg border border-white/[0.08]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Availability</TableHead>
+                        <TableHead>Links</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {catalogProducts.map((product) => (
+                        <TableRow key={product.externalProductId}>
+                          <TableCell>
+                            <div className="font-mono text-xs font-medium text-white">{product.externalProductId}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {product.title?.trim() || "Untitled"}{product.lastSeenAt ? ` · ${new Date(product.lastSeenAt).toLocaleDateString()}` : ""}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">{product.availability}</TableCell>
+                          <TableCell className="text-xs">
+                            <span className="text-green-400">{product.activeLinks}</span>
+                            <span className="text-muted-foreground">/{product.totalLinks}</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Input
+                                value={productRenameDrafts[product.externalProductId] ?? ""}
+                                onChange={(e) => setProductRenameDrafts((current) => ({ ...current, [product.externalProductId]: e.target.value }))}
+                                placeholder="Rename product"
+                                inputSize="sm"
+                                className="w-36"
+                              />
+                              <Button type="button" size="sm" variant="outline" disabled={isCatalogProductSaving} onClick={() => void handleRenameCatalogProduct(product.externalProductId)} className="cursor-pointer shrink-0">
+                                {isCatalogProductSaving && activeCatalogProductId === product.externalProductId ? "…" : "Rename"}
+                              </Button>
+                              <Button type="button" size="sm" variant="destructive" disabled={isCatalogProductSaving} onClick={() => void handleRemoveCatalogProduct(product.externalProductId)} className="cursor-pointer shrink-0">
+                                {isCatalogProductSaving && activeCatalogProductId === product.externalProductId ? "…" : "Remove"}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+
+            {/* Add activity link form */}
+            <div className="space-y-4">
+              <SectionDivider label="Add Product Activity Link" />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-product-id-select">Product ID</Label>
+                  <Select value={activityProductSelectValue} onValueChange={handleActivityProductSelection}>
+                    <SelectTrigger id="activity-product-id-select" className="w-full"><SelectValue placeholder="Choose or add product" /></SelectTrigger>
+                    <SelectContent>
+                      {knownActivityProducts.map((product) => (
+                        <SelectItem key={product.id} value={product.id}>{product.id}{product.title ? ` · ${product.title}` : ""}</SelectItem>
+                      ))}
+                      <SelectItem value={PRODUCT_SELECT_CUSTOM}>Custom Product ID…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {activityProductSelectValue === PRODUCT_SELECT_CUSTOM ? (
+                    <Input
+                      placeholder="sku_12345"
+                      value={linkDraft.product.externalProductId}
+                      onChange={(e) => {
+                        setCustomActivityProductId(e.target.value);
+                        setLinkDraft((current) => ({ ...current, product: { ...current.product, externalProductId: e.target.value } }));
+                      }}
+                      inputSize="sm"
+                    />
+                  ) : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-product-title">Product Title</Label>
+                  <Input
+                    id="activity-product-title"
+                    placeholder="Weekend Hoodie"
+                    value={linkDraft.product.title ?? ""}
+                    onChange={(e) => setLinkDraft((current) => ({ ...current, product: { ...current.product, title: e.target.value } }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-availability">Availability</Label>
+                  <Select value={linkDraft.product.availability} onValueChange={(value) => setLinkDraft((current) => ({ ...current, product: { ...current.product, availability: value as LinkDraftInput["product"]["availability"] } }))}>
+                    <SelectTrigger id="activity-availability" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unknown">Unknown</SelectItem>
+                      <SelectItem value="in_stock">In Stock</SelectItem>
+                      <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                      <SelectItem value="preorder">Preorder</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-object-type">Ad Object Type</Label>
+                  <Select value={linkDraft.adObject.objectType} onValueChange={(value) => setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, objectType: value as LinkDraftInput["adObject"]["objectType"], externalObjectId: "" } }))}>
+                    <SelectTrigger id="activity-object-type" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="campaign">Campaign</SelectItem>
+                      <SelectItem value="adset">Ad Set</SelectItem>
+                      <SelectItem value="ad">Ad</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-object-id-select">Ad Object ID</Label>
+                  <Select value={activityAdObjectSelectValue} onValueChange={handleActivityAdObjectSelection}>
+                    <SelectTrigger id="activity-object-id-select" className="w-full"><SelectValue placeholder="Choose ID" /></SelectTrigger>
+                    <SelectContent>
+                      {knownActivityAdObjectOptions.map((option) => (
+                        <SelectItem key={`${option.level}:${option.id}`} value={option.id}>{option.id}{option.name ? ` · ${option.name}` : ""}</SelectItem>
+                      ))}
+                      <SelectItem value={AD_OBJECT_SELECT_CUSTOM}>Custom Ad Object ID…</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {activityAdObjectSelectValue === AD_OBJECT_SELECT_CUSTOM ? (
+                    <Input
+                      placeholder="adset_9876"
+                      value={linkDraft.adObject.externalObjectId}
+                      onChange={(e) => {
+                        setCustomActivityAdObjectId(e.target.value);
+                        setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, externalObjectId: e.target.value } }));
+                      }}
+                      inputSize="sm"
+                    />
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-object-name">Ad Object Name</Label>
+                  <Input id="activity-object-name" placeholder="Prospecting · Broad 18-34" value={linkDraft.adObject.name ?? ""} onChange={(e) => setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, name: e.target.value } }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-object-status">Delivery Status</Label>
+                  <Select value={(linkDraft.adObject.status ?? "").trim() || "ACTIVE"} onValueChange={(value) => setLinkDraft((current) => ({ ...current, adObject: { ...current.adObject, status: value } }))}>
+                    <SelectTrigger id="activity-object-status" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {knownActivityStatuses.map((status) => <SelectItem key={status} value={status}>{status}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="activity-source">Source</Label>
+                  <Select value={(linkDraft.activity.source ?? "").trim() || "manual"} onValueChange={(value) => setLinkDraft((current) => ({ ...current, activity: { ...current.activity, source: value } }))}>
+                    <SelectTrigger id="activity-source" className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {knownActivitySources.map((source) => <SelectItem key={source} value={source}>{source}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Flex align="center" justify="between" wrap="wrap" gap="3">
+                <label htmlFor="activity-is-active" className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 transition-colors hover:bg-white/[0.04]">
+                  <Checkbox
+                    id="activity-is-active"
+                    checked={linkDraft.activity.isActive}
+                    onCheckedChange={(checked) => setLinkDraft((current) => ({ ...current, activity: { ...current.activity, isActive: checked === true } }))}
+                  />
+                  <Text size="2" className="text-white/80">Mark as active in delivery</Text>
+                </label>
+                <Button type="button" size="sm" disabled={isCatalogLinkSaving || isCatalogLinksLoading} onClick={() => void handleCreateCatalogLink()} className="cursor-pointer">
+                  {isCatalogLinkSaving && !activeCatalogLinkId ? "Saving…" : "Save Product Activity"}
+                </Button>
+              </Flex>
+            </div>
+
+            {/* Activity links table */}
+            {isCatalogLinksLoading ? (
+              <div className="space-y-2">
+                {[0, 1, 2].map((i) => <div key={i} className="h-9 animate-pulse rounded-md bg-white/[0.03]" />)}
+              </div>
+            ) : catalogLinks.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-white/[0.08] py-6 text-center">
+                <Text size="1" color="gray">No product-to-ad activity links recorded for this catalog yet.</Text>
+              </div>
+            ) : (
+              <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-white/[0.08]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Ad Object</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last Seen</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {catalogLinks.map((link) => (
+                      <TableRow key={link.activity.id}>
+                        <TableCell>
+                          <div className="font-mono text-xs font-medium text-white">{link.product.externalProductId}</div>
+                          <div className="text-[11px] text-muted-foreground">{link.product.title ?? "Untitled"} · {link.product.availability}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-xs text-white">{link.adObject.objectType.toUpperCase()} · {link.adObject.externalObjectId}</div>
+                          <div className="text-[11px] text-muted-foreground">{link.adObject.name ?? "Unnamed"}{link.adObject.status ? ` (${link.adObject.status})` : ""}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge color={link.activity.isActive ? "green" : "gray"} radius="full" variant="soft">
+                            {link.activity.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(link.activity.lastSeenAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button" size="sm" variant="outline"
+                            disabled={isCatalogLinkSaving}
+                            onClick={() => void handleToggleCatalogLink(link, !link.activity.isActive)}
+                            className="cursor-pointer"
+                          >
+                            {isCatalogLinkSaving && activeCatalogLinkId === link.activity.id
+                              ? "…"
+                              : link.activity.isActive ? "Deactivate" : "Activate"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Flex>
+        </motion.div>
+      ) : null}
     </motion.div>
   );
 }

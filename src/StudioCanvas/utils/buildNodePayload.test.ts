@@ -324,11 +324,19 @@ describe('buildNodePayload', () => {
       ];
 
       const resolvedData = new Map<string, NodeOutput>();
-      resolvedData.set('img1', { type: 'image', base64: 'img_base64', mimeType: 'image/png' });
       
       const allNodes: StudioNode[] = [
         node,
-        { id: 'img1', type: 'image', position: { x: 0, y: 0 }, data: { image: 'data:image/png;base64,img_base64' } },
+        {
+          id: 'img1',
+          type: 'image',
+          position: { x: 0, y: 0 },
+          data: {
+            image: 'data:image/png;base64,img_base64',
+            sourcePath: 'brand-assets/sample-image.png',
+            sourceUrl: 'https://cdn.continuum.test/sample-image.png',
+          },
+        },
         { id: 'aud1', type: 'audio', position: { x: 0, y: 0 }, data: { audio: 'data:audio/mp3;base64,aud_base64' } },
         { id: 'doc1', type: 'document', position: { x: 0, y: 0 }, data: { documents: [{ content: 'doc content', name: 'doc.txt', type: 'txt' }] } },
       ];
@@ -338,8 +346,42 @@ describe('buildNodePayload', () => {
       expect(payload).not.toBeNull();
       expect(payload?.prompt).toBe('Enrich this');
       expect(payload?.context?.images?.[0].data).toBe('img_base64');
+      expect(payload?.context?.images?.[0].sourcePath).toBe('brand-assets/sample-image.png');
+      expect(payload?.context?.images?.[0].sourceUrl).toBe('https://cdn.continuum.test/sample-image.png');
       expect(payload?.context?.audio?.data).toBe('aud_base64');
       expect(payload?.context?.documents?.[0].content).toBe('doc content');
+    });
+
+    it('should include source metadata for connected video inputs', () => {
+      const node: StudioNode = {
+        id: 'string',
+        type: 'string',
+        position: { x: 0, y: 0 },
+        data: { value: 'Use this video context' },
+      };
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'vid1', target: 'string', sourceHandle: 'video', targetHandle: 'video' },
+      ];
+
+      const allNodes: StudioNode[] = [
+        node,
+        {
+          id: 'vid1',
+          type: 'video',
+          position: { x: 0, y: 0 },
+          data: {
+            video: 'data:video/mp4;base64,vid_base64',
+            sourcePath: 'brand-assets/sample-video.mp4',
+            sourceUrl: 'https://cdn.continuum.test/sample-video.mp4',
+          },
+        },
+      ];
+
+      const payload = buildEnrichPayload(node, new Map(), allNodes, edges);
+      expect(payload?.context?.video?.data).toBe('vid_base64');
+      expect(payload?.context?.video?.sourcePath).toBe('brand-assets/sample-video.mp4');
+      expect(payload?.context?.video?.sourceUrl).toBe('https://cdn.continuum.test/sample-video.mp4');
     });
 
     it('should return an empty payload if no prompt and no inputs', () => {

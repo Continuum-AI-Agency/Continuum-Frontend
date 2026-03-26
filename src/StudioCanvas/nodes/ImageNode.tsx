@@ -133,15 +133,29 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     imageElement.src = src;
   }), []);
 
-  const applyPreviewImage = useCallback((src: string, fileName?: string) => {
-    setPreview(src);
-    updateNodeData(id, { image: src, fileName });
-    triggerSave();
-  }, [id, triggerSave, updateNodeData]);
+  const applyPreviewImage = useCallback(
+    (opts: { src: string; fileName?: string; sourcePath?: string; sourceUrl?: string }) => {
+      setPreview(opts.src);
+      updateNodeData(id, {
+        image: opts.src,
+        fileName: opts.fileName,
+        sourcePath: opts.sourcePath,
+        sourceUrl: opts.sourceUrl,
+      });
+      triggerSave();
+    },
+    [id, triggerSave, updateNodeData]
+  );
 
   const handleClearReference = useCallback(() => {
     setPreview(undefined);
-    updateNodeData(id, { image: undefined, fileName: undefined, aspectRatio: '1:1' });
+    updateNodeData(id, {
+      image: undefined,
+      fileName: undefined,
+      sourcePath: undefined,
+      sourceUrl: undefined,
+      aspectRatio: '1:1',
+    });
     snapNodeToAspectRatio('1:1');
     triggerSave();
   }, [id, snapNodeToAspectRatio, triggerSave, updateNodeData]);
@@ -175,7 +189,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        void applyPreviewImage(result, file.name);
+        void applyPreviewImage({ src: result, fileName: file.name });
       };
       reader.readAsDataURL(file);
     }
@@ -210,7 +224,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       }
       try {
         const result = await fileToDataUrl(file);
-        applyPreviewImage(result, file.name);
+        applyPreviewImage({ src: result, fileName: file.name });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -248,7 +262,12 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       return;
     }
 
-    applyPreviewImage(resolved.dataUrl, resolved.fileName);
+    applyPreviewImage({
+      src: resolved.dataUrl,
+      fileName: resolved.fileName,
+      sourcePath: resolved.sourcePath,
+      sourceUrl: resolved.sourceUrl,
+    });
   }, [applyPreviewImage, fileToDataUrl, show]);
 
   return (

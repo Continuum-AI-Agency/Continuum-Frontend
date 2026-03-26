@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Cross2Icon,
   LightningBoltIcon,
@@ -57,6 +58,18 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { TrendWorkbench } from "./TrendWorkbench"
+import {
+  AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
+  buildAiStudioStorageKey,
+  buildPendingApplyStorageKey,
+  buildSessionHistoryStorageKey,
+  normalizeDraftPostType,
+  plannerAiStudioApplyResponseSchema,
+  plannerAiStudioHandoffSchema,
+  resolveWorkflowConcept,
+  type PlannerAiStudioHandoff,
+  type PlannerAiStudioRevision,
+} from "@/lib/organic/ai-studio-bridge"
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[]
@@ -80,26 +93,6 @@ function isSchedulablePlannerPlatform(
   return platform === "instagram" || platform === "linkedin"
 }
 
-const AI_STUDIO_CONTEXT_STORAGE_PREFIX = "continuum:organic-planner:ai-studio-context"
-const AI_STUDIO_LAST_DRAFT_STORAGE_KEY = `${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:last-draft-id`
-
-type PlannerAiStudioContext = {
-  draftId: string
-  brandProfileId?: string
-  weekStartId: string
-  title: string
-  summary: string
-  captionPreview: string
-  seedTrendId?: string
-  creativeDirectionPrompt?: string
-  thumbnailPrompt?: string
-  updatedAt: string
-}
-
-function buildAiStudioStorageKey(draftId: string) {
-  return `${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:${draftId}`
-}
-
 export function OrganicCalendarWorkspaceClient({
   days: initialDays,
   trendTypes,
@@ -111,6 +104,8 @@ export function OrganicCalendarWorkspaceClient({
   initialWeekStart,
   initialSelectedDraftId,
 }: OrganicCalendarWorkspaceClientProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const {
     days: calendarDays,
     setDays: setCalendarDays,
@@ -127,6 +122,7 @@ export function OrganicCalendarWorkspaceClient({
     viewMode,
     setViewMode,
     addDraft,
+    updateDraft: updateDraftById,
   } = useCalendarStore()
 
   const {
@@ -409,18 +405,45 @@ export function OrganicCalendarWorkspaceClient({
   }, [])
 
   const buildAiStudioContext = React.useCallback(
-    (draft: OrganicCalendarDraft): PlannerAiStudioContext => {
+    (draft: OrganicCalendarDraft): PlannerAiStudioHandoff => {
       const prompts = deriveAiStudioPrompts(draft)
+      const postType = normalizeDraftPostType(draft.format)
+      const platform = draft.platforms[0] === "linkedin" ? "linkedin" : "instagram"
+      const workflowConcept = resolveWorkflowConcept({
+        platform,
+        postType,
+      })
       return {
+        schemaVersion: "planner_ai_handoff_v1",
         draftId: draft.id,
-        brandProfileId,
+        brandProfileId: brandProfileId ?? "",
         weekStartId,
+        platform,
+        postType,
+        workflowConcept,
+        format: draft.format,
+        authoritativeCount:
+          postType === "carousel" ? Math.max(1, draft.slideCount ?? draft.mediaCount ?? 1) : 1,
         title: draft.title,
         summary: draft.summary,
         captionPreview: draft.captionPreview,
         seedTrendId: draft.seedTrendId,
         creativeDirectionPrompt: prompts.creativeDirectionPrompt,
         thumbnailPrompt: prompts.thumbnailPrompt,
+        mediaSuggestion: draft.mediaSuggestion
+          ? {
+              assetUrl:
+                typeof draft.mediaSuggestion.assetUrl === "string"
+                  ? draft.mediaSuggestion.assetUrl
+                  : undefined,
+              assetBase64:
+                typeof draft.mediaSuggestion.assetBase64 === "string"
+                  ? draft.mediaSuggestion.assetBase64
+                  : undefined,
+              generationContext: draft.mediaSuggestion.generationContext,
+            }
+          : undefined,
+        assetHints: draft.assetHints,
         updatedAt: new Date().toISOString(),
       }
     },
@@ -429,13 +452,134 @@ export function OrganicCalendarWorkspaceClient({
 
   React.useEffect(() => {
     if (typeof window === "undefined" || !selectedDraft) return
-    const payload = buildAiStudioContext(selectedDraft)
+    const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
+    if (!parsed.success) return
+    const payload = parsed.data
     window.localStorage.setItem(
       buildAiStudioStorageKey(selectedDraft.id),
       JSON.stringify(payload)
     )
     window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, selectedDraft.id)
   }, [buildAiStudioContext, selectedDraft])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const draftId = searchParams.get("draftId")
+    if (!draftId) return
+
+    const key = buildPendingApplyStorageKey(draftId)
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return
+
+    let parsedPayload: unknown
+    try {
+      parsedPayload = JSON.parse(raw)
+    } catch {
+      return
+    }
+
+    const parsed = plannerAiStudioApplyResponseSchema.safeParse(parsedPayload)
+    if (!parsed.success) return
+    const applyPayload = parsed.data
+
+    updateDraftById(applyPayload.draftId, (draft) => ({
+      ...draft,
+      title: applyPayload.contentPatch.title ?? draft.title,
+      summary: applyPayload.contentPatch.summary ?? draft.summary,
+      captionPreview: applyPayload.contentPatch.captionPreview ?? draft.captionPreview,
+      creativeDirectionPrompt:
+        applyPayload.contentPatch.creativeDirectionPrompt ?? draft.creativeDirectionPrompt,
+      thumbnailPrompt: applyPayload.contentPatch.thumbnailPrompt ?? draft.thumbnailPrompt,
+      creativeIdea: applyPayload.contentPatch.creativeIdea ?? draft.creativeIdea,
+      publishingAssets: applyPayload.assets.map((asset) => ({
+        role: asset.role,
+        kind: asset.kind,
+        slideIndex: asset.slideIndex,
+        storagePath: asset.storagePath,
+        storageUrl: asset.storageUrl,
+        mimeType: asset.mimeType,
+        width: asset.width,
+        height: asset.height,
+        generationContext: asset.generationContext,
+      })),
+      mediaSuggestion:
+        applyPayload.assets[0]?.kind === "image"
+          ? {
+              ...(draft.mediaSuggestion ?? {}),
+              assetUrl: applyPayload.assets[0].storageUrl,
+              assetBase64: null,
+              generationContext: applyPayload.assets[0].generationContext as
+                | NonNullable<NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["generationContext"]>
+                | null
+                | undefined,
+            }
+          : draft.mediaSuggestion,
+      mediaCount: Math.max(
+        1,
+        applyPayload.assets.filter((asset) => asset.kind === "image").length || draft.mediaCount
+      ),
+      status: "draft",
+      generationError: undefined,
+    }))
+
+    setSelectedDraftId(applyPayload.draftId)
+    window.localStorage.removeItem(key)
+
+    const historyKey = buildSessionHistoryStorageKey(applyPayload.draftId)
+    const historyRaw = window.sessionStorage.getItem(historyKey)
+    let history: PlannerAiStudioRevision[] = []
+    if (historyRaw) {
+      try {
+        history = JSON.parse(historyRaw) as PlannerAiStudioRevision[]
+      } catch {
+        history = []
+      }
+    }
+
+    const seedRaw = window.localStorage.getItem(buildAiStudioStorageKey(applyPayload.draftId))
+    let before: PlannerAiStudioHandoff | null = null
+    if (seedRaw) {
+      try {
+        const parsedSeed = plannerAiStudioHandoffSchema.safeParse(JSON.parse(seedRaw))
+        if (parsedSeed.success) {
+          before = parsedSeed.data
+        }
+      } catch {
+        before = null
+      }
+    }
+
+    if (before) {
+      const revision: PlannerAiStudioRevision = {
+        revisionId:
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `revision-${Date.now()}`,
+        draftId: applyPayload.draftId,
+        createdAt: new Date().toISOString(),
+        before,
+        applied: applyPayload,
+      }
+      history.push(revision)
+      window.sessionStorage.setItem(historyKey, JSON.stringify(history.slice(-10)))
+    }
+  }, [searchParams, setSelectedDraftId, updateDraftById])
+
+  const handleOpenInAiStudio = React.useCallback(() => {
+    if (!selectedDraft || !brandProfileId) return
+    const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
+    if (!parsed.success) return
+    window.localStorage.setItem(
+      buildAiStudioStorageKey(selectedDraft.id),
+      JSON.stringify(parsed.data)
+    )
+    window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, selectedDraft.id)
+    router.push(
+      `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(
+        selectedDraft.id
+      )}`
+    )
+  }, [brandProfileId, buildAiStudioContext, router, selectedDraft])
 
   const handleBulkDelete = React.useCallback(() => {
     bulkDeleteDrafts(selectedIds)
@@ -670,15 +814,26 @@ export function OrganicCalendarWorkspaceClient({
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Post Preview
                   </p>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Close preview"
-                    onClick={clearAll}
-                  >
-                    <Cross2Icon className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={!brandProfileId}
+                      onClick={handleOpenInAiStudio}
+                    >
+                      Open in AI Studio
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Close preview"
+                      onClick={clearAll}
+                    >
+                      <Cross2Icon className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="h-[calc(100%-2rem)] overflow-hidden rounded-md bg-background/85">

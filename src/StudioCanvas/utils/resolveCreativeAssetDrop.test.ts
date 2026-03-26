@@ -35,6 +35,7 @@ describe('resolveCreativeAssetDrop', () => {
     if (result.status === 'success') {
       expect(result.dataUrl.startsWith('data:image/png;base64,')).toBe(true);
       expect(result.fileName).toBe('asset.png');
+      expect(result.sourcePath).toBe('brand/asset.png');
     }
   });
 

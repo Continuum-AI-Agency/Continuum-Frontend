@@ -60,6 +60,7 @@ type GridPlacement = {
 type PlacementMediaSuggestion = NonNullable<
   NonNullable<CalendarPlacement["creative"]>["mediaSuggestion"]
 >;
+type PlacementMediaAsset = NonNullable<NonNullable<PlacementMediaSuggestion["assets"]>[number]>;
 
 function normalizeTimestamp(value?: string): string {
   if (!value) return "";
@@ -85,12 +86,34 @@ function resolvePlacementScheduledAt(dayId: string, timeLabel: string) {
   return buildScheduledAt(dayId, timeLabel) ?? `${dayId}T09:00:00.000Z`;
 }
 
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function toDataUrl(base64: string, mimeType?: string | null): string {
+  const normalized = base64.trim();
+  if (normalized.startsWith("data:")) return normalized;
+  const mime = hasText(mimeType) ? mimeType.trim() : "image/png";
+  return `data:${mime};base64,${normalized}`;
+}
+
+function resolvePrimaryMediaAsset(
+  mediaSuggestion: PlacementMediaSuggestion
+): PlacementMediaAsset | undefined {
+  const assets = Array.isArray(mediaSuggestion.assets) ? mediaSuggestion.assets : [];
+  const withBase64 = assets.filter(
+    (asset): asset is PlacementMediaAsset => !!asset && hasText(asset.assetBase64)
+  );
+  if (withBase64.length === 0) return undefined;
+  return withBase64.sort((left, right) => (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER))[0];
+}
+
 function normalizeMediaSuggestionAssetUrl(
   mediaSuggestion?: PlacementMediaSuggestion | null
 ): PlacementMediaSuggestion | undefined {
   if (!mediaSuggestion) return undefined;
   const rawAssetUrl =
-    typeof mediaSuggestion.assetUrl === "string" ? mediaSuggestion.assetUrl.trim() : "";
+    hasText(mediaSuggestion.assetUrl) ? mediaSuggestion.assetUrl.trim() : "";
   if (rawAssetUrl.length > 0) {
     return {
       ...mediaSuggestion,
@@ -98,17 +121,27 @@ function normalizeMediaSuggestionAssetUrl(
     };
   }
 
-  const rawBase64 =
-    typeof mediaSuggestion.assetBase64 === "string" ? mediaSuggestion.assetBase64.trim() : "";
-  if (!rawBase64) return mediaSuggestion;
+  if (hasText(mediaSuggestion.assetBase64)) {
+    return {
+      ...mediaSuggestion,
+      assetUrl: toDataUrl(mediaSuggestion.assetBase64, "image/png"),
+    };
+  }
 
-  const assetUrl = rawBase64.startsWith("data:image/")
-    ? rawBase64
-    : `data:image/png;base64,${rawBase64}`;
+  const primaryAsset = resolvePrimaryMediaAsset(mediaSuggestion);
+  if (!primaryAsset || !hasText(primaryAsset.assetBase64)) return mediaSuggestion;
 
   return {
     ...mediaSuggestion,
-    assetUrl,
+    provider: mediaSuggestion.provider ?? primaryAsset.provider ?? null,
+    model: mediaSuggestion.model ?? primaryAsset.model ?? null,
+    prompt: mediaSuggestion.prompt ?? primaryAsset.prompt ?? null,
+    width: mediaSuggestion.width ?? primaryAsset.width ?? null,
+    height: mediaSuggestion.height ?? primaryAsset.height ?? null,
+    assetBase64: mediaSuggestion.assetBase64 ?? primaryAsset.assetBase64 ?? null,
+    generationContext:
+      mediaSuggestion.generationContext ?? primaryAsset.generationContext ?? null,
+    assetUrl: toDataUrl(primaryAsset.assetBase64, primaryAsset.mimeType),
   };
 }
 
@@ -397,6 +430,25 @@ export function useDraftGeneration({
         }
       }
       const mediaSuggestion = normalizeMediaSuggestionAssetUrl(placement.creative?.mediaSuggestion);
+      const publishingAssets =
+        mediaSuggestion?.assetUrl && mediaSuggestion.assetUrl.trim().length > 0
+          ? [
+              {
+                role: "primary",
+                kind: "image" as const,
+                storagePath: mediaSuggestion.assetUrl,
+                storageUrl: mediaSuggestion.assetUrl,
+                mimeType:
+                  typeof mediaSuggestion.provider === "string" &&
+                  mediaSuggestion.provider.toLowerCase().includes("video")
+                    ? "video/mp4"
+                    : "image/png",
+                width: mediaSuggestion.width ?? undefined,
+                height: mediaSuggestion.height ?? undefined,
+                generationContext: mediaSuggestion.generationContext,
+              },
+            ]
+          : existing?.publishingAssets;
 
       return {
         id: draftIdOverride ?? existing?.id ?? placement.placementId,
@@ -420,6 +472,7 @@ export function useDraftGeneration({
         cta: content.cta ?? undefined,
         creativeIdea: placement.creative?.creativeIdea ?? undefined,
         mediaSuggestion,
+        publishingAssets,
         assetHints: placement.creative?.assetHints ?? undefined,
         hashtags: placement.copy?.hashtags ?? undefined,
         creativeDirectionPrompt: existing?.creativeDirectionPrompt,

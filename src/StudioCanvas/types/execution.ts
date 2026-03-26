@@ -38,9 +38,21 @@ export interface EnrichPromptPayload {
   prompt: string;
   brandId?: string;
   context: {
-    images?: Array<{ type: 'base64'; data: string; mimeType: string }>;
+    images?: Array<{
+      type: 'base64';
+      data: string;
+      mimeType: string;
+      sourcePath?: string;
+      sourceUrl?: string;
+    }>;
     audio?: { type: 'base64'; data: string; mimeType: string };
-    video?: { type: 'base64'; data: string; mimeType: string };
+    video?: {
+      type: 'base64';
+      data: string;
+      mimeType: string;
+      sourcePath?: string;
+      sourceUrl?: string;
+    };
     documents?: Array<{ name: string; content: string }>;
   };
 }

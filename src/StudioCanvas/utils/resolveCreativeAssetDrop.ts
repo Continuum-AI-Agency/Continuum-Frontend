@@ -17,6 +17,8 @@ export type CreativeAssetDropSuccess = {
   dataUrl: string;
   mimeType: string;
   fileName?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
 };
 
 export type CreativeAssetDropError = {
@@ -129,6 +131,8 @@ export async function resolveCreativeAssetDrop(
       dataUrl: buildDataUrl(mimeType, base64),
       mimeType,
       fileName: sourceName && sourceName !== "data-url" ? sourceName : undefined,
+      sourcePath: parsed.kind === "remote" ? parsed.path : undefined,
+      sourceUrl: parsed.kind === "remote" ? parsed.publicUrl : undefined,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to resolve asset";

@@ -152,6 +152,32 @@ describe('isValidConnection', () => {
     expect(valid).toBe(false);
   });
 
+  it('should enforce custom NanoGen max reference image limit when configured', () => {
+    const customNodes = nodes.map((node) =>
+      node.id === 'nano1'
+        ? ({ ...node, data: { ...(node.data as Record<string, unknown>), maxReferenceImages: 5 } } as StudioNode)
+        : node
+    );
+
+    const edges: Edge[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      edges.push({
+        id: `e-limit-${i}`,
+        source: `img-limit-${i}`,
+        sourceHandle: 'image',
+        target: 'nano1',
+        targetHandle: 'ref-image',
+      });
+    }
+
+    const valid = isValidConnection(
+      { source: 'image-overflow', sourceHandle: 'image', target: 'nano1', targetHandle: 'ref-image' },
+      edges,
+      customNodes
+    );
+    expect(valid).toBe(false);
+  });
+
   it('should allow connecting Video to ExtendVideo', () => {
     const valid = isValidConnection(
         { source: 'video1', sourceHandle: 'video', target: 'extend1', targetHandle: 'video' },

@@ -27,6 +27,8 @@ import { Copy, Trash2 } from 'lucide-react';
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
   fileName?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
 }
 
 import {
@@ -61,7 +63,12 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
       reader.onloadend = () => {
         const result = reader.result as string;
         setPreview(result);
-        updateNodeData(id, { video: result, fileName: file.name });
+        updateNodeData(id, {
+          video: result,
+          fileName: file.name,
+          sourcePath: undefined,
+          sourceUrl: undefined,
+        });
         triggerSave();
       };
       reader.readAsDataURL(file);
@@ -98,7 +105,12 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
       try {
         const result = await fileToDataUrl(file);
         setPreview(result);
-        updateNodeData(id, { video: result, fileName: file.name });
+        updateNodeData(id, {
+          video: result,
+          fileName: file.name,
+          sourcePath: undefined,
+          sourceUrl: undefined,
+        });
         triggerSave();
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
@@ -138,7 +150,12 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
     }
 
     setPreview(resolved.dataUrl);
-    updateNodeData(id, { video: resolved.dataUrl, fileName: resolved.fileName });
+    updateNodeData(id, {
+      video: resolved.dataUrl,
+      fileName: resolved.fileName,
+      sourcePath: resolved.sourcePath,
+      sourceUrl: resolved.sourceUrl,
+    });
     triggerSave();
   }, [fileToDataUrl, id, triggerSave, updateNodeData, show]);
 

@@ -34,21 +34,41 @@ type SocialPreviewProps = {
   thumbnailDirection: string
 }
 
+function hasText(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+function toDataUrl(base64: string, mimeType?: string | null): string {
+  const normalized = base64.trim()
+  if (normalized.startsWith("data:")) return normalized
+  const mime = hasText(mimeType) ? mimeType.trim() : "image/png"
+  return `data:${mime};base64,${normalized}`
+}
+
 function resolveDraftMediaAssetUrl(draft: OrganicCalendarDraft): string | null {
+  const persistedImageAsset = draft.publishingAssets?.find((asset) => asset.kind === "image")
+  if (persistedImageAsset?.storageUrl) {
+    return persistedImageAsset.storageUrl
+  }
+
   const mediaSuggestion = draft.mediaSuggestion
   if (!mediaSuggestion) return null
 
-  const assetUrl =
-    typeof mediaSuggestion.assetUrl === "string" ? mediaSuggestion.assetUrl.trim() : ""
+  const assetUrl = hasText(mediaSuggestion.assetUrl) ? mediaSuggestion.assetUrl.trim() : ""
   if (assetUrl.length > 0) return assetUrl
 
-  const assetBase64 =
-    typeof mediaSuggestion.assetBase64 === "string" ? mediaSuggestion.assetBase64.trim() : ""
-  if (!assetBase64) return null
+  if (hasText(mediaSuggestion.assetBase64)) {
+    return toDataUrl(mediaSuggestion.assetBase64, "image/png")
+  }
 
-  return assetBase64.startsWith("data:image/")
-    ? assetBase64
-    : `data:image/png;base64,${assetBase64}`
+  const primaryAsset = (mediaSuggestion.assets ?? [])
+    .filter((asset): asset is NonNullable<NonNullable<typeof mediaSuggestion.assets>[number]> => {
+      return Boolean(asset && hasText(asset.assetBase64))
+    })
+    .sort((left, right) => (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER))[0]
+
+  if (!primaryAsset || !hasText(primaryAsset.assetBase64)) return null
+  return toDataUrl(primaryAsset.assetBase64, primaryAsset.mimeType)
 }
 
 function resolveDraftMediaAltText(draft: OrganicCalendarDraft): string {

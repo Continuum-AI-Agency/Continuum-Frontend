@@ -60,7 +60,7 @@ function resolveVideoInput(
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
   edges: Edge[]
-): { data: string; mimeType: string; filename?: string } | undefined {
+): { data: string; mimeType: string; filename?: string; sourcePath?: string; sourceUrl?: string } | undefined {
   const incomingEdge = edges.find(
     (e) => e.target === nodeId && e.targetHandle === handleId
   );
@@ -84,6 +84,8 @@ function resolveVideoInput(
         data: parsed.base64,
         mimeType: parsed.mimeType,
         filename: (sourceNode.data as any).fileName,
+        sourcePath: (sourceNode.data as any).sourcePath,
+        sourceUrl: (sourceNode.data as any).sourceUrl,
       };
     }
   }
@@ -151,7 +153,7 @@ function resolveImageInput(
   edge: Edge,
   resolvedData: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>
-): { base64: string; mimeType: string } | undefined {
+): { base64: string; mimeType: string; sourcePath?: string; sourceUrl?: string } | undefined {
   const output = resolvedData.get(edge.source);
   if (output?.type === 'image' && output.base64) {
     return { base64: output.base64, mimeType: output.mimeType };
@@ -161,7 +163,12 @@ function resolveImageInput(
   if (sourceNode?.type === 'image') {
     const parsed = parseDataUrl((sourceNode.data as any).image as string | undefined);
     if (parsed?.base64) {
-      return { base64: parsed.base64, mimeType: parsed.mimeType };
+      return {
+        base64: parsed.base64,
+        mimeType: parsed.mimeType,
+        sourcePath: (sourceNode.data as any).sourcePath,
+        sourceUrl: (sourceNode.data as any).sourceUrl,
+      };
     }
   }
 
@@ -260,9 +267,25 @@ export function buildEnrichPayload(
     prompt,
     brandId,
     context: {
-      images: images.length > 0 ? images.map(img => ({ type: 'base64' as const, data: img!.base64, mimeType: img!.mimeType })) : undefined,
+      images: images.length > 0
+        ? images.map((img) => ({
+            type: 'base64' as const,
+            data: img!.base64,
+            mimeType: img!.mimeType,
+            sourcePath: img!.sourcePath,
+            sourceUrl: img!.sourceUrl,
+          }))
+        : undefined,
       audio: audio ? { type: 'base64' as const, data: audio.base64, mimeType: audio.mimeType } : undefined,
-      video: video ? { type: 'base64' as const, data: video.data, mimeType: video.mimeType } : undefined,
+      video: video
+        ? {
+            type: 'base64' as const,
+            data: video.data,
+            mimeType: video.mimeType,
+            sourcePath: video.sourcePath,
+            sourceUrl: video.sourceUrl,
+          }
+        : undefined,
       documents: documents,
     }
   };

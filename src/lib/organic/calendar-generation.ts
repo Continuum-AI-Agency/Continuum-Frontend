@@ -395,6 +395,22 @@ const mediaSuggestionGenerationContextSchema = z
   .passthrough()
   .nullish();
 
+const mediaSuggestionAssetSchema = z
+  .object({
+    role: z.string().nullish(),
+    order: z.number().nullish(),
+    provider: z.string().nullish(),
+    model: z.string().nullish(),
+    prompt: z.string().nullish(),
+    width: z.number().nullish(),
+    height: z.number().nullish(),
+    assetBase64: z.string().nullish(),
+    mimeType: z.string().nullish(),
+    error: z.string().nullish(),
+    generationContext: mediaSuggestionGenerationContextSchema.nullish(),
+  })
+  .passthrough();
+
 const placementCreativeSchema = z
   .object({
     creativeIdea: z.string().optional().nullable(),
@@ -410,6 +426,7 @@ const placementCreativeSchema = z
         assetUrl: z.string().nullish(),
         alt: z.string().nullish(),
         assetBase64: z.string().nullish(),
+        assets: z.array(mediaSuggestionAssetSchema).nullish(),
         generationContext: mediaSuggestionGenerationContextSchema.nullish(),
       })
       .nullish(),

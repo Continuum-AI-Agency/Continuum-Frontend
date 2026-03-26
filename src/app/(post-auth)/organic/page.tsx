@@ -21,7 +21,24 @@ import { redirect } from "next/navigation";
 import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
 import type { OrganicTrendGroup, OrganicTrendType } from "@/components/organic/primitives/types";
 
-export default async function OrganicPage() {
+type OrganicPageProps = {
+  searchParams?:
+    | Record<string, string | string[] | undefined>
+    | Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function OrganicPage({ searchParams }: OrganicPageProps) {
+  const resolvedSearchParams = (searchParams ? await searchParams : undefined) ?? {};
+  const initialSelectedDraftIdRaw = resolvedSearchParams.draftId;
+  const initialWeekStartRaw = resolvedSearchParams.weekStartId ?? resolvedSearchParams.weekStart;
+  const initialSelectedDraftId =
+    typeof initialSelectedDraftIdRaw === "string" && initialSelectedDraftIdRaw.trim().length > 0
+      ? initialSelectedDraftIdRaw
+      : null;
+  const initialWeekStart =
+    typeof initialWeekStartRaw === "string" && initialWeekStartRaw.trim().length > 0
+      ? initialWeekStartRaw
+      : null;
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
@@ -225,6 +242,8 @@ export default async function OrganicPage() {
               platformAccountIds={platformAccountIds}
               maxTrendSelections={5}
               brandProfileId={brandProfileId}
+              initialSelectedDraftId={initialSelectedDraftId}
+              initialWeekStart={initialWeekStart}
             />
           )}
           metricsSlot={(

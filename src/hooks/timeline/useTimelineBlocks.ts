@@ -34,6 +34,19 @@ const PREFETCH_WINDOW_DAYS = 30;
 const TIMELINE_ACCOUNT_CACHE = new Map<string, AccountTimelineCacheEntry>();
 const TIMELINE_ACCOUNT_BOOTSTRAP = new Map<string, Promise<AccountTimelineCacheEntry>>();
 
+function buildResolutionCacheEntry(
+    blocks: TimelineBlock[],
+    rangeStart: string,
+    rangeEnd: string
+): ResolutionCacheEntry {
+    return {
+        blocks,
+        rangeStart,
+        rangeEnd,
+        fetchedAt: Date.now(),
+    };
+}
+
 function buildAccountCacheKey(brandId: string, accountId: string): string {
     return `${brandId}:${accountId}`;
 }
@@ -276,29 +289,54 @@ export function useTimelineBlocks({
                     } else {
                         const bootstrapRange = computePrefetchRange(startDate, endDate);
 
-                        const bootstrapPromise = Promise.all([
-                            fetchResolutionBlocks('daily', bootstrapRange.start, bootstrapRange.end),
-                            fetchResolutionBlocks('hourly', bootstrapRange.start, bootstrapRange.end),
-                        ])
-                            .then(([dailyBlocks, hourlyBlocks]) => {
-                                const nextEntry: AccountTimelineCacheEntry = {
-                                    daily: {
-                                        blocks: dailyBlocks,
-                                        rangeStart: bootstrapRange.start,
-                                        rangeEnd: bootstrapRange.end,
-                                        fetchedAt: Date.now(),
-                                    },
-                                    hourly: {
-                                        blocks: hourlyBlocks,
-                                        rangeStart: bootstrapRange.start,
-                                        rangeEnd: bootstrapRange.end,
-                                        fetchedAt: Date.now(),
-                                    },
-                                };
+                        const bootstrapPromise = (async () => {
+                            const primaryBlocks = await fetchResolutionBlocks(
+                                resolution,
+                                bootstrapRange.start,
+                                bootstrapRange.end
+                            );
+                            const primaryCacheEntry = buildResolutionCacheEntry(
+                                primaryBlocks,
+                                bootstrapRange.start,
+                                bootstrapRange.end
+                            );
 
-                                TIMELINE_ACCOUNT_CACHE.set(cacheKey, nextEntry);
-                                return nextEntry;
-                            })
+                            const nextEntry: AccountTimelineCacheEntry = {
+                                [resolution]: primaryCacheEntry,
+                            };
+
+                            TIMELINE_ACCOUNT_CACHE.set(cacheKey, nextEntry);
+
+                            const secondaryResolution: TimelineResolution =
+                                resolution === 'daily' ? 'hourly' : 'daily';
+
+                            void fetchResolutionBlocks(
+                                secondaryResolution,
+                                bootstrapRange.start,
+                                bootstrapRange.end
+                            )
+                                .then((secondaryBlocks) => {
+                                    const secondaryCacheEntry = buildResolutionCacheEntry(
+                                        secondaryBlocks,
+                                        bootstrapRange.start,
+                                        bootstrapRange.end
+                                    );
+                                    const currentCache = TIMELINE_ACCOUNT_CACHE.get(cacheKey) ?? nextEntry;
+
+                                    TIMELINE_ACCOUNT_CACHE.set(cacheKey, {
+                                        ...currentCache,
+                                        [secondaryResolution]: secondaryCacheEntry,
+                                    });
+                                })
+                                .catch((prefetchError) => {
+                                    console.warn(
+                                        `[useTimelineBlocks] Failed to prefetch ${secondaryResolution} timeline blocks`,
+                                        prefetchError
+                                    );
+                                });
+
+                            return TIMELINE_ACCOUNT_CACHE.get(cacheKey) ?? nextEntry;
+                        })()
                             .finally(() => {
                                 TIMELINE_ACCOUNT_BOOTSTRAP.delete(cacheKey);
                             });
@@ -322,12 +360,11 @@ export function useTimelineBlocks({
                         refreshRange.end
                     );
 
-                    resolutionCache = {
-                        blocks: refreshedBlocks,
-                        rangeStart: refreshRange.start,
-                        rangeEnd: refreshRange.end,
-                        fetchedAt: Date.now(),
-                    };
+                    resolutionCache = buildResolutionCacheEntry(
+                        refreshedBlocks,
+                        refreshRange.start,
+                        refreshRange.end
+                    );
 
                     accountCache = {
                         ...accountCache,

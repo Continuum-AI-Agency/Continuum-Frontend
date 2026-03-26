@@ -23,6 +23,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { FolderOpen, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 import { Canvas } from '@/components/ai-elements/canvas';
 import { Controls } from '@/components/ai-elements/controls';
@@ -58,12 +59,30 @@ import { CanvasRoomsTabs } from '@/components/ai-studio/CanvasRoomsTabs';
 import { useCanvasRooms } from '@/components/ai-studio/hooks/useCanvasRooms';
 import { CanvasMediaLoader } from '@/components/ai-studio/CanvasMediaLoader';
 import { StudioNode } from '../types';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
+import {
+  buildPendingApplyStorageKey,
+  plannerAiStudioApplyResponseSchema,
+  resolveWorkflowConceptSpec,
+  type PlannerAiStudioApplyRequest,
+  type PlannerAiStudioHandoff,
+  type WorkflowConceptSpec,
+} from '@/lib/organic/ai-studio-bridge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -93,15 +112,6 @@ type LibrarySection = {
   value: string;
   label: string;
   items: LibraryItem[];
-};
-
-type OrganicPlannerSeedContext = {
-  draftId: string;
-  title: string;
-  summary: string;
-  captionPreview: string;
-  creativeDirectionPrompt?: string;
-  thumbnailPrompt?: string;
 };
 
 const LIBRARY_SECTIONS: LibrarySection[] = [
@@ -268,6 +278,294 @@ const edgeTypes = {
   dataType: AiElementsEdge.DataType,
 };
 
+type SeedNodeBuild = {
+  nodes: StudioNode[];
+  edges: Edge[];
+};
+
+type ApplyAssetCandidate = {
+  nodeId: string;
+  role: string;
+  kind: "image" | "video";
+  source: string;
+};
+
+function resolveSeedMediaDataUrl(seed: PlannerAiStudioHandoff): string | null {
+  const assetUrl =
+    typeof seed.mediaSuggestion?.assetUrl === "string"
+      ? seed.mediaSuggestion.assetUrl.trim()
+      : "";
+  if (assetUrl.length > 0) return assetUrl;
+
+  const assetBase64 =
+    typeof seed.mediaSuggestion?.assetBase64 === "string"
+      ? seed.mediaSuggestion.assetBase64.trim()
+      : "";
+  if (!assetBase64) return null;
+
+  return assetBase64.startsWith("data:image/")
+    ? assetBase64
+    : `data:image/png;base64,${assetBase64}`;
+}
+
+function buildSeedPrompt(seed: PlannerAiStudioHandoff): string {
+  const workflowSpec = resolveWorkflowConceptSpec({
+    platform: seed.platform,
+    postType: seed.postType,
+    workflowConcept: seed.workflowConcept,
+  });
+  const promptSections = [
+    seed.title ? `Title: ${seed.title}` : "",
+    seed.summary ? `Summary: ${seed.summary}` : "",
+    seed.captionPreview ? `Draft caption:\n${seed.captionPreview}` : "",
+    seed.creativeDirectionPrompt
+      ? `Creative direction:\n${seed.creativeDirectionPrompt}`
+      : "",
+    seed.thumbnailPrompt ? `Thumbnail direction:\n${seed.thumbnailPrompt}` : "",
+  ].filter(Boolean);
+
+  if (workflowSpec.outputKind === "video") {
+    promptSections.push("Goal: Generate a short-form social reel concept with clear motion direction.");
+  } else if (workflowSpec.outputMode === "ordered") {
+    promptSections.push("Goal: Generate distinct but coherent slide visuals for the full carousel.");
+  } else {
+    promptSections.push("Goal: Generate a clean social thumbnail concept with clear hierarchy and one focal subject.");
+  }
+
+  return promptSections.join("\n\n");
+}
+
+function sortNodesByCanvasPosition(nodes: StudioNode[]): StudioNode[] {
+  return [...nodes].sort((left, right) => {
+    const xDiff = (left.position?.x ?? 0) - (right.position?.x ?? 0);
+    if (Math.abs(xDiff) > 16) return xDiff;
+    return (left.position?.y ?? 0) - (right.position?.y ?? 0);
+  });
+}
+
+function collectApplyAssetCandidates(nodes: StudioNode[]): ApplyAssetCandidate[] {
+  const sorted = sortNodesByCanvasPosition(nodes);
+  const imageCandidates: ApplyAssetCandidate[] = [];
+  const videoCandidates: ApplyAssetCandidate[] = [];
+
+  sorted.forEach((node) => {
+    if (node.type === "nanoGen") {
+      const generatedImage =
+        typeof (node.data as { generatedImage?: unknown }).generatedImage === "string"
+          ? ((node.data as { generatedImage?: string }).generatedImage ?? "").trim()
+          : "";
+      if (!generatedImage) return;
+      imageCandidates.push({
+        nodeId: node.id,
+        role: `image_${imageCandidates.length + 1}`,
+        kind: "image",
+        source: generatedImage,
+      });
+      return;
+    }
+
+    if (node.type === "videoGen" || node.type === "extendVideo") {
+      const generatedVideo =
+        typeof (node.data as { generatedVideo?: unknown }).generatedVideo === "string"
+          ? ((node.data as { generatedVideo?: string }).generatedVideo ?? "").trim()
+          : "";
+      if (!generatedVideo) return;
+      videoCandidates.push({
+        nodeId: node.id,
+        role: `video_${videoCandidates.length + 1}`,
+        kind: "video",
+        source: generatedVideo,
+      });
+    }
+  });
+
+  return [...imageCandidates, ...videoCandidates];
+}
+
+function buildStarterFlow(seed: PlannerAiStudioHandoff): SeedNodeBuild {
+  const workflowSpec = resolveWorkflowConceptSpec({
+    platform: seed.platform,
+    postType: seed.postType,
+    workflowConcept: seed.workflowConcept,
+  });
+  const promptValue = buildSeedPrompt(seed);
+  const seedImage = resolveSeedMediaDataUrl(seed);
+  const textNodeId = `organic-seed-text-${seed.draftId}`;
+  const textNode: StudioNode = {
+    id: textNodeId,
+    type: "string",
+    position: { x: 120, y: 160 },
+    data: { value: promptValue },
+    style: { width: 420, height: 240 },
+  } as StudioNode;
+
+  if (workflowSpec.outputKind === "video") {
+    const videoNodeId = `organic-seed-reel-${seed.draftId}`;
+    const nodes: StudioNode[] = [
+      textNode,
+      {
+        id: videoNodeId,
+        type: "videoGen",
+        position: { x: 620, y: 160 },
+        data: {
+          model: workflowSpec.defaultModel,
+          prompt: "",
+          negativePrompt: "",
+          enhancePrompt: false,
+          referenceMode: "frames",
+        },
+        style: { width: 512, height: 288 },
+      } as StudioNode,
+    ];
+
+    const edges: Edge[] = [
+      {
+        id: `e-${textNodeId}-${videoNodeId}-prompt`,
+        source: textNodeId,
+        sourceHandle: "text",
+        target: videoNodeId,
+        targetHandle: "prompt-in",
+        type: "dataType",
+        data: { dataType: "text", pathType: "bezier" },
+      },
+    ];
+
+    if (seedImage) {
+      const imageRefId = `organic-seed-image-ref-${seed.draftId}`;
+      nodes.push({
+        id: imageRefId,
+        type: "image",
+        position: { x: 620, y: 500 },
+        data: { image: seedImage, fileName: "planner-seed-image.png" },
+        style: { width: 196, height: 196 },
+      } as StudioNode);
+      edges.push({
+        id: `e-${imageRefId}-${videoNodeId}-first`,
+        source: imageRefId,
+        sourceHandle: "image",
+        target: videoNodeId,
+        targetHandle: "first-frame",
+        type: "dataType",
+        data: { dataType: "image", pathType: "bezier" },
+      });
+    }
+
+    return { nodes, edges };
+  }
+
+  if (workflowSpec.outputMode === "ordered") {
+    const count = Math.max(1, Math.min(seed.authoritativeCount ?? 1, 10));
+    const nodes: StudioNode[] = [textNode];
+    const edges: Edge[] = [];
+    let seedNodeId: string | null = null;
+
+    if (seedImage) {
+      seedNodeId = `organic-seed-image-ref-${seed.draftId}`;
+      nodes.push({
+        id: seedNodeId,
+        type: "image",
+        position: { x: 120, y: 470 },
+        data: { image: seedImage, fileName: "planner-seed-image.png" },
+        style: { width: 180, height: 180 },
+      } as StudioNode);
+    }
+
+    for (let index = 0; index < count; index += 1) {
+      const row = Math.floor(index / 3);
+      const col = index % 3;
+      const nodeId = `organic-seed-carousel-${seed.draftId}-${index + 1}`;
+      nodes.push({
+        id: nodeId,
+        type: "nanoGen",
+        position: { x: 620 + col * 380, y: 140 + row * 360 },
+        data: {
+          model: workflowSpec.defaultModel,
+          positivePrompt: "",
+          aspectRatio: "1:1",
+          imageSize: "512px",
+          maxReferenceImages: workflowSpec.maxReferenceImages,
+        },
+        style: { width: 340, height: 340 },
+      } as StudioNode);
+
+      edges.push({
+        id: `e-${textNodeId}-${nodeId}-prompt`,
+        source: textNodeId,
+        sourceHandle: "text",
+        target: nodeId,
+        targetHandle: "prompt",
+        type: "dataType",
+        data: { dataType: "text", pathType: "bezier" },
+      });
+
+      if (seedNodeId) {
+        edges.push({
+          id: `e-${seedNodeId}-${nodeId}-ref`,
+          source: seedNodeId,
+          sourceHandle: "image",
+          target: nodeId,
+          targetHandle: "ref-image",
+          type: "dataType",
+          data: { dataType: "image", pathType: "bezier" },
+        });
+      }
+    }
+
+    return { nodes, edges };
+  }
+
+  const imageGenNodeId = `organic-seed-image-${seed.draftId}`;
+  const nodes: StudioNode[] = [
+    textNode,
+    {
+      id: imageGenNodeId,
+      type: "nanoGen",
+      position: { x: 620, y: 190 },
+      data: {
+        model: workflowSpec.defaultModel,
+        positivePrompt: "",
+        aspectRatio: "1:1",
+        imageSize: "1K",
+        maxReferenceImages: workflowSpec.maxReferenceImages,
+      },
+      style: { width: 420, height: 420 },
+    } as StudioNode,
+  ];
+  const edges: Edge[] = [
+    {
+      id: `e-${textNodeId}-${imageGenNodeId}-prompt`,
+      source: textNodeId,
+      sourceHandle: "text",
+      target: imageGenNodeId,
+      targetHandle: "prompt",
+      type: "dataType",
+      data: { dataType: "text", pathType: "bezier" },
+    },
+  ];
+
+  if (seedImage) {
+    const imageRefId = `organic-seed-image-ref-${seed.draftId}`;
+    nodes.push({
+      id: imageRefId,
+      type: "image",
+      position: { x: 620, y: 650 },
+      data: { image: seedImage, fileName: "planner-seed-image.png" },
+      style: { width: 196, height: 196 },
+    } as StudioNode);
+    edges.push({
+      id: `e-${imageRefId}-${imageGenNodeId}-ref`,
+      source: imageRefId,
+      sourceHandle: "image",
+      target: imageGenNodeId,
+      targetHandle: "ref-image",
+      type: "dataType",
+      data: { dataType: "image", pathType: "bezier" },
+    });
+  }
+
+  return { nodes, edges };
+}
+
 function Flow({
   brandProfileId,
   realtime,
@@ -277,7 +575,7 @@ function Flow({
   brandProfileId?: string;
   realtime: ReturnType<typeof useCanvasRealtime>;
   activeRoomId?: string;
-  organicPlannerSeed?: OrganicPlannerSeedContext | null;
+  organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }) {
   const {
     nodes,
@@ -372,62 +670,11 @@ function Flow({
     const roomScope = activeRoomId ?? 'default-room';
     const hydrationKey = `${roomScope}:${organicPlannerSeed.draftId}`;
     if (hydratedPlannerSeedRef.current === hydrationKey) return;
-
-    const promptSections = [
-      organicPlannerSeed.title ? `Title: ${organicPlannerSeed.title}` : '',
-      organicPlannerSeed.summary ? `Summary: ${organicPlannerSeed.summary}` : '',
-      organicPlannerSeed.captionPreview ? `Draft caption:\n${organicPlannerSeed.captionPreview}` : '',
-      organicPlannerSeed.creativeDirectionPrompt
-        ? `Creative direction:\n${organicPlannerSeed.creativeDirectionPrompt}`
-        : '',
-      organicPlannerSeed.thumbnailPrompt
-        ? `Thumbnail direction:\n${organicPlannerSeed.thumbnailPrompt}`
-        : '',
-      'Goal: Generate a clean social thumbnail concept with clear hierarchy and one focal subject.',
-    ].filter(Boolean);
-
-    const textNodeId = `organic-seed-text-${organicPlannerSeed.draftId}`;
-    const imageGenNodeId = `organic-seed-image-${organicPlannerSeed.draftId}`;
-
-    const starterNodes: StudioNode[] = [
-      {
-        id: textNodeId,
-        type: 'string',
-        position: { x: 120, y: 160 },
-        data: {
-          value: promptSections.join('\n\n'),
-        },
-        style: { width: 420, height: 240 },
-      } as StudioNode,
-      {
-        id: imageGenNodeId,
-        type: 'nanoGen',
-        position: { x: 620, y: 190 },
-        data: {
-          model: 'nano-banana-2',
-          positivePrompt: '',
-          aspectRatio: '1:1',
-          imageSize: '1K',
-        },
-        style: { width: 420, height: 420 },
-      } as StudioNode,
-    ];
-
-    const starterEdges: Edge[] = [
-      {
-        id: `e-${textNodeId}-${imageGenNodeId}-prompt`,
-        source: textNodeId,
-        sourceHandle: 'text',
-        target: imageGenNodeId,
-        targetHandle: 'prompt',
-        type: 'dataType',
-        data: { dataType: 'text', pathType: 'bezier' },
-      },
-    ];
+    const starter = buildStarterFlow(organicPlannerSeed);
 
     takeSnapshot();
-    setNodes(starterNodes);
-    setEdges(starterEdges);
+    setNodes(starter.nodes);
+    setEdges(starter.edges);
     triggerSave();
     hydratedPlannerSeedRef.current = hydrationKey;
   }, [
@@ -645,9 +892,19 @@ function Flow({
       let style = { width: 192, height: 192 };
 
       if (assetNodeType === 'image') {
-        assetData = { image: resolved.dataUrl, fileName: resolved.fileName };
+        assetData = {
+          image: resolved.dataUrl,
+          fileName: resolved.fileName,
+          sourcePath: resolved.sourcePath,
+          sourceUrl: resolved.sourceUrl,
+        };
       } else if (assetNodeType === 'video') {
-        assetData = { video: resolved.dataUrl, fileName: resolved.fileName };
+        assetData = {
+          video: resolved.dataUrl,
+          fileName: resolved.fileName,
+          sourcePath: resolved.sourcePath,
+          sourceUrl: resolved.sourceUrl,
+        };
       } else if (assetNodeType === 'audio') {
         assetData = { audio: resolved.dataUrl, fileName: resolved.fileName };
         style = { width: 192, height: 100 };
@@ -845,7 +1102,7 @@ function Flow({
 interface StudioCanvasProps {
   embedded?: boolean;
   brandProfileId?: string;
-  organicPlannerSeed?: OrganicPlannerSeedContext | null;
+  organicPlannerSeed?: PlannerAiStudioHandoff | null;
 }
 
 export function StudioCanvas({
@@ -853,8 +1110,108 @@ export function StudioCanvas({
   brandProfileId,
   organicPlannerSeed,
 }: StudioCanvasProps) {
+  const router = useRouter();
+  const { show } = useToast();
+  const nodes = useStudioStore((state) => state.nodes);
   const { rooms } = useCanvasRooms(brandProfileId || '');
   const [activeRoomId, setActiveRoomId] = useState<string | undefined>(undefined);
+  const [isApplyingBack, setIsApplyingBack] = useState(false);
+  const [selectedLinkedinNodeId, setSelectedLinkedinNodeId] = useState<string | null>(null);
+  const workflowSpec = useMemo<WorkflowConceptSpec | null>(
+    () =>
+      organicPlannerSeed
+        ? resolveWorkflowConceptSpec({
+            platform: organicPlannerSeed.platform,
+            postType: organicPlannerSeed.postType,
+            workflowConcept: organicPlannerSeed.workflowConcept,
+          })
+        : null,
+    [organicPlannerSeed]
+  );
+
+  const applyCandidates = useMemo(() => collectApplyAssetCandidates(nodes), [nodes]);
+  const linkedinImageCandidates = useMemo(
+    () => applyCandidates.filter((candidate) => candidate.kind === "image"),
+    [applyCandidates]
+  );
+  const requiresExplicitSelection = Boolean(
+    workflowSpec?.requiresExplicitPickOnMultiOutput && linkedinImageCandidates.length > 1
+  );
+  const applyReadiness = useMemo(() => {
+    if (!organicPlannerSeed || !workflowSpec) return null;
+
+    const imageCount = applyCandidates.filter((candidate) => candidate.kind === "image").length;
+    const videoCount = applyCandidates.filter((candidate) => candidate.kind === "video").length;
+
+    if (workflowSpec.outputKind === "video") {
+      const total = 1;
+      const completed = Math.min(videoCount, total);
+      return {
+        ready: completed >= total,
+        completed,
+        total,
+        label: `${completed}/${total} video ready`,
+        detail:
+          completed >= total
+            ? "Ready to apply this reel back to Planner."
+            : "Generate one video output to enable apply-back.",
+      };
+    }
+
+    if (workflowSpec.outputMode === "ordered") {
+      const total = Math.max(1, organicPlannerSeed.authoritativeCount ?? 1);
+      const completed = Math.min(imageCount, total);
+      return {
+        ready: completed >= total,
+        completed,
+        total,
+        label: `${completed}/${total} slides ready`,
+        detail:
+          completed >= total
+            ? "Ordered carousel outputs are ready to apply."
+            : "Generate all required carousel slides before applying.",
+      };
+    }
+
+    const total = 1;
+    const completed = Math.min(imageCount, total);
+    const missingSelection =
+      workflowSpec.requiresExplicitPickOnMultiOutput && imageCount > 1 && !selectedLinkedinNodeId;
+    return {
+      ready: completed >= total && !missingSelection,
+      completed,
+      total,
+      label: `${completed}/${total} image ready`,
+      detail: missingSelection
+        ? "Select one image output before applying."
+        : completed >= total
+          ? "Ready to apply this draft back to Planner."
+          : "Generate one image output to enable apply-back.",
+    };
+  }, [
+    applyCandidates,
+    organicPlannerSeed,
+    selectedLinkedinNodeId,
+    workflowSpec,
+  ]);
+  const workflowSummaryLabel = useMemo(() => {
+    if (!workflowSpec) return null;
+    if (workflowSpec.outputKind === "video") return "Reel workflow";
+    if (workflowSpec.outputMode === "ordered") return "Carousel workflow";
+    if (workflowSpec.requiresExplicitPickOnMultiOutput) return "LinkedIn post workflow";
+    return "Single-image workflow";
+  }, [workflowSpec]);
+
+  useEffect(() => {
+    if (!requiresExplicitSelection) {
+      setSelectedLinkedinNodeId(null);
+      return;
+    }
+    if (selectedLinkedinNodeId && linkedinImageCandidates.some((candidate) => candidate.nodeId === selectedLinkedinNodeId)) {
+      return;
+    }
+    setSelectedLinkedinNodeId(linkedinImageCandidates[0]?.nodeId ?? null);
+  }, [linkedinImageCandidates, requiresExplicitSelection, selectedLinkedinNodeId]);
 
   useEffect(() => {
     if (!activeRoomId && rooms.length > 0) {
@@ -863,6 +1220,198 @@ export function StudioCanvas({
   }, [activeRoomId, rooms]);
 
   const realtime = useCanvasRealtime(brandProfileId || '', activeRoomId);
+  const handleReturnToPlanner = useCallback(() => {
+    if (!organicPlannerSeed) return;
+
+    const params = new URLSearchParams({
+      tab: "planner",
+      draftId: organicPlannerSeed.draftId,
+      weekStartId: organicPlannerSeed.weekStartId,
+      from: "ai-studio",
+    });
+    router.push(`/organic?${params.toString()}`);
+  }, [organicPlannerSeed, router]);
+
+  const resolveCandidateSource = useCallback(async (source: string) => {
+    if (source.startsWith("data:")) {
+      return { sourceDataUrl: source };
+    }
+    if (source.startsWith("http://") || source.startsWith("https://")) {
+      return { sourceUrl: source };
+    }
+    if (source.startsWith("blob:")) {
+      const response = await fetch(source);
+      if (!response.ok) {
+        throw new Error("Unable to read local asset blob for apply.");
+      }
+      const blob = await response.blob();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = typeof reader.result === "string" ? reader.result : "";
+          if (!result) {
+            reject(new Error("Unable to convert blob output to data URL."));
+            return;
+          }
+          resolve(result);
+        };
+        reader.onerror = () => reject(new Error("Unable to convert blob output to data URL."));
+        reader.readAsDataURL(blob);
+      });
+      return { sourceDataUrl: dataUrl };
+    }
+    return { sourceBase64: source };
+  }, []);
+
+  const handleApplyBackToPlanner = useCallback(async () => {
+    if (!organicPlannerSeed || !brandProfileId) {
+      show({
+        title: "Apply unavailable",
+        description: "Missing Planner context for this canvas session.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    setIsApplyingBack(true);
+    try {
+      if (!workflowSpec) {
+        throw new Error("Workflow concept is missing for this Planner draft.");
+      }
+      const imageCandidates = applyCandidates.filter((candidate) => candidate.kind === "image");
+      const videoCandidates = applyCandidates.filter((candidate) => candidate.kind === "video");
+
+      let selectedCandidates: ApplyAssetCandidate[] = [];
+      if (workflowSpec.outputKind === "video") {
+        const firstVideo = videoCandidates[0];
+        if (!firstVideo) {
+          throw new Error("Generate at least one video output before applying back.");
+        }
+        selectedCandidates = [firstVideo];
+      } else if (workflowSpec.outputMode === "ordered") {
+        const requiredCount = Math.max(1, organicPlannerSeed.authoritativeCount ?? 1);
+        if (imageCandidates.length < requiredCount) {
+          throw new Error(
+            `Carousel requires ${requiredCount} generated images, but only ${imageCandidates.length} found.`
+          );
+        }
+        selectedCandidates = imageCandidates.slice(0, requiredCount);
+      } else if (workflowSpec.requiresExplicitPickOnMultiOutput) {
+        if (imageCandidates.length === 0) {
+          throw new Error("Generate at least one image output before applying back.");
+        }
+        if (imageCandidates.length > 1 && !selectedLinkedinNodeId) {
+          throw new Error("Select one image output before applying.");
+        }
+        selectedCandidates =
+          imageCandidates.length > 1
+            ? imageCandidates.filter((candidate) => candidate.nodeId === selectedLinkedinNodeId)
+            : [imageCandidates[0]];
+      } else {
+        const firstImage = imageCandidates[0];
+        if (!firstImage) {
+          throw new Error("Generate at least one image output before applying back.");
+        }
+        selectedCandidates = [firstImage];
+      }
+
+      const assets = await Promise.all(
+        selectedCandidates.map(async (candidate, index) => {
+          const source = await resolveCandidateSource(candidate.source);
+          return {
+            role:
+              workflowSpec.outputMode === "ordered" ? `slide_${index + 1}` : candidate.role,
+            kind: candidate.kind,
+            slideIndex: workflowSpec.outputMode === "ordered" ? index : undefined,
+            ...source,
+          };
+        })
+      );
+
+      const requestPayload: PlannerAiStudioApplyRequest = {
+        schemaVersion: "planner_ai_apply_v1",
+        draftId: organicPlannerSeed.draftId,
+        brandProfileId,
+        postType: organicPlannerSeed.postType,
+        platform: organicPlannerSeed.platform,
+        overwrite: true,
+        contentPatch: {
+          title: organicPlannerSeed.title,
+          summary: organicPlannerSeed.summary,
+          captionPreview: organicPlannerSeed.captionPreview,
+          creativeDirectionPrompt: organicPlannerSeed.creativeDirectionPrompt,
+          thumbnailPrompt: organicPlannerSeed.thumbnailPrompt,
+        },
+        assets,
+        selection: {
+          required: requiresExplicitSelection,
+          selectedAssetRole:
+            requiresExplicitSelection && selectedCandidates[0]
+              ? selectedCandidates[0].role
+              : undefined,
+        },
+      };
+
+      const response = await fetch("/api/organic/ai-studio/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestPayload),
+      });
+
+      const responseJson = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          responseJson && typeof responseJson.error === "string"
+            ? responseJson.error
+            : "Failed to apply output to Planner.";
+        throw new Error(message);
+      }
+
+      const parsed = plannerAiStudioApplyResponseSchema.safeParse(responseJson);
+      if (!parsed.success) {
+        throw new Error("Apply response payload is invalid.");
+      }
+
+      window.localStorage.setItem(
+        buildPendingApplyStorageKey(organicPlannerSeed.draftId),
+        JSON.stringify(parsed.data)
+      );
+
+      show({
+        title: "Applied to Planner",
+        description: "Returning to Organic Planner.",
+        variant: "success",
+      });
+
+      const params = new URLSearchParams({
+        tab: "planner",
+        draftId: organicPlannerSeed.draftId,
+        weekStartId: organicPlannerSeed.weekStartId,
+        from: "ai-studio",
+      });
+      router.push(`/organic?${params.toString()}`);
+    } catch (error) {
+      show({
+        title: "Apply failed",
+        description: error instanceof Error ? error.message : "Unable to apply output to Planner.",
+        variant: "error",
+      });
+    } finally {
+      setIsApplyingBack(false);
+    }
+  }, [
+    applyCandidates,
+    brandProfileId,
+    organicPlannerSeed,
+    requiresExplicitSelection,
+    resolveCandidateSource,
+    router,
+    selectedLinkedinNodeId,
+    show,
+    workflowSpec,
+  ]);
 
   return (
     <ReactFlowProvider>
@@ -889,6 +1438,66 @@ export function StudioCanvas({
             </div>
 
             <div className="flex items-center gap-2">
+              {organicPlannerSeed ? (
+                <>
+                  {applyReadiness && workflowSummaryLabel ? (
+                    <div className="hidden min-w-[18rem] items-center gap-3 rounded-md border border-border/70 bg-background/70 px-3 py-2 lg:flex">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <Badge variant="outline" className="h-5 px-2 text-[10px]">
+                            {workflowSummaryLabel}
+                          </Badge>
+                          <span className="text-[11px] text-muted-foreground">
+                            {applyReadiness.label}
+                          </span>
+                        </div>
+                        <Progress
+                          value={(applyReadiness.completed / applyReadiness.total) * 100}
+                          className="h-1.5"
+                        />
+                        <p className="mt-1 line-clamp-1 text-[11px] text-muted-foreground">
+                          {applyReadiness.detail}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+                  {requiresExplicitSelection ? (
+                    <Select
+                      value={selectedLinkedinNodeId ?? undefined}
+                      onValueChange={(value) => setSelectedLinkedinNodeId(value)}
+                    >
+                      <SelectTrigger className="h-9 w-[15rem]">
+                        <SelectValue placeholder="Pick one output to apply" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {linkedinImageCandidates.map((candidate, index) => (
+                          <SelectItem key={candidate.nodeId} value={candidate.nodeId}>
+                            {`Output ${index + 1}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleReturnToPlanner}
+                  >
+                    Back to Planner
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      void handleApplyBackToPlanner();
+                    }}
+                    disabled={isApplyingBack || !applyReadiness?.ready}
+                  >
+                    {isApplyingBack ? "Applying..." : "Apply Back to Planner"}
+                  </Button>
+                </>
+              ) : null}
               <LoadWorkflowDialog brandProfileId={brandProfileId} />
               <SaveWorkflowDialog brandProfileId={brandProfileId} />
               <Toolbar />

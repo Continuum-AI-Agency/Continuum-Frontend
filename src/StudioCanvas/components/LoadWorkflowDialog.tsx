@@ -14,6 +14,7 @@ import type { AiStudioWorkflow } from '@/lib/schemas/aiStudio';
 import { useStudioStore } from '../stores/useStudioStore';
 import { normalizeWorkflowSnapshot } from '../utils/workflowSerialization';
 import { filterWorkflowsByQuery, sortWorkflowsByRecency } from '../utils/workflowList';
+import { rehydrateWorkflowMediaNodes } from '../utils/rehydrateWorkflowMedia';
 
 const WORKFLOW_VISIBLE_ROWS = 6;
 const WORKFLOW_ROW_HEIGHT = 72;
@@ -37,7 +38,7 @@ type WorkflowPanelProps = {
   error: string | null;
   filteredWorkflows: AiStudioWorkflow[];
   isLoading: boolean;
-  onApplyWorkflow: (workflow: AiStudioWorkflow) => void;
+  onApplyWorkflow: (workflow: AiStudioWorkflow) => Promise<void> | void;
   onClose?: () => void;
   onQueryChange: (query: string) => void;
   onRefresh: () => void;
@@ -112,7 +113,9 @@ function WorkflowPanel({
                   key={workflow.id}
                   type="button"
                   className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-accent/50"
-                  onClick={() => onApplyWorkflow(workflow)}
+                  onClick={() => {
+                    void onApplyWorkflow(workflow);
+                  }}
                 >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-primary">{workflow.name}</p>
@@ -189,14 +192,15 @@ export function LoadWorkflowDialog({
   const filteredWorkflows = React.useMemo(() => filterWorkflowsByQuery(workflows, query), [query, workflows]);
 
   const applyWorkflow = React.useCallback(
-    (workflow: AiStudioWorkflow) => {
+    async (workflow: AiStudioWorkflow) => {
       const snapshot = normalizeWorkflowSnapshot(
         { nodes: (workflow.nodes ?? []) as unknown as StudioNode[], edges: (workflow.edges ?? []) as unknown as Edge[] },
         defaultEdgeType
       );
+      const hydratedNodes = await rehydrateWorkflowMediaNodes(snapshot.nodes);
 
       takeSnapshot();
-      setNodes(snapshot.nodes);
+      setNodes(hydratedNodes);
       setEdges(snapshot.edges);
       requestAnimationFrame(() => {
         fitView({ padding: 0.2, duration: 300 });

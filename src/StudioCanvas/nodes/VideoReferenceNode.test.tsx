@@ -95,7 +95,12 @@ describe('VideoReferenceNode', () => {
     });
 
     await waitFor(() => {
-      expect(updateNodeData).toHaveBeenCalledWith('1', { video: dataUrl, fileName: undefined });
+      expect(updateNodeData).toHaveBeenCalledWith('1', {
+        video: dataUrl,
+        fileName: undefined,
+        sourcePath: undefined,
+        sourceUrl: undefined,
+      });
       expect(triggerSave).toHaveBeenCalled();
     });
   });

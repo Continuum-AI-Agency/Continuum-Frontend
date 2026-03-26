@@ -47,6 +47,8 @@ type OrganicCalendarWorkspaceProps = {
   brandProfileId?: string
   userId?: string
   instagramAccountId?: string
+  initialWeekStart?: string | null
+  initialSelectedDraftId?: string | null
 }
 
 export function OrganicCalendarWorkspace({
@@ -58,14 +60,20 @@ export function OrganicCalendarWorkspace({
   brandProfileId,
   userId,
   instagramAccountId,
+  initialWeekStart,
+  initialSelectedDraftId,
 }: OrganicCalendarWorkspaceProps) {
-  const weekStart = startOfWeek(new Date())
-  const days = buildWeekDays(weekStart)
+  const resolvedWeekStart =
+    initialWeekStart && !Number.isNaN(new Date(initialWeekStart).getTime())
+      ? startOfWeek(new Date(initialWeekStart))
+      : startOfWeek(new Date())
+  const days = buildWeekDays(resolvedWeekStart)
 
   return (
     <OrganicCalendarWorkspaceClient
       days={days}
-      initialWeekStart={weekStart.toISOString()}
+      initialWeekStart={resolvedWeekStart.toISOString()}
+      initialSelectedDraftId={initialSelectedDraftId}
       steps={defaultCreationSteps}
       editorSlides={defaultEditorSlides}
       trendTypes={trendTypes}

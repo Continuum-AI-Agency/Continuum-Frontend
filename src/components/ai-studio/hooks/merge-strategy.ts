@@ -18,6 +18,8 @@ const richInputDataKeys = [
   'inputs',
   'frameList',
   'fileName',
+  'sourcePath',
+  'sourceUrl',
 ] as const;
 
 const richTextDataKeys = ['positivePrompt', 'prompt', 'negativePrompt'] as const;

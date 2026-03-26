@@ -18,6 +18,11 @@ import type {
 import { StudioCanvas } from "@/StudioCanvas";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  buildAiStudioStorageKey,
+  plannerAiStudioHandoffSchema,
+  type PlannerAiStudioHandoff,
+} from "@/lib/organic/ai-studio-bridge";
 
 type AIStudioClientProps = {
   brandProfileId: string;
@@ -25,41 +30,15 @@ type AIStudioClientProps = {
   promptTemplates?: import("@/lib/schemas/promptTemplates").PromptTemplate[];
 };
 
-type OrganicPlannerSeedContext = {
-  draftId: string;
-  title: string;
-  summary: string;
-  captionPreview: string;
-  creativeDirectionPrompt?: string;
-  thumbnailPrompt?: string;
-};
-
-const ORGANIC_CONTEXT_STORAGE_PREFIX = "continuum:organic-planner:ai-studio-context";
-
-function readOrganicPlannerSeedContext(draftId: string): OrganicPlannerSeedContext | null {
+function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff | null {
   if (typeof window === "undefined") return null;
 
-  const raw = window.localStorage.getItem(`${ORGANIC_CONTEXT_STORAGE_PREFIX}:${draftId}`);
+  const raw = window.localStorage.getItem(buildAiStudioStorageKey(draftId));
   if (!raw) return null;
 
   try {
-    const parsed = JSON.parse(raw) as Partial<OrganicPlannerSeedContext>;
-    if (typeof parsed.draftId !== "string" || parsed.draftId.trim().length === 0) {
-      return null;
-    }
-
-    return {
-      draftId: parsed.draftId,
-      title: typeof parsed.title === "string" ? parsed.title : "",
-      summary: typeof parsed.summary === "string" ? parsed.summary : "",
-      captionPreview: typeof parsed.captionPreview === "string" ? parsed.captionPreview : "",
-      creativeDirectionPrompt:
-        typeof parsed.creativeDirectionPrompt === "string"
-          ? parsed.creativeDirectionPrompt
-          : undefined,
-      thumbnailPrompt:
-        typeof parsed.thumbnailPrompt === "string" ? parsed.thumbnailPrompt : undefined,
-    };
+    const parsed = plannerAiStudioHandoffSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }
@@ -78,7 +57,7 @@ export default function AIStudioClient({
   const source = searchParams.get("source");
   const draftId = searchParams.get("draftId");
   const activeTab = mode === "chat" ? "chat" : "canvas";
-  const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<OrganicPlannerSeedContext | null>(null);
+  const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(null);
 
   React.useEffect(() => {
     if (source !== "organic-planner" || !draftId) {

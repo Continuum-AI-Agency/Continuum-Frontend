@@ -33,6 +33,7 @@ export interface NanoGenNodeData extends BaseNodeData {
   positivePrompt: string;
   aspectRatio: string;
   imageSize?: '512px' | '1K' | '2K' | '4K';
+  maxReferenceImages?: number;
   stylePreset?: ImageStylePreset;
   seed?: number;
   steps?: number;
@@ -54,6 +55,8 @@ export type ImageReferenceType = 'default' | 'product' | 'color' | 'person';
 export interface ImageNodeData extends BaseNodeData {
   image?: string;
   fileName?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
   referenceType?: ImageReferenceType;
   aspectRatio?: string;
 }
@@ -61,6 +64,8 @@ export interface ImageNodeData extends BaseNodeData {
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
   fileName?: string;
+  sourcePath?: string;
+  sourceUrl?: string;
 }
 
 export interface AudioNodeData extends BaseNodeData {

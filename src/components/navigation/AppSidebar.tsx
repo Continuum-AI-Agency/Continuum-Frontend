@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState, ElementType } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@radix-ui/themes";
 import {
   Sidebar,
@@ -21,7 +21,7 @@ import {
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronRight, LogOut, Moon, Sun } from "lucide-react";
+import { ChevronRight, LogOut, Moon, Search, SquarePen, Sun } from "lucide-react";
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import Link from "next/link";
@@ -38,22 +38,19 @@ import { BrandSwitcher } from "./BrandSwitcher";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTheme } from "@/components/theme-provider";
 import { isPointerInDeepSidebarZone } from "./sidebarHoverIntent";
+import { useCommandPalette } from "./CommandPaletteProvider";
 
 function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams, item: { href: string }) {
-  // Exact match for dashboard
   if (item.href === "/dashboard") {
     return currentPath === item.href;
   }
 
-  // If the item has query params (e.g. ?mode=chat), we need to check both path and params
   if (item.href.includes("?")) {
     const [path, query] = item.href.split("?");
     const itemParams = new URLSearchParams(query);
-    
-    // Path must match
+
     if (currentPath !== path) return false;
 
-    // All params in the item link must be present in current URL
     for (const [key, value] of itemParams.entries()) {
       if (currentSearchParams.get(key) !== value) {
         return false;
@@ -65,37 +62,16 @@ function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams
   return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
 }
 
-interface AnimatedIconProps {
-  icon: ElementType<{ className?: string }>;
-  isHovered: boolean;
-  active?: boolean;
-}
-
-function AnimatedIcon({ icon: Icon, isHovered, active }: AnimatedIconProps) {
+function NavIcon({ icon: Icon, active }: { icon: ElementType<{ className?: string }>; active?: boolean }) {
   return (
-    <div className="relative flex items-center justify-center">
-      <Icon className={cn(
-        "z-10 !h-[18px] !w-[18px] stroke-[1.8] transition-colors duration-200",
+    <Icon
+      className={cn(
+        "!h-[18px] !w-[18px] stroke-[1.8] transition-colors duration-150",
         active
           ? "text-[var(--ring)]"
-          : "text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-hover:text-[var(--sidebar-foreground)]"
-      )} />
-      <motion.div
-        className="absolute -bottom-1.5 h-px w-3 rounded-full bg-[var(--ring)]"
-        initial={{ scaleX: 0, opacity: 0 }}
-        animate={{ 
-          scaleX: isHovered ? 1 : 0, 
-          opacity: isHovered ? 1 : 0 
-        }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 400, 
-          damping: 25,
-          mass: 0.5
-        }}
-        style={{ originX: 0.5 }}
-      />
-    </div>
+          : "text-[color-mix(in_srgb,var(--sidebar-foreground)_60%,transparent)] group-hover:text-[var(--sidebar-foreground)]"
+      )}
+    />
   );
 }
 
@@ -104,12 +80,13 @@ import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvide
 export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { isMobile, state, open, setOpen, toggleSidebar } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
+  const { setOpen: openPalette } = useCommandPalette();
   const isAdmin = isAdminUser(user);
-  const [hoveredHref, setHoveredHref] = useState<string | null>(null);
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
   const wasAutoExpandedRef = useRef(false);
 
@@ -158,13 +135,48 @@ export function AppSidebar() {
     >
       <SidebarHeader className="flex items-center justify-between px-3">
         <BrandSwitcher />
-        <button
-          onClick={handleToggleSidebar}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
-          aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />
-        </button>
+        <div className="flex items-center gap-0.5">
+          {state !== "collapsed" && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => openPalette(true)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-[color-mix(in_srgb,var(--sidebar-foreground)_48%,transparent)] transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
+                    aria-label="Search (⌘K)"
+                  >
+                    <Search className="h-[14px] w-[14px]" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="flex items-center gap-2">
+                  Search
+                  <kbd className="pointer-events-none inline-flex h-4 select-none items-center gap-1 rounded border bg-muted px-1 font-mono text-[10px] font-medium opacity-100">
+                    ⌘K
+                  </kbd>
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => router.push("/ai-studio?mode=chat")}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-[color-mix(in_srgb,var(--sidebar-foreground)_48%,transparent)] transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
+                    aria-label="New creation"
+                  >
+                    <SquarePen className="h-[14px] w-[14px]" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">New creation</TooltipContent>
+              </Tooltip>
+            </>
+          )}
+          <button
+            onClick={handleToggleSidebar}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[color-mix(in_srgb,var(--sidebar-foreground)_48%,transparent)] transition-colors hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
+            aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
+          >
+            <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />
+          </button>
+        </div>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-4">
@@ -197,10 +209,8 @@ export function AppSidebar() {
                           isActive={active || isSubActive}
                           tooltip={item.label}
                           size="default"
-                          onMouseEnter={() => setHoveredHref(item.href)}
-                          onMouseLeave={() => setHoveredHref(null)}
                           className={cn(
-                            "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                            "group relative transition-colors duration-150 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
                             (active || isSubActive)
                               ? "text-[var(--sidebar-foreground)]"
                               : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
@@ -213,11 +223,7 @@ export function AppSidebar() {
                                 aria-hidden="true"
                               />
                             ) : null}
-                            <AnimatedIcon
-                              icon={item.icon}
-                              isHovered={hoveredHref === item.href}
-                              active={active || isSubActive}
-                            />
+                            <NavIcon icon={item.icon} active={active || isSubActive} />
                             <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                               {item.label}
                             </span>
@@ -289,10 +295,8 @@ export function AppSidebar() {
                               <SidebarMenuButton
                                 size="default"
                                 isActive={active || isSubActive}
-                                onMouseEnter={() => setHoveredHref(item.href)}
-                                onMouseLeave={() => setHoveredHref(null)}
                                 className={cn(
-                                  "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                                  "group relative transition-colors duration-150 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
                                   (active || isSubActive)
                                     ? "text-[var(--sidebar-foreground)]"
                                     : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
@@ -304,11 +308,7 @@ export function AppSidebar() {
                                     aria-hidden="true"
                                   />
                                 ) : null}
-                                <AnimatedIcon 
-                                  icon={item.icon} 
-                                  isHovered={hoveredHref === item.href} 
-                                  active={active || isSubActive} 
-                                />
+                                <NavIcon icon={item.icon} active={active || isSubActive} />
                                 <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                                   {item.label}
                                 </span>
@@ -329,18 +329,16 @@ export function AppSidebar() {
                             {item.items?.map((subItem) => {
                               const subActive = isRouteActive(pathname, searchParams, subItem);
                               const SubIcon = subItem.icon;
-                              
+
                               return (
                                 <SidebarMenuSubItem key={subItem.href} className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full">
                                   <SidebarMenuSubButton
                                     asChild
                                     isActive={subActive}
                                     size="md"
-                                    onMouseEnter={() => setHoveredHref(subItem.href)}
-                                    onMouseLeave={() => setHoveredHref(null)}
                                     className={cn(
-                                       "group relative text-[color-mix(in_srgb,var(--sidebar-foreground)_66%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)]",
-                                       "group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+                                      "group relative text-[color-mix(in_srgb,var(--sidebar-foreground)_66%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)]",
+                                      "group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
                                     )}
                                   >
                                     <Link href={subItem.href}>
@@ -350,13 +348,7 @@ export function AppSidebar() {
                                           aria-hidden="true"
                                         />
                                       ) : null}
-                                      {SubIcon && (
-                                        <AnimatedIcon 
-                                          icon={SubIcon} 
-                                          isHovered={hoveredHref === subItem.href} 
-                                          active={subActive} 
-                                        />
-                                      )}
+                                      {SubIcon && <NavIcon icon={SubIcon} active={subActive} />}
                                       <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">{subItem.label}</span>
                                     </Link>
                                   </SidebarMenuSubButton>
@@ -377,10 +369,8 @@ export function AppSidebar() {
                       isActive={active}
                       tooltip={item.label}
                       size="default"
-                      onMouseEnter={() => setHoveredHref(item.href)}
-                      onMouseLeave={() => setHoveredHref(null)}
                       className={cn(
-                        "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                        "group relative transition-colors duration-150 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
                         active
                           ? "text-[var(--sidebar-foreground)]"
                           : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
@@ -393,24 +383,20 @@ export function AppSidebar() {
                             aria-hidden="true"
                           />
                         ) : null}
-                        <AnimatedIcon 
-                          icon={item.icon} 
-                          isHovered={hoveredHref === item.href} 
-                          active={active} 
-                        />
+                        <NavIcon icon={item.icon} active={active} />
                         <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
                     {item.badge ? (
                       <SidebarMenuBadge className="pointer-events-none">
-                         <Badge 
-                            size="1" 
-                            color={item.badge.tone ?? "violet"} 
-                            radius="full" 
-                            variant="surface"
-                          >
-                            {item.badge.label}
-                          </Badge>
+                        <Badge
+                          size="1"
+                          color={item.badge.tone ?? "violet"}
+                          radius="full"
+                          variant="surface"
+                        >
+                          {item.badge.label}
+                        </Badge>
                       </SidebarMenuBadge>
                     ) : null}
                   </SidebarMenuItem>
@@ -434,10 +420,8 @@ export function AppSidebar() {
                   isActive={active}
                   tooltip={item.label}
                   size="default"
-                  onMouseEnter={() => setHoveredHref(item.href)}
-                  onMouseLeave={() => setHoveredHref(null)}
                   className={cn(
-                    "group relative transition-colors duration-200 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
+                    "group relative transition-colors duration-150 data-[active=true]:bg-[color-mix(in_srgb,var(--ring)_14%,transparent)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]",
                     active
                       ? "text-[var(--sidebar-foreground)]"
                       : "text-[color-mix(in_srgb,var(--sidebar-foreground)_68%,transparent)]"
@@ -450,33 +434,23 @@ export function AppSidebar() {
                         aria-hidden="true"
                       />
                     ) : null}
-                    <AnimatedIcon 
-                      icon={item.icon} 
-                      isHovered={hoveredHref === item.href} 
-                      active={active} 
-                    />
+                    <NavIcon icon={item.icon} active={active} />
                     <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
           })}
-          
+
           <SidebarMenuItem>
             <SidebarMenuButton
               tooltip="Sign out"
               size="default"
               disabled={isPending}
               onClick={() => logout()}
-              onMouseEnter={() => setHoveredHref("sign-out")}
-              onMouseLeave={() => setHoveredHref(null)}
-              className="group text-[var(--destructive)] hover:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)] hover:text-[var(--destructive)] transition-all duration-200"
+              className="group text-[var(--destructive)] hover:bg-[color-mix(in_srgb,var(--destructive)_14%,transparent)] hover:text-[var(--destructive)] transition-all duration-150"
             >
-              <AnimatedIcon 
-                icon={LogOut} 
-                isHovered={hoveredHref === "sign-out"} 
-                active={false} 
-              />
+              <LogOut className="!h-[18px] !w-[18px] stroke-[1.8]" />
               <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                 {isPending ? "Signing out..." : "Sign out"}
               </span>
@@ -491,32 +465,28 @@ export function AppSidebar() {
               tooltip={appearance === "dark" ? "Switch to light mode" : "Switch to dark mode"}
               size="default"
               onClick={toggle}
-              onMouseEnter={() => setHoveredHref("theme-toggle")}
-              onMouseLeave={() => setHoveredHref(null)}
-              className="group text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)] transition-all duration-200"
+              className="group text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)] transition-all duration-150"
             >
-              <AnimatedIcon
-                icon={appearance === "dark" ? Sun : Moon}
-                isHovered={hoveredHref === "theme-toggle"}
-                active={false}
-              />
+              {appearance === "dark"
+                ? <Sun className="!h-[18px] !w-[18px] stroke-[1.8]" />
+                : <Moon className="!h-[18px] !w-[18px] stroke-[1.8]" />}
               <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                 {appearance === "dark" ? "Light mode" : "Dark mode"}
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-             <SidebarMenuButton
-               size="lg"
-               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-             >
-                <div className="flex items-center justify-center w-8">
-                  <CurrentUserAvatar size={32} />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{user?.user_metadata?.name || "User"}</span>
-                </div>
-             </SidebarMenuButton>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <div className="flex items-center justify-center w-8">
+                <CurrentUserAvatar size={32} />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{user?.user_metadata?.name || "User"}</span>
+              </div>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

@@ -99,6 +99,15 @@ export function getTargetHandleConnectionLimit(
   edges: Edge[]
 ): number | undefined {
   if (node.type === 'nanoGen' && isImageReferenceHandle(targetHandle)) {
+    const configuredLimit =
+      typeof (node.data as { maxReferenceImages?: unknown })?.maxReferenceImages === "number"
+        ? Math.floor(
+            (node.data as { maxReferenceImages?: number }).maxReferenceImages ?? 14
+          )
+        : undefined;
+    if (configuredLimit !== undefined && Number.isFinite(configuredLimit) && configuredLimit > 0) {
+      return configuredLimit;
+    }
     return 14;
   }
 

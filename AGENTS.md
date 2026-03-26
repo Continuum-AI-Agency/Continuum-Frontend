@@ -162,3 +162,4 @@ When you learn something, place a note of it here:
 - Exclude `/socket.io` and `/.well-known/appspecific/*` probes from Next middleware matchers so extension/devtools polling does not trigger Supabase auth lookups on 404 noise requests.
 - Keep paid-media marker placement synchronized with alerts refresh: when `DCOActionAlertsBox` refreshes, trigger `CampaignAdSetWorkspace` action-log refresh so chart markers re-render against the latest alerts.
 - In paid-media observability charts, place action markers at the nearest in-window chart timestamp (time-sensitive), render full top markers only for the active layer (`CAMPAIGN` in campaign view, `ADSET` in adset view), and demote non-layer scopes (for example `AD`) to bottom bookmarks.
+- Timeline bootstrap should fetch the active resolution first and prefetch the opposite resolution best-effort; a secondary-resolution failure (for example upstream `546`) must not break paid-media initial load.

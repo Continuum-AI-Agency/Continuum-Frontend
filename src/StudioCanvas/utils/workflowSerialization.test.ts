@@ -71,7 +71,16 @@ describe('workflowSerialization', () => {
     const dataUrl = 'data:image/png;base64,abc123';
     const snapshot = serializeWorkflowSnapshot(
       [
-        buildNode({ id: 'img', type: 'image', data: { image: dataUrl, fileName: 'img.png' } as any }),
+        buildNode({
+          id: 'img',
+          type: 'image',
+          data: {
+            image: dataUrl,
+            fileName: 'img.png',
+            sourcePath: 'brand-assets/img.png',
+            sourceUrl: 'https://cdn.continuum.test/img.png',
+          } as any,
+        }),
         buildNode({
           id: 'doc',
           type: 'document',
@@ -86,6 +95,16 @@ describe('workflowSerialization', () => {
           type: 'video-gen',
           data: { model: 'veo-3.1', prompt: '', enhancePrompt: false, frameList: [{ id: 'f1', src: dataUrl, type: 'image' }] } as any,
         }),
+        buildNode({
+          id: 'video-ref',
+          type: 'video',
+          data: {
+            video: 'data:video/mp4;base64,video123',
+            fileName: 'clip.mp4',
+            sourcePath: 'brand-assets/clip.mp4',
+            sourceUrl: 'https://cdn.continuum.test/clip.mp4',
+          } as any,
+        }),
       ],
       [],
       'bezier'
@@ -93,6 +112,8 @@ describe('workflowSerialization', () => {
 
     const imageNode = snapshot.nodes.find((node) => node.id === 'img');
     expect((imageNode?.data as any)?.image).toBeUndefined();
+    expect((imageNode?.data as any)?.sourcePath).toBe('brand-assets/img.png');
+    expect((imageNode?.data as any)?.sourceUrl).toBe('https://cdn.continuum.test/img.png');
 
     const documentNode = snapshot.nodes.find((node) => node.id === 'doc');
     expect((documentNode?.data as any)?.documents?.[0]?.content).toBe('');
@@ -102,6 +123,11 @@ describe('workflowSerialization', () => {
 
     const videoNode = snapshot.nodes.find((node) => node.id === 'video-gen');
     expect((videoNode?.data as any)?.frameList?.[0]?.src).toBeUndefined();
+
+    const videoReferenceNode = snapshot.nodes.find((node) => node.id === 'video-ref');
+    expect((videoReferenceNode?.data as any)?.video).toBeUndefined();
+    expect((videoReferenceNode?.data as any)?.sourcePath).toBe('brand-assets/clip.mp4');
+    expect((videoReferenceNode?.data as any)?.sourceUrl).toBe('https://cdn.continuum.test/clip.mp4');
   });
 
   it('strips complex data URLs with extra parameters', () => {

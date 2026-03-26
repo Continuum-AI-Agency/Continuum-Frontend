@@ -5,6 +5,11 @@
       "source": "emeraldls/mmt-agent-skills",
       "sourceType": "github",
       "computedHash": "722ced196779af9b9fafa37f3df0327c16f1ebf6ff2206e839d4e7163cf47e47"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "computedHash": "9c87c315aed143ee3b34bec8117100f5035e0df09e6b23e1ecc772cff434c9ad"
     }
   }
 }

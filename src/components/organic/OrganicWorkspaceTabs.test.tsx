@@ -88,11 +88,8 @@ describe("OrganicWorkspaceTabs", () => {
       />
     );
 
-    const plannerContainer = findElementByExactText(container, "Planner Slot").parentElement as HTMLDivElement;
-    const metricsContainer = findElementByExactText(container, "Metrics Slot").parentElement as HTMLDivElement;
-
-    expect(plannerContainer.style.display).toBe("block");
-    expect(metricsContainer.style.display).toBe("none");
+    expect(findElementByExactText(container, "Planner Slot")).toBeTruthy();
+    expect(container.textContent?.includes("Metrics Slot")).toBe(false);
   });
 
   it("updates the query param when the active tab changes", () => {

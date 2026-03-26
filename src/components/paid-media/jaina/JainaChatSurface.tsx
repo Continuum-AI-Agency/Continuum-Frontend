@@ -361,9 +361,24 @@ function mergePersistedMessagesWithLocal(
   }
 
   const persistedAssistant = persistedMessages[persistedAssistantIndex];
+
+  // Bail out if the persisted message is already authoritative — UNLESS the
+  // persisted copy lacks report data that the local state already holds.
+  // Without this extra guard, a fast `refreshConversationSnapshot` after
+  // stream completion races the backend write: the backend returns real text
+  // content but no `report` JSON yet, the guard fires, and the local rich
+  // state is replaced with an incomplete snapshot. This causes the double-
+  // overwrite: first from the immediate refresh at completion, and again from
+  // the Supabase Realtime `conversation_updated` broadcast.
+  const persistedLacksReport =
+    !persistedAssistant.report && !persistedAssistant.reportAssembly;
+  const localHasReport = Boolean(
+    localAssistant?.report || localAssistant?.reportAssembly
+  );
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
-    !isPersistedErrorMessage(persistedAssistant.content)
+    !isPersistedErrorMessage(persistedAssistant.content) &&
+    !(persistedLacksReport && localHasReport)
   ) {
     return persistedMessages;
   }
