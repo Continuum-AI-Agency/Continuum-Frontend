@@ -580,4 +580,113 @@ describe('executeWorkflow', () => {
     expect(updatedNode?.data.isComplete).toBe(false);
     expect(updatedNode?.data.isExecuting).toBe(false);
   });
+
+  it('should composite image with markup layer before using as reference', async () => {
+    // Mock the compositeImages function
+    const compositeMock = mock(async () => ({
+      base64: 'composited_base64',
+      mimeType: 'image/png',
+      dataUrl: 'data:image/png;base64,composited_base64',
+    }));
+
+    mock.module('./compositeImages', () => ({
+      compositeImages: compositeMock,
+    }));
+
+    const nodes: StudioNode[] = [
+      {
+        id: 'img-markup',
+        position: { x: 0, y: 0 },
+        data: {
+          image: 'data:image/png;base64,original_image',
+          originalImage: 'data:image/png;base64,original_image',
+          markupLayer: 'data:image/png;base64,markup_layer',
+          hasMarkup: true,
+        },
+        type: 'image',
+      },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'edit this' },
+        type: 'nanoGen',
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img-markup', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => {
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+        payload,
+      };
+    });
+
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any);
+
+    // Wait for any async compositing
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // Verify compositeImages was called with the original image and markup layer
+    expect(compositeMock).toHaveBeenCalledTimes(1);
+    expect(compositeMock).toHaveBeenCalledWith(
+      'data:image/png;base64,original_image',
+      'data:image/png;base64,markup_layer'
+    );
+
+    // Verify the payload received the composited image
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_images?.[0]?.data).toBe('composited_base64');
+  });
+
+  it('should use original image when no markup layer is present', async () => {
+    const nodes: StudioNode[] = [
+      {
+        id: 'img-no-markup',
+        position: { x: 0, y: 0 },
+        data: {
+          image: 'data:image/png;base64,original_only',
+        },
+        type: 'image',
+      },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'use this' },
+        type: 'nanoGen',
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img-no-markup', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => {
+      return {
+        success: true,
+        output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+        payload,
+      };
+    });
+
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any);
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_images?.[0]?.data).toBe('original_only');
+  });
 });

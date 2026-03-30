@@ -4,6 +4,7 @@ import { EnrichPromptPayload, ExtendVideoInput, ExtendVideoPayload, GenerationPa
 import { BackendChatImageRequestPayload, BackendExtendVideoRequestPayload } from '@/lib/types/chatImage';
 import { NanoGenNodeData, VideoGenNodeData, ExtendVideoNodeData, StringNodeData, ImageNodeData } from '../types';
 import { parseDataUrl } from './dataUrl';
+import { compositeImages } from './compositeImages';
 import {
   getVideoGeneratorBackendModel,
   getVideoGeneratorReferenceMode,
@@ -149,11 +150,11 @@ function resolveExtendVideoInput(
   return undefined;
 }
 
-function resolveImageInput(
+async function resolveImageInput(
   edge: Edge,
   resolvedData: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>
-): { base64: string; mimeType: string; sourcePath?: string; sourceUrl?: string } | undefined {
+): Promise<{ base64: string; mimeType: string; sourcePath?: string; sourceUrl?: string } | undefined> {
   const output = resolvedData.get(edge.source);
   if (output?.type === 'image' && output.base64) {
     return { base64: output.base64, mimeType: output.mimeType };
@@ -161,13 +162,29 @@ function resolveImageInput(
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'image') {
-    const parsed = parseDataUrl((sourceNode.data as any).image as string | undefined);
+    const imageData = sourceNode.data as ImageNodeData;
+    
+    if (imageData.markupLayer && imageData.originalImage) {
+      try {
+        const composited = await compositeImages(imageData.originalImage, imageData.markupLayer);
+        return {
+          base64: composited.base64,
+          mimeType: composited.mimeType,
+          sourcePath: imageData.sourcePath,
+          sourceUrl: imageData.sourceUrl,
+        };
+      } catch (error) {
+        console.error('Failed to composite image with markup:', error);
+      }
+    }
+    
+    const parsed = parseDataUrl(imageData.image);
     if (parsed?.base64) {
       return {
         base64: parsed.base64,
         mimeType: parsed.mimeType,
-        sourcePath: (sourceNode.data as any).sourcePath,
-        sourceUrl: (sourceNode.data as any).sourceUrl,
+        sourcePath: imageData.sourcePath,
+        sourceUrl: imageData.sourceUrl,
       };
     }
   }
@@ -230,13 +247,13 @@ function resolveDocumentInput(
 }
 
 
-export function buildEnrichPayload(
+export async function buildEnrichPayload(
   node: StudioNode,
   resolvedData: Map<string, NodeOutput>,
   allNodes: StudioNode[],
   allEdges: Edge[],
   brandId: string
-): EnrichPromptPayload | null {
+): Promise<EnrichPromptPayload | null> {
   const data = node.data as StringNodeData;
   const prompt = data.value || "";
 
@@ -245,7 +262,9 @@ export function buildEnrichPayload(
     (e) => e.target === node.id && e.targetHandle === 'image'
   );
   
-  const images = imageEdges.map(edge => resolveImageInput(edge, resolvedData, new Map(allNodes.map(n => [n.id, n])) as any)).filter(Boolean);
+  const nodeById = new Map(allNodes.map(n => [n.id, n]));
+  const imagePromises = imageEdges.map(edge => resolveImageInput(edge, resolvedData, nodeById as Map<string, StudioNode>));
+  const images = (await Promise.all(imagePromises)).filter(Boolean);
 
   // Resolve Audio (Single)
   const audio = resolveAudioInput(node.id, 'audio', resolvedData, allNodes, allEdges);

@@ -1,11 +1,12 @@
 "use client";
 
 import type { Edge } from '@xyflow/react';
-import { StudioNode } from "../types";
+import { StudioNode, ImageNodeData } from "../types";
 import { NodeOutput } from "../types/execution";
 import { useStudioStore } from "../stores/useStudioStore";
 import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnrichPayload, toBackendExtendVideoPayload, toBackendPayload } from "./buildNodePayload";
 import { buildDataUrl, parseDataUrl } from "./dataUrl";
+import { compositeImages } from "./compositeImages";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
 import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
 import { resolveVideoGeneratorModel, isVideoGeneratorNodeType } from "./videoModel";
@@ -375,6 +376,8 @@ export async function executeWorkflow(
   const resolvedOutputs = new Map<string, NodeOutput>();
   const failedNodes = new Set<string>();
 
+  const imageNodePromises: Promise<void>[] = [];
+  
   for (const node of nodes) {
     if (node.type === 'string') {
       const value = normalizeText((node.data as any).value);
@@ -384,9 +387,30 @@ export async function executeWorkflow(
     }
 
     if (node.type === 'image') {
-      const parsed = parseDataUrl((node.data as any).image as string | undefined);
-      if (parsed?.base64) {
-        resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+      const imageData = node.data as ImageNodeData;
+      
+      if (imageData.markupLayer && imageData.originalImage) {
+        const promise = compositeImages(imageData.originalImage, imageData.markupLayer)
+          .then((composited) => {
+            resolvedOutputs.set(node.id, { 
+              type: 'image', 
+              base64: composited.base64, 
+              mimeType: composited.mimeType 
+            });
+          })
+          .catch((error) => {
+            console.error('Failed to composite image with markup:', error);
+            const parsed = parseDataUrl(imageData.image);
+            if (parsed?.base64) {
+              resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+            }
+          });
+        imageNodePromises.push(promise);
+      } else {
+        const parsed = parseDataUrl(imageData.image);
+        if (parsed?.base64) {
+          resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+        }
       }
     }
 
@@ -420,6 +444,10 @@ export async function executeWorkflow(
          }
       }
     }
+  }
+
+  if (imageNodePromises.length > 0) {
+    await Promise.all(imageNodePromises);
   }
 
   const updateNodeStatus = (nodeId: string, status: 'running' | 'completed' | 'failed', error?: string) => {
@@ -485,7 +513,7 @@ export async function executeWorkflow(
     try {
       const brandId = options.brandId || "default-brand";
       if (node.type === 'string') {
-        const payload = buildEnrichPayload(node, resolvedOutputs, nodes, edges, brandId);
+        const payload = await buildEnrichPayload(node, resolvedOutputs, nodes, edges, brandId);
         
         const hasExternalInputs = (payload?.context?.images?.length ?? 0) > 0 || !!payload?.context?.audio || (payload?.context?.documents?.length ?? 0) > 0 || !!payload?.context?.video;
 

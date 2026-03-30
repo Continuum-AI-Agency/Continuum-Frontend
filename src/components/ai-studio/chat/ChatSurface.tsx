@@ -475,8 +475,9 @@ export function ChatSurface({
               id: `markup-${Date.now()}`,
               name: "preview-markup.png",
               path: "preview-markup.png",
-              mime: result.mime,
-              base64: result.base64,
+              mime: result.composited.mime,
+              base64: result.composited.base64,
+              markupLayer: result.markupLayer.base64,
               referenceType: getMediumForModel(activeModel) === "video" ? "asset" : undefined,
             };
             setRefs((prev) => prev.concat(nextRef));

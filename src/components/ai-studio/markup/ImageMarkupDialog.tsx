@@ -31,14 +31,20 @@ const PALETTE: PaletteColor[] = [
   { name: "Blue", value: "#3b82f6", className: "bg-blue-500" },
 ];
 
+export type ImageMarkupSaveResult = {
+  composited: { base64: string; mime: "image/png" };
+  markupLayer: { base64: string; mime: "image/png" };
+};
+
 export type ImageMarkupDialogProps = {
   open: boolean;
   sourceBase64: string;
   sourceMime: string;
   title?: string;
   maxBytes?: number;
+  initialMarkup?: string;
   onClose: () => void;
-  onSave: (result: { base64: string; mime: "image/png" }) => void;
+  onSave: (result: ImageMarkupSaveResult) => void;
 };
 
 export function ImageMarkupDialog({
@@ -47,6 +53,7 @@ export function ImageMarkupDialog({
   sourceMime,
   title,
   maxBytes,
+  initialMarkup,
   onClose,
   onSave,
 }: ImageMarkupDialogProps) {
@@ -171,6 +178,10 @@ export function ImageMarkupDialog({
   const handleSave = React.useCallback(() => {
     if (!canvasRef.current || !imageRef.current) return;
     const canvas = canvasRef.current;
+    
+    const markupDataUrl = canvas.toDataURL("image/png");
+    const markupBase64 = markupDataUrl.split(",")[1] ?? "";
+    
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = canvas.width;
     exportCanvas.height = canvas.height;
@@ -178,10 +189,11 @@ export function ImageMarkupDialog({
     if (!exportCtx) return;
     exportCtx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
     exportCtx.drawImage(canvas, 0, 0);
-    const dataUrl = exportCanvas.toDataURL("image/png");
-    const base64 = dataUrl.split(",")[1] ?? "";
+    const compositedDataUrl = exportCanvas.toDataURL("image/png");
+    const compositedBase64 = compositedDataUrl.split(",")[1] ?? "";
+    
     if (maxBytes) {
-      const bytes = estimateBase64DecodedBytes(base64);
+      const bytes = estimateBase64DecodedBytes(compositedBase64);
       if (bytes > maxBytes) {
         show({
           title: "Edited image too large",
@@ -191,7 +203,11 @@ export function ImageMarkupDialog({
         return;
       }
     }
-    onSave({ base64, mime: "image/png" });
+    
+    onSave({
+      composited: { base64: compositedBase64, mime: "image/png" },
+      markupLayer: { base64: markupBase64, mime: "image/png" },
+    });
   }, [maxBytes, onSave, show]);
 
   const updateDisplayDims = React.useCallback(
@@ -216,6 +232,24 @@ export function ImageMarkupDialog({
     []
   );
 
+  const loadMarkupLayer = React.useCallback((markupBase64: string, canvasWidth: number, canvasHeight: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const markupImg = new Image();
+    markupImg.onload = () => {
+      ctx.drawImage(markupImg, 0, 0, canvasWidth, canvasHeight);
+      const snapshot = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+      setHistoryState([snapshot]);
+    };
+    markupImg.onerror = () => {
+      show({ title: "Failed to load existing markup", variant: "warning" });
+    };
+    markupImg.src = `data:image/png;base64,${markupBase64}`;
+  }, [setHistoryState, show]);
+
   React.useEffect(() => {
     if (!open) return;
     const img = new Image();
@@ -231,14 +265,19 @@ export function ImageMarkupDialog({
         if (!canvas) return;
         canvas.width = width;
         canvas.height = height;
-        resetCanvas();
+        
+        if (initialMarkup) {
+          loadMarkupLayer(initialMarkup, width, height);
+        } else {
+          resetCanvas();
+        }
       });
     };
     img.onerror = () => {
       show({ title: "Failed to load image", variant: "error" });
     };
     img.src = `data:${sourceMime};base64,${sourceBase64}`;
-  }, [open, resetCanvas, show, sourceBase64, sourceMime, updateDisplayDims]);
+  }, [open, resetCanvas, show, sourceBase64, sourceMime, updateDisplayDims, initialMarkup, loadMarkupLayer]);
 
   React.useEffect(() => {
     if (!open) {
