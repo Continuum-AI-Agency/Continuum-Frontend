@@ -59,6 +59,9 @@ export interface ImageNodeData extends BaseNodeData {
   sourceUrl?: string;
   referenceType?: ImageReferenceType;
   aspectRatio?: string;
+  originalImage?: string;
+  markupLayer?: string;
+  hasMarkup?: boolean;
 }
 
 export interface VideoNodeData extends BaseNodeData {

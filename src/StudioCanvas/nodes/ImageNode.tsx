@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useStudioStore } from '../stores/useStudioStore';
 import { ImageNodeData, ImageReferenceType } from '../types';
-import { Cross1Icon, ImageIcon, UploadIcon } from '@radix-ui/react-icons';
+import { Cross1Icon, ImageIcon, Pencil2Icon, ReloadIcon, UploadIcon } from '@radix-ui/react-icons';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
 import { resolveDroppedBase64 } from '@/lib/ai-studio/referenceDropClient';
 import { resolveCreativeAssetDrop } from '../utils/resolveCreativeAssetDrop';
@@ -44,6 +44,8 @@ import {
 } from '@/components/ui/context-menu';
 import { Copy, Trash2 } from 'lucide-react';
 import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
+import { ImageMarkupDialog, ImageMarkupSaveResult } from '@/components/ai-studio/markup/ImageMarkupDialog';
+import { parseDataUrl } from '../utils/dataUrl';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -75,6 +77,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
+  const [markupOpen, setMarkupOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
@@ -138,6 +141,9 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       setPreview(opts.src);
       updateNodeData(id, {
         image: opts.src,
+        originalImage: opts.src,
+        markupLayer: undefined,
+        hasMarkup: false,
         fileName: opts.fileName,
         sourcePath: opts.sourcePath,
         sourceUrl: opts.sourceUrl,
@@ -147,10 +153,37 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     [id, triggerSave, updateNodeData]
   );
 
+  const handleMarkupSave = useCallback((result: ImageMarkupSaveResult) => {
+    const markupLayerDataUrl = `data:${result.markupLayer.mime};base64,${result.markupLayer.base64}`;
+    updateNodeData(id, {
+      markupLayer: markupLayerDataUrl,
+      hasMarkup: true,
+    });
+    setMarkupOpen(false);
+    triggerSave();
+    show({ title: 'Markup saved', variant: 'success' });
+  }, [id, updateNodeData, triggerSave, show]);
+
+  const handleResetToOriginal = useCallback(() => {
+    const original = data.originalImage ?? data.image;
+    if (!original) return;
+    setPreview(original);
+    updateNodeData(id, {
+      image: original,
+      markupLayer: undefined,
+      hasMarkup: false,
+    });
+    triggerSave();
+    show({ title: 'Reset to original', variant: 'success' });
+  }, [data.originalImage, data.image, id, updateNodeData, triggerSave, show]);
+
   const handleClearReference = useCallback(() => {
     setPreview(undefined);
     updateNodeData(id, {
       image: undefined,
+      originalImage: undefined,
+      markupLayer: undefined,
+      hasMarkup: false,
       fileName: undefined,
       sourcePath: undefined,
       sourceUrl: undefined,
@@ -333,6 +366,26 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   <Cross1Icon className="h-3 w-3" />
                 </Button>
               )}
+              {preview && (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className={cn(
+                    "h-6 w-6 nodrag border border-border/60 bg-background/90 text-muted-foreground",
+                    data.hasMarkup && "text-amber-500"
+                  )}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMarkupOpen(true);
+                  }}
+                  title="Markup image"
+                  aria-label="Markup image"
+                >
+                  <Pencil2Icon className="h-3 w-3" />
+                </Button>
+              )}
               <Select value={refType} onValueChange={handleRefTypeChange}>
                   <SelectTrigger className="h-6 w-[94px] text-[10px] px-1.5 py-0 border border-border/60 bg-background/90 shadow-sm">
                   <SelectValue placeholder="Type" />
@@ -347,7 +400,26 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
             </div>
             {preview ? (
               <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-default">
-                <img src={preview} alt="Preview" className="h-full w-full select-none object-contain" draggable={false} />
+                <img 
+                  src={data.originalImage ?? preview} 
+                  alt="Preview" 
+                  className="h-full w-full select-none object-contain" 
+                  draggable={false} 
+                />
+                {data.markupLayer && (
+                  <img
+                    src={data.markupLayer}
+                    alt="Markup overlay"
+                    className="absolute inset-0 h-full w-full select-none object-contain pointer-events-none"
+                    draggable={false}
+                  />
+                )}
+                {data.hasMarkup && (
+                  <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
+                    <Pencil2Icon className="h-2.5 w-2.5" />
+                    <span>Marked up</span>
+                  </div>
+                )}
               </div>
             ) : (
               <Label
@@ -424,6 +496,16 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           {preview && (
             <>
               <ContextMenuSeparator />
+              <ContextMenuItem onClick={() => setMarkupOpen(true)}>
+                <Pencil2Icon className="mr-2 h-4 w-4" />
+                Markup Image
+              </ContextMenuItem>
+              {data.hasMarkup && (data.originalImage ?? data.image) && (
+                <ContextMenuItem onClick={handleResetToOriginal}>
+                  <ReloadIcon className="mr-2 h-4 w-4" />
+                  Reset to Original
+                </ContextMenuItem>
+              )}
               <ContextMenuItem onClick={handleClearReference}>
                 <Cross1Icon className="mr-2 h-4 w-4" />
                 Clear Reference
@@ -443,6 +525,18 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+
+      {preview && (
+        <ImageMarkupDialog
+          open={markupOpen}
+          sourceBase64={parseDataUrl(data.originalImage ?? data.image)?.base64 ?? ''}
+          sourceMime={parseDataUrl(data.originalImage ?? data.image)?.mimeType ?? 'image/png'}
+          initialMarkup={data.markupLayer ? parseDataUrl(data.markupLayer)?.base64 : undefined}
+          title="Markup reference image"
+          onClose={() => setMarkupOpen(false)}
+          onSave={handleMarkupSave}
+        />
+      )}
     </TooltipProvider>
   );
 }
