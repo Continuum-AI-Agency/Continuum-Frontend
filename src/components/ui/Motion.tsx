@@ -1,7 +1,7 @@
 "use client";
 
 import { PropsWithChildren } from "react";
-import { motion, type Variants, type HTMLMotionProps } from "framer-motion";
+import { motion, type Variants, type HTMLMotionProps } from "motion/react";
 
 export const fadeInUp: Variants = {
   hidden: { opacity: 0, y: 16 },

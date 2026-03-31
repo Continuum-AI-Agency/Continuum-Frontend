@@ -8,33 +8,33 @@
 [data-theme="light"] {
   /* --- Continuum Default (Light) --- */
   color-scheme: light;
-  --background: #ffffff;
-  --foreground: #0f172a; /* slate-900 */
+  --background: #fdfdfd;
+  --foreground: #16162a; /* violet-tinted near-black */
 
-  --card: #f8fafc; /* slate-50/100 range */
-  --card-foreground: #0f172a;
+  --card: #f5f4ff; /* faint violet wash — brand-owned layering */
+  --card-foreground: #16162a;
 
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
+  --popover-foreground: #16162a;
 
-  --primary: #6d28d9; /* violet-700 */
-  --primary-foreground: #f8fafc;
+  --primary: #5A48F9; /* electric blue-violet — brand anchor */
+  --primary-foreground: #ffffff;
 
-  --secondary: #22c55e; /* green-500 */
+  --secondary: #0ea5e9; /* sky-500 — electric cyan complement */
   --secondary-foreground: #0f172a;
 
-  --muted: #e2e8f0; /* slate-200 */
-  --muted-foreground: #475569; /* slate-600 */
+  --muted: #eeecfc; /* violet-tinted muted bg */
+  --muted-foreground: #5c5b7a; /* violet-tinted mid-gray */
 
-  --accent: #8b5cf6; /* violet-500 for accents */
+  --accent: #7B6BFF; /* lighter blend of primary toward white */
   --accent-foreground: #0f172a;
 
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 
-  --border: #e2e8f0; /* subtle border */
-  --input: #e2e8f0;
-  --ring: #7c3aed; /* violet-600 */
+  --border: #e4e2f7; /* violet-tinted border */
+  --input: #e4e2f7;
+  --ring: #5A48F9; /* unify with primary */
 
   --radius: 0.5rem;
   --color-background: var(--background);
@@ -44,8 +44,8 @@
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
   --border-subtle: var(--border);
-  --shadow-brand-glow: 0 16px 40px -18px rgba(90, 72, 249, 0.35);
-  --glass-border: rgba(15, 23, 42, 0.08);
+  --shadow-brand-glow: 0 16px 40px -18px rgba(90, 72, 249, 0.4);
+  --glass-border: rgba(90, 72, 249, 0.08);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-card: var(--card);
@@ -64,19 +64,24 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --chart-1: #2563eb;
+  --chart-1: #5A48F9;
   --chart-2: #22c55e;
   --chart-3: #f59e0b;
-  --chart-4: #8b5cf6;
+  --chart-4: #7B6BFF;
   --chart-5: #ec4899;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
+  --sidebar: #f9f8ff;
+  --sidebar-foreground: #16162a;
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #0f172a;
+  --sidebar-accent: #eeecfc;
+  --sidebar-accent-foreground: #16162a;
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
+  --sidebar-muted: color-mix(in srgb, #16162a 68%, transparent);
+  --sidebar-muted-dim: color-mix(in srgb, #16162a 48%, transparent);
+  --sidebar-hover-bg: color-mix(in srgb, var(--ring) 10%, transparent);
+  --sidebar-active-bg: color-mix(in srgb, var(--ring) 14%, transparent);
+  --sidebar-destructive-bg: color-mix(in srgb, var(--destructive) 14%, transparent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
@@ -98,12 +103,12 @@
   --edge-flow-duration: 3.2s;
   --edge-flow-offset: -10000;
   --edge-handle-border: var(--surface-default);
-  --studio-grid-dot: rgba(15, 23, 42, 0.06);
+  --studio-grid-dot: rgba(22, 22, 42, 0.07);
   --studio-canvas-vignette: radial-gradient(120% 120% at 30% 0%, rgba(15, 23, 42, 0.04), transparent 60%);
 
   /* Glass surface tokens (light) */
   --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-border: rgba(90, 72, 249, 0.08);
   --glass-shadow: 0 18px 40px -16px rgba(15, 23, 42, 0.28);
 
   /* Legacy Galaxy background CSS variables for SSR-stable inline styles */
@@ -210,10 +215,10 @@ html {
   --card-foreground: #E5E7EB;
   --popover: #0B1220;
   --popover-foreground: #E5E7EB;
-  --primary: #2563EB;
-  --primary-foreground: #0B1220;
-  --secondary: #2E2257;
-  --secondary-foreground: #E5E7EB;
+  --primary: #7C6FFF;
+  --primary-foreground: #ffffff;
+  --secondary: #0ea5e9;
+  --secondary-foreground: #0f172a;
   --muted: #0F172A;
   --muted-foreground: #94A3B8;
   --accent: #53A88A;
@@ -222,27 +227,32 @@ html {
   --destructive-foreground: #0B1220;
   --border: rgba(255,255,255,0.10);
   --input: rgba(255,255,255,0.10);
-  --ring: #8B5CF6;
-  --chart-1: #3b82f6;
+  --ring: #7C6FFF;
+  --chart-1: #7C6FFF;
   --chart-2: #34d399;
   --chart-3: #fbbf24;
   --chart-4: #a78bfa;
   --chart-5: #f472b6;
   --sidebar: #0B1220;
   --sidebar-foreground: #E5E7EB;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #0B1220;
+  --sidebar-primary: #7C6FFF;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #0f172a;
   --sidebar-accent-foreground: #E5E7EB;
   --sidebar-border: rgba(255,255,255,0.10);
-  --sidebar-ring: #8B5CF6;
+  --sidebar-ring: #7C6FFF;
+  --sidebar-muted: color-mix(in srgb, #E5E7EB 68%, transparent);
+  --sidebar-muted-dim: color-mix(in srgb, #E5E7EB 48%, transparent);
+  --sidebar-hover-bg: color-mix(in srgb, #7C6FFF 10%, transparent);
+  --sidebar-active-bg: color-mix(in srgb, #7C6FFF 14%, transparent);
+  --sidebar-destructive-bg: color-mix(in srgb, var(--destructive) 14%, transparent);
   --radius: 0.5rem;
   --surface-default: var(--background);
   --surface-accent: var(--card);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
   --border-subtle: var(--border);
-  --shadow-brand-glow: 0 18px 48px -18px rgba(139, 92, 246, 0.45);
+  --shadow-brand-glow: 0 18px 48px -18px rgba(124, 111, 255, 0.5);
   --glass-border: rgba(255, 255, 255, 0.10);
   --glass-bg: rgba(2, 6, 23, 0.60);
   --glass-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -284,10 +294,10 @@ html {
     --card-foreground: #E5E7EB;
     --popover: #0B1220;
     --popover-foreground: #E5E7EB;
-    --primary: #2563EB;
-    --primary-foreground: #0B1220;
-    --secondary: #2E2257;
-    --secondary-foreground: #E5E7EB;
+    --primary: #7C6FFF;
+    --primary-foreground: #ffffff;
+    --secondary: #0ea5e9;
+    --secondary-foreground: #0f172a;
     --muted: #0F172A;
     --muted-foreground: #94A3B8;
     --accent: #53A88A;
@@ -296,20 +306,20 @@ html {
     --destructive-foreground: #0B1220;
     --border: rgba(255,255,255,0.10);
     --input: rgba(255,255,255,0.10);
-    --ring: #8B5CF6;
-    --chart-1: #3b82f6;
+    --ring: #7C6FFF;
+    --chart-1: #7C6FFF;
     --chart-2: #34d399;
     --chart-3: #fbbf24;
     --chart-4: #a78bfa;
     --chart-5: #f472b6;
     --sidebar: #0B1220;
     --sidebar-foreground: #E5E7EB;
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-foreground: #0B1220;
+    --sidebar-primary: #7C6FFF;
+    --sidebar-primary-foreground: #ffffff;
     --sidebar-accent: #0f172a;
     --sidebar-accent-foreground: #E5E7EB;
     --sidebar-border: rgba(255,255,255,0.10);
-    --sidebar-ring: #8B5CF6;
+    --sidebar-ring: #7C6FFF;
     --radius: 0.5rem;
   }
 }
@@ -322,7 +332,7 @@ body {
   background-color: var(--surface-default);
   background-image: none;
   background-size: cover;
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="rgba(139, 92, 246, 0.2)" /><circle cx="16" cy="16" r="8" fill="rgba(139, 92, 246, 0.4)" /><circle cx="16" cy="16" r="4" fill="rgb(139, 92, 246)" /></svg>') 16 16, auto;
+  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="rgba(90, 72, 249, 0.2)" /><circle cx="16" cy="16" r="8" fill="rgba(90, 72, 249, 0.4)" /><circle cx="16" cy="16" r="4" fill="rgb(90, 72, 249)" /></svg>') 16 16, auto;
 }
 
 /* Glow for nodes selected by other users */
@@ -709,9 +719,9 @@ body {
 .sidebar-gradient-bg {
   background: linear-gradient(
     270deg,
-    rgba(139, 92, 246, 0.03),
+    rgba(90, 72, 249, 0.03),
     rgba(83, 168, 138, 0.03),
-    rgba(139, 92, 246, 0.03)
+    rgba(90, 72, 249, 0.03)
   );
   background-size: 200% 200%;
   animation: sidebar-gradient 15s ease infinite;

@@ -6,12 +6,12 @@ import "@radix-ui/themes/styles.css";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ThemeProvider } from "../components/theme-provider";
-import GalaxyBackground from "../components/ui/GalaxyBackground";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";
 import { VersionBanner } from "@/components/version-banner";
 import { MixpanelInit } from "@/components/analytics/MixpanelInit";
 import type { ThemeAppearance } from "@/lib/theme/themeDom";
+import { GalaxyBackgroundLazy } from "@/components/ui/GalaxyBackgroundLazy";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -94,7 +94,7 @@ export default async function RootLayout({
           <MixpanelInit />
           <ReactQueryProvider>
             <ToastProvider>
-              <GalaxyBackground intensity={1} speed="glacial" />
+              <GalaxyBackgroundLazy intensity={1} speed="glacial" />
               <VersionBanner />
               <div className="relative z-10">
                 {children}

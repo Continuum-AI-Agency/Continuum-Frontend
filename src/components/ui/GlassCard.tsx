@@ -2,7 +2,7 @@
 
 import { Card } from "@radix-ui/themes";
 import { PropsWithChildren, forwardRef } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { cn } from "../../lib/utils";
 
 export type GlassCardProps = PropsWithChildren<{
