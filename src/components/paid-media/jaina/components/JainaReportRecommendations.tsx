@@ -3,7 +3,7 @@
 import { Heading, Text, Badge, Flex } from "@radix-ui/themes";
 import { Task, TaskTrigger, TaskContent } from "@/components/ai-elements/task";
 import { type RecommendationItem } from "@/lib/jaina/schemas";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 
 interface JainaReportRecommendationsProps {
   recommendations: RecommendationItem[];

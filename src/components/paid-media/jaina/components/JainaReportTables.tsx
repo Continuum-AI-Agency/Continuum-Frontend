@@ -18,7 +18,7 @@ export function JainaReportTables({ tables }: JainaReportTablesProps) {
       </Text>
       <div className="space-y-6">
         {tables.map((table: Table, index: number) => (
-          <TableCard key={index} table={table} index={index} />
+          <TableCard key={table.headers.join("-") || `table-${index}`} table={table} index={index} />
         ))}
       </div>
     </div>
@@ -33,9 +33,9 @@ function TableCard({ table, index }: { table: Table; index: number }) {
           <table className="w-full text-sm">
             <thead className="bg-white/5 border-b border-white/10">
               <tr>
-                {table.headers.map((header: string, headerIndex: number) => (
+                {table.headers.map((header: string) => (
                   <th
-                    key={headerIndex}
+                    key={header}
                     className="text-left px-4 py-3 text-white/70 font-medium uppercase text-xs tracking-wider whitespace-nowrap"
                   >
                     {header}
@@ -46,12 +46,12 @@ function TableCard({ table, index }: { table: Table; index: number }) {
             <tbody>
               {table.rows.map((row: string[], rowIndex: number) => (
                 <tr
-                  key={rowIndex}
+                  key={`${rowIndex}-${row[0]}`}
                   className="border-b border-white/5 last:border-b-0 hover:bg-white/5 transition-colors"
                 >
                   {row.map((cell: string, cellIndex: number) => (
                     <td
-                      key={cellIndex}
+                      key={`${rowIndex}-${cellIndex}`}
                       className="px-4 py-3 text-white/80 whitespace-nowrap"
                     >
                       {cell}

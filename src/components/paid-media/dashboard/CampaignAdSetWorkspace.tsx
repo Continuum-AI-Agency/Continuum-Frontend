@@ -66,12 +66,17 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AdSet } from "./AdSetTable";
 import { mapActionLogsToTimelineMarkers } from "./actionMarkers";
-import {
-  ObservabilityLightweightChart,
-  type ObservabilityChartMarkerSelection,
-  type ObservabilityChartPoint,
-  type ObservabilityChartSeries,
+import dynamic from "next/dynamic";
+import type {
+  ObservabilityChartMarkerSelection,
+  ObservabilityChartPoint,
+  ObservabilityChartSeries,
 } from "./ObservabilityLightweightChart";
+
+const ObservabilityLightweightChart = dynamic(
+  () => import("./ObservabilityLightweightChart").then((mod) => mod.ObservabilityLightweightChart),
+  { ssr: false }
+);
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 import { resolveTimeRangeWindow, toMetricsRange, type PaidMediaTimeRange } from "./timeRange";
 
@@ -182,7 +187,7 @@ const COMPARE_COLORS = [
   "#0ea5e9",
   "#10b981",
   "#f97316",
-  "#8b5cf6",
+  "#7B6BFF",
   "#ef4444",
   "#14b8a6",
   "#84cc16",
@@ -192,7 +197,7 @@ const COMPARE_COLORS = [
 const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   spend: "#0ea5e9",
   roas: "#10b981",
-  ctr: "#8b5cf6",
+  ctr: "#7B6BFF",
   cpc: "#f97316",
   cpa: "#f43f5e",
   impressions: "#14b8a6",

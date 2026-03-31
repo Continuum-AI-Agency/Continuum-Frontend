@@ -3,7 +3,7 @@
 import React from "react";
 import { Badge, Callout, Flex, Heading } from "@radix-ui/themes";
 import { DownloadIcon, MailIcon } from "lucide-react";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import {
   deriveLegacyFieldsFromBlocks,
   type FrontendCheckpointReport,

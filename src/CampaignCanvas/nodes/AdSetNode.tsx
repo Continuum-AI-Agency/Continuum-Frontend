@@ -119,7 +119,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
           <NodeHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="rounded-md bg-purple-500/10 p-1.5 text-purple-500">
+                <div className="rounded-md bg-primary/10 p-1.5 text-primary">
                   <Layers className="h-4 w-4" />
                 </div>
                 <NodeTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -148,12 +148,12 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                   {data.billingEvent || 'IMPRESSIONS'}
                 </Badge>
                 {data.bidStrategy && (
-                  <Badge variant="outline" className="text-[8px] px-1 py-0 opacity-80 h-4 border-purple-500/20">
+                  <Badge variant="outline" className="text-[8px] px-1 py-0 opacity-80 h-4 border-primary/20">
                     {BID_STRATEGIES.find(s => s.value === data.bidStrategy)?.label || 'Highest Vol'}
                   </Badge>
                 )}
               </div>
-              <div className="mt-1.5 rounded-md border border-purple-500/20 bg-purple-500/5 p-1.5">
+              <div className="mt-1.5 rounded-md border border-primary/20 bg-primary/5 p-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <EditableAmount
                     value={data.budgetAmount ?? 0}
@@ -165,7 +165,7 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                     Budget Type
                   </span>
                 </div>
-                <div className="mt-1 inline-flex w-full rounded-sm border border-purple-500/25 bg-background/70 p-0.5">
+                <div className="mt-1 inline-flex w-full rounded-sm border border-primary/25 bg-background/70 p-0.5">
                   {BUDGET_TYPES.map((type) => {
                     const isActive = activeBudgetType === type.value;
 
@@ -179,10 +179,10 @@ export const AdSetNode = memo(({ id, data, selected }: CampaignNodeProps<'ad-set
                           handleBudgetTypeChange(type.value);
                         }}
                         className={cn(
-                          "flex-1 rounded-sm px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-purple-500/40",
+                          "flex-1 rounded-sm px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
                           isActive
-                            ? "bg-purple-500/15 text-foreground"
-                            : "text-muted-foreground hover:bg-purple-500/10"
+                            ? "bg-primary/15 text-foreground"
+                            : "text-muted-foreground hover:bg-primary/10"
                         )}
                       >
                         {type.label}

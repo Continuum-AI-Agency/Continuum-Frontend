@@ -3,7 +3,7 @@
 import * as React from "react";
 import { BellIcon, CalendarIcon, ReloadIcon } from "@radix-ui/react-icons";
 import { Box, Card, Flex, IconButton, Select, Text } from "@radix-ui/themes";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { format, parseISO } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
@@ -96,7 +96,10 @@ async function mapWithConcurrency<T, U>(
   return results;
 }
 
-export function PaidMediaDashboard({ brandId, adAccountId }: PaidMediaDashboardProps) {
+export function PaidMediaDashboard({
+  brandId,
+  adAccountId,
+}: PaidMediaDashboardProps) {
   const [platform, setPlatform] = React.useState<Platform>("meta");
   const defaultCustomRange = React.useMemo(() => buildDefaultCustomRange(), []);
   const [timeRangePreset, setTimeRangePreset] = React.useState<TimePreset>("last_7d");

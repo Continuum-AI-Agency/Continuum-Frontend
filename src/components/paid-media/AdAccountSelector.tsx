@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 import { cn } from "@/lib/utils";
 
-type AdAccount = {
+export type AdAccount = {
   id: string;
   name: string;
 };
@@ -27,17 +27,25 @@ type AdAccountSelectorProps = {
   brandId: string;
   selectedAccountId: string | null;
   onSelect: (accountId: string) => void;
+  /** Server-provided initial accounts to avoid a client-side fetch waterfall. */
+  initialTimelineAccounts?: AdAccount[];
 };
 
 export function AdAccountSelector({
   brandId,
   selectedAccountId,
   onSelect,
+  initialTimelineAccounts,
 }: AdAccountSelectorProps) {
   const { integrations, isLoading, isError } = useBrandIntegrations(brandId);
   const [open, setOpen] = React.useState(false);
-  const [timelineAccounts, setTimelineAccounts] = React.useState<AdAccount[]>([]);
-  const [timelineAccountsLoaded, setTimelineAccountsLoaded] = React.useState(false);
+  const hasInitialAccounts = initialTimelineAccounts && initialTimelineAccounts.length > 0;
+  const [timelineAccounts, setTimelineAccounts] = React.useState<AdAccount[]>(
+    initialTimelineAccounts ?? []
+  );
+  const [timelineAccountsLoaded, setTimelineAccountsLoaded] = React.useState(
+    hasInitialAccounts ?? false
+  );
 
   const adAccounts = React.useMemo(() => {
     const seen = new Set<string>();
@@ -64,12 +72,20 @@ export function AdAccountSelector({
     return merged;
   }, [integrations, timelineAccounts]);
 
+  const initialAccountsUsedRef = React.useRef(hasInitialAccounts);
+
   React.useEffect(() => {
+    // Skip client-side fetch on first render when server-provided data exists
+    if (initialAccountsUsedRef.current) {
+      initialAccountsUsedRef.current = false;
+      return;
+    }
+
     let isCancelled = false;
     setTimelineAccountsLoaded(false);
     setTimelineAccounts([]);
 
-    const fetchTimelineAccounts = async () => {
+    const fetchAccounts = async () => {
       try {
         const response = await fetch("/api/paid-media/timeline/accounts", {
           method: "POST",
@@ -101,7 +117,7 @@ export function AdAccountSelector({
       }
     };
 
-    void fetchTimelineAccounts();
+    void fetchAccounts();
 
     return () => {
       isCancelled = true;

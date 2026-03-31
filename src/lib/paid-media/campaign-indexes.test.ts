@@ -3,7 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { buildCampaignIndexAggregate } from "./campaign-indexes";
 
 describe("buildCampaignIndexAggregate", () => {
-  it("averages metrics and comparison across campaigns", () => {
+  it("totalizes spend and averages other metrics across campaigns", () => {
     const aggregate = buildCampaignIndexAggregate([
       {
         id: "c1",
@@ -41,7 +41,7 @@ describe("buildCampaignIndexAggregate", () => {
       },
     ]);
 
-    expect(aggregate.metrics.spend).toBe(150);
+    expect(aggregate.metrics.spend).toBe(300);
     expect(aggregate.metrics.roas).toBe(1);
     expect(aggregate.metrics.ctr).toBe(3);
     expect(aggregate.metrics.cpc).toBe(4);
@@ -49,9 +49,10 @@ describe("buildCampaignIndexAggregate", () => {
     expect(aggregate.metrics.impressions).toBe(2000);
     expect(aggregate.metrics.clicks).toBe(100);
 
-    expect(aggregate.comparison.spend.current).toBe(150);
-    expect(aggregate.comparison.spend.previous).toBe(165);
-    expect(aggregate.comparison.spend.percentageChange).toBe(2.5);
+    // spend: totalized — current=300, previous=330, change=-9.09%
+    expect(aggregate.comparison.spend.current).toBe(300);
+    expect(aggregate.comparison.spend.previous).toBe(330);
+    expect(aggregate.comparison.spend.percentageChange).toBeCloseTo(-9.09, 1);
 
     expect(aggregate.comparison.roas.current).toBe(1);
     expect(aggregate.comparison.roas.previous).toBe(1);
@@ -61,7 +62,7 @@ describe("buildCampaignIndexAggregate", () => {
     expect(aggregate.comparison.cpa.percentageChange).toBe(0);
   });
 
-  it("averages trends by matching date", () => {
+  it("totalizes spend in trends and averages other metrics by matching date", () => {
     const aggregate = buildCampaignIndexAggregate([
       {
         id: "c1",
@@ -80,7 +81,7 @@ describe("buildCampaignIndexAggregate", () => {
     ]);
 
     expect(aggregate.trends).toHaveLength(3);
-    expect(aggregate.trends[0]?.spend).toBe(150);
+    expect(aggregate.trends[0]?.spend).toBe(300);
     expect(aggregate.trends[0]?.roas).toBe(2);
     expect(aggregate.trends[0]?.ctr_pct).toBe(3);
     expect(aggregate.trends[0]?.cpa).toBe(10);

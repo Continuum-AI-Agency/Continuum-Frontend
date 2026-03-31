@@ -58,6 +58,10 @@ function average(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function sum(values: number[]): number {
+  return values.reduce((acc, value) => acc + value, 0);
+}
+
 function numeric(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return value;
@@ -166,7 +170,7 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
   });
 
   const metrics: CampaignMetrics = {
-    spend: average(metricsByKey.spend),
+    spend: sum(metricsByKey.spend),
     roas: average(metricsByKey.roas),
     ctr: average(metricsByKey.ctr),
     cpc: average(metricsByKey.cpc),
@@ -179,18 +183,26 @@ export function buildCampaignIndexAggregate(campaigns: CampaignLike[]): Campaign
   COMPARISON_KEYS.forEach((key) => {
     const entry = comparisonByKey.get(key);
     if (!entry) return;
-    comparison[key] = {
-      current: average(entry.current),
-      previous: average(entry.previous),
-      percentageChange: average(entry.percentageChange),
-    };
+    if (key === "spend") {
+      const totalCurrent = sum(entry.current);
+      const totalPrevious = sum(entry.previous);
+      const percentageChange =
+        totalPrevious !== 0 ? ((totalCurrent - totalPrevious) / totalPrevious) * 100 : 0;
+      comparison[key] = { current: totalCurrent, previous: totalPrevious, percentageChange };
+    } else {
+      comparison[key] = {
+        current: average(entry.current),
+        previous: average(entry.previous),
+        percentageChange: average(entry.percentageChange),
+      };
+    }
   });
 
   const trends: PaidMetricsTrendPoint[] = Array.from(trendsByDate.entries())
     .sort((left, right) => new Date(left[0]).getTime() - new Date(right[0]).getTime())
     .map(([date, value]) => ({
       date,
-      spend: value.spend.length > 0 ? average(value.spend) : undefined,
+      spend: value.spend.length > 0 ? sum(value.spend) : undefined,
       roas: value.roas.length > 0 ? average(value.roas) : undefined,
       ctr_pct: value.ctr_pct.length > 0 ? average(value.ctr_pct) : undefined,
       cpc: value.cpc.length > 0 ? average(value.cpc) : undefined,

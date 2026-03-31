@@ -145,7 +145,7 @@ export const CampaignNode = memo(({ id, data, selected }: CampaignNodeProps<'cam
         <ContextMenuLabel>Campaign Actions</ContextMenuLabel>
         <ContextMenuGroup>
           <ContextMenuItem onClick={handleAddAdSet}>
-            <Plus className="mr-2 h-4 w-4 text-purple-500" />
+            <Plus className="mr-2 h-4 w-4 text-primary" />
             Add Ad Set
             <ContextMenuItemInfo description="An ad set defines audience, budget, and delivery settings for its ads." />
           </ContextMenuItem>

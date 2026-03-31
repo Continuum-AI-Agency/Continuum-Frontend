@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Badge, Callout, Flex, Heading, Text } from "@radix-ui/themes";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useForm } from "react-hook-form";
 import { AlertTriangle, Check, ChevronsUpDown, Database, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { z } from "zod";

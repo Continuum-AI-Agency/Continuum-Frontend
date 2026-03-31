@@ -365,4 +365,16 @@ export const formatToolLabel = (toolName: string) =>
     ? "Consulting the Council"
     : toolName.replace(/_/g, " ");
 
+export function isStreamingPlaceholderMessage(content: string): boolean {
+  const normalized = content.trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized === "thinking through your request…" ||
+    normalized === "processing your clarification…" ||
+    normalized === "building checkpoint report…" ||
+    normalized === "generating analysis..." ||
+    normalized === "working through objectives…"
+  );
+}
+
 export { hasReportContent };

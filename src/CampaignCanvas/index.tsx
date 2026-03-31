@@ -8,7 +8,7 @@ import {
 import { CampaignCanvas } from './components/CampaignCanvas';
 import { CampaignChat } from './components/CampaignChat';
 import { ReactFlowProvider } from '@xyflow/react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { JainaChatSurface } from '@/components/paid-media/jaina/JainaChatSurface';
 import { Button } from '@/components/ui/button';
 import { Bot, X, GripHorizontal, MessageSquareText, Maximize2, Minimize2 } from 'lucide-react';

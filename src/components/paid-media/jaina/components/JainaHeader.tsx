@@ -9,6 +9,17 @@ import {
   ResetIcon,
   TargetIcon,
 } from "@radix-ui/react-icons";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 type JainaHeaderProps = {
   brandName: string;
@@ -62,28 +73,70 @@ export function JainaHeader({
       </Flex>
 
       <Flex align="center" gap="2">
-        <Button
-          variant="soft"
-          color="gray"
-          size="1"
-          onClick={onClearMemory}
-          className="hover:bg-white/10"
-          aria-label="Clear Memory"
-        >
-          <ResetIcon />
-          <span className="hidden xs:inline">Memory</span>
-        </Button>
-        <Button
-          variant="soft"
-          color="gray"
-          size="1"
-          onClick={onClearConversation}
-          className="hover:bg-white/10"
-          aria-label="Clear Conversation"
-        >
-          <Cross2Icon />
-          <span className="hidden xs:inline">Clear</span>
-        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="soft"
+              color="gray"
+              size="1"
+              className="hover:bg-white/10"
+              aria-label="Clear Memory"
+            >
+              <ResetIcon />
+              <span className="hidden xs:inline">Memory</span>
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear Jaina's memory?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently erase Jaina's memory for this ad account. She will start fresh on your next message. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={onClearMemory}
+              >
+                Clear memory
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="soft"
+              color="gray"
+              size="1"
+              className="hover:bg-white/10"
+              aria-label="Clear Conversation"
+            >
+              <Cross2Icon />
+              <span className="hidden xs:inline">Clear</span>
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Clear this conversation?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will delete the current conversation and all its messages. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={onClearConversation}
+              >
+                Clear conversation
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {isStreaming && (
           <Button
             variant="solid"

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Box, Button, TextArea } from "@radix-ui/themes";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Edit2Icon,
   PlayIcon,
@@ -11,11 +11,17 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { AnimatedShaderBackground } from "@/components/ui/animated-shader-background";
+import dynamic from "next/dynamic";
+
+const AnimatedShaderBackground = dynamic(
+  () => import("@/components/ui/animated-shader-background").then((mod) => mod.AnimatedShaderBackground),
+  { ssr: false }
+);
 import { useToast } from "@/components/ui/ToastProvider";
 import { useJainaChatStream } from "@/hooks/useJainaChatStream";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
+import type { Attachment } from "@/components/ai-elements/attachments";
 import {
   Queue,
   QueueItem,
@@ -49,6 +55,7 @@ import {
   getReportSummary,
   hasReportContent,
   isLikelyStructuredJsonContent,
+  isStreamingPlaceholderMessage,
   resolveReportSignal,
 } from "./jainaUtils";
 import { parsePersistedReportValue } from "./persistedReport";
@@ -65,6 +72,30 @@ import {
 } from "@/lib/jaina/conversations";
 import { frontendCheckpointReportSchema, reportAssemblySchema } from "@/lib/jaina/schemas";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+
+function ConversationSkeleton() {
+  return (
+    <div className="space-y-6 px-4 py-6" aria-hidden="true">
+      <div className="flex justify-end">
+        <div className="h-9 w-48 animate-pulse rounded-2xl bg-muted/50" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="h-4 w-3/4 animate-pulse rounded bg-muted/40" />
+        <div className="h-4 w-2/3 animate-pulse rounded bg-muted/40" />
+        <div className="h-4 w-1/2 animate-pulse rounded bg-muted/30" />
+      </div>
+      <div className="flex justify-end">
+        <div className="h-9 w-64 animate-pulse rounded-2xl bg-muted/50" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="h-4 w-4/5 animate-pulse rounded bg-muted/40" />
+        <div className="h-4 w-3/5 animate-pulse rounded bg-muted/40" />
+        <div className="h-4 w-2/5 animate-pulse rounded bg-muted/30" />
+        <div className="h-4 w-3/4 animate-pulse rounded bg-muted/20" />
+      </div>
+    </div>
+  );
+}
 
 type JainaChatSurfaceProps = {
   brandProfileId: string;
@@ -311,18 +342,6 @@ function isPersistedErrorMessage(content: string): boolean {
   );
 }
 
-function isStreamingPlaceholderMessage(content: string): boolean {
-  const normalized = content.trim().toLowerCase();
-  if (!normalized) return false;
-  return (
-    normalized === "thinking through your request…" ||
-    normalized === "processing your clarification…" ||
-    normalized === "building checkpoint report…" ||
-    normalized === "generating analysis..." ||
-    normalized === "working through objectives…"
-  );
-}
-
 function mergePersistedMessagesWithLocal(
   persistedMessages: JainaChatMessage[],
   localMessages: JainaChatMessage[]
@@ -330,6 +349,42 @@ function mergePersistedMessagesWithLocal(
   if (persistedMessages.length === 0 || localMessages.length === 0) {
     return persistedMessages;
   }
+
+  // Local messages with non-"persisted-" IDs are optimistic — they were added to
+  // local state while the backend was still writing. The previous implementation
+  // always returned persistedMessages as the base, silently dropping these pending
+  // messages. This caused the visible "clear": the current exchange (user + assistant)
+  // disappeared as soon as any refreshConversationSnapshot resolved, because the DB
+  // hadn't written the new messages yet. Then the Realtime broadcast (which fires
+  // when the backend finishes) caused a second overwrite with just plain text.
+  const pendingLocal = localMessages.filter((msg) => !msg.id.startsWith("persisted-"));
+
+  if (pendingLocal.length > 0) {
+    // Dedup: if the last pending user message content already matches the last
+    // persisted user message, the backend has now written this exchange — fall
+    // through to the report-merge path below instead of appending the local copy.
+    const lastPendingUser = [...pendingLocal].reverse().find((m) => m.role === "user");
+    const lastPersistedUser = [...persistedMessages].reverse().find((m) => m.role === "user");
+    const alreadySynced =
+      lastPendingUser &&
+      lastPersistedUser &&
+      lastPendingUser.content.trim() === lastPersistedUser.content.trim();
+
+    if (!alreadySynced) {
+      // The current exchange hasn't landed in the DB yet. Return the persisted
+      // history (without touching it — the last persisted assistant belongs to a
+      // previous exchange, not this one) plus the pending local pair.
+      return [...persistedMessages, ...pendingLocal];
+    }
+    // alreadySynced: fall through — the DB has the new messages so we want the
+    // persisted version and can apply report-data enrichment below.
+  }
+
+  // From here on, all local messages are accounted for in persistedMessages.
+  // Apply the assistant report-data merge: local in-memory state may have richer
+  // data (report, reportAssembly, etc.) than what the backend persisted, either
+  // because the backend saved placeholder text or because it hasn't persisted the
+  // full report JSON yet.
 
   let persistedAssistantIndex = -1;
   for (let index = persistedMessages.length - 1; index >= 0; index -= 1) {
@@ -364,16 +419,12 @@ function mergePersistedMessagesWithLocal(
 
   // Bail out if the persisted message is already authoritative — UNLESS the
   // persisted copy lacks report data that the local state already holds.
-  // Without this extra guard, a fast `refreshConversationSnapshot` after
-  // stream completion races the backend write: the backend returns real text
-  // content but no `report` JSON yet, the guard fires, and the local rich
-  // state is replaced with an incomplete snapshot. This causes the double-
-  // overwrite: first from the immediate refresh at completion, and again from
-  // the Supabase Realtime `conversation_updated` broadcast.
+  // This guards the race where the backend saved real text content but hadn't
+  // yet written the report JSON when the snapshot resolved.
   const persistedLacksReport =
     !persistedAssistant.report && !persistedAssistant.reportAssembly;
   const localHasReport = Boolean(
-    localAssistant?.report || localAssistant?.reportAssembly
+    localAssistant.report || localAssistant.reportAssembly
   );
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
@@ -481,6 +532,7 @@ export function JainaChatSurface({
   const activeSessionIdRef = React.useRef(sessionId);
   const streamBusyRef = React.useRef(false);
   const queueDispatchInFlightRef = React.useRef(false);
+  const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     activeSessionIdRef.current = sessionId;
@@ -1111,7 +1163,7 @@ export function JainaChatSurface({
   ]);
 
   const dispatchMessage = React.useCallback(
-    async (input: { query: string; canvas: boolean; clarificationId?: string }) => {
+    async (input: { query: string; canvas: boolean; clarificationId?: string; images?: Array<{ url: string; name?: string }> }) => {
       const query = input.query.trim();
       if (!query) return false;
 
@@ -1196,6 +1248,7 @@ export function JainaChatSurface({
         sessionId: activeSessionId,
         clarificationId: input.clarificationId,
         userId: userId ?? undefined,
+        images: input.images,
       }).then((result) => {
         if (result.error) {
           show({
@@ -1239,14 +1292,19 @@ export function JainaChatSurface({
   );
 
   const handleSubmit = React.useCallback(
-    async (query: string) => {
+    async (query: string, attachments?: Attachment[]) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) return;
+
+      const images = attachments
+        ?.filter((a) => Boolean(a.url))
+        .map((a) => ({ url: a.url as string, name: a.name }));
 
       const input = {
         query: normalizedQuery,
         canvas: isPlanMode,
         clarificationId: pendingClarificationId,
+        ...(images && images.length > 0 ? { images } : {}),
       };
 
       const shouldQueue = shouldQueueSubmission({
@@ -1538,6 +1596,19 @@ export function JainaChatSurface({
     }
   }, [clearMemory, adAccountId, show]);
 
+  const handleFocusInput = React.useCallback(() => {
+    const textarea = promptInputWrapperRef.current?.querySelector("textarea");
+    textarea?.focus();
+    textarea?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
+
+  React.useEffect(() => {
+    if (pendingClarificationId) {
+      const textarea = promptInputWrapperRef.current?.querySelector("textarea");
+      textarea?.focus();
+    }
+  }, [pendingClarificationId]);
+
   const isInputDisabled = isHistoryLoading || isConversationSwitching;
   const isQueueStreaming = isStreaming || Boolean(activeResponseId);
   const canStartQueuedNow =
@@ -1610,9 +1681,7 @@ export function JainaChatSurface({
           <Conversation>
             <ConversationContent>
               {isConversationSwitching ? (
-                <div className="px-4 py-6 text-sm text-muted-foreground">
-                  Loading conversation…
-                </div>
+                <ConversationSkeleton />
               ) : null}
 
               {!isConversationSwitching && messages.length === 0 && (
@@ -1623,22 +1692,35 @@ export function JainaChatSurface({
               )}
 
               <AnimatePresence mode="popLayout">
-                {messages.map((message) => (
-                  <JainaMessageItem
-                    key={message.id}
-                    message={message}
-                    activeResponseId={activeResponseId}
-                    state={state}
-                    onSuggestionClick={handleSubmit}
-                    onPlanFeedback={handlePlanFeedback}
-                  />
-                ))}
+                {messages.map((message, index) => {
+                  const precedingUserMessage =
+                    message.role === "assistant"
+                      ? [...messages].slice(0, index).reverse().find((m) => m.role === "user")
+                      : undefined;
+                  return (
+                    <JainaMessageItem
+                      key={message.id}
+                      message={message}
+                      activeResponseId={activeResponseId}
+                      state={state}
+                      onSuggestionClick={handleSubmit}
+                      onPlanFeedback={handlePlanFeedback}
+                      onFocusInput={handleFocusInput}
+                      onRegenerate={
+                        precedingUserMessage
+                          ? () => handleSubmit(precedingUserMessage.content)
+                          : undefined
+                      }
+                    />
+                  );
+                })}
               </AnimatePresence>
             </ConversationContent>
           </Conversation>
         </div>
       </div>
 
+      <div ref={promptInputWrapperRef}>
       <Box p="4" className="relative z-10">
         {queuedMessages.length > 0 ? (
           <div className="mx-auto mb-3 w-full max-w-[1600px] px-4 md:px-6 lg:px-8">
@@ -1751,9 +1833,9 @@ export function JainaChatSurface({
         ) : null}
 
         <PromptInput
-          onSubmit={(value) => handleSubmit(value)}
+          onSubmit={(value, attachments) => handleSubmit(value, attachments)}
           disabled={isInputDisabled}
-          placeholder="Ask Jaina anything..."
+          placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}
           actions={
             <Button
               type="button"
@@ -1769,6 +1851,7 @@ export function JainaChatSurface({
           }
         />
       </Box>
+      </div>
     </div>
   );
 }

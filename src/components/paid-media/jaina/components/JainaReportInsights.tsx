@@ -1,6 +1,6 @@
 import { Heading, Card, Text, Flex, Box } from "@radix-ui/themes";
 import { LightbulbIcon } from "lucide-react";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 
 interface JainaReportInsightsProps {
   insights: string[];

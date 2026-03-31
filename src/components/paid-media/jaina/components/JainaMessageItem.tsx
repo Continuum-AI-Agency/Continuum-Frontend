@@ -2,13 +2,16 @@
 
 import * as React from "react";
 import { Badge, Text } from "@radix-ui/themes";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import {
   CheckCircle2Icon,
   ChevronDownIcon,
   CircleIcon,
+  ClipboardCheckIcon,
+  ClipboardIcon,
   ListChecksIcon,
   Loader2Icon,
+  RefreshCwIcon,
 } from "lucide-react";
 import { Message } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
@@ -45,7 +48,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import {
   frontendCheckpointReportSchema,
   hasReportContent,
@@ -59,6 +62,7 @@ import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
   formatToolLabel,
+  isStreamingPlaceholderMessage,
 } from "../jainaUtils";
 import { ThinkingStatusGrid } from "./ThinkingStatusGrid";
 import { CreativeCard } from "./CreativeCard";
@@ -685,6 +689,54 @@ function ThinkingWindow({
   );
 }
 
+type MessageActionBarProps = {
+  content: string;
+  onRegenerate?: () => void;
+};
+
+function MessageActionBar({ content, onRegenerate }: MessageActionBarProps) {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = React.useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard not available
+    }
+  }, [content]);
+
+  return (
+    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <button
+        type="button"
+        aria-label={copied ? "Copied" : "Copy response"}
+        onClick={handleCopy}
+        className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+      >
+        {copied ? (
+          <ClipboardCheckIcon className="size-3.5 text-emerald-500" />
+        ) : (
+          <ClipboardIcon className="size-3.5" />
+        )}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </button>
+      {onRegenerate ? (
+        <button
+          type="button"
+          aria-label="Regenerate response"
+          onClick={onRegenerate}
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+        >
+          <RefreshCwIcon className="size-3.5" />
+          <span>Regenerate</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 type JainaMessageItemProps = {
   message: JainaChatMessage;
   activeResponseId: string | null;
@@ -695,6 +747,8 @@ type JainaMessageItemProps = {
     approved: boolean;
     reason?: string;
   }) => void;
+  onRegenerate?: () => void;
+  onFocusInput?: () => void;
 };
 
 export function JainaMessageItem({
@@ -703,6 +757,8 @@ export function JainaMessageItem({
   state,
   onSuggestionClick,
   onPlanFeedback,
+  onRegenerate,
+  onFocusInput,
 }: JainaMessageItemProps) {
   const isStreaming = message.id === activeResponseId;
   const reasoning = isStreaming ? state.progress : message.reasoning;
@@ -755,7 +811,7 @@ export function JainaMessageItem({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="w-full space-y-4"
+        className="group w-full space-y-4"
       >
         {message.role === "user" ? (
           <Text size="2" className="font-medium">
@@ -764,12 +820,22 @@ export function JainaMessageItem({
         ) : (
           <>
             {!shouldHideMarkdownContent ? (
-              <SafeMarkdown
-                content={message.content}
-                className="text-[15px] leading-7 text-foreground"
-                mode={isStreaming ? "streaming" : "static"}
-                isAnimating={isStreaming}
-              />
+              <div className="relative">
+                <SafeMarkdown
+                  content={message.content}
+                  className="text-[15px] leading-7 text-foreground"
+                  mode={isStreaming ? "streaming" : "static"}
+                  isAnimating={isStreaming}
+                />
+                {isStreaming && isStreamingPlaceholderMessage(message.content) ? (
+                  <motion.span
+                    aria-hidden="true"
+                    className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[2px] rounded-sm bg-primary"
+                    animate={{ opacity: [1, 0, 1] }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                  />
+                ) : null}
+              </div>
             ) : null}
 
             {structuredFallbackContent ? (
@@ -788,17 +854,24 @@ export function JainaMessageItem({
             ) : null}
 
             {message.pendingClarification ? (
-              <div className="rounded-lg border border-amber-300/40 bg-amber-100/20 px-3 py-2">
+              <div className="rounded-xl border-l-2 border-amber-400/60 border border-amber-300/30 bg-amber-50/8 px-4 py-3 space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <Badge color="amber" variant="soft" className="uppercase text-[10px] tracking-wide">
-                    Clarification Needed
+                  <Badge color="amber" variant="soft" className="uppercase text-[10px] tracking-wide shrink-0">
+                    Clarification needed
                   </Badge>
-                  {message.pendingClarification.id ? (
-                    <Text size="1" className="text-muted-foreground">
-                      ID: {message.pendingClarification.id}
-                    </Text>
-                  ) : null}
                 </div>
+                {message.pendingClarification.question ? (
+                  <Text size="2" className="block text-foreground/90 leading-relaxed">
+                    {message.pendingClarification.question}
+                  </Text>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={onFocusInput}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 transition-colors hover:bg-amber-400/20 cursor-pointer"
+                >
+                  Reply to this
+                </button>
               </div>
             ) : null}
 
@@ -899,6 +972,13 @@ export function JainaMessageItem({
                   ))}
                 </div>
               </div>
+            ) : null}
+
+            {!isStreaming && message.status === "done" ? (
+              <MessageActionBar
+                content={message.content}
+                onRegenerate={onRegenerate}
+              />
             ) : null}
           </>
         )}

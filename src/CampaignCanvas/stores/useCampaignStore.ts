@@ -61,6 +61,19 @@ function getSiblingHorizontalOffset(index: number): number {
   return direction * depth * CONNECTED_NODE_SIBLING_HORIZONTAL_SPACING;
 }
 
+let validationTimer: ReturnType<typeof setTimeout> | null = null;
+
+function debouncedValidation(
+  set: (partial: Partial<Pick<CampaignStore, 'nodes'>>) => void,
+  getNodes: () => CampaignCanvasNode[],
+  getEdges: () => CampaignCanvasEdge[],
+) {
+  if (validationTimer) clearTimeout(validationTimer);
+  validationTimer = setTimeout(() => {
+    set({ nodes: applyCampaignGraphValidation(getNodes(), getEdges()) });
+  }, 200);
+}
+
 export const useCampaignStore = create<CampaignStore>((set, get) => ({
   nodes: [],
   edges: [],
@@ -78,19 +91,14 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
   onNodesChange: (changes: NodeChange[]) => {
     const nextNodes = applyNodeChanges(changes, get().nodes) as CampaignCanvasNode[];
-    const nextEdges = get().edges;
-    set({
-      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
-    });
+    set({ nodes: nextNodes });
+    debouncedValidation(set, () => get().nodes, () => get().edges);
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
     const nextEdges = applyEdgeChanges(changes, get().edges) as CampaignCanvasEdge[];
-    const nextNodes = get().nodes;
-    set({
-      edges: nextEdges,
-      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
-    });
+    set({ edges: nextEdges });
+    debouncedValidation(set, () => get().nodes, () => get().edges);
   },
 
   onConnect: (connection: Connection) => {
@@ -165,13 +173,11 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
   },
 
   updateNodeData: (id, data) => {
-    const nextEdges = get().edges;
     const nextNodes = get().nodes.map((node) =>
       node.id === id ? { ...node, data: { ...node.data, ...data } } : node
     );
-    set({
-      nodes: applyCampaignGraphValidation(nextNodes, nextEdges),
-    });
+    set({ nodes: nextNodes });
+    debouncedValidation(set, () => get().nodes, () => get().edges);
   },
 
   removeNode: (id) => {

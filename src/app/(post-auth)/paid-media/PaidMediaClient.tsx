@@ -2,33 +2,44 @@
 
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
+import { type AdAccount, AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
 import { JainaChatSurface } from "@/components/paid-media/jaina/JainaChatSurface";
 import { PaidMediaDashboard } from "@/components/paid-media/dashboard/PaidMediaDashboard";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CampaignCanvas } from "@/CampaignCanvas/components/CampaignCanvas";
+import dynamic from "next/dynamic";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useSession } from "@/hooks/useSession";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import { PanelRightOpen, PanelRightClose } from "lucide-react";
+
+const CampaignCanvas = dynamic(
+  () => import("@/CampaignCanvas/components/CampaignCanvas").then((mod) => mod.CampaignCanvas),
+  { ssr: false },
+);
 
 type PaidMediaClientPageProps = {
   brandProfileId: string;
   brandName: string;
+  initialAccounts?: AdAccount[];
+  initialAdAccountId?: string | null;
 };
 
 export default function PaidMediaClientPage({
   brandProfileId,
   brandName,
+  initialAccounts,
+  initialAdAccountId,
 }: PaidMediaClientPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get("tab");
   const { user } = useSession();
   
-  const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(null);
+  const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(
+    initialAdAccountId ?? null
+  );
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState(tabParam || "dashboard");
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
@@ -40,6 +51,12 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Reset brand-dependent state when server re-renders with a new brand
+  React.useEffect(() => {
+    setSelectedAdAccount(initialAdAccountId ?? null);
+    setSelectedCampaign(null);
+  }, [brandProfileId, initialAdAccountId]);
 
   React.useEffect(() => {
     if (tabParam && tabParam !== activeTab) {
@@ -146,6 +163,7 @@ export default function PaidMediaClientPage({
             brandId={brandProfileId}
             selectedAccountId={selectedAdAccount}
             onSelect={setSelectedAdAccount}
+            initialTimelineAccounts={initialAccounts}
           />
           <TabsList className="h-9">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
@@ -154,7 +172,10 @@ export default function PaidMediaClientPage({
         </div>
 
         <TabsContent value="dashboard" className="box-border flex-1 min-h-0 pt-2 overflow-auto">
-          <PaidMediaDashboard brandId={brandProfileId} adAccountId={selectedAdAccount} />
+          <PaidMediaDashboard
+            brandId={brandProfileId}
+            adAccountId={selectedAdAccount}
+          />
         </TabsContent>
 
         <TabsContent value="jaina" className="box-border flex-1 min-h-0 pt-2 flex flex-col overflow-hidden">

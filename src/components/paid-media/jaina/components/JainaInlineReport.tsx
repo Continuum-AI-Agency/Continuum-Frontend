@@ -4,7 +4,7 @@ import * as React from "react";
 import { Badge, Button, Heading, Text } from "@radix-ui/themes";
 import { DownloadIcon } from "lucide-react";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useToast } from "@/components/ui/ToastProvider";
 import {
   type FrontendCheckpointReport,

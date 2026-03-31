@@ -4,7 +4,7 @@ import { Card, Box, Text, Badge, Heading, Flex } from "@radix-ui/themes";
 import { CheckCircle2Icon, AlertCircleIcon, InfoIcon } from "lucide-react";
 import { type FrontendCheckpointReport } from "@/lib/jaina/schemas";
 import { JainaReportCharts, isJainaChartInput } from "./JainaReportCharts";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 
 type JainaReportSectionsProps = {
   sections: FrontendCheckpointReport["sections"];

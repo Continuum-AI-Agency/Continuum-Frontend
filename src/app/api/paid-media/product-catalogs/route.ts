@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
 
   const parsed = productCatalogCreateSchema.safeParse(body);
   if (!parsed.success) {
+    console.error("[product-catalogs POST] 422 field errors:", parsed.error.flatten());
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 422 });
   }
 

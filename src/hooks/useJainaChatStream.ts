@@ -28,6 +28,7 @@ type JainaChatInput = {
   sessionId?: string;
   clarificationId?: string;
   userId?: string;
+  images?: Array<{ url: string; name?: string }>;
 };
 
 type StartResult = { error?: string };
@@ -203,6 +204,7 @@ export function useJainaChatStream() {
             brandId: input.brandId,
             sessionId: input.sessionId,
             canvas: input.canvas,
+            ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
           },
         });
       } catch (error) {

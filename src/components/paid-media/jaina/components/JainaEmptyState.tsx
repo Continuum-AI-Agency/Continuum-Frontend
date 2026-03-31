@@ -3,7 +3,7 @@
 import React from "react";
 import { Flex, Heading, Text } from "@radix-ui/themes";
 import { RocketIcon } from "@radix-ui/react-icons";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Attachment } from "@/components/ai-elements/attachments";
 
 import { Suggestion } from "@/components/ai-elements/suggestion";
