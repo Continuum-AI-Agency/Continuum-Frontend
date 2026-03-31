@@ -21,8 +21,8 @@ export function FrameStrip({ frames, onFrameClick, onRemoveFrame, activeFrameInd
           key={index}
           className={cn(
             "relative w-12 h-16 flex-shrink-0 rounded bg-white border border-dashed border-slate-300 flex items-center justify-center group cursor-pointer transition-colors",
-            frame ? "border-solid border-indigo-200" : "hover:border-indigo-300",
-            activeFrameIndex === index && "ring-2 ring-indigo-500 ring-offset-1"
+            frame ? "border-solid border-primary/30" : "hover:border-primary/50",
+            activeFrameIndex === index && "ring-2 ring-primary ring-offset-1"
           )}
           onClick={() => onFrameClick(index)}
         >
@@ -32,7 +32,7 @@ export function FrameStrip({ frames, onFrameClick, onRemoveFrame, activeFrameInd
              id={`frame-${index}`}
              className={cn(
                "!w-2 !h-2 !bg-slate-300 transition-colors",
-               frame ? "!bg-indigo-500" : ""
+               frame ? "!bg-primary" : ""
              )}
              style={{ bottom: -6 }}
           />

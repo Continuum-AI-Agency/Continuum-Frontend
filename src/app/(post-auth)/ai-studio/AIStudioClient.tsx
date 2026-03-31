@@ -1,33 +1,25 @@
 "use client";
 
 import React from "react";
-import { Heading, Text, Tabs } from "@radix-ui/themes";
-import { useToast } from "@/components/ui/ToastProvider";
+import { Heading, Text } from "@radix-ui/themes";
 import { CreativeLibrarySidebar } from "@/components/creative-assets/CreativeLibrarySidebar";
 import { BrandSwitcherMenu } from "@/components/navigation/BrandSwitcherMenu";
-import { ChatSurface } from "@/components/ai-studio/chat/ChatSurface";
-import {
-  createPromptTemplateAction,
-  deletePromptTemplateAction,
-  updatePromptTemplateAction,
-} from "./actions";
-import type {
-  PromptTemplateCreateInput,
-  PromptTemplateUpdateInput,
-} from "@/lib/schemas/promptTemplates";
-import { StudioCanvas } from "@/StudioCanvas";
-import { useSearchParams, useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import {
   buildAiStudioStorageKey,
   plannerAiStudioHandoffSchema,
   type PlannerAiStudioHandoff,
 } from "@/lib/organic/ai-studio-bridge";
 
+const StudioCanvas = dynamic(
+  () => import("@/StudioCanvas/components/StudioCanvas").then((mod) => mod.StudioCanvas),
+  { ssr: false },
+);
+
 type AIStudioClientProps = {
   brandProfileId: string;
   brandName: string;
-  promptTemplates?: import("@/lib/schemas/promptTemplates").PromptTemplate[];
 };
 
 function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff | null {
@@ -47,16 +39,10 @@ function readOrganicPlannerSeedContext(draftId: string): PlannerAiStudioHandoff 
 export default function AIStudioClient({
   brandProfileId,
   brandName,
-  promptTemplates,
 }: AIStudioClientProps) {
-  const { show: showToast } = useToast();
   const searchParams = useSearchParams();
-  const router = useRouter();
-  
-  const mode = searchParams.get("mode") as "chat" | "canvas" | null;
   const source = searchParams.get("source");
   const draftId = searchParams.get("draftId");
-  const activeTab = mode === "chat" ? "chat" : "canvas";
   const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(null);
 
   React.useEffect(() => {
@@ -68,130 +54,35 @@ export default function AIStudioClient({
     setOrganicPlannerSeed(readOrganicPlannerSeedContext(draftId));
   }, [draftId, source]);
 
-  const setActiveTab = (tab: "chat" | "canvas") => {
-    const params = new URLSearchParams(searchParams);
-    params.set("mode", tab);
-    router.replace(`?${params.toString()}`);
-  };
-
-  const [templates, setTemplates] = React.useState(promptTemplates ?? []);
-  const [templatesLoading, setTemplatesLoading] = React.useState(false);
-  const mainLayoutStyle =
-    activeTab === "canvas"
-      ? {
-          gap: "var(--app-shell-gap-compact)",
-          padding: "var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)",
-        }
-      : {
-          gap: "var(--app-shell-gap)",
-          padding: "var(--app-shell-pad-block) var(--app-shell-pad-inline)",
-        };
-
-  const handleCreateTemplate = React.useCallback(
-    async (input: Omit<PromptTemplateCreateInput, "brandProfileId">) => {
-      setTemplatesLoading(true);
-      try {
-        const created = await createPromptTemplateAction({
-          brandProfileId,
-          name: input.name,
-          prompt: input.prompt,
-          category: input.category,
-        });
-        setTemplates((prev) => [created, ...prev.filter((item) => item.id !== created.id)]);
-        showToast({ title: "Template saved", variant: "success" });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to save template";
-        showToast({ title: "Save failed", description: message, variant: "error" });
-        throw error;
-      } finally {
-        setTemplatesLoading(false);
-      }
-    },
-    [brandProfileId, showToast]
-  );
-
-  const handleUpdateTemplate = React.useCallback(
-    async (input: PromptTemplateUpdateInput) => {
-      setTemplatesLoading(true);
-      try {
-        const updated = await updatePromptTemplateAction(input);
-        setTemplates((prev) => [updated, ...prev.filter((item) => item.id !== updated.id)]);
-        showToast({ title: "Template updated", variant: "success" });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to update template";
-        showToast({ title: "Update failed", description: message, variant: "error" });
-        throw error;
-      } finally {
-        setTemplatesLoading(false);
-      }
-    },
-    [showToast]
-  );
-
-  const handleDeleteTemplate = React.useCallback(
-    async (id: string) => {
-      setTemplatesLoading(true);
-      try {
-        await deletePromptTemplateAction(id);
-        setTemplates((prev) => prev.filter((item) => item.id !== id));
-        showToast({ title: "Template deleted", variant: "success" });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unable to delete template";
-        showToast({ title: "Delete failed", description: message, variant: "error" });
-        throw error;
-      } finally {
-        setTemplatesLoading(false);
-      }
-    },
-    [showToast]
-  );
-
   return (
     <div className="fixed inset-x-0 top-0 h-screen h-[100dvh] md:left-[var(--app-sidebar-width,5.5rem)] isolate flex flex-col overflow-hidden bg-slate-950 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.15),transparent_35%),radial-gradient(circle_at_88%_12%,rgba(59,130,246,0.12),transparent_32%),linear-gradient(180deg,rgba(10,12,24,0.95) 0%,rgba(10,12,24,0.98) 50%,rgba(7,9,18,1) 100%)]" />
 
       <main
         className="relative z-[1] flex min-h-0 flex-1 flex-col"
-        style={mainLayoutStyle}
+        style={{
+          gap: "var(--app-shell-gap-compact)",
+          padding: "var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)",
+        }}
       >
-        <div className={cn("flex flex-wrap items-center justify-between", activeTab === "canvas" ? "gap-2" : "gap-3")}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-baseline gap-3">
             <Heading size="7" className="text-white">AI Studio</Heading>
             <Text color="gray">Build flows for {brandName}</Text>
           </div>
           <div className="flex items-center gap-3">
-            <Tabs.Root value={activeTab} onValueChange={(v) => setActiveTab(v as "chat" | "canvas")} activationMode="manual">
-              <Tabs.List>
-                <Tabs.Trigger value="chat">Chat</Tabs.Trigger>
-                <Tabs.Trigger value="canvas">Canvas</Tabs.Trigger>
-              </Tabs.List>
-            </Tabs.Root>
             <BrandSwitcherMenu />
           </div>
         </div>
 
-        {activeTab === "chat" ? (
-          <div className="flex-1 min-h-0">
-            <ChatSurface
+        <div className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
+          <div className="h-full w-full">
+            <StudioCanvas
               brandProfileId={brandProfileId}
-              brandName={brandName}
-              promptTemplates={templates}
-              templatesLoading={templatesLoading}
-              onCreatePromptTemplate={handleCreateTemplate}
-              onUpdatePromptTemplate={handleUpdateTemplate}
-              onDeletePromptTemplate={handleDeleteTemplate}
+              organicPlannerSeed={organicPlannerSeed}
             />
           </div>
-        ) : (
-          <div className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
-            <div className="h-full w-full">
-              <StudioCanvas
-                brandProfileId={brandProfileId}
-                organicPlannerSeed={organicPlannerSeed}
-              />
-            </div>
-          </div>
-        )}
+        </div>
       </main>
 
       <CreativeLibrarySidebar brandProfileId={brandProfileId} />

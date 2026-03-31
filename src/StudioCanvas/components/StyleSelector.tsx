@@ -25,14 +25,14 @@ export function StyleSelector({ value, onChange }: StyleSelectorProps) {
         <Card
           key={style.value}
           className={cn(
-            "cursor-pointer p-2 flex flex-col items-center justify-center gap-1 border hover:border-indigo-400 transition-all",
-            value === style.value ? "border-indigo-500 bg-indigo-50/50" : "border-slate-200"
+            "cursor-pointer p-2 flex flex-col items-center justify-center gap-1 border hover:border-primary/70 transition-all",
+            value === style.value ? "border-primary bg-primary/5" : "border-slate-200"
           )}
           onClick={() => onChange(style.value)}
         >
           <div className={cn(
             "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold",
-            value === style.value ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-500"
+            value === style.value ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-500"
           )}>
             {style.label.charAt(0)}
           </div>

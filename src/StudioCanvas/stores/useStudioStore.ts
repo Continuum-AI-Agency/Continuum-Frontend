@@ -227,13 +227,21 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set((state) => {
         const newNodes = applyNodeChanges(changes, state.nodes);
         
-        const isDragging = changes.some(
-          (c) => c.type === 'position' && 'dragging' in c && c.dragging === true
+        const positionChanges = changes.filter(c => c.type === 'position');
+        const isDragging = positionChanges.some(
+          (c) => 'dragging' in c && c.dragging === true
         );
-        const multipleMoving = changes.filter(c => c.type === 'position').length > 1;
+        const multipleMoving = positionChanges.length > 1;
+        const hasDragEnd = positionChanges.some(
+          (c) => 'dragging' in c && c.dragging === false
+        );
 
-        if (isDragging || multipleMoving) {
-            return { nodes: newNodes };
+        if (isDragging || multipleMoving || !hasDragEnd) {
+            return {
+              nodes: newNodes,
+              deletedNodeIds: deletedNodes.length > 0 ? [...state.deletedNodeIds, ...deletedNodes] : state.deletedNodeIds,
+              saveTrigger: deletedNodes.length > 0 ? state.saveTrigger + 1 : state.saveTrigger,
+            };
         }
 
         const hasDimensions = newNodes.some(n => n.measured?.width || n.width);

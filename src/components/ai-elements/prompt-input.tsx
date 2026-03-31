@@ -2,7 +2,7 @@
 
 import React, { useCallback, useMemo, useRef } from "react";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Paperclip } from "lucide-react";
 
 import { Attachments, type Attachment } from "./attachments";

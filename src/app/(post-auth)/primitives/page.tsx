@@ -1,19 +1,15 @@
-import { Box, Card, Flex, Heading, Text } from "@radix-ui/themes";
+import { Box, Flex, Heading, Text } from "@radix-ui/themes";
 import { PrimitivesHub } from "@/components/paid-media/PrimitivesHub";
-import OnboardingLoading from "@/components/loader-animations/OnboardingLoading";
-import { ClientOnly } from "@/components/ui/ClientOnly";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import { listBrandGuidelines } from "@/lib/api/brandGuidelines.server";
 import type { BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 import type { BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { DASHBOARD_LOADER_TOTAL_DURATION_MS, getDashboardLoaderCycleDurationMs } from "@/lib/ui/dashboardLoaderTiming";
-import { DEFAULT_LOADING_PHRASES } from "@/lib/ui/loadingPhrases";
 import { redirect } from "next/navigation";
 
+// force-dynamic: reads user session cookies via getActiveBrandContext() and ensureOnboardingState()
 export const dynamic = "force-dynamic";
-export const revalidate = 300;
 
 export default async function PrimitivesPage() {
   const { activeBrandId } = await getActiveBrandContext();
@@ -21,13 +17,18 @@ export default async function PrimitivesPage() {
     redirect("/onboarding");
   }
 
-  const showLoaderPreview = process.env.NODE_ENV !== "production";
-  const loaderCycleDurationMs = getDashboardLoaderCycleDurationMs(
-    DEFAULT_LOADING_PHRASES.length,
-    DASHBOARD_LOADER_TOTAL_DURATION_MS
-  );
+  // Run all three in parallel — none depend on each other.
+  const [onboardingResult, insightsResult, guidelinesResult] = await Promise.allSettled([
+    ensureOnboardingState(activeBrandId),
+    fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
+    listBrandGuidelines(activeBrandId),
+  ]);
 
-  const { brandId } = await ensureOnboardingState(activeBrandId);
+  if (onboardingResult.status === "rejected") {
+    throw onboardingResult.reason;
+  }
+  const { brandId } = onboardingResult.value;
+
   let questionsByNiche: BrandInsightsQuestionsByNiche = {
     questionsByNiche: {},
     status: undefined,
@@ -37,27 +38,17 @@ export default async function PrimitivesPage() {
   let guidelineSummaries: BrandGuidelineSummary[] = [];
   let questionsError: string | null = null;
 
-  try {
-    const [insightsResult, guidelinesResult] = await Promise.allSettled([
-      fetchBrandInsights(brandId, { revalidateSeconds: revalidate }),
-      listBrandGuidelines(brandId),
-    ]);
-
-    if (insightsResult.status === "fulfilled") {
-      questionsByNiche = insightsResult.value.data.questionsByNiche;
-    } else {
-      questionsError =
-        insightsResult.reason instanceof Error
-          ? insightsResult.reason.message
-          : "Unable to load Brand Insights questions.";
-    }
-
-    if (guidelinesResult.status === "fulfilled") {
-      guidelineSummaries = guidelinesResult.value;
-    }
-  } catch (error) {
+  if (insightsResult.status === "fulfilled") {
+    questionsByNiche = insightsResult.value.data.questionsByNiche;
+  } else {
     questionsError =
-      error instanceof Error ? error.message : "Unable to load Brand Insights questions.";
+      insightsResult.reason instanceof Error
+        ? insightsResult.reason.message
+        : "Unable to load Brand Insights questions.";
+  }
+
+  if (guidelinesResult.status === "fulfilled") {
+    guidelineSummaries = guidelinesResult.value;
   }
 
   return (
@@ -79,32 +70,6 @@ export default async function PrimitivesPage() {
         questionsError={questionsError}
       />
 
-      {showLoaderPreview ? (
-        <Card className="overflow-hidden">
-          <Flex direction="column" gap="3" p="4">
-            <Heading size="4">Loader preview</Heading>
-            <Text color="gray" size="2">
-              Saturn rings + message cycle. This mirrors the 3-second dashboard loader behavior.
-            </Text>
-            <Box className="relative h-96 w-full overflow-hidden rounded-lg border border-white/10">
-              <ClientOnly
-                fallback={
-                  <Flex align="center" justify="center" className="h-full">
-                    <Text color="gray" size="2">Loading preview...</Text>
-                  </Flex>
-                }
-              >
-                <OnboardingLoading
-                  phrases={DEFAULT_LOADING_PHRASES}
-                  cycleDuration={loaderCycleDurationMs}
-                  overlay={false}
-                  size="lg"
-                />
-              </ClientOnly>
-            </Box>
-          </Flex>
-        </Card>
-      ) : null}
     </Box>
   );
 }
