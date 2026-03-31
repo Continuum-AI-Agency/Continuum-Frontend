@@ -12,12 +12,13 @@ We use a semantic color naming convention. All color usage must reference the de
 
 | Purpose | Light Mode Value (Example) | Dark Mode Value (Example) | Tailwind Class Mapping | Usage |
 | :--- | :--- | :--- | :--- | :--- |
-| **Surface Default** (Base BG) | `#F8FAFC` (Slate 50) | `#030712` (Deep Charcoal) | `bg-default` | Body background, large areas. |
-| **Surface Accent** (Card/Panel BG) | `#FFFFFF` (White) | `#0E1729` (Deep Navy) | `bg-accent` | Primary content containers, cards, modals. |
-| **Primary Text** (Default copy) | `#1F2937` (Gray 800) | `#E2E8F0` (Slate 200) | `text-primary` | Main headers, body paragraphs. |
-| **Secondary Text** (Subtle copy) | `#6B7280` (Gray 500) | `#9CA3AF` (Gray 400) | `text-secondary` | Labels, helper text, timestamps. |
-| **Primary Brand** (Highlights) | `#5A48F9` (Vibrant Purple) | `#8B5CF6` (Vibrant Purple) | `bg-brand-primary` / `text-brand-primary` | Primary CTAs, active states, focus rings. |
-| **Accent Glow** (Interactive effects) | `#8B5CF6` (Subtle Purple) | `#C4B5FD` (Luminous Lavender) | `shadow-brand-glow` | Subtle shadow/ring effect on interactive elements. |
+| **Surface Default** (Base BG) | `#fdfdfd` (Near-white) | `#020617` (Deep Space) | `bg-default` | Body background, large areas. |
+| **Surface Accent** (Card/Panel BG) | `#f5f4ff` (Faint violet) | `#0B1220` (Deep Navy) | `bg-accent` | Primary content containers, cards, modals. |
+| **Primary Text** (Default copy) | `#16162a` (Violet near-black) | `#E5E7EB` (Gray 200) | `text-primary` | Main headers, body paragraphs. |
+| **Secondary Text** (Subtle copy) | `#5c5b7a` (Violet mid-gray) | `#94A3B8` (Slate 400) | `text-secondary` | Labels, helper text, timestamps. |
+| **Primary Brand** (Highlights) | `#5A48F9` (Electric blue-violet) | `#7C6FFF` (Lighter violet) | `bg-brand-primary` / `text-brand-primary` | Primary CTAs, active states, focus rings. |
+| **Accent Glow** (Interactive effects) | `#7B6BFF` (Brand accent) | `#C4B5FD` (Luminous Lavender) | `shadow-brand-glow` | Subtle shadow/ring effect on interactive elements. |
+| **Secondary** (Complementary accent) | `#0ea5e9` (Sky-500 cyan) | `#0ea5e9` (Sky-500 cyan) | `bg-secondary` / `text-secondary` | Secondary actions, data highlights. |
 | **Danger** (Errors, Deletion) | `#EF4444` (Red 500) | `#F87171` (Red 400) | `text-danger` / `bg-danger` | Form validation errors, critical actions. |
 
 > **Rule: High Contrast is Mandatory**
