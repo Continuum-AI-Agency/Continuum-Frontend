@@ -16,7 +16,10 @@ type BrandTrendsPanelProps = {
   weekStartDate?: string;
   generatedAt?: string;
   status?: string;
+  /** Small stable actions rendered in the header badge row (e.g. icon buttons). */
   actionSlot?: React.ReactNode;
+  /** Expanded content rendered at the top of CardContent — use for generate controls that may expand with alerts/progress. */
+  statusSlot?: React.ReactNode;
   brandId?: string;
   isLoading?: boolean;
   className?: string;
@@ -35,26 +38,42 @@ function formatDate(value?: string) {
 
 function BrandTrendsPanelSkeleton() {
   return (
-    <Card className="h-full min-h-0 border shadow-none">
+    <Card className="flex flex-col h-full min-h-0 border shadow-none">
       <CardHeader className="gap-2 border-b pb-3">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-6 w-64" />
-            <Skeleton className="h-4 w-80 max-w-full" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-1.5">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-5 w-52" />
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Skeleton className="h-9 w-28" />
-            <Skeleton className="h-9 w-40" />
+            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-24 rounded-full" />
           </div>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 py-4">
-        <div className="space-y-2">
-          <Skeleton className="h-10 w-full rounded-lg" />
-          <Skeleton className="h-16 w-full rounded-lg" />
-          <Skeleton className="h-16 w-full rounded-lg" />
-          <Skeleton className="h-16 w-full rounded-lg" />
+      <CardContent className="min-h-0 flex-1 p-3 space-y-3">
+        <div className="flex justify-end gap-2">
+          <Skeleton className="h-8 w-28 rounded-md" />
+          <Skeleton className="h-8 w-36 rounded-md" />
+        </div>
+        <Skeleton className="h-9 w-full rounded-lg" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 flex-1 rounded-md" />
+          <Skeleton className="h-9 w-20 rounded-md" />
+        </div>
+        <div className="rounded-lg border overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={`trends-row-${i}`} className="flex items-start gap-3 px-4 py-3 border-b last:border-0">
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3.5 w-3/5" />
+                <Skeleton className="h-3 w-4/5" />
+              </div>
+              <div className="space-y-1.5 shrink-0">
+                <Skeleton className="h-3.5 w-20" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -70,6 +89,7 @@ export function BrandTrendsPanel({
   generatedAt,
   status,
   actionSlot,
+  statusSlot,
   brandId,
   isLoading = false,
   className,
@@ -77,24 +97,20 @@ export function BrandTrendsPanel({
   const weekLabel = formatDate(weekStartDate);
   const generatedLabel = formatDate(generatedAt);
 
-  // Show skeleton when loading
   if (isLoading) {
     return <BrandTrendsPanelSkeleton />;
   }
 
   return (
-    <Card className={cn("h-full min-h-0 border shadow-none", className)}>
+    <Card className={cn("flex flex-col h-full min-h-0 border shadow-none", className)}>
       <CardHeader className="gap-2 border-b pb-3">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1.5">
             <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
               <LineChart className="h-3.5 w-3.5" />
               Brand Insights
             </p>
             <CardTitle className="text-xl tracking-tight">Current trend signals</CardTitle>
-            <p className="text-muted-foreground max-w-xl text-sm">
-              High-signal trends, events, and audience questions from the latest generation window.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -122,8 +138,14 @@ export function BrandTrendsPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="min-h-0 flex-1 pt-1 pb-1">
-        <div className="h-full min-h-0">
+      <CardContent className="flex min-h-0 flex-1 flex-col p-3 gap-3">
+        {statusSlot ? (
+          <>
+            {statusSlot}
+            <Separator />
+          </>
+        ) : null}
+        <div className="min-h-0 flex-1">
           <BrandTrendsTabs
             trends={trends}
             events={events}
@@ -133,7 +155,6 @@ export function BrandTrendsPanel({
           />
         </div>
       </CardContent>
-      <Separator />
     </Card>
   );
 }

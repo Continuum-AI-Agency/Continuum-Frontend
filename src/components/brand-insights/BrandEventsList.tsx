@@ -42,6 +42,7 @@ export function BrandEventsList({ events, platforms = [] }: BrandEventsListProps
       secondaryHeaderLabel="Date"
       emptyTitle="No dated events yet"
       emptyDescription="No event opportunities were found in this generation window."
+      scrollWithinSection
     />
   );
 }

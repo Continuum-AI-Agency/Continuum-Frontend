@@ -396,6 +396,9 @@ const backendStatusMessageSchema = z
   .object({
     message_id: z.number().int().nonnegative().nullish(),
     messageId: z.number().int().nonnegative().nullish(),
+    event_type: z.string().nullish(),
+    eventType: z.string().nullish(),
+    status: z.string().nullish(),
     stage: z.string().nullish(),
     progress_percent: z.number().nullish(),
     progressPercent: z.number().nullish(),
@@ -878,7 +881,15 @@ export function mapBackendGenerationResponse(payload: unknown) {
     parsed.dependency?.strategicAnalysis ??
     undefined;
 
-  if (parsed.status === "processing" || parsed.status === "running" || parsed.status === "pending") {
+  const innerJobStatus = data?.status;
+  const isRunningJob =
+    parsed.status === "processing" ||
+    parsed.status === "running" ||
+    parsed.status === "pending" ||
+    (parsed.status === "success" &&
+      (innerJobStatus === "running" || innerJobStatus === "pending"));
+
+  if (isRunningJob) {
     return brandInsightsGenerationResponseSchema.parse({
       status: "processing",
       generationId: data?.generation_id ?? data?.generationId ?? data?.task_id ?? data?.taskId ?? undefined,
@@ -1030,6 +1041,8 @@ export function mapBackendStatusMessage(payload: unknown) {
 
   return brandInsightsStatusMessageSchema.parse({
     messageId: parsed.message_id ?? parsed.messageId ?? undefined,
+    eventType: parsed.event_type ?? parsed.eventType ?? undefined,
+    status: parsed.status ?? undefined,
     stage: parsed.stage ?? undefined,
     progressPercent: typeof progress === "number" ? Math.max(0, Math.min(100, progress)) : undefined,
     stageMessage: parsed.stage_message ?? parsed.stageMessage ?? undefined,

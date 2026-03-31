@@ -13,6 +13,7 @@ type ActiveBrandContextValue = {
   activeBrandId: string;
   brandSummaries: BrandSummary[];
   isSwitching: boolean;
+  switchingToBrandId: string | null;
   selectBrand: (brandId: string) => Promise<void>;
   updateBrandName: (brandId: string, name: string) => void;
   user: User | null;
@@ -35,7 +36,8 @@ export function ActiveBrandProvider({
 }: ActiveBrandProviderProps) {
   const [selectedBrandId, setSelectedBrandId] = useState(activeBrandId);
   const [summaries, setSummaries] = useState<BrandSummary[]>(brandSummaries);
-  const [isSwitching, startTransition] = useTransition();
+  const [switchingToBrandId, setSwitchingToBrandId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
   const toast = useToastContext();
   const { user: sessionUser } = useSession();
   const router = useRouter();
@@ -56,7 +58,10 @@ export function ActiveBrandProvider({
     [toast]
   );
 
+  // Cross-tab sync: when auth metadata changes in another tab, update local state.
+  // Skipped while a local switch is in progress to prevent race-condition reversions.
   useEffect(() => {
+    if (switchingToBrandId) return;
     const metadata = user?.user_metadata as { onboarding?: { activeBrandId?: string } } | undefined;
     const metadataId = metadata?.onboarding?.activeBrandId;
     if (
@@ -66,7 +71,7 @@ export function ActiveBrandProvider({
     ) {
       setSelectedBrandId(metadataId);
     }
-  }, [user, selectedBrandId, summaries]);
+  }, [user, selectedBrandId, summaries, switchingToBrandId]);
 
   useEffect(() => {
     setSelectedBrandId(activeBrandId);
@@ -79,47 +84,72 @@ export function ActiveBrandProvider({
     );
   }, []);
 
+  const stateRef = React.useRef({ activeBrandId, selectedBrandId, router, showToast });
+  stateRef.current = { activeBrandId, selectedBrandId, router, showToast };
+
+  // Tracks the most recent switch request ID so a newer click discards an older in-flight switch.
+  const switchRequestRef = React.useRef<string | null>(null);
+
   const selectBrand = React.useCallback(
     async (brandId: string) =>
       new Promise<void>(resolve => {
+        const requestId = `${brandId}-${Date.now()}`;
+        switchRequestRef.current = requestId;
+        setSwitchingToBrandId(brandId);
+
         startTransition(async () => {
-          const previous = selectedBrandId;
-          setSelectedBrandId(brandId); 
+          const { activeBrandId: currentActive, selectedBrandId: previous, router: r, showToast: st } = stateRef.current;
+          setSelectedBrandId(brandId);
           try {
             const switched = await switchBrand({
               targetBrandId: brandId,
-              activeBrandId: activeBrandId,
+              activeBrandId: currentActive,
               switchAction: switchActiveBrandAction,
-              refresh: () => router.refresh(),
+              refresh: () => r.refresh(),
             });
+
+            // A newer switch started — discard this result
+            if (switchRequestRef.current !== requestId) {
+              resolve();
+              return;
+            }
+
             if (!switched) {
               setSelectedBrandId(previous);
             }
           } catch (error) {
-            setSelectedBrandId(previous);
-            showToast({
-              title: "Switch failed",
-              description: error instanceof Error ? error.message : "Unable to switch brand.",
-              variant: "error",
-            });
+            if (switchRequestRef.current === requestId) {
+              setSelectedBrandId(previous);
+              st({
+                title: "Switch failed",
+                description: error instanceof Error ? error.message : "Unable to switch brand.",
+                variant: "error",
+              });
+            }
           } finally {
+            if (switchRequestRef.current === requestId) {
+              setSwitchingToBrandId(null);
+            }
             resolve();
           }
         });
       }),
-    [activeBrandId, selectedBrandId, showToast]
+    []
   );
+
+  const isSwitching = switchingToBrandId !== null;
 
   const value = useMemo<ActiveBrandContextValue>(
     () => ({
       activeBrandId: selectedBrandId,
       brandSummaries: summaries,
       isSwitching,
+      switchingToBrandId,
       selectBrand,
       updateBrandName,
       user,
     }),
-    [isSwitching, selectBrand, selectedBrandId, summaries, updateBrandName, user]
+    [isSwitching, switchingToBrandId, selectBrand, selectedBrandId, summaries, updateBrandName, user]
   );
 
   return <ActiveBrandContext.Provider value={value}>{children}</ActiveBrandContext.Provider>;

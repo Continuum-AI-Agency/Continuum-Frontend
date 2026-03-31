@@ -31,7 +31,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowRight, Globe, Sparkles, Loader2, Wand2, RefreshCw, Edit3, Eye } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 
 const INDUSTRIES = [
   "Advertising",

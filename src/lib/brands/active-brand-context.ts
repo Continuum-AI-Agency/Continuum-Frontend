@@ -133,10 +133,9 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
 
-  if (error || !user) {
+  if (!user) {
     redirect("/login");
   }
 
@@ -150,83 +149,87 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
   );
 
   let brandMap = new Map<string, { name: string; logoPath: string | null; tier: number; completedAt: string | null }>();
-  if (allBrandIds.length > 0) {
-    const { data: brands, error: brandsError } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profiles")
-      .select("id, brand_name, logo_path, tier, completed_at")
-      .in("id", allBrandIds);
-    if (brandsError) {
-      console.error("[activeBrand] brand_profiles lookup failed", brandsError);
-    } else {
-      brandMap = new Map(
-        (brands ?? []).map((brand) => [
-          brand.id,
-          {
-            name: brand.brand_name ?? "Untitled brand",
-            logoPath: brand.logo_path ?? null,
-            tier: brand.tier,
-            completedAt: brand.completed_at ?? null,
-          },
-        ])
-      );
+
+  // Run brand_profiles lookup and get_active_brand_id RPC in parallel — both only need
+  // allBrandIds / permittedIds from the previous step, with no dependency on each other.
+  const [brandsResult, activeBrandResult] = await Promise.all([
+    allBrandIds.length > 0
+      ? supabase
+          .schema("brand_profiles")
+          .from("brand_profiles")
+          .select("id, brand_name, logo_path, tier, completed_at")
+          .in("id", allBrandIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; brand_name: string | null; logo_path: string | null; tier: number; completed_at: string | null }>, error: null }),
+    permittedIds.length > 0
+      ? supabase.schema("brand_profiles").rpc("get_active_brand_id")
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  if (brandsResult.error) {
+    console.error("[activeBrand] brand_profiles lookup failed", brandsResult.error);
+  } else {
+    brandMap = new Map(
+      (brandsResult.data ?? []).map((brand) => [
+        brand.id,
+        {
+          name: brand.brand_name ?? "Untitled brand",
+          logoPath: brand.logo_path ?? null,
+          tier: brand.tier,
+          completedAt: brand.completed_at ?? null,
+        },
+      ])
+    );
+  }
+
+  // Batch logo signing: one request for all brands instead of N individual calls.
+  const pathsToSign = allBrandIds
+    .map((id) => brandMap.get(id)?.logoPath)
+    .filter((p): p is string => Boolean(p));
+
+  const signedUrlMap = new Map<string, string>();
+  if (pathsToSign.length > 0) {
+    try {
+      const { data: signedUrls, error: signError } = await supabase.storage
+        .from("brand-profile-assets")
+        .createSignedUrls(pathsToSign, 604800);
+      if (!signError && signedUrls) {
+        for (const item of signedUrls) {
+          if (item.signedUrl && item.path) signedUrlMap.set(item.path, item.signedUrl);
+        }
+      }
+    } catch (e) {
+      console.error("[activeBrand] Failed to batch sign URLs", e);
     }
   }
 
-  const brandSummaries: BrandSummary[] = (await Promise.all(
-    allBrandIds.map(async (id) => {
-      const brandData = brandMap.get(id);
-      
-      if (!brandData?.completedAt) {
-        return null;
-      }
+  const brandSummaries: BrandSummary[] = allBrandIds.flatMap((id) => {
+    const brandData = brandMap.get(id);
+    if (!brandData?.completedAt) return [];
 
-      const name = brandData.name;
-      const logoPath = brandData.logoPath;
-      let logoUrl = null;
+    const logoPath = brandData.logoPath;
+    const isPending = !permittedIds.includes(id);
 
-      if (logoPath) {
-        try {
-          const { data, error: urlError } = await supabase.storage
-            .from("brand-profile-assets")
-            .createSignedUrl(logoPath, 604800);
-
-          if (!urlError && data?.signedUrl) {
-            logoUrl = data.signedUrl;
-          }
-        } catch (e) {
-          console.error(`[activeBrand] Failed to sign URL for ${logoPath}`, e);
-        }
-      }
-
-      const isPending = !permittedIds.includes(id);
-
-      const summary: BrandSummary = {
-        id,
-        name,
-        completed: true,
-        logoPath,
-        logoUrl,
-        isPending,
-      };
-
-      return summary;
-    })
-  )).filter((b): b is BrandSummary => b !== null);
+    return [{
+      id,
+      name: brandData.name,
+      completed: true,
+      logoPath,
+      logoUrl: logoPath ? signedUrlMap.get(logoPath) ?? null : null,
+      isPending,
+    }];
+  });
 
   if (permittedIds.length === 0) {
-    return { 
-      activeBrandId: null, 
-      brandSummaries, 
-      permissions: perms ?? [], 
+    return {
+      activeBrandId: null,
+      brandSummaries,
+      permissions: perms ?? [],
       activeBrandTier: 0,
       user
     };
   }
 
-  const { data: activeBrandData, error: activeBrandError } = await supabase
-    .schema("brand_profiles")
-    .rpc("get_active_brand_id");
+  const { data: activeBrandData, error: activeBrandError } = activeBrandResult;
 
   if (activeBrandError) {
     console.error("[activeBrand] active brand rpc failed", activeBrandError);

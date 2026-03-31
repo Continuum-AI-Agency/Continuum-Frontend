@@ -26,7 +26,7 @@ import { useRouter } from "next/navigation";
 import { runOnboardingPreview } from "@/lib/onboarding/agentClient";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { createSignedAssetUrl } from "@/lib/creative-assets/storageClient";
-import { SafeMarkdown } from "@/components/ui/SafeMarkdown";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { Textarea } from "@/components/ui/textarea";
 
 type ReportSection = {

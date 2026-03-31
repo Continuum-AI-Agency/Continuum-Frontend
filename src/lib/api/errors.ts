@@ -25,7 +25,21 @@ export async function toApiError(response: Response): Promise<ApiError> {
   } catch {
     // ignore non-JSON errors
   }
-  const message = payload?.message || `${response.status} ${response.statusText}`;
+  let message = payload?.message;
+  if (!message && payload?.error && typeof payload.error === "object") {
+    const err = payload.error as Record<string, unknown>;
+    const fieldErrors = err.fieldErrors as Record<string, string[]> | undefined;
+    if (fieldErrors) {
+      const fields = Object.entries(fieldErrors)
+        .map(([f, msgs]) => `${f}: ${(msgs as string[]).join(", ")}`)
+        .join("; ");
+      if (fields) message = `Validation error — ${fields}`;
+    }
+    if (!message && Array.isArray(err.formErrors) && (err.formErrors as string[]).length > 0) {
+      message = (err.formErrors as string[]).join("; ");
+    }
+  }
+  message = message || `${response.status} ${response.statusText}`;
   const code = payload?.code;
   return new ApiError(message, response.status, code, payload);
 }

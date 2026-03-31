@@ -57,6 +57,7 @@ export function BrandTrendsGrid({ trends, platforms = [], generatedAt, isLoading
       secondaryHeaderLabel="Date"
       emptyTitle="No trends yet"
       emptyDescription="Generate brand insights to populate trend signals for this brand."
+      scrollWithinSection
     />
   );
 }

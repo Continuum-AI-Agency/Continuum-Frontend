@@ -6,7 +6,6 @@ import { RunStrategicAnalysisButton } from "@/components/strategic-analyses/RunS
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { fetchBrandProfileDetails } from "@/lib/brands/profile";
 import { fetchBrandDocuments } from "@/lib/brands/documents";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { UserSettingsPanel } from "@/components/settings/UserSettingsPanel";
 import { createEmptyUserIntegrationSummary, fetchUserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
@@ -20,10 +19,7 @@ import {
 import { BrandDocumentsSection } from "@/components/settings/BrandDocumentsSection";
 
 export default async function SettingsPage() {
-  const supabase = await createSupabaseServerClient();
-  const { data: userData } = await supabase.auth.getUser();
-
-  const { activeBrandId } = await getActiveBrandContext();
+  const { activeBrandId, user } = await getActiveBrandContext();
 
   if (!activeBrandId) {
     return (
@@ -40,23 +36,21 @@ export default async function SettingsPage() {
     brandProfile,
     documents,
     members,
-    invites
+    invites,
+    userIntegrationSummary,
   ] = await Promise.all([
     fetchBrandIntegrationSummary(activeBrandId),
     fetchBrandProfileDetails(activeBrandId),
     fetchBrandDocuments(activeBrandId),
     repo.fetchMembers(activeBrandId),
-    repo.fetchInvites(activeBrandId)
+    repo.fetchInvites(activeBrandId),
+    user ? fetchUserIntegrationSummary(user.id) : Promise.resolve(createEmptyUserIntegrationSummary()),
   ]);
-  
+
   const currentUserRole =
     members.find(
-      member => member.id === userData?.user?.id || member.email === userData?.user?.email
+      member => member.id === user?.id || member.email === user?.email
     )?.role ?? null;
-
-  const userIntegrationSummary = userData?.user
-    ? await fetchUserIntegrationSummary(userData.user.id)
-    : createEmptyUserIntegrationSummary();
 
   return (
     <div className="py-10 w-full max-w-none px-3 sm:px-4 lg:px-6">
@@ -105,9 +99,9 @@ export default async function SettingsPage() {
             <GlassPanel className="p-6">
               <UserSettingsPanel
                 user={{
-                  email: userData?.user?.email ?? "Unknown",
-                  name: userData?.user?.user_metadata?.full_name ?? null,
-                  lastSignIn: userData?.user?.last_sign_in_at ?? null,
+                  email: user?.email ?? "Unknown",
+                  name: user?.user_metadata?.full_name ?? null,
+                  lastSignIn: user?.last_sign_in_at ?? null,
                 }}
                 integrations={userIntegrationSummary}
               />

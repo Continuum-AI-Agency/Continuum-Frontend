@@ -200,6 +200,8 @@ export const brandInsightsStatusResponseSchema = z.object({
 
 export const brandInsightsStatusMessageSchema = z.object({
   messageId: z.number().int().nonnegative().optional(),
+  eventType: z.string().optional(),
+  status: z.string().optional(),
   stage: z.string().optional(),
   progressPercent: z.number().min(0).max(100).optional(),
   stageMessage: z.string().optional(),

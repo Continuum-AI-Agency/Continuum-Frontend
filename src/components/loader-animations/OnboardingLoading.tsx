@@ -1,9 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import SaturnRingsScene from "./SaturnRingsScene";
+import dynamic from "next/dynamic";
+import { motion } from "motion/react";
 import PhraseOverlay from "./PhraseOverlay";
+
+const SaturnRingsScene = dynamic(() => import("./SaturnRingsScene"), {
+  ssr: false,
+});
 import CSSFallback from "./CSSFallback";
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";

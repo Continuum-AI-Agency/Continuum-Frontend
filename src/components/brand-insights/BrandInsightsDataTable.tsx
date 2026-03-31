@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -92,6 +92,9 @@ function RowSkeleton({ density = "default" }: Pick<BrandInsightsDataTableProps, 
   );
 }
 
+type SortKey = "title" | "secondary";
+type SortDir = "asc" | "desc";
+
 export function BrandInsightsDataTable({
   rows,
   emptyTitle,
@@ -105,7 +108,20 @@ export function BrandInsightsDataTable({
 }: BrandInsightsDataTableProps) {
   const [query, setQuery] = useState("");
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const compact = density === "compact";
+
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return key;
+      }
+      setSortDir("asc");
+      return key;
+    });
+  }, []);
 
   const filteredRows = useMemo(() => {
     if (!query.trim()) return rows;
@@ -124,12 +140,22 @@ export function BrandInsightsDataTable({
     );
   }, [rows, query]);
 
+  const sortedRows = useMemo(() => {
+    if (!sortKey) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      const valA = sortKey === "title" ? (a.title ?? "") : (a.secondaryValue ?? "");
+      const valB = sortKey === "title" ? (b.title ?? "") : (b.secondaryValue ?? "");
+      const cmp = valA.localeCompare(valB);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [filteredRows, sortKey, sortDir]);
+
   useEffect(() => {
     if (!expandedRowId) return;
-    if (!filteredRows.some((row) => row.id === expandedRowId)) {
+    if (!sortedRows.some((row) => row.id === expandedRowId)) {
       setExpandedRowId(null);
     }
-  }, [expandedRowId, filteredRows]);
+  }, [expandedRowId, sortedRows]);
 
   const rowPaddingClass = compact ? "py-2" : "py-3";
 
@@ -167,7 +193,7 @@ export function BrandInsightsDataTable({
                 ))}
               </TableBody>
             </Table>
-          ) : filteredRows.length === 0 ? (
+          ) : sortedRows.length === 0 ? (
             <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 px-6 text-center">
               <p className="text-sm font-medium">{emptyTitle}</p>
               <p className="text-muted-foreground max-w-lg text-sm">{emptyDescription}</p>
@@ -176,12 +202,38 @@ export function BrandInsightsDataTable({
             <Table>
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow>
-                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">Content</TableHead>
-                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">{secondaryHeaderLabel}</TableHead>
+                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      onClick={() => handleSort("title")}
+                    >
+                      Content
+                      {sortKey === "title" ? (
+                        sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-40" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                      onClick={() => handleSort("secondary")}
+                    >
+                      {secondaryHeaderLabel}
+                      {sortKey === "secondary" ? (
+                        sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 opacity-40" />
+                      )}
+                    </button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRows.map((row) => {
+                {sortedRows.map((row) => {
                   const isExpanded = expandedRowId === row.id;
                   const normalizedPlatforms = Array.from(
                     new Set(
@@ -220,7 +272,7 @@ export function BrandInsightsDataTable({
                         </TableCell>
                         <TableCell className={cn("px-4 align-top", rowPaddingClass)}>
                           <div className="space-y-1.5">
-                            <p className="text-foreground text-xs font-semibold">{row.secondaryValue ?? "No date"}</p>
+                            <p className="text-foreground text-xs font-semibold">{row.secondaryValue ?? "—"}</p>
                             {normalizedPlatforms.length > 0 ? (
                               <div className="flex flex-wrap items-center gap-1">
                                 {normalizedPlatforms.map((platform) => (
@@ -238,7 +290,7 @@ export function BrandInsightsDataTable({
                         </TableCell>
                       </TableRow>
                       {isExpanded ? (
-                        <TableRow id={`brand-insights-row-details-${row.id}`} className="bg-muted/20 hover:bg-muted/20">
+                        <TableRow id={`brand-insights-row-details-${row.id}`} className="animate-in fade-in-0 duration-150 bg-muted/20 hover:bg-muted/20">
                           <TableCell colSpan={2} className="px-4 pb-4">
                             {row.details?.some((detail) => Boolean(detail.value?.trim())) ? (
                               <dl className="grid gap-2 sm:grid-cols-2">

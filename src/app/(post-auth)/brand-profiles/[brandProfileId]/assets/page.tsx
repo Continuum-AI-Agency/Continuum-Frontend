@@ -3,6 +3,7 @@ import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { mergeSelectableAssetsWithBrandSummary } from "@/lib/integrations/selectableAssets";
 import { BrandAssetsForm } from "./BrandAssetsForm";
 
+// force-dynamic: fetches user-specific integration assets and brand summary (auth-gated)
 export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: { brandProfileId: string } }) {

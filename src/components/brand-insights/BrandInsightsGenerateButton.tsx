@@ -126,6 +126,10 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
               }
               if (message.stage) {
                 setStage(message.stage);
+              }
+              if (message.status) {
+                setStatus(message.status);
+              } else if (message.stage) {
                 setStatus((current) => (isTerminalBrandInsightsStatus(current) ? current : "running"));
               }
             },

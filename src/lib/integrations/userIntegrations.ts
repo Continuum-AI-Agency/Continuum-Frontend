@@ -3,22 +3,6 @@ import "server-only";
 import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/types";
-
-type UserIntegrationRow = Database["brand_profiles"]["Tables"]["user_integrations"]["Row"];
-type IntegrationAccountAssetRow =
-  Database["brand_profiles"]["Tables"]["integration_accounts_assets"]["Row"];
-type IntegrationAccountAssetSummaryRow = Pick<
-  IntegrationAccountAssetRow,
-  | "id"
-  | "integration_id"
-  | "type"
-  | "name"
-  | "status"
-  | "external_account_id"
-  | "created_at"
-  | "updated_at"
->;
 
 export type UserIntegrationAccount = {
   id: string;
@@ -47,18 +31,46 @@ export function createEmptyUserIntegrationSummary(): UserIntegrationSummary {
 export async function fetchUserIntegrationSummary(userId: string): Promise<UserIntegrationSummary> {
   const supabase = await createSupabaseServerClient();
 
+  // Primary path: single RPC call (replaces 2 sequential queries)
+  const { data: rows, error: rpcError } = await supabase
+    .schema("brand_profiles")
+    .rpc("get_user_integration_summary", { p_user_id: userId });
+
+  if (!rpcError && rows) {
+    const summary = createEmptyUserIntegrationSummary();
+    for (const row of rows as Record<string, unknown>[]) {
+      const platformKey = row.platform_key as PlatformKey | null;
+      if (!platformKey || !PLATFORM_KEYS.includes(platformKey)) continue;
+
+      summary[platformKey].accounts.push({
+        id: row.asset_id as string,
+        name: (row.asset_name as string) ?? "Account",
+        status: (row.asset_status as string | null) ?? null,
+        externalAccountId: (row.external_account_id as string | null) ?? null,
+        provider: row.provider as string,
+        platformKey,
+        createdAt: (row.created_at as string | null) ?? null,
+      });
+    }
+    return summary;
+  }
+
+  // Fallback: existing 2-query approach for graceful rollout
+  console.warn(
+    "[fetchUserIntegrationSummary] RPC failed, falling back to sequential queries",
+    rpcError,
+  );
+
   const { data: integrations, error: integrationsError } = await supabase
     .schema("brand_profiles")
     .from("user_integrations")
     .select("id, provider, status, user_id, platform_email, platform_user_id, created_at")
     .eq("user_id", userId);
 
-  if (integrationsError) {
-    console.error("[fetchUserIntegrationSummary] failed to load user_integrations", integrationsError);
-    return createEmptyUserIntegrationSummary();
-  }
-
-  if (!integrations || integrations.length === 0) {
+  if (integrationsError || !integrations || integrations.length === 0) {
+    if (integrationsError) {
+      console.error("[fetchUserIntegrationSummary] fallback query failed", integrationsError);
+    }
     return createEmptyUserIntegrationSummary();
   }
 
@@ -71,33 +83,24 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
     .in("integration_id", integrationIds);
 
   if (assetsError) {
-    console.error("[fetchUserIntegrationSummary] failed to load integration_accounts_assets", assetsError);
+    console.error("[fetchUserIntegrationSummary] fallback assets query failed", assetsError);
     return createEmptyUserIntegrationSummary();
   }
 
-  const assetsByIntegrationId = new Map<string, IntegrationAccountAssetSummaryRow[]>();
+  const assetsByIntegrationId = new Map<string, typeof assets>();
   for (const asset of assets ?? []) {
     const current = assetsByIntegrationId.get(asset.integration_id) ?? [];
-    current.push({
-      id: asset.id,
-      integration_id: asset.integration_id,
-      type: asset.type,
-      name: asset.name,
-      status: asset.status,
-      external_account_id: asset.external_account_id,
-      created_at: asset.created_at,
-      updated_at: asset.updated_at ?? asset.created_at ?? new Date().toISOString(),
-    });
+    current.push(asset);
     assetsByIntegrationId.set(asset.integration_id, current);
   }
 
   const summary = createEmptyUserIntegrationSummary();
 
-  integrations.forEach((integration) => {
+  for (const integration of integrations) {
     const relatedAssets = assetsByIntegrationId.get(integration.id) ?? [];
-    relatedAssets.forEach(asset => {
+    for (const asset of relatedAssets) {
       const platformKey = mapIntegrationTypeToPlatformKey(asset.type ?? undefined);
-      if (!platformKey) return;
+      if (!platformKey) continue;
 
       summary[platformKey].accounts.push({
         id: asset.id,
@@ -108,8 +111,8 @@ export async function fetchUserIntegrationSummary(userId: string): Promise<UserI
         platformKey,
         createdAt: asset.created_at ?? integration.created_at ?? null,
       });
-    });
-  });
+    }
+  }
 
   PLATFORM_KEYS.forEach(key => {
     summary[key].accounts.sort((a, b) => a.name.localeCompare(b.name));

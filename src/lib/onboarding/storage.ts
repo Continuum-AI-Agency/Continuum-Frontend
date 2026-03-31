@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
@@ -52,10 +53,9 @@ async function getAuthContext(): Promise<AuthContext> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
 
-  if (error || !user) {
+  if (!user) {
     redirect("/login");
   }
 
@@ -645,12 +645,14 @@ export async function fetchOnboardingState(
   return context.state;
 }
 
-export async function fetchOnboardingContext(
+// cache() deduplicates within a single server request — multiple pages/components
+// calling ensureOnboardingState() with the same brandId only run once.
+export const fetchOnboardingContext = cache(async (
   brandId?: string
-): Promise<{ metadata: OnboardingMetadata; state: OnboardingState; brandId: string }> {
+): Promise<{ metadata: OnboardingMetadata; state: OnboardingState; brandId: string }> => {
   const context = await loadOnboardingContext(brandId);
   return { metadata: context.metadata, state: context.state, brandId: context.brandId };
-}
+});
 
 async function updateBrandState(
   brandId: string,

@@ -127,7 +127,7 @@ export async function generateBrandInsights(input: unknown) {
     windowEnd: parsed.windowEnd,
   });
   const response = await request({
-    path: "/api/trends/jobs/start",
+    path: "/api/trends/run",
     method: "POST",
     body: {
       brand_id: parsed.brandId,
@@ -135,7 +135,7 @@ export async function generateBrandInsights(input: unknown) {
       window_start: window.windowStart,
       window_end: window.windowEnd,
       platforms: parsed.selectedSocialPlatforms ?? undefined,
-      max_items_per_platform: parsed.maxItemsPerPlatform ?? undefined,
+      items_per_platform: parsed.maxItemsPerPlatform ?? undefined,
     },
     cache: "no-store",
   });
@@ -315,6 +315,13 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
     });
 
     source.addEventListener("ping", () => undefined);
+
+    source.addEventListener("done", () => {
+      closeEventSource();
+      pollOnce()
+        .catch(() => undefined)
+        .finally(stop);
+    });
 
     source.onerror = () => {
       if (stopped) return;
