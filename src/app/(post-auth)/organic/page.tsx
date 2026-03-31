@@ -1,7 +1,8 @@
+import { Suspense } from "react";
 import { Callout, Heading } from "@radix-ui/themes";
 import { LightningBoltIcon } from "@radix-ui/react-icons";
 
-import { OrganicMetricsDashboard } from "@/components/organic/OrganicMetricsDashboard";
+import { OrganicMetricsDashboardLazy } from "@/components/organic/OrganicMetricsDashboardLazy";
 import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
 import { OrganicCalendarWorkspace } from "@/components/organic/primitives/OrganicCalendarWorkspace";
 import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
@@ -15,7 +16,7 @@ import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import type { Trend } from "@/lib/organic/trends";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
-import { fetchBrandIntegrationSummary, type BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { deriveMetricAccountsByPlatform } from "@/lib/organic/metricAccounts";
 import { redirect } from "next/navigation";
 import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
@@ -27,31 +28,52 @@ type OrganicPageProps = {
     | Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function OrganicPage({ searchParams }: OrganicPageProps) {
-  const resolvedSearchParams = (searchParams ? await searchParams : undefined) ?? {};
-  const initialSelectedDraftIdRaw = resolvedSearchParams.draftId;
-  const initialWeekStartRaw = resolvedSearchParams.weekStartId ?? resolvedSearchParams.weekStart;
-  const initialSelectedDraftId =
-    typeof initialSelectedDraftIdRaw === "string" && initialSelectedDraftIdRaw.trim().length > 0
-      ? initialSelectedDraftIdRaw
-      : null;
-  const initialWeekStart =
-    typeof initialWeekStartRaw === "string" && initialWeekStartRaw.trim().length > 0
-      ? initialWeekStartRaw
-      : null;
-  const { activeBrandId } = await getActiveBrandContext();
+function OrganicContentSkeleton() {
+  return (
+    <div className="flex h-full w-full flex-col gap-3">
+      <div className="h-8 w-48 animate-pulse rounded-md bg-gray-200 dark:bg-gray-800" />
+      <div className="min-h-0 flex-1 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-900" />
+    </div>
+  );
+}
+
+async function OrganicContent({
+  initialSelectedDraftId,
+  initialWeekStart,
+  initialView,
+}: {
+  initialSelectedDraftId: string | null;
+  initialWeekStart: string | null;
+  initialView: "week" | "month" | "list";
+}) {
+  const { activeBrandId, brandSummaries } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
   }
-  const { brandId, state: onboarding } = await ensureOnboardingState(activeBrandId);
-  const brandProfileId = brandId;
+  const brandName = brandSummaries?.find(b => b.id === activeBrandId)?.name;
 
+  // Run all three in parallel — ensureOnboardingState, integration summary, and
+  // brand insights only need activeBrandId, with no dependency on each other.
+  const [onboardingResult, integrationSummaryResult, insightsResult] = await Promise.allSettled([
+    ensureOnboardingState(activeBrandId),
+    fetchBrandIntegrationSummary(activeBrandId),
+    fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
+  ]);
+
+  if (onboardingResult.status === "rejected") {
+    throw onboardingResult.reason;
+  }
+  const { brandId, state: onboarding } = onboardingResult.value;
+  const brandProfileId = brandId;
   const mvpPlatformSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
-  let integrationSummary: BrandIntegrationSummary | null = null;
-  try {
-    integrationSummary = await fetchBrandIntegrationSummary(brandProfileId);
-  } catch (error) {
-    console.error("[OrganicPage] Failed to load integration account summary", error);
+
+  const integrationSummary =
+    integrationSummaryResult.status === "fulfilled" ? integrationSummaryResult.value : null;
+  if (integrationSummaryResult.status === "rejected") {
+    console.error(
+      "[OrganicPage] Failed to load integration account summary",
+      integrationSummaryResult.reason
+    );
   }
 
   const platformAccounts = ORGANIC_PLATFORMS.filter(({ key }) =>
@@ -92,10 +114,12 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
   let selectorTrends: Trend[] = [];
   let trendTypes: OrganicTrendType[] = [];
   let insightsError: string | null = null;
-  let insights: Awaited<ReturnType<typeof fetchBrandInsights>> | null = null;
+  const insights =
+    insightsResult.status === "fulfilled"
+      ? insightsResult.value
+      : null;
 
-  try {
-    insights = await fetchBrandInsights(brandProfileId, { revalidateSeconds: 300 });
+  if (insightsResult.status === "fulfilled" && insights) {
     const brandTrends = insights.data.trendsAndEvents.trends;
     selectorTrends = brandTrends.map((trend) => ({
       id: trend.id,
@@ -182,10 +206,10 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
           }]
         : [])
     ];
-
-  } catch (error) {
+  } else if (insightsResult.status === "rejected") {
+    const reason = insightsResult.reason;
     insightsError =
-      error instanceof Error ? error.message : "Unable to load brand insights for this brand.";
+      reason instanceof Error ? reason.message : "Unable to load brand insights for this brand.";
   }
 
   const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
@@ -206,7 +230,7 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
     metricAccountsByPlatform.instagram.length > 0 ? "instagram" : "facebook";
 
   return (
-    <div className="flex h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full flex-col gap-2 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+    <>
       <div className="shrink-0 space-y-2">
         <BrandInsightsAutoGenerate
           brandId={brandProfileId}
@@ -242,12 +266,14 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
               platformAccountIds={platformAccountIds}
               maxTrendSelections={5}
               brandProfileId={brandProfileId}
+              brandName={brandName}
               initialSelectedDraftId={initialSelectedDraftId}
               initialWeekStart={initialWeekStart}
+              initialView={initialView}
             />
           )}
           metricsSlot={(
-            <OrganicMetricsDashboard
+            <OrganicMetricsDashboardLazy
               brandId={brandProfileId}
               accountsByPlatform={metricAccountsByPlatform}
               initialPlatform={initialMetricsPlatform}
@@ -255,6 +281,40 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
           )}
         />
       </div>
+    </>
+  );
+}
+
+const VALID_VIEWS = ["week", "month", "list"] as const
+
+export default async function OrganicPage({ searchParams }: OrganicPageProps) {
+  const resolvedSearchParams = (searchParams ? await searchParams : undefined) ?? {};
+  const initialSelectedDraftIdRaw = resolvedSearchParams.draftId;
+  const initialWeekStartRaw = resolvedSearchParams.weekStartId ?? resolvedSearchParams.weekStart;
+  const initialViewRaw = resolvedSearchParams.view;
+  const initialSelectedDraftId =
+    typeof initialSelectedDraftIdRaw === "string" && initialSelectedDraftIdRaw.trim().length > 0
+      ? initialSelectedDraftIdRaw
+      : null;
+  const initialWeekStart =
+    typeof initialWeekStartRaw === "string" && initialWeekStartRaw.trim().length > 0
+      ? initialWeekStartRaw
+      : null;
+  const initialView: "week" | "month" | "list" =
+    typeof initialViewRaw === "string" &&
+    (VALID_VIEWS as readonly string[]).includes(initialViewRaw)
+      ? (initialViewRaw as "week" | "month" | "list")
+      : "week";
+
+  return (
+    <div className="flex h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full flex-col gap-2 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+      <Suspense fallback={<OrganicContentSkeleton />}>
+        <OrganicContent
+          initialSelectedDraftId={initialSelectedDraftId}
+          initialWeekStart={initialWeekStart}
+          initialView={initialView}
+        />
+      </Suspense>
     </div>
   );
 }

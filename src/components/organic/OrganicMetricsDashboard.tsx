@@ -34,7 +34,12 @@ import {
 } from "recharts";
 
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
-import { OrganicAudienceLocationMapCard } from "@/components/organic/OrganicAudienceLocationMapCard";
+import dynamic from "next/dynamic";
+
+const OrganicAudienceLocationMapCard = dynamic(
+  () => import("@/components/organic/OrganicAudienceLocationMapCard").then((mod) => mod.OrganicAudienceLocationMapCard),
+  { ssr: false }
+);
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 import {
   ChartContainer,

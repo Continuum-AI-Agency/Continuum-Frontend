@@ -83,15 +83,24 @@ describe("useDraftGeneration", () => {
       },
     ],
     selectedTrendIds: ["trend-1"],
-    trends: [],
     platformAccountIds: { instagram: "acc-123" },
     activePlatforms: ["instagram"],
     weekStartId: "2026-01-26",
   };
 
   beforeEach(() => {
-    (useCalendarStore as unknown as ReturnType<typeof mock>).mockReturnValue(mockStore);
     mock.restore();
+    Object.values(mockStore).forEach((value) => {
+      if (typeof value === "function" && "mockClear" in value) {
+        (value as ReturnType<typeof mock>).mockClear();
+      }
+    });
+    mockStore.gridStatus = "idle";
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockClear();
+    (useCalendarStore as unknown as ReturnType<typeof mock>).mockImplementation(
+      (selector?: (state: typeof mockStore) => unknown) =>
+        selector ? selector(mockStore) : mockStore
+    );
   });
 
   afterEach(() => {

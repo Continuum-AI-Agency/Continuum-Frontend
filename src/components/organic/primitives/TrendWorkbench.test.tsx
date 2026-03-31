@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react"
-import { describe, expect, it, mock } from "bun:test"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { ReactNode } from "react"
 
 import type { Trend } from "@/lib/organic/trends"
@@ -77,6 +77,14 @@ const trends: Trend[] = [
 ]
 
 describe("TrendWorkbench", () => {
+  beforeEach(() => {
+    ;(window as unknown as { SyntaxError?: typeof SyntaxError }).SyntaxError = SyntaxError
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
   it("toggles a trend and supports filtering", () => {
     const onToggleTrend = mock()
 

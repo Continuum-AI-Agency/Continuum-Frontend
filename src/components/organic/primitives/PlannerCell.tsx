@@ -11,7 +11,6 @@ import type {
   OrganicPlatformTag,
 } from "./types"
 import { DraggableDraftCard } from "./DraggableDraftCard"
-import { parseTimeLabelToMinutes } from "./calendar-utils"
 import type { PlannerPlatform } from "./planner-platforms"
 
 type PlannerCellProps = {
@@ -19,11 +18,12 @@ type PlannerCellProps = {
   platform: PlannerPlatform
   drafts: OrganicCalendarDraft[]
   selectedDraftId: string | null
-  selectedDraftIds: string[]
+  selectedDraftIdSet: ReadonlySet<string>
   showGhosts: boolean
   compact?: boolean
   isLastColumn: boolean
   isLastRow: boolean
+  isToday?: boolean
   onSelectDraft: (id: string) => void
   onToggleSelection: (id: string) => void
   onRegenerate: (draftId: string) => void
@@ -41,16 +41,17 @@ type PlannerCellProps = {
   }) => void
 }
 
-export function PlannerCell({
+export const PlannerCell = React.memo(function PlannerCell({
   dayId,
   platform,
   drafts,
   selectedDraftId,
-  selectedDraftIds,
+  selectedDraftIdSet,
   showGhosts,
   compact = false,
   isLastColumn,
   isLastRow,
+  isToday = false,
   onSelectDraft,
   onToggleSelection,
   onRegenerate,
@@ -72,15 +73,7 @@ export function PlannerCell({
 
   const ghosts = useCalendarStore((state) => (showGhosts ? state.ghosts[dayId] || 0 : 0))
 
-  const sortedDrafts = React.useMemo(() => {
-    return [...drafts].sort((a, b) => {
-      const minutesA = parseTimeLabelToMinutes(a.timeLabel) ?? 0
-      const minutesB = parseTimeLabelToMinutes(b.timeLabel) ?? 0
-      return minutesA - minutesB
-    })
-  }, [drafts])
-
-  const visibleDrafts = sortedDrafts
+  const visibleDrafts = drafts
 
   const handleNativeDrop = (event: React.DragEvent<HTMLDivElement>) => {
     const rawData = event.dataTransfer.getData("application/json")
@@ -100,13 +93,14 @@ export function PlannerCell({
     <div
       ref={setNodeRef}
       className={cn(
-        "relative align-top",
+        "group relative align-top",
         compact ? "min-h-[50px] p-1" : "min-h-[102px] p-1.5",
         "border-r border-b border-border/50",
         !isLastColumn && "border-r",
         isLastColumn && "border-r-0",
         isLastRow && "border-b-0",
-        isOver && !isComingSoon && "bg-primary/10"
+        isOver && !isComingSoon && "bg-primary/10",
+        isToday && "bg-primary/[0.03]"
       )}
       onDragOver={(event) => {
         if (!isComingSoon && event.dataTransfer.types.includes("application/json")) {
@@ -126,7 +120,7 @@ export function PlannerCell({
             key={draft.id}
             draft={draft}
             isSelected={draft.id === selectedDraftId}
-            isMultiSelected={selectedDraftIds.includes(draft.id)}
+            isMultiSelected={selectedDraftIdSet.has(draft.id)}
             onSelect={onSelectDraft}
             onToggleSelection={onToggleSelection}
             onRegenerate={onRegenerate}
@@ -155,7 +149,7 @@ export function PlannerCell({
             type="button"
             variant="outline"
             size="icon-sm"
-            className={cn("mx-auto", compact ? "h-6 w-6" : "h-7 w-7")}
+            className={cn("mx-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150", compact ? "h-6 w-6" : "h-7 w-7")}
             aria-label={`Add placeholder for ${dayId} ${platform.label}`}
             onClick={() =>
               onCreatePost({ dayId, platformKey: platform.key, status: "placeholder" })
@@ -168,4 +162,4 @@ export function PlannerCell({
       </div>
     </div>
   )
-}
+})

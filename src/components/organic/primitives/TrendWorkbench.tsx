@@ -30,6 +30,14 @@ import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import type { Trend } from "@/lib/organic/trends"
 import { cn } from "@/lib/utils"
 
+const PLATFORM_DISPLAY_NAME: Record<OrganicPlatformKey, string> = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+}
+
 type TrendWorkbenchProps = {
   trends: Trend[]
   selectedTrendIds: string[]
@@ -41,6 +49,14 @@ type TrendWorkbenchProps = {
 type TrendTypeFilter = "all" | "event" | "question" | "trend"
 type TrendMomentumFilter = "all" | Trend["momentum"]
 type TrendScopeFilter = "all" | "selected" | "active-platform"
+type ResolvedTrendType = "event" | "question" | "trend"
+type IndexedTrend = {
+  trend: Trend
+  trendType: ResolvedTrendType
+  normalizedTitle: string
+  normalizedSummary: string
+  normalizedTags: string
+}
 
 export function TrendWorkbench({
   trends,
@@ -59,6 +75,14 @@ export function TrendWorkbench({
   const effectiveQuery = isCommandMode ? "" : normalizedQuery
   const commandNeedle = isCommandMode ? normalizedQuery.replace("/", "").trim() : ""
   const shouldShowCommandList = isCommandMode || effectiveQuery.length > 0
+  const selectedTrendIdSet = React.useMemo(
+    () => new Set(selectedTrendIds),
+    [selectedTrendIds]
+  )
+  const activePlatformSet = React.useMemo(
+    () => new Set(activePlatforms),
+    [activePlatforms]
+  )
 
   const resolveTrendType = React.useCallback(
     (trend: Trend): "event" | "question" | "trend" => {
@@ -87,6 +111,18 @@ export function TrendWorkbench({
     []
   )
 
+  const indexedTrends = React.useMemo<IndexedTrend[]>(
+    () =>
+      trends.map((trend) => ({
+        trend,
+        trendType: resolveTrendType(trend),
+        normalizedTitle: trend.title.toLowerCase(),
+        normalizedSummary: trend.summary.toLowerCase(),
+        normalizedTags: trend.tags.map((tag) => tag.toLowerCase()).join(" "),
+      })),
+    [resolveTrendType, trends]
+  )
+
   const filteredTrends = React.useMemo(() => {
     const typeRank: Record<"event" | "question" | "trend", number> = {
       event: 0,
@@ -94,52 +130,59 @@ export function TrendWorkbench({
       trend: 2,
     }
 
-    return trends
-      .filter((trend) => {
-        const trendType = resolveTrendType(trend)
+    return indexedTrends
+      .map((item) => ({
+        ...item,
+        isSelected: selectedTrendIdSet.has(item.trend.id),
+        platformFit: item.trend.platforms.reduce(
+          (count, platform) => (activePlatformSet.has(platform) ? count + 1 : count),
+          0
+        ),
+      }))
+      .filter((item) => {
+        const { trend, trendType, isSelected } = item
         const matchesType = typeFilter === "all" || trendType === typeFilter
         const matchesMomentum =
           momentumFilter === "all" || trend.momentum === momentumFilter
-        const isSelected = selectedTrendIds.includes(trend.id)
         const matchesScope =
           scopeFilter === "all" ||
           (scopeFilter === "selected" && isSelected) ||
-          (scopeFilter === "active-platform" &&
-            trend.platforms.some((platform) => activePlatforms.includes(platform)))
+          (scopeFilter === "active-platform" && item.platformFit > 0)
 
         if (!matchesType || !matchesMomentum || !matchesScope) {
           return false
         }
 
         if (!effectiveQuery) return true
-        const normalizedTags = trend.tags.map((tag) => tag.toLowerCase()).join(" ")
         return (
-          trend.title.toLowerCase().includes(effectiveQuery) ||
-          trend.summary.toLowerCase().includes(effectiveQuery) ||
-          normalizedTags.includes(effectiveQuery)
+          item.normalizedTitle.includes(effectiveQuery) ||
+          item.normalizedSummary.includes(effectiveQuery) ||
+          item.normalizedTags.includes(effectiveQuery)
         )
       })
       .sort((a, b) => {
-        const aType = resolveTrendType(a)
-        const bType = resolveTrendType(b)
-        if (aType !== bType) return typeRank[aType] - typeRank[bType]
-
-        const aFit = a.platforms.filter((platform) => activePlatforms.includes(platform)).length
-        const bFit = b.platforms.filter((platform) => activePlatforms.includes(platform)).length
-        if (aFit !== bFit) return bFit - aFit
-
-        return a.title.localeCompare(b.title)
+        if (a.trendType !== b.trendType) return typeRank[a.trendType] - typeRank[b.trendType]
+        if (a.platformFit !== b.platformFit) return b.platformFit - a.platformFit
+        return a.trend.title.localeCompare(b.trend.title)
       })
+      .map((item) => item.trend)
   }, [
-    activePlatforms,
+    activePlatformSet,
     effectiveQuery,
+    indexedTrends,
     momentumFilter,
-    resolveTrendType,
     scopeFilter,
-    selectedTrendIds,
-    trends,
+    selectedTrendIdSet,
     typeFilter,
   ])
+
+  const trendTypeById = React.useMemo(() => {
+    const map = new Map<string, ResolvedTrendType>()
+    indexedTrends.forEach((item) => {
+      map.set(item.trend.id, item.trendType)
+    })
+    return map
+  }, [indexedTrends])
 
   const commandSuggestions = React.useMemo(() => {
     const base = isCommandMode ? trends : filteredTrends
@@ -246,12 +289,12 @@ export function TrendWorkbench({
             Trends Workbench
           </p>
           <p className="text-[11px] text-muted-foreground">
-            Context: {activePlatformLabel} • {selectedLabel} selected • type `{typeFilter}` • signal `{momentumFilter}` • type `/` for presets
+            Context: {activePlatformLabel} • type `{typeFilter}` • signal `{momentumFilter}` • type `/` for presets
           </p>
         </div>
 
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-          {selectedLabel} selected
+        <Badge variant="outline" className="shrink-0 text-[10px] uppercase tracking-wide">
+          {selectedLabel}
         </Badge>
       </div>
 
@@ -280,7 +323,7 @@ export function TrendWorkbench({
                   <>
                     <CommandGroup heading="Contextual picks">
                       {commandSuggestions.map((trend) => {
-                        const isSelected = selectedTrendIds.includes(trend.id)
+                        const isSelected = selectedTrendIdSet.has(trend.id)
                         return (
                           <CommandItem
                             key={`command-trend-${trend.id}`}
@@ -309,7 +352,7 @@ export function TrendWorkbench({
         </div>
 
         <ScrollArea className="min-h-0 flex-1 rounded-md bg-background/45 ring-1 ring-border/35">
-          <div className="p-2">
+          <div className="px-2 pb-2">
             {filteredTrends.length === 0 ? (
               <div className="rounded-md border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
                 No trends match this search.
@@ -318,19 +361,19 @@ export function TrendWorkbench({
               <Table className="text-xs">
                 <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
                     <TableRow>
-                      <TableHead className="w-8">Pick</TableHead>
+                      <TableHead className="w-8"><span className="sr-only">Selected</span></TableHead>
                       <TableHead className="w-24">Type</TableHead>
                       <TableHead>Trend</TableHead>
                       <TableHead className="w-28">Momentum</TableHead>
                       <TableHead className="w-44">Platforms</TableHead>
                       <TableHead className="w-32">Tags</TableHead>
-                      <TableHead className="w-12 text-right">Drag</TableHead>
+                      <TableHead className="w-12 text-right"><span className="sr-only">Drag</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                   {filteredTrends.map((trend) => {
-                    const isSelected = selectedTrendIds.includes(trend.id)
-                    const trendType = resolveTrendType(trend)
+                    const isSelected = selectedTrendIdSet.has(trend.id)
+                    const trendType = trendTypeById.get(trend.id) ?? "trend"
 
                     const handleDragStart = (event: React.DragEvent<HTMLTableRowElement>) => {
                       event.dataTransfer.setData(
@@ -391,9 +434,9 @@ export function TrendWorkbench({
                             {trend.platforms.map((platform) => (
                               <span
                                 key={`${trend.id}:${platform}`}
-                                className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground"
+                                className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium capitalize tracking-wide text-muted-foreground"
                               >
-                                {platform}
+                                {PLATFORM_DISPLAY_NAME[platform] ?? platform}
                               </span>
                             ))}
                           </div>

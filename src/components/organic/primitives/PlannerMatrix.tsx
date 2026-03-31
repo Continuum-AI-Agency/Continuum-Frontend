@@ -1,15 +1,20 @@
 import * as React from "react"
+import { AnimatePresence, motion } from "motion/react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
+import { useCalendarStore } from "@/lib/organic/store"
 import type {
   OrganicCalendarDay,
+  OrganicCalendarDraft,
   OrganicSeedDragPayload,
   OrganicPlatformTag,
 } from "./types"
 import type { PlannerPlatform } from "./planner-platforms"
 import { PlannerCell } from "./PlannerCell"
+import { parseTimeLabelToMinutes } from "./calendar-utils"
 
 type PlannerMatrixProps = {
   days: OrganicCalendarDay[]
@@ -34,6 +39,8 @@ type PlannerMatrixProps = {
   }) => void
 }
 
+const EMPTY_DRAFTS: OrganicCalendarDraft[] = []
+
 function DayHeader({
   label,
   dateLabel,
@@ -46,7 +53,10 @@ function DayHeader({
   const dayNumber = dateLabel.split(" ").at(-1) ?? dateLabel
 
   return (
-    <div className="sticky top-0 z-20 border-r border-b border-border/50 bg-background/95 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0">
+    <div className={cn(
+      "sticky top-0 z-20 border-r border-b border-border/50 px-1.5 py-1.5 text-center backdrop-blur last:border-r-0",
+      isToday ? "bg-primary/[0.05]" : "bg-background/95"
+    )}>
       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
@@ -74,8 +84,82 @@ export function PlannerMatrix({
   onNativeDrop,
   onCreatePost,
 }: PlannerMatrixProps) {
+  const gridStatus = useCalendarStore((state) => state.gridStatus)
+  const gridProgress = useCalendarStore((state) => state.gridProgress)
+
+  const selectedDraftIdSet = React.useMemo(
+    () => new Set(selectedDraftIds),
+    [selectedDraftIds]
+  )
+
+  const draftsByCell = React.useMemo(() => {
+    const map = new Map<string, OrganicCalendarDraft[]>()
+
+    days.forEach((day) => {
+      const byPlatform: Record<OrganicPlatformTag, OrganicCalendarDraft[]> = {
+        youtube: [],
+        instagram: [],
+        facebook: [],
+        tiktok: [],
+        linkedin: [],
+      }
+
+      day.slots.forEach((draft) => {
+        if (draft.platforms.length === 0) {
+          byPlatform.instagram.push(draft)
+          return
+        }
+
+        const platforms = new Set(
+          draft.platforms.filter(
+            (platform): platform is OrganicPlatformTag =>
+              platform === "instagram" || platform === "linkedin"
+          )
+        )
+
+        platforms.forEach((platform) => {
+          byPlatform[platform].push(draft)
+        })
+      })
+
+      const schedulablePlatforms: OrganicPlatformTag[] = ["instagram", "linkedin"]
+      schedulablePlatforms.forEach((platform) => {
+        const sorted = [...byPlatform[platform]].sort((a, b) => {
+          const minutesA = parseTimeLabelToMinutes(a.timeLabel) ?? 0
+          const minutesB = parseTimeLabelToMinutes(b.timeLabel) ?? 0
+          return minutesA - minutesB
+        })
+        map.set(`${day.id}::${platform}`, sorted)
+      })
+    })
+
+    return map
+  }, [days])
+
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-lg ring-1 ring-border/45 bg-background/90">
+    <div className="relative min-h-0 flex-1 overflow-auto rounded-lg ring-1 ring-border/45 bg-background/90">
+      <AnimatePresence>
+        {gridStatus === "running" ? (
+          <motion.div
+            key="grid-progress"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="sticky top-0 z-30 border-b border-primary/20 bg-background/95 px-4 py-2 backdrop-blur"
+          >
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11px] font-semibold text-primary/80 uppercase tracking-wide">
+                {gridProgress.stage ?? "Generating content"}
+              </p>
+              <span className="text-[11px] text-muted-foreground">{gridProgress.percent}%</span>
+            </div>
+            <Progress value={gridProgress.percent} className="h-1" />
+            {gridProgress.message ? (
+              <p className="mt-1 text-[10px] text-muted-foreground">{gridProgress.message}</p>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
       <div className="min-w-[880px]">
         <div className="grid grid-cols-[96px_repeat(7,minmax(110px,1fr))]">
           <div className="sticky top-0 left-0 z-30 flex items-center justify-center border-r border-b border-border/50 bg-background/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur">
@@ -136,9 +220,10 @@ export function PlannerMatrix({
                       platform={platform}
                       drafts={[]}
                       selectedDraftId={selectedDraftId}
-                      selectedDraftIds={selectedDraftIds}
+                      selectedDraftIdSet={selectedDraftIdSet}
                       showGhosts={false}
                       compact
+                      isToday={day.id === todayId}
                       isLastColumn={dayIndex === days.length - 1}
                       isLastRow={platformIndex === platforms.length - 1}
                       onSelectDraft={onSelectDraft}
@@ -152,10 +237,8 @@ export function PlannerMatrix({
                 }
 
                 const schedulablePlatformKey = platform.key as OrganicPlatformTag
-                const cellDrafts = day.slots.filter((draft) => {
-                  if (draft.platforms.length === 0) return schedulablePlatformKey === "instagram"
-                  return draft.platforms.includes(schedulablePlatformKey)
-                })
+                const cellDrafts =
+                  draftsByCell.get(`${day.id}::${schedulablePlatformKey}`) ?? EMPTY_DRAFTS
 
                 return (
                   <PlannerCell
@@ -164,8 +247,9 @@ export function PlannerMatrix({
                     platform={platform}
                     drafts={cellDrafts}
                     selectedDraftId={selectedDraftId}
-                    selectedDraftIds={selectedDraftIds}
+                    selectedDraftIdSet={selectedDraftIdSet}
                     showGhosts={platformIndex === 0}
+                    isToday={day.id === todayId}
                     isLastColumn={dayIndex === days.length - 1}
                     isLastRow={platformIndex === platforms.length - 1}
                     onSelectDraft={onSelectDraft}

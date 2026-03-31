@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { TrashIcon, MixerHorizontalIcon, Cross2Icon } from "@radix-ui/react-icons";
+import { TrashIcon, MixerHorizontalIcon, Cross2Icon, CheckIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +10,7 @@ interface BulkActionToolbarProps {
   onClear: () => void;
   onDelete: () => void;
   onMove: () => void;
+  onApprove?: () => void;
   className?: string;
 }
 
@@ -18,6 +19,7 @@ export function BulkActionToolbar({
   onClear,
   onDelete,
   onMove,
+  onApprove,
   className,
 }: BulkActionToolbarProps) {
   if (selectedCount === 0) return null;
@@ -45,6 +47,17 @@ export function BulkActionToolbar({
         </div>
 
         <div className="flex items-center gap-2">
+          {onApprove ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onApprove}
+              className="h-8 gap-2 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600"
+            >
+              <CheckIcon className="w-4 h-4" />
+              Approve
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"

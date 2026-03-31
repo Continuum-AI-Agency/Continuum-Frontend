@@ -88,9 +88,10 @@ interface CalendarState {
   gridJobId: string | null;
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
-  viewMode: "day" | "week" | "month";
+  viewMode: "week" | "month" | "list";
   eventHistory: EventHistory;
-  
+  backlogDrafts: OrganicCalendarDraft[];
+
   setDays: (days: OrganicCalendarDay[]) => void;
   updateDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
   moveDraft: (draftId: string, targetDayId: string) => void;
@@ -123,7 +124,44 @@ interface CalendarState {
   addScheduledEvent: (date: string, event: Omit<ScheduledEvent, "id">) => void;
   updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
   moveEventToDay: (eventId: string, targetDate: string) => void;
-  setViewMode: (mode: "day" | "week" | "month") => void;
+  setViewMode: (mode: "week" | "month" | "list") => void;
+
+  addBacklogDraft: (draft: OrganicCalendarDraft) => void;
+  updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
+  deleteBacklogDraft: (draftId: string) => void;
+  promoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
+}
+
+type PersistedCalendarState = Pick<
+  CalendarState,
+  "selectedTrendIds" | "persistedWeekStartId" | "viewMode"
+>;
+
+const CALENDAR_STORE_VERSION = 3;
+
+function sanitizePersistedCalendarState(
+  state: Partial<CalendarState> | undefined
+): PersistedCalendarState {
+  const selectedTrendIds = Array.isArray(state?.selectedTrendIds)
+    ? state.selectedTrendIds.filter((id): id is string => typeof id === "string").slice(0, 5)
+    : [];
+
+  const persistedWeekStartId =
+    typeof state?.persistedWeekStartId === "string" &&
+    state.persistedWeekStartId.trim().length > 0
+      ? state.persistedWeekStartId
+      : null;
+
+  const viewMode: "week" | "month" | "list" =
+    state?.viewMode === "week" || state?.viewMode === "month" || state?.viewMode === "list"
+      ? state.viewMode
+      : "week";
+
+  return {
+    selectedTrendIds,
+    persistedWeekStartId,
+    viewMode,
+  };
 }
 
 export const useCalendarStore = create<CalendarState>()(
@@ -142,6 +180,7 @@ export const useCalendarStore = create<CalendarState>()(
       scheduledEvents: {},
       viewMode: "week",
       eventHistory: [],
+      backlogDrafts: [],
 
       setDays: (days) => set({ days }),
       
@@ -269,7 +308,7 @@ export const useCalendarStore = create<CalendarState>()(
       setGridJobId: (jobId) => set({ gridJobId: jobId }),
       addEvent: (event) =>
         set((state) => ({
-          eventHistory: [...state.eventHistory, event].slice(-50),
+          eventHistory: [...state.eventHistory, event].slice(-20),
         })),
       clearEventHistory: () => set({ eventHistory: [] }),
       
@@ -343,18 +382,44 @@ export const useCalendarStore = create<CalendarState>()(
         }),
 
       setViewMode: (mode) => set({ viewMode: mode }),
+
+      addBacklogDraft: (draft) =>
+        set((state) => ({
+          backlogDrafts: [...state.backlogDrafts.filter((d) => d.id !== draft.id), draft],
+        })),
+
+      updateBacklogDraft: (draftId, updater) =>
+        set((state) => ({
+          backlogDrafts: state.backlogDrafts.map((d) => (d.id === draftId ? updater(d) : d)),
+        })),
+
+      deleteBacklogDraft: (draftId) =>
+        set((state) => ({
+          backlogDrafts: state.backlogDrafts.filter((d) => d.id !== draftId),
+        })),
+
+      promoteBacklogDraft: (draftId, dayId, timeLabel) =>
+        set((state) => {
+          const draft = state.backlogDrafts.find((d) => d.id === draftId);
+          if (!draft) return {};
+          const promoted: OrganicCalendarDraft = { ...draft, timeLabel, status: "draft" };
+          const day = state.days.find((d) => d.id === dayId);
+          const dateLabel = day ? `${day.label}, ${day.dateLabel}` : draft.dateLabel;
+          return {
+            backlogDrafts: state.backlogDrafts.filter((d) => d.id !== draftId),
+            days: state.days.map((d) => {
+              if (d.id !== dayId) return d;
+              return { ...d, slots: [...d.slots, { ...promoted, dateLabel }] };
+            }),
+          };
+        }),
     }),
     {
       name: "organic-calendar-storage",
-      partialize: (state) => ({ 
-        selectedTrendIds: state.selectedTrendIds,
-        selectedDraftId: state.selectedDraftId,
-        selectedDraftIds: state.selectedDraftIds,
-        days: state.days,
-        persistedWeekStartId: state.persistedWeekStartId,
-        scheduledEvents: state.scheduledEvents,
-        viewMode: state.viewMode,
-      }),
+      version: CALENDAR_STORE_VERSION,
+      partialize: (state) => sanitizePersistedCalendarState(state),
+      migrate: (persistedState) =>
+        sanitizePersistedCalendarState(persistedState as Partial<CalendarState>),
     }
   )
 );

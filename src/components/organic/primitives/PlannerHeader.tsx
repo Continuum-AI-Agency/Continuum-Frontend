@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-type PlannerViewMode = "day" | "week" | "month"
+type PlannerViewMode = "day" | "week"
 
 type PlannerHeaderProps = {
   title: string
@@ -18,7 +18,6 @@ type PlannerHeaderProps = {
 const VIEW_MODE_OPTIONS: Array<{ value: PlannerViewMode; label: string }> = [
   { value: "day", label: "Day" },
   { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
 ]
 
 export function PlannerHeader({

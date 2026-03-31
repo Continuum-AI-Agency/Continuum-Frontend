@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 import { TimeGridCanvas } from "./TimeGridCanvas"
 import type { OrganicCalendarDay } from "./types"
+import { buildPlannerPlatforms } from "./planner-platforms"
 
 const store = {
   ghosts: {},
@@ -80,9 +81,14 @@ function buildWeekDays(): OrganicCalendarDay[] {
   ]
 }
 
+function buildPlannerTestPlatforms(days: OrganicCalendarDay[]) {
+  return buildPlannerPlatforms(["instagram", "linkedin"], days)
+}
+
 describe("TimeGridCanvas", () => {
   beforeEach(() => {
     mock.restore()
+    ;(window as unknown as { SyntaxError?: typeof SyntaxError }).SyntaxError = SyntaxError
   })
 
   afterEach(() => {
@@ -95,9 +101,9 @@ describe("TimeGridCanvas", () => {
     render(
       <TimeGridCanvas
         days={buildWeekDays()}
+        platforms={buildPlannerTestPlatforms(buildWeekDays())}
         selectedDraftId={null}
         selectedDraftIds={[]}
-        activePlatforms={["instagram", "linkedin"]}
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"
@@ -111,7 +117,7 @@ describe("TimeGridCanvas", () => {
       />
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /add placeholder/i }))
+    fireEvent.click(screen.getByRole("button", { name: "Add placeholder" }))
 
     expect(onCreatePost).toHaveBeenCalledWith({ status: "placeholder" })
   })
@@ -122,9 +128,9 @@ describe("TimeGridCanvas", () => {
     render(
       <TimeGridCanvas
         days={buildWeekDays()}
+        platforms={buildPlannerTestPlatforms(buildWeekDays())}
         selectedDraftId={null}
         selectedDraftIds={[]}
-        activePlatforms={["instagram", "linkedin"]}
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"
@@ -155,9 +161,9 @@ describe("TimeGridCanvas", () => {
     render(
       <TimeGridCanvas
         days={buildWeekDays()}
+        platforms={buildPlannerTestPlatforms(buildWeekDays())}
         selectedDraftId={null}
         selectedDraftIds={[]}
-        activePlatforms={["instagram", "linkedin"]}
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"
@@ -202,9 +208,9 @@ describe("TimeGridCanvas", () => {
     render(
       <TimeGridCanvas
         days={days}
+        platforms={buildPlannerTestPlatforms(days)}
         selectedDraftId={null}
         selectedDraftIds={[]}
-        activePlatforms={["instagram", "linkedin"]}
         rangeTitle="February 23 – March 1, 2026"
         rangeSubtitle="Week 9"
         viewMode="week"

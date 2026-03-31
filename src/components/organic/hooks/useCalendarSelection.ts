@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicCalendarDay } from "../primitives/types";
 
@@ -10,7 +11,29 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
     toggleDraftSelection,
     clearDraftSelection,
     bulkDeleteDrafts,
-  } = useCalendarStore();
+  } = useCalendarStore(
+    useShallow((state) => ({
+      selectedDraftId: state.selectedDraftId,
+      setSelectedDraftId: state.setSelectedDraftId,
+      selectedDraftIds: state.selectedDraftIds,
+      toggleDraftSelection: state.toggleDraftSelection,
+      clearDraftSelection: state.clearDraftSelection,
+      bulkDeleteDrafts: state.bulkDeleteDrafts,
+    }))
+  );
+
+  const orderedDraftIds = React.useMemo(
+    () => days.flatMap((day) => day.slots.map((slot) => slot.id)),
+    [days]
+  );
+
+  const orderedDraftIndexById = React.useMemo(() => {
+    const indexById = new Map<string, number>();
+    orderedDraftIds.forEach((id, index) => {
+      indexById.set(id, index);
+    });
+    return indexById;
+  }, [orderedDraftIds]);
 
   const handleSelect = React.useCallback(
     (id: string, isMulti: boolean = false) => {
@@ -48,26 +71,18 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
       if (!selectedDraftId && selectedDraftIds.length === 0) return;
 
       const currentId = selectedDraftId || selectedDraftIds[selectedDraftIds.length - 1];
-      let flatSlots: string[] = [];
-      let currentIndex = -1;
-
-      days.forEach((day) => {
-        day.slots.forEach((slot) => {
-          flatSlots.push(slot.id);
-          if (slot.id === currentId) currentIndex = flatSlots.length - 1;
-        });
-      });
+      const currentIndex = orderedDraftIndexById.get(currentId) ?? -1;
 
       if (currentIndex === -1) return;
 
       if (e.key === "ArrowDown") {
-        const nextId = flatSlots[currentIndex + 1];
+        const nextId = orderedDraftIds[currentIndex + 1];
         if (nextId) {
           handleSelect(nextId, e.shiftKey);
           e.preventDefault();
         }
       } else if (e.key === "ArrowUp") {
-        const prevId = flatSlots[currentIndex - 1];
+        const prevId = orderedDraftIds[currentIndex - 1];
         if (prevId) {
           handleSelect(prevId, e.shiftKey);
           e.preventDefault();
@@ -76,7 +91,15 @@ export function useCalendarSelection(days: OrganicCalendarDay[] = []) {
         clearAll();
       }
     },
-    [days, selectedDraftId, selectedDraftIds, handleSelect, clearAll, handleDelete]
+    [
+      clearAll,
+      handleDelete,
+      handleSelect,
+      orderedDraftIds,
+      orderedDraftIndexById,
+      selectedDraftId,
+      selectedDraftIds,
+    ]
   );
 
   return {

@@ -5,26 +5,22 @@ import * as React from "react"
 import { formatDayId } from "./calendar-utils"
 import { PlannerHeader } from "./PlannerHeader"
 import { PlannerMatrix } from "./PlannerMatrix"
-import {
-  buildPlannerPlatforms,
-  type PlannerPlatformKey,
-} from "./planner-platforms"
+import type { PlannerPlatform, PlannerPlatformKey } from "./planner-platforms"
 import type {
   OrganicCalendarDay,
   OrganicPlatformTag,
   OrganicSeedDragPayload,
 } from "./types"
-import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 
 type TimeGridCanvasProps = {
   days: OrganicCalendarDay[]
+  platforms: PlannerPlatform[]
   selectedDraftId: string | null
   selectedDraftIds: string[]
-  activePlatforms: OrganicPlatformKey[]
   rangeTitle: string
   rangeSubtitle?: string
-  viewMode: "day" | "week" | "month"
-  onViewModeChange: (mode: "day" | "week" | "month") => void
+  viewMode: "day" | "week"
+  onViewModeChange: (mode: "day" | "week") => void
   onPreviousWeek: () => void
   onNextWeek: () => void
   onCreatePost: (options?: {
@@ -46,9 +42,9 @@ type TimeGridCanvasProps = {
 
 export function TimeGridCanvas({
   days,
+  platforms,
   selectedDraftId,
   selectedDraftIds,
-  activePlatforms,
   rangeTitle,
   rangeSubtitle,
   viewMode,
@@ -62,11 +58,6 @@ export function TimeGridCanvas({
   onClearFailure,
   onNativeDrop,
 }: TimeGridCanvasProps) {
-  const plannerPlatforms = React.useMemo(
-    () => buildPlannerPlatforms(activePlatforms, days),
-    [activePlatforms, days]
-  )
-
   const todayId = React.useMemo(() => formatDayId(new Date()), [])
 
   return (
@@ -87,7 +78,7 @@ export function TimeGridCanvas({
 
       <PlannerMatrix
         days={days}
-        platforms={plannerPlatforms}
+        platforms={platforms}
         selectedDraftId={selectedDraftId}
         selectedDraftIds={selectedDraftIds}
         todayId={todayId}

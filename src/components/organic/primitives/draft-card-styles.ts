@@ -37,6 +37,7 @@ export const statusBadgeVariants = cva(
         streaming: "border-amber-500/30 bg-amber-500/15 text-amber-900 dark:text-amber-100 animate-pulse",
         failed: "border-destructive/30 bg-destructive/15 text-destructive",
         placeholder: "border-brand-primary/30 bg-brand-primary/10 text-brand-primary",
+        published: "border-emerald-600/30 bg-emerald-600/15 text-emerald-700 dark:text-emerald-400",
       },
     },
     defaultVariants: {
@@ -75,20 +76,7 @@ export const cardVariants = cva(
         none: "",
       }
     },
-    compoundVariants: [
-      {
-        selected: false,
-        multiSelected: false,
-        platformHover: "instagram",
-        class: "hover:shadow-fuchsia-500/5",
-      },
-      {
-        selected: false,
-        multiSelected: false,
-        platformHover: "linkedin",
-        class: "hover:shadow-sky-500/5",
-      }
-    ],
+    compoundVariants: [],
     defaultVariants: {
       selected: false,
       multiSelected: false,

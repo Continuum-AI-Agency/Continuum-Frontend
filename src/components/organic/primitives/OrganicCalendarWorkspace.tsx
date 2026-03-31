@@ -45,10 +45,12 @@ type OrganicCalendarWorkspaceProps = {
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>
   maxTrendSelections?: number
   brandProfileId?: string
+  brandName?: string
   userId?: string
   instagramAccountId?: string
   initialWeekStart?: string | null
   initialSelectedDraftId?: string | null
+  initialView?: "week" | "month" | "list"
 }
 
 export function OrganicCalendarWorkspace({
@@ -58,10 +60,12 @@ export function OrganicCalendarWorkspace({
   platformAccountIds,
   maxTrendSelections,
   brandProfileId,
+  brandName,
   userId,
   instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
+  initialView,
 }: OrganicCalendarWorkspaceProps) {
   const resolvedWeekStart =
     initialWeekStart && !Number.isNaN(new Date(initialWeekStart).getTime())
@@ -82,8 +86,10 @@ export function OrganicCalendarWorkspace({
       platformAccountIds={platformAccountIds}
       maxTrendSelections={maxTrendSelections}
       brandProfileId={brandProfileId}
+      brandName={brandName}
       userId={userId}
       instagramAccountId={instagramAccountId}
+      initialView={initialView}
     />
   )
 }

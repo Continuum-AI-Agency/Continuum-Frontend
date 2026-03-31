@@ -1,12 +1,21 @@
 "use client"
 
 import * as React from "react"
-import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type ColumnFiltersState, type SortingState } from "@tanstack/react-table"
-import * as Accordion from "@radix-ui/react-accordion"
-import { DragHandleHorizontalIcon, ChevronDownIcon } from "@radix-ui/react-icons"
-import { ArrowUpDown, MoreHorizontal, Filter } from "lucide-react"
-import { motion } from "framer-motion"
+import { Fragment } from "react"
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type SortingState,
+} from "@tanstack/react-table"
+import { DragHandleHorizontalIcon } from "@radix-ui/react-icons"
+import { ArrowUpDown, ChevronDown, Filter, MoreHorizontal } from "lucide-react"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -18,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import type { Trend } from "@/lib/organic/trends"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
@@ -40,6 +49,16 @@ const momentumStyles: Record<Trend["momentum"], string> = {
   cooling: "bg-amber-500/10 text-amber-500 border-amber-500/20",
 }
 
+const PLATFORM_SHORT: Record<string, string> = {
+  instagram: "IG",
+  linkedin: "LI",
+  facebook: "FB",
+  tiktok: "TK",
+  youtube: "YT",
+  twitter: "TW",
+  x: "X",
+}
+
 export function TrendsDataTable({
   data,
   selectedTrendIds,
@@ -53,60 +72,54 @@ export function TrendsDataTable({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [momentumFilter, setMomentumFilter] = React.useState<string>("all")
-  const [columnSizing, setColumnSizing] = React.useState({})
   const [expandedId, setExpandedId] = React.useState<string | undefined>(undefined)
 
   const filteredData = React.useMemo(() => {
-    if (momentumFilter === "all") return data;
-    return data.filter(item => item.momentum === momentumFilter);
-  }, [data, momentumFilter]);
+    if (momentumFilter === "all") return data
+    return data.filter((item) => item.momentum === momentumFilter)
+  }, [data, momentumFilter])
 
   const columns = React.useMemo<ColumnDef<Trend>[]>(() => {
-    const baseColumns: ColumnDef<Trend>[] = [];
+    const cols: ColumnDef<Trend>[] = []
 
     if (allowDrag) {
-      baseColumns.push({
+      cols.push({
         id: "drag",
-        header: "",
+        header: () => <span className="sr-only">Drag</span>,
         size: 40,
-        minSize: 40,
-        maxSize: 40,
         cell: ({ row }) => {
-          const trend = row.original;
+          const trend = row.original
           const handleDragStart = (e: React.DragEvent) => {
             const seedType = trend.tags.includes("question")
               ? "question"
               : trend.tags.includes("event")
-              ? "event"
-              : "trend";
-            e.dataTransfer.setData("application/json", JSON.stringify({ 
-              type: seedType, 
-              trendId: trend.id,
-              title: trend.title 
-            }));
-            e.dataTransfer.effectAllowed = "copy";
-          };
-
+                ? "event"
+                : "trend"
+            e.dataTransfer.setData(
+              "application/json",
+              JSON.stringify({ type: seedType, trendId: trend.id, title: trend.title })
+            )
+            e.dataTransfer.effectAllowed = "copy"
+          }
           return (
-            <div 
-              draggable 
+            <div
+              draggable
               onDragStart={handleDragStart}
-              className="cursor-grab active:cursor-grabbing p-1 hover:bg-surface rounded transition-colors"
+              className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
-              <DragHandleHorizontalIcon className="text-secondary opacity-50" />
+              <DragHandleHorizontalIcon className="text-muted-foreground opacity-50" />
             </div>
           )
         },
-      });
+      })
     }
 
     if (allowSelect) {
-      baseColumns.push({
+      cols.push({
         id: "select",
-        header: "Sel",
+        header: () => <span className="sr-only">Select</span>,
         size: 40,
-        minSize: 40,
         cell: ({ row }) => (
           <div onClick={(e) => e.stopPropagation()}>
             <Checkbox
@@ -116,10 +129,10 @@ export function TrendsDataTable({
             />
           </div>
         ),
-      });
+      })
     }
 
-    baseColumns.push(
+    cols.push(
       {
         accessorKey: "title",
         header: ({ column }) => (
@@ -128,19 +141,17 @@ export function TrendsDataTable({
             size="sm"
             className="-ml-3 h-7 text-[10px] uppercase"
             onClick={(e) => {
-              e.stopPropagation();
-              column.toggleSorting(column.getIsSorted() === "asc");
+              e.stopPropagation()
+              column.toggleSorting(column.getIsSorted() === "asc")
             }}
           >
-            Topic
+            Trend
             <ArrowUpDown className="ml-1 h-3 w-3" />
           </Button>
         ),
-        size: 350,
-        minSize: 150,
         cell: ({ row }) => (
-          <div className="py-1 min-w-0 flex-1">
-            <div className="font-medium text-primary truncate text-xs" title={row.getValue("title")}>
+          <div className="min-w-0">
+            <div className="font-medium text-sm truncate" title={row.getValue("title")}>
               {row.getValue("title")}
             </div>
           </div>
@@ -148,61 +159,62 @@ export function TrendsDataTable({
       },
       {
         accessorKey: "momentum",
-        header: "Mom",
-        size: 80,
-        minSize: 60,
+        header: "Momentum",
         cell: ({ row }) => {
           const momentum = row.getValue("momentum") as Trend["momentum"]
           return (
-            <div className="hidden sm:block">
-              <Badge variant="outline" className={cn("text-[9px] uppercase px-1 py-0", momentumStyles[momentum])}>
-                {momentum.slice(0, 3)}
-              </Badge>
-            </div>
+            <Badge
+              variant="outline"
+              className={cn("text-[9px] uppercase px-1.5 py-0", momentumStyles[momentum])}
+            >
+              {momentum}
+            </Badge>
           )
         },
       },
       {
         id: "platforms",
-        header: "Plat",
-        size: 100,
-        minSize: 80,
+        header: "Platforms",
         cell: ({ row }) => (
-          <div className="hidden md:flex flex-wrap gap-0.5">
+          <div className="flex flex-wrap gap-0.5">
             {row.original.platforms.map((p) => (
-              <Badge 
-                key={p} 
-                variant="secondary" 
+              <Badge
+                key={p}
+                variant="secondary"
                 className={cn(
-                  "text-[8px] px-0.5 py-0 min-w-[16px] text-center",
-                  activePlatforms.includes(p as OrganicPlatformKey) ? "bg-brand-primary/20 text-brand-primary border-brand-primary/20" : "opacity-50"
+                  "text-[8px] px-1 py-0 min-w-[18px] text-center",
+                  activePlatforms.includes(p as OrganicPlatformKey)
+                    ? "bg-brand-primary/20 text-brand-primary border-brand-primary/20"
+                    : "opacity-40"
                 )}
               >
-                {p === "instagram" ? "IG" : p === "linkedin" ? "LI" : p.slice(0, 1).toUpperCase()}
+                {PLATFORM_SHORT[p] ?? p.slice(0, 2).toUpperCase()}
               </Badge>
             ))}
           </div>
         ),
       }
-    );
+    )
 
     if (allowActions) {
-      baseColumns.push({
+      cols.push({
         id: "actions",
-        header: "Act",
+        header: () => <span className="sr-only">Actions</span>,
         size: 50,
-        minSize: 50,
         cell: ({ row }) => (
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-6 w-6 p-0">
+                <Button variant="ghost" className="h-6 w-6 p-0" aria-label="Row actions">
                   <MoreHorizontal className="h-3 w-3" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
-                <DropdownMenuItem className="text-xs" onClick={() => onToggleTrend(row.original.id)}>
+                <DropdownMenuItem
+                  className="text-xs"
+                  onClick={() => onToggleTrend(row.original.id)}
+                >
                   {selectedTrendIds.includes(row.original.id) ? "Remove from plan" : "Add to plan"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -211,199 +223,173 @@ export function TrendsDataTable({
             </DropdownMenu>
           </div>
         ),
-      });
+      })
     }
 
-    baseColumns.push({
+    cols.push({
       id: "expand",
-      header: "",
+      header: () => <span className="sr-only">Expand</span>,
       size: 40,
-      minSize: 40,
-      cell: () => (
-        <ChevronDownIcon className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180 opacity-50" />
+      cell: ({ row }) => (
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-muted-foreground transition-transform duration-200",
+            expandedId === row.id && "rotate-180"
+          )}
+        />
       ),
-    });
+    })
 
-    return baseColumns.filter(col => {
-      if (col.id === "momentum" || (col as any).accessorKey === "momentum") return showMomentumFilter;
-      return true;
-    });
-  }, [selectedTrendIds, onToggleTrend, activePlatforms, showMomentumFilter, allowDrag, allowSelect, allowActions]);
+    return cols.filter((col) => {
+      if (col.id === "momentum" || ("accessorKey" in col && col.accessorKey === "momentum")) {
+        return showMomentumFilter
+      }
+      return true
+    })
+  }, [
+    selectedTrendIds,
+    onToggleTrend,
+    activePlatforms,
+    showMomentumFilter,
+    allowDrag,
+    allowSelect,
+    allowActions,
+    expandedId,
+  ])
 
   const table = useReactTable({
     data: filteredData,
     columns,
-    columnResizeMode: "onChange",
-    onColumnSizingChange: setColumnSizing,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    state: {
-      sorting,
-      columnFilters,
-      columnSizing,
-    },
+    state: { sorting, columnFilters },
   })
 
   return (
     <div className="flex flex-col h-full space-y-2">
       <div className="flex items-center gap-2 px-1 shrink-0">
         <Input
-          placeholder="Filter..."
+          placeholder="Filter trends…"
           value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("title")?.setFilterValue(event.target.value)
-          }
-          className="h-7 text-[11px] bg-surface/50 border-subtle flex-1"
+          onChange={(event) => table.getColumn("title")?.setFilterValue(event.target.value)}
+          className="h-7 text-[11px] bg-muted/50 border-border/60 flex-1"
         />
         {showMomentumFilter && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 px-2 text-[9px] uppercase font-semibold border-subtle">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[9px] uppercase font-semibold"
+              >
                 <Filter className="mr-1 h-3 w-3" />
                 {momentumFilter === "all" ? "All" : momentumFilter}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem className="text-xs" onClick={() => setMomentumFilter("all")}>All</DropdownMenuItem>
-              <DropdownMenuItem className="text-xs" onClick={() => setMomentumFilter("rising")}>Rising</DropdownMenuItem>
-              <DropdownMenuItem className="text-xs" onClick={() => setMomentumFilter("stable")}>Stable</DropdownMenuItem>
-              <DropdownMenuItem className="text-xs" onClick={() => setMomentumFilter("cooling")}>Cooling</DropdownMenuItem>
+              {["all", "rising", "stable", "cooling"].map((value) => (
+                <DropdownMenuItem
+                  key={value}
+                  className="text-xs capitalize"
+                  onClick={() => setMomentumFilter(value)}
+                >
+                  {value === "all" ? "All momentum" : value}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
       </div>
 
-      <div className="flex-1 min-h-0 rounded border border-subtle bg-surface/20 overflow-hidden flex flex-col">
-        <div className="bg-surface/40 border-b border-subtle shrink-0">
-          <div className="flex h-8 items-center px-2">
-            {table.getHeaderGroups()[0].headers.map((header) => (
-              <div 
-                key={header.id} 
-                className={cn(
-                  "text-[9px] uppercase tracking-wider font-bold px-2 relative group/header flex items-center",
-                  header.id === "momentum" ? "hidden sm:flex" : "",
-                  header.id === "platforms" ? "hidden md:flex" : ""
-                )}
-                style={{ width: header.getSize() }}
-              >
-                <div className="truncate flex-1">
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                </div>
-                {header.column.getCanResize() && (
-                  <div
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
-                    className={cn(
-                      "absolute right-0 top-0 h-full w-1 cursor-col-resize bg-brand-primary/0 group-hover/header:bg-brand-primary/50 transition-colors z-10",
-                      header.column.getIsResizing() ? "bg-brand-primary opacity-100" : ""
-                    )}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <Accordion.Root 
-            type="single" 
-            collapsible 
-            value={expandedId}
-            onValueChange={setExpandedId}
-            className="divide-y divide-subtle/30"
-          >
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <Accordion.Item key={row.id} value={row.id} className="group">
-                  <Accordion.Header className="flex items-center min-h-[2.5rem] hover:bg-surface/40 transition-colors">
-                    {row.getVisibleCells().map((cell) => {
-                      const id = cell.column.id;
-                      const isInteractive = ["drag", "select", "actions"].includes(id);
-                      const width = cell.column.getSize();
-                      
-                      if (isInteractive) {
-                        return (
-                          <div 
-                            key={cell.id} 
-                            className={cn(
-                              "px-2 flex items-center h-full",
-                              id === "drag" ? "shrink-0" : "min-w-0"
-                            )}
-                            style={{ width }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <Accordion.Trigger key={cell.id} asChild>
-                          <div 
-                            className={cn(
-                              "px-2 flex items-center h-full min-w-0",
-                              id === "momentum" ? "hidden sm:flex" : "",
-                              id === "platforms" ? "hidden md:flex" : ""
-                            )}
-                            style={{ width }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </div>
-                        </Accordion.Trigger>
-                      );
-                    })}
-                  </Accordion.Header>
-                  <Accordion.Content className="overflow-hidden bg-surface/10" forceMount asChild>
-                    <motion.div
-                      initial={false}
-                      animate={{ 
-                        height: expandedId === row.id ? "auto" : 0,
-                        opacity: expandedId === row.id ? 1 : 0
-                      }}
-                      transition={{ duration: 0.3, ease: "easeInOut" }}
+      <div className="flex-1 min-h-0 rounded-lg border border-border bg-card overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-y-auto">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="text-[10px] uppercase tracking-wider font-bold px-3 h-8"
                     >
-                      <div className="p-4 space-y-3">
-                        <div className="space-y-1">
-                          <span className="text-[10px] uppercase font-bold text-secondary tracking-wider">Summary</span>
-                          <p className="text-xs text-primary leading-relaxed">
-                            {row.original.summary}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="space-y-1">
-                            <span className="text-[10px] uppercase font-bold text-secondary tracking-wider">Momentum</span>
-                            <div className="flex items-center gap-2">
-                              <Badge className={cn("text-[10px] px-2 py-0.5", momentumStyles[row.original.momentum])}>
-                                {row.original.momentum}
-                              </Badge>
-                            </div>
-                          </div>
-                          {row.original.tags.length > 0 && (
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <Fragment key={row.id}>
+                    <TableRow
+                      data-state={
+                        selectedTrendIds.includes(row.original.id) ? "selected" : undefined
+                      }
+                      onClick={() =>
+                        setExpandedId((prev) => (prev === row.id ? undefined : row.id))
+                      }
+                      className="cursor-pointer"
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id} className="px-3 py-2">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                    {expandedId === row.id && (
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell colSpan={columns.length} className="px-4 pb-4 pt-2">
+                          <div className="space-y-3">
                             <div className="space-y-1">
-                              <span className="text-[10px] uppercase font-bold text-secondary tracking-wider">Tags</span>
-                              <div className="flex flex-wrap gap-1">
-                                {row.original.tags.map(tag => (
-                                  <Badge key={tag} variant="secondary" className="text-[9px] px-1.5 py-0 bg-surface/50">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                                Summary
+                              </span>
+                              <p className="text-xs leading-relaxed">
+                                {row.original.summary}
+                              </p>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  </Accordion.Content>
-                </Accordion.Item>
-              ))
-            ) : (
-              <div className="h-16 flex items-center justify-center text-[10px] text-secondary">
-                No insights found.
-              </div>
-            )}
-          </Accordion.Root>
+                            {row.original.tags.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                                  Tags
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {row.original.tags.map((tag) => (
+                                    <Badge
+                                      key={tag}
+                                      variant="secondary"
+                                      className="text-[9px] px-1.5 py-0"
+                                    >
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-16 text-center text-xs text-muted-foreground"
+                  >
+                    No trends found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
+import * as React from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "motion/react";
 import { CalendarDraftCard } from "./CalendarDraftCard";
 import type { OrganicCalendarDraft } from "./types";
 
@@ -17,7 +18,7 @@ interface DraggableDraftCardProps {
   onPreview?: (draft: OrganicCalendarDraft | null) => void;
 }
 
-export function DraggableDraftCard({
+function DraggableDraftCardComponent({
   draft,
   isSelected,
   isMultiSelected,
@@ -27,10 +28,11 @@ export function DraggableDraftCard({
   onClearFailure,
   onPreview,
 }: DraggableDraftCardProps) {
+  const reduceMotion = useReducedMotion();
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: draft.id,
-      data: { type: "draft", draft },
+      data: { type: "draft" },
     });
 
   const style = {
@@ -42,12 +44,12 @@ export function DraggableDraftCard({
   return (
     <motion.div
       ref={setNodeRef}
-      layout
-      layoutId={draft.id}
-      initial={{ opacity: 0, y: 10 }}
+      layout={!reduceMotion}
+      layoutId={reduceMotion ? undefined : draft.id}
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ 
+      exit={reduceMotion ? {} : { opacity: 0, scale: 0.95 }}
+      transition={reduceMotion ? { duration: 0 } : {
         layout: { type: "spring", stiffness: 300, damping: 30 },
         opacity: { duration: 0.2 }
       }}
@@ -69,3 +71,5 @@ export function DraggableDraftCard({
     </motion.div>
   );
 }
+
+export const DraggableDraftCard = React.memo(DraggableDraftCardComponent);

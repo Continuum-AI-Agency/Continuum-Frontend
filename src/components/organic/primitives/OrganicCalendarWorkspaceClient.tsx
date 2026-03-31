@@ -3,13 +3,16 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
+  CalendarIcon,
   Cross2Icon,
+  ListBulletIcon,
   LightningBoltIcon,
   PlusIcon,
   RocketIcon,
   TrashIcon,
 } from "@radix-ui/react-icons"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion } from "motion/react"
+import { useShallow } from "zustand/react/shallow"
 
 import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
@@ -58,8 +61,15 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { TrendWorkbench } from "./TrendWorkbench"
+import { OrganicTrendsDrawer } from "./OrganicTrendsDrawer"
+import { OrganicMonthlyCalendar } from "./OrganicMonthlyCalendar"
+import { OrganicListView } from "./OrganicListView"
 import {
+  AI_STUDIO_CONTEXT_STORAGE_PREFIX,
   AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
+  AI_STUDIO_PENDING_APPLY_PREFIX,
+  AI_STUDIO_SESSION_HISTORY_PREFIX,
+  buildAiStudioHandoffStorageCandidates,
   buildAiStudioStorageKey,
   buildPendingApplyStorageKey,
   buildSessionHistoryStorageKey,
@@ -81,16 +91,37 @@ type OrganicCalendarWorkspaceClientProps = {
   platformAccountIds?: Partial<Record<OrganicPlatformKey, string>>
   maxTrendSelections?: number
   brandProfileId?: string
+  brandName?: string
   userId?: string
   instagramAccountId?: string
   initialWeekStart?: string | null
   initialSelectedDraftId?: string | null
+  initialView?: "week" | "month" | "list"
 }
 
 function isSchedulablePlannerPlatform(
   platform: PlannerPlatformKey | undefined
 ): platform is OrganicPlatformTag {
   return platform === "instagram" || platform === "linkedin"
+}
+
+function isQuotaExceededStorageError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "QuotaExceededError"
+}
+
+function pruneStaleAiStudioContextEntries(activeDraftId: string): void {
+  if (typeof window === "undefined") return
+  const activeStorageKey = buildAiStudioStorageKey(activeDraftId)
+
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index)
+    if (!key) continue
+    if (!key.startsWith(`${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:`)) continue
+    if (key === activeStorageKey || key === AI_STUDIO_LAST_DRAFT_STORAGE_KEY) continue
+    if (key.startsWith(`${AI_STUDIO_PENDING_APPLY_PREFIX}:`)) continue
+    if (key.startsWith(`${AI_STUDIO_SESSION_HISTORY_PREFIX}:`)) continue
+    window.localStorage.removeItem(key)
+  }
 }
 
 export function OrganicCalendarWorkspaceClient({
@@ -101,8 +132,10 @@ export function OrganicCalendarWorkspaceClient({
   platformAccountIds = {},
   maxTrendSelections,
   brandProfileId,
+  brandName,
   initialWeekStart,
   initialSelectedDraftId,
+  initialView,
 }: OrganicCalendarWorkspaceClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -123,7 +156,34 @@ export function OrganicCalendarWorkspaceClient({
     setViewMode,
     addDraft,
     updateDraft: updateDraftById,
-  } = useCalendarStore()
+    backlogDrafts,
+    addBacklogDraft,
+    deleteBacklogDraft,
+    promoteBacklogDraft,
+  } = useCalendarStore(
+    useShallow((state) => ({
+      days: state.days,
+      setDays: state.setDays,
+      persistedWeekStartId: state.persistedWeekStartId,
+      setPersistedWeekStartId: state.setPersistedWeekStartId,
+      toggleTrend: state.toggleTrend,
+      bulkMoveDrafts: state.bulkMoveDrafts,
+      bulkDeleteDrafts: state.bulkDeleteDrafts,
+      clearCalendar: state.clearCalendar,
+      setSelectedDraftId: state.setSelectedDraftId,
+      setSelectedDraftIds: state.setSelectedDraftIds,
+      selectedTrendIds: state.selectedTrendIds,
+      gridProgress: state.gridProgress,
+      viewMode: state.viewMode,
+      setViewMode: state.setViewMode,
+      addDraft: state.addDraft,
+      updateDraft: state.updateDraft,
+      backlogDrafts: state.backlogDrafts,
+      addBacklogDraft: state.addBacklogDraft,
+      deleteBacklogDraft: state.deleteBacklogDraft,
+      promoteBacklogDraft: state.promoteBacklogDraft,
+    }))
+  )
 
   const {
     selectedId,
@@ -172,6 +232,14 @@ export function OrganicCalendarWorkspaceClient({
   )
 
   const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart)
+  const [localGridViewMode, setLocalGridViewMode] = React.useState<"day" | "week">("week")
+  const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false)
+
+  // Apply initialView from URL search param on mount (once)
+  React.useEffect(() => {
+    if (initialView) setViewMode(initialView)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const weekStartId = formatDayId(weekStart)
   const weekCacheRef = React.useRef<Record<string, OrganicCalendarDay[]>>({})
 
@@ -179,11 +247,14 @@ export function OrganicCalendarWorkspaceClient({
     setPersistedWeekStartId(weekStartId)
   }, [setPersistedWeekStartId, weekStartId])
 
+  // Keep the week cache in sync (ref write is safe during render)
+  if (calendarDays.length > 0) {
+    weekCacheRef.current[weekStartId] = calendarDays
+  }
+
+  // Populate calendar days when the store is empty for the current week
   React.useEffect(() => {
-    if (calendarDays.length > 0) {
-      weekCacheRef.current[weekStartId] = calendarDays
-      return
-    }
+    if (calendarDays.length > 0) return
 
     const cachedWeek = weekCacheRef.current[weekStartId]
     const fallbackDays =
@@ -194,7 +265,7 @@ export function OrganicCalendarWorkspaceClient({
     setCalendarDays(fallbackDays)
     weekCacheRef.current[weekStartId] = fallbackDays
   }, [
-    calendarDays,
+    calendarDays.length,
     initialDays,
     resolvedInitialWeekStartId,
     setCalendarDays,
@@ -228,6 +299,20 @@ export function OrganicCalendarWorkspaceClient({
     handleWeekChange(next)
   }, [handleWeekChange, weekStart])
 
+  const handlePreviousMonth = React.useCallback(() => {
+    const prev = new Date(weekStart)
+    prev.setDate(1)
+    prev.setMonth(prev.getMonth() - 1)
+    handleWeekChange(prev)
+  }, [handleWeekChange, weekStart])
+
+  const handleNextMonth = React.useCallback(() => {
+    const next = new Date(weekStart)
+    next.setDate(1)
+    next.setMonth(next.getMonth() + 1)
+    handleWeekChange(next)
+  }, [handleWeekChange, weekStart])
+
   const drafts = React.useMemo(
     () => calendarDays.flatMap((day) => day.slots),
     [calendarDays]
@@ -240,32 +325,48 @@ export function OrganicCalendarWorkspaceClient({
 
   const allDraftIds = React.useMemo(() => new Set(drafts.map((draft) => draft.id)), [drafts])
 
+  // Unified selection sync: prune stale selections and restore preferred
+  // draft in a single pass to avoid cascading renders.
   React.useEffect(() => {
-    if (selectedId && !allDraftIds.has(selectedId)) {
-      setSelectedDraftId(null)
-    }
-
+    // Prune multi-selection IDs that no longer exist
     const nextSelectedIds = selectedIds.filter((id) => allDraftIds.has(id))
     if (nextSelectedIds.length !== selectedIds.length) {
       setSelectedDraftIds(nextSelectedIds)
     }
-  }, [allDraftIds, selectedId, selectedIds, setSelectedDraftId, setSelectedDraftIds])
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    if (selectedId) return
+    // Resolve the active single-selection draft
+    if (selectedId && !allDraftIds.has(selectedId)) {
+      // Current selection is stale -- attempt to restore a preferred draft
+      // instead of nulling out then re-selecting on the next render cycle.
+      if (typeof window !== "undefined") {
+        const preferredDraftId =
+          initialSelectedDraftId ??
+          window.localStorage.getItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY)
+        if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
+          setSelectedDraftId(preferredDraftId)
+          return
+        }
+      }
+      setSelectedDraftId(null)
+      return
+    }
 
-    const preferredDraftId =
-      initialSelectedDraftId ??
-      window.localStorage.getItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY)
-    if (!preferredDraftId || !allDraftIds.has(preferredDraftId)) return
-
-    setSelectedDraftId(preferredDraftId)
+    // No current selection -- try to restore from initial prop / localStorage
+    if (!selectedId && typeof window !== "undefined") {
+      const preferredDraftId =
+        initialSelectedDraftId ??
+        window.localStorage.getItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY)
+      if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
+        setSelectedDraftId(preferredDraftId)
+      }
+    }
   }, [
     allDraftIds,
     initialSelectedDraftId,
     selectedId,
+    selectedIds,
     setSelectedDraftId,
+    setSelectedDraftIds,
   ])
 
   const {
@@ -286,7 +387,6 @@ export function OrganicCalendarWorkspaceClient({
     calendarDays,
     drafts,
     selectedTrendIds,
-    trends: resolvedTrends,
     platformAccountIds,
     activePlatforms,
     weekStartId,
@@ -369,11 +469,12 @@ export function OrganicCalendarWorkspaceClient({
       dayId?: string
       platform?: PlannerPlatformKey
       trendId?: string
+      status?: "draft" | "scheduled" | "placeholder"
     }) => {
       const createdDraftId = createQuickDraft({
         dayId: context?.dayId,
         platform: context?.platform,
-        status: "placeholder",
+        status: context?.status ?? "placeholder",
         trendId: context?.trendId,
       })
       if (!createdDraftId) return
@@ -450,17 +551,41 @@ export function OrganicCalendarWorkspaceClient({
     [brandProfileId, deriveAiStudioPrompts, weekStartId]
   )
 
+  const persistAiStudioContext = React.useCallback(
+    (payload: PlannerAiStudioHandoff): boolean => {
+      if (typeof window === "undefined") return false
+      const storageKey = buildAiStudioStorageKey(payload.draftId)
+      const candidates = buildAiStudioHandoffStorageCandidates(payload)
+      let didPruneStaleEntries = false
+
+      for (const candidate of candidates) {
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(candidate))
+          window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, payload.draftId)
+          return true
+        } catch (error) {
+          if (!isQuotaExceededStorageError(error)) return false
+          if (!didPruneStaleEntries) {
+            pruneStaleAiStudioContextEntries(payload.draftId)
+            didPruneStaleEntries = true
+          }
+        }
+      }
+
+      return false
+    },
+    []
+  )
+
   React.useEffect(() => {
     if (typeof window === "undefined" || !selectedDraft) return
-    const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
-    if (!parsed.success) return
-    const payload = parsed.data
-    window.localStorage.setItem(
-      buildAiStudioStorageKey(selectedDraft.id),
-      JSON.stringify(payload)
-    )
-    window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, selectedDraft.id)
-  }, [buildAiStudioContext, selectedDraft])
+    const timer = setTimeout(() => {
+      const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
+      if (!parsed.success) return
+      persistAiStudioContext(parsed.data)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [buildAiStudioContext, persistAiStudioContext, selectedDraft])
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
@@ -569,17 +694,18 @@ export function OrganicCalendarWorkspaceClient({
     if (!selectedDraft || !brandProfileId) return
     const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
     if (!parsed.success) return
-    window.localStorage.setItem(
-      buildAiStudioStorageKey(selectedDraft.id),
-      JSON.stringify(parsed.data)
-    )
-    window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, selectedDraft.id)
+    persistAiStudioContext(parsed.data)
     router.push(
       `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(
         selectedDraft.id
       )}`
     )
-  }, [brandProfileId, buildAiStudioContext, router, selectedDraft])
+  }, [brandProfileId, buildAiStudioContext, persistAiStudioContext, router, selectedDraft])
+
+  const handleBulkApprove = React.useCallback(() => {
+    selectedIds.forEach((id) => updateDraftById(id, (d) => ({ ...d, status: "scheduled" as const })))
+    clearAll()
+  }, [selectedIds, updateDraftById, clearAll])
 
   const handleBulkDelete = React.useCallback(() => {
     bulkDeleteDrafts(selectedIds)
@@ -660,6 +786,29 @@ export function OrganicCalendarWorkspaceClient({
                   <div className="rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center rounded-md border border-border bg-muted/35 p-0.5">
+                          {(["week", "month", "list"] as const).map((mode) => (
+                            <Button
+                              key={mode}
+                              type="button"
+                              size="sm"
+                              variant={viewMode === mode ? "secondary" : "ghost"}
+                              className={viewMode === mode
+                                ? "h-7 rounded px-2.5 text-xs"
+                                : "h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                              }
+                              aria-pressed={viewMode === mode}
+                              onClick={() => {
+                                setViewMode(mode)
+                                const next = new URLSearchParams(searchParams.toString())
+                                next.set("view", mode)
+                                router.replace(`?${next.toString()}`, { scroll: false })
+                              }}
+                            >
+                              {mode === "week" ? "Week" : mode === "month" ? "Month" : "List"}
+                            </Button>
+                          ))}
+                        </div>
                         <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                           {selectedTrendIds.length}
                           {typeof maxTrendSelections === "number"
@@ -672,6 +821,16 @@ export function OrganicCalendarWorkspaceClient({
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          aria-label="Open trends"
+                          onClick={() => setTrendsDrawerOpen(true)}
+                        >
+                          <LightningBoltIcon className="mr-1 h-3.5 w-3.5" />
+                          Trends
+                        </Button>
                         <Button
                           type="button"
                           size="icon-sm"
@@ -697,6 +856,16 @@ export function OrganicCalendarWorkspaceClient({
                             <RocketIcon className="mr-1 h-3.5 w-3.5" />
                           )}
                           Generate
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={isGenerating || drafts.length === 0}
+                          onClick={clearCalendar}
+                        >
+                          <TrashIcon className="mr-1 h-3.5 w-3.5" />
+                          Clear
                         </Button>
                       </div>
                     </div>
@@ -753,50 +922,97 @@ export function OrganicCalendarWorkspaceClient({
             </motion.div>
 
             <motion.div layout transition={layoutTransition} className="min-h-0 flex-1 overflow-hidden">
-              <ResizablePanelGroup orientation="vertical" className="gap-0">
-                <ResizablePanel defaultSize={74} minSize={48}>
-                  <div className="h-full overflow-hidden">
-                    <TimeGridCanvas
-                      days={calendarDays}
-                      selectedDraftId={selectedId}
-                      selectedDraftIds={selectedIds}
-                      activePlatforms={activePlatforms}
-                      rangeTitle={weekTitle}
-                      rangeSubtitle={weekSubtitle}
-                      viewMode={viewMode}
-                      onViewModeChange={setViewMode}
-                      onPreviousWeek={handlePreviousWeek}
-                      onNextWeek={handleNextWeek}
-                      onCreatePost={(context) =>
-                        handleGoDraft({
-                          dayId: context?.dayId,
-                          platform: context?.platform,
-                        })
-                      }
-                      onSelectDraft={(id) => handleSelect(id, false)}
-                      onToggleSelection={(id) => handleSelect(id, true)}
-                      onRegenerate={handleRegenerate}
-                      onClearFailure={handleClearFailure}
-                      onNativeDrop={handleNativeDrop}
-                    />
-                  </div>
-                </ResizablePanel>
+              {viewMode === "week" && (
+                <ResizablePanelGroup orientation="vertical" className="gap-0">
+                  <ResizablePanel defaultSize={74} minSize={48}>
+                    <div className="h-full overflow-hidden">
+                      <TimeGridCanvas
+                        days={calendarDays}
+                        platforms={plannerPlatforms}
+                        selectedDraftId={selectedId}
+                        selectedDraftIds={selectedIds}
+                        rangeTitle={weekTitle}
+                        rangeSubtitle={weekSubtitle}
+                        viewMode={localGridViewMode}
+                        onViewModeChange={setLocalGridViewMode}
+                        onPreviousWeek={handlePreviousWeek}
+                        onNextWeek={handleNextWeek}
+                        onCreatePost={(context) =>
+                          handleGoDraft({
+                            dayId: context?.dayId,
+                            platform: context?.platform,
+                          })
+                        }
+                        onSelectDraft={(id) => handleSelect(id, false)}
+                        onToggleSelection={(id) => handleSelect(id, true)}
+                        onRegenerate={handleRegenerate}
+                        onClearFailure={handleClearFailure}
+                        onNativeDrop={handleNativeDrop}
+                      />
+                    </div>
+                  </ResizablePanel>
 
-                <ResizableHandle withHandle className="my-1 h-1 cursor-row-resize rounded-md" />
+                  <ResizableHandle withHandle className="my-1 h-1 cursor-row-resize rounded-md" />
 
-                <ResizablePanel defaultSize={26} minSize={18}>
-                  <div className="h-full min-h-0 overflow-hidden">
-                    <TrendWorkbench
-                      trends={resolvedTrends}
-                      selectedTrendIds={selectedTrendIds}
-                      activePlatforms={activePlatforms}
-                      maxSelections={maxTrendSelections}
-                      onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-                    />
-                  </div>
-                </ResizablePanel>
-              </ResizablePanelGroup>
+                  <ResizablePanel defaultSize={26} minSize={18}>
+                    <div className="h-full min-h-0 overflow-hidden">
+                      <TrendWorkbench
+                        trends={resolvedTrends}
+                        selectedTrendIds={selectedTrendIds}
+                        activePlatforms={activePlatforms}
+                        maxSelections={maxTrendSelections}
+                        onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                      />
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              )}
+
+              {viewMode === "month" && (
+                <OrganicMonthlyCalendar
+                  days={calendarDays}
+                  weekStart={weekStart}
+                  platforms={plannerPlatforms}
+                  selectedDraftId={selectedId}
+                  onSelectDraft={(id) => handleSelect(id, false)}
+                  onCreatePost={({ dayId, platformKey }) =>
+                    handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined })
+                  }
+                  onPreviousMonth={handlePreviousMonth}
+                  onNextMonth={handleNextMonth}
+                />
+              )}
+
+              {viewMode === "list" && (
+                <OrganicListView
+                  days={calendarDays}
+                  platforms={plannerPlatforms}
+                  selectedDraftId={selectedId}
+                  selectedDraftIds={selectedIds}
+                  onSelectDraft={(id) => handleSelect(id, false)}
+                  onToggleSelection={(id) => handleSelect(id, true)}
+                  onRegenerate={handleRegenerate}
+                  onCreatePost={({ dayId, platformKey, status }) =>
+                    handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status })
+                  }
+                  brandProfileId={brandProfileId}
+                  backlogDrafts={backlogDrafts}
+                  onAddBacklogDraft={addBacklogDraft}
+                  onDeleteBacklogDraft={deleteBacklogDraft}
+                  onPromoteBacklogDraft={promoteBacklogDraft}
+                />
+              )}
             </motion.div>
+
+            <OrganicTrendsDrawer
+              open={trendsDrawerOpen}
+              onOpenChange={setTrendsDrawerOpen}
+              trends={resolvedTrends}
+              selectedTrendIds={selectedTrendIds}
+              activePlatforms={activePlatforms}
+              maxSelections={maxTrendSelections}
+              onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+            />
           </motion.section>
 
           <AnimatePresence initial={false}>
@@ -838,7 +1054,14 @@ export function OrganicCalendarWorkspaceClient({
 
                 <div className="h-[calc(100%-2rem)] overflow-hidden rounded-md bg-background/85">
                   <div className="h-full min-h-0 overflow-hidden rounded-md border border-border/45 bg-background/80">
-                    <OrganicDraftPreview draft={selectedDraft} />
+                    <OrganicDraftPreview
+                      draft={selectedDraft}
+                      brandName={brandName}
+                      brandProfileId={brandProfileId}
+                      onApprove={(draftId) =>
+                        updateDraftById(draftId, (d) => ({ ...d, status: "scheduled" as const }))
+                      }
+                    />
                   </div>
                 </div>
               </motion.aside>
@@ -852,6 +1075,7 @@ export function OrganicCalendarWorkspaceClient({
         onClear={clearAll}
         onDelete={handleBulkDelete}
         onMove={handleBulkMove}
+        onApprove={handleBulkApprove}
       />
     </div>
   )

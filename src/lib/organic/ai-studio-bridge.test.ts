@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  buildAiStudioHandoffStorageCandidates,
   normalizeDraftPostType,
   plannerAiStudioApplyRequestSchema,
   plannerAiStudioHandoffSchema,
@@ -74,5 +75,36 @@ describe("ai-studio-bridge", () => {
     expect(linkedinSpec.outputMode).toBe("single");
     expect(linkedinSpec.maxReferenceImages).toBe(5);
     expect(linkedinSpec.requiresExplicitPickOnMultiOutput).toBe(true);
+  });
+
+  it("builds deduped fallback candidates for storage-constrained handoff payloads", () => {
+    const handoff = plannerAiStudioHandoffSchema.parse({
+      schemaVersion: "planner_ai_handoff_v1",
+      draftId: "seeded-1",
+      brandProfileId: "brand-1",
+      weekStartId: "2026-03-23",
+      platform: "instagram",
+      postType: "post",
+      format: "Post",
+      title: "Seeded title",
+      summary: "Seeded summary",
+      captionPreview: "Seeded caption",
+      mediaSuggestion: {
+        assetUrl: "https://example.com/image.png",
+        assetBase64: "abc123",
+        generationContext: { foo: "bar" },
+      },
+      assetHints: [{ role: "thumbnail", suggestion: "Hero subject" }],
+      updatedAt: new Date().toISOString(),
+    });
+
+    const candidates = buildAiStudioHandoffStorageCandidates(handoff);
+
+    expect(candidates).toHaveLength(5);
+    expect(candidates[0].mediaSuggestion?.assetBase64).toBe("abc123");
+    expect(candidates[1].mediaSuggestion?.assetBase64).toBeUndefined();
+    expect(candidates[2].mediaSuggestion?.generationContext).toBeUndefined();
+    expect(candidates[3].mediaSuggestion).toBeUndefined();
+    expect(candidates[4].assetHints).toBeUndefined();
   });
 });

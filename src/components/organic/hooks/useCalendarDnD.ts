@@ -1,5 +1,6 @@
 import * as React from "react"
 import { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
+import { useShallow } from "zustand/react/shallow"
 
 import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
@@ -71,16 +72,38 @@ export function useCalendarDnD(
   drafts: OrganicCalendarDraft[],
   platformAccountIds: Partial<Record<OrganicPlatformKey, string>>
 ) {
-  const { moveDraft, addDraft, updateDraft } = useCalendarStore()
+  const { moveDraft, addDraft, updateDraft } = useCalendarStore(
+    useShallow((state) => ({
+      moveDraft: state.moveDraft,
+      addDraft: state.addDraft,
+      updateDraft: state.updateDraft,
+    }))
+  )
   const [activeDragDraft, setActiveDragDraft] = React.useState<OrganicCalendarDraft | null>(null)
+
+  const draftsById = React.useMemo(() => {
+    const map = new Map<string, OrganicCalendarDraft>()
+    drafts.forEach((draft) => {
+      map.set(draft.id, draft)
+    })
+    return map
+  }, [drafts])
+
+  const daysById = React.useMemo(() => {
+    const map = new Map<string, OrganicCalendarDay>()
+    days.forEach((day) => {
+      map.set(day.id, day)
+    })
+    return map
+  }, [days])
 
   const handleDragStart = React.useCallback(
     (event: DragStartEvent) => {
       const draftId = event.active.id as string
-      const draft = drafts.find((item) => item.id === draftId)
+      const draft = draftsById.get(draftId)
       if (draft) setActiveDragDraft(draft)
     },
-    [drafts]
+    [draftsById]
   )
 
   const handleDragEnd = React.useCallback(
@@ -99,7 +122,7 @@ export function useCalendarDnD(
         const plannerCell = parsePlannerCellId(overId)
 
         if (plannerCell) {
-          const targetDay = days.find((day) => day.id === plannerCell.dayId)
+          const targetDay = daysById.get(plannerCell.dayId)
 
           updateDraft(draftId, (draft) => ({
             ...draft,
@@ -115,7 +138,7 @@ export function useCalendarDnD(
           return
         }
 
-        const targetDay = days.find((day) => day.id === overId)
+        const targetDay = daysById.get(overId)
         if (targetDay) {
           updateDraft(draftId, (draft) => ({
             ...draft,
@@ -125,7 +148,7 @@ export function useCalendarDnD(
         }
       }
     },
-    [days, moveDraft, platformAccountIds, updateDraft]
+    [daysById, moveDraft, platformAccountIds, updateDraft]
   )
 
   const handleNativeDrop = React.useCallback(
@@ -142,7 +165,7 @@ export function useCalendarDnD(
       const trendId = data.trendId
       if (!trendId) return
 
-      const targetDay = days.find((day) => day.id === dayId)
+      const targetDay = daysById.get(dayId)
       if (!targetDay) return
 
       const fallbackPlatform = (ORGANIC_BETA_LAUNCH_SCHEDULE[
@@ -177,7 +200,7 @@ export function useCalendarDnD(
 
       addDraft(dayId, seededDraft)
     },
-    [addDraft, days, platformAccountIds]
+    [addDraft, daysById, platformAccountIds]
   )
 
   return {

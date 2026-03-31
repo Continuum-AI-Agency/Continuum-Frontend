@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Tabs } from "@radix-ui/themes";
 
 type Props = {
@@ -11,15 +11,18 @@ type Props = {
 
 export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const tabParam = searchParams.get("tab");
   const initialView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
   const [activeView, setActiveView] = React.useState<"planner" | "metrics">(initialView);
+  // Track whether metrics tab has ever been shown — once mounted, keep it alive
+  // so switching back doesn't re-fetch / re-mount the chart components.
+  const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === "metrics");
 
   React.useEffect(() => {
     const nextView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
     if (nextView !== activeView) {
       setActiveView(nextView);
+      if (nextView === "metrics") setMetricsEverShown(true);
     }
   }, [activeView, tabParam]);
 
@@ -27,11 +30,14 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
     (value: string) => {
       const nextView: "planner" | "metrics" = value === "planner" ? "planner" : "metrics";
       setActiveView(nextView);
+      if (nextView === "metrics") setMetricsEverShown(true);
+      // Use history.replaceState instead of router.replace to avoid triggering
+      // a Next.js server re-render (which would flash the Suspense fallback).
       const params = new URLSearchParams(searchParams.toString());
       params.set("tab", nextView);
-      router.push(`?${params.toString()}`);
+      window.history.replaceState(null, "", `?${params.toString()}`);
     },
-    [router, searchParams]
+    [searchParams]
   );
 
   return (
@@ -46,10 +52,11 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
       </div>
 
       <div className="flex-1 min-h-0">
-        {activeView === "planner" ? (
-          <div className="h-full w-full">{plannerSlot}</div>
-        ) : (
-          <div className="h-full w-full">{metricsSlot}</div>
+        {/* Always render planner — it's the default tab */}
+        <div className="h-full w-full" hidden={activeView !== "planner"}>{plannerSlot}</div>
+        {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
+        {metricsEverShown && (
+          <div className="h-full w-full" hidden={activeView !== "metrics"}>{metricsSlot}</div>
         )}
       </div>
     </div>

@@ -11,6 +11,7 @@ export type OrganicDraftStatus =
   | "streaming"
   | "failed"
   | "placeholder"
+  | "published"
 
 export type OrganicCalendarDraft = {
   id: string
@@ -40,6 +41,7 @@ export type OrganicCalendarDraft = {
   creativeIdea?: string
   generationError?: string
   generationAttempts?: number
+  instagram_post_id?: string | null
   mediaSuggestion?: {
     provider?: string | null
     model?: string | null

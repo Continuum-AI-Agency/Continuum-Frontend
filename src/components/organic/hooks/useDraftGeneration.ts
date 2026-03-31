@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import type {
   CalendarGenerationRequest,
@@ -17,7 +18,6 @@ import {
 } from "@/lib/organic/types";
 import { useCalendarStore } from "@/lib/organic/store";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import type { Trend } from "@/lib/organic/trends";
 import { parseWeeklyGridPayload } from "@/lib/organic/weekly-grid";
 
 import {
@@ -336,7 +336,6 @@ export function useDraftGeneration({
   calendarDays,
   drafts,
   selectedTrendIds,
-  trends,
   platformAccountIds,
   activePlatforms,
   weekStartId,
@@ -345,7 +344,6 @@ export function useDraftGeneration({
   calendarDays: OrganicCalendarDay[];
   drafts: OrganicCalendarDraft[];
   selectedTrendIds: string[];
-  trends: Trend[];
   platformAccountIds: Partial<Record<OrganicPlatformKey, string>>;
   activePlatforms: OrganicPlatformKey[];
   weekStartId: string;
@@ -361,7 +359,20 @@ export function useDraftGeneration({
     setGhosts,
     addEvent,
     setDays,
-  } = useCalendarStore();
+  } = useCalendarStore(
+    useShallow((state) => ({
+      gridStatus: state.gridStatus,
+      setGridStatus: state.setGridStatus,
+      setGridProgress: state.setGridProgress,
+      setGridError: state.setGridError,
+      addDraft: state.addDraft,
+      bulkDeleteDrafts: state.bulkDeleteDrafts,
+      updateDraft: state.updateDraft,
+      setGhosts: state.setGhosts,
+      addEvent: state.addEvent,
+      setDays: state.setDays,
+    }))
+  );
 
   const gridEventSourceRef = React.useRef<EventSource | null>(null);
 
@@ -506,11 +517,20 @@ export function useDraftGeneration({
         platformAccountIds,
       });
 
-      setDays(calendarDays.map((day) => ({ ...day, slots: [] })));
-
+      const nextDaysById = new Map(
+        calendarDays.map((day) => [day.id, { ...day, slots: [] as OrganicCalendarDraft[] }])
+      );
       placements.forEach((placement) => {
-        addDraft(placement.dayId, placement.draft);
+        const targetDay = nextDaysById.get(placement.dayId);
+        if (!targetDay) return;
+        targetDay.slots.push(placement.draft);
       });
+
+      setDays(
+        calendarDays.map(
+          (day) => nextDaysById.get(day.id) ?? { ...day, slots: [] as OrganicCalendarDraft[] }
+        )
+      );
 
       setGridProgress({
         percent: 100,
@@ -522,7 +542,6 @@ export function useDraftGeneration({
     },
     [
       activePlatforms,
-      addDraft,
       calendarDays,
       platformAccountIds,
       selectedTrendIds,
@@ -671,16 +690,22 @@ export function useDraftGeneration({
       const completedPlacementIds = new Set<string>();
       const failedPlacementIds = new Set<string>();
       const totalPlacements = seeds.length;
-
-      seeds.forEach((seed) => {
-        if (!seed) return;
-        updateDraftById(seed.placementId, (draft) => ({
-          ...draft,
-          status: "streaming",
-          generationError: undefined,
-          generationAttempts: (draft.generationAttempts ?? 0) + 1,
-        }));
-      });
+      const seededPlacementIds = new Set(seeds.map((seed) => seed.placementId));
+      setDays(
+        calendarDays.map((day) => ({
+          ...day,
+          slots: day.slots.map((slot) =>
+            seededPlacementIds.has(slot.id)
+              ? {
+                  ...slot,
+                  status: "streaming",
+                  generationError: undefined,
+                  generationAttempts: (slot.generationAttempts ?? 0) + 1,
+                }
+              : slot
+          ),
+        }))
+      );
 
       const mvpSet = new Set<OrganicPlatformKey>(ORGANIC_MVP_PLATFORM_KEYS);
       const preferredMvpPlatforms = activePlatforms.filter((platform) => mvpSet.has(platform));
@@ -950,6 +975,7 @@ export function useDraftGeneration({
     platformAccountIds,
     resolveDayMeta,
     setGhosts,
+    setDays,
     setGridError,
     setGridProgress,
     setGridStatus,
@@ -1228,6 +1254,7 @@ export function useDraftGeneration({
       addDraft,
       addEvent,
       brandProfileId,
+      buildDraftMetadata,
       bulkDeleteDrafts,
       calendarDays,
       drafts,

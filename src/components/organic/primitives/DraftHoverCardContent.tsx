@@ -1,84 +1,148 @@
-"use client";
+"use client"
 
-import { Progress } from "@/components/ui/progress";
-import { PlatformBadge, StatusBadge } from "./DraftCardBadges";
-import type { OrganicCalendarDraft } from "./types";
+import { LightningBoltIcon, Pencil1Icon } from "@radix-ui/react-icons"
+import { Loader2, Send } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
+import type { OrganicCalendarDraft } from "./types"
+import { DraftCardMedia, resolveFormatAspectClass } from "./DraftCardMedia"
+import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
+import { inferPostType } from "@/lib/organic/publish-utils"
 
-export function DraftHoverCardContent({ draft }: { draft: OrganicCalendarDraft }) {
+function resolveHashtags(draft: OrganicCalendarDraft): string[] {
+  const ht = draft.hashtags
+  if (ht) {
+    const combined = [
+      ...(ht.high ?? []).slice(0, 3),
+      ...(ht.medium ?? []).slice(0, 2),
+      ...(ht.low ?? []).slice(0, 1),
+    ]
+    if (combined.length > 0) return combined
+  }
+  return draft.tags?.slice(0, 6) ?? []
+}
+
+export function DraftHoverCardContent({
+  draft,
+  onEdit,
+  onRegenerate,
+}: {
+  draft: OrganicCalendarDraft
+  onEdit?: (id: string) => void
+  onRegenerate?: (id: string) => void
+}) {
+  const { publish, isPublishing } = usePublishDraft()
+  const canPublish =
+    draft.platforms.includes("instagram") &&
+    draft.status !== "published" &&
+    draft.status !== "streaming"
+
+  const hashtags = resolveHashtags(draft)
+  const visibleHashtags = hashtags.slice(0, 6)
+  const extraCount = hashtags.length - visibleHashtags.length
+
+  const aspectClass = resolveFormatAspectClass(draft.format)
+  const isStory = (draft.format ?? "").toLowerCase() === "story"
+
   return (
-    <div className="w-[380px] p-0 overflow-hidden border border-border/80 bg-card shadow-2xl shadow-black/10">
-      <div className="flex flex-col">
-        <div className="flex items-center justify-between border-b border-border/70 bg-muted/60 p-4">
-           <div className="flex items-center gap-2">
-              <PlatformBadge platform={draft.platforms[0]} />
-              <StatusBadge status={draft.status} />
-           </div>
-           <span className="font-mono text-xs text-muted-foreground">{draft.timeLabel}</span>
-        </div>
+    <div className="w-[272px] overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/20">
+      {/* Media thumbnail */}
+      <div className={cn("overflow-hidden", isStory && "max-h-[220px]")}>
+        <DraftCardMedia
+          draft={draft}
+          aspectClass={aspectClass}
+          className="w-full rounded-none"
+          sizes="272px"
+        />
+      </div>
 
-        <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
-          {draft.titleTopic && (
-            <div className="space-y-1">
-              <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground/80 font-bold">Post Idea</h4>
-              <p className="text-xs leading-relaxed font-medium font-serif tracking-wide text-foreground">
-                {draft.titleTopic}
-              </p>
-            </div>
+      {/* Caption */}
+      <div className="px-3 pt-2.5 pb-1.5">
+        <p className="line-clamp-5 text-xs leading-relaxed text-foreground">
+          {draft.captionPreview}
+        </p>
+      </div>
+
+      {/* Hashtags */}
+      {visibleHashtags.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-3 pb-2">
+          {visibleHashtags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+            >
+              {tag.startsWith("#") ? tag : `#${tag}`}
+            </span>
+          ))}
+          {extraCount > 0 && (
+            <span className="rounded-full bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground/60">
+              +{extraCount} more
+            </span>
           )}
-
-          <div className="space-y-2">
-            <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground/80 font-bold">Creative Direction</h4>
-            <div className="relative overflow-hidden rounded-lg border border-border/70 bg-muted/50 p-3 group">
-              <div className="absolute top-0 left-0 h-full w-1 bg-brand-primary/40 transition-colors group-hover:bg-brand-primary" />
-              <p className="pl-2 text-sm leading-snug text-foreground">
-                {draft.creativeIdea || draft.summary}
-              </p>
-              {draft.assetHints && draft.assetHints.length > 0 && (
-                <div className="mt-3 space-y-2 pl-2">
-                   {draft.assetHints.slice(0, 3).map((hint, idx) => (
-                     <div
-                       key={idx}
-                       className="border-l border-brand-primary/30 pl-2 text-[11px] leading-relaxed text-muted-foreground"
-                     >
-                        <span className="mr-1 font-bold text-brand-primary/90">{hint.role}:</span>
-                        {hint.suggestion}
-                     </div>
-                   ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <h4 className="text-[10px] uppercase tracking-widest text-muted-foreground/80 font-bold">Caption Preview</h4>
-                <p className="border-l-2 border-border/60 pl-2 text-xs leading-relaxed italic whitespace-pre-wrap text-muted-foreground line-clamp-6">
-              &quot;{draft.captionPreview}&quot;
-            </p>
-          </div>
         </div>
-        
-        <div className="mt-auto flex items-center justify-between gap-4 border-t border-border/70 bg-muted/40 px-4 py-3">
-            <div className="flex gap-4">
-               <div className="flex flex-col">
-                 <span className="text-[9px] uppercase font-bold text-muted-foreground/70">Format</span>
-                 <span className="text-xs font-medium text-foreground">{draft.format}</span>
-               </div>
-               <div className="flex flex-col">
-                 <span className="text-[9px] uppercase font-bold text-muted-foreground/70">Objective</span>
-                 <span className="text-xs font-medium text-foreground">{draft.objective}</span>
-               </div>
-            </div>
-            {draft.progress !== undefined && (
-               <div className="flex-1 max-w-[100px] space-y-1">
-                 <div className="flex justify-between text-[9px] text-muted-foreground font-bold">
-                   <span className="animate-pulse text-amber-500">GENERATING</span>
-                   <span>{draft.progress}%</span>
-                 </div>
-                 <Progress value={draft.progress} className="h-1" />
-               </div>
+      )}
+
+      {/* Generation progress */}
+      {typeof draft.progress === "number" && (
+        <div className="space-y-1 px-3 pb-2">
+          <div className="flex justify-between text-[9px] font-bold text-muted-foreground">
+            <span className="animate-pulse text-amber-500">GENERATING</span>
+            <span>{draft.progress}%</span>
+          </div>
+          <Progress value={draft.progress} className="h-0.5" />
+        </div>
+      )}
+
+      {/* Quick actions */}
+      <div className="flex items-center gap-1 border-t border-border/50 px-2.5 py-2">
+        {onEdit && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(draft.id)
+            }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <Pencil1Icon className="h-3 w-3" />
+            Edit
+          </button>
+        )}
+        {onRegenerate && draft.status !== "streaming" && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRegenerate(draft.id)
+            }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <LightningBoltIcon className="h-3 w-3" />
+            Regen
+          </button>
+        )}
+        {canPublish && (
+          <button
+            type="button"
+            disabled={isPublishing}
+            onClick={(e) => {
+              e.stopPropagation()
+              publish(draft.id, inferPostType(draft))
+            }}
+            className={cn(
+              "ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
+              "bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
             )}
-        </div>
+          >
+            {isPublishing ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3" />
+            )}
+            {isPublishing ? "Publishing…" : "Publish"}
+          </button>
+        )}
       </div>
     </div>
-  );
+  )
 }

@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   CheckIcon,
   Cross2Icon,
+  ImageIcon,
   LightningBoltIcon,
   Pencil1Icon,
   QuestionMarkCircledIcon,
@@ -19,6 +20,12 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
@@ -28,12 +35,15 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { OrganicCalendarDraft } from "./types";
-import { PlatformBadge, StatusBadge } from "./DraftCardBadges";
+import { PlatformBadge, StatusDot } from "./DraftCardBadges";
 import { DraftHoverCardContent } from "./DraftHoverCardContent";
 import { cardVariants } from "./draft-card-styles";
 import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 import { isValidTimeLabel, normalizeTimeLabel } from "@/lib/organic/scheduling";
+import { useReducedMotion } from "motion/react";
+import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft";
+import { inferPostType } from "@/lib/organic/publish-utils";
 
 const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "linkedin"];
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
@@ -44,6 +54,26 @@ const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
   tiktok: "TikTok",
   youtube: "YouTube",
 };
+
+// Left-border accent colors per platform / status
+const PLATFORM_ACCENT: Record<string, string> = {
+  instagram: "#E1306C",
+  linkedin: "#0A66C2",
+  facebook: "#1877F2",
+  tiktok: "#69C9D0",
+  youtube: "#FF0000",
+  twitter: "#1DA1F2",
+};
+
+function resolveAccentColor(
+  draft: OrganicCalendarDraft,
+  platform: string
+): string {
+  if (draft.status === "published") return "#10B981"; // emerald-500
+  if (draft.status === "failed") return "#EF4444";    // red-500
+  if (draft.status === "streaming") return "#5A48F9"; // brand-primary
+  return PLATFORM_ACCENT[platform] ?? "#5A48F9";
+}
 
 export function CalendarDraftCard({
   draft,
@@ -68,15 +98,31 @@ export function CalendarDraftCard({
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
 }) {
-  const platform = (draft.platforms[0] || "instagram") as "instagram" | "linkedin" | "facebook" | "tiktok" | "youtube" | "twitter";
+  const platform = (draft.platforms[0] || "instagram") as
+    | "instagram"
+    | "linkedin"
+    | "facebook"
+    | "tiktok"
+    | "youtube"
+    | "twitter";
   const isStreaming = draft.status === "streaming";
   const isFailed = draft.status === "failed";
   const isAssignedToDay = draft.dateLabel.trim().length > 0;
   const hasValidTimeLabel = isValidTimeLabel(draft.timeLabel);
   const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;
-  const [isHovered, setIsHovered] = React.useState(false);
+  const reduceMotion = useReducedMotion();
+  const [timePickerOpen, setTimePickerOpen] = React.useState(false);
+  const [pendingTime, setPendingTime] = React.useState(draft.timeLabel);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const { publish, isPublishing } = usePublishDraft();
+  const canPublishToInstagram =
+    draft.platforms.includes("instagram") &&
+    draft.status !== "published" &&
+    draft.status !== "streaming";
+
+  const accentColor = resolveAccentColor(draft, platform);
+  const hasMedia = draft.mediaCount > 0;
 
   const focusEditor = React.useCallback(
     (draftId: string) => {
@@ -98,7 +144,6 @@ export function CalendarDraftCard({
       onClearFailure(draft.id);
       return;
     }
-
     applyQuickEdit((currentDraft) => ({
       ...currentDraft,
       status: currentDraft.seedTrendId ? "placeholder" : "draft",
@@ -106,319 +151,382 @@ export function CalendarDraftCard({
     }));
   }, [applyQuickEdit, draft.id, onClearFailure]);
 
-  const setCustomTime = React.useCallback(() => {
-    if (typeof window === "undefined") return;
-    const nextTime = window.prompt("Set posting time (e.g. 11:15 AM)", draft.timeLabel);
-    if (!nextTime) return;
-
-    const trimmed = nextTime.trim();
-    if (!trimmed) return;
-    const normalized = normalizeTimeLabel(trimmed);
+  const applyCustomTime = React.useCallback(() => {
+    const normalized = normalizeTimeLabel(pendingTime.trim());
     if (!normalized) return;
-
     applyQuickEdit((currentDraft) => ({
       ...currentDraft,
       timeLabel: normalized,
     }));
-  }, [applyQuickEdit, draft.timeLabel]);
+    setTimePickerOpen(false);
+  }, [applyQuickEdit, pendingTime]);
 
   return (
-    <HoverCard openDelay={250} closeDelay={120}>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <HoverCardTrigger asChild>
-            <button
-              type="button"
-              onClick={(e) => {
-                if (e.shiftKey) {
-                  onToggleSelection(draft.id);
-                } else {
-                  onSelect(draft.id);
-                }
-              }}
-              draggable={!!onDragStart}
-              onDragStart={(event) => onDragStart?.(event, draft.id)}
-              onMouseEnter={() => {
-                setIsHovered(true);
-                onMouseEnter?.();
-              }}
-              onMouseLeave={() => {
-                setIsHovered(false);
-                onMouseLeave?.();
-              }}
-              aria-pressed={isSelected || isMultiSelected}
-              className={cn(
-                cardVariants({
-                  selected: isSelected,
-                  multiSelected: isMultiSelected,
-                  streaming: isStreaming,
-                  failed: isFailed,
-                  platformHover: isSelected ? "none" : platform,
-                }),
-                isHovered &&
-                !isSelected &&
-                  "scale-[1.015] -translate-y-0.5 shadow-[0_10px_26px_rgba(14,165,233,.18)]",
-                draft.status === "placeholder" && "opacity-80 grayscale-[0.5]"
-              )}
-            >
-              {isStreaming && (
-              <div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent animate-shimmer"
-                style={{ backgroundSize: "200% 100%" }}
-              />
-              )}
-              
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
-                      {draft.timeLabel}
-                    </span>
-                    {draft.titleTopic && (
-                      <TooltipProvider>
-                        <Tooltip delayDuration={0}>
-                          <TooltipTrigger asChild>
-                            <div 
-                              className="p-0.5 -m-0.5 cursor-help"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <QuestionMarkCircledIcon 
-                                className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" 
-                              />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="top"
-                            className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-[11px]"
-                          >
-                            <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
-                            {draft.titleTopic}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {isMultiSelected && (
-                      <div className="w-3.5 h-3.5 bg-brand-primary rounded-full flex items-center justify-center">
-                        <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
-                      </div>
-                    )}
-                    {onRegenerate && draft.status !== "streaming" && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-label={isFailed ? "Retry failed draft" : "Regenerate draft"}
-                        className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRegenerate(draft.id);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            onRegenerate(draft.id);
-                          }
-                        }}
-                      >
-                        <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
-                      </span>
-                    )}
-                        <StatusBadge status={draft.status} format={draft.format} />
-                      </div>
-                    </div>
-
-                <p className={cn(
-                  "text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif",
-                  isStreaming && "animate-pulse opacity-70"
-                )}>
-                  {draft.creativeIdea || draft.title}
-                </p>
-                
-                <p className={cn(
-                  "mt-1 text-[11px] text-muted-foreground leading-snug font-medium transition-all",
-                  isHovered ? "line-clamp-3" : "line-clamp-2"
-                )}>
-                  {draft.captionPreview}
-                </p>
-
-                <div
+    <Popover open={timePickerOpen} onOpenChange={setTimePickerOpen}>
+      <HoverCard openDelay={250} closeDelay={120}>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <HoverCardTrigger asChild>
+              <PopoverAnchor asChild>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    if (e.shiftKey) {
+                      onToggleSelection(draft.id);
+                    } else {
+                      onSelect(draft.id);
+                    }
+                  }}
+                  draggable={!!onDragStart}
+                  onDragStart={(event) => onDragStart?.(event, draft.id)}
+                  onMouseEnter={() => onMouseEnter?.()}
+                  onMouseLeave={() => onMouseLeave?.()}
+                  aria-pressed={isSelected || isMultiSelected}
                   className={cn(
-                    "grid transition-all",
-                    isHovered ? "mt-2 max-h-16 opacity-100" : "max-h-0 opacity-0 overflow-hidden"
+                    "group",
+                    cardVariants({
+                      selected: isSelected,
+                      multiSelected: isMultiSelected,
+                      streaming: isStreaming,
+                      failed: isFailed,
+                      platformHover: isSelected ? "none" : platform,
+                    }),
+                    draft.status === "placeholder" && "opacity-80 grayscale-[0.5]"
                   )}
                 >
-                  <div className="rounded border border-border/70 bg-muted/60 px-2 py-1.5">
-                    <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                      Quick Preview
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-foreground">
-                      {draft.objective}
-                      {draft.cta ? ` • CTA: ${draft.cta}` : ""}
-                    </p>
-                  </div>
-                </div>
+                  {/* Streaming shimmer */}
+                  {isStreaming && !reduceMotion && (
+                    <div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent animate-shimmer"
+                      style={{ backgroundSize: "200% 100%" }}
+                    />
+                  )}
 
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="flex gap-1.5">
-                    {draft.platforms.map((p) => (
-                      <PlatformBadge key={p} platform={p} />
-                    ))}
-                  </div>
-                  <span className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest">
-                    {draft.format}
-                  </span>
-                </div>
+                  {/* Platform accent left bar */}
+                  <div
+                    className={cn(
+                      "absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg",
+                      isStreaming && "animate-pulse"
+                    )}
+                    style={{ backgroundColor: accentColor }}
+                    aria-hidden
+                  />
 
-                {typeof draft.progress === "number" ? (
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
-                      <span className="text-primary animate-pulse">GENERATING</span>
-                      <span>{draft.progress}%</span>
-                    </div>
-                    <Progress value={draft.progress} className="h-1" />
-                  </div>
-                ) : null}
-
-                {isFailed && draft.generationError ? (
-                  <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
-                      Generation failed
-                    </p>
-                    <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive/90">
-                      {draft.generationError}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      {onRegenerate ? (
-                        <span
-                          role="button"
-                          tabIndex={0}
-                          className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onRegenerate(draft.id);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              onRegenerate(draft.id);
-                            }
-                          }}
-                        >
-                          <LightningBoltIcon className="h-3 w-3" />
-                          Retry
+                  <div className="relative z-10 pl-1">
+                    {/* Header row: time | multi-select | regen | status dot */}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
+                          {draft.timeLabel}
                         </span>
-                      ) : null}
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          clearFailure();
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            clearFailure();
-                          }
-                        }}
-                      >
-                        <Cross2Icon className="h-3 w-3" />
-                        Clear
+                        {draft.titleTopic && (
+                          <TooltipProvider>
+                            <Tooltip delayDuration={0}>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className="p-0.5 -m-0.5 cursor-help"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <QuestionMarkCircledIcon className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="top"
+                                className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-[11px]"
+                              >
+                                <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
+                                {draft.titleTopic}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {isMultiSelected && (
+                          <div className="w-3.5 h-3.5 bg-brand-primary rounded-full flex items-center justify-center">
+                            <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
+                          </div>
+                        )}
+                        {onRegenerate && draft.status !== "streaming" && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            aria-label={isFailed ? "Retry failed draft" : "Regenerate draft"}
+                            className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onRegenerate(draft.id);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onRegenerate(draft.id);
+                              }
+                            }}
+                          >
+                            <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
+                          </span>
+                        )}
+                        <StatusDot status={draft.status} format={draft.format} />
+                      </div>
+                    </div>
+
+                    {/* Title */}
+                    <p
+                      className={cn(
+                        "text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif",
+                        isStreaming && "animate-pulse opacity-70"
+                      )}
+                    >
+                      {draft.creativeIdea || draft.title}
+                    </p>
+
+                    {/* Caption */}
+                    <p className="mt-1 text-[11px] text-muted-foreground leading-snug font-medium line-clamp-2">
+                      {draft.captionPreview}
+                    </p>
+
+                    {/* Generation progress */}
+                    {typeof draft.progress === "number" ? (
+                      <div className="mt-3 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
+                          <span className="text-primary animate-pulse">GENERATING</span>
+                          <span>{draft.progress}%</span>
+                        </div>
+                        <Progress value={draft.progress} className="h-1" />
+                      </div>
+                    ) : null}
+
+                    {/* Error state */}
+                    {isFailed && draft.generationError ? (
+                      <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
+                          Generation failed
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive/90">
+                          {draft.generationError}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          {onRegenerate ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onRegenerate(draft.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  onRegenerate(draft.id);
+                                }
+                              }}
+                            >
+                              <LightningBoltIcon className="h-3 w-3" />
+                              Retry
+                            </span>
+                          ) : null}
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              clearFailure();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                clearFailure();
+                              }
+                            }}
+                          >
+                            <Cross2Icon className="h-3 w-3" />
+                            Clear
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* Footer: platforms | media chip | format */}
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        {draft.platforms.map((p) => (
+                          <PlatformBadge key={p} platform={p} />
+                        ))}
+                        {hasMedia && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 ml-0.5">
+                            <ImageIcon className="h-2.5 w-2.5" />
+                            {draft.mediaCount > 1 ? draft.mediaCount : null}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest">
+                        {draft.format}
                       </span>
                     </div>
                   </div>
-                ) : null}
-              </div>
-            </button>
-          </HoverCardTrigger>
-        </ContextMenuTrigger>
-        <ContextMenuContent className="w-56">
-          <ContextMenuLabel>Quick Edit</ContextMenuLabel>
-          <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
-            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
-            Open in editor
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          {QUICK_PLATFORM_OPTIONS.map((option) => (
+                </button>
+              </PopoverAnchor>
+            </HoverCardTrigger>
+          </ContextMenuTrigger>
+
+          {/* Context menu */}
+          <ContextMenuContent className="w-56">
+            <ContextMenuLabel>Quick Edit</ContextMenuLabel>
+            <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
+              <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+              Open in editor
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            {QUICK_PLATFORM_OPTIONS.map((option) => (
+              <ContextMenuItem
+                key={option}
+                onSelect={() =>
+                  applyQuickEdit((currentDraft) => ({
+                    ...currentDraft,
+                    platforms: [option],
+                  }))
+                }
+              >
+                Platform: {QUICK_PLATFORM_LABELS[option]}
+              </ContextMenuItem>
+            ))}
+            {QUICK_TIME_OPTIONS.map((time) => (
+              <ContextMenuItem
+                key={time}
+                onSelect={() =>
+                  applyQuickEdit((currentDraft) => ({
+                    ...currentDraft,
+                    timeLabel: time,
+                  }))
+                }
+              >
+                Time: {time}
+              </ContextMenuItem>
+            ))}
             <ContextMenuItem
-              key={option}
+              onSelect={() => {
+                setPendingTime(draft.timeLabel);
+                setTimePickerOpen(true);
+              }}
+            >
+              Time: Custom...
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={!canMarkScheduled}
               onSelect={() =>
+                canMarkScheduled &&
                 applyQuickEdit((currentDraft) => ({
                   ...currentDraft,
-                  platforms: [option],
+                  status: "scheduled",
                 }))
               }
             >
-              Platform: {QUICK_PLATFORM_LABELS[option]}
+              Mark as scheduled
             </ContextMenuItem>
-          ))}
-          {QUICK_TIME_OPTIONS.map((time) => (
             <ContextMenuItem
-              key={time}
               onSelect={() =>
                 applyQuickEdit((currentDraft) => ({
                   ...currentDraft,
-                  timeLabel: time,
+                  status: "draft",
                 }))
               }
             >
-              Time: {time}
+              Mark as draft
             </ContextMenuItem>
-          ))}
-          <ContextMenuItem onSelect={setCustomTime}>
-            Time: Custom...
-          </ContextMenuItem>
-          <ContextMenuItem
-            disabled={!canMarkScheduled}
-            onSelect={() =>
-              canMarkScheduled &&
-              applyQuickEdit((currentDraft) => ({
-                ...currentDraft,
-                status: "scheduled",
-              }))
-            }
-          >
-            Mark as scheduled
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() =>
-              applyQuickEdit((currentDraft) => ({
-                ...currentDraft,
-                status: "draft",
-              }))
-            }
-          >
-            Mark as draft
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          {onRegenerate ? (
-            <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
-              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
-              {isFailed ? "Retry generation" : "Regenerate"}
+            <ContextMenuSeparator />
+            {onRegenerate ? (
+              <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
+                <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+                {isFailed ? "Retry generation" : "Regenerate"}
+              </ContextMenuItem>
+            ) : null}
+            {isFailed ? (
+              <ContextMenuItem onSelect={clearFailure}>
+                <Cross2Icon className="mr-2 h-3.5 w-3.5" />
+                Clear failure
+              </ContextMenuItem>
+            ) : null}
+            {canPublishToInstagram ? (
+              <ContextMenuItem
+                disabled={isPublishing}
+                onSelect={() => publish(draft.id, inferPostType(draft))}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="mr-2 h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+                {isPublishing ? "Publishing…" : "Publish to Instagram"}
+              </ContextMenuItem>
+            ) : null}
+            <ContextMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => bulkDeleteDrafts([draft.id])}
+            >
+              <TrashIcon className="mr-2 h-3.5 w-3.5" />
+              Delete draft
             </ContextMenuItem>
-          ) : null}
-          {isFailed ? (
-            <ContextMenuItem onSelect={clearFailure}>
-              <Cross2Icon className="mr-2 h-3.5 w-3.5" />
-              Clear failure
-            </ContextMenuItem>
-          ) : null}
-          <ContextMenuItem
-            className="text-destructive focus:text-destructive"
-            onSelect={() => bulkDeleteDrafts([draft.id])}
+          </ContextMenuContent>
+        </ContextMenu>
+
+        {/* Rich hover popover */}
+        <HoverCardContent
+          side="right"
+          align="start"
+          className="p-0 border-none bg-transparent shadow-none"
+          avoidCollisions
+        >
+          <DraftHoverCardContent
+            draft={draft}
+            onEdit={focusEditor}
+            onRegenerate={onRegenerate}
+          />
+        </HoverCardContent>
+      </HoverCard>
+
+      {/* Time picker popover */}
+      <PopoverContent side="top" align="start" className="w-56 p-3">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Set posting time
+        </p>
+        <Input
+          value={pendingTime}
+          onChange={(e) => setPendingTime(e.target.value)}
+          placeholder="e.g. 11:15 AM"
+          className="h-8 text-xs"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applyCustomTime();
+            if (e.key === "Escape") setTimePickerOpen(false);
+          }}
+          autoFocus
+        />
+        <div className="mt-2 flex gap-1.5">
+          <button
+            type="button"
+            onClick={applyCustomTime}
+            className="flex-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            <TrashIcon className="mr-2 h-3.5 w-3.5" />
-            Delete draft
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-      <HoverCardContent side="right" align="start" className="p-0 border-none bg-transparent shadow-none" avoidCollisions>
-         <DraftHoverCardContent draft={draft} />
-      </HoverCardContent>
-    </HoverCard>
+            Set
+          </button>
+          <button
+            type="button"
+            onClick={() => setTimePickerOpen(false)}
+            className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

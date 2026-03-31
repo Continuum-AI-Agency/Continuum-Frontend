@@ -135,6 +135,64 @@ export type PlannerAiStudioRevision = {
   applied: PlannerAiStudioApplyResponse;
 };
 
+function dedupeHandoffCandidates(
+  candidates: PlannerAiStudioHandoff[]
+): PlannerAiStudioHandoff[] {
+  const seen = new Set<string>();
+  const deduped: PlannerAiStudioHandoff[] = [];
+
+  candidates.forEach((candidate) => {
+    const signature = JSON.stringify(candidate);
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    deduped.push(candidate);
+  });
+
+  return deduped;
+}
+
+export function buildAiStudioHandoffStorageCandidates(
+  handoff: PlannerAiStudioHandoff
+): PlannerAiStudioHandoff[] {
+  const candidates: PlannerAiStudioHandoff[] = [handoff];
+  const mediaSuggestion = handoff.mediaSuggestion;
+
+  if (mediaSuggestion?.assetBase64) {
+    const mediaWithoutBase64 = { ...mediaSuggestion };
+    delete mediaWithoutBase64.assetBase64;
+    candidates.push({
+      ...handoff,
+      mediaSuggestion: mediaWithoutBase64,
+    });
+  }
+
+  if (mediaSuggestion && typeof mediaSuggestion.generationContext !== "undefined") {
+    const mediaWithoutContext = { ...mediaSuggestion };
+    delete mediaWithoutContext.generationContext;
+    candidates.push({
+      ...handoff,
+      mediaSuggestion: mediaWithoutContext,
+    });
+  }
+
+  if (mediaSuggestion) {
+    candidates.push({
+      ...handoff,
+      mediaSuggestion: undefined,
+    });
+  }
+
+  if (handoff.assetHints?.length) {
+    candidates.push({
+      ...handoff,
+      mediaSuggestion: undefined,
+      assetHints: undefined,
+    });
+  }
+
+  return dedupeHandoffCandidates(candidates);
+}
+
 export function buildAiStudioStorageKey(draftId: string): string {
   return `${STORAGE_PREFIX}:${draftId}`;
 }
