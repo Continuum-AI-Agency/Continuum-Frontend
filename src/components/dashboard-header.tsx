@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import { useSession } from "@/hooks/useSession";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useToastContext } from "@/components/ui/ToastProvider";
@@ -11,9 +11,9 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./navigation/routes";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "motion/react";
 
-export function DashboardHeader() {
+function DashboardHeaderInner() {
   useDashboardWelcomeToast();
   useInviteToast();
   const pathname = usePathname();
@@ -53,6 +53,18 @@ export function DashboardHeader() {
       <div className="ml-auto flex items-center gap-3">
       </div>
     </header>
+  );
+}
+
+export function DashboardHeader() {
+  return (
+    <Suspense
+      fallback={
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4" />
+      }
+    >
+      <DashboardHeaderInner />
+    </Suspense>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Box, Text } from "@radix-ui/themes";
 
 const points = [
@@ -13,7 +13,7 @@ const points = [
   { x: 312, y: 28, label: "Continuum" },
 ];
 
-const glowGradient = `radial-gradient(circle at 60% 20%, rgba(130, 102, 255, 0.45), transparent 55%),
+const glowGradient = `radial-gradient(circle at 60% 20%, rgba(90, 72, 249, 0.45), transparent 55%),
   radial-gradient(circle at 30% 80%, rgba(99, 253, 207, 0.35), transparent 60%)`;
 
 export function KpiGraph() {
@@ -47,12 +47,12 @@ export function KpiGraph() {
         >
           <defs>
             <linearGradient id="graphStroke" x1="0%" x2="100%" y1="0%" y2="0%">
-              <stop offset="0%" stopColor="rgba(139, 92, 246, 0.85)" />
+              <stop offset="0%" stopColor="rgba(90, 72, 249, 0.85)" />
               <stop offset="60%" stopColor="rgba(99, 253, 207, 0.9)" />
               <stop offset="100%" stopColor="rgba(244, 114, 182, 0.95)" />
             </linearGradient>
             <linearGradient id="graphFill" x1="0%" x2="0%" y1="0%" y2="100%">
-              <stop offset="0%" stopColor="rgba(129, 140, 248, 0.35)" />
+              <stop offset="0%" stopColor="rgba(90, 72, 249, 0.3)" />
               <stop offset="100%" stopColor="rgba(129, 140, 248, 0.0)" />
             </linearGradient>
             <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -92,7 +92,7 @@ export function KpiGraph() {
               transition={{ delay: 0.6 + index * 0.12, type: "spring", stiffness: 280, damping: 18 }}
             >
               <circle cx={point.x} cy={point.y} r={5} fill="rgba(255, 255, 255, 0.95)" />
-              <circle cx={point.x} cy={point.y} r={10} fill="rgba(139, 92, 246, 0.25)" />
+              <circle cx={point.x} cy={point.y} r={10} fill="rgba(90, 72, 249, 0.25)" />
               <text x={point.x + 12} y={point.y - 12} className="fill-white text-xs font-semibold">
                 {point.label}
               </text>

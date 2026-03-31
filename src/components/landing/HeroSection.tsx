@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { Box, Container, Flex, Heading, Text, Button, Badge } from "@radix-ui/themes";
 import GradientText from "../ui/GradientText";
 import { KpiGraph } from "./KpiGraph";
@@ -19,7 +19,7 @@ export function HeroSection() {
         <Flex direction={{ initial: "column", md: "row" }} gap="8" align="center">
           <Box className="w-full md:w-6/12">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-              <Badge size="2" color="purple" className="mb-4 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-200">
+              <Badge size="2" color="indigo" className="mb-4 rounded-full bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary">
                 Hybrid Stripe × Modern Treasury polish
               </Badge>
               <Heading size="9" className="tracking-tight leading-tight">

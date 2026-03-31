@@ -362,6 +362,14 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
   const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
 
+  // Reset when brand changes (new accounts arrive from server)
+  React.useEffect(() => {
+    const newFirst = accounts[0]?.integrationAccountId ?? null;
+    setSelectedAccountId(newFirst);
+    setState({ status: "idle" });
+    setExpandedMetric(null);
+  }, [brandId, accounts]);
+
   const selectedAccount = accounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
 
   React.useEffect(() => {

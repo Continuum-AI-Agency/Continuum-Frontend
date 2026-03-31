@@ -1,13 +1,16 @@
 "use client";
 
-import React from "react";
-import { PaidMediaReportingWidget } from "@/components/paid-media/PaidMediaReportingWidget";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+
+const PaidMediaReportingWidget = dynamic(
+  () =>
+    import("@/components/paid-media/PaidMediaReportingWidget").then((m) => ({
+      default: m.PaidMediaReportingWidget,
+    })),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> },
+);
 
 type PaidDashboardViewProps = {
   brandId: string;
@@ -15,23 +18,13 @@ type PaidDashboardViewProps = {
 
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   return (
-    <ResizablePanelGroup orientation="vertical" className="h-full min-h-0">
-      <ResizablePanel defaultSize={35} minSize={20} className="min-h-0">
-        <div className="h-full min-h-0 border-b bg-background p-4 overflow-hidden">
-          <PaidMediaReportingWidget brandId={brandId} />
-        </div>
-      </ResizablePanel>
-      
-      <ResizableHandle withHandle className="h-px w-full" />
-      
-      <ResizablePanel defaultSize={65} minSize={20} className="min-h-0">
-        <div className="h-full min-h-0 p-4 overflow-hidden">
-          <DCOActionsWidget
-            brandId={brandId}
-            className="h-full min-h-0 flex flex-col overflow-hidden"
-          />
-        </div>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+    <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
+      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <PaidMediaReportingWidget brandId={brandId} />
+      </div>
+      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+        <DCOActionsWidget brandId={brandId} />
+      </div>
+    </div>
   );
 }

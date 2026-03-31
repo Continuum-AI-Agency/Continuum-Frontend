@@ -7,7 +7,12 @@ import { ActiveBrandProvider } from "./providers/ActiveBrandProvider";
 import { StrategicAnalysisRealtimeListener } from "./strategic-analyses/StrategicAnalysisRealtimeListener";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CommandPaletteProvider } from "./navigation/CommandPaletteProvider";
-import { CommandPalette } from "./navigation/CommandPalette";
+import dynamic from "next/dynamic";
+
+const CommandPalette = dynamic(
+  () => import("./navigation/CommandPalette").then((m) => ({ default: m.CommandPalette })),
+  { ssr: false },
+);
 
 import { User } from "@supabase/supabase-js";
 

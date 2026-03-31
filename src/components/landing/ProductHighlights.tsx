@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { Box, Container, Flex, Badge, Heading, Text, Tabs } from "@radix-ui/themes";
 import GlassCard from "../ui/GlassCard";
 import { MagicWandIcon, BarChartIcon, LayersIcon } from "@radix-ui/react-icons";

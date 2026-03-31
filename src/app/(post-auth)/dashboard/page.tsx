@@ -6,6 +6,7 @@ import { PaidDashboardView } from "@/components/dashboard/views/PaidDashboardVie
 import { OrganicDashboardDataWrapper } from "@/components/dashboard/server/OrganicDashboardDataWrapper";
 import { WidgetSkeleton } from "@/components/dashboard/skeletons/DashboardSkeletons";
 
+// force-dynamic: reads user session cookies via getActiveBrandContext()
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -15,18 +16,13 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="h-full w-full overflow-hidden">
-      <HomeBaseDashboard
-        activeBrandId={activeBrandId}
-        paidViewSlot={
-          <PaidDashboardView brandId={activeBrandId} />
-        }
-        organicViewSlot={
-          <Suspense fallback={<WidgetSkeleton />}>
-            <OrganicDashboardDataWrapper brandId={activeBrandId} />
-          </Suspense>
-        }
-      />
-    </div>
+    <HomeBaseDashboard
+      paidViewSlot={<PaidDashboardView brandId={activeBrandId} />}
+      organicViewSlot={
+        <Suspense fallback={<WidgetSkeleton />}>
+          <OrganicDashboardDataWrapper brandId={activeBrandId} />
+        </Suspense>
+      }
+    />
   );
 }
