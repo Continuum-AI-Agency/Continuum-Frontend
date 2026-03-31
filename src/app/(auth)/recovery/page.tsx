@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@radix-ui/themes";
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion } from "motion/react";
 import { ArrowLeft } from "lucide-react";
 import { FormInput } from "@/components/auth/FormInput";
 import { FormAlert } from "@/components/auth/FormAlert";
