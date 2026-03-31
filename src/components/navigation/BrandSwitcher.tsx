@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { 
-  ChevronsUpDown, 
-  Plus, 
+import {
+  ChevronsUpDown,
+  Loader2,
+  Plus,
   Layers
 } from "lucide-react"
 
@@ -35,7 +36,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function BrandSwitcher() {
   const { isMobile } = useSidebar()
-  const { activeBrandId, brandSummaries, selectBrand } = useActiveBrandContext()
+  const { activeBrandId, brandSummaries, selectBrand, isSwitching } = useActiveBrandContext()
   const router = useRouter()
   const [isCreating, startCreate] = React.useTransition()
   const [menuOpen, setMenuOpen] = React.useState(false)
@@ -54,15 +55,16 @@ export function BrandSwitcher() {
     return null
   }
 
-  const handleBrandSelect = async (brandId: string) => {
-    await selectBrand(brandId);
+  const handleBrandSelect = (brandId: string) => {
     setMenuOpen(false);
-    
+
     const targetBrand = brandSummaries.find(b => b.id === brandId);
-    
-    if (targetBrand?.completed && typeof window !== 'undefined' && window.location.pathname.startsWith('/onboarding')) {
-      router.push('/dashboard');
-    }
+
+    void selectBrand(brandId).then(() => {
+      if (targetBrand?.completed && typeof window !== 'undefined' && window.location.pathname.startsWith('/onboarding')) {
+        router.push('/dashboard');
+      }
+    });
   };
 
   const TeamLogo = activeTeam.logo;
@@ -89,7 +91,11 @@ export function BrandSwitcher() {
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{activeTeam.name}</span>
               </div>
-              <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
+              {isSwitching ? (
+                <Loader2 className="ml-auto h-4 w-4 animate-spin text-[var(--ring)] group-data-[collapsible=icon]:hidden" />
+              ) : (
+                <ChevronsUpDown className="ml-auto text-[color-mix(in_srgb,var(--sidebar-foreground)_64%,transparent)] group-data-[collapsible=icon]:hidden" />
+              )}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
