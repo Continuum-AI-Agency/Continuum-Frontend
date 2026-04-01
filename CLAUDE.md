@@ -136,18 +136,25 @@ Reserved for **large cross-cutting documents**: plans, roadmaps, analyses, desig
 
 **Planning phase:** Non-trivial features trigger `EnterPlanMode` to explore the codebase, understand existing patterns, and design an implementation approach before touching code. Plans are written to `.planning/PLAN.md`, reviewed by the user, then executed. Keep plans concise; list unresolved questions at the end.
 
-**Sub-agent delegation:**
-- **Explore agent** — fast codebase search and pattern discovery; use for multi-round investigations or broad context-gathering before planning
-- **Plan agent** — design implementation strategies and identify critical files and dependencies
-- **General-purpose agent** — research, multi-step tasks, tool-agnostic work
-- **Specialized agents** (`gsd-executor`, `gsd-verifier`, etc.) — leverage for domain-specific workflows (GSD orchestration, testing, debugging)
+**Sub-agent delegation (aggressive parallelization):**
+Use sub-agents liberally to maximize throughput. Spawn as many agents in parallel as the work permits.
+
+- **Explore agent** — codebase search, pattern discovery, file navigation. Use for any investigation >1 file.
+- **Plan agent** — design and architecture. Use whenever you'd write a plan.
+- **General-purpose agent** — research, multi-step tasks, tool-agnostic work.
+- **Specialized agents** (`gsd-executor`, `gsd-verifier`, etc.) — domain-specific workflows.
+- **Custom agents** — you may draft entirely new sub-agent types for recurring work patterns in this repo (e.g., an agent specialized in Canvas component generation, or one for schema/migration work). When useful patterns emerge, propose and implement custom agents to the user.
 
 Use `Agent` tool with `subagent_type` to delegate. Parallel agents maximize throughput; don't duplicate work (if delegating research, don't also search yourself).
 
 **When to delegate vs. implement directly:**
-- Delegate research/exploration that touches 3+ files or needs multi-round investigation
-- Delegate multi-step execution if work is clearly partitionable and independent
-- Implement directly for single-file fixes, simple features, or focused tasks under 5 minutes
+- **Delegate most work.** Default to spawning sub-agents unless the task is trivial (<2 minutes, single concern).
+- Delegate any investigation/exploration that touches 2+ files.
+- Delegate multi-step execution if partitionable (even loosely independent work).
+- Delegate background/parallel tasks with `run_in_background=true` while you proceed with dependent work.
+- Implement directly only for: single-file edits, obvious bug fixes, simple feature additions in 1–2 files.
+
+**Drafting new agent types:** When you encounter recurring patterns in the work (e.g., "we always need to validate migrations before merging," or "we frequently refactor Canvas nodes in a similar way"), propose a new `subagent_type` to the user with a description of what it would do. The user can then integrate it into their tooling for future use.
 
 **Plan mode format:** Extremely concise — sacrifice grammar for brevity. List unresolved questions at the end.
 

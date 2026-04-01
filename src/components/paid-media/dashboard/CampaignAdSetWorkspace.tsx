@@ -878,21 +878,18 @@ export function CampaignAdSetWorkspace({
   ]);
 
   const toggleCompareEntity = React.useCallback((key: string) => {
+    const isRemoving = selectedCompareKeys.includes(key);
     setSelectedCompareKeys((current) => {
       if (current.includes(key)) {
-        const next = current.filter((item) => item !== key);
-        if (
-          scope &&
-          key === `${scope.type}:${scope.id}`
-        ) {
-          setScope(undefined);
-          onSelectedCampaignChange?.(undefined);
-        }
-        return next;
+        return current.filter((item) => item !== key);
       }
       return [...current, key];
     });
-  }, [onSelectedCampaignChange, scope]);
+    if (isRemoving && scope && key === `${scope.type}:${scope.id}`) {
+      setScope(undefined);
+      onSelectedCampaignChange?.(undefined);
+    }
+  }, [onSelectedCampaignChange, scope, selectedCompareKeys]);
 
   const showAllEntityOptions = React.useCallback(() => {
     setRailEntityFilter("all");
