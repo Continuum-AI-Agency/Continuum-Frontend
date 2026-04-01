@@ -45,7 +45,10 @@ export function resolveMediaTemplate(platform: string): MediaTemplate {
   return MEDIA_TEMPLATES[platform] ?? MEDIA_TEMPLATES.instagram
 }
 
-export function resolvePreviewAspectRatio(platform: string): number {
+export function resolvePreviewAspectRatio(platform: string, format?: string): number {
+  const f = (format ?? "").toLowerCase()
+  if (f === "reel" || f === "video") return 4 / 5
+  if (f === "story") return 9 / 16
   const template = resolveMediaTemplate(platform)
   return template.width / template.height
 }

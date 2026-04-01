@@ -2,8 +2,16 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
+import { LightningBoltIcon, Pencil1Icon, TrashIcon } from "@radix-ui/react-icons"
 
 import { Button } from "@/components/ui/button"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "./types"
 import type { PlannerPlatform } from "./planner-platforms"
@@ -28,6 +36,8 @@ type OrganicMonthlyCalendarProps = {
   onCreatePost: (options: { dayId: string; platformKey: string }) => void
   onPreviousMonth: () => void
   onNextMonth: () => void
+  onRegenerate?: (draftId: string) => void
+  onDeleteDraft?: (draftId: string) => void
 }
 
 function buildMonthGrid(weekStart: Date): Date[] {
@@ -56,30 +66,65 @@ function DraftChip({
   draft,
   isSelected,
   onClick,
+  onRegenerate,
+  onDelete,
 }: {
   draft: OrganicCalendarDraft
   isSelected: boolean
   onClick: () => void
+  onRegenerate?: (id: string) => void
+  onDelete?: (id: string) => void
 }) {
   const platform = draft.platforms[0] ?? "instagram"
   const colorClass = PLATFORM_CHIP_COLORS[platform] ?? "bg-muted text-foreground"
 
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
-      className={cn(
-        "flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight ring-0 transition-opacity hover:opacity-80",
-        colorClass,
-        isSelected && "ring-1 ring-white/80 ring-offset-1"
-      )}
-      title={draft.title}
-    >
-      <span className="truncate">{draft.title || "Untitled"}</span>
-    </button>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onClick()
+          }}
+          className={cn(
+            "flex w-full cursor-pointer items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight ring-0 transition-opacity hover:opacity-80",
+            colorClass,
+            isSelected && "ring-1 ring-white/80 ring-offset-1"
+          )}
+          title={draft.title}
+        >
+          <span className="truncate">{draft.title || "Untitled"}</span>
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem onSelect={onClick}>
+          <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+          Open in editor
+        </ContextMenuItem>
+        {onRegenerate && draft.status !== "streaming" && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={() => onRegenerate(draft.id)}>
+              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+              {draft.status === "failed" ? "Retry generation" : "Regenerate"}
+            </ContextMenuItem>
+          </>
+        )}
+        {onDelete && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => onDelete(draft.id)}
+            >
+              <TrashIcon className="mr-2 h-3.5 w-3.5" />
+              Delete
+            </ContextMenuItem>
+          </>
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -91,6 +136,8 @@ export function OrganicMonthlyCalendar({
   onCreatePost,
   onPreviousMonth,
   onNextMonth,
+  onRegenerate,
+  onDeleteDraft,
 }: OrganicMonthlyCalendarProps) {
   const todayId = React.useMemo(() => formatDayId(new Date()), [])
 
@@ -183,6 +230,8 @@ export function OrganicMonthlyCalendar({
                       draft={draft}
                       isSelected={draft.id === selectedDraftId}
                       onClick={() => onSelectDraft(draft.id)}
+                      onRegenerate={onRegenerate}
+                      onDelete={onDeleteDraft}
                     />
                   ))}
                   {overflowCount > 0 && (

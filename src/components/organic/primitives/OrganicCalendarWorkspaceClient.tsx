@@ -980,6 +980,8 @@ export function OrganicCalendarWorkspaceClient({
                   }
                   onPreviousMonth={handlePreviousMonth}
                   onNextMonth={handleNextMonth}
+                  onRegenerate={handleRegenerate}
+                  onDeleteDraft={(id) => bulkDeleteDrafts([id])}
                 />
               )}
 
@@ -1024,9 +1026,9 @@ export function OrganicCalendarWorkspaceClient({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}
                 transition={previewTransition}
-                className="h-[55dvh] min-h-[22rem] overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[42rem] lg:shrink-0 xl:w-[46rem]"
+                className="flex h-[55dvh] min-h-[22rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[42rem] lg:shrink-0 xl:w-[46rem]"
               >
-                <div className="mb-2 flex items-center justify-between pb-1.5">
+                <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Post Preview
                   </p>
@@ -1052,8 +1054,8 @@ export function OrganicCalendarWorkspaceClient({
                   </div>
                 </div>
 
-                <div className="h-[calc(100%-2rem)] overflow-hidden rounded-md bg-background/85">
-                  <div className="h-full min-h-0 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-background/85">
+                  <div className="h-full overflow-hidden rounded-md border border-border/45 bg-background/80">
                     <OrganicDraftPreview
                       draft={selectedDraft}
                       brandName={brandName}

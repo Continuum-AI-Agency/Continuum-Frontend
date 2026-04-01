@@ -1,11 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { CheckIcon, ChevronDownIcon, Cross2Icon, PlusIcon } from "@radix-ui/react-icons"
+import { CheckIcon, ChevronDownIcon, Cross2Icon, LightningBoltIcon, Pencil1Icon, PlusIcon, TrashIcon } from "@radix-ui/react-icons"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
@@ -76,6 +83,7 @@ function DraftRow({
   onSelect,
   onToggle,
   onDelete,
+  onRegenerate,
 }: {
   draft: OrganicCalendarDraft
   isSelected: boolean
@@ -83,54 +91,82 @@ function DraftRow({
   onSelect: () => void
   onToggle: () => void
   onDelete: () => void
+  onRegenerate?: () => void
 }) {
   return (
-    <div
-      className={cn(
-        "group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40",
-        isSelected && "bg-primary/[0.05]"
-      )}
-      onClick={onSelect}
-    >
-      <div
-        onClick={(e) => { e.stopPropagation(); onToggle() }}
-        className="flex shrink-0 cursor-pointer items-center"
-      >
-        <Checkbox
-          checked={isMultiSelected}
-          className="opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
-        />
-      </div>
-
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {draft.platforms.map((p) => (
-          <PlatformBadge key={p} platform={p} />
-        ))}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {draft.title || "Untitled"}
-        </span>
-        {draft.captionPreview && (
-          <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
-            {draft.captionPreview}
-          </span>
-        )}
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        {draft.dateLabel && (
-          <span className="text-xs text-muted-foreground">{draft.dateLabel}</span>
-        )}
-        <StatusBadge status={draft.status} />
-        <button
-          type="button"
-          aria-label="Remove"
-          onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div
+          className={cn(
+            "group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40",
+            isSelected && "bg-primary/[0.05]"
+          )}
+          onClick={onSelect}
         >
-          <Cross2Icon className="size-3" />
-        </button>
-      </div>
-    </div>
+          <div
+            onClick={(e) => { e.stopPropagation(); onToggle() }}
+            className="flex shrink-0 cursor-pointer items-center"
+          >
+            <Checkbox
+              checked={isMultiSelected}
+              className="opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
+            />
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {draft.platforms.map((p) => (
+              <PlatformBadge key={p} platform={p} />
+            ))}
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+              {draft.title || "Untitled"}
+            </span>
+            {draft.captionPreview && (
+              <span className="hidden min-w-0 max-w-xs truncate text-xs text-muted-foreground lg:block">
+                {draft.captionPreview}
+              </span>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            {draft.dateLabel && (
+              <span className="text-xs text-muted-foreground">{draft.dateLabel}</span>
+            )}
+            <StatusBadge status={draft.status} />
+            <button
+              type="button"
+              aria-label="Remove"
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+            >
+              <Cross2Icon className="size-3" />
+            </button>
+          </div>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-48">
+        <ContextMenuItem onSelect={onSelect}>
+          <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+          Open in editor
+        </ContextMenuItem>
+        {onRegenerate && draft.status !== "streaming" && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={onRegenerate}>
+              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+              {draft.status === "failed" ? "Retry generation" : "Regenerate"}
+            </ContextMenuItem>
+          </>
+        )}
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          className="text-destructive focus:text-destructive"
+          onSelect={onDelete}
+        >
+          <TrashIcon className="mr-2 h-3.5 w-3.5" />
+          Delete
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
 
@@ -228,6 +264,7 @@ export function OrganicListView({
   selectedDraftIds,
   onSelectDraft,
   onToggleSelection,
+  onRegenerate,
   onCreatePost,
   backlogDrafts,
   onAddBacklogDraft,
@@ -348,6 +385,7 @@ export function OrganicListView({
               onSelect={() => onSelectDraft(draft.id)}
               onToggle={() => onToggleSelection(draft.id)}
               onDelete={() => bulkDeleteDrafts([draft.id])}
+              onRegenerate={() => onRegenerate(draft.id)}
             />
           ))}
           {draftDrafts.length === 0 && creating !== "draft" && (

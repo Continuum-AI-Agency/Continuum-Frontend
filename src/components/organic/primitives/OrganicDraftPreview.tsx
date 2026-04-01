@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Image from "next/image"
-import { PlayIcon } from "@radix-ui/react-icons"
+import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from "@radix-ui/react-icons"
 
 import { Loader2, Send } from "lucide-react"
 
@@ -117,6 +117,112 @@ function resolveThumbnailDirection(draft: OrganicCalendarDraft): string {
   )
 }
 
+function resolveCarouselSlides(draft: OrganicCalendarDraft): string[] {
+  const media = draft.mediaSuggestion
+  if (!media) return []
+
+  const assets = (media.assets ?? [])
+    .filter((a): a is NonNullable<typeof a> => Boolean(a && hasText(a.assetBase64)))
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
+
+  if (assets.length > 0) {
+    return assets.map((a) => toDataUrl(a.assetBase64!, a.mimeType))
+  }
+
+  const primary = resolveDraftMediaAssetUrl(draft)
+  return primary ? [primary] : []
+}
+
+function CarouselMediaArea({
+  slides,
+  alt,
+  aspectRatio,
+  borderClass = "border-b border-border/70",
+}: {
+  slides: string[]
+  alt: string
+  aspectRatio: number
+  borderClass?: string
+}) {
+  const [activeIndex, setActiveIndex] = React.useState(0)
+  const total = slides.length
+
+  if (total === 0) {
+    return (
+      <div className={cn("relative bg-muted", borderClass)} style={{ aspectRatio }}>
+        <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-background">
+              <PlayIcon className="h-6 w-6" />
+            </div>
+            <p className="text-xs">No thumbnail yet</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const canPrev = activeIndex > 0
+  const canNext = activeIndex < total - 1
+
+  return (
+    <div className={cn("relative bg-muted", borderClass)} style={{ aspectRatio }}>
+      <Image
+        src={slides[activeIndex]}
+        alt={`${alt} — slide ${activeIndex + 1}`}
+        fill
+        unoptimized
+        sizes="(max-width: 768px) 100vw, 560px"
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+
+      {total > 1 && (
+        <div className="absolute right-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white tabular-nums">
+          {activeIndex + 1}/{total}
+        </div>
+      )}
+
+      {canPrev && (
+        <button
+          type="button"
+          onClick={() => setActiveIndex((i) => i - 1)}
+          className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          aria-label="Previous slide"
+        >
+          <ChevronLeftIcon className="h-4 w-4" />
+        </button>
+      )}
+      {canNext && (
+        <button
+          type="button"
+          onClick={() => setActiveIndex((i) => i + 1)}
+          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+          aria-label="Next slide"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </button>
+      )}
+
+      {total > 1 && (
+        <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-1">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setActiveIndex(i)}
+              className={cn(
+                "h-1.5 rounded-full transition-all",
+                i === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/50"
+              )}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InlinePreviewTextarea({
   className,
   ...props
@@ -178,7 +284,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   const updateDraft = useCalendarStore((state) => state.updateDraft)
   const selectedPlatform = draft.platforms[0] || "instagram"
   const previewMaxWidth = resolvePreviewMaxWidth(selectedPlatform)
-  const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform)
+  const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform, draft.format)
   const creativeDirection = resolveCreativeDirection(draft)
   const thumbnailDirection = resolveThumbnailDirection(draft)
 
@@ -288,13 +394,42 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
           {/* Social preview mock */}
           <div className="mx-auto w-full" style={{ maxWidth: `${previewMaxWidth}px` }}>
             {selectedPlatform === "instagram" ? (
-              <InstagramMobilePreview
-                draft={draft}
-                mediaAspectRatio={mediaAspectRatio}
-                onCaptionChange={(value) => patchDraft({ captionPreview: value })}
-                thumbnailDirection={thumbnailDirection}
-                brandName={brandName}
-              />
+              <div className="overflow-hidden rounded-[2.5rem] border-[5px] border-foreground/10 shadow-2xl">
+                {/* Phone status bar */}
+                <div className="relative flex items-center justify-center bg-background px-4 pt-3 pb-2">
+                  <span className="absolute left-5 text-[9px] font-bold tabular-nums text-foreground/70">9:41</span>
+                  <div className="h-5 w-[88px] rounded-full bg-foreground/90" />
+                  <div className="absolute right-5 flex items-center gap-1 text-foreground/70">
+                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
+                      <path d="M1.5 8.5C5.082 4.918 9.795 3 12 3s6.918 1.918 10.5 5.5L21 11c-2.9-3.15-5.68-4.5-9-4.5S5.9 7.85 3 11L1.5 8.5z" />
+                      <path d="M4.5 11.5C7.2 8.8 9.7 7.5 12 7.5s4.8 1.3 7.5 4L18 13c-1.9-2.15-3.7-3-6-3s-4.1.85-6 3L4.5 11.5z" />
+                      <circle cx="12" cy="17" r="2" />
+                    </svg>
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
+                      <rect x="1" y="6" width="18" height="12" rx="2" fillOpacity="0.3" />
+                      <rect x="1" y="6" width="13" height="12" rx="2" />
+                      <path d="M21 10v4a2 2 0 0 0 0-4z" />
+                    </svg>
+                  </div>
+                </div>
+                {/* Scrollable Instagram feed viewport */}
+                <div
+                  className="overflow-y-auto"
+                  style={{ maxHeight: 560 }}
+                >
+                  <InstagramMobilePreview
+                    draft={draft}
+                    mediaAspectRatio={mediaAspectRatio}
+                    onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                    thumbnailDirection={thumbnailDirection}
+                    brandName={brandName}
+                  />
+                </div>
+                {/* Home indicator */}
+                <div className="flex justify-center bg-background py-2">
+                  <div className="h-1 w-24 rounded-full bg-foreground/20" />
+                </div>
+              </div>
             ) : null}
 
             {selectedPlatform === "facebook" ? (
@@ -448,13 +583,13 @@ function InstagramMobilePreview({
   thumbnailDirection,
   brandName,
 }: SocialPreviewProps) {
-  const mediaAssetUrl = resolveDraftMediaAssetUrl(draft)
+  const slides = resolveCarouselSlides(draft)
   const mediaAltText = resolveDraftMediaAltText(draft)
   const displayName = brandName ?? "Your Brand"
   const initials = brandInitials(brandName)
 
   return (
-    <div className="w-full overflow-hidden rounded-xl border border-border/70 bg-card shadow-lg text-foreground">
+    <div className="w-full overflow-hidden bg-card text-foreground">
       <div className="flex items-center p-3 border-b border-border/70">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary/70 via-accent/70 to-secondary/70 p-[2px] flex items-center justify-center text-[10px] font-bold text-foreground">
@@ -473,27 +608,7 @@ function InstagramMobilePreview({
         </div>
       </div>
 
-      <div className="relative border-b border-border/70 bg-muted" style={{ aspectRatio: mediaAspectRatio }}>
-        {mediaAssetUrl ? (
-          <Image
-            src={mediaAssetUrl}
-            alt={mediaAltText}
-            fill
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 560px"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground">
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-background">
-                <PlayIcon className="h-6 w-6" />
-              </div>
-              <p className="text-xs">No thumbnail yet</p>
-            </div>
-          </div>
-        )}
-      </div>
+      <CarouselMediaArea slides={slides} alt={mediaAltText} aspectRatio={mediaAspectRatio} />
 
       {thumbnailDirection ? (
         <div className="border-b border-border/70 px-3 py-2">
@@ -535,7 +650,7 @@ function FacebookFeedPreview({
   thumbnailDirection,
   brandName,
 }: SocialPreviewProps) {
-  const mediaAssetUrl = resolveDraftMediaAssetUrl(draft)
+  const slides = resolveCarouselSlides(draft)
   const mediaAltText = resolveDraftMediaAltText(draft)
   const displayName = brandName ?? "Your Brand"
 
@@ -564,27 +679,7 @@ function FacebookFeedPreview({
         <CaptionCharCount caption={draft.captionPreview} platform="facebook" />
       </div>
 
-      <div className="relative border-y border-border/70 bg-muted" style={{ aspectRatio: mediaAspectRatio }}>
-        {mediaAssetUrl ? (
-          <Image
-            src={mediaAssetUrl}
-            alt={mediaAltText}
-            fill
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 560px"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-background">
-                <PlayIcon className="h-6 w-6" />
-              </div>
-              <p className="text-xs">No thumbnail yet</p>
-            </div>
-          </div>
-        )}
-      </div>
+      <CarouselMediaArea slides={slides} alt={mediaAltText} aspectRatio={mediaAspectRatio} borderClass="border-y border-border/70" />
 
       {thumbnailDirection ? (
         <div className="border-t border-border/70 px-4 py-2">
@@ -620,7 +715,7 @@ function LinkedInDesktopPreview({
   thumbnailDirection,
   brandName,
 }: SocialPreviewProps) {
-  const mediaAssetUrl = resolveDraftMediaAssetUrl(draft)
+  const slides = resolveCarouselSlides(draft)
   const mediaAltText = resolveDraftMediaAltText(draft)
   const displayName = brandName ?? "Your Brand"
 
@@ -649,27 +744,7 @@ function LinkedInDesktopPreview({
         <CaptionCharCount caption={draft.captionPreview} platform="linkedin" />
       </div>
 
-      <div className="relative border-y border-border/70 bg-muted" style={{ aspectRatio: mediaAspectRatio }}>
-        {mediaAssetUrl ? (
-          <Image
-            src={mediaAssetUrl}
-            alt={mediaAltText}
-            fill
-            unoptimized
-            sizes="(max-width: 768px) 100vw, 620px"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-            <div className="flex flex-col items-center gap-2">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/70 bg-background">
-                <PlayIcon className="h-7 w-7 text-primary" />
-              </div>
-              <p className="text-xs">No thumbnail yet</p>
-            </div>
-          </div>
-        )}
-      </div>
+      <CarouselMediaArea slides={slides} alt={mediaAltText} aspectRatio={mediaAspectRatio} borderClass="border-y border-border/70" />
 
       {thumbnailDirection ? (
         <div className="border-t border-border/70 px-4 py-2">
