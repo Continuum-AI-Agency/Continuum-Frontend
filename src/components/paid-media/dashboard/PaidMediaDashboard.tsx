@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/popover";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
+import { AccountInsightsPanel } from "./AccountInsightsPanel";
 import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
 import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
 import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
@@ -518,26 +519,34 @@ export function PaidMediaDashboard({
         )}
 
         {adAccountId ? (
-          <CampaignAdSetWorkspace
-            brandId={brandId}
-            accountId={adAccountId}
-            campaigns={campaigns}
-            campaignIndexes={campaignIndexes}
-            selectedCampaignIndexId={selectedCampaignIndexId}
-            onSelectedCampaignIndexChange={setSelectedCampaignIndexId}
-            timeRange={timeRange}
-            resolution={timelineResolution}
-            onResolutionChange={setTimelineResolution}
-            activeOnly={activeOnly}
-            onActiveOnlyChange={setActiveOnly}
-            onSelectedCampaignChange={setSelectedCampaignId}
-            alertsRefreshTick={alertsRefreshTick}
-            onEditCampaignIndex={(indexId) => {
-              setSelectedCampaignIndexId(indexId);
-              setIndexDialogOpen(true);
-            }}
-            onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
-          />
+          <>
+            <CampaignAdSetWorkspace
+              brandId={brandId}
+              accountId={adAccountId}
+              campaigns={campaigns}
+              campaignIndexes={campaignIndexes}
+              selectedCampaignIndexId={selectedCampaignIndexId}
+              onSelectedCampaignIndexChange={setSelectedCampaignIndexId}
+              timeRange={timeRange}
+              resolution={timelineResolution}
+              onResolutionChange={setTimelineResolution}
+              activeOnly={activeOnly}
+              onActiveOnlyChange={setActiveOnly}
+              onSelectedCampaignChange={setSelectedCampaignId}
+              alertsRefreshTick={alertsRefreshTick}
+              onEditCampaignIndex={(indexId) => {
+                setSelectedCampaignIndexId(indexId);
+                setIndexDialogOpen(true);
+              }}
+              onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
+            />
+
+            <AccountInsightsPanel
+              brandId={brandId}
+              adAccountId={adAccountId}
+              timeRange={timeRange}
+            />
+          </>
         ) : (
           <Card>
             <Box className="p-8 text-center text-muted-foreground">
