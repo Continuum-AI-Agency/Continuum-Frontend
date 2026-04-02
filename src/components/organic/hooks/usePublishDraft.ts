@@ -2,7 +2,10 @@
 
 import * as React from "react"
 import { useCalendarStore } from "@/lib/organic/store"
+import { buildPublishBody } from "@/lib/organic/publish-utils"
+import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken"
 import { useToast } from "@/components/ui/ToastProvider"
+import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
 
 // ── SSE event shapes ────────────────────────────────────────────────────────
 
@@ -23,7 +26,7 @@ export type PublishProgressStage =
   | "polling"
 
 export type UsePublishDraftResult = {
-  publish: (draftId: string, postType: "POST" | "REEL" | "CAROUSEL") => Promise<void>
+  publish: (draft: OrganicCalendarDraft) => Promise<void>
   isPublishing: boolean
   stage: PublishProgressStage | null
   pollingAttempt: number
@@ -62,6 +65,7 @@ async function* parseSSE(body: ReadableStream<Uint8Array>) {
 
 export function usePublishDraft(): UsePublishDraftResult {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
+  const accountContext = useCalendarStore((state) => state.accountContext)
   const { show } = useToast()
 
   const [isPublishing, setIsPublishing] = React.useState(false)
@@ -71,7 +75,7 @@ export function usePublishDraft(): UsePublishDraftResult {
   const [error, setError] = React.useState<string | null>(null)
 
   const publish = React.useCallback(
-    async (draftId: string, postType: "POST" | "REEL" | "CAROUSEL") => {
+    async (draft: OrganicCalendarDraft) => {
       setIsPublishing(true)
       setStage(null)
       setPollingAttempt(0)
@@ -79,10 +83,16 @@ export function usePublishDraft(): UsePublishDraftResult {
       setError(null)
 
       try {
-        const response = await fetch(`/api/organic/calendar/drafts/${draftId}/publish`, {
+        const token = await getBrowserAccessToken()
+        const body = buildPublishBody(draft, accountContext.igAccountId, accountContext.brandId)
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" }
+        if (token) headers["Authorization"] = `Bearer ${token}`
+
+        const response = await fetch(`/api/organic/calendar/drafts/${draft.id}/publish`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ postType }),
+          headers,
+          body: JSON.stringify(body),
         })
 
         if (response.status === 401) {
@@ -113,7 +123,7 @@ export function usePublishDraft(): UsePublishDraftResult {
             if (ev.stage === "polling") setPollingAttempt(ev.attempt)
           } else if (event === "published") {
             const ev = parsed as PublishedEvent
-            updateDraft(draftId, (d) => ({
+            updateDraft(draft.id, (d) => ({
               ...d,
               status: "published" as const,
               instagram_post_id: ev.postId ?? null,
@@ -126,7 +136,7 @@ export function usePublishDraft(): UsePublishDraftResult {
           } else if (event === "failed") {
             const ev = parsed as FailedEvent
             if (ev.code === "already_published") {
-              updateDraft(draftId, (d) => ({ ...d, status: "published" as const }))
+              updateDraft(draft.id, (d) => ({ ...d, status: "published" as const }))
             } else if (
               ev.code === "token_expired" ||
               ev.error.toLowerCase().includes("token") ||
@@ -150,7 +160,7 @@ export function usePublishDraft(): UsePublishDraftResult {
         setStage(null)
       }
     },
-    [updateDraft, show]
+    [updateDraft, accountContext, show]
   )
 
   return { publish, isPublishing, stage, pollingAttempt, tokenExpired, error }

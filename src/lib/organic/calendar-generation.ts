@@ -479,6 +479,20 @@ const slotStartedEventSchema = z.object({
   message: z.string().optional(),
 });
 
+const slotHeartbeatEventSchema = z.object({
+  type: z.literal("slot_heartbeat"),
+  placementId: z.string().min(1),
+  stage: z.string().optional(),
+  progress: z.number().min(0).max(1),
+  elapsedMs: z.number().nonnegative().optional(),
+});
+
+const slotStageEventSchema = z.object({
+  type: z.literal("slot_stage"),
+  placementId: z.string().min(1),
+  stage: z.string().min(1),
+});
+
 const slotCompletedEventSchema = z.object({
   type: z.literal("slot_completed"),
   placement: calendarPlacementSchema,
@@ -514,6 +528,8 @@ const completeEventSchema = z.object({
 export const calendarGenerationEventSchema = z.discriminatedUnion("type", [
   progressEventSchema,
   slotStartedEventSchema,
+  slotHeartbeatEventSchema,
+  slotStageEventSchema,
   slotCompletedEventSchema,
   slotFailedEventSchema,
   placementEventSchema,

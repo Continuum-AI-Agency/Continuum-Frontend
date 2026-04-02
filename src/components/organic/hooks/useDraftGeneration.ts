@@ -158,6 +158,16 @@ function resolveProgressStageFloor(stage?: string): number {
   return 10;
 }
 
+function resolveSlotStageFloor(stage: string): number {
+  if (stage === "concepting") return 15;
+  if (stage === "drafting") return 30;
+  if (stage === "generating_assets") return 55;
+  if (stage === "reviewing") return 60;
+  if (stage === "revising") return 75;
+  if (stage === "merging") return 95;
+  return 5;
+}
+
 function formatGridProgressMessage({
   platform,
   stage,
@@ -861,8 +871,42 @@ export function useDraftGeneration({
             updateDraftById(seedPlacementId ?? event.placementId, (draft) => ({
               ...draft,
               status: "streaming",
+              progress: 5,
+              generationStage: "queued",
               generationError: undefined,
             }));
+            return;
+          }
+
+          if (event.type === "slot_heartbeat") {
+            const seedPlacementId =
+              generatedToSeedPlacementId.get(event.placementId) ??
+              (unresolvedSeedIds.has(event.placementId)
+                ? event.placementId
+                : platformSeeds.find((seed) => unresolvedSeedIds.has(seed.placementId))?.placementId);
+            if (seedPlacementId) {
+              updateDraftById(seedPlacementId, (draft) => ({
+                ...draft,
+                progress: Math.round(event.progress * 100),
+                ...(event.stage ? { generationStage: event.stage } : {}),
+              }));
+            }
+            return;
+          }
+
+          if (event.type === "slot_stage") {
+            const seedPlacementId =
+              generatedToSeedPlacementId.get(event.placementId) ??
+              (unresolvedSeedIds.has(event.placementId)
+                ? event.placementId
+                : platformSeeds.find((seed) => unresolvedSeedIds.has(seed.placementId))?.placementId);
+            if (seedPlacementId) {
+              updateDraftById(seedPlacementId, (draft) => ({
+                ...draft,
+                generationStage: event.stage,
+                progress: Math.max(draft.progress ?? 0, resolveSlotStageFloor(event.stage)),
+              }));
+            }
             return;
           }
 
@@ -880,6 +924,8 @@ export function useDraftGeneration({
             updateDraftById(seedPlacementId, (draft) => ({
               ...draft,
               status: "failed",
+              progress: undefined,
+              generationStage: undefined,
               generationError: event.message,
               generationAttempts: event.attempts ?? draft.generationAttempts,
             }));

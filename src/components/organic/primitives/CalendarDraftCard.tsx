@@ -42,8 +42,8 @@ import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 import { isValidTimeLabel, normalizeTimeLabel } from "@/lib/organic/scheduling";
 import { useReducedMotion } from "motion/react";
-import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft";
-import { inferPostType } from "@/lib/organic/publish-utils";
+import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
+import { useProgressAnimation } from "@/components/organic/hooks/useProgressAnimation";
 
 const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "linkedin"];
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
@@ -115,7 +115,8 @@ export function CalendarDraftCard({
   const [pendingTime, setPendingTime] = React.useState(draft.timeLabel);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
-  const { publish, isPublishing } = usePublishDraft();
+  const { publish, isPublishing } = usePublishDraft()
+  const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const canPublishToInstagram =
     draft.platforms.includes("instagram") &&
     draft.status !== "published" &&
@@ -287,13 +288,13 @@ export function CalendarDraftCard({
                     </p>
 
                     {/* Generation progress */}
-                    {typeof draft.progress === "number" ? (
+                    {typeof displayProgress === "number" ? (
                       <div className="mt-3 space-y-1.5">
                         <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
                           <span className="text-primary animate-pulse">GENERATING</span>
-                          <span>{draft.progress}%</span>
+                          <span>{displayProgress}%</span>
                         </div>
-                        <Progress value={draft.progress} className="h-1" />
+                        <Progress value={displayProgress} className="h-1" />
                       </div>
                     ) : null}
 
@@ -454,7 +455,7 @@ export function CalendarDraftCard({
             {canPublishToInstagram ? (
               <ContextMenuItem
                 disabled={isPublishing}
-                onSelect={() => publish(draft.id, inferPostType(draft))}
+                onSelect={() => publish(draft)}
               >
                 <svg
                   viewBox="0 0 24 24"

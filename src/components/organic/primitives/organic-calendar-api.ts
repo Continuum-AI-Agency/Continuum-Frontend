@@ -97,6 +97,32 @@ function normalizeRunEvent(eventPayload: Record<string, unknown>): CalendarGener
     return parsed.success ? parsed.data : null
   }
 
+  if (eventType === "slot_heartbeat") {
+    const placementId = readString(eventPayload, "placementId")
+    const progress = readNumber(eventPayload, "progress")
+    if (!placementId || typeof progress !== "number") return null
+    const parsed = calendarGenerationEventSchema.safeParse({
+      type: "slot_heartbeat",
+      placementId,
+      stage: readString(eventPayload, "stage"),
+      progress,
+      elapsedMs: readNumber(eventPayload, "elapsedMs"),
+    })
+    return parsed.success ? parsed.data : null
+  }
+
+  if (eventType === "slot_stage") {
+    const placementId = readString(eventPayload, "placementId")
+    const stage = readString(eventPayload, "stage")
+    if (!placementId || !stage) return null
+    const parsed = calendarGenerationEventSchema.safeParse({
+      type: "slot_stage",
+      placementId,
+      stage,
+    })
+    return parsed.success ? parsed.data : null
+  }
+
   if (eventType === "slot_completed") {
     const placementValue = eventPayload.placement
     const parsedPlacement = calendarPlacementSchema.safeParse(placementValue)

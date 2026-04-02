@@ -25,6 +25,7 @@ export type OrganicCalendarDraft = {
   objective: string
   slideCount?: number
   progress?: number
+  generationStage?: string
   captionPreview: string
   tags: string[]
   creativeDirectionPrompt?: string

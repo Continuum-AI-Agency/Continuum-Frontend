@@ -75,6 +75,7 @@ interface CalendarState {
   selectedDraftIds: string[];
   selectedTrendIds: string[];
   persistedWeekStartId: string | null;
+  accountContext: { igAccountId: string | null; brandId: string | null };
   gridStatus: GridStatus;
   gridProgress: {
     percent: number;
@@ -130,6 +131,7 @@ interface CalendarState {
   updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
   deleteBacklogDraft: (draftId: string) => void;
   promoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
+  setAccountContext: (ctx: { igAccountId: string | null; brandId: string | null }) => void;
 }
 
 type PersistedCalendarState = Pick<
@@ -173,6 +175,7 @@ export const useCalendarStore = create<CalendarState>()(
       selectedDraftIds: [],
       selectedTrendIds: [],
       persistedWeekStartId: null,
+      accountContext: { igAccountId: null, brandId: null },
       gridStatus: "idle",
       gridProgress: { percent: 0 },
       gridError: null,
@@ -413,6 +416,8 @@ export const useCalendarStore = create<CalendarState>()(
             }),
           };
         }),
+
+      setAccountContext: (ctx) => set({ accountContext: ctx }),
     }),
     {
       name: "organic-calendar-storage",

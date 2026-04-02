@@ -26,7 +26,6 @@ import {
 } from "./social-preview-utils"
 import { OrganicCreativesPicker } from "./OrganicCreativesPicker"
 import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
-import { inferPostType } from "@/lib/organic/publish-utils"
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft
@@ -280,6 +279,13 @@ function LifecyclePill({ status }: { status: OrganicCalendarDraft["status"] }) {
   )
 }
 
+function toPublishFormat(format: string): "Post" | "Carousel" | "Reel" {
+  const f = format.toLowerCase()
+  if (f === "reel" || f === "video") return "Reel"
+  if (f === "carousel") return "Carousel"
+  return "Post"
+}
+
 export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprove }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
   const selectedPlatform = draft.platforms[0] || "instagram"
@@ -336,9 +342,19 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             className="h-8 w-[8rem] border-border/60 bg-background text-xs font-medium"
           />
 
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {draft.format}
-          </p>
+          <Select
+            value={toPublishFormat(draft.format)}
+            onValueChange={(value) => patchDraft({ format: value })}
+          >
+            <SelectTrigger className="h-8 w-[7rem] border-border/60 bg-background text-xs font-semibold">
+              <SelectValue placeholder="Format" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Post">Post</SelectItem>
+              <SelectItem value="Carousel">Carousel</SelectItem>
+              <SelectItem value="Reel">Reel</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <LifecyclePill status={draft.status} />
@@ -502,7 +518,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             <button
               type="button"
               disabled={isPublishing}
-              onClick={() => publish(draft.id, inferPostType(draft))}
+              onClick={() => publish(draft)}
               className={cn(
                 "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
                 isPublishing

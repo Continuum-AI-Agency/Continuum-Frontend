@@ -133,6 +133,7 @@ export function OrganicCalendarWorkspaceClient({
   maxTrendSelections,
   brandProfileId,
   brandName,
+  instagramAccountId,
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
@@ -160,6 +161,7 @@ export function OrganicCalendarWorkspaceClient({
     addBacklogDraft,
     deleteBacklogDraft,
     promoteBacklogDraft,
+    setAccountContext,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -182,8 +184,14 @@ export function OrganicCalendarWorkspaceClient({
       addBacklogDraft: state.addBacklogDraft,
       deleteBacklogDraft: state.deleteBacklogDraft,
       promoteBacklogDraft: state.promoteBacklogDraft,
+      setAccountContext: state.setAccountContext,
     }))
   )
+
+  React.useEffect(() => {
+    const igAccountId = instagramAccountId ?? platformAccountIds.instagram ?? null
+    setAccountContext({ igAccountId, brandId: brandProfileId ?? null })
+  }, [instagramAccountId, platformAccountIds, brandProfileId, setAccountContext])
 
   const {
     selectedId,

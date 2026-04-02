@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import type { OrganicCalendarDraft } from "./types"
 import { DraftCardMedia, resolveFormatAspectClass } from "./DraftCardMedia"
 import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
-import { inferPostType } from "@/lib/organic/publish-utils"
+import { useProgressAnimation } from "@/components/organic/hooks/useProgressAnimation"
 
 function resolveHashtags(draft: OrganicCalendarDraft): string[] {
   const ht = draft.hashtags
@@ -32,6 +32,7 @@ export function DraftHoverCardContent({
   onRegenerate?: (id: string) => void
 }) {
   const { publish, isPublishing } = usePublishDraft()
+  const displayProgress = useProgressAnimation(draft.progress, draft.generationStage)
   const canPublish =
     draft.platforms.includes("instagram") &&
     draft.status !== "published" &&
@@ -83,13 +84,13 @@ export function DraftHoverCardContent({
       )}
 
       {/* Generation progress */}
-      {typeof draft.progress === "number" && (
+      {typeof displayProgress === "number" && (
         <div className="space-y-1 px-3 pb-2">
           <div className="flex justify-between text-[9px] font-bold text-muted-foreground">
             <span className="animate-pulse text-amber-500">GENERATING</span>
-            <span>{draft.progress}%</span>
+            <span>{displayProgress}%</span>
           </div>
-          <Progress value={draft.progress} className="h-0.5" />
+          <Progress value={displayProgress} className="h-0.5" />
         </div>
       )}
 
@@ -127,7 +128,7 @@ export function DraftHoverCardContent({
             disabled={isPublishing}
             onClick={(e) => {
               e.stopPropagation()
-              publish(draft.id, inferPostType(draft))
+              publish(draft)
             }}
             className={cn(
               "ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors",
