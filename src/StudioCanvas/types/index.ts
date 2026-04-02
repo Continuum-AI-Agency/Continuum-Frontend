@@ -90,7 +90,7 @@ export interface VideoGenNodeData extends BaseNodeData {
   negativePrompt?: string;
   enhancePrompt: boolean;
   aspectRatio?: '16:9' | '9:16';
-  resolution?: '720p' | '1080p';
+  resolution?: '720p' | '1080p' | '2K' | '4K';
   durationSeconds?: 4 | 6 | 8;
   referenceMode?: 'images' | 'frames' | 'omni';
   frameList?: FrameSlot[];

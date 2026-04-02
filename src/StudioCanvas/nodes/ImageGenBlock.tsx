@@ -370,7 +370,10 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
         <ContextMenuSub>
           <ContextMenuSubTrigger>Aspect Ratio</ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-36">
-            {['1:1', '16:9', '9:16', '4:3', '3:4'].map((value) => (
+            {(data.model === 'nano-banana-2'
+              ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4']
+              : ['1:1', '16:9', '9:16', '4:3', '3:4']
+            ).map((value) => (
               <ContextMenuCheckboxItem
                 key={value}
                 checked={(data.aspectRatio || '16:9') === value}

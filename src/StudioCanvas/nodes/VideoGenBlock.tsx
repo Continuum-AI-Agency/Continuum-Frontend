@@ -479,7 +479,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
           <ContextMenuSub>
             <ContextMenuSubTrigger>Resolution</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
-              {['720p', '1080p'].map((value) => (
+              {(model === 'veo-3.1' ? ['720p', '1080p', '2K', '4K'] : ['720p', '1080p']).map((value) => (
                 <ContextMenuCheckboxItem
                   key={value}
                   checked={(data.resolution ?? '720p') === value}

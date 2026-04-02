@@ -8,6 +8,7 @@ import { useStudioStore } from '../stores/useStudioStore';
 import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   getVideoGeneratorReferenceMode,
+  resolveVideoGeneratorModel,
 } from '../utils/videoModel';
 
 export type NodeType = 'nanoGen' | 'videoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video' | 'audio' | 'document';
@@ -374,11 +375,12 @@ export function useProximityConnect() {
         
         if (targetNode.type === 'nanoGen' || targetNode.type === 'veoDirector' || targetNode.type === 'videoGen') {
              const targetVideoModel =
-               targetNode.type === 'veoDirector'
-                 ? 'veo-3.1'
-                 : targetNode.type === 'videoGen'
-                   ? DEFAULT_VIDEO_GENERATOR_MODEL
-                   : null;
+               (targetNode.type === 'veoDirector' || targetNode.type === 'videoGen')
+                 ? resolveVideoGeneratorModel({
+                     type: targetNode.type,
+                     data: (nodeLookup.get(targetNode.id)?.data ?? {}) as Record<string, unknown>,
+                   })
+                 : null;
              if (sourceNode.type === 'string') {
                  const currentEdges = getEdges();
                  const isPromptFilled = currentEdges.some(
