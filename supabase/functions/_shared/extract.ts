@@ -8,13 +8,29 @@ export async function extractText(
   options: ExtractOptions
 ): Promise<{ text: string; mimeType: string; fileName?: string }> {
   const mime = options.mimeType ?? inferMimeType(options.fileName);
-  if (mime?.startsWith("text/")) {
+  if (mime?.startsWith("text/") || mime === "application/json") {
     const decoder = new TextDecoder("utf-8", { fatal: false });
     return { text: decoder.decode(bytes), mimeType: mime, fileName: options.fileName };
   }
-  // TODO: Add PDF, DOCX, PPTX, HTML extraction. For now, treat as text fallback.
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  return { text: decoder.decode(bytes), mimeType: mime ?? "text/plain", fileName: options.fileName };
+
+  const UNSUPPORTED_BINARY_FORMATS: Record<string, string> = {
+    "application/pdf": "PDF",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.template": "DOCM",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PPTX",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+  };
+
+  if (mime && mime in UNSUPPORTED_BINARY_FORMATS) {
+    const label = UNSUPPORTED_BINARY_FORMATS[mime];
+    throw new Error(
+      `${label} files are not yet supported for text extraction. Please convert to .txt, .md, .csv, or .json and re-upload.`
+    );
+  }
+
+  throw new Error(
+    `Format "${mime ?? "unknown"}" is not yet supported for text extraction. Please convert to .txt, .md, .csv, or .json and re-upload.`
+  );
 }
 
 function inferMimeType(fileName?: string): string | undefined {

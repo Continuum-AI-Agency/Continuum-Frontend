@@ -47,6 +47,11 @@ interface InsightsData {
   selected_social_platforms?: string[];
 }
 
+interface EntityCounts {
+  total: number;
+  failed: number;
+}
+
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "OPENAI_API_KEY"] as const;
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -73,21 +78,41 @@ function validatePayload(body: unknown): { ok: true; data: InsightsData } | { ok
   if (!generation_data || !brand_id) {
     return { ok: false, error: "brand_id and generation_data are required." };
   }
-  if (typeof generation_data.week_start_date !== "string") {
+  const gen = generation_data as Record<string, unknown>;
+  if (typeof gen.week_start_date !== "string") {
     return { ok: false, error: "week_start_date is required." };
   }
-  if (generation_data.trends_and_events && typeof generation_data.trends_and_events !== "object") {
+  if (gen.trends_and_events && typeof gen.trends_and_events !== "object") {
     return { ok: false, error: "trends_and_events must be an object." };
   }
-  if (generation_data.questions_by_niche && typeof generation_data.questions_by_niche !== "object") {
+  if (gen.questions_by_niche && typeof gen.questions_by_niche !== "object") {
     return { ok: false, error: "questions_by_niche must be an object." };
   }
 
   const data: InsightsData = {
-    ...generation_data,
-    brand_id,
+    ...(gen as Omit<InsightsData, "brand_id">),
+    brand_id: brand_id as string,
   };
   return { ok: true, data };
+}
+
+async function embedBatch(texts: string[], openai: OpenAI, concurrency = 10): Promise<(number[] | null)[]> {
+  const results: (number[] | null)[] = new Array(texts.length).fill(null);
+  for (let i = 0; i < texts.length; i += concurrency) {
+    const slice = texts.slice(i, i + concurrency);
+    const batch = await Promise.all(
+      slice.map((text) => {
+        const cleaned = (text || "").trim();
+        if (!cleaned) return Promise.resolve(null);
+        return openai.embeddings
+          .create({ model: "text-embedding-3-small", input: cleaned })
+          .then((r) => r.data[0]?.embedding ?? null)
+          .catch(() => null);
+      })
+    );
+    batch.forEach((v, j) => { results[i + j] = v; });
+  }
+  return results;
 }
 
 serve(async (req) => {
@@ -136,83 +161,123 @@ serve(async (req) => {
     const generationId: string = generation.id;
 
     // Clear previous child rows for idempotent reruns
-    await supabase.from("brand_insights_trends").delete().eq("generation_id", generationId);
-    await supabase.from("brand_insights_events").delete().eq("generation_id", generationId);
-    await supabase.from("brand_insights_questions").delete().eq("generation_id", generationId);
+    await Promise.all([
+      supabase.from("brand_insights_trends").delete().eq("generation_id", generationId),
+      supabase.from("brand_insights_events").delete().eq("generation_id", generationId),
+      supabase.from("brand_insights_questions").delete().eq("generation_id", generationId),
+    ]);
 
-    let totalTrends = 0;
-    let totalEvents = 0;
-    let totalQuestions = 0;
-    let failedTrends = 0;
-    let failedEvents = 0;
-    let failedQuestions = 0;
+    async function processTrends(): Promise<EntityCounts> {
+      const trends = insightsData.trends_and_events?.trends ?? [];
+      const valid = trends.filter((t) => t?.title);
+      const invalidCount = trends.length - valid.length;
 
-    const embedOrNull = async (text: string): Promise<number[] | null> => {
-      const cleaned = (text || "").trim();
-      if (!cleaned) return null;
-      try {
-        const resp = await openai.embeddings.create({ model: "text-embedding-3-small", input: cleaned });
-        return resp.data[0]?.embedding ?? null;
-      } catch (error) {
-        console.error("Embedding failed", error);
-        return null;
+      if (valid.length === 0) return { total: 0, failed: invalidCount };
+
+      const texts = valid.map((t) =>
+        [t.title, t.description, t.relevance_to_brand].filter(Boolean).join("\n")
+      );
+      const embeddings = await embedBatch(texts, openai);
+
+      const rows = valid.map((t, i) => ({
+        generation_id: generationId,
+        brand_id: insightsData.brand_id,
+        title: t.title,
+        description: t.description ?? null,
+        relevance_to_brand: t.relevance_to_brand ?? null,
+        source: t.source ?? null,
+        embedding: embeddings[i],
+      }));
+
+      const { error } = await supabase.from("brand_insights_trends").insert(rows);
+      if (error) {
+        console.error("Trend bulk insert failed:", error);
+        return { total: 0, failed: valid.length + invalidCount };
       }
-    };
-
-    // Trends
-    for (const trend of insightsData.trends_and_events?.trends ?? []) {
-      if (!trend?.title) { failedTrends++; continue; }
-      const text = [trend.title, trend.description ?? "", trend.relevance_to_brand ?? ""].filter(Boolean).join("\n");
-      const embedding = await embedOrNull(text);
-        const { error } = await supabase.from("brand_insights_trends").insert({
-          generation_id: generationId,
-          brand_id: insightsData.brand_id,
-          title: trend.title,
-          description: trend.description ?? null,
-          relevance_to_brand: trend.relevance_to_brand ?? null,
-          source: trend.source ?? null,
-          embedding,
-        });
-      if (error) failedTrends++; else totalTrends++;
+      return { total: valid.length, failed: invalidCount };
     }
 
-    // Events
-    for (const event of insightsData.trends_and_events?.events ?? []) {
-      if (!event?.title) { failedEvents++; continue; }
-      const text = [event.title, event.description ?? "", event.opportunity ?? ""].filter(Boolean).join("\n");
-      const embedding = await embedOrNull(text);
-        const { error } = await supabase.from("brand_insights_events").insert({
-          generation_id: generationId,
-          brand_id: insightsData.brand_id,
-          title: event.title,
-          event_date: event.date ?? null,
-          description: event.description ?? null,
-          opportunity: event.opportunity ?? null,
-          embedding,
-        });
-      if (error) failedEvents++; else totalEvents++;
-    }
+    async function processEvents(): Promise<EntityCounts> {
+      const events = insightsData.trends_and_events?.events ?? [];
+      const valid = events.filter((e) => e?.title);
+      const invalidCount = events.length - valid.length;
 
-    // Questions
-    for (const niche of Object.keys(insightsData.questions_by_niche ?? {})) {
-      const qs = insightsData.questions_by_niche?.[niche]?.questions ?? [];
-      for (const q of qs) {
-        if (!q?.question) { failedQuestions++; continue; }
-        const text = [q.question, q.why_relevant ?? ""].filter(Boolean).join("\n");
-        const embedding = await embedOrNull(text);
-        const { error } = await supabase.from("brand_insights_questions").insert({
-          generation_id: generationId,
-          brand_id: insightsData.brand_id,
-          niche,
-          question_text: q.question,
-          social_platform: q.social_platform ?? null,
-          content_type_suggestion: q.content_type_suggestion ?? null,
-          why_relevant: q.why_relevant ?? null,
-          embedding,
-        });
-        if (error) failedQuestions++; else totalQuestions++;
+      if (valid.length === 0) return { total: 0, failed: invalidCount };
+
+      const texts = valid.map((e) =>
+        [e.title, e.description, e.opportunity].filter(Boolean).join("\n")
+      );
+      const embeddings = await embedBatch(texts, openai);
+
+      const rows = valid.map((e, i) => ({
+        generation_id: generationId,
+        brand_id: insightsData.brand_id,
+        title: e.title,
+        event_date: e.date ?? null,
+        description: e.description ?? null,
+        opportunity: e.opportunity ?? null,
+        embedding: embeddings[i],
+      }));
+
+      const { error } = await supabase.from("brand_insights_events").insert(rows);
+      if (error) {
+        console.error("Event bulk insert failed:", error);
+        return { total: 0, failed: valid.length + invalidCount };
       }
+      return { total: valid.length, failed: invalidCount };
     }
+
+    async function processQuestions(): Promise<EntityCounts> {
+      const nicheMap = insightsData.questions_by_niche ?? {};
+      const allItems: { niche: string; q: QuestionData }[] = [];
+
+      for (const niche of Object.keys(nicheMap)) {
+        for (const q of nicheMap[niche]?.questions ?? []) {
+          allItems.push({ niche, q });
+        }
+      }
+
+      const valid = allItems.filter((item) => item.q?.question);
+      const invalidCount = allItems.length - valid.length;
+
+      if (valid.length === 0) return { total: 0, failed: invalidCount };
+
+      const texts = valid.map(({ q }) =>
+        [q.question, q.why_relevant].filter(Boolean).join("\n")
+      );
+      const embeddings = await embedBatch(texts, openai);
+
+      const rows = valid.map(({ niche, q }, i) => ({
+        generation_id: generationId,
+        brand_id: insightsData.brand_id,
+        niche,
+        question_text: q.question,
+        social_platform: q.social_platform ?? null,
+        content_type_suggestion: q.content_type_suggestion ?? null,
+        why_relevant: q.why_relevant ?? null,
+        embedding: embeddings[i],
+      }));
+
+      const { error } = await supabase.from("brand_insights_questions").insert(rows);
+      if (error) {
+        console.error("Question bulk insert failed:", error);
+        return { total: 0, failed: valid.length + invalidCount };
+      }
+      return { total: valid.length, failed: invalidCount };
+    }
+
+    const [trendResult, eventResult, questionResult] = await Promise.all([
+      processTrends(),
+      processEvents(),
+      processQuestions(),
+    ]);
+
+    const totalTrends = trendResult.total;
+    const totalEvents = eventResult.total;
+    const totalQuestions = questionResult.total;
+    const failedTrends = trendResult.failed;
+    const failedEvents = eventResult.failed;
+    const failedQuestions = questionResult.failed;
 
     const status = (failedTrends + failedEvents + failedQuestions) > 0 ? "completed_with_errors" : "completed";
 

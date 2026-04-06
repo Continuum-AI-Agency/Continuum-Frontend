@@ -2,31 +2,35 @@ import { computeTextDelta, extractGeminiChunkText } from "./geminiStream.ts";
 
 // --- Tool Execution ---
 
-async function createEmbedding(input: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      input,
-      model: "text-embedding-3-small",
-    }),
-  });
+async function createEmbedding(input: string, geminiApiKey: string): Promise<number[]> {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiApiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "models/gemini-embedding-001",
+        taskType: "RETRIEVAL_QUERY",
+        content: { parts: [{ text: input }] },
+        outputDimensionality: 1536,
+      }),
+    }
+  );
   if (!response.ok) throw new Error("Failed to create embedding");
   const data = await response.json();
-  return data.data[0].embedding;
+  return data.embedding.values;
 }
 
-async function searchBrandDocs(brandId: string, query: string, openaiKey: string, supabase: any) {
-  if (!openaiKey) return "No embedding key available.";
+export { createEmbedding as createQueryEmbedding };
+
+async function searchBrandDocs(brandId: string, query: string, geminiKey: string, supabase: any) {
+  if (!geminiKey) return "No embedding key available.";
   try {
-    const embedding = await createEmbedding(query, openaiKey);
+    const embedding = await createEmbedding(query, geminiKey);
     const { data: chunks, error } = await supabase.rpc("match_brand_documents", {
       query_embedding: embedding,
-      match_threshold: 0.5,
-      match_count: 5,
+      match_threshold: 0.35,
+      match_count: 10,
       filter_brand_id: brandId,
     });
     if (error) throw error;
@@ -38,13 +42,113 @@ async function searchBrandDocs(brandId: string, query: string, openaiKey: string
   }
 }
 
-async function executeTool(functionCall: any, brandId: string, supabase: any, openaiKey: string): Promise<any> {
+async function executeTool(functionCall: any, brandId: string, supabase: any, geminiKey: string): Promise<any> {
   if (functionCall.name === "search_brand_documents") {
     const query = functionCall.args.query;
-    return await searchBrandDocs(brandId, query, openaiKey, supabase);
+    return await searchBrandDocs(brandId, query, geminiKey, supabase);
   }
   throw new Error(`Unknown tool: ${functionCall.name}`);
 }
+
+// --- Pre-fetch ---
+
+export type BrandContextSources = {
+  documents: string;
+  trends: string;
+  events: string;
+  questions: string;
+  strategicAnalysis: string;
+};
+
+export async function prefetchBrandContext(
+  brandId: string,
+  query: string,
+  geminiKey: string,
+  supabase: any
+): Promise<BrandContextSources> {
+  let queryEmbedding: number[];
+  try {
+    queryEmbedding = await createEmbedding(query, geminiKey);
+  } catch {
+    return { documents: "", trends: "", events: "", questions: "", strategicAnalysis: "" };
+  }
+
+  const [docsResult, trendsResult, eventsResult, questionsResult, stratResult] = await Promise.allSettled([
+    supabase.rpc("match_brand_documents", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 10,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_brand_insights_trends", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_brand_insights_events", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_brand_insights_questions", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_strategic_analysis_embeddings", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+  ]);
+
+  const extractDocs = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? []).map((c: any) => c.content).filter(Boolean).join("\n\n");
+  };
+
+  const extractTrends = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((t: any) => [t.title, t.description, t.relevance_to_brand].filter(Boolean).join(" — "))
+      .join("\n");
+  };
+
+  const extractEvents = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((e: any) => [e.title, e.description, e.opportunity].filter(Boolean).join(" — "))
+      .join("\n");
+  };
+
+  const extractQuestions = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((q: any) => [q.question_text, q.why_relevant].filter(Boolean).join(" — "))
+      .join("\n");
+  };
+
+  const extractStrat = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((s: any) => [s.label, s.embedding_text].filter(Boolean).join(": "))
+      .join("\n");
+  };
+
+  return {
+    documents: extractDocs(docsResult),
+    trends: extractTrends(trendsResult),
+    events: extractEvents(eventsResult),
+    questions: extractQuestions(questionsResult),
+    strategicAnalysis: extractStrat(stratResult),
+  };
+}
+
+// --- Streaming ---
 
 export type GeminiStreamRequest = {
   apiKey: string;
@@ -56,8 +160,8 @@ export type GeminiStreamRequest = {
   tools?: unknown[];
   brandId?: string; // for tool execution
   supabase?: any; // for tool execution
-  openaiKey?: string; // for tool execution
-  groundingModel?: string; 
+  geminiKey?: string; // for tool execution
+  groundingModel?: string;
 };
 
 export type GeminiRequestToolsMode = "url_context_and_search" | "search_only" | "none";
@@ -72,9 +176,12 @@ export async function streamGeminiTextDeltas({
   tools,
   brandId,
   supabase,
-  openaiKey,
+  geminiKey,
   groundingModel,
 }: GeminiStreamRequest): Promise<ReadableStream<string>> {
+  const MAX_TOOL_ROUNDS = 5;
+  let rounds = 0;
+
   const groundingModelToUse = groundingModel || model;
   const groundingRequestBody = buildGeminiStreamGenerateContentRequestBody({
     systemInstruction: "You are a research assistant. Extract all relevant information from the website and search results to help a brand strategist.",
@@ -98,12 +205,14 @@ export async function streamGeminiTextDeltas({
   let contents: any[] = [{ role: "user", parts: [{ text: phase2Input }] }];
 
   while (true) {
+    if (rounds++ >= MAX_TOOL_ROUNDS) throw new Error("Gemini tool loop exceeded max rounds");
+
     const requestBody = buildGeminiStreamGenerateContentRequestBody({
       systemInstruction,
-      input: "", 
+      input: "",
       tools,
     });
-    (requestBody as any).contents = contents; 
+    (requestBody as any).contents = contents;
 
     const response = await postGenerateContent({
       apiKey,
@@ -123,7 +232,7 @@ export async function streamGeminiTextDeltas({
     const functionCallPart = parts.find((p: any) => p.function_call);
 
     if (functionCallPart) {
-      const result = await executeTool(functionCallPart.function_call, brandId!, supabase!, openaiKey!);
+      const result = await executeTool(functionCallPart.function_call, brandId!, supabase!, geminiKey!);
       contents.push({ role: "model", parts: content.parts });
       contents.push({
         role: "user",
@@ -173,6 +282,21 @@ export async function streamGeminiTextDeltas({
   }
 }
 
+function makeCombinedSignal(externalSignal: AbortSignal, timeoutMs: number): { signal: AbortSignal; cleanup: () => void } {
+  const combined = new AbortController();
+  const timer = setTimeout(() => combined.abort(new Error("Request timed out after 30s")), timeoutMs);
+
+  const onExternalAbort = () => combined.abort(externalSignal.reason);
+  externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+
+  const cleanup = () => {
+    clearTimeout(timer);
+    externalSignal.removeEventListener("abort", onExternalAbort);
+  };
+
+  return { signal: combined.signal, cleanup };
+}
+
 async function postGenerateContent({
   apiKey,
   baseUrl,
@@ -187,29 +311,34 @@ async function postGenerateContent({
   signal: AbortSignal;
 }): Promise<any> {
   const url = new URL(`/v1beta/models/${model}:generateContent`, baseUrl);
+  const { signal: combinedSignal, cleanup } = makeCombinedSignal(signal, 30_000);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(requestBody),
-    signal,
-  });
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(requestBody),
+      signal: combinedSignal,
+    });
 
-  if (!response.ok) {
-    let details = `${response.status}`;
-    try {
-      const errorText = await response.text();
-      if (errorText) details += ` ${errorText}`;
-    } catch {
-      // ignore
+    if (!response.ok) {
+      let details = `${response.status}`;
+      try {
+        const errorText = await response.text();
+        if (errorText) details += ` ${errorText}`;
+      } catch {
+        // ignore
+      }
+      throw new Error(`Gemini API error: ${details}`.trim());
     }
-    throw new Error(`Gemini API error: ${details}`.trim());
-  }
 
-  return await response.json();
+    return await response.json();
+  } finally {
+    cleanup();
+  }
 }
 
 async function postStreamGenerateContent({
@@ -227,27 +356,32 @@ async function postStreamGenerateContent({
 }): Promise<Response> {
   const url = new URL(`/v1beta/models/${model}:streamGenerateContent`, baseUrl);
   url.searchParams.set("alt", "sse");
+  const { signal: combinedSignal, cleanup } = makeCombinedSignal(signal, 30_000);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(requestBody),
-    signal,
-  });
-
-  if (response.ok) return response;
-
-  let details = `${response.status}`;
   try {
-    const errorText = await response.text();
-    if (errorText) details += ` ${errorText}`;
-  } catch {
-    // ignore
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(requestBody),
+      signal: combinedSignal,
+    });
+
+    if (response.ok) return response;
+
+    let details = `${response.status}`;
+    try {
+      const errorText = await response.text();
+      if (errorText) details += ` ${errorText}`;
+    } catch {
+      // ignore
+    }
+    throw new Error(`Gemini API error: ${details}`.trim());
+  } finally {
+    cleanup();
   }
-  throw new Error(`Gemini API error: ${details}`.trim());
 }
 
 export function buildGeminiStreamGenerateContentRequestBody({
@@ -265,8 +399,8 @@ export function buildGeminiStreamGenerateContentRequestBody({
     systemInstruction: { parts: [{ text: systemInstruction }] },
     contents: [{ role: "user", parts: [{ text: input }] }],
     generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 1200,
+      temperature: 0.65,
+      maxOutputTokens: 2500,
     },
   };
 
@@ -278,4 +412,3 @@ export function buildGeminiStreamGenerateContentRequestBody({
   }
   return body;
 }
-

@@ -2,7 +2,8 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { streamGeminiTextDeltas } from "./geminiClient.ts";
+import { streamGeminiTextDeltas, prefetchBrandContext } from "./geminiClient.ts";
+import type { BrandContextSources } from "./geminiClient.ts";
 
 type DraftRequest = {
   brandId: string;
@@ -45,7 +46,7 @@ serve(async (req: Request) => {
 
     const { websiteUrl, brandId, locale } = payload;
     const { apiKey, model, baseUrl } = getGeminiConfigFromEnv();
-    
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -74,17 +75,64 @@ serve(async (req: Request) => {
             },
           ];
 
-          const systemInstruction =
-            `You are an expert brand strategist. Goal: Define the Target Audience & Customer Personas. ` +
-            `1. Analyze the website: ${websiteUrl}. ` +
-            `2. If the website is sparse, SEARCH the uploaded documents for "Target Audience" or "Customer Personas". ` +
-            `3. Output 2-3 sentences plus bullet segments (3-5). ` +
-            `Locale: ${locale || "en-US"}.`;
-
-          const finalPrompt = `Website: ${websiteUrl}\n\nInstruction: Derive the target audience and customer personas.`;
-
           const abortController = new AbortController();
           req.signal?.addEventListener("abort", () => abortController.abort());
+
+          // Parallel pre-fetch: brand profile, competitors, and cross-table RAG
+          const audienceQuery = "target audience customer personas demographics segments motivations";
+
+          const [brandRow, competitors, ragContext] = await Promise.all([
+            supabase
+              .schema("brand_profiles")
+              .from("brand_profiles")
+              .select("brand_name, context")
+              .eq("id", brandId)
+              .maybeSingle()
+              .then((r: any) => r.data ?? null),
+
+            supabase
+              .schema("brand_profiles")
+              .from("brand_competitors")
+              .select("name")
+              .eq("brand_id", brandId)
+              .then((r: any) => r.data ?? []),
+
+            prefetchBrandContext(brandId, audienceQuery, apiKey, supabase),
+          ]);
+
+          const brandName = (brandRow as any)?.brand_name ?? "this brand";
+          const brandMeta = (brandRow as any)?.context
+            ? `\nBrand metadata: ${JSON.stringify((brandRow as any).context)}`
+            : "";
+          const competitorNames = ((competitors as any[]) ?? []).map((c: any) => c.name).filter(Boolean);
+          const competitorLine = competitorNames.length
+            ? `\nKnown competitors: ${competitorNames.join(", ")}`
+            : "";
+
+          const ragSections = [
+            ragContext.documents && `## Brand Guidelines & Documents\n${ragContext.documents}`,
+            ragContext.strategicAnalysis && `## Strategic Analysis\n${ragContext.strategicAnalysis}`,
+            ragContext.trends && `## Relevant Trends\n${ragContext.trends}`,
+            ragContext.questions && `## Customer Questions\n${ragContext.questions}`,
+            ragContext.events && `## Relevant Events\n${ragContext.events}`,
+          ].filter(Boolean).join("\n\n");
+
+          const systemInstruction =
+            `You are a senior brand strategist defining the Target Audience & Customer Personas for ${brandName}.` +
+            brandMeta +
+            competitorLine +
+            `\n\nWebsite to analyse: ${websiteUrl}` +
+            (ragSections ? `\n\n${ragSections}` : "") +
+            `\n\n## Your task\nAnalyse the website, uploaded documents, customer questions, and trends above. Define the audience across these dimensions:\n` +
+            `1. **Primary segment** — Demographics, geography, income, job role.\n` +
+            `2. **Psychographics** — Values, beliefs, lifestyle, identity.\n` +
+            `3. **Pain points** — The 3 core problems this brand solves for them.\n` +
+            `4. **Buying motivations** — What triggers them to purchase. Rational and emotional.\n` +
+            `5. **Platform behaviour** — Where they spend time and what content they engage with.\n` +
+            (competitorNames.length ? `6. **Why they choose ${brandName} over ${competitorNames[0]}** — What differentiates.\n` : "") +
+            `\nBe specific. Use evidence from the sources above. If customer questions are present, treat them as direct audience signal.\nLocale: ${locale || "en-US"}.`;
+
+          const finalPrompt = `Analyse ${websiteUrl} and the provided context. Write the target audience and persona profiles.`;
 
           const deltas = await streamGeminiTextDeltas({
             apiKey,

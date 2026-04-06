@@ -19,14 +19,16 @@ async function createEmbedding(input: string, geminiKey: string): Promise<number
   return data.embedding.values;
 }
 
+export { createEmbedding as createQueryEmbedding };
+
 async function searchBrandDocs(brandId: string, query: string, geminiKey: string, supabase: any) {
   if (!geminiKey) return "No embedding key available.";
   try {
     const embedding = await createEmbedding(query, geminiKey);
     const { data: chunks, error } = await supabase.rpc("match_brand_documents", {
       query_embedding: embedding,
-      match_threshold: 0.5,
-      match_count: 5,
+      match_threshold: 0.35,
+      match_count: 10,
       filter_brand_id: brandId,
     });
     if (error) throw error;
@@ -45,6 +47,106 @@ async function executeTool(functionCall: any, brandId: string, supabase: any, ge
   }
   throw new Error(`Unknown tool: ${functionCall.name}`);
 }
+
+// --- Pre-fetch ---
+
+export type BrandContextSources = {
+  documents: string;
+  trends: string;
+  events: string;
+  questions: string;
+  strategicAnalysis: string;
+};
+
+export async function prefetchBrandContext(
+  brandId: string,
+  query: string,
+  geminiKey: string,
+  supabase: any
+): Promise<BrandContextSources> {
+  let queryEmbedding: number[];
+  try {
+    queryEmbedding = await createEmbedding(query, geminiKey);
+  } catch {
+    return { documents: "", trends: "", events: "", questions: "", strategicAnalysis: "" };
+  }
+
+  const [docsResult, trendsResult, eventsResult, questionsResult, stratResult] = await Promise.allSettled([
+    supabase.rpc("match_brand_documents", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 10,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_brand_insights_trends", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_brand_insights_events", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_brand_insights_questions", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+    supabase.rpc("match_strategic_analysis_embeddings", {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.35,
+      match_count: 5,
+      filter_brand_id: brandId,
+    }),
+  ]);
+
+  const extractDocs = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? []).map((c: any) => c.content).filter(Boolean).join("\n\n");
+  };
+
+  const extractTrends = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((t: any) => [t.title, t.description, t.relevance_to_brand].filter(Boolean).join(" — "))
+      .join("\n");
+  };
+
+  const extractEvents = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((e: any) => [e.title, e.description, e.opportunity].filter(Boolean).join(" — "))
+      .join("\n");
+  };
+
+  const extractQuestions = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((q: any) => [q.question_text, q.why_relevant].filter(Boolean).join(" — "))
+      .join("\n");
+  };
+
+  const extractStrat = (r: PromiseSettledResult<any>): string => {
+    if (r.status === "rejected" || r.value?.error) return "";
+    return (r.value?.data ?? [])
+      .map((s: any) => [s.label, s.embedding_text].filter(Boolean).join(": "))
+      .join("\n");
+  };
+
+  return {
+    documents: extractDocs(docsResult),
+    trends: extractTrends(trendsResult),
+    events: extractEvents(eventsResult),
+    questions: extractQuestions(questionsResult),
+    strategicAnalysis: extractStrat(stratResult),
+  };
+}
+
+// --- Streaming ---
 
 export type GeminiStreamRequest = {
   apiKey: string;
@@ -104,10 +206,10 @@ export async function streamGeminiTextDeltas({
     if (rounds++ >= MAX_TOOL_ROUNDS) throw new Error("Gemini tool loop exceeded max rounds");
     const requestBody = buildGeminiStreamGenerateContentRequestBody({
       systemInstruction,
-      input: "", 
+      input: "",
       tools,
     });
-    (requestBody as any).contents = contents; 
+    (requestBody as any).contents = contents;
 
     const response = await postGenerateContent({
       apiKey,
@@ -269,8 +371,8 @@ export function buildGeminiStreamGenerateContentRequestBody({
     systemInstruction: { parts: [{ text: systemInstruction }] },
     contents: [{ role: "user", parts: [{ text: input }] }],
     generationConfig: {
-      temperature: 0.2,
-      maxOutputTokens: 1200,
+      temperature: 0.65,
+      maxOutputTokens: 2500,
     },
   };
 

@@ -212,6 +212,15 @@ async function processDocument(input: z.infer<typeof InputSchema>, authHeader?: 
     
     if (updateDocErr) console.warn("Doc final update error", updateDocErr.message);
 
+    const { error: deleteChunksErr } = await supabase
+      .schema("brand_profiles")
+      .from("brand_document_chunks")
+      .delete()
+      .eq("document_id", input.documentId);
+    if (deleteChunksErr) {
+      console.warn("Failed to delete existing chunks", deleteChunksErr.message);
+    }
+
     const batchSize = 100;
     for (let i = 0; i < chunks.length; i += batchSize) {
       const slice = chunks.slice(i, i + batchSize);

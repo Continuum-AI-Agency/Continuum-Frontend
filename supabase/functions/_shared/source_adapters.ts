@@ -1,6 +1,22 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 20_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    return res;
+  } catch (err) {
+    if ((err as Error)?.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs}ms: ${url}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type FetchInput = {
   source:
     | "upload"
@@ -38,7 +54,7 @@ async function fetchFromStorage(path: string, client?: SupabaseClient): Promise<
 async function fetchFromGoogleDrive(url: string): Promise<Uint8Array> {
   // Expect alt=media for blob files, or export links for Docs/Sheets
   // Ref: https://developers.google.com/workspace/drive/api/guides/manage-downloads
-  const res = await fetch(url);
+  const res = await fetchWithTimeout(url, {}, 30_000);
   if (!res.ok) throw new Error(`Drive download failed: ${res.status}`);
   const buf = new Uint8Array(await res.arrayBuffer());
   return buf;

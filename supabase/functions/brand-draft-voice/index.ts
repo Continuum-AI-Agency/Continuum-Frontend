@@ -3,7 +3,8 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { streamGeminiTextDeltas } from "./geminiClient.ts";
+import { streamGeminiTextDeltas, prefetchBrandContext } from "./geminiClient.ts";
+import type { BrandContextSources } from "./geminiClient.ts";
 
 type DraftRequest = {
   brandId: string;
@@ -19,48 +20,10 @@ function getGeminiConfigFromEnv() {
   const apiKey = Deno.env.get("GEMINI_API_KEY")?.trim();
   const model = Deno.env.get("GEMINI_MODEL")?.trim() || "gemini-3-flash-preview"; // Use latest for tools
   const baseUrl = Deno.env.get("GEMINI_BASE_URL")?.trim() || "https://generativelanguage.googleapis.com";
-  const openaiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
+  const geminiKey = Deno.env.get("GEMINI_API_KEY")?.trim();
 
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
-  return { apiKey, model, baseUrl, openaiKey };
-}
-
-// --- RAG Helpers ---
-
-async function createEmbedding(input: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      input,
-      model: "text-embedding-3-small",
-    }),
-  });
-  if (!response.ok) throw new Error("Failed to create embedding");
-  const data = await response.json();
-  return data.data[0].embedding;
-}
-
-async function searchBrandDocs(brandId: string, query: string, openaiKey: string, supabase: any) {
-  if (!openaiKey) return "No embedding key available.";
-  try {
-    const embedding = await createEmbedding(query, openaiKey);
-    const { data: chunks, error } = await supabase.rpc("match_brand_documents", {
-      query_embedding: embedding,
-      match_threshold: 0.5,
-      match_count: 5,
-      filter_brand_id: brandId,
-    });
-    if (error) throw error;
-    if (!chunks || chunks.length === 0) return "No relevant documents found.";
-    return chunks.map((c: any) => c.content).join("\n\n");
-  } catch (e) {
-    console.error("Search error:", e);
-    return "Error searching documents.";
-  }
+  return { apiKey, model, baseUrl, geminiKey };
 }
 
 // --- Main Handler ---
@@ -84,12 +47,15 @@ serve(async (req: Request) => {
     }
 
     const { websiteUrl, brandId, locale } = payload;
-    const { apiKey, model, baseUrl, openaiKey } = getGeminiConfigFromEnv();
-    
+    const { apiKey, model, baseUrl, geminiKey } = getGeminiConfigFromEnv();
+
     // Supabase client for RPC
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const abortController = new AbortController();
+    req.signal?.addEventListener("abort", () => abortController.abort());
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
@@ -115,29 +81,74 @@ serve(async (req: Request) => {
             },
           ];
 
+          // Parallel pre-fetch: brand profile, competitors, and cross-table RAG
+          const voiceQuery = "brand voice tone personality communication style guidelines";
+
+          const [brandRow, competitors, ragContext] = await Promise.all([
+            supabase
+              .schema("brand_profiles")
+              .from("brand_profiles")
+              .select("brand_name, context")
+              .eq("id", brandId)
+              .maybeSingle()
+              .then((r: any) => r.data ?? null),
+
+            supabase
+              .schema("brand_profiles")
+              .from("brand_competitors")
+              .select("name")
+              .eq("brand_id", brandId)
+              .then((r: any) => r.data ?? []),
+
+            prefetchBrandContext(brandId, voiceQuery, geminiKey!, supabase),
+          ]);
+
+          const brandName = (brandRow as any)?.brand_name ?? "this brand";
+          const brandMeta = (brandRow as any)?.context
+            ? `\nBrand metadata: ${JSON.stringify((brandRow as any).context)}`
+            : "";
+          const competitorNames = ((competitors as any[]) ?? []).map((c: any) => c.name).filter(Boolean);
+          const competitorLine = competitorNames.length
+            ? `\nKnown competitors: ${competitorNames.join(", ")}`
+            : "";
+
+          const ragSections = [
+            ragContext.documents && `## Brand Guidelines & Documents\n${ragContext.documents}`,
+            ragContext.strategicAnalysis && `## Strategic Analysis\n${ragContext.strategicAnalysis}`,
+            ragContext.trends && `## Relevant Trends\n${ragContext.trends}`,
+            ragContext.questions && `## Audience Questions\n${ragContext.questions}`,
+          ].filter(Boolean).join("\n\n");
+
           const systemInstruction =
-            `You are an expert brand strategist. Goal: Define the Brand Voice. ` +
-            `1. Analyze the website: ${websiteUrl}. ` +
-            `2. If the website is sparse, SEARCH the uploaded documents for "Brand Voice" or "Tone". ` +
-            `3. Output a concise voice summary (2-3 sentences + 5 adjectives). ` +
-            `Locale: ${locale || "en-US"}.`;
+            `You are a senior brand strategist defining the Brand Voice for ${brandName}.` +
+            brandMeta +
+            competitorLine +
+            `\n\nWebsite to analyse: ${websiteUrl}` +
+            (ragSections ? `\n\n${ragSections}` : "") +
+            `\n\n## Your task\nAnalyse the website content, uploaded documents, and any strategic context above. Define the brand voice across these dimensions:\n` +
+            `1. **Personality** — 5 adjectives. For each write one "We are [X], not [Y]" contrast.\n` +
+            `2. **Tone** — How the brand modulates tone across contexts (celebratory, error, product detail, social).\n` +
+            `3. **Vocabulary** — Sentence length tendency, technical vs plain language, active vs passive, signature phrases and words to avoid.\n` +
+            `4. **Emotional register** — The primary emotion the brand aims to evoke.\n` +
+            (competitorNames.length ? `5. **Differentiation** — How this voice contrasts with ${competitorNames.join(", ")}.\n` : "") +
+            `\nBe specific — cite examples from the website or documents. Do not write generic brand strategy advice.\nLocale: ${locale || "en-US"}.`;
 
-          const finalPrompt = `Website: ${websiteUrl}\n\nInstruction: Derive the brand voice.`;
+          const finalPrompt = `Analyse ${websiteUrl} and the provided context. Write the brand voice definition.`;
 
-           // Call Gemini with Streaming
-           const deltas = await streamGeminiTextDeltas({
-             apiKey,
-             baseUrl,
-             model,
-             systemInstruction: systemInstruction,
-             input: finalPrompt,
-             signal: new AbortController().signal, // simplified
-             tools,
-              brandId,
-              supabase,
-              openaiKey,
-              groundingModel: model, 
-            });
+          // Call Gemini with Streaming
+          const deltas = await streamGeminiTextDeltas({
+            apiKey,
+            baseUrl,
+            model,
+            systemInstruction,
+            input: finalPrompt,
+            signal: abortController.signal,
+            tools,
+            brandId,
+            supabase,
+            geminiKey,
+            groundingModel: model,
+          });
 
           const reader = deltas.getReader();
           while (true) {
