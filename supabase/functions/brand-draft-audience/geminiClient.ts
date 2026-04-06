@@ -2,27 +2,27 @@ import { computeTextDelta, extractGeminiChunkText } from "./geminiStream.ts";
 
 // --- Tool Execution ---
 
-async function createEmbedding(input: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
+async function createEmbedding(input: string, geminiKey: string): Promise<number[]> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiKey}`;
+  const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      input,
-      model: "text-embedding-3-small",
+      model: "models/gemini-embedding-001",
+      taskType: "RETRIEVAL_QUERY",
+      content: { parts: [{ text: input }] },
+      outputDimensionality: 1536,
     }),
   });
   if (!response.ok) throw new Error("Failed to create embedding");
   const data = await response.json();
-  return data.data[0].embedding;
+  return data.embedding.values;
 }
 
-async function searchBrandDocs(brandId: string, query: string, openaiKey: string, supabase: any) {
-  if (!openaiKey) return "No embedding key available.";
+async function searchBrandDocs(brandId: string, query: string, geminiKey: string, supabase: any) {
+  if (!geminiKey) return "No embedding key available.";
   try {
-    const embedding = await createEmbedding(query, openaiKey);
+    const embedding = await createEmbedding(query, geminiKey);
     const { data: chunks, error } = await supabase.rpc("match_brand_documents", {
       query_embedding: embedding,
       match_threshold: 0.5,
@@ -38,10 +38,10 @@ async function searchBrandDocs(brandId: string, query: string, openaiKey: string
   }
 }
 
-async function executeTool(functionCall: any, brandId: string, supabase: any, openaiKey: string): Promise<any> {
+async function executeTool(functionCall: any, brandId: string, supabase: any, geminiKey: string): Promise<any> {
   if (functionCall.name === "search_brand_documents") {
     const query = functionCall.args.query;
-    return await searchBrandDocs(brandId, query, openaiKey, supabase);
+    return await searchBrandDocs(brandId, query, geminiKey, supabase);
   }
   throw new Error(`Unknown tool: ${functionCall.name}`);
 }
@@ -56,8 +56,8 @@ export type GeminiStreamRequest = {
   tools?: unknown[];
   brandId?: string; // for tool execution
   supabase?: any; // for tool execution
-  openaiKey?: string; // for tool execution
-  groundingModel?: string; 
+  geminiKey?: string; // for tool execution (embeddings)
+  groundingModel?: string;
 };
 
 export type GeminiRequestToolsMode = "url_context_and_search" | "search_only" | "none";
@@ -72,7 +72,7 @@ export async function streamGeminiTextDeltas({
   tools,
   brandId,
   supabase,
-  openaiKey,
+  geminiKey,
   groundingModel,
 }: GeminiStreamRequest): Promise<ReadableStream<string>> {
   const groundingModelToUse = groundingModel || model;
@@ -97,7 +97,11 @@ export async function streamGeminiTextDeltas({
   const phase2Input = `Research Context:\n${groundingContext}\n\nUser Request: ${input}`;
   let contents: any[] = [{ role: "user", parts: [{ text: phase2Input }] }];
 
+  const MAX_TOOL_ROUNDS = 5;
+  let rounds = 0;
+
   while (true) {
+    if (rounds++ >= MAX_TOOL_ROUNDS) throw new Error("Gemini tool loop exceeded max rounds");
     const requestBody = buildGeminiStreamGenerateContentRequestBody({
       systemInstruction,
       input: "", 
@@ -123,7 +127,7 @@ export async function streamGeminiTextDeltas({
     const functionCallPart = parts.find((p: any) => p.function_call);
 
     if (functionCallPart) {
-      const result = await executeTool(functionCallPart.function_call, brandId!, supabase!, openaiKey!);
+      const result = await executeTool(functionCallPart.function_call, brandId!, supabase!, geminiKey!);
       contents.push({ role: "model", parts: content.parts });
       contents.push({
         role: "user",

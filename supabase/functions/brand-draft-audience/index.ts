@@ -18,49 +18,9 @@ function getGeminiConfigFromEnv() {
   const apiKey = Deno.env.get("GEMINI_API_KEY")?.trim();
   const model = Deno.env.get("GEMINI_MODEL")?.trim() || "gemini-3-flash-preview";
   const baseUrl = Deno.env.get("GEMINI_BASE_URL")?.trim() || "https://generativelanguage.googleapis.com";
-  const openaiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
 
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
-  return { apiKey, model, baseUrl, openaiKey };
-}
-
-// --- RAG Helpers ---
-
-async function createEmbedding(input: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://api.openai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      input,
-      model: "text-embedding-3-small",
-    }),
-  });
-  if (!response.ok) throw new Error("Failed to create embedding");
-  const data = await response.json();
-  return data.data[0].embedding;
-}
-
-// Returns concatenated text content of top matches
-async function searchBrandDocs(brandId: string, query: string, openaiKey: string, supabase: any) {
-  if (!openaiKey) return "No embedding key available.";
-  try {
-    const embedding = await createEmbedding(query, openaiKey);
-    const { data: chunks, error } = await supabase.rpc("match_brand_documents", {
-      query_embedding: embedding,
-      match_threshold: 0.5,
-      match_count: 5,
-      filter_brand_id: brandId,
-    });
-    if (error) throw error;
-    if (!chunks || chunks.length === 0) return "No relevant documents found.";
-    return chunks.map((c: any) => c.content).join("\n\n");
-  } catch (e) {
-    console.error("Search error:", e);
-    return "Error searching documents.";
-  }
+  return { apiKey, model, baseUrl };
 }
 
 // --- Main Handler ---
@@ -84,7 +44,7 @@ serve(async (req: Request) => {
     }
 
     const { websiteUrl, brandId, locale } = payload;
-    const { apiKey, model, baseUrl, openaiKey } = getGeminiConfigFromEnv();
+    const { apiKey, model, baseUrl } = getGeminiConfigFromEnv();
     
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -123,18 +83,21 @@ serve(async (req: Request) => {
 
           const finalPrompt = `Website: ${websiteUrl}\n\nInstruction: Derive the target audience and customer personas.`;
 
+          const abortController = new AbortController();
+          req.signal?.addEventListener("abort", () => abortController.abort());
+
           const deltas = await streamGeminiTextDeltas({
             apiKey,
             baseUrl,
             model,
             systemInstruction,
             input: finalPrompt,
-            signal: new AbortController().signal,
+            signal: abortController.signal,
             tools,
             brandId,
             supabase,
-            openaiKey,
-            groundingModel: model, 
+            geminiKey: apiKey,
+            groundingModel: model,
           });
 
           const reader = deltas.getReader();
