@@ -2,6 +2,7 @@ import type {
   BreakdownData,
   DemographicBreakdown,
   FormatBreakdown,
+  ObjectiveBreakdown,
   PlacementBreakdown,
 } from "./breakdowns.ts";
 
@@ -16,10 +17,13 @@ export type HeuristicInsight = {
   metric?: string;
   value?: number;
   delta?: number;
+  recommendation?: string;
+  estimated_impact?: string;
 };
 
-const MIN_SPEND_SHARE = 0.05;
+const MIN_SPEND_SHARE = 0.08;
 const MIN_DELTA_PCT = 15;
+const MIN_SPEND_THRESHOLD = 50;
 
 function pct(part: number, total: number): number {
   return total > 0 ? Math.round((part / total) * 100) : 0;
@@ -72,8 +76,10 @@ function computeFormatInsights(formats: FormatBreakdown[]): HeuristicInsight[] {
   if (formats.length < 2) return [];
 
   const insights: HeuristicInsight[] = [];
-  const totalSpend = formats.reduce((s, f) => s + f.spend, 0);
-  const sig = formats.filter(
+  const qualified = formats.filter((f) => f.spend >= MIN_SPEND_THRESHOLD);
+  if (qualified.length < 2) return [];
+  const totalSpend = qualified.reduce((s, f) => s + f.spend, 0);
+  const sig = qualified.filter(
     (f) => totalSpend > 0 && f.spend / totalSpend >= MIN_SPEND_SHARE
   );
   if (sig.length < 2) return [];
@@ -112,6 +118,9 @@ function computeFormatInsights(formats: FormatBreakdown[]): HeuristicInsight[] {
     (f) => f.roas < (byRoas[0]?.roas ?? 0) * 0.5 && pct(f.spend, totalSpend) >= 20
   );
   for (const up of underperformers) {
+    const shiftAmount = up.spend * 0.15;
+    const roasGap = (byRoas[0]?.roas ?? 0) - up.roas;
+    const estimatedGain = shiftAmount * roasGap;
     insights.push({
       category: "formats",
       text: `${capitalize(up.format)} receives ${fmtPct(pct(up.spend, totalSpend))} of spend but ROAS is only ${up.roas.toFixed(2)}x`,
@@ -119,6 +128,8 @@ function computeFormatInsights(formats: FormatBreakdown[]): HeuristicInsight[] {
       source: "computed",
       metric: "roas",
       value: up.roas,
+      recommendation: `Consider shifting 15% of ${capitalize(up.format)} budget (${fmtCurrency(shiftAmount)}) to ${capitalize(byRoas[0].format)}`,
+      estimated_impact: estimatedGain > 0 ? `~${fmtCurrency(estimatedGain)} potential additional revenue` : undefined,
     });
   }
 
@@ -131,14 +142,16 @@ function computePlacementInsights(
   if (placements.length === 0) return [];
 
   const insights: HeuristicInsight[] = [];
-  const totalConv = placements.reduce((s, p) => s + p.conversions, 0);
-  const totalSpend = placements.reduce((s, p) => s + p.spend, 0);
+  const qualified = placements.filter((p) => p.spend >= MIN_SPEND_THRESHOLD);
+  if (qualified.length === 0) return [];
+  const totalConv = qualified.reduce((s, p) => s + p.conversions, 0);
+  const totalSpend = qualified.reduce((s, p) => s + p.spend, 0);
 
   const byPlatform = new Map<
     string,
     { spend: number; conversions: number; clicks: number; impressions: number; conversion_value: number }
   >();
-  for (const p of placements) {
+  for (const p of qualified) {
     const e = byPlatform.get(p.publisher_platform) ?? {
       spend: 0, conversions: 0, clicks: 0, impressions: 0, conversion_value: 0,
     };
@@ -169,7 +182,7 @@ function computePlacementInsights(
   }
 
   const positions = new Map<string, PlacementBreakdown[]>();
-  for (const p of placements) {
+  for (const p of qualified) {
     const g = positions.get(p.publisher_platform) ?? [];
     g.push(p);
     positions.set(p.publisher_platform, g);
@@ -211,6 +224,7 @@ function computePlacementInsights(
         source: "computed",
         metric: "roas",
         value: roas,
+        recommendation: `Increase ${platformLabel(platform)} budget allocation to capitalize on efficiency`,
       });
     }
   }
@@ -224,11 +238,13 @@ function computeAudienceInsights(
   if (demographics.length === 0) return [];
 
   const insights: HeuristicInsight[] = [];
-  const totalConv = demographics.reduce((s, d) => s + d.conversions, 0);
-  const totalSpend = demographics.reduce((s, d) => s + d.spend, 0);
+  const qualified = demographics.filter((d) => d.spend >= MIN_SPEND_THRESHOLD);
+  if (qualified.length === 0) return [];
+  const totalConv = qualified.reduce((s, d) => s + d.conversions, 0);
+  const totalSpend = qualified.reduce((s, d) => s + d.spend, 0);
 
   const byAge = new Map<string, { spend: number; conversions: number; conversion_value: number }>();
-  for (const d of demographics) {
+  for (const d of qualified) {
     const e = byAge.get(d.age) ?? { spend: 0, conversions: 0, conversion_value: 0 };
     e.spend += d.spend;
     e.conversions += d.conversions;
@@ -268,7 +284,7 @@ function computeAudienceInsights(
   }
 
   const byGender = new Map<string, { spend: number; conversions: number; conversion_value: number }>();
-  for (const d of demographics) {
+  for (const d of qualified) {
     const e = byGender.get(d.gender) ?? { spend: 0, conversions: 0, conversion_value: 0 };
     e.spend += d.spend;
     e.conversions += d.conversions;
@@ -307,7 +323,7 @@ function computeAudienceInsights(
 
 function computeCreativeInsights(data: BreakdownData): HeuristicInsight[] {
   const insights: HeuristicInsight[] = [];
-  const { formats, devices, placements } = data;
+  const { formats, devices } = data;
 
   if (formats.length >= 2 && devices.length >= 2) {
     const mobile = devices.find(
@@ -382,11 +398,178 @@ function computeCreativeInsights(data: BreakdownData): HeuristicInsight[] {
   return insights.slice(0, 3);
 }
 
-export function computeHeuristicInsights(data: BreakdownData): HeuristicInsight[] {
-  return [
+const OBJECTIVE_LABELS: Record<string, string> = {
+  OUTCOME_SALES: "Sales",
+  OUTCOME_ENGAGEMENT: "Engagement",
+  OUTCOME_LEADS: "Leads",
+  OUTCOME_AWARENESS: "Awareness",
+  OUTCOME_TRAFFIC: "Traffic",
+  OUTCOME_APP_PROMOTION: "App Promotion",
+  CONVERSIONS: "Conversions",
+  LINK_CLICKS: "Traffic",
+  REACH: "Reach",
+  BRAND_AWARENESS: "Awareness",
+  POST_ENGAGEMENT: "Engagement",
+  VIDEO_VIEWS: "Video Views",
+  LEAD_GENERATION: "Lead Gen",
+  MESSAGES: "Messages",
+  APP_INSTALLS: "App Installs",
+};
+
+function formatObjective(objective: string): string {
+  return (
+    OBJECTIVE_LABELS[objective] ??
+    capitalize(objective.toLowerCase().replace(/_/g, " "))
+  );
+}
+
+function computeObjectiveInsights(
+  objectives: ObjectiveBreakdown[]
+): HeuristicInsight[] {
+  if (objectives.length < 2) return [];
+
+  const insights: HeuristicInsight[] = [];
+  const qualified = objectives.filter((o) => o.spend >= MIN_SPEND_THRESHOLD);
+  if (qualified.length < 2) return [];
+
+  const totalSpend = qualified.reduce((s, o) => s + o.spend, 0);
+
+  const byRoas = [...qualified].sort((a, b) => b.roas - a.roas);
+  if (byRoas[0].roas > 0 && byRoas.length >= 2) {
+    const spendShare = pct(byRoas[0].spend, totalSpend);
+    insights.push({
+      category: "formats",
+      text: `${formatObjective(byRoas[0].objective)} campaigns lead ROAS at ${byRoas[0].roas.toFixed(2)}x on ${fmtPct(spendShare)} of spend`,
+      severity: "positive",
+      source: "computed",
+      metric: "roas",
+      value: byRoas[0].roas,
+    });
+  }
+
+  for (const obj of qualified) {
+    if (
+      obj.roas < (byRoas[0]?.roas ?? 0) * 0.5 &&
+      pct(obj.spend, totalSpend) >= 20
+    ) {
+      const shiftAmount = obj.spend * 0.15;
+      const roasGap = (byRoas[0]?.roas ?? 0) - obj.roas;
+      const estimatedGain = shiftAmount * roasGap;
+      insights.push({
+        category: "formats",
+        text: `${formatObjective(obj.objective)} campaigns get ${fmtPct(pct(obj.spend, totalSpend))} of spend but only ${obj.roas.toFixed(2)}x ROAS`,
+        severity: "negative",
+        source: "computed",
+        metric: "roas",
+        value: obj.roas,
+        recommendation: `Consider reallocating 15% of ${formatObjective(obj.objective)} budget (${fmtCurrency(shiftAmount)}) to ${formatObjective(byRoas[0].objective)}`,
+        estimated_impact:
+          estimatedGain > 0
+            ? `~${fmtCurrency(estimatedGain)} potential additional revenue`
+            : undefined,
+      });
+    }
+  }
+
+  const byConv = [...qualified].sort((a, b) => b.conversions - a.conversions);
+  if (byConv[0].conversions > 0 && byConv.length >= 2) {
+    const totalConv = qualified.reduce((s, o) => s + o.conversions, 0);
+    const convShare = pct(byConv[0].conversions, totalConv);
+    if (convShare >= 40) {
+      insights.push({
+        category: "audiences",
+        text: `${formatObjective(byConv[0].objective)} drives ${fmtPct(convShare)} of conversions across ${byConv[0].campaign_count} campaigns`,
+        severity: "positive",
+        source: "computed",
+        metric: "conversions",
+        value: convShare,
+      });
+    }
+  }
+
+  return insights.slice(0, 3);
+}
+
+function computePeriodInsights(
+  current: BreakdownData,
+  previous: BreakdownData
+): HeuristicInsight[] {
+  const insights: HeuristicInsight[] = [];
+
+  const curSpend = current.placements.reduce((s, p) => s + p.spend, 0);
+  const prevSpend = previous.placements.reduce((s, p) => s + p.spend, 0);
+  const curConv = current.placements.reduce((s, p) => s + p.conversions, 0);
+  const prevConv = previous.placements.reduce((s, p) => s + p.conversions, 0);
+  const curConvValue = current.placements.reduce((s, p) => s + p.conversion_value, 0);
+  const prevConvValue = previous.placements.reduce((s, p) => s + p.conversion_value, 0);
+
+  const curRoas = curSpend > 0 ? curConvValue / curSpend : 0;
+  const prevRoas = prevSpend > 0 ? prevConvValue / prevSpend : 0;
+
+  if (prevSpend > MIN_SPEND_THRESHOLD && curSpend > MIN_SPEND_THRESHOLD) {
+    const spendDelta = prevSpend > 0 ? Math.round(((curSpend - prevSpend) / prevSpend) * 100) : 0;
+    const roasDelta = prevRoas > 0 ? Math.round(((curRoas - prevRoas) / prevRoas) * 100) : 0;
+    const convDelta = prevConv > 0 ? Math.round(((curConv - prevConv) / prevConv) * 100) : 0;
+
+    if (Math.abs(roasDelta) >= MIN_DELTA_PCT) {
+      insights.push({
+        category: "placements",
+        text: `Account ROAS ${roasDelta > 0 ? "improved" : "declined"} ${fmtPct(Math.abs(roasDelta))} period-over-period (${prevRoas.toFixed(2)}x → ${curRoas.toFixed(2)}x)`,
+        severity: roasDelta > 0 ? "positive" : "negative",
+        source: "computed",
+        metric: "roas",
+        value: curRoas,
+        delta: roasDelta,
+        recommendation: roasDelta < 0 ? "Review recent changes to targeting, creative, or budget allocation" : undefined,
+      });
+    }
+
+    if (Math.abs(convDelta) >= MIN_DELTA_PCT) {
+      insights.push({
+        category: "audiences",
+        text: `Conversions ${convDelta > 0 ? "up" : "down"} ${fmtPct(Math.abs(convDelta))} vs prior period (${fmtNumber(prevConv)} → ${fmtNumber(curConv)})`,
+        severity: convDelta > 0 ? "positive" : "negative",
+        source: "computed",
+        metric: "conversions",
+        value: curConv,
+        delta: convDelta,
+      });
+    }
+
+    if (spendDelta > 20 && roasDelta < -10) {
+      insights.push({
+        category: "creative",
+        text: `Spend increased ${fmtPct(spendDelta)} but ROAS dropped ${fmtPct(Math.abs(roasDelta))} — possible diminishing returns`,
+        severity: "negative",
+        source: "computed",
+        metric: "spend_efficiency",
+        recommendation: "Evaluate whether incremental spend is reaching saturated audiences",
+      });
+    }
+  }
+
+  return insights.slice(0, 3);
+}
+
+export function computeHeuristicInsights(
+  data: BreakdownData,
+  previousData?: BreakdownData,
+  objectives?: ObjectiveBreakdown[]
+): HeuristicInsight[] {
+  const base = [
     ...computeFormatInsights(data.formats),
     ...computePlacementInsights(data.placements),
     ...computeAudienceInsights(data.demographics),
     ...computeCreativeInsights(data),
   ];
+
+  if (objectives && objectives.length > 0) {
+    base.push(...computeObjectiveInsights(objectives));
+  }
+
+  if (previousData) {
+    base.push(...computePeriodInsights(data, previousData));
+  }
+
+  return base;
 }

@@ -75,6 +75,8 @@ export type ComputedInsight = {
   metric?: string;
   value?: number;
   delta?: number;
+  recommendation?: string;
+  estimated_impact?: string;
 };
 
 export const ComputedInsightSchema = z.object({
@@ -85,16 +87,43 @@ export const ComputedInsightSchema = z.object({
   metric: z.string().optional(),
   value: z.number().optional(),
   delta: z.number().optional(),
+  recommendation: z.string().optional(),
+  estimated_impact: z.string().optional(),
 });
+
+export const DailyDataPointSchema = z.object({
+  date: z.string(),
+  spend: z.number(),
+  impressions: z.number(),
+  clicks: z.number(),
+  ctr: z.number(),
+  conversions: z.number(),
+  conversion_value: z.number(),
+  roas: z.number(),
+});
+
+export type DailyDataPoint = z.infer<typeof DailyDataPointSchema>;
+
+export const PeriodComparisonSchema = z.object({
+  spend_delta_pct: z.number(),
+  roas_delta_pct: z.number(),
+  ctr_delta_pct: z.number(),
+  conversions_delta_pct: z.number(),
+});
+
+export type PeriodComparison = z.infer<typeof PeriodComparisonSchema>;
 
 export const AccountInsightsResponseSchema = z.object({
   insights: z.array(ComputedInsightSchema),
   generated_at: z.string(),
+  expires_at: z.string().optional(),
   range: z.object({
     since: z.string(),
     until: z.string(),
     preset: z.string(),
   }),
+  time_series: z.array(DailyDataPointSchema).optional(),
+  period_comparison: PeriodComparisonSchema.optional(),
 });
 
 export type AccountInsightsResponse = z.infer<typeof AccountInsightsResponseSchema>;

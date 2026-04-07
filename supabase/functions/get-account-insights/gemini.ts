@@ -1,4 +1,4 @@
-import type { BreakdownData } from "./breakdowns.ts";
+import type { BreakdownData, DailyDataPoint, ObjectiveBreakdown } from "./breakdowns.ts";
 import type { HeuristicInsight } from "./compute.ts";
 
 type InsightCategory = "formats" | "placements" | "audiences" | "creative";
@@ -9,9 +9,16 @@ export type LlmInsight = {
   text: string;
   severity: InsightSeverity;
   source: "llm";
+  recommendation?: string;
+  estimated_impact?: string;
 };
 
-function condenseSummary(data: BreakdownData): string {
+function condenseSummary(
+  data: BreakdownData,
+  previousData?: BreakdownData,
+  timeSeries?: DailyDataPoint[],
+  objectives?: ObjectiveBreakdown[]
+): string {
   const lines: string[] = [];
 
   if (data.placements.length > 0) {
@@ -50,28 +57,83 @@ function condenseSummary(data: BreakdownData): string {
     }
   }
 
+  if (objectives && objectives.length > 0) {
+    lines.push("\n## Campaign Objective Performance");
+    for (const o of objectives) {
+      lines.push(
+        `- ${o.objective} (${o.campaign_count} campaigns): $${o.spend.toFixed(0)} spend, ${o.ctr.toFixed(2)}% CTR, ${o.roas.toFixed(2)}x ROAS, ${o.conversions} conv`
+      );
+    }
+  }
+
+  if (previousData) {
+    const curSpend = data.placements.reduce((s, p) => s + p.spend, 0);
+    const prevSpend = previousData.placements.reduce((s, p) => s + p.spend, 0);
+    const curConvValue = data.placements.reduce((s, p) => s + p.conversion_value, 0);
+    const prevConvValue = previousData.placements.reduce((s, p) => s + p.conversion_value, 0);
+    const curRoas = curSpend > 0 ? curConvValue / curSpend : 0;
+    const prevRoas = prevSpend > 0 ? prevConvValue / prevSpend : 0;
+    const curConv = data.placements.reduce((s, p) => s + p.conversions, 0);
+    const prevConv = previousData.placements.reduce((s, p) => s + p.conversions, 0);
+    const curClicks = data.placements.reduce((s, p) => s + p.clicks, 0);
+    const prevClicks = previousData.placements.reduce((s, p) => s + p.clicks, 0);
+    const curImpressions = data.placements.reduce((s, p) => s + p.impressions, 0);
+    const prevImpressions = previousData.placements.reduce((s, p) => s + p.impressions, 0);
+    const curCtr = curImpressions > 0 ? (curClicks / curImpressions) * 100 : 0;
+    const prevCtr = prevImpressions > 0 ? (prevClicks / prevImpressions) * 100 : 0;
+
+    lines.push("\n## Prior Period Comparison");
+    lines.push(`- Spend: $${prevSpend.toFixed(0)} → $${curSpend.toFixed(0)}`);
+    lines.push(`- ROAS: ${prevRoas.toFixed(2)}x → ${curRoas.toFixed(2)}x`);
+    lines.push(`- CTR: ${prevCtr.toFixed(2)}% → ${curCtr.toFixed(2)}%`);
+    lines.push(`- Conversions: ${prevConv} → ${curConv}`);
+  }
+
+  if (timeSeries && timeSeries.length > 0) {
+    lines.push("\n## Daily Trend (last days)");
+    for (const day of timeSeries.slice(-7)) {
+      lines.push(
+        `- ${day.date}: $${day.spend.toFixed(0)} spend, ${day.ctr.toFixed(2)}% CTR, ${day.roas.toFixed(2)}x ROAS`
+      );
+    }
+  }
+
   return lines.join("\n");
 }
 
 function buildPrompt(
   data: BreakdownData,
-  computed: HeuristicInsight[]
+  computed: HeuristicInsight[],
+  opts: {
+    previousData?: BreakdownData;
+    timeSeries?: DailyDataPoint[];
+    objectives?: ObjectiveBreakdown[];
+  }
 ): string {
-  const summary = condenseSummary(data);
+  const summary = condenseSummary(data, opts.previousData, opts.timeSeries, opts.objectives);
 
   const alreadySurfaced = computed
     .map((i) => `- [${i.category}] ${i.text}`)
     .join("\n");
 
-  return `You are a senior paid media analyst reviewing a Meta Ads account. Given the performance breakdown data below, generate exactly 8 high-impact insights (2 per category).
+  return `You are a senior paid media analyst reviewing a Meta Ads account. The account's own data is your benchmark — do NOT compare to industry averages. Generate exactly 8 high-impact insights (2 per category).
 
 CATEGORIES: formats, placements, audiences, creative
 
+ANALYSIS APPROACH:
+- The account's own performance is the baseline. Compare dimensions against each other within the account.
+- Look for CROSS-DIMENSIONAL patterns: format x placement, audience x format, device x placement, objective x audience, objective x placement.
+- Identify the account's relative winners and losers — which dimension outperforms vs underperforms the account's own averages.
+- When prior-period data exists, frame as acceleration or deceleration within the account (e.g., "Instagram ROAS improved 40% while Facebook declined 15%").
+- When daily trend data exists, identify inflection points, momentum shifts, or anomalies.
+- Flag spend allocation mismatches: high spend on the account's own low-performing dimensions.
+- When campaign objective data is available, analyze which objectives are most efficient and whether budget allocation across objectives matches performance.
+
 RULES:
 - Each insight MUST be a single sentence, under 140 characters
-- Focus on CROSS-DIMENSIONAL patterns that combine data from multiple breakdowns (e.g., audience + placement, format + device, demographics + format)
 - Include specific numbers from the data
 - Provide strategic, actionable observations — not just restating what the data shows
+- For each insight, provide a concrete recommendation and estimated dollar or percentage impact
 - Do NOT repeat or rephrase these already-computed insights:
 ${alreadySurfaced}
 - Rate each as: positive (opportunity to exploit), negative (risk to address), or neutral (noteworthy observation)
@@ -82,14 +144,14 @@ ${summary}
 Respond ONLY with valid JSON matching this schema:
 {
   "insights": [
-    { "category": "formats", "text": "...", "severity": "positive" },
-    { "category": "formats", "text": "...", "severity": "neutral" },
-    { "category": "placements", "text": "...", "severity": "positive" },
-    { "category": "placements", "text": "...", "severity": "negative" },
-    { "category": "audiences", "text": "...", "severity": "positive" },
-    { "category": "audiences", "text": "...", "severity": "neutral" },
-    { "category": "creative", "text": "...", "severity": "positive" },
-    { "category": "creative", "text": "...", "severity": "negative" }
+    { "category": "formats", "text": "...", "severity": "positive", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "formats", "text": "...", "severity": "neutral", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "placements", "text": "...", "severity": "positive", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "placements", "text": "...", "severity": "negative", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "audiences", "text": "...", "severity": "positive", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "audiences", "text": "...", "severity": "neutral", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "creative", "text": "...", "severity": "positive", "recommendation": "...", "estimated_impact": "..." },
+    { "category": "creative", "text": "...", "severity": "negative", "recommendation": "...", "estimated_impact": "..." }
   ]
 }`;
 }
@@ -126,11 +188,16 @@ function parseGeminiResponse(raw: string): LlmInsight[] {
       text: String(i.text).slice(0, 200),
       severity: i.severity as InsightSeverity,
       source: "llm" as const,
+      recommendation: typeof i.recommendation === "string" ? String(i.recommendation).slice(0, 300) : undefined,
+      estimated_impact: typeof i.estimated_impact === "string" ? String(i.estimated_impact).slice(0, 200) : undefined,
     }));
 }
 
 export async function generateLlmInsights(args: {
   data: BreakdownData;
+  previousData?: BreakdownData;
+  timeSeries?: DailyDataPoint[];
+  objectives?: ObjectiveBreakdown[];
   computedInsights: HeuristicInsight[];
   log: (msg: string, extra?: unknown) => void;
 }): Promise<LlmInsight[]> {
@@ -140,8 +207,12 @@ export async function generateLlmInsights(args: {
     return [];
   }
 
-  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash-preview-05-20";
-  const prompt = buildPrompt(args.data, args.computedInsights);
+  const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-3-flash-preview";
+  const prompt = buildPrompt(args.data, args.computedInsights, {
+    previousData: args.previousData,
+    timeSeries: args.timeSeries,
+    objectives: args.objectives,
+  });
 
   try {
     const response = await fetch(

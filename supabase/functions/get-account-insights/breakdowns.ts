@@ -45,6 +45,41 @@ export type DeviceBreakdown = {
   conversions: number;
 };
 
+export type DailyDataPoint = {
+  date: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  conversions: number;
+  conversion_value: number;
+  roas: number;
+};
+
+export type CampaignMetrics = {
+  campaign_id: string;
+  campaign_name: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  conversions: number;
+  conversion_value: number;
+  roas: number;
+};
+
+export type ObjectiveBreakdown = {
+  objective: string;
+  campaign_count: number;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  conversions: number;
+  conversion_value: number;
+  roas: number;
+};
+
 export type BreakdownData = {
   placements: PlacementBreakdown[];
   demographics: DemographicBreakdown[];
@@ -115,7 +150,8 @@ async function fetchInsightsWithBreakdowns(args: {
   level?: string;
   log: (msg: string, extra?: unknown) => void;
 }): Promise<InsightRow[]> {
-  const url = `https://graph.facebook.com/v23.0/act_${args.adAccountId}/insights`;
+  const rawId = args.adAccountId.replace(/^act_/, "");
+  const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
   const params = new URLSearchParams({
     fields:
       "spend,impressions,clicks,cpc,ctr,actions,action_values,cost_per_action_type",
@@ -159,20 +195,169 @@ async function fetchInsightsWithBreakdowns(args: {
   return rows;
 }
 
+export async function fetchDailyTimeSeries(args: {
+  adAccountId: string;
+  accessToken: string;
+  since: string;
+  until: string;
+  log: (msg: string, extra?: unknown) => void;
+}): Promise<DailyDataPoint[]> {
+  const rawId = args.adAccountId.replace(/^act_/, "");
+  const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
+  const params = new URLSearchParams({
+    fields: "spend,impressions,clicks,actions,action_values",
+    time_range: JSON.stringify({ since: args.since, until: args.until }),
+    time_increment: "1",
+    level: "account",
+    access_token: args.accessToken,
+    limit: "500",
+  });
+
+  const response = await fetch(`${url}?${params.toString()}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    args.log("Meta API error for daily time series", {
+      status: response.status,
+      error: errorData,
+    });
+    return [];
+  }
+
+  const data = await response.json().catch(() => ({}));
+  const rows: InsightRow[] = Array.isArray(data?.data) ? data.data : [];
+
+  return rows.map((row) => {
+    const metrics = parseMetrics(row);
+    return {
+      date: String(row.date_start ?? ""),
+      spend: metrics.spend,
+      impressions: metrics.impressions,
+      clicks: metrics.clicks,
+      ctr: metrics.ctr,
+      conversions: metrics.conversions,
+      conversion_value: metrics.conversion_value,
+      roas: metrics.roas,
+    };
+  });
+}
+
+export async function fetchCampaignMetrics(args: {
+  adAccountId: string;
+  accessToken: string;
+  since: string;
+  until: string;
+  log: (msg: string, extra?: unknown) => void;
+}): Promise<CampaignMetrics[]> {
+  const rawId = args.adAccountId.replace(/^act_/, "");
+  const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
+  const params = new URLSearchParams({
+    fields:
+      "campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+    time_range: JSON.stringify({ since: args.since, until: args.until }),
+    level: "campaign",
+    access_token: args.accessToken,
+    limit: "500",
+  });
+
+  const response = await fetch(`${url}?${params.toString()}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    args.log("Meta API error for campaign metrics", {
+      status: response.status,
+      error: errorData,
+    });
+    return [];
+  }
+
+  const data = await response.json().catch(() => ({}));
+  const rows: InsightRow[] = Array.isArray(data?.data) ? data.data : [];
+
+  let nextUrl = data?.paging?.next;
+  let pages = 1;
+  while (nextUrl && pages < 10) {
+    const nextResponse = await fetch(nextUrl);
+    if (!nextResponse.ok) break;
+    const nextData = await nextResponse.json().catch(() => ({}));
+    if (Array.isArray(nextData?.data)) {
+      rows.push(...nextData.data);
+    }
+    nextUrl = nextData?.paging?.next;
+    pages += 1;
+  }
+
+  return rows.map((row) => {
+    const metrics = parseMetrics(row);
+    return {
+      campaign_id: String(row.campaign_id ?? ""),
+      campaign_name: String(row.campaign_name ?? ""),
+      ...metrics,
+    };
+  });
+}
+
+export function buildObjectiveBreakdowns(
+  campaignMetrics: CampaignMetrics[],
+  objectiveMap: Map<string, string>
+): ObjectiveBreakdown[] {
+  const grouped = new Map<
+    string,
+    {
+      spend: number;
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      conversion_value: number;
+      count: number;
+    }
+  >();
+
+  for (const cm of campaignMetrics) {
+    const objective = objectiveMap.get(cm.campaign_id) ?? "unknown";
+    const existing = grouped.get(objective) ?? {
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
+      conversion_value: 0,
+      count: 0,
+    };
+    existing.spend += cm.spend;
+    existing.impressions += cm.impressions;
+    existing.clicks += cm.clicks;
+    existing.conversions += cm.conversions;
+    existing.conversion_value += cm.conversion_value;
+    existing.count += 1;
+    grouped.set(objective, existing);
+  }
+
+  return Array.from(grouped.entries()).map(([objective, t]) => ({
+    objective,
+    campaign_count: t.count,
+    spend: Math.round(t.spend * 100) / 100,
+    impressions: Math.round(t.impressions),
+    clicks: Math.round(t.clicks),
+    ctr:
+      t.impressions > 0
+        ? Math.round((t.clicks / t.impressions) * 10000) / 100
+        : 0,
+    conversions: Math.round(t.conversions * 100) / 100,
+    conversion_value: Math.round(t.conversion_value * 100) / 100,
+    roas:
+      t.spend > 0
+        ? Math.round((t.conversion_value / t.spend) * 100) / 100
+        : 0,
+  }));
+}
+
 function inferFormat(row: InsightRow): string {
-  const adName = String(row.ad_name ?? "").toLowerCase();
-  const objectType = String(row.object_type ?? "").toLowerCase();
   const formatAsset = String(row.ad_format_asset ?? "").toLowerCase();
 
-  if (formatAsset.includes("video") || objectType === "video" || adName.includes("video") || adName.includes("reel")) {
-    return "video";
-  }
-  if (formatAsset.includes("carousel") || objectType === "carousel" || adName.includes("carousel") || adName.includes("dpa")) {
-    return "carousel";
-  }
-  if (formatAsset.includes("collection") || objectType === "collection" || adName.includes("collection")) {
-    return "collection";
-  }
+  if (formatAsset === "video" || formatAsset.includes("video")) return "video";
+  if (formatAsset === "carousel_container" || formatAsset.includes("carousel")) return "carousel";
+  if (formatAsset === "collection" || formatAsset.includes("collection")) return "collection";
+  if (formatAsset === "ig_reel" || formatAsset === "fb_reel") return "video";
+  if (formatAsset.length > 0 && formatAsset !== "unknown") return formatAsset;
+
   return "image";
 }
 
@@ -284,7 +469,6 @@ export async function fetchAllBreakdowns(args: {
       fetchInsightsWithBreakdowns({
         ...args,
         breakdowns: "ad_format_asset",
-        level: "ad",
       }),
       fetchInsightsWithBreakdowns({
         ...args,
