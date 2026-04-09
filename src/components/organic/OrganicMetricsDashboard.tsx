@@ -41,7 +41,13 @@ const OrganicAudienceLocationMapCard = dynamic(
   () => import("@/components/organic/OrganicAudienceLocationMapCard").then((mod) => mod.OrganicAudienceLocationMapCard),
   { ssr: false }
 );
-import { OrganicInsightsPanel } from "@/components/organic/OrganicInsightsPanel";
+import { useOrganicInsights } from "@/hooks/useOrganicInsights";
+import type { OrganicComputedInsight } from "@/lib/organic/organic-insights.types";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 import {
   ChartContainer,
@@ -179,6 +185,21 @@ const ACCOUNT_TREND_MAP: Partial<Record<
   newFollowers: "newFollowers",
   profileVisits24h: "profileVisits24h",
   profileVisitsYesterday: "profileVisits24h",
+};
+
+// Maps insight metric tags → KPI keys they're relevant to
+const INSIGHT_KPI_MAP: Record<string, Array<keyof OrganicMetrics>> = {
+  newFollowers: ["newFollowers"],
+  nonFollowerReach: ["nonFollowerReach"],
+  reach: ["reach"],
+  views: ["views", "postViews", "reelsViews"],
+  totalInteractions: ["accountsEngaged"],
+  accountsEngaged: ["accountsEngaged"],
+  saved: ["accountsEngaged"],
+  comments: ["comments"],
+  country: ["followerReach"],
+  age: ["followerReach"],
+  profileVisits24h: ["profileVisits24h"],
 };
 
 const POST_METRIC_LABELS: Record<PostMetricKey, string> = {
@@ -691,6 +712,7 @@ function MetricCard({
   active = false,
   onClick,
   ariaLabel,
+  insights,
 }: {
   label: string;
   value: number | undefined;
@@ -699,19 +721,22 @@ function MetricCard({
   active?: boolean;
   onClick?: () => void;
   ariaLabel?: string;
+  insights?: OrganicComputedInsight[];
 }) {
   const pctChange = comparison?.percentageChange;
   const direction = trendDirection(pctChange);
   const interactive = Boolean(onClick);
+  const hasInsights = insights && insights.length > 0;
 
-  return (
+  const cardContent = (
     <Card
       variant="surface"
       className={cn(
         "border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-all duration-200 motion-reduce:transition-none",
         compact ? "min-h-[50px]" : "min-h-[70px]",
         active ? "border-blue-500/70 bg-blue-500/10 shadow-blue-500/10" : "",
-        interactive ? "hover:-translate-y-0.5 hover:shadow-md" : ""
+        interactive ? "hover:-translate-y-0.5 hover:shadow-md" : "",
+        hasInsights ? "ring-1 ring-violet-400/30" : ""
       )}
     >
       <button
@@ -727,7 +752,12 @@ function MetricCard({
         )}
       >
         <Flex align="start" justify="between" gap="2" className="w-full">
-          <Text size="1" color="gray" className="leading-none">{label}</Text>
+          <Flex align="center" gap="1">
+            <Text size="1" color="gray" className="leading-none">{label}</Text>
+            {hasInsights ? (
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title="Insights available" />
+            ) : null}
+          </Flex>
           {!compact && (
             <span
               className={cn(
@@ -777,6 +807,34 @@ function MetricCard({
       </button>
     </Card>
   );
+
+  if (!hasInsights) return cardContent;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>{cardContent}</PopoverTrigger>
+      <PopoverContent side="bottom" align="start" className="w-80 p-3">
+        <Text size="2" weight="medium" className="mb-2 block">{label} Insights</Text>
+        <Flex direction="column" gap="2">
+          {insights.map((insight, i) => (
+            <Flex key={i} align="start" gap="2">
+              <div className={cn(
+                "mt-1 h-2 w-2 shrink-0 rounded-full",
+                insight.severity === "positive" ? "bg-emerald-500" :
+                insight.severity === "negative" ? "bg-red-500" : "bg-blue-500"
+              )} />
+              <div className="min-w-0">
+                <Text size="1" className="leading-snug">{insight.text}</Text>
+                {insight.recommendation ? (
+                  <Text size="1" color="gray" className="mt-0.5 block leading-snug">{insight.recommendation}</Text>
+                ) : null}
+              </div>
+            </Flex>
+          ))}
+        </Flex>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function Dashboard({
@@ -814,6 +872,30 @@ function Dashboard({
   const [selectedAccountMetric, setSelectedAccountMetric] = React.useState<keyof OrganicMetrics>("reach");
   const [selectedPostMetric, setSelectedPostMetric] = React.useState<PostMetricKey>("views");
   const [drilldownWindow, setDrilldownWindow] = React.useState<DrilldownWindow>("7d");
+
+  // Fetch organic insights for KPI tooltips
+  const { insights: organicInsights } = useOrganicInsights({
+    brandId,
+    integrationAccountId,
+    platform,
+    rangePreset,
+    enabled: viewMode === "account",
+  });
+
+  // Build per-KPI insight lookup
+  const insightsByKpi = React.useMemo(() => {
+    const map = new Map<keyof OrganicMetrics, OrganicComputedInsight[]>();
+    for (const insight of organicInsights) {
+      const kpiKeys = insight.metric ? INSIGHT_KPI_MAP[insight.metric] : undefined;
+      if (!kpiKeys) continue;
+      for (const kpi of kpiKeys) {
+        const arr = map.get(kpi) ?? [];
+        arr.push(insight);
+        map.set(kpi, arr);
+      }
+    }
+    return map;
+  }, [organicInsights]);
 
   const metrics = data.metrics;
   const profileVisits24h = resolveProfileVisits(metrics);
@@ -951,6 +1033,7 @@ function Dashboard({
                 onClick={() => {
                   setSelectedAccountMetric(metric.key);
                 }}
+                insights={insightsByKpi.get(metric.key)}
               />
             </motion.div>
           ))}
@@ -1152,15 +1235,6 @@ function Dashboard({
           countryEntries={countryDemographics}
           cityEntries={cityDemographics}
           timeframe={demographicTimeframe}
-        />
-      ) : null}
-
-      {isAccountView ? (
-        <OrganicInsightsPanel
-          brandId={brandId}
-          integrationAccountId={integrationAccountId}
-          platform={platform}
-          rangePreset={rangePreset}
         />
       ) : null}
 
