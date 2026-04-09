@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   CheckIcon,
+  CopyIcon,
   Cross2Icon,
   ImageIcon,
   LightningBoltIcon,
@@ -37,6 +38,7 @@ import { cn } from "@/lib/utils";
 import type { OrganicCalendarDraft } from "./types";
 import { PlatformBadge, StatusDot } from "./DraftCardBadges";
 import { DraftHoverCardContent } from "./DraftHoverCardContent";
+import { DuplicateDayPicker } from "./DuplicateDayPicker";
 import { cardVariants } from "./draft-card-styles";
 import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
@@ -112,9 +114,12 @@ export function CalendarDraftCard({
   const canMarkScheduled = isAssignedToDay && hasValidTimeLabel;
   const reduceMotion = useReducedMotion();
   const [timePickerOpen, setTimePickerOpen] = React.useState(false);
+  const [duplicatePickerOpen, setDuplicatePickerOpen] = React.useState(false);
   const [pendingTime, setPendingTime] = React.useState(draft.timeLabel);
+  const [timeError, setTimeError] = React.useState<string | null>(null);
   const updateDraft = useCalendarStore((state) => state.updateDraft);
   const bulkDeleteDrafts = useCalendarStore((state) => state.bulkDeleteDrafts);
+  const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
   const { publish, isPublishing } = usePublishDraft()
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
   const canPublishToInstagram =
@@ -124,6 +129,7 @@ export function CalendarDraftCard({
 
   const accentColor = resolveAccentColor(draft, platform);
   const hasMedia = draft.mediaCount > 0;
+  const showHoverPreview = draft.status !== "streaming" && draft.status !== "placeholder";
 
   const focusEditor = React.useCallback(
     (draftId: string) => {
@@ -154,7 +160,11 @@ export function CalendarDraftCard({
 
   const applyCustomTime = React.useCallback(() => {
     const normalized = normalizeTimeLabel(pendingTime.trim());
-    if (!normalized) return;
+    if (!normalized) {
+      setTimeError("Use format like 9:00 AM or 14:00");
+      return;
+    }
+    setTimeError(null);
     applyQuickEdit((currentDraft) => ({
       ...currentDraft,
       timeLabel: normalized,
@@ -162,226 +172,256 @@ export function CalendarDraftCard({
     setTimePickerOpen(false);
   }, [applyQuickEdit, pendingTime]);
 
-  return (
+  const triggerButton = (
     <Popover open={timePickerOpen} onOpenChange={setTimePickerOpen}>
-      <HoverCard openDelay={250} closeDelay={120}>
-        <ContextMenu>
-          <ContextMenuTrigger asChild>
-            <HoverCardTrigger asChild>
-              <PopoverAnchor asChild>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    if (e.shiftKey) {
-                      onToggleSelection(draft.id);
-                    } else {
-                      onSelect(draft.id);
-                    }
-                  }}
-                  draggable={!!onDragStart}
-                  onDragStart={(event) => onDragStart?.(event, draft.id)}
-                  onMouseEnter={() => onMouseEnter?.()}
-                  onMouseLeave={() => onMouseLeave?.()}
-                  aria-pressed={isSelected || isMultiSelected}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <PopoverAnchor asChild>
+            <button
+              type="button"
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  onToggleSelection(draft.id);
+                } else {
+                  onSelect(draft.id);
+                }
+              }}
+              draggable={!!onDragStart}
+              onDragStart={(event) => onDragStart?.(event, draft.id)}
+              onMouseEnter={() => onMouseEnter?.()}
+              onMouseLeave={() => onMouseLeave?.()}
+              aria-pressed={isSelected || isMultiSelected}
+              className={cn(
+                "group",
+                cardVariants({
+                  selected: isSelected,
+                  multiSelected: isMultiSelected,
+                  streaming: isStreaming,
+                  failed: isFailed,
+                  platformHover: isSelected ? "none" : platform,
+                }),
+                draft.status === "placeholder" && "border-dashed border-muted-foreground/30 bg-muted/20"
+              )}
+            >
+              {/* Top-edge status strip */}
+              {(isStreaming || isFailed || draft.status === "published") && (
+                <div
                   className={cn(
-                    "group",
-                    cardVariants({
-                      selected: isSelected,
-                      multiSelected: isMultiSelected,
-                      streaming: isStreaming,
-                      failed: isFailed,
-                      platformHover: isSelected ? "none" : platform,
-                    }),
-                    draft.status === "placeholder" && "opacity-80 grayscale-[0.5]"
+                    "absolute top-0 left-0 right-0 h-0.5",
+                    isStreaming && "bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer",
+                    isFailed && "bg-red-500",
+                    draft.status === "published" && "bg-emerald-500"
+                  )}
+                  style={isStreaming ? { backgroundSize: "200% 100%" } : undefined}
+                  aria-hidden
+                />
+              )}
+
+              {/* Streaming shimmer */}
+              {isStreaming && !reduceMotion && (
+                <div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent animate-shimmer"
+                  style={{ backgroundSize: "200% 100%" }}
+                />
+              )}
+
+              {/* Platform accent left bar */}
+              <div
+                className={cn(
+                  "absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg",
+                  isStreaming && "animate-pulse"
+                )}
+                style={{ backgroundColor: accentColor }}
+                aria-hidden
+              />
+
+              <div className="relative z-10 pl-1">
+                {/* Header row: time | multi-select | regen | status dot */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
+                      {draft.timeLabel}
+                    </span>
+                    {draft.titleTopic && (
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="p-0.5 -m-0.5 cursor-help"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <QuestionMarkCircledIcon className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-[11px]"
+                          >
+                            <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
+                            {draft.titleTopic}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {isMultiSelected && (
+                      <div className="w-3.5 h-3.5 bg-brand-primary rounded-full flex items-center justify-center">
+                        <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
+                      </div>
+                    )}
+                    {onRegenerate && draft.status !== "streaming" && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        aria-label={isFailed ? "Retry failed draft" : "Regenerate draft"}
+                        className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRegenerate(draft.id);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onRegenerate(draft.id);
+                          }
+                        }}
+                      >
+                        <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
+                      </span>
+                    )}
+                    <StatusDot status={draft.status} format={draft.format} />
+                  </div>
+                </div>
+
+                {/* Title */}
+                <p
+                  className={cn(
+                    "text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif",
+                    isStreaming && "animate-pulse opacity-70"
                   )}
                 >
-                  {/* Streaming shimmer */}
-                  {isStreaming && !reduceMotion && (
-                    <div
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/10 to-transparent animate-shimmer"
-                      style={{ backgroundSize: "200% 100%" }}
-                    />
-                  )}
+                  {draft.creativeIdea || draft.title}
+                </p>
 
-                  {/* Platform accent left bar */}
-                  <div
-                    className={cn(
-                      "absolute left-0 top-0 bottom-0 w-[3px] rounded-l-lg",
-                      isStreaming && "animate-pulse"
-                    )}
-                    style={{ backgroundColor: accentColor }}
-                    aria-hidden
-                  />
+                {/* Inline streaming status */}
+                {isStreaming && (
+                  <p className="mt-0.5 text-[10px] text-brand-primary/80 font-medium">
+                    {draft.generationStage ? `Generating · ${draft.generationStage}` : "Generating..."}
+                  </p>
+                )}
 
-                  <div className="relative z-10 pl-1">
-                    {/* Header row: time | multi-select | regen | status dot */}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-bold">
-                          {draft.timeLabel}
-                        </span>
-                        {draft.titleTopic && (
-                          <TooltipProvider>
-                            <Tooltip delayDuration={0}>
-                              <TooltipTrigger asChild>
-                                <div
-                                  className="p-0.5 -m-0.5 cursor-help"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <QuestionMarkCircledIcon className="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-brand-primary" />
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent
-                                side="top"
-                                className="max-w-[200px] border-border/70 bg-popover text-popover-foreground text-[11px]"
-                              >
-                                <p className="mb-1 font-bold text-brand-primary/90">Post Idea</p>
-                                {draft.titleTopic}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {isMultiSelected && (
-                          <div className="w-3.5 h-3.5 bg-brand-primary rounded-full flex items-center justify-center">
-                            <CheckIcon className="w-2.5 h-2.5 text-brand-primary-foreground" />
-                          </div>
-                        )}
-                        {onRegenerate && draft.status !== "streaming" && (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            aria-label={isFailed ? "Retry failed draft" : "Regenerate draft"}
-                            className="inline-flex items-center justify-center h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface/50 rounded cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRegenerate(draft.id);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                onRegenerate(draft.id);
-                              }
-                            }}
-                          >
-                            <LightningBoltIcon className="h-3.5 w-3.5 text-brand-primary" />
-                          </span>
-                        )}
-                        <StatusDot status={draft.status} format={draft.format} />
-                      </div>
+                {/* Caption */}
+                <p className="mt-1 text-[11px] text-muted-foreground leading-snug font-medium line-clamp-2">
+                  {draft.captionPreview}
+                </p>
+
+                {draft.status === "placeholder" && (
+                  <p className="mt-1.5 text-[10px] italic text-muted-foreground/60">
+                    Awaiting generation
+                  </p>
+                )}
+
+                {/* Generation progress */}
+                {typeof displayProgress === "number" ? (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
+                      <span className="text-primary animate-pulse">GENERATING</span>
+                      <span>{displayProgress}%</span>
                     </div>
+                    <Progress value={displayProgress} className="h-1" />
+                  </div>
+                ) : null}
 
-                    {/* Title */}
-                    <p
-                      className={cn(
-                        "text-sm font-bold text-foreground line-clamp-2 leading-tight tracking-tight font-serif",
-                        isStreaming && "animate-pulse opacity-70"
-                      )}
-                    >
-                      {draft.creativeIdea || draft.title}
+                {/* Error state */}
+                {isFailed && draft.generationError ? (
+                  <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
+                      Generation failed
                     </p>
-
-                    {/* Caption */}
-                    <p className="mt-1 text-[11px] text-muted-foreground leading-snug font-medium line-clamp-2">
-                      {draft.captionPreview}
+                    <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive/90">
+                      {draft.generationError}
                     </p>
-
-                    {/* Generation progress */}
-                    {typeof displayProgress === "number" ? (
-                      <div className="mt-3 space-y-1.5">
-                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-tighter text-muted-foreground">
-                          <span className="text-primary animate-pulse">GENERATING</span>
-                          <span>{displayProgress}%</span>
-                        </div>
-                        <Progress value={displayProgress} className="h-1" />
-                      </div>
-                    ) : null}
-
-                    {/* Error state */}
-                    {isFailed && draft.generationError ? (
-                      <div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1.5">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-destructive">
-                          Generation failed
-                        </p>
-                        <p className="mt-0.5 line-clamp-2 text-[10px] text-destructive/90">
-                          {draft.generationError}
-                        </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          {onRegenerate ? (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onRegenerate(draft.id);
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  onRegenerate(draft.id);
-                                }
-                              }}
-                            >
-                              <LightningBoltIcon className="h-3 w-3" />
-                              Retry
-                            </span>
-                          ) : null}
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
-                            onClick={(event) => {
+                    <div className="mt-2 flex items-center gap-2">
+                      {onRegenerate ? (
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRegenerate(draft.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
                               event.stopPropagation();
-                              clearFailure();
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                clearFailure();
-                              }
-                            }}
-                          >
-                            <Cross2Icon className="h-3 w-3" />
-                            Clear
-                          </span>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {/* Footer: platforms | media chip | format */}
-                    <div className="mt-2.5 flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        {draft.platforms.map((p) => (
-                          <PlatformBadge key={p} platform={p} />
-                        ))}
-                        {hasMedia && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 ml-0.5">
-                            <ImageIcon className="h-2.5 w-2.5" />
-                            {draft.mediaCount > 1 ? draft.mediaCount : null}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest">
-                        {draft.format}
+                              onRegenerate(draft.id);
+                            }
+                          }}
+                        >
+                          <LightningBoltIcon className="h-3 w-3" />
+                          Retry
+                        </span>
+                      ) : null}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-0.5 text-[10px] text-destructive hover:bg-destructive/20"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          clearFailure();
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            clearFailure();
+                          }
+                        }}
+                      >
+                        <Cross2Icon className="h-3 w-3" />
+                        Clear
                       </span>
                     </div>
                   </div>
-                </button>
-              </PopoverAnchor>
-            </HoverCardTrigger>
-          </ContextMenuTrigger>
+                ) : null}
 
-          {/* Context menu */}
-          <ContextMenuContent className="w-56">
+                {/* Footer: platforms | media chip | format */}
+                <div className="mt-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    {draft.platforms.map((p) => (
+                      <PlatformBadge key={p} platform={p} />
+                    ))}
+                    {hasMedia && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground/60 ml-0.5">
+                        <ImageIcon className="h-2.5 w-2.5" />
+                        {draft.mediaCount > 1 ? draft.mediaCount : null}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest">
+                    {draft.format}
+                  </span>
+                </div>
+              </div>
+            </button>
+          </PopoverAnchor>
+        </ContextMenuTrigger>
+
+        {/* Context menu */}
+        <ContextMenuContent className="w-56">
             <ContextMenuLabel>Quick Edit</ContextMenuLabel>
             <ContextMenuItem onSelect={() => focusEditor(draft.id)}>
               <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
               Open in editor
             </ContextMenuItem>
+            {draft.status !== "streaming" && draft.status !== "placeholder" ? (
+              <ContextMenuItem onSelect={() => setDuplicatePickerOpen(true)}>
+                <CopyIcon className="mr-2 h-3.5 w-3.5" />
+                Duplicate...
+              </ContextMenuItem>
+            ) : null}
             <ContextMenuSeparator />
             {QUICK_PLATFORM_OPTIONS.map((option) => (
               <ContextMenuItem
@@ -480,53 +520,82 @@ export function CalendarDraftCard({
           </ContextMenuContent>
         </ContextMenu>
 
-        {/* Rich hover popover */}
-        <HoverCardContent
-          side="right"
-          align="start"
-          className="p-0 border-none bg-transparent shadow-none"
-          avoidCollisions
-        >
-          <DraftHoverCardContent
-            draft={draft}
-            onEdit={focusEditor}
-            onRegenerate={onRegenerate}
+        {/* Time picker popover */}
+        <PopoverContent side="top" align="start" className="w-56 p-3">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Set posting time
+          </p>
+          <Input
+            value={pendingTime}
+            onChange={(e) => {
+              setPendingTime(e.target.value);
+              setTimeError(null);
+            }}
+            placeholder="e.g. 11:15 AM"
+            className="h-8 text-xs"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") applyCustomTime();
+              if (e.key === "Escape") { setTimePickerOpen(false); setTimeError(null); }
+            }}
+            autoFocus
           />
-        </HoverCardContent>
-      </HoverCard>
+          {timeError && (
+            <p className="mt-1 text-[10px] text-destructive">{timeError}</p>
+          )}
+          <div className="mt-2 flex gap-1.5">
+            <button
+              type="button"
+              onClick={applyCustomTime}
+              className="flex-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Set
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTimePickerOpen(false); setTimeError(null); }}
+              className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
+            >
+              Cancel
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+  );
 
-      {/* Time picker popover */}
-      <PopoverContent side="top" align="start" className="w-56 p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Set posting time
-        </p>
-        <Input
-          value={pendingTime}
-          onChange={(e) => setPendingTime(e.target.value)}
-          placeholder="e.g. 11:15 AM"
-          className="h-8 text-xs"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") applyCustomTime();
-            if (e.key === "Escape") setTimePickerOpen(false);
-          }}
-          autoFocus
+  const cardWithHover = showHoverPreview ? (
+    <HoverCard openDelay={400} closeDelay={120}>
+      <HoverCardTrigger asChild>{triggerButton}</HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        className="p-0 border-none bg-transparent shadow-none"
+        avoidCollisions
+      >
+        <DraftHoverCardContent
+          draft={draft}
+          onEdit={focusEditor}
+          onRegenerate={onRegenerate}
         />
-        <div className="mt-2 flex gap-1.5">
-          <button
-            type="button"
-            onClick={applyCustomTime}
-            className="flex-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Set
-          </button>
-          <button
-            type="button"
-            onClick={() => setTimePickerOpen(false)}
-            className="rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted"
-          >
-            Cancel
-          </button>
-        </div>
+      </HoverCardContent>
+    </HoverCard>
+  ) : triggerButton;
+
+  return (
+    <Popover open={duplicatePickerOpen} onOpenChange={setDuplicatePickerOpen}>
+      <PopoverAnchor asChild>
+        {cardWithHover}
+      </PopoverAnchor>
+      <PopoverContent side="right" align="start" className="w-auto p-3">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Duplicate to...
+        </p>
+        <DuplicateDayPicker
+          onSelect={(dayId) => {
+            duplicateDraft(draft.id, dayId)
+            setDuplicatePickerOpen(false)
+          }}
+          onCancel={() => setDuplicatePickerOpen(false)}
+        />
       </PopoverContent>
     </Popover>
   );

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Image from "next/image"
-import { ChevronLeftIcon, ChevronRightIcon, PlayIcon } from "@radix-ui/react-icons"
+import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon, PlayIcon } from "@radix-ui/react-icons"
 
 import { Loader2, Send } from "lucide-react"
 
@@ -286,6 +286,40 @@ function toPublishFormat(format: string): "Post" | "Carousel" | "Reel" {
   return "Post"
 }
 
+function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
+  const [value, setValue] = React.useState("")
+
+  const handleSubmit = () => {
+    const cleaned = value.trim().replace(/^#/, "")
+    if (!cleaned) return
+    onAdd(cleaned)
+    setValue("")
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); handleSubmit() }
+        }}
+        placeholder="Add hashtag..."
+        className="h-6 flex-1 rounded border border-border/50 bg-transparent px-2 text-[10px] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!value.trim()}
+        className="rounded bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-40"
+      >
+        Add
+      </button>
+    </div>
+  )
+}
+
 export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprove }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
   const selectedPlatform = draft.platforms[0] || "instagram"
@@ -306,6 +340,11 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
   const isApproveDisabled =
     draft.status === "scheduled" || draft.status === "streaming"
+
+  const handleCaptionChange = React.useCallback(
+    (value: string) => patchDraft({ captionPreview: value }),
+    [patchDraft]
+  )
 
   const { publish, isPublishing, stage, pollingAttempt, tokenExpired } = usePublishDraft()
   const isInstagram = draft.platforms.includes("instagram")
@@ -407,6 +446,69 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             </div>
           )}
 
+          {/* Hashtag Tiers */}
+          {draft.hashtags && (draft.hashtags.high?.length || draft.hashtags.medium?.length || draft.hashtags.low?.length) ? (
+            <div
+              className="mx-auto w-full rounded-xl border border-border/70 bg-background/90 p-3"
+              style={{ maxWidth: `${previewMaxWidth}px` }}
+            >
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Hashtags
+                </p>
+                {(["high", "medium", "low"] as const).map((tier) => {
+                  const tags = draft.hashtags?.[tier]
+                  if (!tags?.length) return null
+                  return (
+                    <div key={tier} className="space-y-1">
+                      <p className="text-[10px] font-medium text-muted-foreground/70">
+                        {tier === "high" ? "High Competition" : tier === "medium" ? "Medium Competition" : "Low Competition"}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground"
+                          >
+                            #{tag.replace(/^#/, "")}
+                            <button
+                              type="button"
+                              className="ml-0.5 rounded-full p-0.5 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                patchDraft({
+                                  hashtags: {
+                                    ...draft.hashtags,
+                                    [tier]: tags.filter((t) => t !== tag),
+                                  },
+                                })
+                              }}
+                              aria-label={`Remove #${tag.replace(/^#/, "")}`}
+                            >
+                              <Cross2Icon className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                <HashtagInput
+                  onAdd={(tag) => {
+                    const current = draft.hashtags ?? {}
+                    const medium = current.medium ?? []
+                    patchDraft({
+                      hashtags: {
+                        ...current,
+                        medium: [...medium, tag],
+                      },
+                    })
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+
           {/* Social preview mock */}
           <div className="mx-auto w-full" style={{ maxWidth: `${previewMaxWidth}px` }}>
             {selectedPlatform === "instagram" ? (
@@ -436,7 +538,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
                   <InstagramMobilePreview
                     draft={draft}
                     mediaAspectRatio={mediaAspectRatio}
-                    onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                    onCaptionChange={handleCaptionChange}
                     thumbnailDirection={thumbnailDirection}
                     brandName={brandName}
                   />
@@ -452,7 +554,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               <FacebookFeedPreview
                 draft={draft}
                 mediaAspectRatio={mediaAspectRatio}
-                onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                onCaptionChange={handleCaptionChange}
                 thumbnailDirection={thumbnailDirection}
                 brandName={brandName}
               />
@@ -462,7 +564,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               <LinkedInDesktopPreview
                 draft={draft}
                 mediaAspectRatio={mediaAspectRatio}
-                onCaptionChange={(value) => patchDraft({ captionPreview: value })}
+                onCaptionChange={handleCaptionChange}
                 thumbnailDirection={thumbnailDirection}
                 brandName={brandName}
               />
@@ -599,8 +701,14 @@ function InstagramMobilePreview({
   thumbnailDirection,
   brandName,
 }: SocialPreviewProps) {
-  const slides = resolveCarouselSlides(draft)
-  const mediaAltText = resolveDraftMediaAltText(draft)
+  const slides = React.useMemo(() => resolveCarouselSlides(draft), [
+    draft.publishingAssets,
+    draft.mediaSuggestion,
+  ])
+  const mediaAltText = React.useMemo(() => resolveDraftMediaAltText(draft), [
+    draft.mediaSuggestion,
+    draft.title,
+  ])
   const displayName = brandName ?? "Your Brand"
   const initials = brandInitials(brandName)
 
@@ -666,8 +774,14 @@ function FacebookFeedPreview({
   thumbnailDirection,
   brandName,
 }: SocialPreviewProps) {
-  const slides = resolveCarouselSlides(draft)
-  const mediaAltText = resolveDraftMediaAltText(draft)
+  const slides = React.useMemo(() => resolveCarouselSlides(draft), [
+    draft.publishingAssets,
+    draft.mediaSuggestion,
+  ])
+  const mediaAltText = React.useMemo(() => resolveDraftMediaAltText(draft), [
+    draft.mediaSuggestion,
+    draft.title,
+  ])
   const displayName = brandName ?? "Your Brand"
 
   return (
@@ -731,8 +845,14 @@ function LinkedInDesktopPreview({
   thumbnailDirection,
   brandName,
 }: SocialPreviewProps) {
-  const slides = resolveCarouselSlides(draft)
-  const mediaAltText = resolveDraftMediaAltText(draft)
+  const slides = React.useMemo(() => resolveCarouselSlides(draft), [
+    draft.publishingAssets,
+    draft.mediaSuggestion,
+  ])
+  const mediaAltText = React.useMemo(() => resolveDraftMediaAltText(draft), [
+    draft.mediaSuggestion,
+    draft.title,
+  ])
   const displayName = brandName ?? "Your Brand"
 
   return (

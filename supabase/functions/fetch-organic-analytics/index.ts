@@ -158,7 +158,7 @@ serve(async (req) => {
       });
     }
     const scope: AnalyticsScope = body.scope ?? "all";
-    if (!["account", "posts", "all"].includes(scope)) {
+    if (!["account", "posts", "all", "kpis", "demographics"].includes(scope)) {
       return new Response(JSON.stringify({ error: "Unsupported scope" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

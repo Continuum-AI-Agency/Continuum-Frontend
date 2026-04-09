@@ -1,4 +1,4 @@
-import { CACHE_TTL_MS } from "./types.ts";
+const GEOCODE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type SupabaseLike = {
   schema: (schema: string) => {
@@ -11,6 +11,16 @@ type SupabaseLike = {
                 data: Array<Record<string, unknown>> | null;
                 error: unknown;
               }>;
+            };
+          };
+          gt: (column: string, value: string) => {
+            order: (column: string, options: { ascending: boolean }) => {
+              limit: (value: number) => {
+                maybeSingle: () => Promise<{
+                  data: Record<string, unknown> | null;
+                  error: unknown;
+                }>;
+              };
             };
           };
         };
@@ -63,13 +73,12 @@ function inferCountryCodeFromCityLabel(value: string) {
   return null;
 }
 
-function buildCityGeocodeCacheKey(city: string, countryCode?: string | null) {
-  return [
-    "google_geocode",
-    "city",
-    normalizeToken(city),
-    normalizeCountryCode(countryCode) ?? "global",
-  ].join(":");
+function buildGeocodeBundleCacheKey(integrationAccountId: string, externalAccountId: string) {
+  return `google_geocode:cities:${integrationAccountId}:${externalAccountId}`;
+}
+
+function buildCityLookupKey(city: string, countryCode?: string | null) {
+  return [normalizeToken(city), normalizeCountryCode(countryCode) ?? "global"].join(":");
 }
 
 function parseCachedGeocode(payload: unknown): GeocodeResult | null {
@@ -86,61 +95,61 @@ function parseCachedGeocode(payload: unknown): GeocodeResult | null {
   };
 }
 
-async function readCityGeocodeCache(params: {
+async function readGeocodeBundleCache(params: {
   supabase: SupabaseLike;
-  keys: string[];
-}) {
-  const { supabase, keys } = params;
-  if (keys.length === 0) return new Map<string, GeocodeResult>();
+  cacheKey: string;
+}): Promise<Map<string, GeocodeResult>> {
+  const { supabase, cacheKey } = params;
+  const nowIso = new Date().toISOString();
 
   const { data, error } = await supabase
     .schema("brand_profiles")
     .from("reporting_cache")
-    .select("cache_key,payload,expires_at,fetched_at")
-    .eq("provider", "google")
-    .in("cache_key", keys)
-    .gt("expires_at", new Date().toISOString())
-    .order("fetched_at", { ascending: false });
+    .select("payload")
+    .eq("cache_key", cacheKey)
+    .gt("expires_at", nowIso)
+    .order("fetched_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (error || !data) {
-    return new Map<string, GeocodeResult>();
-  }
+  if (error || !data?.payload) return new Map();
 
+  const bundle = data.payload as Record<string, unknown>;
   const cache = new Map<string, GeocodeResult>();
-  data.forEach((row) => {
-    const key = typeof row.cache_key === "string" ? row.cache_key : null;
-    if (!key || cache.has(key)) return;
-    const parsed = parseCachedGeocode(row.payload);
-    if (!parsed) return;
-    cache.set(key, parsed);
-  });
-
+  for (const [key, value] of Object.entries(bundle)) {
+    const parsed = parseCachedGeocode(value);
+    if (parsed) cache.set(key, parsed);
+  }
   return cache;
 }
 
-async function writeCityGeocodeCache(params: {
+async function writeGeocodeBundleCache(params: {
   supabase: SupabaseLike;
   cacheKey: string;
   integrationAccountId: string;
   externalAccountId: string;
-  payload: GeocodeResult;
+  cache: Map<string, GeocodeResult>;
 }) {
-  const { supabase, cacheKey, integrationAccountId, externalAccountId, payload } = params;
+  const { supabase, cacheKey, integrationAccountId, externalAccountId, cache } = params;
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const expiresAt = new Date(now.getTime() + CACHE_TTL_MS);
+  const expiresAt = new Date(now.getTime() + GEOCODE_TTL_MS);
+  const payload: Record<string, GeocodeResult> = {};
+  for (const [key, value] of cache) {
+    payload[key] = value;
+  }
+
   await supabase
     .schema("brand_profiles")
     .from("reporting_cache")
     .insert({
       cache_key: cacheKey,
       provider: "google",
-      scope_type: "organic_geocode_city",
+      scope_type: "organic_geocode_cities",
       account_id: integrationAccountId,
       scope_id: externalAccountId,
-      range_preset: "city_geocode",
-      range_since: today,
-      range_until: today,
+      range_preset: "geocode_bundle",
+      range_since: now.toISOString().slice(0, 10),
+      range_until: now.toISOString().slice(0, 10),
       payload,
       fetched_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
@@ -236,6 +245,10 @@ export async function enrichCityDemographicsWithGoogleGeocoding(params: {
     return cityEntries;
   }
 
+  const bundleCacheKey = buildGeocodeBundleCacheKey(integrationAccountId, externalAccountId);
+
+  const cache = await readGeocodeBundleCache({ supabase, cacheKey: bundleCacheKey });
+
   const topCountryHints = dedupeCountryCodes(
     [...countryEntries]
       .sort((a, b) => b.value - a.value)
@@ -243,39 +256,24 @@ export async function enrichCityDemographicsWithGoogleGeocoding(params: {
       .map((entry) => entry.key)
   );
 
-  const candidateKeys = new Set<string>();
-  const perEntryHints = cityEntries.map((entry) => {
-    const inferred = inferCountryCodeFromCityLabel(entry.label || entry.key);
-    const entryCountry = normalizeCountryCode(entry.countryCode);
-    const hints = dedupeCountryCodes([entryCountry, inferred, ...topCountryHints]);
-    const cacheHints = [...hints, null];
-    cacheHints.forEach((hint) => {
-      candidateKeys.add(buildCityGeocodeCacheKey(entry.label || entry.key, hint));
-    });
-    return { hints, cacheHints };
-  });
-
-  const cache = await readCityGeocodeCache({
-    supabase,
-    keys: Array.from(candidateKeys),
-  });
-
+  let newGeocodes = false;
   const enriched: AudienceDemographicEntry[] = [];
 
-  for (let index = 0; index < cityEntries.length; index += 1) {
-    const entry = cityEntries[index];
-    const { hints, cacheHints } = perEntryHints[index] ?? { hints: [], cacheHints: [null] };
+  for (const entry of cityEntries) {
     const label = entry.label || entry.key;
+    const inferred = inferCountryCodeFromCityLabel(label);
+    const entryCountry = normalizeCountryCode(entry.countryCode);
+    const hints = dedupeCountryCodes([entryCountry, inferred, ...topCountryHints]);
 
     let resolved: GeocodeResult | null = null;
-    let resolvedKey: string | null = null;
-    for (const hint of cacheHints) {
-      const key = buildCityGeocodeCacheKey(label, hint);
-      const cached = cache.get(key);
-      if (!cached) continue;
-      resolved = cached;
-      resolvedKey = key;
-      break;
+    const lookupHints = [...hints, null];
+    for (const hint of lookupHints) {
+      const lookupKey = buildCityLookupKey(label, hint);
+      const cached = cache.get(lookupKey);
+      if (cached) {
+        resolved = cached;
+        break;
+      }
     }
 
     if (!resolved) {
@@ -283,22 +281,12 @@ export async function enrichCityDemographicsWithGoogleGeocoding(params: {
       const attemptHints = [...geocodeAttempts, null];
       for (const hint of attemptHints) {
         try {
-          const result = await geocodeCityWithGoogle({
-            apiKey,
-            cityLabel: label,
-            countryCode: hint,
-          });
+          const result = await geocodeCityWithGoogle({ apiKey, cityLabel: label, countryCode: hint });
           if (!result) continue;
           resolved = result;
-          resolvedKey = buildCityGeocodeCacheKey(label, hint);
-          cache.set(resolvedKey, result);
-          await writeCityGeocodeCache({
-            supabase,
-            cacheKey: resolvedKey,
-            integrationAccountId,
-            externalAccountId,
-            payload: result,
-          });
+          const lookupKey = buildCityLookupKey(label, hint);
+          cache.set(lookupKey, result);
+          newGeocodes = true;
           break;
         } catch {
           continue;
@@ -317,10 +305,16 @@ export async function enrichCityDemographicsWithGoogleGeocoding(params: {
       lng: resolved.lng,
       countryCode: resolved.countryCode ?? entry.countryCode,
     });
+  }
 
-    if (resolvedKey && !cache.has(resolvedKey)) {
-      cache.set(resolvedKey, resolved);
-    }
+  if (newGeocodes) {
+    await writeGeocodeBundleCache({
+      supabase,
+      cacheKey: bundleCacheKey,
+      integrationAccountId,
+      externalAccountId,
+      cache,
+    });
   }
 
   const unresolved = enriched.filter((entry) => typeof entry.lat !== "number" || typeof entry.lng !== "number").length;

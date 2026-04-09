@@ -216,13 +216,13 @@ export async function fetchFacebookAnalytics(params: {
   warnings: string[];
 }): Promise<PlatformAnalyticsResult> {
   const { account, token, range, scope, selectedPostId, postsLimit, commentsLimit, warnings } = params;
-  const includeAccount = scope !== "posts";
-  const includePosts = scope !== "account";
+  const includeKpis = scope === "kpis" || scope === "account" || scope === "all";
+  const includePosts = scope === "posts" || scope === "all";
   const includePostDetails = scope === "all" || (scope === "posts" && Boolean(selectedPostId));
   const comparisonSince = dayBefore(range.since);
 
   const [pageInsights, comparisonInsights, pagePosts] = await Promise.all([
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric:
         "page_impressions_unique,page_impressions,page_post_engagements,page_views_total,page_fan_adds,page_fan_removes",
@@ -235,7 +235,7 @@ export async function fetchFacebookAnalytics(params: {
       return { data: [] };
     })
       : Promise.resolve({ data: [] }),
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric:
         "page_impressions_unique,page_impressions,page_post_engagements,page_views_total,page_fan_adds,page_fan_removes",
@@ -483,7 +483,7 @@ export async function fetchFacebookAnalytics(params: {
     })
     .slice(0, 10);
 
-  const metrics = includeAccount
+  const metrics = includeKpis
     ? {
         newFollowers,
         reach,
@@ -504,9 +504,9 @@ export async function fetchFacebookAnalytics(params: {
 
   return {
     metrics,
-    trends: includeAccount ? trends : undefined,
+    trends: includeKpis ? trends : undefined,
     boostedEvents: includePosts ? boostedEvents : undefined,
-    audienceBreakdown: includeAccount
+    audienceBreakdown: includeKpis
       ? {
           followers: followerReach,
           nonFollowers: nonFollowerReach,
@@ -515,6 +515,6 @@ export async function fetchFacebookAnalytics(params: {
     contentTypePerformance: includePosts ? contentTypePerformance : undefined,
     posts: includePosts ? posts : undefined,
     recentComments: includePosts ? recentComments : undefined,
-    comparison: includeAccount ? comparison : null,
+    comparison: includeKpis ? comparison : null,
   };
 }

@@ -34,12 +34,14 @@ import {
 } from "recharts";
 
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
+import { PostCommentsPanel } from "@/components/organic/primitives/PostCommentsPanel";
 import dynamic from "next/dynamic";
 
 const OrganicAudienceLocationMapCard = dynamic(
   () => import("@/components/organic/OrganicAudienceLocationMapCard").then((mod) => mod.OrganicAudienceLocationMapCard),
   { ssr: false }
 );
+import { OrganicInsightsPanel } from "@/components/organic/OrganicInsightsPanel";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 import {
   ChartContainer,
@@ -104,6 +106,16 @@ type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "success"; data: OrganicMetricsResponse };
+
+type SectionState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "success"; data: T };
+
+type DemographicsSlice = {
+  audienceDemographics: OrganicMetricsResponse["audienceDemographics"];
+};
 
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
 
@@ -660,6 +672,8 @@ function PostSnapshotPanel({
             )}
           </Box>
 
+          <PostCommentsPanel comments={post.comments} />
+
           <Text size="1" className="line-clamp-8">
             {post.caption?.trim().length ? post.caption : "No caption available for this post."}
           </Text>
@@ -775,6 +789,11 @@ function Dashboard({
   hasMorePosts,
   loadingMorePosts,
   onLoadMorePosts,
+  demographicsLoading = false,
+  brandId,
+  integrationAccountId,
+  platform,
+  rangePreset,
 }: {
   data: OrganicMetricsResponse;
   accountName?: string | null;
@@ -785,6 +804,11 @@ function Dashboard({
   hasMorePosts?: boolean;
   loadingMorePosts?: boolean;
   onLoadMorePosts?: () => void;
+  demographicsLoading?: boolean;
+  brandId: string;
+  integrationAccountId: string;
+  platform: "instagram" | "facebook";
+  rangePreset: OrganicDateRangePreset;
 }) {
   const [selectedPostId, setSelectedPostId] = React.useState<string | null>(null);
   const [selectedAccountMetric, setSelectedAccountMetric] = React.useState<keyof OrganicMetrics>("reach");
@@ -906,21 +930,31 @@ function Dashboard({
       </Flex>
 
       {isAccountView ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        <motion.div
+          key={`kpi-${data.range.since}-${data.range.until}`}
+          initial="hidden"
+          animate="visible"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
+        >
           {KPI_CONFIG.map((metric) => (
-            <MetricCard
+            <motion.div
               key={String(metric.key)}
-              label={metric.label}
-              value={metric.key === "profileVisits24h" ? profileVisits24h : metrics[metric.key]}
-              comparison={metricComparisonFor(data, metric.key)}
-              active={selectedAccountMetric === metric.key}
-              ariaLabel={`Account metric ${metric.label}`}
-              onClick={() => {
-                setSelectedAccountMetric(metric.key);
-              }}
-            />
+              variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] } } }}
+            >
+              <MetricCard
+                label={metric.label}
+                value={metric.key === "profileVisits24h" ? profileVisits24h : metrics[metric.key]}
+                comparison={metricComparisonFor(data, metric.key)}
+                active={selectedAccountMetric === metric.key}
+                ariaLabel={`Account metric ${metric.label}`}
+                onClick={() => {
+                  setSelectedAccountMetric(metric.key);
+                }}
+              />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       ) : null}
 
       {isAccountView ? (
@@ -1057,7 +1091,9 @@ function Dashboard({
               <Heading size="3" mb="2">Audience Demographics</Heading>
 
               <Text size="1" color="gray" mb="1">Gender</Text>
-              {genderDemographics.length === 0 ? (
+              {demographicsLoading ? (
+                <div className="h-28 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+              ) : genderDemographics.length === 0 ? (
                 <Text size="1" color="gray">Gender breakdown unavailable.</Text>
               ) : (
                 <>
@@ -1091,7 +1127,9 @@ function Dashboard({
 
               <Separator my="2" size="4" />
               <Text size="1" color="gray" mb="1">Age</Text>
-              {ageDemographics.length === 0 ? (
+              {demographicsLoading ? (
+                <div className="h-28 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+              ) : ageDemographics.length === 0 ? (
                 <Text size="1" color="gray">Age breakdown unavailable.</Text>
               ) : (
                 <ChartContainer config={demographicChartConfig} className="h-28 w-full">
@@ -1114,6 +1152,15 @@ function Dashboard({
           countryEntries={countryDemographics}
           cityEntries={cityDemographics}
           timeframe={demographicTimeframe}
+        />
+      ) : null}
+
+      {isAccountView ? (
+        <OrganicInsightsPanel
+          brandId={brandId}
+          integrationAccountId={integrationAccountId}
+          platform={platform}
+          rangePreset={rangePreset}
         />
       ) : null}
 
@@ -1206,6 +1253,7 @@ function Dashboard({
 }
 
 export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPlatform = "instagram" }: Props) {
+  const [isPending, startTransition] = React.useTransition();
   const [platform, setPlatform] = React.useState<MetricsPlatform>(initialPlatform);
   const [viewMode, setViewMode] = React.useState<MetricsViewMode>("account");
   const [rangePreset, setRangePreset] = React.useState<OrganicDateRangePreset>(DEFAULT_RANGE_PRESET);
@@ -1229,6 +1277,8 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     facebook: accountsByPlatform.facebook[0]?.integrationAccountId ?? null,
   });
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
+  const [kpisState, setKpisState] = React.useState<SectionState<OrganicMetricsResponse>>({ status: "idle" });
+  const [demographicsState, setDemographicsState] = React.useState<SectionState<DemographicsSlice>>({ status: "idle" });
 
   const platformAccounts = platform === "facebook"
     ? accountsByPlatform.facebook
@@ -1481,91 +1531,101 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   React.useEffect(() => {
     if (!selectedAccountId) {
       setState({ status: "idle" });
+      setKpisState({ status: "idle" });
+      setDemographicsState({ status: "idle" });
       return;
     }
     const accountId = selectedAccountId;
 
     let cancelled = false;
 
-    async function run() {
-      setState({ status: "loading" });
-      try {
-        const forceRefresh = manualRefreshRef.current;
-        manualRefreshRef.current = false;
-        let data: OrganicMetricsResponse;
-        if (viewMode === "posts") {
-          const postsData = await fetchPostsWindow({
-            accountId,
-            windowOffset: 0,
-            forceRefresh,
-          });
+    if (viewMode === "posts") {
+      async function runPosts() {
+        setState({ status: "loading" });
+        try {
+          const forceRefresh = manualRefreshRef.current;
+          manualRefreshRef.current = false;
+          const postsData = await fetchPostsWindow({ accountId, windowOffset: 0, forceRefresh });
           if (!postsData) {
             setState({ status: "error", message: "Unable to load post windows for the selected range." });
             return;
           }
-          data = postsData;
-        } else {
-          data = await fetchOrganicAnalytics({
-            brandId,
-            integrationAccountId: accountId,
-            platform,
-            range: { preset: rangePreset },
-            scope: "account",
-            forceRefresh,
-          });
-
-          if ((data.trends?.length ?? 0) < 30) {
-            try {
-              const trendData = await fetchOrganicAnalytics({
-                brandId,
-                integrationAccountId: accountId,
-                platform,
-                range: { preset: "last_30d" },
-                scope: "account",
-                forceRefresh: false,
-              });
-              if ((trendData.trends?.length ?? 0) > (data.trends?.length ?? 0)) {
-                data = {
-                  ...data,
-                  trends: trendData.trends,
-                };
-              }
-            } catch (trendError) {
-              console.warn("[OrganicMetricsDashboard] Unable to hydrate 30d account trends", trendError);
-            }
-          }
-        }
-
-        if (cancelled) return;
-        if (viewMode === "posts") {
-          const initialPosts = data.posts ?? [];
-          setPostGalleryPosts(initialPosts);
+          if (cancelled) return;
+          setPostGalleryPosts(postsData.posts ?? []);
           setPostWindowOffset(0);
           setHasMorePostWindows(postWindowRange(1) !== null);
           setLoadingMorePostWindows(false);
+          setState({ status: "success", data: postsData });
+        } catch (error) {
+          if (cancelled) return;
+          const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
+          setState({ status: "error", message });
         }
-        setState({ status: "success", data });
-      } catch (error) {
-        if (cancelled) return;
-        const message =
-          error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
-        setState({ status: "error", message });
+      }
+      void runPosts();
+    } else {
+      const forceRefresh = manualRefreshRef.current;
+      manualRefreshRef.current = false;
+
+      setKpisState({ status: "loading" });
+      setDemographicsState(platform === "instagram" ? { status: "loading" } : { status: "idle" });
+
+      const base = {
+        brandId,
+        integrationAccountId: accountId,
+        platform,
+        range: { preset: rangePreset },
+        forceRefresh,
+      } as const;
+
+      fetchOrganicAnalytics({ ...base, scope: "kpis" })
+        .then((data) => { if (!cancelled) setKpisState({ status: "success", data }); })
+        .catch((error) => {
+          if (!cancelled) {
+            const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
+            setKpisState({ status: "error", message });
+          }
+        });
+
+      if (platform === "instagram") {
+        fetchOrganicAnalytics({ ...base, scope: "demographics" })
+          .then((data) => {
+            if (!cancelled) {
+              setDemographicsState({ status: "success", data: { audienceDemographics: data.audienceDemographics } });
+            }
+          })
+          .catch((error) => {
+            if (!cancelled) {
+              const message = error instanceof Error ? error.message : "Unable to load demographics.";
+              setDemographicsState({ status: "error", message });
+            }
+          });
       }
     }
-
-    void run();
 
     return () => {
       cancelled = true;
     };
   }, [brandId, fetchPostsWindow, platform, rangePreset, reloadTick, selectedAccountId, viewMode]);
 
-  const dashboardData =
-    state.status === "success"
-      ? viewMode === "posts"
-        ? { ...state.data, posts: postGalleryPosts }
-        : state.data
-      : null;
+  const dashboardData = React.useMemo(() => {
+    if (viewMode === "posts") {
+      return state.status === "success" ? { ...state.data, posts: postGalleryPosts } : null;
+    }
+    if (kpisState.status !== "success") return null;
+    return {
+      ...kpisState.data,
+      audienceDemographics: demographicsState.status === "success"
+        ? demographicsState.data.audienceDemographics
+        : undefined,
+    } as OrganicMetricsResponse;
+  }, [viewMode, state, kpisState, demographicsState, postGalleryPosts]);
+
+  const isLoadingView = viewMode === "posts" ? state.status === "loading" : kpisState.status === "loading";
+  const viewError = viewMode === "posts"
+    ? (state.status === "error" ? state.message : null)
+    : (kpisState.status === "error" ? kpisState.message : null);
+  const demographicsLoading = demographicsState.status === "loading";
 
   return (
     <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
@@ -1588,7 +1648,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           </Flex>
 
           <Flex align="center" gap="2" wrap="wrap">
-            <Select.Root value={platform} onValueChange={(value) => setPlatform(value as MetricsPlatform)}>
+            <Select.Root value={platform} onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}>
               <Select.Trigger variant="surface" radius="large" style={{ width: "130px" }}>
                 {platform === "facebook" ? "Facebook" : "Instagram"}
               </Select.Trigger>
@@ -1600,7 +1660,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
 
             <Select.Root
               value={rangePreset}
-              onValueChange={(value) => setRangePreset(value as OrganicDateRangePreset)}
+              onValueChange={(value) => startTransition(() => setRangePreset(value as OrganicDateRangePreset))}
             >
               <Select.Trigger
                 variant="surface"
@@ -1658,10 +1718,10 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               variant="surface"
               radius="large"
               onClick={handleRefresh}
-              disabled={!selectedAccountId || state.status === "loading"}
+              disabled={!selectedAccountId || isLoadingView || isPending}
               aria-label="Refresh organic analytics"
             >
-              <ReloadIcon className={cn(state.status === "loading" && "animate-spin")} />
+              <ReloadIcon className={cn(isLoadingView && "animate-spin")} />
               Refresh
             </Button>
 
@@ -1671,7 +1731,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               onClick={() => {
                 void handleExportReport("csv");
               }}
-              disabled={!selectedAccountId || state.status === "loading" || exportingReportFormat !== null}
+              disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
               aria-label="Export last thirty day organic report as csv"
             >
               <DownloadIcon className={cn(exportingReportFormat === "csv" && "animate-pulse")} />
@@ -1684,7 +1744,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               onClick={() => {
                 void handleExportReport("html");
               }}
-              disabled={!selectedAccountId || state.status === "loading" || exportingReportFormat !== null}
+              disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
               aria-label="Export last thirty day organic report as html"
             >
               <DownloadIcon className={cn(exportingReportFormat === "html" && "animate-pulse")} />
@@ -1693,7 +1753,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           </Flex>
         </Flex>
 
-        <Box pt="3" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+        <Box pt="3" className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", isPending && "opacity-60 pointer-events-none transition-opacity duration-150")}>
           {reportError ? (
             <Callout.Root color="red" variant="surface" mb="3">
               <Callout.Text>{reportError}</Callout.Text>
@@ -1705,26 +1765,67 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 No {platform} accounts are linked to this brand profile.
               </Callout.Text>
             </Callout.Root>
-          ) : state.status === "loading" ? (
-            <OrganicMetricsWidgetSkeleton />
-          ) : state.status === "error" ? (
-            <Callout.Root color="red" variant="surface">
-              <Callout.Text>{state.message}</Callout.Text>
-            </Callout.Root>
-          ) : state.status === "success" && dashboardData ? (
-            <Dashboard
-              data={dashboardData}
-              accountName={selectedAccount?.name}
-              viewMode={viewMode}
-              postDetailsById={postDetailsById}
-              loadingPostId={loadingPostId}
-              onRequestPostDetail={requestPostDetail}
-              hasMorePosts={hasMorePostWindows}
-              loadingMorePosts={loadingMorePostWindows}
-              onLoadMorePosts={loadMorePostWindow}
-            />
           ) : (
-            <Text color="gray" size="2">Select an account to view organic reporting.</Text>
+            <AnimatePresence mode="wait" initial={false}>
+              {isLoadingView ? (
+                <motion.div
+                  key="skeleton"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <OrganicMetricsWidgetSkeleton />
+                </motion.div>
+              ) : viewError ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <Callout.Root color="red" variant="surface">
+                    <Callout.Text>{viewError}</Callout.Text>
+                  </Callout.Root>
+                </motion.div>
+              ) : dashboardData ? (
+                <motion.div
+                  key="dashboard"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+                >
+                  <Dashboard
+                    data={dashboardData}
+                    accountName={selectedAccount?.name}
+                    viewMode={viewMode}
+                    postDetailsById={postDetailsById}
+                    loadingPostId={loadingPostId}
+                    onRequestPostDetail={requestPostDetail}
+                    hasMorePosts={hasMorePostWindows}
+                    loadingMorePosts={loadingMorePostWindows}
+                    onLoadMorePosts={loadMorePostWindow}
+                    demographicsLoading={demographicsLoading}
+                    brandId={brandId}
+                    integrationAccountId={selectedAccountId ?? ""}
+                    platform={platform}
+                    rangePreset={rangePreset}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <Text color="gray" size="2">Select an account to view organic reporting.</Text>
+                </motion.div>
+              )}
+            </AnimatePresence>
           )}
         </Box>
       </Box>

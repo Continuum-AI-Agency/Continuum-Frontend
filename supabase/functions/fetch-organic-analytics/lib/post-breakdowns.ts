@@ -60,7 +60,7 @@ export function buildPostBreakdown30d(params: {
 }
 
 export function buildPostBreakdown7d(breakdown30d: DailyBreakdownPoint[]) {
-  return breakdown30d.slice(0, 7);
+  return breakdown30d.slice(-7);
 }
 
 export function buildPostBreakdown24h(params: {

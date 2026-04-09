@@ -54,6 +54,19 @@ mock.module("@/components/ui/progress", () => ({
   Progress: () => <div data-testid="progress" />,
 }));
 
+mock.module("@/components/ui/ToastProvider", () => ({
+  useToast: () => ({ show: mock() }),
+  useToastContext: () => ({ show: mock() }),
+}));
+
+mock.module("@/components/organic/hooks/usePublishDraft", () => ({
+  usePublishDraft: () => ({ publish: mock(), retryPublish: mock(), isPublishing: false, stage: null, pollingAttempt: 0, tokenExpired: false, error: null }),
+}));
+
+mock.module("@/components/organic/hooks/useProgressAnimation", () => ({
+  useProgressAnimation: () => null,
+}));
+
 mock.module("./DraftHoverCardContent", () => ({
   DraftHoverCardContent: () => <div data-testid="hover-preview" />,
 }));

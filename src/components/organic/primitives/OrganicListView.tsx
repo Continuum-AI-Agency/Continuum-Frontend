@@ -76,7 +76,7 @@ function StatusBadge({ status }: { status: OrganicDraftStatus }) {
   )
 }
 
-function DraftRow({
+const DraftRow = React.memo(function DraftRow({
   draft,
   isSelected,
   isMultiSelected,
@@ -168,9 +168,9 @@ function DraftRow({
       </ContextMenuContent>
     </ContextMenu>
   )
-}
+})
 
-function BacklogRow({
+const BacklogRow = React.memo(function BacklogRow({
   draft,
   isSelected,
   onSelect,
@@ -215,7 +215,7 @@ function BacklogRow({
       </div>
     </div>
   )
-}
+})
 
 function QuickCreateRow({
   onSubmit,

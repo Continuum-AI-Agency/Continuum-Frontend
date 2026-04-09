@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { LightningBoltIcon, UpdateIcon } from "@radix-ui/react-icons";
 import { cn } from "@/lib/utils";
 import { GlassPanel } from "@/components/ui/GlassPanel";
+import { Button } from "@/components/ui/button";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
 import type { Trend } from "@/lib/organic/trends";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -21,6 +23,8 @@ type TrendSelectorProps = {
   allowDrag?: boolean;
   allowSelect?: boolean;
   allowActions?: boolean;
+  onFetch?: () => void;
+  isFetching?: boolean;
   className?: string;
 };
 
@@ -35,9 +39,12 @@ export function TrendSelector({
   allowDrag = false,
   allowSelect = true,
   allowActions = true,
+  onFetch,
+  isFetching = false,
   className,
 }: TrendSelectorProps) {
   const hasLimit = typeof maxSelections === "number" && Number.isFinite(maxSelections);
+  const hasTrends = trendTypes.some((type) => type.groups.some((group) => group.trends.length > 0));
 
   const Wrapper: React.ElementType = withContainer ? GlassPanel : "div";
   const wrapperClassName = cn(withContainer ? "p-5" : "", className);
@@ -50,9 +57,30 @@ export function TrendSelector({
             <p className="text-xs uppercase tracking-[0.2em] text-secondary">Content Ideas</p>
             <p className="text-lg font-semibold text-primary">Trends & Questions</p>
           </div>
-          <div className="text-xs text-secondary bg-surface px-2 py-1 rounded border border-subtle">
-            {selectedTrendIds.length}
-            {hasLimit ? `/${maxSelections}` : ""} selected
+          <div className="flex items-center gap-2">
+            {onFetch ? (
+              <Button
+                type="button"
+                variant={hasTrends ? "ghost" : "default"}
+                size="sm"
+                className="h-7 px-2 text-[10px]"
+                onClick={onFetch}
+                disabled={isFetching}
+              >
+                {isFetching ? (
+                  <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+                ) : hasTrends ? (
+                  <UpdateIcon className="mr-1 h-3 w-3" />
+                ) : (
+                  <LightningBoltIcon className="mr-1 h-3 w-3" />
+                )}
+                {isFetching ? "Generating…" : hasTrends ? "Refresh" : "Generate Trends"}
+              </Button>
+            ) : null}
+            <div className="text-xs text-secondary bg-surface px-2 py-1 rounded border border-subtle">
+              {selectedTrendIds.length}
+              {hasLimit ? `/${maxSelections}` : ""} selected
+            </div>
           </div>
         </div>
       ) : null}

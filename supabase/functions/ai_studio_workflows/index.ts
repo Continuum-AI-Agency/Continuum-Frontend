@@ -11,7 +11,7 @@ import { workflowActionSchema, type WorkflowAction } from "./validators.ts";
 import type { WorkflowRow } from "./types.ts";
 import { sanitizeWorkflowNodes } from "./sanitize.ts";
 
-const DEFAULT_MAX_PAYLOAD_BYTES = 1024 * 1024;
+const DEFAULT_MAX_PAYLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_PAYLOAD_BYTES = Number(Deno.env.get("AI_STUDIO_WORKFLOWS_MAX_BYTES")) || DEFAULT_MAX_PAYLOAD_BYTES;
 const decoder = new TextDecoder();
 

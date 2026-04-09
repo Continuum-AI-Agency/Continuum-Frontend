@@ -1,4 +1,5 @@
 import type { OrganicCalendarDraft } from "./types"
+import { buildFullCaption } from "@/lib/organic/publish-utils"
 
 type MediaTemplate = {
   width: number
@@ -75,7 +76,7 @@ export function buildInstagramPreviewData(draft: OrganicCalendarDraft, verified 
     avatar: handle.slice(0, 1).toUpperCase(),
     image: resolveMediaSource(platform, draft.location),
     likes: "2,847",
-    caption: draft.captionPreview,
+    caption: buildFullCaption(draft),
     time: draft.timeLabel,
     verified,
   }
@@ -88,7 +89,7 @@ export function buildLinkedInPreviewData(draft: OrganicCalendarDraft) {
     author: handle,
     headline: draft.tone || "Brand team",
     avatar: handle.slice(0, 1).toUpperCase(),
-    content: draft.captionPreview,
+    content: buildFullCaption(draft),
     time: draft.timeLabel,
     image: resolveMediaSource("linkedin", draft.location),
     reactions: "1,234",

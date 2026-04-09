@@ -43,7 +43,7 @@ export function CalendarDndContext({
       onDragStart={onDragStart}
     >
       {children}
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {dragOverlay}
       </DragOverlay>
     </DndContext>

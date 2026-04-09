@@ -74,7 +74,7 @@ function recentPostBreakdown(post: OrganicPost | null, window: DrilldownWindow) 
   const sourcePoints =
     window === "30d"
       ? post.breakdown30d ?? post.breakdown7d
-      : post.breakdown30d ?? post.breakdown7d;
+      : post.breakdown7d ?? post.breakdown30d;
 
   return normalizeDailyBreakdown(sourcePoints)
     .filter((point) => point.date <= today)

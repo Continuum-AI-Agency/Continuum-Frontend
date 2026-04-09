@@ -1,8 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { startTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Tabs } from "@radix-ui/themes";
+
+// ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
+// Stable @types/react doesn't include it yet, so we pull it at runtime via cast.
+const ViewTransition = (React as unknown as { ViewTransition: React.ComponentType<{ children: React.ReactNode }> }).ViewTransition;
 
 type Props = {
   plannerSlot: React.ReactNode;
@@ -29,13 +33,18 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
   const handleValueChange = React.useCallback(
     (value: string) => {
       const nextView: "planner" | "metrics" = value === "planner" ? "planner" : "metrics";
-      setActiveView(nextView);
-      if (nextView === "metrics") setMetricsEverShown(true);
-      // Use history.replaceState instead of router.replace to avoid triggering
-      // a Next.js server re-render (which would flash the Suspense fallback).
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("tab", nextView);
-      window.history.replaceState(null, "", `?${params.toString()}`);
+
+      const apply = () => {
+        setActiveView(nextView);
+        if (nextView === "metrics") setMetricsEverShown(true);
+        // Use history.replaceState instead of router.replace to avoid triggering
+        // a Next.js server re-render (which would flash the Suspense fallback).
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("tab", nextView);
+        window.history.replaceState(null, "", `?${params.toString()}`);
+      };
+
+      startTransition(apply);
     },
     [searchParams]
   );
@@ -51,14 +60,16 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
         </Tabs.Root>
       </div>
 
-      <div className="flex-1 min-h-0">
-        {/* Always render planner — it's the default tab */}
-        <div className="h-full w-full" hidden={activeView !== "planner"}>{plannerSlot}</div>
-        {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
-        {metricsEverShown && (
-          <div className="h-full w-full" hidden={activeView !== "metrics"}>{metricsSlot}</div>
-        )}
-      </div>
+      <ViewTransition>
+        <div className="flex-1 min-h-0">
+          {/* Always render planner — it's the default tab */}
+          <div className="h-full w-full" hidden={activeView !== "planner"}>{plannerSlot}</div>
+          {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
+          {metricsEverShown && (
+            <div className="h-full w-full" hidden={activeView !== "metrics"}>{metricsSlot}</div>
+          )}
+        </div>
+      </ViewTransition>
     </div>
   );
 }

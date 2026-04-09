@@ -20,6 +20,7 @@ import { useCalendarStore } from "@/lib/organic/store";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { parseWeeklyGridPayload } from "@/lib/organic/weekly-grid";
 
+import { useToast } from "@/components/ui/ToastProvider";
 import {
   ORGANIC_BETA_LAUNCH_SCHEDULE,
   ORGANIC_NEWSLETTER_DEFAULT,
@@ -158,6 +159,7 @@ function resolveProgressStageFloor(stage?: string): number {
   return 10;
 }
 
+
 function resolveSlotStageFloor(stage: string): number {
   if (stage === "concepting") return 15;
   if (stage === "drafting") return 30;
@@ -167,6 +169,14 @@ function resolveSlotStageFloor(stage: string): number {
   if (stage === "merging") return 95;
   return 5;
 }
+
+const GRID_STAGE_LABELS: Record<string, string> = {
+  analyzing: "Reading brand context",
+  optimizing: "Planning schedule",
+  drafting: "Writing content",
+  matching: "Generating visuals",
+  finalizing: "Polishing details",
+};
 
 function formatGridProgressMessage({
   platform,
@@ -178,12 +188,14 @@ function formatGridProgressMessage({
   message?: string;
 }) {
   const prefix = `[${platform.toUpperCase()}]`;
-  const stageLabel = stage ? `${stage.toUpperCase()} • ` : "";
+  const stageLabel = stage
+    ? `${GRID_STAGE_LABELS[stage] ?? stage} · `
+    : "";
   const detail = message?.trim();
   if (detail) {
     return `${prefix} ${stageLabel}${detail}`;
   }
-  return stage ? `${prefix} ${stage.toUpperCase()}` : prefix;
+  return stage ? `${prefix} ${GRID_STAGE_LABELS[stage] ?? stage}` : prefix;
 }
 
 function resolveGridPlatformOrder(activePlatforms: OrganicPlatformKey[]) {
@@ -384,6 +396,8 @@ export function useDraftGeneration({
     }))
   );
 
+  const { show: showToast } = useToast();
+
   const gridEventSourceRef = React.useRef<EventSource | null>(null);
 
   const closeGridStream = React.useCallback(() => {
@@ -440,16 +454,7 @@ export function useDraftGeneration({
       const title = content.titleTopic ?? existing?.title ?? "Planned draft";
       const summary =
         placement.creative?.creativeIdea ?? content.objective ?? existing?.summary ?? "Planned draft";
-      const caption = placement.copy?.caption ?? existing?.captionPreview ?? "Details incoming.";
-      const hashtags = placement.copy?.hashtags;
-      let finalCaption = caption;
-
-      if (hashtags) {
-        const allTags = [...(hashtags.high || []), ...(hashtags.medium || []), ...(hashtags.low || [])].filter(Boolean);
-        if (allTags.length > 0) {
-          finalCaption = `${caption}\n\n${allTags.join(" ")}`;
-        }
-      }
+      const finalCaption = placement.copy?.caption ?? existing?.captionPreview ?? "Details incoming.";
       const mediaSuggestion = normalizeMediaSuggestionAssetUrl(placement.creative?.mediaSuggestion);
       const publishingAssets =
         mediaSuggestion?.assetUrl && mediaSuggestion.assetUrl.trim().length > 0
@@ -549,6 +554,11 @@ export function useDraftGeneration({
         total: placements.length,
       });
       setGridStatus("complete");
+      showToast({
+        title: "Generation complete",
+        description: `All ${placements.length} posts generated`,
+        variant: "success",
+      });
     },
     [
       activePlatforms,
@@ -558,6 +568,7 @@ export function useDraftGeneration({
       setDays,
       setGridProgress,
       setGridStatus,
+      showToast,
     ]
   );
 
@@ -1004,6 +1015,19 @@ export function useDraftGeneration({
       });
       setGridStatus(hasFailures ? "complete_with_errors" : "complete");
       setGridError(null);
+      if (hasFailures) {
+        showToast({
+          title: "Generation finished with errors",
+          description: `${succeeded} of ${totalPlacements} generated. ${failed} failed.`,
+          variant: "error",
+        });
+      } else {
+        showToast({
+          title: "Generation complete",
+          description: `All ${totalPlacements} posts generated`,
+          variant: "success",
+        });
+      }
     } catch (error) {
       setGridStatus("error");
       setGridError(error instanceof Error ? error.message : "Generation failed. Please try again.");
@@ -1025,6 +1049,7 @@ export function useDraftGeneration({
     setGridError,
     setGridProgress,
     setGridStatus,
+    showToast,
     updateDraftById,
     weekStartId,
   ]);
@@ -1281,6 +1306,11 @@ export function useDraftGeneration({
                 bulkDeleteDrafts(idsToDelete);
                 addDraft(targetDay.id, next);
               }
+              showToast({
+                title: "Draft ready",
+                description: next.title || next.summary || "New post",
+                variant: "success",
+              });
               return;
             }
             if (event.type === "error") {
@@ -1308,6 +1338,7 @@ export function useDraftGeneration({
       platformAccountIds,
       resolveDayMeta,
       setGridError,
+      showToast,
       updateDraftById,
       weekStartId,
     ]

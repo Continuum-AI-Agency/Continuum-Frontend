@@ -384,7 +384,7 @@ export function TrendsDataTable({
                     colSpan={columns.length}
                     className="h-16 text-center text-xs text-muted-foreground"
                   >
-                    No trends found.
+                    {data.length === 0 ? "No trends yet." : "No trends match your filters."}
                   </TableCell>
                 </TableRow>
               )}

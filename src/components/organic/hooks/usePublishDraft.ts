@@ -5,6 +5,7 @@ import { useCalendarStore } from "@/lib/organic/store"
 import { buildPublishBody } from "@/lib/organic/publish-utils"
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken"
 import { useToast } from "@/components/ui/ToastProvider"
+import { classifyOrganicError, isRetryableError } from "@/lib/organic/error-handling"
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
 
 // ── SSE event shapes ────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ export type PublishProgressStage =
 
 export type UsePublishDraftResult = {
   publish: (draft: OrganicCalendarDraft) => Promise<void>
+  retryPublish: () => void
   isPublishing: boolean
   stage: PublishProgressStage | null
   pollingAttempt: number
@@ -63,6 +65,8 @@ async function* parseSSE(body: ReadableStream<Uint8Array>) {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
+const MAX_RETRIES = 2
+
 export function usePublishDraft(): UsePublishDraftResult {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
   const accountContext = useCalendarStore((state) => state.accountContext)
@@ -74,13 +78,29 @@ export function usePublishDraft(): UsePublishDraftResult {
   const [tokenExpired, setTokenExpired] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
+  const retryCountRef = React.useRef(0)
+  const retryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastDraftRef = React.useRef<OrganicCalendarDraft | null>(null)
+  const mountedRef = React.useRef(true)
+
+  React.useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current)
+    }
+  }, [])
+
   const publish = React.useCallback(
     async (draft: OrganicCalendarDraft) => {
+      lastDraftRef.current = draft
       setIsPublishing(true)
       setStage(null)
       setPollingAttempt(0)
       setTokenExpired(false)
       setError(null)
+
+      let retrying = false
 
       try {
         const token = await getBrowserAccessToken()
@@ -96,8 +116,9 @@ export function usePublishDraft(): UsePublishDraftResult {
         })
 
         if (response.status === 401) {
-          setError("Not authenticated.")
-          show({ title: "Publishing failed", description: "Session expired.", variant: "error" })
+          const classified = classifyOrganicError({ status: 401 }, "Publishing")
+          setError(classified.userMessage)
+          show({ title: "Publishing failed", description: classified.userMessage, variant: "error" })
           return
         }
 
@@ -137,31 +158,58 @@ export function usePublishDraft(): UsePublishDraftResult {
             const ev = parsed as FailedEvent
             if (ev.code === "already_published") {
               updateDraft(draft.id, (d) => ({ ...d, status: "published" as const }))
-            } else if (
-              ev.code === "token_expired" ||
-              ev.error.toLowerCase().includes("token") ||
-              ev.error.toLowerCase().includes("expired") ||
-              ev.error.toLowerCase().includes("reconnect")
-            ) {
-              setTokenExpired(true)
-              show({ title: "Publishing failed", description: ev.error, variant: "error" })
             } else {
+              const classified = classifyOrganicError(
+                { status: 0, message: ev.error, code: ev.code },
+                "Publishing"
+              )
+              if (classified.retryable) {
+                setTokenExpired(false)
+              } else if (
+                ev.code === "token_expired" ||
+                ev.error.toLowerCase().includes("token")
+              ) {
+                setTokenExpired(true)
+              }
               setError(ev.error)
               show({ title: "Publishing failed", description: ev.error, variant: "error" })
             }
           }
         }
-      } catch {
-        const msg = "Network error. Please try again."
+      } catch (err) {
+        if (isRetryableError(err) && retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current += 1
+          const delay = Math.pow(2, retryCountRef.current) * 1000
+          retrying = true
+          show({ title: "Publishing failed", description: `Retrying in ${delay / 1000}s...`, variant: "error" })
+          retryTimerRef.current = setTimeout(() => {
+            if (mountedRef.current && lastDraftRef.current) {
+              publish(lastDraftRef.current)
+            }
+          }, delay)
+          return
+        }
+        const msg = retryCountRef.current > 0
+          ? `Publishing failed after ${retryCountRef.current + 1} attempts.`
+          : "Network error. Please try again."
         setError(msg)
         show({ title: "Publishing failed", description: msg, variant: "error" })
       } finally {
-        setIsPublishing(false)
-        setStage(null)
+        if (!retrying) {
+          setIsPublishing(false)
+          setStage(null)
+        }
       }
     },
     [updateDraft, accountContext, show]
   )
 
-  return { publish, isPublishing, stage, pollingAttempt, tokenExpired, error }
+  const retryPublish = React.useCallback(() => {
+    if (lastDraftRef.current) {
+      retryCountRef.current = 0
+      publish(lastDraftRef.current)
+    }
+  }, [publish])
+
+  return { publish, retryPublish, isPublishing, stage, pollingAttempt, tokenExpired, error }
 }

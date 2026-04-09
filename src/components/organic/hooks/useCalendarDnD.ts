@@ -3,6 +3,7 @@ import { DragEndEvent, DragStartEvent } from "@dnd-kit/core"
 import { useShallow } from "zustand/react/shallow"
 
 import { useCalendarStore } from "@/lib/organic/store"
+import { useToast } from "@/components/ui/ToastProvider"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import {
   ORGANIC_BETA_LAUNCH_SCHEDULE,
@@ -72,6 +73,7 @@ export function useCalendarDnD(
   drafts: OrganicCalendarDraft[],
   platformAccountIds: Partial<Record<OrganicPlatformKey, string>>
 ) {
+  const { show } = useToast()
   const { moveDraft, addDraft, updateDraft } = useCalendarStore(
     useShallow((state) => ({
       moveDraft: state.moveDraft,
@@ -198,9 +200,21 @@ export function useCalendarDnD(
         platformAccountIds,
       })
 
+      const existingSeeded = targetDay.slots.some(
+        (slot) => slot.seedTrendId === trendId && slot.status === "placeholder"
+      )
+
       addDraft(dayId, seededDraft)
+
+      show({
+        title: existingSeeded ? "Duplicate trend seeded" : "Placeholder created",
+        description: existingSeeded
+          ? `"${data.title ?? "Trend"}" already has a placeholder on ${targetDay.label}. Added another.`
+          : `"${data.title ?? "Trend"}" added to ${targetDay.label}, ${targetDay.dateLabel}`,
+        variant: "info",
+      })
     },
-    [addDraft, daysById, platformAccountIds]
+    [addDraft, daysById, platformAccountIds, show]
   )
 
   return {

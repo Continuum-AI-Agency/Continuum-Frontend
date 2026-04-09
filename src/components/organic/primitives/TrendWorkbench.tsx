@@ -3,10 +3,13 @@
 import * as React from "react"
 import {
   CheckIcon,
+  LightningBoltIcon,
+  UpdateIcon,
 } from "@radix-ui/react-icons"
 import { GripVerticalIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Command,
   CommandEmpty,
@@ -44,6 +47,8 @@ type TrendWorkbenchProps = {
   activePlatforms: OrganicPlatformKey[]
   maxSelections?: number
   onToggleTrend: (trendId: string) => void
+  onFetch?: () => void
+  isFetching?: boolean
 }
 
 type TrendTypeFilter = "all" | "event" | "question" | "trend"
@@ -58,12 +63,114 @@ type IndexedTrend = {
   normalizedTags: string
 }
 
+type TrendTableRowProps = {
+  trend: Trend
+  isSelected: boolean
+  trendType: ResolvedTrendType
+  onToggleTrend: (trendId: string) => void
+  resolveMomentumTone: (momentum: Trend["momentum"]) => string
+}
+
+const TrendTableRow = React.memo(function TrendTableRow({
+  trend,
+  isSelected,
+  trendType,
+  onToggleTrend,
+  resolveMomentumTone,
+}: TrendTableRowProps) {
+  const handleDragStart = React.useCallback(
+    (event: React.DragEvent<HTMLTableRowElement>) => {
+      event.dataTransfer.setData(
+        "application/json",
+        JSON.stringify({
+          type: trendType,
+          trendId: trend.id,
+          title: trend.title,
+        })
+      )
+      event.dataTransfer.effectAllowed = "copy"
+    },
+    [trend.id, trend.title, trendType]
+  )
+
+  const handleClick = React.useCallback(
+    () => onToggleTrend(trend.id),
+    [onToggleTrend, trend.id]
+  )
+
+  return (
+    <TableRow
+      data-state={isSelected ? "selected" : undefined}
+      draggable
+      onDragStart={handleDragStart}
+      onClick={handleClick}
+      className="cursor-pointer"
+    >
+      <TableCell>
+        {isSelected ? (
+          <span className="inline-flex rounded-full bg-primary/15 p-1 text-primary">
+            <CheckIcon className="h-3 w-3" />
+          </span>
+        ) : (
+          <span className="inline-flex h-5 w-5 rounded-full border border-border/70" />
+        )}
+      </TableCell>
+      <TableCell className="align-top">
+        <Badge
+          variant="outline"
+          className="h-5 px-2 text-[9px] uppercase tracking-wide"
+        >
+          {trendType}
+        </Badge>
+      </TableCell>
+      <TableCell className="align-top whitespace-normal">
+        <p className="font-semibold text-foreground">{trend.title}</p>
+        <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+          {trend.summary}
+        </p>
+      </TableCell>
+      <TableCell className="align-top">
+        <span
+          className={cn(
+            "inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+            resolveMomentumTone(trend.momentum)
+          )}
+        >
+          {trend.momentum}
+        </span>
+      </TableCell>
+      <TableCell className="align-top whitespace-normal">
+        <div className="flex flex-wrap gap-1">
+          {trend.platforms.map((platform) => (
+            <span
+              key={`${trend.id}:${platform}`}
+              className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium capitalize tracking-wide text-muted-foreground"
+            >
+              {PLATFORM_DISPLAY_NAME[platform] ?? platform}
+            </span>
+          ))}
+        </div>
+      </TableCell>
+      <TableCell className="align-top whitespace-normal text-[11px] text-muted-foreground">
+        {trend.tags.length > 0
+          ? trend.tags.slice(0, 2).map((tag) => `#${tag}`).join(" ")
+          : "\u2014"}
+      </TableCell>
+      <TableCell className="align-top text-right">
+        <GripVerticalIcon className="ml-auto h-3.5 w-3.5 text-muted-foreground/70" />
+      </TableCell>
+    </TableRow>
+  )
+})
+
 export function TrendWorkbench({
   trends,
   selectedTrendIds,
   activePlatforms,
   maxSelections,
   onToggleTrend,
+  onFetch,
+  isFetching = false,
 }: TrendWorkbenchProps) {
   const [query, setQuery] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState<TrendTypeFilter>("all")
@@ -293,9 +400,30 @@ export function TrendWorkbench({
           </p>
         </div>
 
-        <Badge variant="outline" className="shrink-0 text-[10px] uppercase tracking-wide">
-          {selectedLabel}
-        </Badge>
+        <div className="flex items-center gap-2">
+          {onFetch ? (
+            <Button
+              type="button"
+              variant={trends.length === 0 ? "default" : "ghost"}
+              size="sm"
+              className="h-7 px-2 text-[10px]"
+              onClick={onFetch}
+              disabled={isFetching}
+            >
+              {isFetching ? (
+                <UpdateIcon className="mr-1 h-3 w-3 animate-spin" />
+              ) : trends.length === 0 ? (
+                <LightningBoltIcon className="mr-1 h-3 w-3" />
+              ) : (
+                <UpdateIcon className="mr-1 h-3 w-3" />
+              )}
+              {isFetching ? "Generating…" : trends.length === 0 ? "Generate Trends" : "Refresh"}
+            </Button>
+          ) : null}
+          <Badge variant="outline" className="shrink-0 text-[10px] uppercase tracking-wide">
+            {selectedLabel}
+          </Badge>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -371,87 +499,16 @@ export function TrendWorkbench({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                  {filteredTrends.map((trend) => {
-                    const isSelected = selectedTrendIdSet.has(trend.id)
-                    const trendType = trendTypeById.get(trend.id) ?? "trend"
-
-                    const handleDragStart = (event: React.DragEvent<HTMLTableRowElement>) => {
-                      event.dataTransfer.setData(
-                        "application/json",
-                        JSON.stringify({
-                          type: trendType,
-                          trendId: trend.id,
-                          title: trend.title,
-                        })
-                      )
-                      event.dataTransfer.effectAllowed = "copy"
-                    }
-
-                    return (
-                      <TableRow
-                        key={trend.id}
-                        data-state={isSelected ? "selected" : undefined}
-                        draggable
-                        onDragStart={handleDragStart}
-                        onClick={() => onToggleTrend(trend.id)}
-                        className="cursor-pointer"
-                      >
-                        <TableCell>
-                          {isSelected ? (
-                            <span className="inline-flex rounded-full bg-primary/15 p-1 text-primary">
-                              <CheckIcon className="h-3 w-3" />
-                            </span>
-                          ) : (
-                            <span className="inline-flex h-5 w-5 rounded-full border border-border/70" />
-                          )}
-                        </TableCell>
-                        <TableCell className="align-top">
-                          <Badge
-                            variant="outline"
-                            className="h-5 px-2 text-[9px] uppercase tracking-wide"
-                          >
-                            {trendType}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="align-top whitespace-normal">
-                          <p className="font-semibold text-foreground">{trend.title}</p>
-                          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
-                            {trend.summary}
-                          </p>
-                        </TableCell>
-                        <TableCell className="align-top">
-                          <span
-                            className={cn(
-                              "inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                              resolveMomentumTone(trend.momentum)
-                            )}
-                          >
-                            {trend.momentum}
-                          </span>
-                        </TableCell>
-                        <TableCell className="align-top whitespace-normal">
-                          <div className="flex flex-wrap gap-1">
-                            {trend.platforms.map((platform) => (
-                              <span
-                                key={`${trend.id}:${platform}`}
-                                className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium capitalize tracking-wide text-muted-foreground"
-                              >
-                                {PLATFORM_DISPLAY_NAME[platform] ?? platform}
-                              </span>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="align-top whitespace-normal text-[11px] text-muted-foreground">
-                          {trend.tags.length > 0
-                            ? trend.tags.slice(0, 2).map((tag) => `#${tag}`).join(" ")
-                            : "—"}
-                        </TableCell>
-                        <TableCell className="align-top text-right">
-                          <GripVerticalIcon className="ml-auto h-3.5 w-3.5 text-muted-foreground/70" />
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                  {filteredTrends.map((trend) => (
+                    <TrendTableRow
+                      key={trend.id}
+                      trend={trend}
+                      isSelected={selectedTrendIdSet.has(trend.id)}
+                      trendType={trendTypeById.get(trend.id) ?? "trend"}
+                      onToggleTrend={onToggleTrend}
+                      resolveMomentumTone={resolveMomentumTone}
+                    />
+                  ))}
                 </TableBody>
               </Table>
             )}

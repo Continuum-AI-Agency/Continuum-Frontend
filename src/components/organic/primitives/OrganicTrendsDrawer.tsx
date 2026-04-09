@@ -18,6 +18,8 @@ type OrganicTrendsDrawerProps = {
   activePlatforms: OrganicPlatformKey[]
   maxSelections?: number
   onToggleTrend: (trendId: string) => void
+  onFetch?: () => void
+  isFetching?: boolean
 }
 
 export function OrganicTrendsDrawer({
@@ -28,6 +30,8 @@ export function OrganicTrendsDrawer({
   activePlatforms,
   maxSelections,
   onToggleTrend,
+  onFetch,
+  isFetching,
 }: OrganicTrendsDrawerProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -45,6 +49,8 @@ export function OrganicTrendsDrawer({
             activePlatforms={activePlatforms}
             maxSelections={maxSelections}
             onToggleTrend={onToggleTrend}
+            onFetch={onFetch}
+            isFetching={isFetching}
           />
         </div>
       </SheetContent>

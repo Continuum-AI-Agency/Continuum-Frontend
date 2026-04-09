@@ -353,7 +353,7 @@ async function fetchInstagramPostDetails(params: {
       access_token: accessToken,
     }).catch(() => null),
     metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${postId}/insights`, {
-      metric: "views,reach,total_interactions,comments",
+      metric: "views,reach",
       period: "day",
       since: postDate,
       until: toYmd(dailyUntilExclusiveDate),
@@ -558,8 +558,9 @@ export async function fetchInstagramAnalytics(params: {
   warnings: string[];
 }): Promise<PlatformAnalyticsResult> {
   const { account, token, range, scope, selectedPostId, postsLimit, commentsLimit, warnings } = params;
-  const includeAccount = scope !== "posts";
-  const includePosts = scope !== "account";
+  const includeKpis = scope === "kpis" || scope === "account" || scope === "all";
+  const includeDemographics = scope === "demographics" || scope === "account" || scope === "all";
+  const includePosts = scope === "posts" || scope === "all";
   const includePostDetails = scope === "all" || (scope === "posts" && Boolean(selectedPostId));
   const demographicTimeframe = demographicTimeframeForRange(range);
   const emptyPayload = Promise.resolve({ data: [] as Array<Record<string, unknown>> });
@@ -581,7 +582,7 @@ export async function fetchInstagramAnalytics(params: {
     followerDemographicsCity,
     mediaPayload,
   ] = await Promise.all([
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "reach,views,accounts_engaged,likes,comments,shares,saves,total_interactions",
       period: "day",
@@ -594,7 +595,7 @@ export async function fetchInstagramAnalytics(params: {
       return { data: [] };
     })
       : emptyPayload,
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "follower_count",
       period: "day",
@@ -606,7 +607,7 @@ export async function fetchInstagramAnalytics(params: {
       return null;
     })
       : Promise.resolve(null),
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "profile_views",
       metric_type: "total_value",
@@ -619,7 +620,7 @@ export async function fetchInstagramAnalytics(params: {
       return null;
     })
       : Promise.resolve(null),
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "views",
       metric_type: "total_value",
@@ -633,7 +634,7 @@ export async function fetchInstagramAnalytics(params: {
       return null;
     })
       : Promise.resolve(null),
-    includeAccount
+    includeKpis
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "reach",
       metric_type: "total_value",
@@ -652,7 +653,7 @@ export async function fetchInstagramAnalytics(params: {
     Promise.resolve(null),
     Promise.resolve(null),
     Promise.resolve(null),
-    includeAccount
+    includeDemographics
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "follower_demographics",
       period: "lifetime",
@@ -665,7 +666,7 @@ export async function fetchInstagramAnalytics(params: {
       return null;
     })
       : Promise.resolve(null),
-    includeAccount
+    includeDemographics
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "follower_demographics",
       period: "lifetime",
@@ -678,7 +679,7 @@ export async function fetchInstagramAnalytics(params: {
       return null;
     })
       : Promise.resolve(null),
-    includeAccount
+    includeDemographics
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "follower_demographics",
       period: "lifetime",
@@ -691,7 +692,7 @@ export async function fetchInstagramAnalytics(params: {
       return null;
     })
       : Promise.resolve(null),
-    includeAccount
+    includeDemographics
       ? metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${account.external_account_id}/insights`, {
       metric: "follower_demographics",
       period: "lifetime",
@@ -824,7 +825,7 @@ export async function fetchInstagramAnalytics(params: {
     metricName: "follower_demographics",
     dimension: "city",
   });
-  const dailySnapshots = includeAccount
+  const dailySnapshots = includeKpis
     ? await fetchInstagramAccountDailySnapshots({
       accountId: account.external_account_id,
       accessToken: token,
@@ -970,6 +971,9 @@ export async function fetchInstagramAnalytics(params: {
         thumbnailUrl:
           typeof child.thumbnail_url === "string" ? child.thumbnail_url : null,
       })),
+      isBoosted: undefined as boolean | undefined,
+      boostedAt: undefined as string | undefined,
+      comments: undefined as Array<Record<string, unknown>> | undefined,
     };
   });
 
@@ -985,8 +989,8 @@ export async function fetchInstagramAnalytics(params: {
       boostedSignals.byPostId.get(post.id);
 
     if (boostedAt) {
-      post.isBoosted = true;
-      post.boostedAt = boostedAt;
+      (post as Record<string, unknown>).isBoosted = true;
+      (post as Record<string, unknown>).boostedAt = boostedAt;
       boostedEvents.push({
         id: `boost-${post.id}`,
         date: boostedAt.slice(0, 10),
@@ -1009,11 +1013,11 @@ export async function fetchInstagramAnalytics(params: {
     String(a.date).localeCompare(String(b.date))
   );
   const trends = comparisonTrends.filter((trend) => String(trend.date) >= range.since);
-  if (includeAccount && trends.length === 0) {
+  if (includeKpis && trends.length === 0) {
     warnings.push("Instagram trends are empty for the selected range.");
   }
   if (
-    includeAccount &&
+    includeDemographics &&
     genderDemographics.length === 0 &&
     ageDemographics.length === 0 &&
     countryDemographics.length === 0 &&
@@ -1071,7 +1075,7 @@ export async function fetchInstagramAnalytics(params: {
     })
     .slice(0, 10);
 
-  const metrics = includeAccount
+  const metrics = includeKpis
     ? {
         newFollowers,
         reach,
@@ -1095,15 +1099,15 @@ export async function fetchInstagramAnalytics(params: {
 
   return {
     metrics,
-    trends: includeAccount ? trends : undefined,
+    trends: includeKpis ? trends : undefined,
     boostedEvents: includePosts ? boostedEvents : undefined,
-    audienceBreakdown: includeAccount
+    audienceBreakdown: includeKpis
       ? {
           followers: followerReach,
           nonFollowers: nonFollowerReach,
         }
       : undefined,
-    audienceDemographics: includeAccount
+    audienceDemographics: includeDemographics
       ? {
           gender: genderDemographics,
           age: ageDemographics,
@@ -1115,6 +1119,6 @@ export async function fetchInstagramAnalytics(params: {
     contentTypePerformance: includePosts ? contentTypePerformance : undefined,
     posts: includePosts ? posts : undefined,
     recentComments: includePosts ? recentComments : undefined,
-    comparison: includeAccount ? comparison : null,
+    comparison: includeKpis ? comparison : null,
   };
 }

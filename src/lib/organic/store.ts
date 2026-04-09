@@ -131,6 +131,7 @@ interface CalendarState {
   updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
   deleteBacklogDraft: (draftId: string) => void;
   promoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
+  duplicateDraft: (sourceDraftId: string, targetDayId?: string, newTimeLabel?: string) => void;
   setAccountContext: (ctx: { igAccountId: string | null; brandId: string | null }) => void;
 }
 
@@ -351,6 +352,7 @@ export const useCalendarStore = create<CalendarState>()(
           for (const date in newEvents) {
             const index = newEvents[date].findIndex((e) => e.id === eventId);
             if (index !== -1) {
+              newEvents[date] = [...newEvents[date]];
               newEvents[date][index] = {
                 ...newEvents[date][index],
                 startTime: newTime.start,
@@ -366,12 +368,17 @@ export const useCalendarStore = create<CalendarState>()(
         set((state) => {
           let eventToMove: ScheduledEvent | undefined;
           const newEvents = { ...state.scheduledEvents };
-          
+
           for (const date in newEvents) {
             const index = newEvents[date].findIndex((e) => e.id === eventId);
             if (index !== -1) {
-              [eventToMove] = newEvents[date].splice(index, 1);
-              if (newEvents[date].length === 0) delete newEvents[date];
+              const cloned = [...newEvents[date]];
+              [eventToMove] = cloned.splice(index, 1);
+              if (cloned.length === 0) {
+                delete newEvents[date];
+              } else {
+                newEvents[date] = cloned;
+              }
               break;
             }
           }
@@ -417,6 +424,47 @@ export const useCalendarStore = create<CalendarState>()(
           };
         }),
 
+      duplicateDraft: (sourceDraftId, targetDayId, newTimeLabel) =>
+        set((state) => {
+          let sourceDraft: OrganicCalendarDraft | undefined;
+          let sourceDayId: string | undefined;
+          for (const day of state.days) {
+            const found = day.slots.find((s) => s.id === sourceDraftId);
+            if (found) { sourceDraft = found; sourceDayId = day.id; break; }
+          }
+          if (!sourceDraft) return {};
+
+          const resolvedTargetDayId = targetDayId ?? sourceDayId;
+          if (!resolvedTargetDayId) return {};
+
+          const targetDay = state.days.find((d) => d.id === resolvedTargetDayId);
+          const cloned: OrganicCalendarDraft = {
+            ...sourceDraft,
+            id: `draft-${crypto.randomUUID()}`,
+            title: sourceDraft.title.endsWith(" (copy)") ? sourceDraft.title : `${sourceDraft.title} (copy)`,
+            status: "draft",
+            timeLabel: newTimeLabel ?? sourceDraft.timeLabel,
+            dateLabel: targetDay ? `${targetDay.label}, ${targetDay.dateLabel}` : sourceDraft.dateLabel,
+            seedTrendId: undefined,
+            targetAccountId: undefined,
+            generationError: undefined,
+            generationAttempts: undefined,
+            instagram_post_id: undefined,
+            publishingAssets: undefined,
+            progress: undefined,
+            generationStage: undefined,
+          };
+
+          return {
+            days: state.days.map((day) => {
+              if (day.id === resolvedTargetDayId) {
+                return { ...day, slots: [...day.slots, cloned] };
+              }
+              return day;
+            }),
+          };
+        }),
+
       setAccountContext: (ctx) => set({ accountContext: ctx }),
     }),
     {
@@ -428,3 +476,4 @@ export const useCalendarStore = create<CalendarState>()(
     }
   )
 );
+

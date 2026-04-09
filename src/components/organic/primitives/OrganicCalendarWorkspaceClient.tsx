@@ -1,16 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import {
-  CalendarIcon,
-  Cross2Icon,
-  ListBulletIcon,
-  LightningBoltIcon,
-  PlusIcon,
-  RocketIcon,
-  TrashIcon,
-} from "@radix-ui/react-icons"
+import dynamic from "next/dynamic"
+import { Cross2Icon } from "@radix-ui/react-icons"
 import { AnimatePresence, motion } from "motion/react"
 import { useShallow } from "zustand/react/shallow"
 
@@ -38,19 +30,10 @@ import {
 import { useCalendarSelection } from "../hooks/useCalendarSelection"
 import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
+import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu"
 import {
   buildPlannerPlatforms,
   type PlannerPlatformKey,
@@ -61,25 +44,19 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { TrendWorkbench } from "./TrendWorkbench"
-import { OrganicTrendsDrawer } from "./OrganicTrendsDrawer"
-import { OrganicMonthlyCalendar } from "./OrganicMonthlyCalendar"
-import { OrganicListView } from "./OrganicListView"
-import {
-  AI_STUDIO_CONTEXT_STORAGE_PREFIX,
-  AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
-  AI_STUDIO_PENDING_APPLY_PREFIX,
-  AI_STUDIO_SESSION_HISTORY_PREFIX,
-  buildAiStudioHandoffStorageCandidates,
-  buildAiStudioStorageKey,
-  buildPendingApplyStorageKey,
-  buildSessionHistoryStorageKey,
-  normalizeDraftPostType,
-  plannerAiStudioApplyResponseSchema,
-  plannerAiStudioHandoffSchema,
-  resolveWorkflowConcept,
-  type PlannerAiStudioHandoff,
-  type PlannerAiStudioRevision,
-} from "@/lib/organic/ai-studio-bridge"
+import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
+import { AI_STUDIO_LAST_DRAFT_STORAGE_KEY } from "@/lib/organic/ai-studio-bridge"
+import { CalendarToolbar } from "./CalendarToolbar"
+
+const OrganicMonthlyCalendar = dynamic(
+  () => import("./OrganicMonthlyCalendar").then((m) => m.OrganicMonthlyCalendar)
+)
+const OrganicListView = dynamic(
+  () => import("./OrganicListView").then((m) => m.OrganicListView)
+)
+const OrganicTrendsDrawer = dynamic(
+  () => import("./OrganicTrendsDrawer").then((m) => m.OrganicTrendsDrawer)
+)
 
 type OrganicCalendarWorkspaceClientProps = {
   days: OrganicCalendarDay[]
@@ -99,29 +76,12 @@ type OrganicCalendarWorkspaceClientProps = {
   initialView?: "week" | "month" | "list"
 }
 
+const NOOP_STRING = (_id: string) => {}
+
 function isSchedulablePlannerPlatform(
   platform: PlannerPlatformKey | undefined
 ): platform is OrganicPlatformTag {
   return platform === "instagram" || platform === "linkedin"
-}
-
-function isQuotaExceededStorageError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "QuotaExceededError"
-}
-
-function pruneStaleAiStudioContextEntries(activeDraftId: string): void {
-  if (typeof window === "undefined") return
-  const activeStorageKey = buildAiStudioStorageKey(activeDraftId)
-
-  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-    const key = window.localStorage.key(index)
-    if (!key) continue
-    if (!key.startsWith(`${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:`)) continue
-    if (key === activeStorageKey || key === AI_STUDIO_LAST_DRAFT_STORAGE_KEY) continue
-    if (key.startsWith(`${AI_STUDIO_PENDING_APPLY_PREFIX}:`)) continue
-    if (key.startsWith(`${AI_STUDIO_SESSION_HISTORY_PREFIX}:`)) continue
-    window.localStorage.removeItem(key)
-  }
 }
 
 export function OrganicCalendarWorkspaceClient({
@@ -138,8 +98,6 @@ export function OrganicCalendarWorkspaceClient({
   initialSelectedDraftId,
   initialView,
 }: OrganicCalendarWorkspaceClientProps) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const {
     days: calendarDays,
     setDays: setCalendarDays,
@@ -162,6 +120,7 @@ export function OrganicCalendarWorkspaceClient({
     deleteBacklogDraft,
     promoteBacklogDraft,
     setAccountContext,
+    gridError,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -185,6 +144,7 @@ export function OrganicCalendarWorkspaceClient({
       deleteBacklogDraft: state.deleteBacklogDraft,
       promoteBacklogDraft: state.promoteBacklogDraft,
       setAccountContext: state.setAccountContext,
+      gridError: state.gridError,
     }))
   )
 
@@ -400,6 +360,8 @@ export function OrganicCalendarWorkspaceClient({
     weekStartId,
   })
 
+  const { refresh: refreshTrends, isFetching: isFetchingTrends } = useBrandInsightsRefresh(brandProfileId ?? "")
+
   const plannerPlatforms = React.useMemo(
     () => buildPlannerPlatforms(activePlatforms, calendarDays),
     [activePlatforms, calendarDays]
@@ -494,221 +456,13 @@ export function OrganicCalendarWorkspaceClient({
     void handleGenerateDrafts()
   }, [handleGenerateDrafts])
 
-  const deriveAiStudioPrompts = React.useCallback((draft: OrganicCalendarDraft) => {
-    const creativeDirectionPrompt =
-      draft.creativeDirectionPrompt?.trim() ||
-      draft.creativeIdea?.trim() ||
-      draft.summary?.trim() ||
-      draft.title.trim()
-
-    const thumbnailPrompt =
-      draft.thumbnailPrompt?.trim() ||
-      draft.mediaSuggestion?.prompt?.trim() ||
-      draft.assetHints?.[0]?.suggestion?.trim() ||
-      ""
-
-    return {
-      creativeDirectionPrompt,
-      thumbnailPrompt,
-    }
-  }, [])
-
-  const buildAiStudioContext = React.useCallback(
-    (draft: OrganicCalendarDraft): PlannerAiStudioHandoff => {
-      const prompts = deriveAiStudioPrompts(draft)
-      const postType = normalizeDraftPostType(draft.format)
-      const platform = draft.platforms[0] === "linkedin" ? "linkedin" : "instagram"
-      const workflowConcept = resolveWorkflowConcept({
-        platform,
-        postType,
-      })
-      return {
-        schemaVersion: "planner_ai_handoff_v1",
-        draftId: draft.id,
-        brandProfileId: brandProfileId ?? "",
-        weekStartId,
-        platform,
-        postType,
-        workflowConcept,
-        format: draft.format,
-        authoritativeCount:
-          postType === "carousel" ? Math.max(1, draft.slideCount ?? draft.mediaCount ?? 1) : 1,
-        title: draft.title,
-        summary: draft.summary,
-        captionPreview: draft.captionPreview,
-        seedTrendId: draft.seedTrendId,
-        creativeDirectionPrompt: prompts.creativeDirectionPrompt,
-        thumbnailPrompt: prompts.thumbnailPrompt,
-        mediaSuggestion: draft.mediaSuggestion
-          ? {
-              assetUrl:
-                typeof draft.mediaSuggestion.assetUrl === "string"
-                  ? draft.mediaSuggestion.assetUrl
-                  : undefined,
-              assetBase64:
-                typeof draft.mediaSuggestion.assetBase64 === "string"
-                  ? draft.mediaSuggestion.assetBase64
-                  : undefined,
-              generationContext: draft.mediaSuggestion.generationContext,
-            }
-          : undefined,
-        assetHints: draft.assetHints,
-        updatedAt: new Date().toISOString(),
-      }
-    },
-    [brandProfileId, deriveAiStudioPrompts, weekStartId]
-  )
-
-  const persistAiStudioContext = React.useCallback(
-    (payload: PlannerAiStudioHandoff): boolean => {
-      if (typeof window === "undefined") return false
-      const storageKey = buildAiStudioStorageKey(payload.draftId)
-      const candidates = buildAiStudioHandoffStorageCandidates(payload)
-      let didPruneStaleEntries = false
-
-      for (const candidate of candidates) {
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(candidate))
-          window.localStorage.setItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, payload.draftId)
-          return true
-        } catch (error) {
-          if (!isQuotaExceededStorageError(error)) return false
-          if (!didPruneStaleEntries) {
-            pruneStaleAiStudioContextEntries(payload.draftId)
-            didPruneStaleEntries = true
-          }
-        }
-      }
-
-      return false
-    },
-    []
-  )
-
-  React.useEffect(() => {
-    if (typeof window === "undefined" || !selectedDraft) return
-    const timer = setTimeout(() => {
-      const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
-      if (!parsed.success) return
-      persistAiStudioContext(parsed.data)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [buildAiStudioContext, persistAiStudioContext, selectedDraft])
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    const draftId = searchParams.get("draftId")
-    if (!draftId) return
-
-    const key = buildPendingApplyStorageKey(draftId)
-    const raw = window.localStorage.getItem(key)
-    if (!raw) return
-
-    let parsedPayload: unknown
-    try {
-      parsedPayload = JSON.parse(raw)
-    } catch {
-      return
-    }
-
-    const parsed = plannerAiStudioApplyResponseSchema.safeParse(parsedPayload)
-    if (!parsed.success) return
-    const applyPayload = parsed.data
-
-    updateDraftById(applyPayload.draftId, (draft) => ({
-      ...draft,
-      title: applyPayload.contentPatch.title ?? draft.title,
-      summary: applyPayload.contentPatch.summary ?? draft.summary,
-      captionPreview: applyPayload.contentPatch.captionPreview ?? draft.captionPreview,
-      creativeDirectionPrompt:
-        applyPayload.contentPatch.creativeDirectionPrompt ?? draft.creativeDirectionPrompt,
-      thumbnailPrompt: applyPayload.contentPatch.thumbnailPrompt ?? draft.thumbnailPrompt,
-      creativeIdea: applyPayload.contentPatch.creativeIdea ?? draft.creativeIdea,
-      publishingAssets: applyPayload.assets.map((asset) => ({
-        role: asset.role,
-        kind: asset.kind,
-        slideIndex: asset.slideIndex,
-        storagePath: asset.storagePath,
-        storageUrl: asset.storageUrl,
-        mimeType: asset.mimeType,
-        width: asset.width,
-        height: asset.height,
-        generationContext: asset.generationContext,
-      })),
-      mediaSuggestion:
-        applyPayload.assets[0]?.kind === "image"
-          ? {
-              ...(draft.mediaSuggestion ?? {}),
-              assetUrl: applyPayload.assets[0].storageUrl,
-              assetBase64: null,
-              generationContext: applyPayload.assets[0].generationContext as
-                | NonNullable<NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["generationContext"]>
-                | null
-                | undefined,
-            }
-          : draft.mediaSuggestion,
-      mediaCount: Math.max(
-        1,
-        applyPayload.assets.filter((asset) => asset.kind === "image").length || draft.mediaCount
-      ),
-      status: "draft",
-      generationError: undefined,
-    }))
-
-    setSelectedDraftId(applyPayload.draftId)
-    window.localStorage.removeItem(key)
-
-    const historyKey = buildSessionHistoryStorageKey(applyPayload.draftId)
-    const historyRaw = window.sessionStorage.getItem(historyKey)
-    let history: PlannerAiStudioRevision[] = []
-    if (historyRaw) {
-      try {
-        history = JSON.parse(historyRaw) as PlannerAiStudioRevision[]
-      } catch {
-        history = []
-      }
-    }
-
-    const seedRaw = window.localStorage.getItem(buildAiStudioStorageKey(applyPayload.draftId))
-    let before: PlannerAiStudioHandoff | null = null
-    if (seedRaw) {
-      try {
-        const parsedSeed = plannerAiStudioHandoffSchema.safeParse(JSON.parse(seedRaw))
-        if (parsedSeed.success) {
-          before = parsedSeed.data
-        }
-      } catch {
-        before = null
-      }
-    }
-
-    if (before) {
-      const revision: PlannerAiStudioRevision = {
-        revisionId:
-          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-            ? crypto.randomUUID()
-            : `revision-${Date.now()}`,
-        draftId: applyPayload.draftId,
-        createdAt: new Date().toISOString(),
-        before,
-        applied: applyPayload,
-      }
-      history.push(revision)
-      window.sessionStorage.setItem(historyKey, JSON.stringify(history.slice(-10)))
-    }
-  }, [searchParams, setSelectedDraftId, updateDraftById])
-
-  const handleOpenInAiStudio = React.useCallback(() => {
-    if (!selectedDraft || !brandProfileId) return
-    const parsed = plannerAiStudioHandoffSchema.safeParse(buildAiStudioContext(selectedDraft))
-    if (!parsed.success) return
-    persistAiStudioContext(parsed.data)
-    router.push(
-      `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(
-        selectedDraft.id
-      )}`
-    )
-  }, [brandProfileId, buildAiStudioContext, persistAiStudioContext, router, selectedDraft])
+  const { handleOpenInAiStudio } = useAiStudioHandoff({
+    brandProfileId,
+    weekStartId,
+    selectedDraft,
+    updateDraftById,
+    setSelectedDraftId,
+  })
 
   const handleBulkApprove = React.useCallback(() => {
     selectedIds.forEach((id) => updateDraftById(id, (d) => ({ ...d, status: "scheduled" as const })))
@@ -766,13 +520,13 @@ export function OrganicCalendarWorkspaceClient({
         onDragEnd={handleDragEnd}
         dragOverlay={
           activeDragDraft ? (
-            <div className="w-[220px] cursor-grabbing opacity-85">
+            <div className="w-[220px] cursor-grabbing opacity-60">
               <CalendarDraftCard
                 draft={activeDragDraft}
                 isSelected={false}
                 isMultiSelected={false}
-                onSelect={() => {}}
-                onToggleSelection={() => {}}
+                onSelect={NOOP_STRING}
+                onToggleSelection={NOOP_STRING}
               />
             </div>
           ) : null
@@ -789,229 +543,137 @@ export function OrganicCalendarWorkspaceClient({
             className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
           >
             <motion.div layout transition={layoutTransition}>
-              <ContextMenu>
-                <ContextMenuTrigger asChild>
-                  <div className="rounded-lg bg-card/70 px-2.5 py-1.5 ring-1 ring-border/40">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex items-center rounded-md border border-border bg-muted/35 p-0.5">
-                          {(["week", "month", "list"] as const).map((mode) => (
-                            <Button
-                              key={mode}
-                              type="button"
-                              size="sm"
-                              variant={viewMode === mode ? "secondary" : "ghost"}
-                              className={viewMode === mode
-                                ? "h-7 rounded px-2.5 text-xs"
-                                : "h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground"
-                              }
-                              aria-pressed={viewMode === mode}
-                              onClick={() => {
-                                setViewMode(mode)
-                                const next = new URLSearchParams(searchParams.toString())
-                                next.set("view", mode)
-                                router.replace(`?${next.toString()}`, { scroll: false })
-                              }}
-                            >
-                              {mode === "week" ? "Week" : mode === "month" ? "Month" : "List"}
-                            </Button>
-                          ))}
-                        </div>
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                          {selectedTrendIds.length}
-                          {typeof maxTrendSelections === "number"
-                            ? `/${maxTrendSelections}`
-                            : ""}{" "}
-                          trends
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                          {seededDraftCount} placeholders
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          aria-label="Open trends"
-                          onClick={() => setTrendsDrawerOpen(true)}
-                        >
-                          <LightningBoltIcon className="mr-1 h-3.5 w-3.5" />
-                          Trends
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon-sm"
-                          variant="outline"
-                          aria-label="Add placeholder"
-                          disabled={isGenerating}
-                          onClick={() => {
-                            handleGoDraft()
-                          }}
-                        >
-                          <PlusIcon className={isGenerating ? "h-3.5 w-3.5 animate-pulse" : "h-3.5 w-3.5"} />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="default"
-                          disabled={isGenerating || seededDraftCount === 0}
-                          onClick={handleGenerateSelectedDrafts}
-                        >
-                          {isGenerating ? (
-                            <LightningBoltIcon className="mr-1 h-3.5 w-3.5 animate-pulse" />
-                          ) : (
-                            <RocketIcon className="mr-1 h-3.5 w-3.5" />
-                          )}
-                          Generate
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={isGenerating || drafts.length === 0}
-                          onClick={clearCalendar}
-                        >
-                          <TrashIcon className="mr-1 h-3.5 w-3.5" />
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-
-                    {slotProgress ? (
-                      <div className="mt-2 space-y-1">
-                        <div className="space-y-0.5">
-                          <p className="text-[11px] font-medium text-muted-foreground">
-                            {slotProgress.completed}/{slotProgress.total} completed
-                            {slotProgress.failed > 0 ? ` • ${slotProgress.failed} failed` : ""}
-                          </p>
-                          {gridProgress.stage ? (
-                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                              {gridProgress.stage}
-                            </p>
-                          ) : null}
-                          {gridProgress.message ? (
-                            <p className="line-clamp-2 text-[11px] text-muted-foreground/80">
-                              {gridProgress.message}
-                            </p>
-                          ) : null}
-                        </div>
-                        <Progress value={gridProgress.percent} className="h-1.5 bg-muted/70" />
-                      </div>
-                    ) : null}
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuLabel>Weekly Actions</ContextMenuLabel>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    onSelect={() => {
-                      handleGoDraft()
-                    }}
-                  >
-                    Plus
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    disabled={seededDraftCount === 0}
-                    onSelect={handleGenerateSelectedDrafts}
-                  >
-                    Generate placeholders
-                  </ContextMenuItem>
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={clearCalendar}
-                  >
-                    <TrashIcon className="mr-2 h-3.5 w-3.5" />
-                    Clear current week
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
+              <CalendarToolbar
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                selectedTrendCount={selectedTrendIds.length}
+                maxTrendSelections={maxTrendSelections}
+                seededDraftCount={seededDraftCount}
+                isGenerating={isGenerating}
+                onOpenTrends={() => setTrendsDrawerOpen(true)}
+                onAddPlaceholder={() => handleGoDraft()}
+                onGenerate={handleGenerateSelectedDrafts}
+                onClear={clearCalendar}
+                draftsCount={drafts.length}
+                slotProgress={slotProgress}
+                gridProgress={gridProgress}
+                gridStatus={gridStatus}
+                gridError={gridError}
+              />
             </motion.div>
 
             <motion.div layout transition={layoutTransition} className="min-h-0 flex-1 overflow-hidden">
-              {viewMode === "week" && (
-                <ResizablePanelGroup orientation="vertical" className="gap-0">
-                  <ResizablePanel defaultSize={74} minSize={48}>
-                    <div className="h-full overflow-hidden">
-                      <TimeGridCanvas
-                        days={calendarDays}
-                        platforms={plannerPlatforms}
-                        selectedDraftId={selectedId}
-                        selectedDraftIds={selectedIds}
-                        rangeTitle={weekTitle}
-                        rangeSubtitle={weekSubtitle}
-                        viewMode={localGridViewMode}
-                        onViewModeChange={setLocalGridViewMode}
-                        onPreviousWeek={handlePreviousWeek}
-                        onNextWeek={handleNextWeek}
-                        onCreatePost={(context) =>
-                          handleGoDraft({
-                            dayId: context?.dayId,
-                            platform: context?.platform,
-                          })
-                        }
-                        onSelectDraft={(id) => handleSelect(id, false)}
-                        onToggleSelection={(id) => handleSelect(id, true)}
-                        onRegenerate={handleRegenerate}
-                        onClearFailure={handleClearFailure}
-                        onNativeDrop={handleNativeDrop}
-                      />
-                    </div>
-                  </ResizablePanel>
+              <AnimatePresence mode="wait">
+                {viewMode === "week" && (
+                  <motion.div
+                    key="view-week"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="h-full"
+                  >
+                    <ResizablePanelGroup orientation="vertical" className="gap-0">
+                      <ResizablePanel defaultSize={74} minSize={48}>
+                        <div className="h-full overflow-hidden">
+                          <TimeGridCanvas
+                            days={calendarDays}
+                            platforms={plannerPlatforms}
+                            selectedDraftId={selectedId}
+                            selectedDraftIds={selectedIds}
+                            rangeTitle={weekTitle}
+                            rangeSubtitle={weekSubtitle}
+                            viewMode={localGridViewMode}
+                            onViewModeChange={setLocalGridViewMode}
+                            onPreviousWeek={handlePreviousWeek}
+                            onNextWeek={handleNextWeek}
+                            onCreatePost={(context) =>
+                              handleGoDraft({
+                                dayId: context?.dayId,
+                                platform: context?.platform,
+                              })
+                            }
+                            onSelectDraft={(id) => handleSelect(id, false)}
+                            onToggleSelection={(id) => handleSelect(id, true)}
+                            onRegenerate={handleRegenerate}
+                            onClearFailure={handleClearFailure}
+                            onNativeDrop={handleNativeDrop}
+                          />
+                        </div>
+                      </ResizablePanel>
 
-                  <ResizableHandle withHandle className="my-1 h-1 cursor-row-resize rounded-md" />
+                      <ResizableHandle withHandle className="my-1 h-1 cursor-row-resize rounded-md" />
 
-                  <ResizablePanel defaultSize={26} minSize={18}>
-                    <div className="h-full min-h-0 overflow-hidden">
-                      <TrendWorkbench
-                        trends={resolvedTrends}
-                        selectedTrendIds={selectedTrendIds}
-                        activePlatforms={activePlatforms}
-                        maxSelections={maxTrendSelections}
-                        onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
-                      />
-                    </div>
-                  </ResizablePanel>
-                </ResizablePanelGroup>
-              )}
+                      <ResizablePanel defaultSize={26} minSize={18}>
+                        <div className="h-full min-h-0 overflow-hidden">
+                          <TrendWorkbench
+                            trends={resolvedTrends}
+                            selectedTrendIds={selectedTrendIds}
+                            activePlatforms={activePlatforms}
+                            maxSelections={maxTrendSelections}
+                            onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                          />
+                        </div>
+                      </ResizablePanel>
+                    </ResizablePanelGroup>
+                  </motion.div>
+                )}
 
-              {viewMode === "month" && (
-                <OrganicMonthlyCalendar
-                  days={calendarDays}
-                  weekStart={weekStart}
-                  platforms={plannerPlatforms}
-                  selectedDraftId={selectedId}
-                  onSelectDraft={(id) => handleSelect(id, false)}
-                  onCreatePost={({ dayId, platformKey }) =>
-                    handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined })
-                  }
-                  onPreviousMonth={handlePreviousMonth}
-                  onNextMonth={handleNextMonth}
-                  onRegenerate={handleRegenerate}
-                  onDeleteDraft={(id) => bulkDeleteDrafts([id])}
-                />
-              )}
+                {viewMode === "month" && (
+                  <motion.div
+                    key="view-month"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="h-full"
+                  >
+                    <OrganicMonthlyCalendar
+                      days={calendarDays}
+                      weekStart={weekStart}
+                      platforms={plannerPlatforms}
+                      selectedDraftId={selectedId}
+                      onSelectDraft={(id) => handleSelect(id, false)}
+                      onCreatePost={({ dayId, platformKey }) =>
+                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined })
+                      }
+                      onPreviousMonth={handlePreviousMonth}
+                      onNextMonth={handleNextMonth}
+                      onRegenerate={handleRegenerate}
+                      onDeleteDraft={(id) => bulkDeleteDrafts([id])}
+                    />
+                  </motion.div>
+                )}
 
-              {viewMode === "list" && (
-                <OrganicListView
-                  days={calendarDays}
-                  platforms={plannerPlatforms}
-                  selectedDraftId={selectedId}
-                  selectedDraftIds={selectedIds}
-                  onSelectDraft={(id) => handleSelect(id, false)}
-                  onToggleSelection={(id) => handleSelect(id, true)}
-                  onRegenerate={handleRegenerate}
-                  onCreatePost={({ dayId, platformKey, status }) =>
-                    handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status })
-                  }
-                  brandProfileId={brandProfileId}
-                  backlogDrafts={backlogDrafts}
-                  onAddBacklogDraft={addBacklogDraft}
-                  onDeleteBacklogDraft={deleteBacklogDraft}
-                  onPromoteBacklogDraft={promoteBacklogDraft}
-                />
-              )}
+                {viewMode === "list" && (
+                  <motion.div
+                    key="view-list"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="h-full"
+                  >
+                    <OrganicListView
+                      days={calendarDays}
+                      platforms={plannerPlatforms}
+                      selectedDraftId={selectedId}
+                      selectedDraftIds={selectedIds}
+                      onSelectDraft={(id) => handleSelect(id, false)}
+                      onToggleSelection={(id) => handleSelect(id, true)}
+                      onRegenerate={handleRegenerate}
+                      onCreatePost={({ dayId, platformKey, status }) =>
+                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status })
+                      }
+                      brandProfileId={brandProfileId}
+                      backlogDrafts={backlogDrafts}
+                      onAddBacklogDraft={addBacklogDraft}
+                      onDeleteBacklogDraft={deleteBacklogDraft}
+                      onPromoteBacklogDraft={promoteBacklogDraft}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
 
             <OrganicTrendsDrawer
@@ -1022,6 +684,8 @@ export function OrganicCalendarWorkspaceClient({
               activePlatforms={activePlatforms}
               maxSelections={maxTrendSelections}
               onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+              onFetch={brandProfileId ? refreshTrends : undefined}
+              isFetching={isFetchingTrends}
             />
           </motion.section>
 
@@ -1030,6 +694,12 @@ export function OrganicCalendarWorkspaceClient({
               <motion.aside
                 key="preview-panel"
                 layout
+                role="complementary"
+                aria-label="Draft preview"
+                tabIndex={-1}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === "Escape") clearAll()
+                }}
                 initial={{ opacity: 0, x: 28, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}

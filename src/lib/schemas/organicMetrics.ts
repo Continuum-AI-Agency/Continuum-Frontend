@@ -100,7 +100,7 @@ export type OrganicMetrics = z.infer<typeof organicMetricsSchema>;
 export const organicPlatformSchema = z.enum(["instagram", "facebook", "youtube", "x", "tiktok", "linkedin"]);
 export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
 
-export const organicAnalyticsScopeSchema = z.enum(["account", "posts", "all"]);
+export const organicAnalyticsScopeSchema = z.enum(["account", "posts", "all", "kpis", "demographics"]);
 export type OrganicAnalyticsScope = z.infer<typeof organicAnalyticsScopeSchema>;
 
 export const organicTrendPointSchema = z.object({

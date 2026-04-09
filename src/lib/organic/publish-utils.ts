@@ -38,8 +38,28 @@ export type PublishRequestBody = PostPublishBody | ReelPublishBody | CarouselPub
 
 // ── Caption builder ───────────────────────────────────────────────────────────
 
+export function flattenHashtags(
+  hashtags: OrganicCalendarDraft["hashtags"]
+): string[] {
+  if (!hashtags) return []
+  return [
+    ...(hashtags.high ?? []),
+    ...(hashtags.medium ?? []),
+    ...(hashtags.low ?? []),
+  ]
+    .filter(Boolean)
+    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
+}
+
+export function buildFullCaption(draft: OrganicCalendarDraft): string {
+  const body = (draft.captionPreview ?? "").trim()
+  const tags = flattenHashtags(draft.hashtags)
+  if (!tags.length) return body
+  return body ? `${body}\n\n${tags.join(" ")}` : tags.join(" ")
+}
+
 function buildCaption(draft: OrganicCalendarDraft): string {
-  return draft.captionPreview ?? ""
+  return buildFullCaption(draft)
 }
 
 // ── Main builder ──────────────────────────────────────────────────────────────
