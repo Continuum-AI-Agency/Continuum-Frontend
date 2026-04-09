@@ -144,7 +144,7 @@ Reserved for **large cross-cutting documents**: plans, roadmaps, analyses, desig
 
 ### Agent Dispatch Rules (REQUIRED)
 
-These are hard rules. Violating them degrades throughput and is not acceptable.
+These are hard rules. Violating them degrades throughput and is not acceptable. Spawn subagents using the same model as the parent.
 
 | Trigger | Required action |
 |---|---|

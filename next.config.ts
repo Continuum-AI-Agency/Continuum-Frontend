@@ -6,10 +6,11 @@ const nextConfig: NextConfig = {
     cacheHandler: require.resolve('./cache-handler.js'),
   }),
   experimental: {
-  serverActions: {
-    bodySizeLimit: '3mb',
+    serverActions: {
+      bodySizeLimit: '3mb',
+    },
+    viewTransition: true,
   },
-},
   turbopack: {
     root: __dirname,
   },
