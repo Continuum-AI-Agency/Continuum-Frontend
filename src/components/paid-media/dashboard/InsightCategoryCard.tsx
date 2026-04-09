@@ -27,6 +27,17 @@ const severityTextClasses: Record<InsightSeverity, string> = {
   neutral: "text-primary",
 };
 
+const METRIC_LABELS: Record<string, string> = {
+  roas: "ROAS",
+  conversions: "Conv",
+  ctr: "CTR",
+  cpc: "CPC",
+  cpa: "CPA",
+  clicks: "Clicks",
+  spend_efficiency: "Efficiency",
+  spend: "Spend",
+};
+
 export function InsightCategoryCard({
   title,
   icon: Icon,
@@ -52,7 +63,7 @@ export function InsightCategoryCard({
           Not enough data to surface insights
         </p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2.5">
           {insights.map((insight, idx) => (
             <li key={idx} className="flex items-start gap-2">
               <span
@@ -61,9 +72,31 @@ export function InsightCategoryCard({
                   severityClasses[insight.severity]
                 )}
               />
-              <span className="text-xs leading-relaxed text-muted-foreground">
-                <InsightText text={insight.text} severity={insight.severity} />
-              </span>
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-baseline gap-1.5">
+                  {insight.metric && (
+                    <span className="shrink-0 rounded bg-muted px-1 py-px text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {METRIC_LABELS[insight.metric] ?? insight.metric}
+                    </span>
+                  )}
+                  <span className="text-xs leading-relaxed text-muted-foreground">
+                    <InsightText
+                      text={insight.text}
+                      severity={insight.severity}
+                    />
+                  </span>
+                </div>
+                {insight.recommendation && (
+                  <p className="text-[11px] leading-snug text-muted-foreground/70">
+                    {insight.recommendation}
+                    {insight.estimated_impact && (
+                      <span className="ml-1 font-medium text-foreground/60">
+                        ({insight.estimated_impact})
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -79,11 +112,11 @@ function InsightText({
   text: string;
   severity: InsightSeverity;
 }) {
-  const parts = text.split(/(\d+(?:\.\d+)?[%x]?)/g);
+  const parts = text.split(/(\d+(?:,\d{3})*(?:\.\d+)?[%x]?)/g);
   return (
     <>
       {parts.map((part, i) =>
-        /^\d+(?:\.\d+)?[%x]?$/.test(part) ? (
+        /^\d+(?:,\d{3})*(?:\.\d+)?[%x]?$/.test(part) ? (
           <span
             key={i}
             className={cn("font-semibold", severityTextClasses[severity])}

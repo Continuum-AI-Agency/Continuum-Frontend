@@ -18,7 +18,7 @@ function isProcessingStatus(value?: string | null) {
 }
 
 function isMissingInsightsError(message?: string | null) {
-  if (!message) return false;
+  if (!message) return true;
   const normalized = message.toLowerCase();
   return (
     normalized.includes("unavailable") ||
@@ -37,7 +37,7 @@ export function shouldAutoGenerateBrandInsights({
   }
 
   if (!insights) {
-    return false;
+    return true;
   }
 
   const statusValues = [

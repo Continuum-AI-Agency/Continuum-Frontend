@@ -148,6 +148,7 @@ async function fetchInsightsWithBreakdowns(args: {
   until: string;
   breakdowns: string;
   level?: string;
+  campaignFilter?: string;
   log: (msg: string, extra?: unknown) => void;
 }): Promise<InsightRow[]> {
   const rawId = args.adAccountId.replace(/^act_/, "");
@@ -161,6 +162,15 @@ async function fetchInsightsWithBreakdowns(args: {
     access_token: args.accessToken,
     limit: "500",
   });
+
+  if (args.campaignFilter) {
+    params.set(
+      "filtering",
+      JSON.stringify([
+        { field: "campaign.id", operator: "EQUAL", value: args.campaignFilter },
+      ])
+    );
+  }
 
   const response = await fetch(`${url}?${params.toString()}`);
   if (!response.ok) {
@@ -200,6 +210,7 @@ export async function fetchDailyTimeSeries(args: {
   accessToken: string;
   since: string;
   until: string;
+  campaignFilter?: string;
   log: (msg: string, extra?: unknown) => void;
 }): Promise<DailyDataPoint[]> {
   const rawId = args.adAccountId.replace(/^act_/, "");
@@ -212,6 +223,15 @@ export async function fetchDailyTimeSeries(args: {
     access_token: args.accessToken,
     limit: "500",
   });
+
+  if (args.campaignFilter) {
+    params.set(
+      "filtering",
+      JSON.stringify([
+        { field: "campaign.id", operator: "EQUAL", value: args.campaignFilter },
+      ])
+    );
+  }
 
   const response = await fetch(`${url}?${params.toString()}`);
   if (!response.ok) {
@@ -454,6 +474,7 @@ export async function fetchAllBreakdowns(args: {
   accessToken: string;
   since: string;
   until: string;
+  campaignFilter?: string;
   log: (msg: string, extra?: unknown) => void;
 }): Promise<BreakdownData> {
   const [placementRows, demographicRows, adRows, deviceRows] =

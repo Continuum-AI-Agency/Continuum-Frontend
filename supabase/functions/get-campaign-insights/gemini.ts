@@ -1,6 +1,6 @@
-import type { BreakdownData, DailyDataPoint, ObjectiveBreakdown } from "./breakdowns.ts";
-import type { HeuristicInsight } from "./compute.ts";
-import type { Anomaly } from "./anomalies.ts";
+import type { BreakdownData, DailyDataPoint } from "../get-account-insights/breakdowns.ts";
+import type { HeuristicInsight } from "../get-account-insights/compute.ts";
+import type { Anomaly } from "../get-account-insights/anomalies.ts";
 
 type InsightCategory = "formats" | "placements" | "audiences" | "creative";
 type InsightSeverity = "positive" | "negative" | "neutral";
@@ -14,37 +14,42 @@ export type LlmInsight = {
   estimated_impact?: string;
 };
 
-// --- Sub-agent system instructions (category-specialized) ---
+// --- Campaign-aware system instructions ---
 
-const SYSTEM_INSTRUCTIONS: Record<InsightCategory, string> = {
-  formats: `You analyze ad format and campaign objective performance for a Meta Ads account.
-Identify which formats and objectives outperform others within this account.
-Cross-reference format performance with objective type when data is available.
-Flag budget misallocations where spend doesn't match performance.
-The account's own data is the benchmark — do NOT compare to industry averages.
+function buildSystemInstructions(
+  campaignName: string,
+  campaignObjective: string
+): Record<InsightCategory, string> {
+  const objectiveCtx = campaignObjective
+    ? ` This is a ${campaignObjective} campaign — weight your analysis toward metrics that matter for that objective.`
+    : "";
+
+  return {
+    formats: `You analyze ad format performance for the campaign "${campaignName}".${objectiveCtx}
+Identify which formats deliver best results within this campaign.
+Compare format efficiency against the campaign's own averages — not external benchmarks.
+Flag formats receiving disproportionate spend relative to their performance.
 Each insight: single sentence under 140 chars, include specific numbers, with a concrete recommendation and estimated impact.`,
 
-  placements: `You analyze platform and placement position performance for a Meta Ads account.
-Identify which platforms (Facebook, Instagram, etc.) and positions (Feed, Stories, Reels) outperform.
-Detect period-over-period shifts in platform effectiveness.
-Flag placement budget misallocations where spend doesn't match ROAS or conversion efficiency.
-The account's own data is the benchmark — do NOT compare to industry averages.
+    placements: `You analyze platform and placement performance for the campaign "${campaignName}".${objectiveCtx}
+Identify which platforms and positions (Feed, Stories, Reels, etc.) perform best within this campaign.
+Detect period-over-period shifts in placement effectiveness.
+Flag placements where spend allocation doesn't match conversion efficiency.
 Each insight: single sentence under 140 chars, include specific numbers, with a concrete recommendation and estimated impact.`,
 
-  audiences: `You analyze demographic audience segment performance for a Meta Ads account.
-Identify which age/gender segments convert most efficiently within this account.
+    audiences: `You analyze demographic audience segments for the campaign "${campaignName}".${objectiveCtx}
+Identify which age/gender segments convert most efficiently within this campaign.
 Detect demographic shifts vs the prior period — which segments are growing or declining.
-Cross-reference audience performance with campaign objectives when available.
-The account's own data is the benchmark — do NOT compare to industry averages.
+Flag audience segments receiving spend but underdelivering on the campaign's primary metric.
 Each insight: single sentence under 140 chars, include specific numbers, with a concrete recommendation and estimated impact.`,
 
-  creative: `You analyze creative signals from device usage, format effectiveness, and daily trends for a Meta Ads account.
-Identify device-format correlations (e.g., mobile + video outperforms desktop + image).
-Detect trend inflection points — accelerating or decelerating metrics over the period.
-Flag creative fatigue signals: declining CTR over time, engagement drops on specific days.
-The account's own data is the benchmark — do NOT compare to industry averages.
+    creative: `You analyze creative signals from device usage and daily trends for the campaign "${campaignName}".${objectiveCtx}
+Identify device-format correlations (e.g., mobile outperforms desktop for this campaign).
+Detect trend inflection points — is this campaign accelerating, plateauing, or declining?
+Flag creative fatigue signals: declining CTR, rising CPC, engagement drops over the period.
 Each insight: single sentence under 140 chars, include specific numbers, with a concrete recommendation and estimated impact.`,
-};
+  };
+}
 
 const INSIGHT_SCHEMA = {
   type: "object",
@@ -66,31 +71,18 @@ const INSIGHT_SCHEMA = {
   required: ["insights"],
 };
 
-// --- Category-specific context builders ---
+// --- Context builders ---
 
-function buildFormatsContext(
-  data: BreakdownData,
-  objectives?: ObjectiveBreakdown[],
-  anomalies?: Anomaly[]
-): string {
+function buildFormatsContext(data: BreakdownData, anomalies: Anomaly[]): string {
   const lines: string[] = [];
-
   if (data.formats.length > 0) {
     lines.push("## Format Performance");
     for (const f of data.formats) {
       lines.push(`- ${f.format}: $${f.spend.toFixed(0)} spend, ${f.ctr.toFixed(2)}% CTR, ${f.roas.toFixed(2)}x ROAS, ${f.conversions} conv`);
     }
   }
-
-  if (objectives && objectives.length > 0) {
-    lines.push("\n## Campaign Objective Performance");
-    for (const o of objectives) {
-      lines.push(`- ${o.objective} (${o.campaign_count} campaigns): $${o.spend.toFixed(0)} spend, ${o.ctr.toFixed(2)}% CTR, ${o.roas.toFixed(2)}x ROAS, ${o.conversions} conv`);
-    }
-  }
-
   appendAnomalies(lines, anomalies);
-  return lines.join("\n");
+  return lines.join("\n") || "No format data available for this campaign.";
 }
 
 function buildPlacementsContext(
@@ -99,14 +91,12 @@ function buildPlacementsContext(
   anomalies?: Anomaly[]
 ): string {
   const lines: string[] = [];
-
   if (data.placements.length > 0) {
     lines.push("## Placement Performance");
     for (const p of data.placements) {
       lines.push(`- ${p.publisher_platform}/${p.platform_position}: $${p.spend.toFixed(0)} spend, ${p.ctr.toFixed(2)}% CTR, ${p.roas.toFixed(2)}x ROAS, ${p.conversions} conv`);
     }
   }
-
   if (previousData && previousData.placements.length > 0) {
     const curSpend = data.placements.reduce((s, p) => s + p.spend, 0);
     const prevSpend = previousData.placements.reduce((s, p) => s + p.spend, 0);
@@ -121,34 +111,20 @@ function buildPlacementsContext(
     lines.push(`- ROAS: ${prevRoas.toFixed(2)}x → ${curRoas.toFixed(2)}x`);
     lines.push(`- Conversions: ${prevConv} → ${curConv}`);
   }
-
   appendAnomalies(lines, anomalies);
-  return lines.join("\n");
+  return lines.join("\n") || "No placement data available for this campaign.";
 }
 
-function buildAudiencesContext(
-  data: BreakdownData,
-  objectives?: ObjectiveBreakdown[],
-  anomalies?: Anomaly[]
-): string {
+function buildAudiencesContext(data: BreakdownData, anomalies?: Anomaly[]): string {
   const lines: string[] = [];
-
   if (data.demographics.length > 0) {
     lines.push("## Audience Demographics");
     for (const d of data.demographics) {
       lines.push(`- ${d.age} ${d.gender}: $${d.spend.toFixed(0)} spend, ${d.conversions} conv, $${d.conversion_value.toFixed(0)} value`);
     }
   }
-
-  if (objectives && objectives.length > 0) {
-    lines.push("\n## Campaign Objectives (for cross-reference)");
-    for (const o of objectives) {
-      lines.push(`- ${o.objective}: ${o.conversions} conv, ${o.roas.toFixed(2)}x ROAS`);
-    }
-  }
-
   appendAnomalies(lines, anomalies);
-  return lines.join("\n");
+  return lines.join("\n") || "No demographic data available for this campaign.";
 }
 
 function buildCreativeContext(
@@ -157,35 +133,31 @@ function buildCreativeContext(
   anomalies?: Anomaly[]
 ): string {
   const lines: string[] = [];
-
   if (data.devices.length > 0) {
     lines.push("## Device Distribution");
     for (const d of data.devices) {
       lines.push(`- ${d.device_platform}: $${d.spend.toFixed(0)} spend, ${d.clicks} clicks, ${d.conversions} conv`);
     }
   }
-
   if (data.formats.length > 0) {
-    lines.push("\n## Format Performance (for cross-reference)");
+    lines.push("\n## Format Performance (cross-reference)");
     for (const f of data.formats) {
       lines.push(`- ${f.format}: ${f.ctr.toFixed(2)}% CTR, ${f.roas.toFixed(2)}x ROAS`);
     }
   }
-
   if (timeSeries && timeSeries.length > 0) {
     lines.push("\n## Daily Trend");
     for (const day of timeSeries) {
       lines.push(`- ${day.date}: $${day.spend.toFixed(0)} spend, ${day.ctr.toFixed(2)}% CTR, ${day.roas.toFixed(2)}x ROAS, ${day.conversions} conv`);
     }
   }
-
   appendAnomalies(lines, anomalies);
-  return lines.join("\n");
+  return lines.join("\n") || "No creative signal data available for this campaign.";
 }
 
 function appendAnomalies(lines: string[], anomalies?: Anomaly[]) {
   if (!anomalies || anomalies.length === 0) return;
-  lines.push("\n## Detected Anomalies (pre-identified signals — investigate these)");
+  lines.push("\n## Detected Anomalies (investigate these)");
   for (const a of anomalies) {
     lines.push(`- [${a.metric}] ${a.signal}`);
   }
@@ -197,6 +169,7 @@ const VALID_SEVERITIES = new Set<InsightSeverity>(["positive", "negative", "neut
 
 async function callSubAgent(args: {
   category: InsightCategory;
+  systemInstruction: string;
   context: string;
   computed: HeuristicInsight[];
   apiKey: string;
@@ -204,14 +177,14 @@ async function callSubAgent(args: {
   model: string;
   log: (msg: string, extra?: unknown) => void;
 }): Promise<LlmInsight[]> {
-  const { category, context, computed, apiKey, baseUrl, model, log } = args;
+  const { category, systemInstruction, context, computed, apiKey, baseUrl, model, log } = args;
 
   const alreadySurfaced = computed
     .filter((i) => i.category === category)
     .map((i) => `- ${i.text}`)
     .join("\n");
 
-  const userMessage = `Generate exactly 2 ${category} insights.
+  const userMessage = `Generate exactly 2 ${category} insights for this campaign.
 
 ${alreadySurfaced ? `Do NOT repeat these already-computed insights:\n${alreadySurfaced}\n` : ""}
 DATA:
@@ -226,7 +199,7 @@ ${context}`;
         "x-goog-api-key": apiKey,
       },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_INSTRUCTIONS[category] }] },
+        system_instruction: { parts: [{ text: systemInstruction }] },
         contents: [{ role: "user", parts: [{ text: userMessage }] }],
         generationConfig: {
           responseMimeType: "application/json",
@@ -254,7 +227,7 @@ ${context}`;
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      log(`[${category}] Could not parse JSON from response`, text.slice(0, 300));
+      log(`[${category}] Could not parse JSON`, text.slice(0, 300));
       return [];
     }
 
@@ -288,11 +261,12 @@ ${context}`;
 
 // --- Public API ---
 
-export async function generateParallelInsights(args: {
+export async function generateCampaignInsights(args: {
+  campaignName: string;
+  campaignObjective: string;
   data: BreakdownData;
   previousData?: BreakdownData;
   timeSeries?: DailyDataPoint[];
-  objectives?: ObjectiveBreakdown[];
   anomalies: Anomaly[];
   computedInsights: HeuristicInsight[];
   log: (msg: string, extra?: unknown) => void;
@@ -306,8 +280,8 @@ export async function generateParallelInsights(args: {
   const model = Deno.env.get("GEMINI_MODEL")?.trim() || "gemini-3-flash-preview";
   const baseUrl = Deno.env.get("GEMINI_BASE_URL")?.trim() || "https://generativelanguage.googleapis.com";
 
-  const byCategory = (cat: InsightCategory) =>
-    args.anomalies.filter((a) => a.category === cat);
+  const instructions = buildSystemInstructions(args.campaignName, args.campaignObjective);
+  const byCategory = (cat: InsightCategory) => args.anomalies.filter((a) => a.category === cat);
 
   const shared = { apiKey, baseUrl, model, computed: args.computedInsights, log: args.log };
 
@@ -316,29 +290,28 @@ export async function generateParallelInsights(args: {
       callSubAgent({
         ...shared,
         category: "formats",
-        context: buildFormatsContext(args.data, args.objectives, byCategory("formats")),
+        systemInstruction: instructions.formats,
+        context: buildFormatsContext(args.data, byCategory("formats")),
       }),
       callSubAgent({
         ...shared,
         category: "placements",
+        systemInstruction: instructions.placements,
         context: buildPlacementsContext(args.data, args.previousData, byCategory("placements")),
       }),
       callSubAgent({
         ...shared,
         category: "audiences",
-        context: buildAudiencesContext(args.data, args.objectives, byCategory("audiences")),
+        systemInstruction: instructions.audiences,
+        context: buildAudiencesContext(args.data, byCategory("audiences")),
       }),
       callSubAgent({
         ...shared,
         category: "creative",
+        systemInstruction: instructions.creative,
         context: buildCreativeContext(args.data, args.timeSeries, byCategory("creative")),
       }),
     ]);
 
-  return [
-    ...formatInsights,
-    ...placementInsights,
-    ...audienceInsights,
-    ...creativeInsights,
-  ];
+  return [...formatInsights, ...placementInsights, ...audienceInsights, ...creativeInsights];
 }

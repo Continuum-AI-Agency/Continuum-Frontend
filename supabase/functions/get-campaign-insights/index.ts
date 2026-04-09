@@ -2,13 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
 import {
   fetchAllBreakdowns,
-  fetchCampaignMetrics,
   fetchDailyTimeSeries,
-  buildObjectiveBreakdowns,
-} from "./breakdowns.ts";
-import { computeHeuristicInsights } from "./compute.ts";
-import { generateParallelInsights } from "./gemini.ts";
-import { detectAllAnomalies } from "./anomalies.ts";
+} from "../get-account-insights/breakdowns.ts";
+import { computeHeuristicInsights } from "../get-account-insights/compute.ts";
+import { detectAllAnomalies } from "../get-account-insights/anomalies.ts";
+import { generateCampaignInsights } from "./gemini.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,11 +22,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const toIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
 
-function buildCacheKey(args: {
-  accountId: string;
-  rangePreset: string;
-}) {
-  return ["meta", "account_insights", args.accountId, args.rangePreset].join(":");
+function buildCacheKey(accountId: string, campaignId: string, preset: string) {
+  return `meta:campaign_insights:${accountId}:${campaignId}:${preset}`;
 }
 
 function computePeriodComparison(
@@ -65,42 +60,6 @@ function computePeriodComparison(
   };
 }
 
-async function readCampaignObjectives(
-  supabase: ReturnType<typeof createClient>,
-  adAccountId: string,
-  log: (msg: string, extra?: unknown) => void
-): Promise<Map<string, string>> {
-  const cacheKey = `meta-edge:campaigns:${adAccountId}:all`;
-  const nowIso = new Date().toISOString();
-
-  const { data, error } = await supabase
-    .schema("brand_profiles")
-    .from("reporting_cache")
-    .select("payload")
-    .eq("cache_key", cacheKey)
-    .gt("expires_at", nowIso)
-    .order("fetched_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data?.payload) {
-    log("Campaign cache miss — no objective data available", error ?? "");
-    return new Map();
-  }
-
-  const payload = data.payload as { campaigns?: { id?: string; objective?: string }[] };
-  const campaigns = Array.isArray(payload?.campaigns) ? payload.campaigns : [];
-  const objectiveMap = new Map<string, string>();
-  for (const c of campaigns) {
-    if (c.id && c.objective) {
-      objectiveMap.set(c.id, c.objective);
-    }
-  }
-
-  log(`Loaded ${objectiveMap.size} campaign objectives from cache`);
-  return objectiveMap;
-}
-
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -108,19 +67,24 @@ serve(async (req: Request) => {
 
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) =>
-    console.log(`[get-account-insights] ${requestId} ${msg}`, extra ?? "");
+    console.log(`[get-campaign-insights] ${requestId} ${msg}`, extra ?? "");
 
   try {
     const body = await req.json();
-    const { brandId, adAccountId, range, forceRefresh } = body;
+    const {
+      brandId,
+      adAccountId,
+      campaignId,
+      campaignName,
+      campaignObjective,
+      range,
+      forceRefresh,
+    } = body;
 
-    if (!brandId || !adAccountId) {
+    if (!brandId || !adAccountId || !campaignId) {
       return new Response(
-        JSON.stringify({ error: "brandId and adAccountId are required" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "brandId, adAccountId, and campaignId are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -163,9 +127,7 @@ serve(async (req: Request) => {
         until = now;
         break;
       case "custom":
-        since = range.since
-          ? new Date(range.since)
-          : new Date(now.getTime() - 7 * DAY_MS);
+        since = range.since ? new Date(range.since) : new Date(now.getTime() - 7 * DAY_MS);
         until = range.until ? new Date(range.until) : now;
         break;
       default:
@@ -175,19 +137,41 @@ serve(async (req: Request) => {
 
     const sinceStr = toIsoDay(since);
     const untilStr = toIsoDay(until);
-
-    // --- Compute previous period (equal duration, immediately prior) ---
     const durationMs = until.getTime() - since.getTime();
     const prevUntil = new Date(since.getTime() - DAY_MS);
     const prevSince = new Date(prevUntil.getTime() - durationMs);
     const prevSinceStr = toIsoDay(prevSince);
     const prevUntilStr = toIsoDay(prevUntil);
 
+    // --- Resolve campaign name (from request or cache fallback) ---
+    let resolvedName = campaignName ?? "";
+    let resolvedObjective = campaignObjective ?? "";
+
+    if (!resolvedName) {
+      const campaignCacheKey = `meta-edge:campaigns:${adAccountId}:all`;
+      const { data: cacheData } = await supabase
+        .schema("brand_profiles")
+        .from("reporting_cache")
+        .select("payload")
+        .eq("cache_key", campaignCacheKey)
+        .order("fetched_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cacheData?.payload) {
+        const payload = cacheData.payload as { campaigns?: { id?: string; name?: string; objective?: string }[] };
+        const match = (payload.campaigns ?? []).find((c) => c.id === campaignId);
+        if (match) {
+          resolvedName = match.name ?? "";
+          resolvedObjective = resolvedObjective || (match.objective ?? "");
+        }
+      }
+    }
+
+    log(`Campaign: ${resolvedName || campaignId} (${resolvedObjective || "unknown objective"})`);
+
     // --- Check cache ---
-    const cacheKey = buildCacheKey({
-      accountId: adAccountId,
-      rangePreset: range?.preset || "last_7d",
-    });
+    const cacheKey = buildCacheKey(adAccountId, campaignId, range?.preset || "last_7d");
 
     if (!forceRefresh) {
       const { data, error } = await supabase
@@ -203,90 +187,67 @@ serve(async (req: Request) => {
         log("Cache read error", error);
       } else if (data?.payload && data.expires_at) {
         const expiresAt = new Date(data.expires_at);
-        const cachedPayload = data.payload as {
-          range?: { since?: string; until?: string };
-        };
+        const cachedPayload = data.payload as { range?: { since?: string; until?: string } };
         const rangeMatches =
           cachedPayload?.range?.since === sinceStr &&
           cachedPayload?.range?.until === untilStr;
 
         if (expiresAt.getTime() > Date.now() && rangeMatches) {
-          log("Cache HIT (3-day insights)");
+          log("Cache HIT");
 
-          // Background refresh when <6h remaining
           const timeRemaining = expiresAt.getTime() - Date.now();
           if (timeRemaining < REFRESH_AHEAD_MS) {
-            log("Cache near expiry — triggering background refresh");
             // deno-lint-ignore no-explicit-any
             const runtime = (globalThis as any).EdgeRuntime;
             if (runtime?.waitUntil) {
               runtime.waitUntil(
-                generateFreshInsights({
-                  supabase,
-                  adAccountId,
-                  sinceStr,
-                  untilStr,
-                  prevSinceStr,
-                  prevUntilStr,
-                  rangePreset: range?.preset || "last_7d",
-                  cacheKey,
+                generateFresh({
+                  supabase, adAccountId, campaignId,
+                  campaignName: resolvedName, campaignObjective: resolvedObjective,
+                  sinceStr, untilStr, prevSinceStr, prevUntilStr,
+                  rangePreset: range?.preset || "last_7d", cacheKey,
                   log: (msg: string, extra?: unknown) =>
-                    console.log(`[get-account-insights] ${requestId} [bg] ${msg}`, extra ?? ""),
+                    console.log(`[get-campaign-insights] ${requestId} [bg] ${msg}`, extra ?? ""),
                 })
               );
             }
           }
 
           return new Response(JSON.stringify(data.payload), {
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "X-Cache": "HIT",
-            },
+            headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
           });
         }
       }
     }
 
-    // --- Cache MISS: generate fresh insights ---
-    log("Cache MISS — generating insights");
+    // --- Cache MISS ---
+    log("Cache MISS — generating campaign insights");
 
-    const response = await generateFreshInsights({
-      supabase,
-      adAccountId,
-      sinceStr,
-      untilStr,
-      prevSinceStr,
-      prevUntilStr,
-      rangePreset: range?.preset || "last_7d",
-      cacheKey,
-      log,
+    const response = await generateFresh({
+      supabase, adAccountId, campaignId,
+      campaignName: resolvedName, campaignObjective: resolvedObjective,
+      sinceStr, untilStr, prevSinceStr, prevUntilStr,
+      rangePreset: range?.preset || "last_7d", cacheKey, log,
     });
 
     return new Response(JSON.stringify(response), {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-        "X-Cache": "MISS",
-      },
+      headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
     });
   } catch (error) {
     log("Error", error);
     return new Response(
       JSON.stringify({ error: (error as Error).message }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
 
-// --- Extracted insight generation (used for both foreground and background refresh) ---
-
-async function generateFreshInsights(args: {
+async function generateFresh(args: {
   supabase: ReturnType<typeof createClient>;
   adAccountId: string;
+  campaignId: string;
+  campaignName: string;
+  campaignObjective: string;
   sinceStr: string;
   untilStr: string;
   prevSinceStr: string;
@@ -296,132 +257,89 @@ async function generateFreshInsights(args: {
   log: (msg: string, extra?: unknown) => void;
 }) {
   const {
-    supabase,
-    adAccountId,
-    sinceStr,
-    untilStr,
-    prevSinceStr,
-    prevUntilStr,
-    rangePreset,
-    cacheKey,
-    log,
+    supabase, adAccountId, campaignId, campaignName, campaignObjective,
+    sinceStr, untilStr, prevSinceStr, prevUntilStr, rangePreset, cacheKey, log,
   } = args;
 
-  // Step 0: Fetch access token + read campaign objectives from cache (parallel)
-  const [tokenResult, objectiveMap] = await Promise.all([
-    supabase.rpc("get_meta_access_token", { p_ad_account_id: adAccountId }),
-    readCampaignObjectives(supabase, adAccountId, log),
-  ]);
-
-  const { data: accessToken, error: tokenError } = tokenResult;
+  const { data: accessToken, error: tokenError } = await supabase.rpc(
+    "get_meta_access_token",
+    { p_ad_account_id: adAccountId }
+  );
 
   if (tokenError || !accessToken) {
-    log("No access token for ad account", {
-      adAccountId,
-      error: tokenError,
-    });
+    log("No access token", { adAccountId, error: tokenError });
     throw new Error("Meta account not configured or access token missing");
   }
 
-  const fetchArgs = { adAccountId, accessToken, log };
+  const fetchArgs = { adAccountId, accessToken, campaignFilter: campaignId, log };
 
-  // Step 1: Parallel fetch — current + previous breakdowns + daily time series + campaign metrics
-  const [breakdowns, previousBreakdowns, timeSeries, campaignMetrics] =
-    await Promise.all([
-      fetchAllBreakdowns({ ...fetchArgs, since: sinceStr, until: untilStr }),
-      fetchAllBreakdowns({
-        ...fetchArgs,
-        since: prevSinceStr,
-        until: prevUntilStr,
-      }),
-      fetchDailyTimeSeries({ ...fetchArgs, since: sinceStr, until: untilStr }),
-      fetchCampaignMetrics({ ...fetchArgs, since: sinceStr, until: untilStr }),
-    ]);
+  // Step 1: Parallel fetch — all scoped to this campaign
+  const [breakdowns, previousBreakdowns, timeSeries] = await Promise.all([
+    fetchAllBreakdowns({ ...fetchArgs, since: sinceStr, until: untilStr }),
+    fetchAllBreakdowns({ ...fetchArgs, since: prevSinceStr, until: prevUntilStr }),
+    fetchDailyTimeSeries({ ...fetchArgs, since: sinceStr, until: untilStr }),
+  ]);
 
-  // Step 1b: Build objective breakdowns
-  const objectives = buildObjectiveBreakdowns(campaignMetrics, objectiveMap);
-
-  log("Breakdowns fetched", {
-    current: {
-      placements: breakdowns.placements.length,
-      demographics: breakdowns.demographics.length,
-      formats: breakdowns.formats.length,
-      devices: breakdowns.devices.length,
-    },
-    previous: {
-      placements: previousBreakdowns.placements.length,
-      demographics: previousBreakdowns.demographics.length,
-    },
+  log("Campaign breakdowns fetched", {
+    placements: breakdowns.placements.length,
+    demographics: breakdowns.demographics.length,
+    formats: breakdowns.formats.length,
+    devices: breakdowns.devices.length,
     timeSeries: timeSeries.length,
-    campaigns: campaignMetrics.length,
-    objectives: objectives.length,
   });
 
-  // Step 2: Compute heuristic insights (with period comparison + objectives)
-  const computed = computeHeuristicInsights(
-    breakdowns,
-    previousBreakdowns,
-    objectives
-  );
+  // Step 2: Compute heuristics (no objectives at campaign level)
+  const computed = computeHeuristicInsights(breakdowns, previousBreakdowns);
   log(`Computed ${computed.length} heuristic insights`);
 
-  // Step 2b: Detect statistical anomalies across all dimensions
+  // Step 3: Detect anomalies
   const anomalies = detectAllAnomalies({
     current: breakdowns,
     previous: previousBreakdowns,
     timeSeries,
-    objectives,
   });
   log(`Detected ${anomalies.length} anomalies`);
 
-  // Step 3: Generate LLM insights via 4 parallel Gemini sub-agents
-  const llmInsights = await generateParallelInsights({
+  // Step 4: Generate LLM insights via 4 parallel campaign-aware sub-agents
+  const llmInsights = await generateCampaignInsights({
+    campaignName: campaignName || campaignId,
+    campaignObjective,
     data: breakdowns,
     previousData: previousBreakdowns,
     timeSeries,
-    objectives,
     anomalies,
     computedInsights: computed,
     log,
   });
 
   const hasLlmInsights = llmInsights.length > 0;
-  log(
-    hasLlmInsights
-      ? `Gemini returned ${llmInsights.length} insights`
-      : "Gemini unavailable — returning computed-only"
-  );
+  log(hasLlmInsights
+    ? `Gemini returned ${llmInsights.length} campaign insights`
+    : "Gemini unavailable — returning computed-only");
 
-  // Step 4: Compute period comparison summary
-  const periodComparison = computePeriodComparison(
-    breakdowns,
-    previousBreakdowns
-  );
+  // Step 5: Period comparison
+  const periodComparison = computePeriodComparison(breakdowns, previousBreakdowns);
 
-  // Step 5: Merge insights
+  // Step 6: Build response with campaign metadata
   const allInsights = [...computed, ...llmInsights];
-
-  // Step 6: Compute cache expiry
   const ttl = hasLlmInsights ? INSIGHT_TTL_MS : PARTIAL_TTL_MS;
   const nowTime = new Date();
   const expiresAt = new Date(nowTime.getTime() + ttl);
 
   const response = {
+    campaign_id: campaignId,
+    campaign_name: campaignName || undefined,
+    campaign_objective: campaignObjective || undefined,
     insights: allInsights,
     generated_at: nowTime.toISOString(),
     expires_at: expiresAt.toISOString(),
-    range: {
-      since: sinceStr,
-      until: untilStr,
-      preset: rangePreset,
-    },
+    range: { since: sinceStr, until: untilStr, preset: rangePreset },
     time_series: timeSeries,
     period_comparison: periodComparison,
   };
 
-  // Step 7: Write cache
+  // Step 7: Write cache (upsert)
   try {
-    // Delete old cache entry for this key (manual upsert)
     await supabase
       .schema("brand_profiles")
       .from("reporting_cache")
@@ -434,9 +352,9 @@ async function generateFreshInsights(args: {
       .insert({
         cache_key: cacheKey,
         provider: "meta",
-        scope_type: "account_insights",
+        scope_type: "campaign_insights",
         account_id: adAccountId,
-        scope_id: "all",
+        scope_id: campaignId,
         range_preset: rangePreset,
         range_since: sinceStr,
         range_until: untilStr,
@@ -446,9 +364,7 @@ async function generateFreshInsights(args: {
         updated_at: nowTime.toISOString(),
       });
 
-    log(
-      `Cached insights with ${hasLlmInsights ? "3-day" : "1h (partial)"} TTL`
-    );
+    log(`Cached campaign insights with ${hasLlmInsights ? "3-day" : "1h (partial)"} TTL`);
   } catch (cacheError) {
     log("Cache write failed", cacheError);
   }

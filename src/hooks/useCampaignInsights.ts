@@ -8,14 +8,17 @@ import type {
 } from "@/lib/paid-media/account-insights.types";
 import type { PaidMediaTimeRange } from "@/components/paid-media/dashboard/timeRange";
 
-type UseAccountInsightsParams = {
+type UseCampaignInsightsParams = {
   brandId: string;
   adAccountId: string | null;
+  campaignId: string | null;
+  campaignName?: string;
+  campaignObjective?: string;
   timeRange: PaidMediaTimeRange;
   enabled?: boolean;
 };
 
-type UseAccountInsightsReturn = {
+type UseCampaignInsightsReturn = {
   insights: ComputedInsight[];
   generatedAt: string | null;
   expiresAt: string | null;
@@ -24,7 +27,7 @@ type UseAccountInsightsReturn = {
   refresh: () => void;
 };
 
-function buildRequestBody(params: UseAccountInsightsParams) {
+function buildRequestBody(params: UseCampaignInsightsParams) {
   const range =
     params.timeRange.preset === "custom"
       ? {
@@ -37,14 +40,17 @@ function buildRequestBody(params: UseAccountInsightsParams) {
   return {
     brandId: params.brandId,
     adAccountId: params.adAccountId,
+    campaignId: params.campaignId,
+    campaignName: params.campaignName,
+    campaignObjective: params.campaignObjective,
     range,
   };
 }
 
-export function useAccountInsights(
-  params: UseAccountInsightsParams
-): UseAccountInsightsReturn {
-  const { brandId, adAccountId, timeRange, enabled = true } = params;
+export function useCampaignInsights(
+  params: UseCampaignInsightsParams
+): UseCampaignInsightsReturn {
+  const { brandId, adAccountId, campaignId, timeRange, enabled = true } = params;
 
   const [data, setData] = React.useState<AccountInsightsResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -59,7 +65,7 @@ export function useAccountInsights(
       : timeRange.preset;
 
   React.useEffect(() => {
-    if (!enabled || !adAccountId) {
+    if (!enabled || !adAccountId || !campaignId) {
       setData(null);
       setError(null);
       setIsLoading(false);
@@ -72,11 +78,11 @@ export function useAccountInsights(
 
     const controller = new AbortController();
 
-    fetch("/api/paid-media/account-insights", {
+    fetch("/api/paid-media/campaign-insights", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        buildRequestBody({ brandId, adAccountId, timeRange })
+        buildRequestBody({ brandId, adAccountId, campaignId, timeRange })
       ),
       signal: controller.signal,
     })
@@ -99,7 +105,7 @@ export function useAccountInsights(
         if (requestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === "AbortError") return;
         setError(
-          err instanceof Error ? err.message : "Failed to load insights"
+          err instanceof Error ? err.message : "Failed to load campaign insights"
         );
       })
       .finally(() => {
@@ -112,7 +118,7 @@ export function useAccountInsights(
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, adAccountId, timeRangeKey, enabled, refreshTick]);
+  }, [brandId, adAccountId, campaignId, timeRangeKey, enabled, refreshTick]);
 
   const refresh = React.useCallback(() => {
     setRefreshTick((t) => t + 1);

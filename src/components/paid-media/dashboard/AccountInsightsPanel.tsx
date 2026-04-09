@@ -78,14 +78,27 @@ export function AccountInsightsPanel({
   adAccountId,
   timeRange,
 }: AccountInsightsPanelProps) {
-  const { insights, isLoading, error, refresh } = useAccountInsights({
-    brandId,
-    adAccountId,
-    timeRange,
-  });
+  const { insights, expiresAt, isLoading, error, refresh } =
+    useAccountInsights({
+      brandId,
+      adAccountId,
+      timeRange,
+    });
 
   const grouped = React.useMemo(() => groupByCategory(insights), [insights]);
   const hasAnyInsights = insights.length > 0;
+
+  const stalenessLabel = React.useMemo(() => {
+    if (!expiresAt) return null;
+    const remaining = new Date(expiresAt).getTime() - Date.now();
+    if (remaining <= 0) return "Stale";
+    const hours = Math.floor(remaining / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `Fresh for ${days}d ${hours % 24}h`;
+    if (hours > 0) return `Fresh for ${hours}h`;
+    const mins = Math.ceil(remaining / (1000 * 60));
+    return `Fresh for ${mins}m`;
+  }, [expiresAt]);
 
   return (
     <Card>
@@ -94,17 +107,24 @@ export function AccountInsightsPanel({
           <BarChart3Icon className="size-4 text-muted-foreground" />
           Account Insights
         </CardTitle>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 w-7 p-0"
-          onClick={refresh}
-          disabled={isLoading}
-        >
-          <ReloadIcon
-            className={isLoading ? "size-3.5 animate-spin" : "size-3.5"}
-          />
-        </Button>
+        <div className="flex items-center gap-2">
+          {stalenessLabel && (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">
+              {stalenessLabel}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={refresh}
+            disabled={isLoading}
+          >
+            <ReloadIcon
+              className={isLoading ? "size-3.5 animate-spin" : "size-3.5"}
+            />
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="p-3">
