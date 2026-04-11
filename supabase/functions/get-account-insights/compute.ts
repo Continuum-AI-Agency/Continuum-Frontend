@@ -5,6 +5,7 @@ import type {
   ObjectiveBreakdown,
   PlacementBreakdown,
 } from "./breakdowns.ts";
+import type { AdCreativeBreakdown } from "./creative.ts";
 
 type InsightCategory = "formats" | "placements" | "audiences" | "creative";
 type InsightSeverity = "positive" | "negative" | "neutral";
@@ -321,13 +322,103 @@ function computeAudienceInsights(
   return insights.slice(0, 3);
 }
 
-function computeCreativeInsights(data: BreakdownData): HeuristicInsight[] {
+function computeCreativeInsights(
+  data: BreakdownData,
+  adCreatives?: AdCreativeBreakdown[]
+): HeuristicInsight[] {
   const insights: HeuristicInsight[] = [];
-  const { formats, devices } = data;
 
-  if (formats.length >= 2 && devices.length >= 2) {
+  if (adCreatives && adCreatives.length > 0) {
+    const totalSpend = adCreatives.reduce((s, a) => s + a.spend, 0);
+    const spendThreshold = Math.max(totalSpend * 0.02, MIN_SPEND_THRESHOLD);
+    const qualified = adCreatives.filter((a) => a.spend >= spendThreshold);
+
+    if (qualified.length > 0) {
+      // Top performer: highest ROAS ad with ≥2% spend share
+      const byRoas = [...qualified].sort((a, b) => b.roas - a.roas);
+      if (byRoas[0].roas > 0) {
+        const spendShare = pct(byRoas[0].spend, totalSpend);
+        insights.push({
+          category: "creative",
+          text: `"${byRoas[0].ad_name}" is top ROAS creative at ${byRoas[0].roas.toFixed(1)}x (${fmtPct(spendShare)} of spend)`,
+          severity: "positive",
+          source: "computed",
+          metric: "roas",
+          value: byRoas[0].roas,
+          recommendation: `Increase budget allocation to "${byRoas[0].ad_name}" to scale top performer`,
+        });
+      }
+
+      // Worst performer: lowest ROAS ad with ≥10% spend share vs top performer
+      const highSpend = qualified.filter((a) => pct(a.spend, totalSpend) >= 10);
+      if (highSpend.length >= 2) {
+        const sorted = [...highSpend].sort((a, b) => b.roas - a.roas);
+        const best = sorted[0];
+        const worst = sorted[sorted.length - 1];
+        if (worst.roas < best.roas * 0.5) {
+          const estimatedGain = worst.spend * (best.roas - worst.roas);
+          insights.push({
+            category: "creative",
+            text: `"${worst.ad_name}" gets ${fmtPct(pct(worst.spend, totalSpend))} of spend but only ${worst.roas.toFixed(1)}x ROAS`,
+            severity: "negative",
+            source: "computed",
+            metric: "roas",
+            value: worst.roas,
+            recommendation: `Reallocate budget from "${worst.ad_name}" to higher-performing creatives`,
+            estimated_impact:
+              estimatedGain > 0
+                ? `~${fmtCurrency(estimatedGain)} potential revenue gain`
+                : undefined,
+          });
+        }
+      }
+
+      // Fatigue risk: frequency ≥3.5 AND CTR below account average
+      const avgCtr =
+        qualified.reduce((s, a) => s + a.ctr, 0) / qualified.length;
+      const fatigued = qualified.filter(
+        (a) => a.frequency >= 3.5 && a.ctr < avgCtr
+      );
+      if (fatigued.length > 0) {
+        const ad = fatigued[0];
+        insights.push({
+          category: "creative",
+          text: `"${ad.ad_name}" showing fatigue: ${ad.frequency.toFixed(1)}x frequency, CTR ${ad.ctr.toFixed(2)}% vs ${avgCtr.toFixed(2)}% avg`,
+          severity: "negative",
+          source: "computed",
+          metric: "frequency",
+          value: ad.frequency,
+          recommendation: `Refresh creative for "${ad.ad_name}" — high frequency with below-average CTR signals audience fatigue`,
+        });
+      }
+
+      // Creative concentration: top 2 ads capturing >60% of spend
+      const bySpend = [...qualified].sort((a, b) => b.spend - a.spend);
+      if (bySpend.length >= 2) {
+        const top2Share = pct(bySpend[0].spend + bySpend[1].spend, totalSpend);
+        if (top2Share > 60) {
+          insights.push({
+            category: "creative",
+            text: `Top 2 ads capture ${fmtPct(top2Share)} of creative spend — high concentration risk`,
+            severity: "neutral",
+            source: "computed",
+            metric: "spend_concentration",
+            value: top2Share,
+            recommendation:
+              "Test additional creative variations to reduce dependency on 2 ads",
+          });
+        }
+      }
+    }
+  }
+
+  // Fallback to format/device heuristics when ad-level data is absent or thin
+  if (insights.length < 2) {
+    const { formats, devices } = data;
+
     const mobile = devices.find(
-      (d) => d.device_platform === "mobile_app" || d.device_platform === "mobile_web"
+      (d) =>
+        d.device_platform === "mobile_app" || d.device_platform === "mobile_web"
     );
     const desktop = devices.find((d) => d.device_platform === "desktop");
     if (mobile && desktop) {
@@ -346,51 +437,53 @@ function computeCreativeInsights(data: BreakdownData): HeuristicInsight[] {
         }
       }
     }
-  }
 
-  const video = formats.find((f) => f.format === "video");
-  const image = formats.find((f) => f.format === "image");
-  if (video && image && video.ctr > 0 && image.ctr > 0) {
-    const winner = video.ctr > image.ctr
-      ? { label: "Video", ctr: video.ctr, loser: "Image" }
-      : { label: "Image", ctr: image.ctr, loser: "Video" };
-    const delta = Math.round(
-      ((winner.ctr - Math.min(video.ctr, image.ctr)) /
-        Math.min(video.ctr, image.ctr)) *
-        100
-    );
-    if (delta >= MIN_DELTA_PCT) {
-      insights.push({
-        category: "creative",
-        text: `${winner.label} creatives achieve ${fmtPct(delta)} higher CTR than ${winner.loser} (${winner.ctr.toFixed(2)}%)`,
-        severity: "positive",
-        source: "computed",
-        metric: "ctr",
-        delta,
-      });
-    }
-  }
-
-  const carousel = formats.find((f) => f.format === "carousel");
-  if (carousel && carousel.conversions > 0 && image && image.conversions > 0) {
-    const cCpa = carousel.spend / carousel.conversions;
-    const iCpa = image.spend / image.conversions;
-    if (cCpa > 0 && iCpa > 0) {
-      const winner = cCpa < iCpa
-        ? { label: "Carousel", cpa: cCpa, loser: "Image" }
-        : { label: "Image", cpa: iCpa, loser: "Carousel" };
+    const video = formats.find((f) => f.format === "video");
+    const image = formats.find((f) => f.format === "image");
+    if (video && image && video.ctr > 0 && image.ctr > 0) {
+      const winner =
+        video.ctr > image.ctr
+          ? { label: "Video", ctr: video.ctr, loser: "Image" }
+          : { label: "Image", ctr: image.ctr, loser: "Video" };
       const delta = Math.round(
-        ((Math.max(cCpa, iCpa) - winner.cpa) / winner.cpa) * 100
+        ((winner.ctr - Math.min(video.ctr, image.ctr)) /
+          Math.min(video.ctr, image.ctr)) *
+          100
       );
       if (delta >= MIN_DELTA_PCT) {
         insights.push({
           category: "creative",
-          text: `${winner.label} format has ${fmtPct(delta)} lower CPA than ${winner.loser} (${fmtCurrency(winner.cpa)})`,
+          text: `${winner.label} creatives achieve ${fmtPct(delta)} higher CTR than ${winner.loser} (${winner.ctr.toFixed(2)}%)`,
           severity: "positive",
           source: "computed",
-          metric: "cpa",
+          metric: "ctr",
           delta,
         });
+      }
+    }
+
+    const carousel = formats.find((f) => f.format === "carousel");
+    if (carousel && carousel.conversions > 0 && image && image.conversions > 0) {
+      const cCpa = carousel.spend / carousel.conversions;
+      const iCpa = image.spend / image.conversions;
+      if (cCpa > 0 && iCpa > 0) {
+        const winner =
+          cCpa < iCpa
+            ? { label: "Carousel", cpa: cCpa, loser: "Image" }
+            : { label: "Image", cpa: iCpa, loser: "Carousel" };
+        const delta = Math.round(
+          ((Math.max(cCpa, iCpa) - winner.cpa) / winner.cpa) * 100
+        );
+        if (delta >= MIN_DELTA_PCT) {
+          insights.push({
+            category: "creative",
+            text: `${winner.label} format has ${fmtPct(delta)} lower CPA than ${winner.loser} (${fmtCurrency(winner.cpa)})`,
+            severity: "positive",
+            source: "computed",
+            metric: "cpa",
+            delta,
+          });
+        }
       }
     }
   }
@@ -554,13 +647,14 @@ function computePeriodInsights(
 export function computeHeuristicInsights(
   data: BreakdownData,
   previousData?: BreakdownData,
-  objectives?: ObjectiveBreakdown[]
+  objectives?: ObjectiveBreakdown[],
+  adCreatives?: AdCreativeBreakdown[]
 ): HeuristicInsight[] {
   const base = [
     ...computeFormatInsights(data.formats),
     ...computePlacementInsights(data.placements),
     ...computeAudienceInsights(data.demographics),
-    ...computeCreativeInsights(data),
+    ...computeCreativeInsights(data, adCreatives),
   ];
 
   if (objectives && objectives.length > 0) {

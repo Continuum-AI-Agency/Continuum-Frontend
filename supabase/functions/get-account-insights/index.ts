@@ -6,6 +6,7 @@ import {
   fetchDailyTimeSeries,
   buildObjectiveBreakdowns,
 } from "./breakdowns.ts";
+import { fetchAdLevelInsights } from "./creative.ts";
 import { computeHeuristicInsights } from "./compute.ts";
 import { generateParallelInsights } from "./gemini.ts";
 import { detectAllAnomalies } from "./anomalies.ts";
@@ -325,8 +326,8 @@ async function generateFreshInsights(args: {
 
   const fetchArgs = { adAccountId, accessToken, log };
 
-  // Step 1: Parallel fetch — current + previous breakdowns + daily time series + campaign metrics
-  const [breakdowns, previousBreakdowns, timeSeries, campaignMetrics] =
+  // Step 1: Parallel fetch — current + previous breakdowns + daily time series + campaign metrics + ad-level creatives
+  const [breakdowns, previousBreakdowns, timeSeries, campaignMetrics, adCreatives] =
     await Promise.all([
       fetchAllBreakdowns({ ...fetchArgs, since: sinceStr, until: untilStr }),
       fetchAllBreakdowns({
@@ -336,6 +337,7 @@ async function generateFreshInsights(args: {
       }),
       fetchDailyTimeSeries({ ...fetchArgs, since: sinceStr, until: untilStr }),
       fetchCampaignMetrics({ ...fetchArgs, since: sinceStr, until: untilStr }),
+      fetchAdLevelInsights({ ...fetchArgs, since: sinceStr, until: untilStr }),
     ]);
 
   // Step 1b: Build objective breakdowns
@@ -355,13 +357,15 @@ async function generateFreshInsights(args: {
     timeSeries: timeSeries.length,
     campaigns: campaignMetrics.length,
     objectives: objectives.length,
+    adCreatives: adCreatives.length,
   });
 
-  // Step 2: Compute heuristic insights (with period comparison + objectives)
+  // Step 2: Compute heuristic insights (with period comparison + objectives + ad-level creatives)
   const computed = computeHeuristicInsights(
     breakdowns,
     previousBreakdowns,
-    objectives
+    objectives,
+    adCreatives
   );
   log(`Computed ${computed.length} heuristic insights`);
 
@@ -382,6 +386,7 @@ async function generateFreshInsights(args: {
     objectives,
     anomalies,
     computedInsights: computed,
+    adCreatives,
     log,
   });
 

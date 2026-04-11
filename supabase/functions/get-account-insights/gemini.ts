@@ -1,4 +1,5 @@
 import type { BreakdownData, DailyDataPoint, ObjectiveBreakdown } from "./breakdowns.ts";
+import type { AdCreativeBreakdown } from "./creative.ts";
 import type { HeuristicInsight } from "./compute.ts";
 import type { Anomaly } from "./anomalies.ts";
 
@@ -154,12 +155,25 @@ function buildAudiencesContext(
 function buildCreativeContext(
   data: BreakdownData,
   timeSeries?: DailyDataPoint[],
-  anomalies?: Anomaly[]
+  anomalies?: Anomaly[],
+  adCreatives?: AdCreativeBreakdown[]
 ): string {
   const lines: string[] = [];
 
+  if (adCreatives && adCreatives.length > 0) {
+    const top10 = [...adCreatives]
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 10);
+    lines.push("## Ad Performance (top 10 by spend)");
+    for (const ad of top10) {
+      lines.push(
+        `- ${ad.ad_name}: $${ad.spend.toFixed(0)} spend, ${ad.ctr.toFixed(2)}% CTR, ${ad.roas.toFixed(2)}x ROAS, ${ad.frequency.toFixed(1)}x freq, ${ad.conversions} conv`
+      );
+    }
+  }
+
   if (data.devices.length > 0) {
-    lines.push("## Device Distribution");
+    lines.push("\n## Device Distribution");
     for (const d of data.devices) {
       lines.push(`- ${d.device_platform}: $${d.spend.toFixed(0)} spend, ${d.clicks} clicks, ${d.conversions} conv`);
     }
@@ -295,6 +309,7 @@ export async function generateParallelInsights(args: {
   objectives?: ObjectiveBreakdown[];
   anomalies: Anomaly[];
   computedInsights: HeuristicInsight[];
+  adCreatives?: AdCreativeBreakdown[];
   log: (msg: string, extra?: unknown) => void;
 }): Promise<LlmInsight[]> {
   const apiKey = Deno.env.get("GEMINI_API_KEY")?.trim();
@@ -331,7 +346,7 @@ export async function generateParallelInsights(args: {
       callSubAgent({
         ...shared,
         category: "creative",
-        context: buildCreativeContext(args.data, args.timeSeries, byCategory("creative")),
+        context: buildCreativeContext(args.data, args.timeSeries, byCategory("creative"), args.adCreatives),
       }),
     ]);
 

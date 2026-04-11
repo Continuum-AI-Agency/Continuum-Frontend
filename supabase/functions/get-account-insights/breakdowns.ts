@@ -1,4 +1,4 @@
-const PURCHASE_ACTION_TYPES = new Set(["purchase", "omni_purchase"]);
+const PURCHASE_ACTION_TYPES = new Set(["omni_purchase"]);
 
 export type InsightRow = Record<string, unknown>;
 

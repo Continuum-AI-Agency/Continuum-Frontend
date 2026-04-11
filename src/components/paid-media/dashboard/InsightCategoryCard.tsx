@@ -36,6 +36,8 @@ const METRIC_LABELS: Record<string, string> = {
   clicks: "Clicks",
   spend_efficiency: "Efficiency",
   spend: "Spend",
+  frequency: "Frequency",
+  spend_concentration: "Concentration",
 };
 
 export function InsightCategoryCard({
