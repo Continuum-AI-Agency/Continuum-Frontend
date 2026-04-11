@@ -65,6 +65,7 @@ import {
 import {
   fetchOrganicAnalytics,
 } from "@/lib/api/organicAnalytics.client";
+import { consumePrefetched } from "@/lib/prefetch/organic-metrics-cache";
 import type {
   MetricComparison,
   OrganicDateRangePreset,
@@ -1652,7 +1653,10 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         forceRefresh,
       } as const;
 
-      fetchOrganicAnalytics({ ...base, scope: "kpis" })
+      const kpiPromise = (!forceRefresh && consumePrefetched(brandId, accountId, platform, rangePreset, "kpis"))
+        || fetchOrganicAnalytics({ ...base, scope: "kpis" });
+
+      kpiPromise
         .then((data) => { if (!cancelled) setKpisState({ status: "success", data }); })
         .catch((error) => {
           if (!cancelled) {
@@ -1662,7 +1666,10 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         });
 
       if (platform === "instagram") {
-        fetchOrganicAnalytics({ ...base, scope: "demographics" })
+        const demoPromise = (!forceRefresh && consumePrefetched(brandId, accountId, platform, rangePreset, "demographics"))
+          || fetchOrganicAnalytics({ ...base, scope: "demographics" });
+
+        demoPromise
           .then((data) => {
             if (!cancelled) {
               setDemographicsState({ status: "success", data: { audienceDemographics: data.audienceDemographics } });

@@ -3,17 +3,25 @@
 import React, { startTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Tabs } from "@radix-ui/themes";
+import { prefetchMetricsDashboard } from "@/lib/prefetch/organic-metrics-cache";
 
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
 // Stable @types/react doesn't include it yet, so we pull it at runtime via cast.
 const ViewTransition = (React as unknown as { ViewTransition: React.ComponentType<{ children: React.ReactNode }> }).ViewTransition;
 
+type MetricsPrefetchParams = {
+  brandId: string;
+  integrationAccountId: string;
+  platform: "instagram" | "facebook";
+};
+
 type Props = {
   plannerSlot: React.ReactNode;
   metricsSlot: React.ReactNode;
+  metricsPrefetchParams?: MetricsPrefetchParams;
 };
 
-export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
+export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetchParams }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const initialView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
@@ -21,6 +29,25 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot }: Props) {
   // Track whether metrics tab has ever been shown — once mounted, keep it alive
   // so switching back doesn't re-fetch / re-mount the chart components.
   const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === "metrics");
+
+  // Prefetch metrics data while user is on the planner tab
+  React.useEffect(() => {
+    if (activeView !== "planner" || !metricsPrefetchParams) return;
+    const { brandId, integrationAccountId, platform } = metricsPrefetchParams;
+    if (!integrationAccountId) return;
+
+    const idleHandle = typeof requestIdleCallback === "function"
+      ? requestIdleCallback(() => prefetchMetricsDashboard({ brandId, integrationAccountId, platform }))
+      : setTimeout(() => prefetchMetricsDashboard({ brandId, integrationAccountId, platform }), 2000);
+
+    return () => {
+      if (typeof cancelIdleCallback === "function" && typeof idleHandle === "number") {
+        cancelIdleCallback(idleHandle);
+      } else {
+        clearTimeout(idleHandle as ReturnType<typeof setTimeout>);
+      }
+    };
+  }, [activeView, metricsPrefetchParams]);
 
   React.useEffect(() => {
     const nextView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";

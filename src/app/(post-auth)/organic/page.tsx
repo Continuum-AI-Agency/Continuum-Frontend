@@ -279,6 +279,11 @@ async function OrganicContent({
               initialPlatform={initialMetricsPlatform}
             />
           )}
+          metricsPrefetchParams={{
+            brandId: brandProfileId,
+            integrationAccountId: metricAccountsByPlatform[initialMetricsPlatform][0]?.integrationAccountId ?? "",
+            platform: initialMetricsPlatform,
+          }}
         />
       </div>
     </>
