@@ -44,6 +44,7 @@ import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
+import { WorkflowLibrary } from '@/components/ai-studio/WorkflowLibrary';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
 import { useToast } from '@/components/ui/ToastProvider';
 import { CREATIVE_ASSET_DRAG_TYPE } from '@/lib/creative-assets/drag';
@@ -1500,6 +1501,7 @@ export function StudioCanvas({
               ) : null}
               <LoadWorkflowDialog brandProfileId={brandProfileId} />
               <SaveWorkflowDialog brandProfileId={brandProfileId} />
+              <WorkflowLibrary />
               <Toolbar />
             </div>
           </div>
