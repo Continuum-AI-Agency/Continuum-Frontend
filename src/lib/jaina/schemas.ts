@@ -306,6 +306,182 @@ export const frontendCheckpointReportSchema = z.object({
 
 export type FrontendCheckpointReport = z.infer<typeof frontendCheckpointReportSchema>;
 
+// ============================================================================
+// V2 Checkpoint Block Schemas
+// ============================================================================
+
+export const severitySchema = z.enum(["positive", "neutral", "watch", "risk"]);
+export type Severity = z.infer<typeof severitySchema>;
+
+export const changeDirectionSchema = z.enum(["up", "down", "flat"]);
+export type ChangeDirection = z.infer<typeof changeDirectionSchema>;
+
+export const valueFormatSchema = z.enum([
+  "currency",
+  "percent",
+  "multiplier",
+  "number",
+  "integer",
+  "compact",
+  "text",
+]);
+
+export const checkpointBlockCategoryV2Schema = z.enum([
+  "narrative",
+  "metric_grid",
+  "chart",
+  "data_table",
+  "insight_list",
+  "comparison",
+]);
+export type CheckpointBlockCategoryV2 = z.infer<typeof checkpointBlockCategoryV2Schema>;
+
+const checkpointBlockBaseV2Schema = z.object({
+  block_id: z.string().min(1),
+  category: checkpointBlockCategoryV2Schema,
+  scope: z.string().min(1),
+  title: z.string().min(1),
+  priority: z.number().int().nonnegative().default(0),
+});
+
+export const highlightItemSchema = z.object({
+  category: z.string().optional(),
+  text: z.string(),
+  severity: severitySchema.optional(),
+});
+export type HighlightItem = z.infer<typeof highlightItemSchema>;
+
+export const narrativeBlockV2Schema = checkpointBlockBaseV2Schema.extend({
+  category: z.literal("narrative"),
+  body: z.string(),
+  highlights: z.array(highlightItemSchema).default([]),
+});
+export type NarrativeBlockV2 = z.infer<typeof narrativeBlockV2Schema>;
+
+export const metricItemV2Schema = z.object({
+  label: z.string(),
+  value: z.union([z.number(), z.string()]),
+  unit: z.string().optional(),
+  format: valueFormatSchema.optional(),
+  change: z.number().optional(),
+  change_direction: changeDirectionSchema.optional(),
+  severity: severitySchema.optional(),
+});
+export type MetricItemV2 = z.infer<typeof metricItemV2Schema>;
+
+export const metricGridBlockV2Schema = checkpointBlockBaseV2Schema.extend({
+  category: z.literal("metric_grid"),
+  metrics: z.array(metricItemV2Schema).min(1),
+});
+export type MetricGridBlockV2 = z.infer<typeof metricGridBlockV2Schema>;
+
+export const chartConfigEntrySchema = z.object({
+  label: z.string(),
+  color: z.string(),
+});
+
+export const chartBlockV2Schema = checkpointBlockBaseV2Schema.extend({
+  category: z.literal("chart"),
+  chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar"]),
+  category_key: z.string(),
+  value_key: z.string().optional(),
+  value_format: valueFormatSchema.optional(),
+  data: z.array(z.record(z.string(), z.unknown())),
+  chart_config: z.record(z.string(), chartConfigEntrySchema),
+});
+export type ChartBlockV2 = z.infer<typeof chartBlockV2Schema>;
+
+export const tableColumnV2Schema = z.object({
+  key: z.string(),
+  label: z.string(),
+  format: valueFormatSchema.optional(),
+  align: z.enum(["left", "center", "right"]).optional(),
+});
+export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
+
+export const dataTableBlockV2Schema = checkpointBlockBaseV2Schema.extend({
+  category: z.literal("data_table"),
+  columns: z.array(tableColumnV2Schema).min(1),
+  rows: z.array(z.record(z.string(), z.unknown())),
+});
+export type DataTableBlockV2 = z.infer<typeof dataTableBlockV2Schema>;
+
+export const insightItemV2Schema = z.object({
+  item_type: z.enum(["recommendation", "insight", "action", "question"]),
+  title: z.string(),
+  summary: z.string(),
+  rationale: z.string().optional(),
+  impact: z.string().optional(),
+  severity: severitySchema.optional(),
+  priority: z.enum(["now", "soon", "later"]).optional(),
+});
+export type InsightItemV2 = z.infer<typeof insightItemV2Schema>;
+
+export const insightListBlockV2Schema = checkpointBlockBaseV2Schema.extend({
+  category: z.literal("insight_list"),
+  items: z.array(insightItemV2Schema).min(1),
+});
+export type InsightListBlockV2 = z.infer<typeof insightListBlockV2Schema>;
+
+export const comparisonPairSchema = z.object({
+  label: z.string(),
+  before: z.union([z.number(), z.string()]),
+  after: z.union([z.number(), z.string()]),
+  unit: z.string().optional(),
+  format: valueFormatSchema.optional(),
+  change: z.number().optional(),
+  change_direction: changeDirectionSchema.optional(),
+  severity: severitySchema.optional(),
+});
+export type ComparisonPair = z.infer<typeof comparisonPairSchema>;
+
+export const comparisonBlockV2Schema = checkpointBlockBaseV2Schema.extend({
+  category: z.literal("comparison"),
+  before_label: z.string(),
+  after_label: z.string(),
+  pairs: z.array(comparisonPairSchema).min(1),
+});
+export type ComparisonBlockV2 = z.infer<typeof comparisonBlockV2Schema>;
+
+export const checkpointBlockV2Schema = z.discriminatedUnion("category", [
+  narrativeBlockV2Schema,
+  metricGridBlockV2Schema,
+  chartBlockV2Schema,
+  dataTableBlockV2Schema,
+  insightListBlockV2Schema,
+  comparisonBlockV2Schema,
+]);
+export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2Schema>;
+
+export const mediaMapEntrySchema = z.object({
+  image_url: z.string(),
+  thumbnail_url: z.string().nullable().default(null),
+  entity_type: z.string(),
+  entity_id: z.string(),
+});
+export type MediaMapEntry = z.infer<typeof mediaMapEntrySchema>;
+
+export const mediaMapSchema = z.record(z.string(), mediaMapEntrySchema);
+export type MediaMap = z.infer<typeof mediaMapSchema>;
+
+export const checkpointReportV2MetaSchema = z.object({
+  schema_version: z.literal("2"),
+  block_count: z.number().int().nonnegative(),
+  has_charts: z.boolean(),
+  has_media: z.boolean().default(false),
+  primary_scope: z.string(),
+});
+
+export const checkpointReportV2Schema = z.object({
+  language: z.string().default("en"),
+  executive_summary: z.string().default(""),
+  blocks: z.array(checkpointBlockV2Schema).default([]),
+  follow_up_questions: z.array(z.string()).default([]),
+  media_map: mediaMapSchema.default({}),
+  _meta: checkpointReportV2MetaSchema,
+});
+export type CheckpointReportV2 = z.infer<typeof checkpointReportV2Schema>;
+
 export const chartDatasetSchema = z.object({
   label: z.string(),
   data: z.array(z.number()),
@@ -539,6 +715,16 @@ export const responseBlockDeltaSchema = streamEventSchema(
     source: z.string(),
     agent: z.string().optional(),
     block: checkpointReportBlockSchema,
+  })
+);
+
+export const responseBlockDeltaV2Schema = streamEventSchema(
+  "response.block.delta",
+  z.object({
+    sequence: z.number().int().nonnegative(),
+    source: z.string(),
+    agent: z.string().optional(),
+    block: checkpointBlockV2Schema,
   })
 );
 

@@ -70,7 +70,7 @@ import {
   type JainaConversationMessage,
   type JainaConversationSession,
 } from "@/lib/jaina/conversations";
-import { frontendCheckpointReportSchema, reportAssemblySchema } from "@/lib/jaina/schemas";
+import { frontendCheckpointReportSchema, reportAssemblySchema, checkpointReportV2Schema } from "@/lib/jaina/schemas";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 function ConversationSkeleton() {
@@ -265,6 +265,15 @@ function mapConversationMessageToChatMessage(
   message: JainaConversationMessage
 ): JainaChatMessage {
   const persistedReport = parsePersistedReport(message);
+  const persistedReportV2 = (() => {
+    if (!persistedReport || typeof persistedReport !== "object") return undefined;
+    const meta = (persistedReport as Record<string, unknown>)._meta;
+    if (meta && typeof meta === "object" && (meta as Record<string, unknown>).schema_version === "2") {
+      const parsed = checkpointReportV2Schema.safeParse(persistedReport);
+      return parsed.success ? parsed.data : undefined;
+    }
+    return undefined;
+  })();
   const persistedReportAssembly = parsePersistedReportAssembly(message);
   const persistedObjectives = deriveObjectivesFromPersistedSources({
     message,
@@ -284,6 +293,7 @@ function mapConversationMessageToChatMessage(
     content,
     createdAt: message.createdAt,
     ...(persistedReport ? { report: persistedReport } : {}),
+    ...(persistedReportV2 ? { reportV2: persistedReportV2 } : {}),
     ...(persistedReportAssembly ? { reportAssembly: persistedReportAssembly } : {}),
     ...(typeof message.reportAssemblyHtml === "string"
       ? { reportAssemblyHtml: message.reportAssemblyHtml }
@@ -422,9 +432,9 @@ function mergePersistedMessagesWithLocal(
   // This guards the race where the backend saved real text content but hadn't
   // yet written the report JSON when the snapshot resolved.
   const persistedLacksReport =
-    !persistedAssistant.report && !persistedAssistant.reportAssembly;
+    !persistedAssistant.report && !persistedAssistant.reportV2 && !persistedAssistant.reportAssembly;
   const localHasReport = Boolean(
-    localAssistant.report || localAssistant.reportAssembly
+    localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly
   );
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
@@ -444,6 +454,7 @@ function mergePersistedMessagesWithLocal(
     toolCalls: localAssistant.toolCalls ?? persistedAssistant.toolCalls,
     toolResults: localAssistant.toolResults ?? persistedAssistant.toolResults,
     report: localAssistant.report ?? persistedAssistant.report,
+    reportV2: localAssistant.reportV2 ?? persistedAssistant.reportV2,
     reportAssembly: localAssistant.reportAssembly ?? persistedAssistant.reportAssembly,
     reportAssemblyHtml:
       localAssistant.reportAssemblyHtml ?? persistedAssistant.reportAssemblyHtml,
@@ -777,7 +788,7 @@ export function JainaChatSurface({
 
     if (state.status === "streaming" && (state.responseText || state.objectives.length > 0)) {
       const shouldPreferReport =
-        state.finalContentKind === "report" || Boolean(state.report);
+        state.finalContentKind === "report" || Boolean(state.report) || Boolean(state.reportV2);
       if (shouldPreferReport) {
         updateMessage(activeResponseId, {
           content: "Building checkpoint report…",
@@ -841,6 +852,7 @@ export function JainaChatSurface({
         status: "done",
         content,
         report: state.report ?? undefined,
+        reportV2: state.reportV2 ?? undefined,
         reportAssembly: state.reportAssembly ?? undefined,
         reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
         plan: state.plan ?? undefined,
@@ -889,6 +901,7 @@ export function JainaChatSurface({
             : state.error || previousMessage.content),
         title: "Jaina error",
         report: state.report ?? undefined,
+        reportV2: state.reportV2 ?? undefined,
         reportAssembly: state.reportAssembly ?? undefined,
         reportAssemblyHtml: state.reportAssemblyHtml ?? undefined,
         plan: state.plan ?? undefined,
@@ -922,6 +935,7 @@ export function JainaChatSurface({
     state.plan,
     state.progress,
     state.report,
+    state.reportV2,
     state.reportAssembly,
     state.reportAssemblyHtml,
     state.responseText,

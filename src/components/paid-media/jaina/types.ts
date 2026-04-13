@@ -7,6 +7,7 @@ import type {
   ArtifactDeltaEventData,
   ReportAssembly,
   JainaObjective,
+  CheckpointReportV2,
 } from "@/lib/jaina/schemas";
 import type { PlanStatus } from "@/components/ai-elements/plan";
 
@@ -38,6 +39,7 @@ export type JainaChatMessage = {
   toolCalls?: ToolCallEventData[];
   toolResults?: ToolResultEventData[];
   report?: ReportPayload;
+  reportV2?: CheckpointReportV2;
   reportAssembly?: ReportAssembly;
   reportAssemblyHtml?: string;
   plan?: JainaPlan;

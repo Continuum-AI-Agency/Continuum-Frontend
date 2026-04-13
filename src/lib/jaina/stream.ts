@@ -17,6 +17,10 @@ import {
   responseReportAssemblySchema,
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
+  responseBlockDeltaV2Schema,
+  checkpointReportV2Schema,
+  type CheckpointReportV2,
+  type CheckpointBlockV2,
   reportPayloadSchema,
   stateDeltaSchema,
   hitlPausedSchema,
@@ -130,6 +134,13 @@ export type JainaStreamState = {
   canvasActions: CampaignCanvasActionsEnvelope[];
   reportSourceEventId?: string;
   lastEventType?: string;
+  reportV2: CheckpointReportV2 | null;
+  blockDeltasV2: Array<{
+    sequence: number;
+    source: string;
+    agent?: string;
+    block: CheckpointBlockV2;
+  }>;
 };
 
 export function createInitialJainaStreamState(): JainaStreamState {
@@ -157,6 +168,8 @@ export function createInitialJainaStreamState(): JainaStreamState {
     canvasActions: [],
     checkpointSummarySource: null,
     reportSourceEventId: undefined,
+    reportV2: null,
+    blockDeltasV2: [],
   };
 }
 
@@ -1866,7 +1879,33 @@ export function reduceJainaStreamEvent(
         return { ...nextBase, status: "error", error: "Malformed response.checkpoint_report event" };
       }
 
-      const normalizedReport = normalizeCheckpointReportPayload(parsed.data.data.report);
+      const rawReport = parsed.data.data.report;
+      const maybeV2 =
+        rawReport &&
+        typeof rawReport === "object" &&
+        "_meta" in (rawReport as Record<string, unknown>) &&
+        (rawReport as Record<string, unknown>)._meta &&
+        typeof (rawReport as Record<string, unknown>)._meta === "object" &&
+        ((rawReport as Record<string, unknown>)._meta as Record<string, unknown>).schema_version === "2";
+
+      if (maybeV2) {
+        const v2Parsed = checkpointReportV2Schema.safeParse(rawReport);
+        if (v2Parsed.success) {
+          return {
+            ...nextBase,
+            itemId: parsed.data.data.item_id,
+            partId: parsed.data.data.part_id,
+            reportV2: v2Parsed.data,
+            reportSourceEventId: undefined,
+            hasCanonicalCheckpointReport: true,
+            blockDeltas: [],
+            blockDeltasV2: [],
+            finalContentKind: "report",
+          };
+        }
+      }
+
+      const normalizedReport = normalizeCheckpointReportPayload(rawReport);
       if (!normalizedReport) {
         return { ...nextBase, status: "error", error: "Invalid response.checkpoint_report payload" };
       }
@@ -1884,12 +1923,53 @@ export function reduceJainaStreamEvent(
       };
     }
     case "response.block.delta": {
+      if (state.hasCanonicalCheckpointReport) {
+        return nextBase;
+      }
+
+      const v2Parsed = responseBlockDeltaV2Schema.safeParse(event);
+      if (v2Parsed.success && v2Parsed.data.data) {
+        const v2Payload = v2Parsed.data.data;
+        if (state.blockDeltasV2.some((entry) => entry.sequence === v2Payload.sequence)) {
+          return nextBase;
+        }
+        const nextV2Deltas = [
+          ...state.blockDeltasV2,
+          {
+            sequence: v2Payload.sequence,
+            source: v2Payload.source,
+            agent: v2Payload.agent,
+            block: v2Payload.block,
+          },
+        ].sort((left, right) => left.sequence - right.sequence);
+
+        const existingMeta = state.reportV2?._meta;
+        const progressiveV2: CheckpointReportV2 = {
+          language: state.reportV2?.language ?? "en",
+          executive_summary: state.reportV2?.executive_summary ?? "",
+          blocks: nextV2Deltas.map((entry) => entry.block),
+          follow_up_questions: state.reportV2?.follow_up_questions ?? [],
+          media_map: state.reportV2?.media_map ?? {},
+          _meta: {
+            schema_version: "2" as const,
+            block_count: existingMeta?.block_count ?? nextV2Deltas.length,
+            has_charts: existingMeta?.has_charts ?? nextV2Deltas.some((d) => d.block.category === "chart"),
+            has_media: existingMeta?.has_media ?? false,
+            primary_scope: existingMeta?.primary_scope ?? nextV2Deltas[0]?.block.scope ?? "",
+          },
+        };
+
+        return {
+          ...nextBase,
+          blockDeltasV2: nextV2Deltas,
+          reportV2: progressiveV2,
+          finalContentKind: "report",
+        };
+      }
+
       const parsed = responseBlockDeltaSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
         return { ...nextBase, status: "error", error: "Malformed response.block.delta event" };
-      }
-      if (state.hasCanonicalCheckpointReport) {
-        return nextBase;
       }
 
       const payload = parsed.data.data;
