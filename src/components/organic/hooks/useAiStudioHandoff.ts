@@ -5,10 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { useToast } from "@/components/ui/ToastProvider"
 import {
-  AI_STUDIO_CONTEXT_STORAGE_PREFIX,
   AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
-  AI_STUDIO_PENDING_APPLY_PREFIX,
-  AI_STUDIO_SESSION_HISTORY_PREFIX,
   buildAiStudioHandoffStorageCandidates,
   buildAiStudioStorageKey,
   buildPendingApplyStorageKey,
@@ -20,25 +17,26 @@ import {
   type PlannerAiStudioHandoff,
   type PlannerAiStudioRevision,
 } from "@/lib/organic/ai-studio-bridge"
+import { getLocalStorageJSON, setLocalStorageJSON, removeLocalStorage } from "@/lib/storage"
+import { STORAGE_KEY_AI_STUDIO_KEY_INDEX } from "@/lib/storage-keys"
 import type { OrganicCalendarDraft } from "../primitives/types"
 
-function isQuotaExceededStorageError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "QuotaExceededError"
+function readDraftKeyIndex(): string[] {
+  return getLocalStorageJSON<string[]>(STORAGE_KEY_AI_STUDIO_KEY_INDEX, [])
+}
+
+function registerDraftKey(storageKey: string): void {
+  const index = readDraftKeyIndex()
+  if (!index.includes(storageKey)) {
+    setLocalStorageJSON(STORAGE_KEY_AI_STUDIO_KEY_INDEX, [...index, storageKey])
+  }
 }
 
 function pruneStaleAiStudioContextEntries(activeDraftId: string): void {
-  if (typeof window === "undefined") return
-  const activeStorageKey = buildAiStudioStorageKey(activeDraftId)
-
-  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
-    const key = window.localStorage.key(index)
-    if (!key) continue
-    if (!key.startsWith(`${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:`)) continue
-    if (key === activeStorageKey || key === AI_STUDIO_LAST_DRAFT_STORAGE_KEY) continue
-    if (key.startsWith(`${AI_STUDIO_PENDING_APPLY_PREFIX}:`)) continue
-    if (key.startsWith(`${AI_STUDIO_SESSION_HISTORY_PREFIX}:`)) continue
-    window.localStorage.removeItem(key)
-  }
+  const activeKey = buildAiStudioStorageKey(activeDraftId)
+  const staleKeys = readDraftKeyIndex().filter((k) => k !== activeKey)
+  staleKeys.forEach((k) => removeLocalStorage(k))
+  setLocalStorageJSON(STORAGE_KEY_AI_STUDIO_KEY_INDEX, [activeKey])
 }
 
 type UseAiStudioHandoffOptions = {
@@ -136,19 +134,16 @@ export function useAiStudioHandoff({
       let didPruneStaleEntries = false
 
       for (const candidate of candidates) {
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(candidate))
-          window.localStorage.setItem(
-            AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
-            payload.draftId
-          )
+        setLocalStorageJSON(storageKey, candidate)
+        const written = getLocalStorageJSON<unknown>(storageKey, null)
+        if (written !== null) {
+          registerDraftKey(storageKey)
+          setLocalStorageJSON(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, payload.draftId)
           return true
-        } catch (error) {
-          if (!isQuotaExceededStorageError(error)) return false
-          if (!didPruneStaleEntries) {
-            pruneStaleAiStudioContextEntries(payload.draftId)
-            didPruneStaleEntries = true
-          }
+        }
+        if (!didPruneStaleEntries) {
+          pruneStaleAiStudioContextEntries(payload.draftId)
+          didPruneStaleEntries = true
         }
       }
 
@@ -179,24 +174,17 @@ export function useAiStudioHandoff({
     if (!draftId) return
 
     const key = buildPendingApplyStorageKey(draftId)
-    const raw = window.localStorage.getItem(key)
-    if (!raw) return
+    const raw = getLocalStorageJSON<unknown>(key, null)
+    if (raw === null) return
 
-    let parsedPayload: unknown
-    try {
-      parsedPayload = JSON.parse(raw)
-    } catch {
-      return
-    }
-
-    const parsed = plannerAiStudioApplyResponseSchema.safeParse(parsedPayload)
+    const parsed = plannerAiStudioApplyResponseSchema.safeParse(raw)
     if (!parsed.success) {
       show({
         title: "Could not apply AI Studio edits",
         description: "The response format was unexpected. Try editing again.",
         variant: "error",
       })
-      window.localStorage.removeItem(key)
+      removeLocalStorage(key)
       return
     }
     const applyPayload = parsed.data
@@ -256,7 +244,7 @@ export function useAiStudioHandoff({
       description: `Updates applied to "${applyPayload.contentPatch.title ?? "draft"}"`,
       variant: "success",
     })
-    window.localStorage.removeItem(key)
+    removeLocalStorage(key)
 
     // Track revision history in sessionStorage
     const historyKey = buildSessionHistoryStorageKey(applyPayload.draftId)
@@ -270,20 +258,15 @@ export function useAiStudioHandoff({
       }
     }
 
-    const seedRaw = window.localStorage.getItem(
-      buildAiStudioStorageKey(applyPayload.draftId)
+    const seedRaw = getLocalStorageJSON<unknown>(
+      buildAiStudioStorageKey(applyPayload.draftId),
+      null
     )
     let before: PlannerAiStudioHandoff | null = null
-    if (seedRaw) {
-      try {
-        const parsedSeed = plannerAiStudioHandoffSchema.safeParse(
-          JSON.parse(seedRaw)
-        )
-        if (parsedSeed.success) {
-          before = parsedSeed.data
-        }
-      } catch {
-        before = null
+    if (seedRaw !== null) {
+      const parsedSeed = plannerAiStudioHandoffSchema.safeParse(seedRaw)
+      if (parsedSeed.success) {
+        before = parsedSeed.data
       }
     }
 
@@ -308,27 +291,40 @@ export function useAiStudioHandoff({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const openDraft = React.useCallback(
+    (draft: OrganicCalendarDraft) => {
+      const parsed = plannerAiStudioHandoffSchema.safeParse(
+        buildAiStudioContext(draft)
+      )
+      if (!parsed.success) return
+      const persisted = persistAiStudioContext(parsed.data)
+      if (!persisted) {
+        show({
+          title: "Handoff preparation failed",
+          description: "Unable to prepare handoff data. Try closing other tabs to free storage.",
+          variant: "error",
+        })
+        return
+      }
+      router.push(
+        `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(draft.id)}`
+      )
+    },
+    [buildAiStudioContext, persistAiStudioContext, router, show]
+  )
+
   const handleOpenInAiStudio = React.useCallback(() => {
     if (!selectedDraft || !brandProfileId) return
-    const parsed = plannerAiStudioHandoffSchema.safeParse(
-      buildAiStudioContext(selectedDraft)
-    )
-    if (!parsed.success) return
-    const persisted = persistAiStudioContext(parsed.data)
-    if (!persisted) {
-      show({
-        title: "Handoff preparation failed",
-        description: "Unable to prepare handoff data. Try closing other tabs to free storage.",
-        variant: "error",
-      })
-      return
-    }
-    router.push(
-      `/ai-studio?mode=canvas&source=organic-planner&draftId=${encodeURIComponent(
-        selectedDraft.id
-      )}`
-    )
-  }, [brandProfileId, buildAiStudioContext, persistAiStudioContext, router, selectedDraft, show])
+    openDraft(selectedDraft)
+  }, [brandProfileId, openDraft, selectedDraft])
 
-  return { handleOpenInAiStudio }
+  const handleOpenDraftInAiStudio = React.useCallback(
+    (draft: OrganicCalendarDraft) => {
+      if (!brandProfileId) return
+      openDraft(draft)
+    },
+    [brandProfileId, openDraft]
+  )
+
+  return { handleOpenInAiStudio, handleOpenDraftInAiStudio }
 }

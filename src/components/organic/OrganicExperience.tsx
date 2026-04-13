@@ -25,6 +25,8 @@ import {
 import { z } from "zod";
 
 import { useToast } from "@/components/ui/ToastProvider";
+import { setLocalStorageJSON } from "@/lib/storage";
+import { storageKeyOrganicPlan } from "@/lib/storage-keys";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   ORGANIC_PLATFORM_KEYS,
@@ -88,7 +90,6 @@ type DailyState = {
   isGeneratingDetails: boolean;
 };
 
-const PLAN_STORAGE_KEY = "continuum.organic.plan";
 
 type GridActions = {
   submit: (payload: GenerationRequestPayload) => Promise<void>;
@@ -491,7 +492,6 @@ export function OrganicExperience({
 
   const handleSavePlan = useCallback(() => {
     if (!grid.state.weeklyGrid) return;
-    const storageKey = `${PLAN_STORAGE_KEY}:${brandProfileId}`;
     const formValues = form.getValues();
     const payload = {
       weeklyGrid: grid.state.weeklyGrid,
@@ -502,16 +502,13 @@ export function OrganicExperience({
       prompt: formValues.prompt,
       selectedTrendIds: formValues.selectedTrendIds,
     };
-    const json = JSON.stringify(payload, null, 2);
     try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(storageKey, json);
-      }
+      setLocalStorageJSON(storageKeyOrganicPlan(brandProfileId), payload);
     } catch {
       // ignore storage failures
     }
     try {
-      const blob = new Blob([json], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;

@@ -46,7 +46,15 @@ import {
 import { TrendWorkbench } from "./TrendWorkbench"
 import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
 import { AI_STUDIO_LAST_DRAFT_STORAGE_KEY } from "@/lib/organic/ai-studio-bridge"
+import { getLocalStorageJSON } from "@/lib/storage"
 import { CalendarToolbar } from "./CalendarToolbar"
+import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 const OrganicMonthlyCalendar = dynamic(
   () => import("./OrganicMonthlyCalendar").then((m) => m.OrganicMonthlyCalendar)
@@ -121,6 +129,8 @@ export function OrganicCalendarWorkspaceClient({
     promoteBacklogDraft,
     setAccountContext,
     gridError,
+    weekCache,
+    setWeekCache,
   } = useCalendarStore(
     useShallow((state) => ({
       days: state.days,
@@ -145,6 +155,8 @@ export function OrganicCalendarWorkspaceClient({
       promoteBacklogDraft: state.promoteBacklogDraft,
       setAccountContext: state.setAccountContext,
       gridError: state.gridError,
+      weekCache: state.weekCache,
+      setWeekCache: state.setWeekCache,
     }))
   )
 
@@ -209,31 +221,33 @@ export function OrganicCalendarWorkspaceClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const weekStartId = formatDayId(weekStart)
-  const weekCacheRef = React.useRef<Record<string, OrganicCalendarDay[]>>({})
 
   React.useEffect(() => {
     setPersistedWeekStartId(weekStartId)
   }, [setPersistedWeekStartId, weekStartId])
 
-  // Keep the week cache in sync (ref write is safe during render)
-  if (calendarDays.length > 0) {
-    weekCacheRef.current[weekStartId] = calendarDays
-  }
+  // Keep the store's week cache in sync with the current week's days.
+  // Runs after render so it never triggers a synchronous re-render loop.
+  React.useEffect(() => {
+    if (calendarDays.length > 0) {
+      setWeekCache(weekStartId, calendarDays)
+    }
+  }, [calendarDays, weekStartId, setWeekCache])
 
-  // Populate calendar days when the store is empty for the current week
+  // Populate calendar days when the store is empty for the current week.
   React.useEffect(() => {
     if (calendarDays.length > 0) return
 
-    const cachedWeek = weekCacheRef.current[weekStartId]
+    const cachedWeek = weekCache[weekStartId]
     const fallbackDays =
       cachedWeek ??
       (weekStartId === resolvedInitialWeekStartId
         ? initialDays
         : buildWeekDays(weekStart))
     setCalendarDays(fallbackDays)
-    weekCacheRef.current[weekStartId] = fallbackDays
   }, [
     calendarDays.length,
+    weekCache,
     initialDays,
     resolvedInitialWeekStartId,
     setCalendarDays,
@@ -246,13 +260,13 @@ export function OrganicCalendarWorkspaceClient({
       const nextWeekStart = startOfWeek(date)
       const nextWeekId = formatDayId(nextWeekStart)
       if (nextWeekId === weekStartId) return
-      weekCacheRef.current[weekStartId] = calendarDays
-      const nextDays = weekCacheRef.current[nextWeekId] ?? buildWeekDays(nextWeekStart)
+      setWeekCache(weekStartId, calendarDays)
+      const nextDays = weekCache[nextWeekId] ?? buildWeekDays(nextWeekStart)
       setCalendarDays(nextDays)
       clearAll()
       setWeekStart(nextWeekStart)
     },
-    [calendarDays, clearAll, setCalendarDays, weekStartId]
+    [calendarDays, clearAll, setCalendarDays, setWeekCache, weekCache, weekStartId]
   )
 
   const handlePreviousWeek = React.useCallback(() => {
@@ -309,7 +323,7 @@ export function OrganicCalendarWorkspaceClient({
       if (typeof window !== "undefined") {
         const preferredDraftId =
           initialSelectedDraftId ??
-          window.localStorage.getItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY)
+          getLocalStorageJSON<string | null>(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, null)
         if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
           setSelectedDraftId(preferredDraftId)
           return
@@ -323,7 +337,7 @@ export function OrganicCalendarWorkspaceClient({
     if (!selectedId && typeof window !== "undefined") {
       const preferredDraftId =
         initialSelectedDraftId ??
-        window.localStorage.getItem(AI_STUDIO_LAST_DRAFT_STORAGE_KEY)
+        getLocalStorageJSON<string | null>(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, null)
       if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
         setSelectedDraftId(preferredDraftId)
       }
@@ -456,13 +470,26 @@ export function OrganicCalendarWorkspaceClient({
     void handleGenerateDrafts()
   }, [handleGenerateDrafts])
 
-  const { handleOpenInAiStudio } = useAiStudioHandoff({
+  const { handleOpenInAiStudio, handleOpenDraftInAiStudio } = useAiStudioHandoff({
     brandProfileId,
     weekStartId,
     selectedDraft,
     updateDraftById,
     setSelectedDraftId,
   })
+
+  const handleOpenDraftInStudio = React.useCallback(
+    (draftId: string) => {
+      let found: OrganicCalendarDraft | undefined
+      for (const day of calendarDays) {
+        found = day.slots.find((d: OrganicCalendarDraft) => d.id === draftId)
+        if (found) break
+      }
+      if (!found) return
+      handleOpenDraftInAiStudio(found)
+    },
+    [calendarDays, handleOpenDraftInAiStudio]
+  )
 
   const handleBulkApprove = React.useCallback(() => {
     selectedIds.forEach((id) => updateDraftById(id, (d) => ({ ...d, status: "scheduled" as const })))
@@ -510,6 +537,7 @@ export function OrganicCalendarWorkspaceClient({
   )
 
   return (
+    <AiStudioHandoffProvider onOpen={brandProfileId ? handleOpenDraftInStudio : null}>
     <div
       className="h-full min-h-0 w-full overflow-hidden focus:outline-none"
       onKeyDown={handleKeyDown}
@@ -704,22 +732,34 @@ export function OrganicCalendarWorkspaceClient({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}
                 transition={previewTransition}
-                className="flex h-[55dvh] min-h-[22rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[42rem] lg:shrink-0 xl:w-[46rem]"
+                className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[42rem] lg:shrink-0 xl:w-[46rem]"
               >
                 <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Post Preview
                   </p>
                   <div className="flex items-center gap-1.5">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={!brandProfileId}
-                      onClick={handleOpenInAiStudio}
-                    >
-                      Open in AI Studio
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={!brandProfileId}
+                              onClick={handleOpenInAiStudio}
+                              style={!brandProfileId ? { pointerEvents: "none" } : undefined}
+                            >
+                              Open in AI Studio
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!brandProfileId ? (
+                          <TooltipContent>Select a brand to use AI Studio</TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    </TooltipProvider>
                     <Button
                       type="button"
                       variant="ghost"
@@ -732,17 +772,15 @@ export function OrganicCalendarWorkspaceClient({
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-background/85">
-                  <div className="h-full overflow-hidden rounded-md border border-border/45 bg-background/80">
-                    <OrganicDraftPreview
-                      draft={selectedDraft}
-                      brandName={brandName}
-                      brandProfileId={brandProfileId}
-                      onApprove={(draftId) =>
-                        updateDraftById(draftId, (d) => ({ ...d, status: "scheduled" as const }))
-                      }
-                    />
-                  </div>
+                <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                  <OrganicDraftPreview
+                    draft={selectedDraft}
+                    brandName={brandName}
+                    brandProfileId={brandProfileId}
+                    onApprove={(draftId) =>
+                      updateDraftById(draftId, (d) => ({ ...d, status: "scheduled" as const }))
+                    }
+                  />
                 </div>
               </motion.aside>
             ) : null}
@@ -758,5 +796,6 @@ export function OrganicCalendarWorkspaceClient({
         onApprove={handleBulkApprove}
       />
     </div>
+    </AiStudioHandoffProvider>
   )
 }

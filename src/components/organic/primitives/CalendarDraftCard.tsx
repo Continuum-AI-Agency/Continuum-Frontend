@@ -46,6 +46,7 @@ import { isValidTimeLabel, normalizeTimeLabel } from "@/lib/organic/scheduling";
 import { useReducedMotion } from "motion/react";
 import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
 import { useProgressAnimation } from "@/components/organic/hooks/useProgressAnimation";
+import { useOpenDraftInAiStudio } from "./AiStudioHandoffContext";
 
 const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "linkedin"];
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
@@ -122,6 +123,7 @@ export function CalendarDraftCard({
   const duplicateDraft = useCalendarStore((state) => state.duplicateDraft);
   const { publish, isPublishing } = usePublishDraft()
   const displayProgress = useProgressAnimation(draft.progress, draft.generationStage);
+  const openInStudio = useOpenDraftInAiStudio();
   const canPublishToInstagram =
     draft.platforms.includes("instagram") &&
     draft.status !== "published" &&
@@ -508,6 +510,11 @@ export function CalendarDraftCard({
                   <polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
                 {isPublishing ? "Publishing…" : "Publish to Instagram"}
+              </ContextMenuItem>
+            ) : null}
+            {openInStudio && draft.status !== "streaming" && draft.status !== "placeholder" ? (
+              <ContextMenuItem onSelect={() => openInStudio(draft.id)}>
+                Open in AI Studio
               </ContextMenuItem>
             ) : null}
             <ContextMenuItem

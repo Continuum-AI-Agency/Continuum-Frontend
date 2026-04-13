@@ -405,7 +405,19 @@ export function useDraftGeneration({
     gridEventSourceRef.current = null;
   }, []);
 
-  React.useEffect(() => () => closeGridStream(), [closeGridStream]);
+  React.useEffect(
+    () => () => {
+      const { gridStatus } = useCalendarStore.getState();
+      closeGridStream();
+      if (gridStatus === "running") {
+        useCalendarStore.getState().setGridStatus("error");
+        useCalendarStore
+          .getState()
+          .setGridError("Generation was interrupted. You can regenerate when ready.");
+      }
+    },
+    [closeGridStream]
+  );
 
   const seededDraftCount = React.useMemo(
     () =>

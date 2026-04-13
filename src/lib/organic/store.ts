@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import type { 
   OrganicCalendarDay, 
   OrganicCalendarDraft, 
@@ -133,14 +133,28 @@ interface CalendarState {
   promoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void;
   duplicateDraft: (sourceDraftId: string, targetDayId?: string, newTimeLabel?: string) => void;
   setAccountContext: (ctx: { igAccountId: string | null; brandId: string | null }) => void;
+
+  // Week navigation cache — module-level (not persisted), survives soft navigation
+  weekCache: Record<string, OrganicCalendarDay[]>;
+  setWeekCache: (weekId: string, days: OrganicCalendarDay[]) => void;
 }
 
 type PersistedCalendarState = Pick<
   CalendarState,
-  "selectedTrendIds" | "persistedWeekStartId" | "viewMode"
+  "selectedTrendIds" | "persistedWeekStartId" | "viewMode" | "days" | "backlogDrafts"
 >;
 
-const CALENDAR_STORE_VERSION = 3;
+// Bump when the persisted shape changes in a breaking way.
+const CALENDAR_STORE_VERSION = 4;
+
+function stripDraftBlobs(draft: OrganicCalendarDraft): OrganicCalendarDraft {
+  return {
+    ...draft,
+    mediaSuggestion: draft.mediaSuggestion
+      ? { ...draft.mediaSuggestion, assetBase64: null }
+      : undefined,
+  };
+}
 
 function sanitizePersistedCalendarState(
   state: Partial<CalendarState> | undefined
@@ -160,11 +174,16 @@ function sanitizePersistedCalendarState(
       ? state.viewMode
       : "week";
 
-  return {
-    selectedTrendIds,
-    persistedWeekStartId,
-    viewMode,
-  };
+  // Strip large binary blobs (assetBase64) to keep sessionStorage lean.
+  const days: OrganicCalendarDay[] = Array.isArray(state?.days)
+    ? state.days.map((day) => ({ ...day, slots: day.slots.map(stripDraftBlobs) }))
+    : [];
+
+  const backlogDrafts: OrganicCalendarDraft[] = Array.isArray(state?.backlogDrafts)
+    ? state.backlogDrafts.map(stripDraftBlobs)
+    : [];
+
+  return { selectedTrendIds, persistedWeekStartId, viewMode, days, backlogDrafts };
 }
 
 export const useCalendarStore = create<CalendarState>()(
@@ -185,6 +204,7 @@ export const useCalendarStore = create<CalendarState>()(
       viewMode: "week",
       eventHistory: [],
       backlogDrafts: [],
+      weekCache: {},
 
       setDays: (days) => set({ days }),
       
@@ -466,10 +486,18 @@ export const useCalendarStore = create<CalendarState>()(
         }),
 
       setAccountContext: (ctx) => set({ accountContext: ctx }),
+
+      setWeekCache: (weekId, days) =>
+        set((state) => ({ weekCache: { ...state.weekCache, [weekId]: days } })),
     }),
     {
       name: "organic-calendar-storage",
       version: CALENDAR_STORE_VERSION,
+      // sessionStorage: tab-scoped, survives hard navigation within a session,
+      // does not bleed across tabs. Falls back to localStorage in SSR contexts.
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined" ? window.sessionStorage : localStorage
+      ),
       partialize: (state) => sanitizePersistedCalendarState(state),
       migrate: (persistedState) =>
         sanitizePersistedCalendarState(persistedState as Partial<CalendarState>),
