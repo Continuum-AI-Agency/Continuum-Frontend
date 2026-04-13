@@ -1129,6 +1129,12 @@ export function CampaignAdSetWorkspace({
     pendingMarkerSelectionRef.current = null;
   }, [accountId, brandId, resolution, timeRange]);
 
+  // Syncs scope FROM selectedCampaignIndexId (parent → child).
+  // scope is intentionally excluded from deps: including it creates a circular
+  // update loop with the effect below when a second index is clicked in the
+  // compare rail (scope → onSelectedCampaignIndexChange → selectedCampaignIndexId
+  // → scope → …). Functional setScope updates read current state without
+  // requiring scope to be a closed-over dep.
   React.useEffect(() => {
     if (
       selectedCampaignIndexId !== "all" &&
@@ -1141,10 +1147,23 @@ export function CampaignAdSetWorkspace({
       return;
     }
 
-    if (!scope && eligibleCampaigns.length > 0) {
-      setScope({ type: "campaign", id: eligibleCampaigns[0].id });
-    }
-  }, [campaignIndexes, eligibleCampaigns, scope, selectedCampaignIndexId]);
+    setScope((current) => {
+      if (current !== undefined) return current;
+      if (eligibleCampaigns.length === 0) return current;
+      return { type: "campaign", id: eligibleCampaigns[0].id };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignIndexes, eligibleCampaigns, selectedCampaignIndexId]);
+
+  // Recovers scope when the user removes the active entity from compare while
+  // selectedCampaignIndexId is already "all" — a case where the effect above
+  // would not re-run (none of its deps changed).
+  React.useEffect(() => {
+    if (scope !== undefined) return;
+    if (selectedCampaignIndexId !== "all") return;
+    if (eligibleCampaigns.length === 0) return;
+    setScope({ type: "campaign", id: eligibleCampaigns[0].id });
+  }, [scope, eligibleCampaigns, selectedCampaignIndexId]);
 
   React.useEffect(() => {
     if (!onSelectedCampaignIndexChange) return;
