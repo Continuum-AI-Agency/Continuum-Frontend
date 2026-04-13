@@ -34,17 +34,23 @@ function toDetailedError(context: string, error: unknown): Error {
 
 async function getSessionUserId() {
   const supabase = await createSupabaseServerClient();
-  // Use getSession() instead of getUser() — reads JWT from cookie without an
-  // HTTP round-trip to Supabase Auth. The middleware already verified the session.
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
 
-  if (!session?.user) {
+  // Fast path: middleware runs getUser() before every request (including server
+  // actions), validating the session and refreshing the cookie. Reading from
+  // that cookie here avoids a second round-trip to Supabase Auth on every brand
+  // switch. We fall back to getUser() only if the cookie is absent or stale.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) {
+    return { supabase, userId: session.user.id };
+  }
+
+  // Fallback: make the authoritative call if the session cookie wasn't readable.
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
     throw new Error("Not authenticated");
   }
 
-  return { supabase, userId: session.user.id };
+  return { supabase, userId: user.id };
 }
 
 export async function setActiveBrandPreference(brandId: string): Promise<void> {
