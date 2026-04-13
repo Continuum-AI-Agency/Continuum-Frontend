@@ -70,6 +70,7 @@ export const Plan = ({
     <Collapsible asChild data-slot="plan" {...props}>
       <Card className={cn(
         "shadow-none transition-all duration-300",
+        status === "completed" && "border-emerald-500/30 bg-emerald-500/[0.03]",
         status === "awaiting_approval" && "border-amber-500/50 bg-amber-500/5",
         status === "approved" && "border-emerald-500/50 bg-emerald-500/5",
         status === "rejected" && "border-red-500/50 bg-red-500/5",

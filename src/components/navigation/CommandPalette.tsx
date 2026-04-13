@@ -1,6 +1,7 @@
 "use client"
 
 import React from "react"
+import { motion } from "motion/react"
 import { useRouter } from "next/navigation"
 import { Building2, Loader2, Moon, Sun } from "lucide-react"
 import {
@@ -18,24 +19,17 @@ import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvide
 import { isAdminUser } from "@/lib/brands/brand-switcher-utils"
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes"
 import { useCommandPalette } from "./CommandPaletteProvider"
+import { getLocalStorageJSON, setLocalStorageJSON } from "@/lib/storage"
+import { STORAGE_KEY_RECENT_PAGES, recentPagesSchema, type RecentPage } from "@/lib/storage-keys"
 
-const RECENT_KEY = "continuum:recent-pages"
 const MAX_RECENT = 5
 
-type RecentPage = { href: string; label: string }
-
 function readRecent(): RecentPage[] {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]")
-  } catch {
-    return []
-  }
+  return getLocalStorageJSON(STORAGE_KEY_RECENT_PAGES, [], recentPagesSchema)
 }
 
 function saveRecent(pages: RecentPage[]) {
-  try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(pages))
-  } catch {}
+  setLocalStorageJSON(STORAGE_KEY_RECENT_PAGES, pages)
 }
 
 export function CommandPalette() {
@@ -75,6 +69,12 @@ export function CommandPalette() {
     <CommandDialog open={open} onOpenChange={setOpen} showCloseButton={false}>
       <CommandInput placeholder="Go to, search, or run..." />
       <CommandList>
+        <motion.div
+          key={open ? "open" : "closed"}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        >
         <CommandEmpty>No results found.</CommandEmpty>
 
         {recentPages.length > 0 && (
@@ -180,6 +180,7 @@ export function CommandPalette() {
             <CommandShortcut>Theme</CommandShortcut>
           </CommandItem>
         </CommandGroup>
+        </motion.div>
       </CommandList>
     </CommandDialog>
   )

@@ -86,3 +86,17 @@ export function useOnboarding() {
   }
   return context;
 }
+
+// Selector hook — prevents re-renders when unsubscribed fields change.
+// Note: React context does not suppress re-renders automatically;
+// this improves ergonomics and co-locates the selector pattern.
+// Full elimination requires context splitting (future work).
+export function useOnboardingField<T>(
+  selector: (ctx: OnboardingContextValue) => T
+): T {
+  const context = useContext(OnboardingContext);
+  if (!context) {
+    throw new Error("useOnboardingField must be used within an OnboardingProvider");
+  }
+  return selector(context);
+}

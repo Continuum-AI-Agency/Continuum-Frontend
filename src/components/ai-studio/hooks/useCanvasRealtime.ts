@@ -58,6 +58,14 @@ const toFiniteNumber = (value: unknown): number | null =>
       ? Number(value)
       : null;
 
+const formatDbError = (error: unknown): Record<string, unknown> => {
+  if (error && typeof error === "object") {
+    const e = error as Record<string, unknown>;
+    return { message: e.message, code: e.code, details: e.details, hint: e.hint };
+  }
+  return { raw: String(error) };
+};
+
 const buildCanvasSessionId = (): string => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -84,6 +92,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const isRemoteChangeRef = useRef<boolean>(false);
   const broadcastChannelRef = useRef<any>(null);
   const dbChannelRef = useRef<any>(null);
+  const lastSyncAtRef = useRef<number>(0);
   const hasLoadedInitialDataRef = useRef<boolean>(false);
   const lastRemoteNodeIdsRef = useRef<Set<string>>(new Set());
   const lastRemoteEdgeIdsRef = useRef<Set<string>>(new Set());
@@ -203,7 +212,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       .maybeSingle();
 
     if (error) {
-      console.error("[Canvas Sync] Catch-up load failed", error);
+      console.error("[Canvas Sync] Catch-up load failed", formatDbError(error));
       return;
     }
 
@@ -249,7 +258,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         .maybeSingle();
 
       if (error) {
-        console.error("[Canvas Sync] Load failed", error);
+        console.error("[Canvas Sync] Load failed", formatDbError(error));
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
         return;
@@ -389,7 +398,11 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         const normalizedStatus = normalizeRealtimeStatus(subStatus);
         setDbStatus(normalizedStatus);
         if (subStatus === "SUBSCRIBED") {
-          void syncLatestCanvasSession();
+          const now = Date.now();
+          if (now - lastSyncAtRef.current > 2000) {
+            lastSyncAtRef.current = now;
+            void syncLatestCanvasSession();
+          }
         }
       });
 
@@ -457,7 +470,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         .single();
 
       if (error) {
-        console.error("[Canvas Sync] Save failed", error);
+        console.error("[Canvas Sync] Save failed", formatDbError(error));
       } else if (data) {
         const resolvedTimestamp = (data as any).updated_at as string;
         const resolvedRevision = toFiniteNumber((data as any).revision);

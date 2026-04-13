@@ -60,13 +60,13 @@ function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams
   return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
 }
 
-function NavIcon({ icon: Icon, active }: { icon: ElementType<{ className?: string }>; active?: boolean }) {
+function NavIcon({ icon: Icon, active, accentColor }: { icon: ElementType<{ className?: string }>; active?: boolean; accentColor?: string }) {
   return (
     <Icon
       className={cn(
         "!h-[18px] !w-[18px] stroke-[1.8] transition-colors duration-150",
         active
-          ? "text-[var(--ring)]"
+          ? (accentColor ?? "text-[var(--ring)]")
           : "text-[var(--sidebar-muted)] group-hover:text-[var(--sidebar-foreground)]"
       )}
     />
@@ -168,7 +168,7 @@ function AppSidebarInner() {
                                 aria-hidden="true"
                               />
                             ) : null}
-                            <NavIcon icon={item.icon} active={active || isSubActive} />
+                            <NavIcon icon={item.icon} active={active || isSubActive} accentColor={item.accentColor} />
                             <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                               {item.label}
                             </span>
@@ -251,7 +251,7 @@ function AppSidebarInner() {
                                     aria-hidden="true"
                                   />
                                 ) : null}
-                                <NavIcon icon={item.icon} active={active || isSubActive} />
+                                <NavIcon icon={item.icon} active={active || isSubActive} accentColor={item.accentColor} />
                                 <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                                   {item.label}
                                 </span>
@@ -292,7 +292,7 @@ function AppSidebarInner() {
                                           aria-hidden="true"
                                         />
                                       ) : null}
-                                      {SubIcon && <NavIcon icon={SubIcon} active={subActive} />}
+                                      {SubIcon && <NavIcon icon={SubIcon} active={subActive} accentColor={item.accentColor} />}
                                       <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">{subItem.label}</span>
                                     </Link>
                                   </SidebarMenuSubButton>
@@ -328,7 +328,7 @@ function AppSidebarInner() {
                             aria-hidden="true"
                           />
                         ) : null}
-                        <NavIcon icon={item.icon} active={active} />
+                        <NavIcon icon={item.icon} active={active} accentColor={item.accentColor} />
                         <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
                       </Link>
                     </SidebarMenuButton>

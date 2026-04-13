@@ -3,6 +3,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Theme } from "@radix-ui/themes";
 import { applyThemeAppearanceToRoot, type ThemeAppearance, type ThemeMode } from "@/lib/theme/themeDom";
+import { getLocalStorageJSON, setLocalStorageJSON, removeLocalStorage } from "@/lib/storage";
+import { STORAGE_KEY_THEME } from "@/lib/storage-keys";
 
 type ThemeContextValue = {
   mode: ThemeMode;
@@ -15,7 +17,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function getStoredMode(): ThemeMode | null {
   if (typeof window === "undefined") return null;
-  const stored = window.localStorage.getItem("theme");
+  const stored = getLocalStorageJSON<string | null>(STORAGE_KEY_THEME, null);
   if (stored === "light" || stored === "dark" || stored === "system") return stored;
   return null;
 }
@@ -69,9 +71,9 @@ export function ThemeProvider({ children, initialAppearance }: { children: React
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (mode === "system") {
-      window.localStorage.removeItem("theme");
+      removeLocalStorage(STORAGE_KEY_THEME);
     } else {
-      window.localStorage.setItem("theme", mode);
+      setLocalStorageJSON(STORAGE_KEY_THEME, mode);
     }
     try {
       // Persist the selected mode for informational purposes (not used for SSR directly)

@@ -23,6 +23,7 @@ export type AppNavigationItem = {
   href: string;
   icon: LucideIcon;
   quickTabs?: boolean;
+  accentColor?: string;
   badge?: {
     label: string;
     tone?: "green" | "red" | "blue" | "violet";
@@ -46,11 +47,13 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     label: "Creative Studio",
     href: "/ai-studio",
     icon: Sparkles,
+    accentColor: "text-violet-500",
   },
   {
     label: "Organic Content",
     href: "/organic",
     icon: Sprout,
+    accentColor: "text-emerald-500",
     quickTabs: true,
     items: [
       {
@@ -69,6 +72,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     label: "Campaigns",
     href: "/paid-media",
     icon: Target,
+    accentColor: "text-amber-500",
     quickTabs: true,
     badge: {
       label: "Beta",
@@ -91,6 +95,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     label: "Primitives",
     href: "/primitives",
     icon: Blocks,
+    accentColor: "text-sky-500",
     badge: {
       label: "MVP",
       tone: "blue",

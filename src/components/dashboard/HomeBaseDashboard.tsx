@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Tabs, Text } from "@radix-ui/themes";
+import { cn } from "@/lib/utils";
 
 type Props = {
   paidViewSlot: React.ReactNode;
@@ -24,18 +26,23 @@ export function HomeBaseDashboard({
           </Tabs.List>
         </Tabs.Root>
 
-        <Text size="2" color="gray">
+        <Text size="2" color={activeView === "paid" ? "amber" : "green"}>
           {activeView === "paid" ? "Campaign performance & DCO logs" : "Social metrics & Trend signals"}
         </Text>
       </div>
 
-      <div className="bg-muted/20 p-4 space-y-4">
-        <div className={activeView !== "paid" ? "hidden" : undefined}>
-          {paidViewSlot}
-        </div>
-        <div className={activeView !== "organic" ? "hidden" : undefined}>
-          {organicViewSlot}
-        </div>
+      <div className={cn("p-4 space-y-4 transition-colors duration-200", activeView === "paid" ? "bg-amber-500/[0.04]" : "bg-emerald-500/[0.04]")}>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeView}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {activeView === "paid" ? paidViewSlot : organicViewSlot}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

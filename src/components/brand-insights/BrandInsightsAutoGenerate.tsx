@@ -4,36 +4,23 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 import { generateBrandInsights, isTerminalBrandInsightsStatus, subscribeToBrandInsightsJob } from "@/lib/api/brandInsights.client";
+import { getLocalStorageJSON, setLocalStorageJSON } from "@/lib/storage";
+import { storageKeyBrandInsights, brandInsightsTimestampSchema } from "@/lib/storage-keys";
 
 type BrandInsightsAutoGenerateProps = {
   brandId: string;
   shouldGenerate: boolean;
 };
 
-const STORAGE_PREFIX = "continuum:auto-brand-insights";
 const COOLDOWN_MS = 15 * 60 * 1000;
-function getStorageKey(brandId: string) {
-  return `${STORAGE_PREFIX}:${brandId}`;
-}
 
 function canTriggerGeneration(brandId: string) {
-  try {
-    const stored = window.localStorage.getItem(getStorageKey(brandId));
-    if (!stored) return true;
-    const last = Number(stored);
-    if (!Number.isFinite(last)) return true;
-    return Date.now() - last > COOLDOWN_MS;
-  } catch {
-    return true;
-  }
+  const last = getLocalStorageJSON(storageKeyBrandInsights(brandId), 0, brandInsightsTimestampSchema);
+  return Date.now() - last > COOLDOWN_MS;
 }
 
 function markTriggered(brandId: string) {
-  try {
-    window.localStorage.setItem(getStorageKey(brandId), Date.now().toString());
-  } catch {
-    // Best-effort only.
-  }
+  setLocalStorageJSON(storageKeyBrandInsights(brandId), Date.now());
 }
 
 export function BrandInsightsAutoGenerate({
