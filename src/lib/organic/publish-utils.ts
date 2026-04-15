@@ -10,6 +10,7 @@ export function inferPostType(draft: OrganicCalendarDraft): "POST" | "REEL" | "C
 
 type PostPublishBody = {
   postType: "POST"
+  placementId: string
   imageUrl?: string
   caption?: string
   igAccountId?: string
@@ -18,6 +19,7 @@ type PostPublishBody = {
 
 type ReelPublishBody = {
   postType: "REEL"
+  placementId: string
   videoUrl?: string
   caption?: string
   coverUrl?: string
@@ -28,6 +30,7 @@ type ReelPublishBody = {
 
 type CarouselPublishBody = {
   postType: "CAROUSEL"
+  placementId: string
   items?: Array<{ imageUrl: string }>
   caption?: string
   igAccountId?: string
@@ -83,6 +86,7 @@ export function buildPublishBody(
     const coverAsset = assets.find((a) => a.role === "cover" && a.kind === "image")
     return {
       postType: "REEL",
+      placementId: draft.id,
       ...(videoAsset ? { videoUrl: videoAsset.storageUrl } : {}),
       ...(coverAsset ? { coverUrl: coverAsset.storageUrl } : {}),
       caption,
@@ -106,6 +110,7 @@ export function buildPublishBody(
 
     return {
       postType: "CAROUSEL",
+      placementId: draft.id,
       ...(slides.length > 0 ? { items: slides } : {}),
       caption,
       ...accountFields,
@@ -116,6 +121,7 @@ export function buildPublishBody(
     ?? assets.find((a) => a.kind === "image")
   return {
     postType: "POST",
+    placementId: draft.id,
     ...(imageAsset ? { imageUrl: imageAsset.storageUrl } : {}),
     caption,
     ...accountFields,

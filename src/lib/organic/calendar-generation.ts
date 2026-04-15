@@ -496,6 +496,7 @@ const slotStageEventSchema = z.object({
 const slotCompletedEventSchema = z.object({
   type: z.literal("slot_completed"),
   placement: calendarPlacementSchema,
+  persistedDraftId: z.string().uuid().optional(),
 });
 
 const slotFailedEventSchema = z.object({

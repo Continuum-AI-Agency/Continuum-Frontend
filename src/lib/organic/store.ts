@@ -470,6 +470,7 @@ export const useCalendarStore = create<CalendarState>()(
             generationError: undefined,
             generationAttempts: undefined,
             instagram_post_id: undefined,
+            backendDraftId: undefined,
             publishingAssets: undefined,
             progress: undefined,
             generationStage: undefined,

@@ -109,7 +109,27 @@ export function usePublishDraft(): UsePublishDraftResult {
         const headers: Record<string, string> = { "Content-Type": "application/json" }
         if (token) headers["Authorization"] = `Bearer ${token}`
 
-        const response = await fetch(`/api/organic/calendar/drafts/${draft.id}/publish`, {
+        let publishDraftId = draft.backendDraftId
+        if (!publishDraftId) {
+          if (!accountContext.brandId) throw new Error("Brand context required to register draft for publishing")
+          const createResp = await fetch("/api/organic/calendar/drafts", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              brand_id: accountContext.brandId,
+              platform_account_id: accountContext.igAccountId ?? "",
+              slot_data: { placementId: draft.id, caption: draft.captionPreview },
+              status: "draft",
+            }),
+          })
+          if (!createResp.ok) throw new Error("Failed to register draft before publishing")
+          const created = (await createResp.json()) as { id: string }
+          publishDraftId = created.id
+          updateDraft(draft.id, (d) => ({ ...d, backendDraftId: created.id }))
+          lastDraftRef.current = { ...lastDraftRef.current!, backendDraftId: created.id }
+        }
+
+        const response = await fetch(`/api/organic/calendar/drafts/${publishDraftId}/publish`, {
           method: "POST",
           headers,
           body: JSON.stringify(body),

@@ -9,6 +9,7 @@ import {
   calendarGenerationRequestSchema,
   toBackendCalendarGenerationRequest,
 } from "@/lib/organic/calendar-generation";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,21 @@ export async function POST(request: NextRequest) {
   if (sessionError || !session?.access_token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const distinctId = session.user?.id ?? session.user?.email ?? "anonymous";
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId,
+    event: "organic_calendar_generated",
+    properties: {
+      brand_profile_id: parsedBackendRequest.success
+        ? parsedBackendRequest.data.brandProfileId
+        : parsedRequest.success
+          ? parsedRequest.data.brandProfileId
+          : null,
+    },
+  });
+  posthog.shutdown().catch(() => {});
 
   const token = session.access_token.trim();
   const anonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();

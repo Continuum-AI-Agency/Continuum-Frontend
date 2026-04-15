@@ -46,7 +46,7 @@ export function useOrganicSession({
 
     const load = async () => {
       const { data, error } = await supabase
-        .schema("brand_profiles")
+        .schema("organic" as never)
         .from("organic_chat_sessions")
         .select("*")
         .eq("brand_id", brandId)
@@ -60,7 +60,7 @@ export function useOrganicSession({
 
         // Load existing messages for this session
         const { data: msgs } = await supabase
-          .schema("brand_profiles")
+          .schema("organic" as never)
           .from("organic_chat_messages")
           .select("*")
           .eq("session_id", (data as OrganicChatSession).session_id)
@@ -88,7 +88,7 @@ export function useOrganicSession({
         "postgres_changes",
         {
           event: "INSERT",
-          schema: "brand_profiles",
+          schema: "organic",
           table: "organic_chat_messages",
           filter: `session_id=eq.${session.session_id}`,
         },
@@ -119,7 +119,7 @@ export function useOrganicSession({
         "postgres_changes",
         {
           event: "*",
-          schema: "brand_profiles",
+          schema: "organic",
           table: "organic_chat_sessions",
           filter: `brand_id=eq.${brandId}`,
         },

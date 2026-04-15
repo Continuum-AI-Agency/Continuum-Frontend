@@ -130,6 +130,7 @@ function normalizeRunEvent(eventPayload: Record<string, unknown>): CalendarGener
     const parsed = calendarGenerationEventSchema.safeParse({
       type: "slot_completed",
       placement: parsedPlacement.data,
+      persistedDraftId: readString(eventPayload, "persistedDraftId"),
     })
     return parsed.success ? parsed.data : null
   }

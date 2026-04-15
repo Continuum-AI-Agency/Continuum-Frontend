@@ -84,4 +84,17 @@ describe("useCalendarStore", () => {
     expect(state.days[0]?.slots).toHaveLength(0);
     expect(state.gridStatus).toBe("idle");
   });
+
+  it("strips backendDraftId when duplicating a draft", () => {
+    const draft: OrganicCalendarDraft = { ...createDraft("d1"), backendDraftId: "supabase-uuid-123" };
+    useCalendarStore.getState().addDraft("day-1", draft);
+
+    useCalendarStore.getState().duplicateDraft("d1");
+
+    const state = useCalendarStore.getState();
+    const slots = state.days[0]?.slots ?? [];
+    const copy = slots.find((s) => s.id !== "d1");
+    expect(copy).toBeDefined();
+    expect(copy?.backendDraftId).toBeUndefined();
+  });
 });

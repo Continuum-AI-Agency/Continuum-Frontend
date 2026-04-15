@@ -572,6 +572,39 @@ describe("useDraftGeneration", () => {
     expect(mockStore.updateDraft).toHaveBeenCalled();
     expect(mockStore.setGridStatus).toHaveBeenCalledWith("complete_with_errors");
   });
+
+  it("captures persistedDraftId from slot_completed and sets backendDraftId", async () => {
+    const { result } = renderHook(() => useDraftGeneration(defaultProps));
+
+    (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
+      async (_payload: unknown, onEvent: (event: CalendarGenerationEvent) => void) => {
+        onEvent({
+          type: "slot_completed",
+          placement: {
+            placementId: "seed-1",
+            schedule: { dayId: "2026-01-26", scheduledAt: "2026-01-26T09:00:00Z" },
+            platform: { name: "instagram" },
+            content: { titleTopic: "Backend ID Test", format: "Post" },
+            creative: {},
+            copy: { caption: "Caption" },
+          },
+          persistedDraftId: "supabase-uuid-abc-123",
+        });
+        onEvent({ type: "complete", summary: { total: 1, succeeded: 1, failed: 0 } });
+      }
+    );
+
+    await act(async () => {
+      await result.current.handleGenerateDrafts();
+    });
+
+    expect(mockStore.addDraft).toHaveBeenCalledWith(
+      "2026-01-26",
+      expect.objectContaining({
+        backendDraftId: "supabase-uuid-abc-123",
+      })
+    );
+  });
 });
 
 describe("mapWeeklyGridToCalendarPlacements", () => {

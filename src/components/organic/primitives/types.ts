@@ -42,6 +42,7 @@ export type OrganicCalendarDraft = {
   creativeIdea?: string
   generationError?: string
   generationAttempts?: number
+  backendDraftId?: string
   instagram_post_id?: string | null
   mediaSuggestion?: {
     provider?: string | null

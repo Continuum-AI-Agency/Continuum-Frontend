@@ -95,7 +95,7 @@ export function useOrganicContentPlan({
 
     const load = async () => {
       const { data } = await supabase
-        .schema("brand_profiles")
+        .schema("organic" as never)
         .from("organic_content_plans")
         .select("*")
         .eq("brand_id", brandId)
@@ -117,7 +117,7 @@ export function useOrganicContentPlan({
         "postgres_changes",
         {
           event: "*",
-          schema: "brand_profiles",
+          schema: "organic",
           table: "organic_content_plans",
           filter: `brand_id=eq.${brandId}`,
         },

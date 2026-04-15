@@ -977,7 +977,10 @@ export function useDraftGeneration({
             completedPlacementIds.add(seedPlacementId);
             unresolvedSeedIds.delete(seedPlacementId);
             const existing = drafts.find((draft) => draft.id === seedPlacementId) ?? null;
-            const nextDraft = mapPlacementToDraft(placement, existing, seedPlacementId);
+            const nextDraftBase = mapPlacementToDraft(placement, existing, seedPlacementId);
+            const nextDraft = "persistedDraftId" in event && typeof event.persistedDraftId === "string"
+              ? { ...nextDraftBase, backendDraftId: event.persistedDraftId }
+              : nextDraftBase;
 
             const targetDay = resolveDayMeta(placement.schedule.dayId, placement.schedule.scheduledAt);
             if (targetDay) {
@@ -1305,7 +1308,10 @@ export function useDraftGeneration({
                 return;
               }
               completedPlacementIds.add(event.placement.placementId);
-              const next = mapPlacementToDraft(event.placement, draft, draftId);
+              const nextBase = mapPlacementToDraft(event.placement, draft, draftId);
+              const next = "persistedDraftId" in event && typeof event.persistedDraftId === "string"
+                ? { ...nextBase, backendDraftId: event.persistedDraftId }
+                : nextBase;
               const targetDay = resolveDayMeta(
                 event.placement.schedule.dayId,
                 event.placement.schedule.scheduledAt
