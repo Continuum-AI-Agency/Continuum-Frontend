@@ -14,6 +14,7 @@ import { FormTextarea } from "@/components/auth/FormTextarea";
 import { FormAlert } from "@/components/auth/FormAlert";
 import { PasswordRequirements } from "@/components/auth/PasswordRequirements";
 import { FeatureList } from "@/components/auth/FeatureList";
+import posthog from "posthog-js";
 import { useAuth } from "@/hooks/useAuth";
 import { signupSchema, type SignupInput } from "@/lib/auth/schemas";
 import { LOGIN_GLOW_GRADIENT } from "@/lib/ui/backgrounds";
@@ -56,6 +57,9 @@ export default function SignupPage() {
     const result = await signup(data);
 
     if (result) {
+      posthog.capture("user_signed_up", {
+        how_did_you_hear: data.howDidYouHear ?? null,
+      });
       setSuccess(true);
       setTimeout(() => {
         router.push("/login");

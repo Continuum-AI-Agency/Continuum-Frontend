@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import DashboardLayoutShell from "../../components/DashboardLayoutShell";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { DashboardLayoutFallback } from "./DashboardLayoutFallback";
+import { MixpanelInit } from "@/components/analytics/MixpanelInit";
 
 export const metadata: Metadata = {
   title: "Dashboard | Continuum AI",
@@ -44,6 +45,7 @@ export default function DashboardLayout({
         color: "var(--foreground)",
       }}
     >
+      <MixpanelInit />
       <Suspense fallback={<DashboardLayoutFallback />}>
         <DashboardLayoutContent>{children}</DashboardLayoutContent>
       </Suspense>

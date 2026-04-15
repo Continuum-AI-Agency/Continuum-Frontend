@@ -17,12 +17,25 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? "local-dev",
   },
+  skipTrailingSlashRedirect: true,
   async redirects() {
     return [
       {
         source: "/",
         destination: "/login",
         permanent: false,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/static/:path*",
+        destination: "https://us-assets.i.posthog.com/static/:path*",
+      },
+      {
+        source: "/ingest/:path*",
+        destination: "https://us.i.posthog.com/:path*",
       },
     ];
   },

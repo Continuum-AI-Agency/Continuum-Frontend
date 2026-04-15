@@ -9,7 +9,6 @@ import { ThemeProvider } from "../components/theme-provider";
 import { ToastProvider } from "@/components/ui/ToastProvider";
 import { ReactQueryProvider } from "../lib/react-query/provider";
 import { VersionBanner } from "@/components/version-banner";
-import { MixpanelInit } from "@/components/analytics/MixpanelInit";
 import type { ThemeAppearance } from "@/lib/theme/themeDom";
 import { GalaxyBackgroundLazy } from "@/components/ui/GalaxyBackgroundLazy";
 
@@ -91,7 +90,6 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ThemeProvider initialAppearance={initialAppearance}>
-          <MixpanelInit />
           <ReactQueryProvider>
             <ToastProvider>
               <GalaxyBackgroundLazy intensity={1} speed="glacial" />

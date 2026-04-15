@@ -76,3 +76,4 @@ calendar/
 /.windsurf/
 /.worktrees/
 /.omc/
+.env.local

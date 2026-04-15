@@ -15,6 +15,7 @@ import { FeatureList } from "@/components/auth/FeatureList";
 import { EmailSent } from "@/components/auth/EmailSent";
 import { useAuth } from "@/hooks/useAuth";
 import { magicLinkSchema, type MagicLinkInput, loginSchema, type LoginInput } from "@/lib/auth/schemas";
+import posthog from "posthog-js";
 import { buildInviteCallbackPath } from "@/lib/invites/urls";
 import styles from "./login.module.css";
 
@@ -91,6 +92,7 @@ export default function LoginPage() {
         redirectTo: inviteRedirect,
       });
       if (success) {
+        posthog.capture("user_logged_in", { method: "magic_link", email: data.email });
         setEmailSent(true);
       }
     }
@@ -98,11 +100,15 @@ export default function LoginPage() {
 
   const onPasswordSubmit = async (data: LoginInput) => {
     clearError();
-    await login({
+    const success = await login({
       ...data,
       email: submittedEmail,
       redirectTo: inviteRedirect,
     });
+    if (success) {
+      posthog.identify(submittedEmail, { email: submittedEmail });
+      posthog.capture("user_logged_in", { method: "password", email: submittedEmail });
+    }
   };
 
   const handleResend = async () => {
