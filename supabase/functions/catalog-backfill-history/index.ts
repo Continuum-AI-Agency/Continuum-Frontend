@@ -159,7 +159,7 @@ serve(async (req: Request) => {
 
     if (payload.catalogId) {
       const { data: catalogRow, error: catalogError } = await supabase
-        .schema("brand_profiles")
+        .schema("paid_media")
         .from(CATALOG_TABLE)
         .select("id")
         .eq("id", payload.catalogId)
@@ -175,7 +175,7 @@ serve(async (req: Request) => {
     }
 
     let query = supabase
-      .schema("brand_profiles")
+      .schema("paid_media")
       .from(ACTIVITY_TABLE)
       .select("id, is_active, first_seen_at, last_seen_at, active_from, active_to")
       .eq("brand_id", payload.brandId)
@@ -235,7 +235,7 @@ serve(async (req: Request) => {
     let repaired = 0;
     for (const updateBatch of chunk(updates, 500)) {
       const { error } = await supabase
-        .schema("brand_profiles")
+        .schema("paid_media")
         .from(ACTIVITY_TABLE)
         .upsert(updateBatch as never, { onConflict: "id" });
       if (error) {

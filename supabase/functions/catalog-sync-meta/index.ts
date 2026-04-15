@@ -277,7 +277,7 @@ serve(async (req: Request) => {
     }
 
     const { data: catalogRow, error: catalogError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media")
       .from(CATALOG_TABLE)
       .select("id, brand_id, linked_ad_object_level, linked_ad_object_ids")
       .eq("id", payload.catalogId)
@@ -325,7 +325,7 @@ serve(async (req: Request) => {
     if (dedupedProducts.length > 0) {
       for (const productBatch of chunk(dedupedProducts, 250)) {
         const { data, error } = await supabase
-          .schema("brand_profiles")
+          .schema("paid_media")
           .from(PRODUCT_TABLE)
           .upsert(
             productBatch.map((product) => ({
@@ -372,7 +372,7 @@ serve(async (req: Request) => {
     if (metaObjects.length > 0) {
       for (const adObjectBatch of chunk(metaObjects, 200)) {
         const { data, error } = await supabase
-          .schema("brand_profiles")
+          .schema("paid_media")
           .from(AD_OBJECT_TABLE)
           .upsert(
             adObjectBatch.map((adObject) => ({
@@ -416,7 +416,7 @@ serve(async (req: Request) => {
 
     if (desiredPairs.length > 0) {
       const { data: existingRows, error: existingError } = await supabase
-        .schema("brand_profiles")
+        .schema("paid_media")
         .from(ACTIVITY_TABLE)
         .select("id, product_id, ad_object_id, first_seen_at, active_from")
         .eq("brand_id", payload.brandId)
@@ -468,7 +468,7 @@ serve(async (req: Request) => {
       if (updates.length > 0) {
         for (const updateBatch of chunk(updates, 500)) {
           const { error } = await supabase
-            .schema("brand_profiles")
+            .schema("paid_media")
             .from(ACTIVITY_TABLE)
             .upsert(updateBatch as never, { onConflict: "id" });
           if (error) {
@@ -482,7 +482,7 @@ serve(async (req: Request) => {
       if (inserts.length > 0) {
         for (const insertBatch of chunk(inserts, 500)) {
           const { error } = await supabase
-            .schema("brand_profiles")
+            .schema("paid_media")
             .from(ACTIVITY_TABLE)
             .upsert(insertBatch as never, {
               onConflict: "brand_id,catalog_id,product_id,ad_object_id",

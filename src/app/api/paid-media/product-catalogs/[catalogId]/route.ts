@@ -169,7 +169,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ cat
     }
 
     const { data, error } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_CATALOG_TABLE)
       .update(updates as never)
       .eq("id", params.data.catalogId)
@@ -210,7 +210,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     }
 
     const { error } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_CATALOG_TABLE)
       .delete()
       .eq("id", params.data.catalogId);

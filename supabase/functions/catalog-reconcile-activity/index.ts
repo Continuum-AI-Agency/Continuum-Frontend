@@ -101,7 +101,7 @@ serve(async (req: Request) => {
 
     if (payload.catalogId) {
       const { data: catalogRow, error: catalogError } = await supabase
-        .schema("brand_profiles")
+        .schema("paid_media")
         .from(CATALOG_TABLE)
         .select("id")
         .eq("id", payload.catalogId)
@@ -122,7 +122,7 @@ serve(async (req: Request) => {
     const nowIso = new Date().toISOString();
 
     let baseQuery = supabase
-      .schema("brand_profiles")
+      .schema("paid_media")
       .from(ACTIVITY_TABLE)
       .select("id", { count: "exact" })
       .eq("brand_id", payload.brandId)
@@ -162,7 +162,7 @@ serve(async (req: Request) => {
     }
 
     const { data: updatedRows, error: updateError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media")
       .from(ACTIVITY_TABLE)
       .update({
         is_active: false,

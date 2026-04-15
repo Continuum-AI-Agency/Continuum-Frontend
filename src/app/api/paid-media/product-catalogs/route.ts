@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_CATALOG_TABLE)
       .select(SELECT_COLUMNS)
       .eq("brand_id", brandId)
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
     };
 
     const { data, error } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_CATALOG_TABLE)
       .insert(payload as never)
       .select(SELECT_COLUMNS)

@@ -230,7 +230,7 @@ serve(async req => {
   });
 
   const { error: analysisError, count: deactivatedAnalyses } = await serviceClient
-    .schema("brand_profiles")
+    .schema("brand_trends")
     .from("strategic_analyses")
     .update({ active: false })
     .eq("brand_id", input.brandId)

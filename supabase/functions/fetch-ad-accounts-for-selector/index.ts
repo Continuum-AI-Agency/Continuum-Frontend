@@ -73,7 +73,7 @@ serve(async (req: Request) => {
     }
 
     const { data: accountsData, error: accountsError } = await supabase
-      .schema("integrations")
+      .schema("brand_integrations")
       .from("meta_ad_accounts")
       .select("ad_account_id_prefixed, name")
       .in("ad_account_id_prefixed", accountIds);

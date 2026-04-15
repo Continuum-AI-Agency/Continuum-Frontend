@@ -3,8 +3,6 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type AdAccount, AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
-import { JainaChatSurface } from "@/components/paid-media/jaina/JainaChatSurface";
-import { PaidMediaDashboard } from "@/components/paid-media/dashboard/PaidMediaDashboard";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -13,10 +11,48 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "motion/react";
 import { PanelRightOpen, PanelRightClose } from "lucide-react";
+import { prefetchPaidMediaDashboard } from "@/lib/prefetch/paid-media-cache";
 
 const CampaignCanvas = dynamic(
   () => import("@/CampaignCanvas/components/CampaignCanvas").then((mod) => mod.CampaignCanvas),
   { ssr: false },
+);
+
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 p-6 h-full">
+      <Skeleton className="h-8 w-48" />
+      <div className="flex gap-4 flex-1">
+        <Skeleton className="flex-1 rounded-xl" />
+        <Skeleton className="w-72 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+function JainaSkeleton() {
+  return (
+    <div className="flex flex-col h-full">
+      <Skeleton className="flex-1 m-4 rounded-xl" />
+      <Skeleton className="h-12 m-4 rounded-lg" />
+    </div>
+  );
+}
+
+const PaidMediaDashboard = dynamic(
+  () =>
+    import("@/components/paid-media/dashboard/PaidMediaDashboard").then(
+      (mod) => mod.PaidMediaDashboard
+    ),
+  { ssr: false, loading: () => <DashboardSkeleton /> }
+);
+
+const JainaChatSurface = dynamic(
+  () =>
+    import("@/components/paid-media/jaina/JainaChatSurface").then(
+      (mod) => mod.JainaChatSurface
+    ),
+  { ssr: false, loading: () => <JainaSkeleton /> }
 );
 
 type PaidMediaClientPageProps = {
@@ -70,6 +106,31 @@ export default function PaidMediaClientPage({
     params.set("tab", value);
     router.push(`?${params.toString()}`);
   };
+
+  // Prefetch dashboard data while user is on Jaina tab so data is warm on switch-back
+  React.useEffect(() => {
+    if (activeTab !== "jaina" || !selectedAdAccount) return;
+    const idleHandle =
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback(() =>
+            prefetchPaidMediaDashboard({ brandId: brandProfileId, adAccountId: selectedAdAccount })
+          )
+        : setTimeout(
+            () =>
+              prefetchPaidMediaDashboard({
+                brandId: brandProfileId,
+                adAccountId: selectedAdAccount,
+              }),
+            2000
+          );
+    return () => {
+      if (typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(idleHandle as number);
+      } else {
+        clearTimeout(idleHandle as ReturnType<typeof setTimeout>);
+      }
+    };
+  }, [activeTab, brandProfileId, selectedAdAccount]);
 
   React.useEffect(() => {
     setSelectedCampaign(null);
@@ -166,8 +227,20 @@ export default function PaidMediaClientPage({
             initialTimelineAccounts={initialAccounts}
           />
           <TabsList className="h-9">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="jaina">Jaina Analyst</TabsTrigger>
+            <TabsTrigger
+              value="dashboard"
+              onMouseEnter={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
+              onFocus={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
+            >
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger
+              value="jaina"
+              onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
+              onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
+            >
+              Jaina Analyst
+            </TabsTrigger>
           </TabsList>
         </div>
 

@@ -180,7 +180,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(CATALOG_TABLE)
       .select("id")
       .eq("id", params.data.catalogId)
@@ -196,7 +196,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
     }
 
     let activityQuery = supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(ACTIVITY_TABLE)
       .select(ACTIVITY_SELECT)
       .eq("brand_id", query.data.brandId)
@@ -226,14 +226,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cat
 
     const [{ data: productRows, error: productError }, { data: adObjectRows, error: adObjectError }] = await Promise.all([
       supabase
-        .schema("brand_profiles")
+        .schema("paid_media" as never)
         .from(PRODUCT_TABLE)
         .select(PRODUCT_SELECT)
         .eq("brand_id", query.data.brandId)
         .eq("catalog_id", params.data.catalogId)
         .in("id", productIds),
       supabase
-        .schema("brand_profiles")
+        .schema("paid_media" as never)
         .from(AD_OBJECT_TABLE)
         .select(AD_OBJECT_SELECT)
         .eq("brand_id", query.data.brandId)
@@ -304,7 +304,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(CATALOG_TABLE)
       .select("id")
       .eq("id", params.data.catalogId)
@@ -320,7 +320,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     }
 
     const { data: productUpsertData, error: productUpsertError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_TABLE)
       .upsert(
         {
@@ -348,7 +348,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     }
 
     const { data: adObjectUpsertData, error: adObjectUpsertError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(AD_OBJECT_TABLE)
       .upsert(
         {
@@ -374,7 +374,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     }
 
     const { data: existingActivityData, error: existingActivityError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(ACTIVITY_TABLE)
       .select(ACTIVITY_SELECT)
       .eq("brand_id", parsed.data.brandId)
@@ -392,7 +392,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
     if (existingActivityData) {
       const existing = existingActivityData as ActivityRow;
       const { data: updatedActivity, error: updateActivityError } = await supabase
-        .schema("brand_profiles")
+        .schema("paid_media" as never)
         .from(ACTIVITY_TABLE)
         .update(
           {
@@ -422,7 +422,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ca
       activityData = updatedActivity as ActivityRow;
     } else {
       const { data: insertedActivity, error: insertActivityError } = await supabase
-        .schema("brand_profiles")
+        .schema("paid_media" as never)
         .from(ACTIVITY_TABLE)
         .insert(
           {
@@ -498,7 +498,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ c
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(CATALOG_TABLE)
       .select("id")
       .eq("id", params.data.catalogId)
@@ -514,7 +514,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ c
     }
 
     const { data: updatedProduct, error: updateError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_TABLE)
       .update(
         {
@@ -572,7 +572,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     const { data: catalogMatch, error: catalogMatchError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(CATALOG_TABLE)
       .select("id")
       .eq("id", params.data.catalogId)
@@ -588,7 +588,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     const productLookup = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_TABLE)
       .select("id")
       .eq("brand_id", parsed.data.brandId)
@@ -607,7 +607,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     const { error: activityDeleteError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(ACTIVITY_TABLE)
       .delete()
       .eq("brand_id", parsed.data.brandId)
@@ -619,7 +619,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     }
 
     const { error: productDeleteError } = await supabase
-      .schema("brand_profiles")
+      .schema("paid_media" as never)
       .from(PRODUCT_TABLE)
       .delete()
       .eq("id", productRow.id)

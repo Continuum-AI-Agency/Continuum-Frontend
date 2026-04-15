@@ -109,7 +109,7 @@ serve(async (req: Request) => {
     let metaNameMap = new Map<string, string>();
     if (ids.length > 0) {
       const { data: metaAccounts, error: metaAccountsError } = await supabase
-        .schema("integrations")
+        .schema("brand_integrations")
         .from("meta_ad_accounts")
         .select("ad_account_id_prefixed, name")
         .in("ad_account_id_prefixed", ids);

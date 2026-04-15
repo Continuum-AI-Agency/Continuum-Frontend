@@ -60,7 +60,7 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
     const catchUpMissed = async () => {
       const since = lastCompletedAtRef.current ?? "1970-01-01T00:00:00Z";
       const { data, error } = await supabase
-        .schema("brand_profiles")
+        .schema("brand_trends" as never)
         .from("strategic_analysis_runs")
         .select("id, completed_at")
         .eq("brand_id", brandId)
@@ -70,8 +70,9 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
 
       if (error || !data) return;
 
-      for (const row of data) {
-        const runId = row.id;
+      const rows = data as Array<{ id: string | null; completed_at: string | null }>;
+      for (const row of rows) {
+        const runId = row.id ?? undefined;
         if (!runId || seenRunIdsRef.current.has(runId)) continue;
         handleCompletion(runId, row.completed_at);
       }
@@ -85,7 +86,7 @@ export function StrategicAnalysisRealtimeListener({ brandId }: Props) {
         "postgres_changes",
         {
           event: "UPDATE",
-          schema: "brand_profiles",
+          schema: "brand_trends",
           table: "strategic_analysis_runs",
           filter: `brand_id=eq.${brandId}`,
         },

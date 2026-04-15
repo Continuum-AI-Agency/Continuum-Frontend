@@ -5,6 +5,7 @@ import {
   type CampaignIndexRecord,
 } from "@/lib/paid-media/campaign-indexes";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const CAMPAIGN_INDEX_TABLE = "paid_media_campaign_indexes" as never;
 
@@ -140,6 +141,19 @@ export async function POST(request: NextRequest) {
     if (!index) {
       return NextResponse.json({ error: "Invalid campaign index response" }, { status: 502 });
     }
+
+    const distinctId = session.user?.id ?? session.user?.email ?? "anonymous";
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId,
+      event: "campaign_index_created",
+      properties: {
+        brand_id: parsed.data.brandId,
+        meta_account_id: parsed.data.metaAccountId,
+        campaign_count: parsed.data.campaignIds.length,
+      },
+    });
+    posthog.shutdown().catch(() => {});
 
     return NextResponse.json({ index }, { status: 201 });
   } catch (error) {
