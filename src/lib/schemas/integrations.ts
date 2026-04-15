@@ -24,9 +24,18 @@ export const googleDrivePickerResponseSchema = integrationSyncResponseBase.exten
   state: z.string().min(1),
 });
 
+export const tiktokSyncResponseSchema = integrationSyncResponseBase;
+
+export const tiktokResyncResponseSchema = z.object({
+  updated: z.array(z.string()),
+  failed: z.array(z.string()),
+});
+
 export type MetaSyncResponse = z.infer<typeof metaSyncResponseSchema>;
 export type GoogleSyncResponse = z.infer<typeof googleSyncResponseSchema>;
 export type GoogleDrivePickerResponse = z.infer<typeof googleDrivePickerResponseSchema>;
+export type TikTokSyncResponse = z.infer<typeof tiktokSyncResponseSchema>;
+export type TikTokResyncResponse = z.infer<typeof tiktokResyncResponseSchema>;
 
 const selectableAssetSchema = z.object({
   asset_pk: z.string().uuid(),

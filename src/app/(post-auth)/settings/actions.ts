@@ -5,6 +5,7 @@ import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
 import type { BrandRole } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
@@ -30,8 +31,21 @@ export async function updateBrandLogoAction(brandId: string, logoPath: string | 
 import { revalidatePath } from "next/cache";
 
 export async function createBrandProfileAction(name?: string): Promise<void> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const repo = createBrandProfileRepository();
   const result = await repo.createBrand(name?.trim());
+
+  if (user?.id) {
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: user.id,
+      event: "brand_profile_created",
+      properties: { brand_id: result.brandId, brand_name: name?.trim() ?? null },
+    });
+    await posthog.shutdown();
+  }
+
   revalidatePath("/", "layout");
   redirect(`/onboarding?brand=${result.brandId}`);
 }
@@ -96,6 +110,23 @@ export async function createMagicLinkAction(
     throw new Error(message ?? error?.message ?? "Unable to create invite");
   }
 
+  const invitingUserId = session?.user?.id;
+  if (invitingUserId) {
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: invitingUserId,
+      event: "team_member_invited",
+      properties: {
+        brand_id: brandId,
+        invited_email: email.trim(),
+        role,
+        email_sent: data.emailSent,
+        existing_user: data.existingUser ?? false,
+      },
+    });
+    await posthog.shutdown();
+  }
+
   return data;
 }
 
@@ -108,8 +139,21 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
   if (!brandId) {
     throw new Error("Brand id is required");
   }
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const repo = createBrandProfileRepository();
   const nextBrandId = await repo.deleteBrand(brandId);
+
+  if (user?.id) {
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: user.id,
+      event: "brand_profile_deleted",
+      properties: { brand_id: brandId },
+    });
+    await posthog.shutdown();
+  }
+
   return { nextBrandId };
 }
 

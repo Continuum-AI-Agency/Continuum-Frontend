@@ -8,6 +8,8 @@ import {
   useStartMetaSync,
   useDeauthorizeGoogle,
   useDeauthorizeMeta,
+  useStartTikTokSync,
+  useDeauthorizeTikTok,
 } from "@/lib/api/integrations";
 import { useToast } from "@/components/ui/ToastProvider";
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
@@ -38,6 +40,8 @@ export function UserSettingsPanel({ user, integrations }: Props) {
   const googleSync = useStartGoogleSync();
   const metaDeauthorize = useDeauthorizeMeta();
   const googleDeauthorize = useDeauthorizeGoogle();
+  const tiktokSync = useStartTikTokSync();
+  const tiktokDeauthorize = useDeauthorizeTikTok();
   const supabase = createSupabaseBrowserClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { user: supabaseUser, avatarUrl, initials, refresh } = useCurrentUserAvatar();
@@ -54,7 +58,7 @@ export function UserSettingsPanel({ user, integrations }: Props) {
 
   const personalIntegrations = useMemo(() => integrations, [integrations]);
 
-  type ProviderGroup = "google" | "facebook";
+  type ProviderGroup = "google" | "facebook" | "tiktok";
 
   const getSiteOrigin = () => {
     if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
@@ -82,12 +86,14 @@ export function UserSettingsPanel({ user, integrations }: Props) {
         const syncResponse =
           provider === "google"
             ? await googleSync.mutateAsync(callbackUrl)
-            : await metaSync.mutateAsync(callbackUrl);
+            : provider === "tiktok"
+              ? await tiktokSync.mutateAsync(callbackUrl)
+              : await metaSync.mutateAsync(callbackUrl);
         const expectedState = "state" in syncResponse ? syncResponse.state : null;
 
         const popup = openCenteredPopup(
           syncResponse.url,
-          `Connect ${provider === "google" ? "Google" : "Meta"}`
+          `Connect ${provider === "google" ? "Google" : provider === "tiktok" ? "TikTok" : "Meta"}`
         );
         if (!popup) {
           show({ title: "Popup blocked", description: "Allow popups to continue.", variant: "error" });
@@ -162,7 +168,7 @@ export function UserSettingsPanel({ user, integrations }: Props) {
         }
         cleanup();
         router.refresh();
-        show({ title: "Connected", description: `${provider === "google" ? "Google" : "Meta"} accounts synced.`, variant: "success" });
+        show({ title: "Connected", description: `${provider === "google" ? "Google" : provider === "tiktok" ? "TikTok" : "Meta"} accounts synced.`, variant: "success" });
       } catch (error) {
         show({
           title: "Connection failed",
@@ -180,7 +186,7 @@ export function UserSettingsPanel({ user, integrations }: Props) {
   };
 
   const handleDeauthorizeProvider = (provider: ProviderGroup) => {
-    const label = provider === "google" ? "Google" : "Meta";
+    const label = provider === "google" ? "Google" : provider === "tiktok" ? "TikTok" : "Meta";
     if (
       typeof window !== "undefined" &&
       !window.confirm(
@@ -194,6 +200,12 @@ export function UserSettingsPanel({ user, integrations }: Props) {
       try {
         if (provider === "google") {
           await googleDeauthorize.mutateAsync();
+        } else if (provider === "tiktok") {
+          const tiktokAccount = personalIntegrations.tiktok?.accounts[0];
+          if (!tiktokAccount?.externalAccountId) {
+            throw new Error("No TikTok account found to disconnect.");
+          }
+          await tiktokDeauthorize.mutateAsync(tiktokAccount.externalAccountId);
         } else {
           await metaDeauthorize.mutateAsync();
         }
@@ -307,6 +319,19 @@ export function UserSettingsPanel({ user, integrations }: Props) {
             </Button>
             <Button variant="surface" onClick={() => handleConnectProvider("google")} disabled={isPending}>
               Connect Google
+            </Button>
+            {hasProviderConnections(personalIntegrations, "tiktok") ? (
+              <Button
+                variant="soft"
+                color="red"
+                onClick={() => handleDeauthorizeProvider("tiktok")}
+                disabled={isPending || tiktokDeauthorize.isPending}
+              >
+                Disconnect TikTok
+              </Button>
+            ) : null}
+            <Button variant="surface" onClick={() => handleConnectProvider("tiktok")} disabled={isPending}>
+              Connect TikTok
             </Button>
             <Button variant="ghost" onClick={handleRefresh} disabled={isPending}>
               Refresh

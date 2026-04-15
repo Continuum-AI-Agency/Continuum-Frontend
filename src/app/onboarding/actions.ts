@@ -22,6 +22,7 @@ import { getApiBaseUrl } from "@/lib/api/config";
 import { mapOnboardingStateToAgentPayload } from "@/lib/onboarding/mapping";
 import { approveOnboardingBrandProfile } from "@/lib/onboarding/agentClient";
 import { revalidatePath } from "next/cache";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 
 const getIntegrationServer = async () => {
@@ -139,6 +140,17 @@ export async function approveAndLaunchOnboardingAction(brandId: string): Promise
       console.error("[approveAndLaunchOnboardingAction] Background analysis trigger failed", err);
     });
   });
+
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: userId,
+    event: "onboarding_completed",
+    properties: {
+      brand_id: brandId,
+      integration_count: payload.runContext.integration_account_ids.length,
+    },
+  });
+  await posthog.shutdown();
 
   return completeOnboardingAction(brandId);
 }

@@ -6,6 +6,8 @@ import {
   metaSyncResponseSchema,
   googleSyncResponseSchema,
   googleDrivePickerResponseSchema,
+  tiktokSyncResponseSchema,
+  tiktokResyncResponseSchema,
   selectableAssetsResponseSchema,
   integrationAssetsResponseSchema,
   applyBrandProfileIntegrationAccountsRequestSchema,
@@ -16,6 +18,8 @@ import {
   type MetaSyncResponse,
   type GoogleSyncResponse,
   type GoogleDrivePickerResponse,
+  type TikTokSyncResponse,
+  type TikTokResyncResponse,
 } from "@/lib/schemas/integrations";
 
 function buildSyncPath(basePath: string, params: Record<string, string>): string {
@@ -69,6 +73,34 @@ export async function deauthorizeGoogle(): Promise<void> {
   });
 }
 
+export async function startTikTokSync(callbackUrl: string): Promise<TikTokSyncResponse> {
+  return http.request({
+    path: buildSyncPath("/integrations/tiktok/sync", { callback_url: callbackUrl }),
+    method: "GET",
+    schema: tiktokSyncResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export async function resyncTikTok(platformUserId?: string): Promise<TikTokResyncResponse> {
+  return http.request({
+    path: "/integrations/tiktok/resync",
+    method: "POST",
+    body: platformUserId ? { platform_user_id: platformUserId } : {},
+    schema: tiktokResyncResponseSchema,
+    cache: "no-store",
+  });
+}
+
+export async function deauthorizeTikTok(platformUserId: string): Promise<void> {
+  await http.request({
+    path: "/integrations/tiktok/deauthorize",
+    method: "POST",
+    body: { platform_user_id: platformUserId },
+    cache: "no-store",
+  });
+}
+
 type StartGoogleDrivePickerParams = {
   brandId: string;
   callbackUrl: string;
@@ -112,6 +144,24 @@ export function useDeauthorizeMeta() {
 export function useDeauthorizeGoogle() {
   return useMutation({
     mutationFn: () => deauthorizeGoogle(),
+  });
+}
+
+export function useStartTikTokSync() {
+  return useMutation({
+    mutationFn: (callbackUrl: string) => startTikTokSync(callbackUrl),
+  });
+}
+
+export function useResyncTikTok() {
+  return useMutation({
+    mutationFn: (platformUserId?: string) => resyncTikTok(platformUserId),
+  });
+}
+
+export function useDeauthorizeTikTok() {
+  return useMutation({
+    mutationFn: (platformUserId: string) => deauthorizeTikTok(platformUserId),
   });
 }
 

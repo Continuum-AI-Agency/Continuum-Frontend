@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildInviteLoginRedirect } from "@/lib/invites/urls";
 import { normalizeInviteBrandId, normalizeInviteToken } from "@/lib/invites/params";
+import posthog from "posthog-js";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 
 type InviteStatus = "idle" | "working" | "error";
@@ -151,6 +152,10 @@ export default function InviteCallbackPage() {
         return;
       }
 
+      if (userId) {
+        posthog.identify(userId);
+      }
+      posthog.capture("invite_accepted", { brand_id: brandId });
       router.replace("/dashboard?invite=accepted");
     };
 

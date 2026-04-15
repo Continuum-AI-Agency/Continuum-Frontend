@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { useStartMetaSync, useStartGoogleSync, fetchSelectableAssets } from "@/lib/api/integrations";
+import { useStartMetaSync, useStartGoogleSync, useStartTikTokSync, fetchSelectableAssets } from "@/lib/api/integrations";
 import { associateIntegrationAccountsAction } from "@/app/onboarding/actions";
 import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import { 
-  FACEBOOK_OAUTH_KEYS, 
-  GOOGLE_OAUTH_KEYS, 
+  FACEBOOK_OAUTH_KEYS,
+  GOOGLE_OAUTH_KEYS,
+  TIKTOK_OAUTH_KEYS,
   COMING_SOON_KEYS,
 } from "@/components/onboarding/integrations/constants";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
@@ -35,6 +36,7 @@ export function IntegrationsStep() {
   
   const startMetaSync = useStartMetaSync();
   const startGoogleSync = useStartGoogleSync();
+  const startTikTokSync = useStartTikTokSync();
   const [isSyncing, setIsSyncing] = useState(false);
   const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
 
@@ -201,15 +203,18 @@ export function IntegrationsStep() {
     refreshAccounts();
   }, []);
 
-  const handleConnect = async (group: "google" | "facebook" | "meta") => {
+  const handleConnect = async (group: "google" | "facebook" | "meta" | "tiktok") => {
     setIsSyncing(true);
     try {
-      const context = brandId; 
+      const context = brandId;
       const callbackUrl = buildCallbackUrl(group, context);
-      
+
       let popupUrl: string | null = null;
       if (group === "facebook" || group === "meta") {
         const res = await startMetaSync.mutateAsync(callbackUrl);
+        popupUrl = res.url;
+      } else if (group === "tiktok") {
+        const res = await startTikTokSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
       } else {
         const res = await startGoogleSync.mutateAsync(callbackUrl);
@@ -231,8 +236,8 @@ export function IntegrationsStep() {
     }
   };
 
-  const handleDisconnect = async (group: "google" | "facebook" | "meta") => {
-    const keys = (group === "facebook" || group === "meta") ? FACEBOOK_OAUTH_KEYS : GOOGLE_OAUTH_KEYS;
+  const handleDisconnect = async (group: "google" | "facebook" | "meta" | "tiktok") => {
+    const keys = group === "tiktok" ? TIKTOK_OAUTH_KEYS : (group === "facebook" || group === "meta") ? FACEBOOK_OAUTH_KEYS : GOOGLE_OAUTH_KEYS;
     const patch: any = {};
     keys.forEach(key => {
       patch[key] = { connected: false, accounts: [], accountId: null };
@@ -306,6 +311,7 @@ export function IntegrationsStep() {
     return [
       { id: "google", name: "Google & YouTube", icon: "google", ...getStats(googleKeys) },
       { id: "meta", name: "Meta Portfolio", icon: "meta", ...getStats(metaKeys) },
+      { id: "tiktok", name: "TikTok", icon: "tiktok", ...getStats(TIKTOK_OAUTH_KEYS) },
     ];
   }, [state.connections]);
 
@@ -552,11 +558,11 @@ export function IntegrationsStep() {
   );
 }
 
-function buildCallbackUrl(group: "google" | "facebook" | "meta", context: string): string {
+function buildCallbackUrl(group: "google" | "facebook" | "meta" | "tiktok", context: string): string {
   if (typeof window === "undefined") return "";
   const origin = window.location.origin;
   const url = new URL("/integrations/callback", origin);
-  const provider = (group === "facebook" || group === "meta") ? "meta" : "google";
+  const provider = (group === "facebook" || group === "meta") ? "meta" : group === "tiktok" ? "tiktok" : "google";
   url.searchParams.set("provider", provider);
   url.searchParams.set("context", context);
   return url.toString();

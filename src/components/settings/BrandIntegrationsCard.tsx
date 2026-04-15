@@ -20,7 +20,7 @@ import { Sparkles, RefreshCw } from "lucide-react";
 import * as Accordion from "@radix-ui/react-accordion";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets, useStartMetaSync, useStartGoogleSync } from "@/lib/api/integrations";
+import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets, useStartMetaSync, useStartGoogleSync, useStartTikTokSync } from "@/lib/api/integrations";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import {
@@ -140,7 +140,7 @@ function buildCallbackUrl(group: string, context: string): string {
   if (typeof window === "undefined") return "";
   const origin = window.location.origin;
   const url = new URL("/integrations/callback", origin);
-  const provider = (["facebook", "meta", "instagram", "threads"].includes(group)) ? "meta" : "google";
+  const provider = (["facebook", "meta", "instagram", "threads"].includes(group)) ? "meta" : group === "tiktok" ? "tiktok" : "google";
   url.searchParams.set("provider", provider);
   url.searchParams.set("context", context);
   return url.toString();
@@ -697,6 +697,7 @@ export function BrandIntegrationsCard({
   const { show } = useToast();
   const startMetaSync = useStartMetaSync();
   const startGoogleSync = useStartGoogleSync();
+  const startTikTokSync = useStartTikTokSync();
 
   const handleConnect = async (platformKey: string) => {
     setIsSyncing(true);
@@ -707,6 +708,8 @@ export function BrandIntegrationsCard({
       let group = "google";
       if (["facebook", "instagram", "threads", "meta"].includes(platformKey)) {
         group = "meta";
+      } else if (platformKey === "tiktok") {
+        group = "tiktok";
       }
       
       const callbackUrl = buildCallbackUrl(group, context);
@@ -714,6 +717,9 @@ export function BrandIntegrationsCard({
       let popupUrl: string | null = null;
       if (group === "meta") {
         const res = await startMetaSync.mutateAsync(callbackUrl);
+        popupUrl = res.url;
+      } else if (group === "tiktok") {
+        const res = await startTikTokSync.mutateAsync(callbackUrl);
         popupUrl = res.url;
       } else {
         const res = await startGoogleSync.mutateAsync(callbackUrl);
@@ -743,8 +749,9 @@ export function BrandIntegrationsCard({
   const providerStats = useMemo(() => {
     const metaKeys: PlatformKey[] = ["facebook", "instagram", "threads"];
     const googleKeys: PlatformKey[] = ["googleAds", "youtube", "dv360"];
+    const tiktokKeys: PlatformKey[] = ["tiktok"];
     const otherKeys = PLATFORMS.filter(
-      p => !metaKeys.includes(p.key) && !googleKeys.includes(p.key)
+      p => !metaKeys.includes(p.key) && !googleKeys.includes(p.key) && !tiktokKeys.includes(p.key)
     ).map(p => p.key);
 
     const getGroupStats = (keys: PlatformKey[], label: string, groupKey: string) => {
@@ -772,6 +779,7 @@ export function BrandIntegrationsCard({
     return [
       getGroupStats(metaKeys, "Meta Portfolio", "meta"),
       getGroupStats(googleKeys, "Google & YouTube", "google"),
+      getGroupStats(tiktokKeys, "TikTok", "tiktok"),
       ...(otherKeys.length > 0 ? [getGroupStats(otherKeys, "Other Integrations", "other")] : [])
     ];
   }, [resolvedSummary]);

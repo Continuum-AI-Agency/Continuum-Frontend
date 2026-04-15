@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import posthog from "posthog-js";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type PopupSuccessPayload = {
@@ -62,6 +63,19 @@ export default function IntegrationCallbackPage() {
 
   useEffect(() => {
     const origin = window.location.origin;
+    const provider = (payload.payload as { provider?: string | null }).provider ?? null;
+    const context = (payload.payload as { context?: string }).context ?? null;
+
+    if (payload.status) {
+      posthog.capture("integration_connected", { provider, context });
+    } else {
+      posthog.capture("integration_connection_failed", {
+        provider,
+        context,
+        reason: payload.reason ?? null,
+      });
+    }
+
     const fallback = buildFallbackRedirect(
       origin,
       payload.status ? "connection_successful" : "connection_error",

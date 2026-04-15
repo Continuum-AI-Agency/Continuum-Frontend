@@ -1,9 +1,10 @@
 import type { UserIntegrationSummary } from "@/lib/integrations/userIntegrations";
 
-type ProviderKey = "google" | "meta" | "facebook";
+type ProviderKey = "google" | "meta" | "facebook" | "tiktok";
 
 function normalizeProviders(provider: ProviderKey): Set<string> {
   if (provider === "facebook") return new Set(["meta", "facebook"]);
+  if (provider === "tiktok") return new Set(["tiktok"]);
   return new Set([provider]);
 }
 

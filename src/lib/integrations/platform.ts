@@ -20,6 +20,9 @@ const TYPE_TO_PLATFORM_MAP: Record<string, PlatformKey> = {
   threads_profile: "threads",
   threads_account: "threads",
   meta_threads_account: "threads",
+  tiktok_user: "tiktok",
+  tiktok_business: "tiktok",
+  tiktok_account: "tiktok",
 };
 
 export function mapIntegrationTypeToPlatformKey(type?: string | null): PlatformKey | null {
