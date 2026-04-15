@@ -13,6 +13,7 @@ import {
   markFallbackJobErrored,
   recordFallbackJob,
 } from "../fallback";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +69,19 @@ export async function POST(request: NextRequest) {
     logError("Unauthorized generate attempt", { error: error ?? "missing session", ...requestContext });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const distinctId = data.session.user?.id ?? data.session.user?.email ?? "anonymous";
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId,
+    event: "ai_studio_generation_requested",
+    properties: {
+      brand_profile_id: parsed.data.brandProfileId,
+      provider: parsed.data.provider,
+      medium: parsed.data.medium,
+    },
+  });
+  posthog.shutdown().catch(() => {});
 
   let response: Response;
   try {

@@ -23,6 +23,7 @@ import {
   type CheckpointBlockV2,
   reportPayloadSchema,
   stateDeltaSchema,
+  responsePlanReadySchema,
   hitlPausedSchema,
   canvasActionsProposedSchema,
   artifactDeltaSchema,
@@ -1531,6 +1532,7 @@ function normalizeObjectiveFromRecord(
   const title =
     getNonEmptyString(record.title) ??
     getNonEmptyString(record.label) ??
+    getNonEmptyString(record.task) ??
     getNonEmptyString(record.objective) ??
     getNonEmptyString(record.summary) ??
     (rawId ? rawId.replace(/[_-]+/g, " ") : undefined);
@@ -1559,6 +1561,7 @@ function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
 function normalizeObjectiveListFromPayload(payload: Record<string, unknown>): JainaObjective[] {
   const candidates = [
     ...asArray(payload.objectives),
+    ...asArray(payload.execution_objectives),
     ...asArray(payload.items),
     ...asArray(payload.checklist),
   ];
@@ -1828,7 +1831,23 @@ export function reduceJainaStreamEvent(
       return {
         ...nextBase,
         planJson: nextPlanJson,
-        plan: nextPlan,
+        plan: nextPlan ?? state.plan,
+      };
+    }
+    case "response.plan_ready": {
+      const parsed = responsePlanReadySchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data?.plan) {
+        return nextBase;
+      }
+      const planRecord = parsed.data.data.plan;
+      const planJson = JSON.stringify(planRecord);
+      const nextPlan = parsePlanFromAccumulatedDelta(planJson, state.plan);
+      const planObjectives = normalizeObjectiveListFromPayload(planRecord);
+      return {
+        ...nextBase,
+        plan: nextPlan ?? state.plan,
+        planJson: nextPlan ? planJson : state.planJson,
+        objectives: planObjectives.length > 0 ? planObjectives : state.objectives,
       };
     }
     case "hitl.paused": {
@@ -2779,6 +2798,26 @@ export function reduceJainaStreamEvent(
           },
         })),
       ];
+      if (payload.source === "objectives_init") {
+        const deltaObjectives = normalizeObjectiveListFromPayload(toolDeltaPayload);
+        const objectivePlanRecord = asRecord(toolDeltaPayload.objective_plan);
+        let nextPlan = state.plan;
+        if (objectivePlanRecord) {
+          const planJson = JSON.stringify(objectivePlanRecord);
+          nextPlan = parsePlanFromAccumulatedDelta(planJson, state.plan) ?? state.plan;
+        }
+        return {
+          ...nextBase,
+          stateDeltas: nextStateDeltas,
+          toolCalls: mergedToolCalls,
+          toolResults: mergedToolResults,
+          progress: nextProgress,
+          objectives: deltaObjectives.length > 0 ? deltaObjectives : state.objectives,
+          plan: nextPlan,
+          ...checkpointSummaryPatch,
+        };
+      }
+
       if (payload.source !== "hitl_feedback") {
         return {
           ...nextBase,

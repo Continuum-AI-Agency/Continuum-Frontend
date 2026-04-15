@@ -612,6 +612,15 @@ export type ResponsePlanDeltaEventData = Exclude<
   undefined
 >;
 
+export const responsePlanReadySchema = streamEventSchema(
+  "response.plan_ready",
+  z.object({
+    item_id: z.string().optional(),
+    part_id: z.string().optional(),
+    plan: z.record(z.string(), z.unknown()),
+  })
+);
+
 export const hitlPausedSchema = streamEventSchema(
   "hitl.paused",
   z.object({
@@ -860,6 +869,7 @@ export type JainaStreamEvent =
   | z.infer<typeof progressEventSchema>
   | z.infer<typeof stateDeltaSchema>
   | z.infer<typeof responsePlanDeltaSchema>
+  | z.infer<typeof responsePlanReadySchema>
   | z.infer<typeof hitlPausedSchema>
   | z.infer<typeof canvasActionsProposedSchema>
   | z.infer<typeof toolBatchSchema>
@@ -887,6 +897,7 @@ export const jainaStreamEventSchema = z.union([
   progressEventSchema,
   stateDeltaSchema,
   responsePlanDeltaSchema,
+  responsePlanReadySchema,
   hitlPausedSchema,
   canvasActionsProposedSchema,
   toolBatchSchema,

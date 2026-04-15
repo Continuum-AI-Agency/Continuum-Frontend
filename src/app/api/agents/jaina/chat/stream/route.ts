@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getApiBaseUrl } from "@/lib/api/config";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,16 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
+
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: userData.user.id,
+    event: "jaina_chat_message_sent",
+    properties: {
+      session_id: (body as Record<string, unknown>)?.sessionId ?? null,
+    },
+  });
+  posthog.shutdown().catch(() => {});
 
   const baseUrl = getApiBaseUrl();
   const upstreamUrl = `${baseUrl}/api/agents/jaina/chat/stream`;
