@@ -10,7 +10,7 @@ import {
 export type OrganicAnalyticsRequest = {
   brandId: string;
   integrationAccountId: string;
-  platform: Extract<OrganicPlatform, "instagram" | "facebook">;
+  platform: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok">;
   range: {
     preset: OrganicDateRangePreset;
     custom?: { from: string; to: string };

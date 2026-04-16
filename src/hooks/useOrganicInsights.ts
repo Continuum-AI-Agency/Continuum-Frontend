@@ -11,7 +11,7 @@ import type { OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
 type UseOrganicInsightsParams = {
   brandId: string;
   integrationAccountId: string | null;
-  platform: "instagram" | "facebook";
+  platform: "instagram" | "facebook" | "tiktok";
   rangePreset: OrganicDateRangePreset;
   enabled?: boolean;
 };

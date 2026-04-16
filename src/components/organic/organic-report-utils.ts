@@ -134,7 +134,7 @@ const ACCOUNT_METRIC_ROWS: Array<{ label: string; key: keyof OrganicMetrics }> =
 ];
 
 export function buildOrganicReportCsv(params: {
-  platform: "instagram" | "facebook";
+  platform: "instagram" | "facebook" | "tiktok";
   accountName: string;
   generatedAt: string;
   accountRangeSince: string;
@@ -244,7 +244,7 @@ function fmtNumber(value: number) {
 }
 
 export function buildOrganicReportHtml(params: {
-  platform: "instagram" | "facebook";
+  platform: "instagram" | "facebook" | "tiktok";
   accountName: string;
   generatedAt: string;
   accountRangeSince: string;

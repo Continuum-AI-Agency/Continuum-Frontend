@@ -97,16 +97,17 @@ export type OrganicAccountOption = {
 type AccountsByPlatform = {
   instagram: OrganicAccountOption[];
   facebook: OrganicAccountOption[];
+  tiktok: OrganicAccountOption[];
 };
+
+type MetricsPlatform = "instagram" | "facebook" | "tiktok";
+type MetricsViewMode = "account" | "posts";
 
 type Props = {
   brandId: string;
   accountsByPlatform: AccountsByPlatform;
-  initialPlatform?: "instagram" | "facebook";
+  initialPlatform?: MetricsPlatform;
 };
-
-type MetricsPlatform = "instagram" | "facebook";
-type MetricsViewMode = "account" | "posts";
 
 type LoadState =
   | { status: "idle" }
@@ -866,7 +867,7 @@ function Dashboard({
   demographicsLoading?: boolean;
   brandId: string;
   integrationAccountId: string;
-  platform: "instagram" | "facebook";
+  platform: MetricsPlatform;
   rangePreset: OrganicDateRangePreset;
 }) {
   const [selectedPostId, setSelectedPostId] = React.useState<string | null>(null);
@@ -1347,9 +1348,11 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const [selectedAccountByPlatform, setSelectedAccountByPlatform] = React.useState<{
     instagram: string | null;
     facebook: string | null;
+    tiktok: string | null;
   }>({
     instagram: accountsByPlatform.instagram[0]?.integrationAccountId ?? null,
     facebook: accountsByPlatform.facebook[0]?.integrationAccountId ?? null,
+    tiktok: accountsByPlatform.tiktok[0]?.integrationAccountId ?? null,
   });
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
   const [kpisState, setKpisState] = React.useState<SectionState<OrganicMetricsResponse>>({ status: "idle" });
@@ -1357,11 +1360,15 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
 
   const platformAccounts = platform === "facebook"
     ? accountsByPlatform.facebook
-    : accountsByPlatform.instagram;
+    : platform === "tiktok"
+      ? accountsByPlatform.tiktok
+      : accountsByPlatform.instagram;
 
   const selectedAccountId = platform === "facebook"
     ? selectedAccountByPlatform.facebook
-    : selectedAccountByPlatform.instagram;
+    : platform === "tiktok"
+      ? selectedAccountByPlatform.tiktok
+      : selectedAccountByPlatform.instagram;
 
   const selectedAccount =
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
@@ -1595,13 +1602,23 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
       return;
     }
 
+    if (platform === "tiktok") {
+      if (
+        !selectedAccountByPlatform.tiktok ||
+        !platformAccounts.some((item) => item.integrationAccountId === selectedAccountByPlatform.tiktok)
+      ) {
+        setSelectedAccountByPlatform((current) => ({ ...current, tiktok: firstPlatformAccountId }));
+      }
+      return;
+    }
+
     if (
       !selectedAccountByPlatform.instagram ||
       !platformAccounts.some((item) => item.integrationAccountId === selectedAccountByPlatform.instagram)
     ) {
       setSelectedAccountByPlatform((current) => ({ ...current, instagram: firstPlatformAccountId }));
     }
-  }, [platform, platformAccounts, selectedAccountByPlatform.facebook, selectedAccountByPlatform.instagram]);
+  }, [platform, platformAccounts, selectedAccountByPlatform.facebook, selectedAccountByPlatform.instagram, selectedAccountByPlatform.tiktok]);
 
   React.useEffect(() => {
     if (!selectedAccountId) {
@@ -1730,12 +1747,13 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
 
           <Flex align="center" gap="2" wrap="wrap">
             <Select.Root value={platform} onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}>
-              <Select.Trigger variant="surface" radius="large" style={{ width: "130px" }}>
-                {platform === "facebook" ? "Facebook" : "Instagram"}
+              <Select.Trigger variant="surface" radius="large" style={{ width: "150px" }}>
+                {{ instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" }[platform]}
               </Select.Trigger>
               <Select.Content>
                 <Select.Item value="instagram">Instagram</Select.Item>
                 <Select.Item value="facebook">Facebook Pages</Select.Item>
+                <Select.Item value="tiktok">TikTok</Select.Item>
               </Select.Content>
             </Select.Root>
 

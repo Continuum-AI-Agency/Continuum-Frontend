@@ -19,11 +19,13 @@ type IntegrationSummaryPlatform = {
 type MetricIntegrationSummary = {
   instagram: IntegrationSummaryPlatform;
   facebook: IntegrationSummaryPlatform;
+  tiktok: IntegrationSummaryPlatform;
 };
 
 type OrganicMetricAccountsByPlatform = {
   instagram: OrganicMetricAccountOption[];
   facebook: OrganicMetricAccountOption[];
+  tiktok: OrganicMetricAccountOption[];
 };
 
 function dedupeByIntegrationAccountId(
@@ -87,6 +89,7 @@ export function deriveMetricAccountsByPlatform(params: {
   onboardingConnections: {
     instagram: OnboardingConnectionState;
     facebook: OnboardingConnectionState;
+    tiktok?: OnboardingConnectionState;
   };
 }): OrganicMetricAccountsByPlatform {
   const summaryInstagram = params.integrationSummary
@@ -94,6 +97,9 @@ export function deriveMetricAccountsByPlatform(params: {
     : [];
   const summaryFacebook = params.integrationSummary
     ? fromIntegrationSummary(params.integrationSummary.facebook, "Facebook Page")
+    : [];
+  const summaryTikTok = params.integrationSummary
+    ? fromIntegrationSummary(params.integrationSummary.tiktok, "TikTok account")
     : [];
 
   return {
@@ -105,5 +111,11 @@ export function deriveMetricAccountsByPlatform(params: {
       summaryFacebook.length > 0
         ? summaryFacebook
         : toMetricAccountOptions(params.onboardingConnections.facebook, "Facebook Page"),
+    tiktok:
+      summaryTikTok.length > 0
+        ? summaryTikTok
+        : params.onboardingConnections.tiktok
+          ? toMetricAccountOptions(params.onboardingConnections.tiktok, "TikTok account")
+          : [],
   };
 }

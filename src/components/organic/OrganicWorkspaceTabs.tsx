@@ -12,7 +12,7 @@ const ViewTransition = (React as unknown as { ViewTransition: React.ComponentTyp
 type MetricsPrefetchParams = {
   brandId: string;
   integrationAccountId: string;
-  platform: "instagram" | "facebook";
+  platform: "instagram" | "facebook" | "tiktok";
 };
 
 type Props = {

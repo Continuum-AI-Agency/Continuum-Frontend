@@ -224,10 +224,13 @@ async function OrganicContent({
     onboardingConnections: {
       instagram: onboarding.connections.instagram,
       facebook: onboarding.connections.facebook,
+      tiktok: onboarding.connections.tiktok,
     },
   });
-  const initialMetricsPlatform: "instagram" | "facebook" =
-    metricAccountsByPlatform.instagram.length > 0 ? "instagram" : "facebook";
+  const initialMetricsPlatform: "instagram" | "facebook" | "tiktok" =
+    metricAccountsByPlatform.instagram.length > 0 ? "instagram"
+    : metricAccountsByPlatform.tiktok.length > 0 ? "tiktok"
+    : "facebook";
 
   return (
     <>

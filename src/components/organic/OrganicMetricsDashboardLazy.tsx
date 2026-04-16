@@ -14,8 +14,8 @@ const OrganicMetricsDashboardDynamic = dynamic(
 
 type Props = {
   brandId: string;
-  accountsByPlatform: { instagram: OrganicAccountOption[]; facebook: OrganicAccountOption[] };
-  initialPlatform?: "instagram" | "facebook";
+  accountsByPlatform: { instagram: OrganicAccountOption[]; facebook: OrganicAccountOption[]; tiktok: OrganicAccountOption[] };
+  initialPlatform?: "instagram" | "facebook" | "tiktok";
 };
 
 export function OrganicMetricsDashboardLazy(props: Props) {
