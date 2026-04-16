@@ -151,7 +151,7 @@ serve(async (req) => {
       });
     }
 
-    if (!["instagram", "facebook"].includes(body.platform)) {
+    if (!["instagram", "facebook", "tiktok"].includes(body.platform)) {
       return new Response(JSON.stringify({ error: "Unsupported platform" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -253,6 +253,110 @@ serve(async (req) => {
     }
 
     const warnings: string[] = [];
+
+    // TikTok: delegate to fetch-tiktok-data and reshape into OrganicResponse
+    if (body.platform === "tiktok") {
+      const { data: tiktokData, error: tiktokError } = await supabase.functions.invoke(
+        "fetch-tiktok-data",
+        {
+          body: {
+            brandId: body.brandId,
+            integrationAccountId: body.integrationAccountId,
+            scope: "all",
+            forceRefresh: body.forceRefresh ?? false,
+          },
+        }
+      );
+
+      if (tiktokError || !tiktokData) {
+        return new Response(
+          JSON.stringify({ error: "Failed to fetch TikTok data" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const tiktokMetrics: Record<string, number | undefined> = {};
+      const userInfo = tiktokData.userInfo as Record<string, unknown> | null;
+      if (userInfo) {
+        tiktokMetrics.subscribers = (userInfo.follower_count as number) ?? undefined;
+        tiktokMetrics.likes = (userInfo.likes_count as number) ?? undefined;
+      }
+
+      const videos = (tiktokData.videos ?? []) as Array<Record<string, unknown>>;
+      if (videos.length > 0) {
+        let totalViews = 0, totalComments = 0, totalShares = 0, totalLikes = 0;
+        for (const v of videos) {
+          totalViews += (v.view_count as number) ?? 0;
+          totalComments += (v.comment_count as number) ?? 0;
+          totalShares += (v.share_count as number) ?? 0;
+          totalLikes += (v.like_count as number) ?? 0;
+        }
+        tiktokMetrics.views = totalViews;
+        tiktokMetrics.comments = totalComments;
+        tiktokMetrics.shares = totalShares;
+        if (!tiktokMetrics.likes) tiktokMetrics.likes = totalLikes;
+      }
+
+      const posts = videos.map((v) => ({
+        id: v.id as string,
+        caption: (v.video_description as string) ?? (v.title as string) ?? "",
+        media_type: "VIDEO",
+        media_url: (v.cover_image_url as string) ?? null,
+        permalink: (v.share_url as string) ?? null,
+        timestamp: v.create_time
+          ? new Date((v.create_time as number) * 1000).toISOString()
+          : null,
+        like_count: (v.like_count as number) ?? 0,
+        comments_count: (v.comment_count as number) ?? 0,
+        shares: (v.share_count as number) ?? 0,
+        views: (v.view_count as number) ?? 0,
+      }));
+
+      const tiktokWarnings = (tiktokData.warnings as string[]) ?? [];
+      const response: OrganicResponse = {
+        platform: "tiktok",
+        scope,
+        accountId: account.external_account_id,
+        brandId: body.brandId,
+        integrationAccountId: body.integrationAccountId,
+        externalAccountId: account.external_account_id,
+        fetchedAt: new Date().toISOString(),
+        range: { preset: range.preset, since: range.since, until: range.until },
+        warnings: tiktokWarnings.length > 0 ? tiktokWarnings : undefined,
+        metrics: tiktokMetrics,
+        comparison: null,
+        posts,
+      };
+
+      try {
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + CACHE_TTL_MS);
+        await supabase
+          .schema("brand_profiles")
+          .from("reporting_cache")
+          .insert({
+            cache_key: cacheKey,
+            provider: "tiktok",
+            scope_type: `organic_analytics_tiktok`,
+            account_id: body.integrationAccountId,
+            scope_id: account.external_account_id,
+            range_preset: range.preset,
+            range_since: range.since,
+            range_until: range.until,
+            payload: response,
+            fetched_at: now.toISOString(),
+            expires_at: expiresAt.toISOString(),
+            updated_at: now.toISOString(),
+          });
+      } catch (cacheWriteError) {
+        console.error("[fetch-organic-analytics] tiktok cache write failed", cacheWriteError);
+      }
+
+      return new Response(JSON.stringify(response), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },
+      });
+    }
+
     const token = await resolveMetaAccessToken(supabase, account);
 
     const analytics = await fetchPlatformAnalytics({

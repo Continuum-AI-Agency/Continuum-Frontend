@@ -1,7 +1,7 @@
 export const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 export const META_API_VERSION = "v23.0";
 
-export type OrganicPlatform = "instagram" | "facebook";
+export type OrganicPlatform = "instagram" | "facebook" | "tiktok";
 export type AnalyticsScope = "account" | "posts" | "all" | "kpis" | "demographics";
 export type RangePreset =
   | "yesterday"

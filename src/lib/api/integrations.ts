@@ -265,3 +265,117 @@ export function useApplyBrandProfileIntegrationAccounts() {
     mutationFn: (params: ApplyBrandProfileIntegrationAccountsParams) => applyBrandProfileIntegrationAccounts(params),
   });
 }
+
+export type UserIntegrationAssetRow = {
+  id: string;
+  integration_id: string;
+  type: string | null;
+  name: string | null;
+  status: string | null;
+  external_account_id: string | null;
+  ad_account_id: string | null;
+};
+
+export async function fetchUserIntegrationAssets(): Promise<UserIntegrationAssetRow[]> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  const { data, error } = await supabase
+    .schema("brand_profiles")
+    .from("integration_accounts_assets")
+    .select(`
+      id,
+      integration_id,
+      type,
+      name,
+      status,
+      external_account_id,
+      ad_account_id,
+      user_integrations!inner(user_id)
+    `)
+    .eq("user_integrations.user_id", user.id);
+
+  if (error) throw error;
+  return (data ?? []) as unknown as UserIntegrationAssetRow[];
+}
+
+export function useUserIntegrationAssets() {
+  return useQuery({
+    queryKey: ["user-integration-assets"],
+    queryFn: () => fetchUserIntegrationAssets(),
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
+export async function applyBrandAssignmentsDirect(
+  brandId: string,
+  desiredAccountIds: string[]
+): Promise<{ linked: number }> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+
+  // Fetch current assignments for this brand
+  const { data: existing, error: fetchError } = await supabase
+    .schema("brand_profiles")
+    .from("brand_profile_integration_accounts")
+    .select("id, integration_account_id")
+    .eq("brand_profile_id", brandId);
+
+  if (fetchError) throw new Error(fetchError.message);
+
+  const existingIds = new Set((existing ?? []).map((r: { integration_account_id: string }) => r.integration_account_id));
+  const desiredSet = new Set(desiredAccountIds);
+
+  // Delete removed assignments
+  const toRemove = (existing ?? []).filter(
+    (r: { integration_account_id: string }) => !desiredSet.has(r.integration_account_id)
+  );
+  if (toRemove.length > 0) {
+    const { error: deleteError } = await supabase
+      .schema("brand_profiles")
+      .from("brand_profile_integration_accounts")
+      .delete()
+      .in("id", toRemove.map((r: { id: string }) => r.id));
+    if (deleteError) throw new Error(deleteError.message);
+  }
+
+  // Insert new assignments
+  const toAdd = desiredAccountIds.filter((id) => !existingIds.has(id));
+  if (toAdd.length > 0) {
+    const { error: insertError } = await supabase
+      .schema("brand_profiles")
+      .from("brand_profile_integration_accounts")
+      .insert(
+        toAdd.map((accountId) => ({
+          brand_profile_id: brandId,
+          integration_account_id: accountId,
+        }))
+      );
+    if (insertError) throw new Error(insertError.message);
+  }
+
+  return { linked: desiredAccountIds.length };
+}
+
+export async function fetchUserTikTokAccountIds(): Promise<string[]> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .schema("brand_profiles")
+    .from("integration_accounts_assets")
+    .select("id, user_integrations!inner(user_id, provider)")
+    .eq("user_integrations.user_id", user.id)
+    .eq("user_integrations.provider", "tiktok");
+
+  if (error) {
+    console.error("[fetchUserTikTokAccountIds] query failed", error);
+    return [];
+  }
+  return (data ?? []).map((row: { id: string }) => row.id);
+}

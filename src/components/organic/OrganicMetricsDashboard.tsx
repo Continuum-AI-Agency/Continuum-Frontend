@@ -135,7 +135,9 @@ const RANGE_OPTIONS: OrganicDateRangePreset[] = [
   "last_month",
 ];
 
-const KPI_CONFIG: Array<{ key: keyof OrganicMetrics; label: string }> = [
+type KpiMetric = { key: keyof OrganicMetrics; label: string };
+
+const META_KPI_CONFIG: KpiMetric[] = [
   { key: "accountsEngaged", label: "Engaged" },
   { key: "reach", label: "Reach" },
   { key: "reelsViews", label: "Reels" },
@@ -147,6 +149,20 @@ const KPI_CONFIG: Array<{ key: keyof OrganicMetrics; label: string }> = [
   { key: "followerReach", label: "Follower Reach" },
   { key: "comments", label: "Comments" },
 ];
+
+const TIKTOK_KPI_CONFIG: KpiMetric[] = [
+  { key: "subscribers", label: "Followers" },
+  { key: "following", label: "Following" },
+  { key: "likes", label: "Likes" },
+  { key: "videoCount", label: "Videos" },
+  { key: "views", label: "Views" },
+  { key: "comments", label: "Comments" },
+  { key: "shares", label: "Shares" },
+];
+
+function getKpiConfig(platform: MetricsPlatform): KpiMetric[] {
+  return platform === "tiktok" ? TIKTOK_KPI_CONFIG : META_KPI_CONFIG;
+}
 
 const audienceChartConfig = {
   followers: { label: "Followers", color: "#0284c7" },
@@ -390,14 +406,17 @@ function PostGalleryCard({
   selected,
   loading,
   onSelect,
+  platform = "instagram",
 }: {
   post: OrganicPost;
   selected: boolean;
   loading: boolean;
   onSelect: () => void;
+  platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
-  const video = isVideoPost(post);
+  const isTikTok = platform === "tiktok";
+  const video = !isTikTok && isVideoPost(post);
   const carousel = isCarouselPost(post);
   const recent7dMetrics = summarizePost7dMetrics(post);
   const previewViews = recent7dMetrics.views ?? post.metrics?.views ?? post.metrics?.reach;
@@ -442,7 +461,7 @@ function PostGalleryCard({
     >
       <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90", mediaHeightClass)}>
         {preview ? (
-          video ? (
+          video && !isTikTok ? (
             <Reel className="h-full w-full" data={reelData} defaultMuted>
               <ReelContent>
                 {(item) => (
@@ -457,12 +476,29 @@ function PostGalleryCard({
               </ReelContent>
             </Reel>
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={preview}
-              alt={post.title ?? post.caption ?? "Post media"}
-              className="h-full w-full object-contain"
-            />
+            <div className="relative h-full w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt={post.title ?? post.caption ?? "Post media"}
+                className="h-full w-full object-contain"
+              />
+              {isTikTok && post.permalink ? (
+                <a
+                  href={post.permalink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-200 hover:opacity-100"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 shadow-lg">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-5 w-5 text-black">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
+                </a>
+              ) : null}
+            </div>
           )
         ) : (
           <Box className="h-full w-full flex items-center justify-center">
@@ -509,6 +545,46 @@ function PostGalleryCard({
   );
 }
 
+function TikTokEmbed({ videoId, permalink }: { videoId: string; permalink: string }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    while (container.firstChild) container.removeChild(container.firstChild);
+
+    const blockquote = document.createElement("blockquote");
+    blockquote.className = "tiktok-embed";
+    blockquote.setAttribute("cite", permalink);
+    blockquote.setAttribute("data-video-id", videoId);
+    blockquote.style.maxWidth = "100%";
+
+    const section = document.createElement("section");
+    blockquote.appendChild(section);
+    container.appendChild(blockquote);
+
+    const existingScript = document.querySelector('script[src="https://www.tiktok.com/embed.js"]');
+    if (existingScript) existingScript.remove();
+
+    const script = document.createElement("script");
+    script.src = "https://www.tiktok.com/embed.js";
+    script.async = true;
+    container.appendChild(script);
+
+    return () => {
+      while (container.firstChild) container.removeChild(container.firstChild);
+    };
+  }, [videoId, permalink]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex min-h-[300px] max-h-[500px] w-full items-center justify-center overflow-hidden [&_iframe]:!max-h-[500px]"
+    />
+  );
+}
+
 function PostSnapshotPanel({
   post,
   selectedMetric,
@@ -517,6 +593,7 @@ function PostSnapshotPanel({
   onWindowChange,
   series,
   loading,
+  platform = "instagram",
 }: {
   post: OrganicPost;
   selectedMetric: PostMetricKey;
@@ -525,9 +602,11 @@ function PostSnapshotPanel({
   onWindowChange: (window: DrilldownWindow) => void;
   series: Array<{ date: string; value: number }>;
   loading: boolean;
+  platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
-  const video = isVideoPost(post);
+  const isTikTok = platform === "tiktok";
+  const video = !isTikTok && isVideoPost(post);
   const metricComparisons = post24hComparisons(post);
   const recent7dMetrics = summarizePost7dMetrics(post);
 
@@ -554,7 +633,9 @@ function PostSnapshotPanel({
           </Flex>
 
           <Box className="mb-3 overflow-hidden rounded-lg border border-subtle bg-black/90">
-            {preview ? (
+            {isTikTok && post.permalink ? (
+              <TikTokEmbed videoId={post.id} permalink={post.permalink} />
+            ) : preview ? (
               video ? (
                 <Reel
                   className="max-h-[320px] min-h-[180px] w-full"
@@ -935,7 +1016,7 @@ function Dashboard({
     window: drilldownWindow,
   });
   const selectedAccountMetricLabel =
-    KPI_CONFIG.find((metric) => metric.key === selectedAccountMetric)?.label ?? String(selectedAccountMetric);
+    getKpiConfig(platform).find((metric) => metric.key === selectedAccountMetric)?.label ?? String(selectedAccountMetric);
   const isAccountView = viewMode === "account";
   const isPostsView = viewMode === "posts";
 
@@ -1021,7 +1102,7 @@ function Dashboard({
           variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
           className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
         >
-          {KPI_CONFIG.map((metric) => (
+          {getKpiConfig(platform).map((metric) => (
             <motion.div
               key={String(metric.key)}
               variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { duration: 0.28, ease: [0.2, 0.8, 0.2, 1] } } }}
@@ -1104,7 +1185,7 @@ function Dashboard({
             </Box>
           </Card>
 
-          <Card variant="surface" className="border border-subtle bg-surface">
+          <Card variant="surface" className={cn("border border-subtle bg-surface", platform === "tiktok" && "!hidden")}>
             <Box p="3">
               <Heading size="3" mb="2">Followers Breakdown</Heading>
               <ChartContainer config={audienceChartConfig} className="h-52 w-full">
@@ -1171,7 +1252,7 @@ function Dashboard({
             </Box>
           </Card>
 
-          <Card variant="surface" className="border border-subtle bg-surface">
+          <Card variant="surface" className={cn("border border-subtle bg-surface", platform === "tiktok" && "!hidden")}>
             <Box p="3">
               <Heading size="3" mb="2">Audience Demographics</Heading>
 
@@ -1232,7 +1313,7 @@ function Dashboard({
         </div>
       ) : null}
 
-      {isAccountView ? (
+      {isAccountView && platform !== "tiktok" ? (
         <OrganicAudienceLocationMapCard
           countryEntries={countryDemographics}
           cityEntries={cityDemographics}
@@ -1287,6 +1368,7 @@ function Dashboard({
                                 onSelect={() => {
                                   setSelectedPostId(post.id);
                                 }}
+                                platform={platform}
                               />
                             </motion.div>
                           ))}
@@ -1314,6 +1396,7 @@ function Dashboard({
                           onWindowChange={setDrilldownWindow}
                           series={postSeries}
                           loading={loadingPostId === selectedPost.id}
+                          platform={platform}
                         />
                       ) : null}
                     </AnimatePresence>

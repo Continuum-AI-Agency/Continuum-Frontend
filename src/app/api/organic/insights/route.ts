@@ -7,7 +7,7 @@ import { OrganicInsightsResponseSchema } from "@/lib/organic/organic-insights.ty
 const requestSchema = z.object({
   brandId: z.string(),
   integrationAccountId: z.string(),
-  platform: z.enum(["instagram", "facebook"]),
+  platform: z.enum(["instagram", "facebook", "tiktok"]),
   range: z.object({
     preset: z.enum(["yesterday", "last_7d", "last_14d", "last_30d", "last_month"]),
   }),

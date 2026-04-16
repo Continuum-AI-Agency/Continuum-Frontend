@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
@@ -27,6 +28,8 @@ const TYPE_TO_PLATFORM_MAP: Record<string, string> = {
   threads_profile: "threads",
   threads_account: "threads",
   meta_threads_account: "threads",
+  tiktok_user: "tiktok",
+  tiktok_account: "tiktok",
 };
 
 function mapIntegrationTypeToPlatformKey(type?: string | null): string | null {
@@ -93,8 +96,10 @@ serve(async (req: Request) => {
     }
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    const accessToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    
+    const accessToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : "";
+
     if (!accessToken) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -107,7 +112,10 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // 1. Verify user has access to this brand
-    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(accessToken);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -133,10 +141,13 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       if (brandError || !brand || brand.created_by !== user.id) {
-        return new Response(JSON.stringify({ error: "Forbidden: No access to this brand" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "Forbidden: No access to this brand" }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
@@ -144,7 +155,8 @@ serve(async (req: Request) => {
     const { data, error } = await supabase
       .schema("brand_profiles")
       .from("brand_profile_integration_accounts")
-      .select(`
+      .select(
+        `
         id,
         alias,
         created_at,
@@ -157,7 +169,8 @@ serve(async (req: Request) => {
           status,
           external_account_id
         )
-      `)
+      `,
+      )
       .eq("brand_profile_id", brandId);
 
     if (error) {
@@ -201,12 +214,17 @@ serve(async (req: Request) => {
     (data || []).forEach((assignment: any) => {
       const account = assignment.integration_accounts_assets;
       if (!account) return;
-      
-      const alreadyIncluded = summary.youtube.accounts.some((a: any) => a.integrationAccountId === account.id);
+
+      const alreadyIncluded = summary.youtube.accounts.some(
+        (a: any) => a.integrationAccountId === account.id,
+      );
       if (alreadyIncluded) return;
-      
+
       const typeGuess = account.type?.toLowerCase() ?? "";
-      if (!mapIntegrationTypeToPlatformKey(account.type) && typeGuess.includes("youtube")) {
+      if (
+        !mapIntegrationTypeToPlatformKey(account.type) &&
+        typeGuess.includes("youtube")
+      ) {
         summary.youtube.accounts.push({
           assignmentId: assignment.id,
           integrationAccountId: account.id,
@@ -228,13 +246,14 @@ serve(async (req: Request) => {
 
     // Sort accounts by name
     for (const key of PLATFORM_KEYS) {
-      summary[key].accounts.sort((a: any, b: any) => a.name.localeCompare(b.name));
+      summary[key].accounts.sort((a: any, b: any) =>
+        a.name.localeCompare(b.name),
+      );
     }
 
     return new Response(JSON.stringify({ summary }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
     console.error("[fetch-brand-integrations] unhandled error:", error);
     return new Response(JSON.stringify({ error: (error as Error)?.message }), {

@@ -20,7 +20,7 @@ import { Sparkles, RefreshCw } from "lucide-react";
 import * as Accordion from "@radix-ui/react-accordion";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
-import { useApplyBrandProfileIntegrationAccounts, useSelectableAssets, useStartMetaSync, useStartGoogleSync, useStartTikTokSync } from "@/lib/api/integrations";
+import { useStartMetaSync, useStartGoogleSync, useStartTikTokSync, fetchUserTikTokAccountIds, applyBrandAssignmentsDirect, useUserIntegrationAssets, type UserIntegrationAssetRow } from "@/lib/api/integrations";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import {
@@ -164,12 +164,29 @@ function AssignmentsDialog({
   onSaved,
 }: AssignmentsDialogProps) {
   const { show } = useToast();
-  const selectableAssetsQuery = useSelectableAssets();
-  const applyAssignments = useApplyBrandProfileIntegrationAccounts();
+  const userAssetsQuery = useUserIntegrationAssets();
+  const [isSaving, setIsSaving] = useState(false);
   const selectableAssetsData = useMemo(() => {
-    if (!selectableAssetsQuery.data) return null;
-    return mergeSelectableAssetsWithBrandSummary(selectableAssetsQuery.data, summary);
-  }, [selectableAssetsQuery.data, summary]);
+    if (!userAssetsQuery.data) return null;
+    const userAssets: SelectableAsset[] = userAssetsQuery.data.map((row: UserIntegrationAssetRow) => ({
+      asset_pk: row.id,
+      integration_account_id: row.id,
+      external_id: row.external_account_id ?? row.id,
+      type: row.type ?? "unknown",
+      name: row.name,
+      business_id: null,
+      ad_account_id: row.ad_account_id ?? null,
+    }));
+
+    // Build a minimal SelectableAssetsResponse so mergeSelectableAssetsWithBrandSummary still works
+    const response = {
+      synced_at: new Date().toISOString(),
+      stale: false,
+      assets: userAssets,
+      providers: {},
+    };
+    return mergeSelectableAssetsWithBrandSummary(response, summary);
+  }, [userAssetsQuery.data, summary]);
 
   const selectableAssets = useMemo(
     () => (selectableAssetsData ? getSelectableAssetsFlatList(selectableAssetsData) : []),
@@ -237,11 +254,9 @@ function AssignmentsDialog({
   };
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
-      const result = await applyAssignments.mutateAsync({
-        brandId: brandProfileId,
-        assetPks: desiredAssetIds,
-      });
+      const result = await applyBrandAssignmentsDirect(brandProfileId, desiredAssetIds);
       onOpenChange(false);
       await onSaved?.();
       show({
@@ -257,11 +272,13 @@ function AssignmentsDialog({
         description: message,
         variant: "error",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const isLoading = selectableAssetsQuery.isLoading;
-  const isSaving = applyAssignments.isPending;
+  const isLoading = userAssetsQuery.isLoading;
+  // isSaving is managed by useState above
   const stale = selectableAssetsData?.stale;
   const syncedAt = selectableAssetsData?.synced_at;
 
@@ -730,6 +747,18 @@ export function BrandIntegrationsCard({
         const popup = openCenteredPopup(popupUrl, `Connect ${group}`, 600, 700);
         if (popup) {
           await waitForPopupClosed(popup);
+          // Auto-assign TikTok accounts to this brand after connecting
+          if (group === "tiktok" && brandProfileId) {
+            try {
+              const tiktokIds = await fetchUserTikTokAccountIds();
+              if (tiktokIds.length > 0) {
+                await applyBrandAssignmentsDirect(brandProfileId, tiktokIds);
+                show({ title: "TikTok connected", description: "Account assigned to this brand.", variant: "success" });
+              }
+            } catch (err) {
+              console.error("[handleConnect] TikTok auto-assign failed", err);
+            }
+          }
           if (onRefresh) await onRefresh();
         }
       }

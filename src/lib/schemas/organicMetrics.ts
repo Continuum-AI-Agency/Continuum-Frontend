@@ -92,6 +92,8 @@ export const organicMetricsSchema = z.object({
   saved: z.number().optional(),
   totalInteractions: z.number().optional(),
   subscribers: z.number().optional(),
+  following: z.number().optional(),
+  videoCount: z.number().optional(),
   impressions: z.number().optional(),
 });
 
