@@ -786,9 +786,11 @@ export function JainaChatSurface({
         }
       }
 
-    if (state.status === "streaming" && (state.responseText || state.objectives.length > 0)) {
+    if (state.status === "streaming" && (state.responseText || state.objectives.length > 0 || state.plan)) {
+      const hasPlanAsResult = Boolean(state.plan) && !state.report && !state.reportV2;
       const shouldPreferReport =
-        state.finalContentKind === "report" || Boolean(state.report) || Boolean(state.reportV2);
+        !hasPlanAsResult &&
+        (state.finalContentKind === "report" || Boolean(state.report) || Boolean(state.reportV2));
       if (shouldPreferReport) {
         updateMessage(activeResponseId, {
           content: "Building checkpoint report…",
@@ -800,8 +802,9 @@ export function JainaChatSurface({
           content:
             isJsonStart
               ? "Generating analysis..."
-              : state.responseText || "Working through objectives…",
+              : state.responseText || (state.plan?.title ? state.plan.title : "Working through objectives…"),
           objectives: state.objectives,
+          plan: state.plan ?? undefined,
         });
       }
     }
@@ -825,9 +828,11 @@ export function JainaChatSurface({
           ? (state.report as { type?: unknown }).type
           : undefined;
       const isDirectAnswer = reportType === "direct_answer";
+      const hasPlanAsResult = Boolean(state.plan) && !state.report && !state.reportV2;
       const shouldPreferReport =
         !hasClarificationRequest &&
         !isDirectAnswer &&
+        !hasPlanAsResult &&
         (state.finalContentKind === "report" ||
           (Boolean(state.report) && state.lastEventType === "response.content_part.done"));
       const content = shouldPreferReport
@@ -835,6 +840,7 @@ export function JainaChatSurface({
         : safeResponseText ||
           state.pendingClarification?.question ||
           finalThought ||
+          (hasPlanAsResult && state.plan?.title ? state.plan.title : null) ||
           resolvedSummary ||
           "Response ready.";
 
