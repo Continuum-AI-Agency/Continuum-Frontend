@@ -192,10 +192,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ cat
   }
 }
 
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ catalogId: string }> }) {
   const params = paramsSchema.safeParse(await context.params);
   if (!params.success) {
     return NextResponse.json({ error: "Invalid catalog id" }, { status: 400 });
+  }
+
+  // Optional Meta deletion params — if provided, catalog is also removed from Meta before DB delete.
+  let brandId: string | undefined;
+  let metaAccountId: string | undefined;
+  try {
+    const body = await request.json().catch(() => ({}));
+    const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    if (typeof b.brandId === "string" && b.brandId.trim()) brandId = b.brandId.trim();
+    if (typeof b.metaAccountId === "string" && b.metaAccountId.trim()) metaAccountId = b.metaAccountId.trim();
+  } catch {
+    // body is optional — proceed without it
   }
 
   try {
@@ -207,6 +219,44 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
 
     if (sessionError || !session?.access_token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Fetch catalog to get externalCatalogId for Meta deletion
+    const { data: catalogRow, error: fetchError } = await supabase
+      .schema("paid_media" as never)
+      .from(PRODUCT_CATALOG_TABLE)
+      .select("id, external_catalog_id")
+      .eq("id", params.data.catalogId)
+      .single();
+
+    if (fetchError || !catalogRow) {
+      return NextResponse.json({ error: "Catalog not found" }, { status: 404 });
+    }
+
+    const externalCatalogId = (catalogRow as { external_catalog_id: string }).external_catalog_id?.trim();
+
+    // Attempt Meta deletion — log failures but never block the DB delete
+    if (brandId && metaAccountId && externalCatalogId) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (supabaseUrl) {
+        try {
+          const metaResp = await fetch(`${supabaseUrl}/functions/v1/catalog-delete-meta`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ brandId, externalCatalogId, metaAccountId }),
+            cache: "no-store",
+          });
+          if (!metaResp.ok) {
+            const detail = await metaResp.json().catch(() => ({}));
+            console.error("catalog-delete-meta failed", { status: metaResp.status, detail });
+          }
+        } catch (metaError) {
+          console.error("Failed to invoke catalog-delete-meta", metaError);
+        }
+      }
     }
 
     const { error } = await supabase

@@ -134,30 +134,11 @@ const EMPTY_LINK_DRAFT: LinkDraftInput = {
   },
 };
 
-function toLocalDateTimeInput(value: string | null): string {
-  if (!value) return "";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-  const hours = String(parsed.getHours()).padStart(2, "0");
-  const minutes = String(parsed.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function toIsoDateTime(value: string): string | null {
-  if (!value) return null;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString();
-}
 
 function mapCatalogToFormValues(catalog: ProductCatalogRecord): ProductCatalogFormValues {
   return {
     name: catalog.name,
-    externalCatalogId: catalog.externalCatalogId,
+    externalCatalogId: catalog.externalCatalogId ?? "",
     businessId: catalog.businessId ?? "",
     catalogStoreId: catalog.catalogStoreId ?? "",
     vertical: catalog.vertical,
@@ -166,13 +147,6 @@ function mapCatalogToFormValues(catalog: ProductCatalogRecord): ProductCatalogFo
     fallbackImageUrl: catalog.fallbackImageUrl ?? "",
     linkedAdObjectLevel: catalog.linkedAdObjectLevel,
     linkedAdObjectIdsText: formatLinkedAdObjectIds(catalog.linkedAdObjectIds),
-    dataFeedEnabled: catalog.dataFeedEnabled,
-    productTaggingEnabled: catalog.productTaggingEnabled,
-    syncStatus: catalog.syncStatus,
-    productCount: catalog.productCount,
-    feedCount: catalog.feedCount,
-    productSetCount: catalog.productSetCount,
-    lastSyncedAtLocal: toLocalDateTimeInput(catalog.lastSyncedAt),
     notes: catalog.notes ?? "",
   };
 }
@@ -729,13 +703,13 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
           fallbackImageUrl: values.fallbackImageUrl?.trim() ?? "",
           linkedAdObjectLevel: values.linkedAdObjectLevel,
           linkedAdObjectIds: parseLinkedAdObjectIds(values.linkedAdObjectIdsText ?? ""),
-          dataFeedEnabled: values.dataFeedEnabled,
-          productTaggingEnabled: values.productTaggingEnabled,
-          syncStatus: values.syncStatus,
+          dataFeedEnabled: activeCatalog?.dataFeedEnabled ?? true,
+          productTaggingEnabled: activeCatalog?.productTaggingEnabled ?? true,
+          syncStatus: activeCatalog?.syncStatus ?? "draft",
           productCount: activeCatalog?.productCount ?? derivedCatalogItemCount,
-          feedCount: values.feedCount,
-          productSetCount: values.productSetCount,
-          lastSyncedAt: toIsoDateTime(values.lastSyncedAtLocal ?? ""),
+          feedCount: activeCatalog?.feedCount ?? 0,
+          productSetCount: activeCatalog?.productSetCount ?? 0,
+          lastSyncedAt: activeCatalog?.lastSyncedAt ?? null,
           notes: values.notes?.trim() ?? "",
         });
         setCatalogs((current) => [updated, ...current.filter((catalog) => catalog.id !== updated.id)]);
@@ -753,6 +727,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
           catalogStoreId: values.catalogStoreId.trim(),
           metaAccountId: selectedMetaAccountId,
           vertical: "commerce",
+          linkedAdObjectLevel: values.linkedAdObjectLevel,
         });
         setCatalogs((current) => [created, ...current]);
         setActiveCatalogId(created.id);
@@ -776,7 +751,10 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
     setIsDeleting(true);
 
     try {
-      await deleteProductCatalog(activeCatalogId);
+      await deleteProductCatalog(activeCatalogId, {
+        brandId,
+        metaAccountId: selectedMetaAccountId || undefined,
+      });
       setCatalogs((current) => {
         const nextCatalogs = current.filter((catalog) => catalog.id !== activeCatalogId);
         const nextActiveCatalogId = nextCatalogs[0]?.id ?? null;
@@ -1128,16 +1106,23 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
             </AnimatePresence>
 
             {!isCreateMode && activeCatalog ? (
-              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-4">
-                {([
-                  { label: "Catalog ID", value: activeCatalog.externalCatalogId || "—", mono: true },
-                  { label: "Products", value: activeCatalog.productCount.toLocaleString(), mono: false },
-                  { label: "Feeds", value: String(activeCatalog.feedCount), mono: false },
-                  { label: "Vertical", value: PRODUCT_CATALOG_VERTICAL_LABELS[activeCatalog.vertical], mono: false },
-                ] as const).map(({ label, value, mono }) => (
+              <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/[0.06] bg-white/[0.06] sm:grid-cols-6">
+                {[
+                  { label: "Products", value: activeCatalog.productCount.toLocaleString() },
+                  { label: "Feeds", value: String(activeCatalog.feedCount) },
+                  { label: "Product Sets", value: String(activeCatalog.productSetCount) },
+                  { label: "Vertical", value: PRODUCT_CATALOG_VERTICAL_LABELS[activeCatalog.vertical] },
+                  { label: "Status", value: PRODUCT_CATALOG_SYNC_STATUS_LABELS[activeCatalog.syncStatus] },
+                  {
+                    label: "Last Synced",
+                    value: activeCatalog.lastSyncedAt
+                      ? new Date(activeCatalog.lastSyncedAt).toLocaleDateString()
+                      : "Never",
+                  },
+                ].map(({ label, value }) => (
                   <div key={label} className="bg-background/60 px-3 py-2.5">
                     <div className="text-[10px] font-semibold uppercase tracking-widest text-white/30">{label}</div>
-                    <div className={`mt-0.5 truncate text-xs text-white/75 ${mono ? "font-mono" : ""}`}>{value}</div>
+                    <div className="mt-0.5 truncate text-xs text-white/75">{value}</div>
                   </div>
                 ))}
               </div>
@@ -1303,20 +1288,6 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       {form.formState.errors.fallbackImageUrl ? <Text size="1" color="red">{form.formState.errors.fallbackImageUrl.message}</Text> : null}
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    {([
-                      { id: "catalog-data-feed-enabled", field: "dataFeedEnabled" as const, label: "Data Feed Enabled", description: "Enable feed ingestion for this catalog" },
-                      { id: "catalog-tagging-enabled", field: "productTaggingEnabled" as const, label: "Product Tagging", description: "Use products for ad-level tagging and metrics" },
-                    ]).map(({ id, field, label, description }) => (
-                      <label key={id} htmlFor={id} className="flex flex-1 cursor-pointer items-start gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-colors hover:bg-white/[0.04]">
-                        <Checkbox id={id} checked={form.watch(field)} onCheckedChange={(checked) => form.setValue(field, checked === true, { shouldDirty: true })} className="mt-0.5" />
-                        <div>
-                          <div className="text-xs font-medium text-white">{label}</div>
-                          <div className="text-[11px] text-muted-foreground">{description}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
                 </div>
               ) : null}
 
@@ -1384,36 +1355,32 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                 </div>
               ) : null}
 
-              {/* Status — edit only */}
+              {/* Notes — edit only */}
               {!isCreateMode ? (
-                <div className="space-y-4">
-                  <SectionDivider label="Status" />
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="catalog-sync-status">Sync Status</Label>
-                      <Select
-                        value={form.watch("syncStatus")}
-                        onValueChange={(value) => form.setValue("syncStatus", value as ProductCatalogFormValues["syncStatus"], { shouldDirty: true })}
-                      >
-                        <SelectTrigger id="catalog-sync-status" className="w-full"><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PRODUCT_CATALOG_SYNC_STATUS_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="catalog-last-sync">Last Synced</Label>
-                      <Input id="catalog-last-sync" type="datetime-local" {...form.register("lastSyncedAtLocal")} />
-                    </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <Label htmlFor="catalog-notes">Notes</Label>
-                      <Textarea id="catalog-notes" rows={3} placeholder="Feed caveats, validation notes, product set details…" {...form.register("notes")} />
-                    </div>
-                  </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="catalog-notes">Notes</Label>
+                  <Textarea id="catalog-notes" rows={2} placeholder="Feed caveats, validation notes, product set details…" {...form.register("notes")} />
                 </div>
               ) : null}
+
+              {/* Destructive delete confirmation */}
+              <AnimatePresence initial={false}>
+                {deleteArmed && activeCatalog ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: shouldReduceMotion ? 0 : -4 }}
+                    transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: MOTION_EASE }}
+                  >
+                    <Callout.Root color="red" variant="surface" size="1">
+                      <Callout.Icon><AlertTriangle className="h-3.5 w-3.5" /></Callout.Icon>
+                      <Callout.Text>
+                        <strong>{activeCatalog.name}</strong> will be permanently removed from Continuum and Meta. This cannot be undone.
+                      </Callout.Text>
+                    </Callout.Root>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
 
               {/* Form actions */}
               <div className="flex items-center justify-between pt-1">
@@ -1434,7 +1401,7 @@ export function ProductCatalogManagerPrimitive({ brandId }: ProductCatalogManage
                       className="cursor-pointer gap-1.5"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      {isDeleting ? "Deleting…" : deleteArmed ? "Confirm Delete" : "Delete"}
+                      {isDeleting ? "Deleting…" : deleteArmed ? "Confirm" : "Delete"}
                     </Button>
                   ) : null}
                   <Button

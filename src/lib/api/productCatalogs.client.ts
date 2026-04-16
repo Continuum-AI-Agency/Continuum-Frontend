@@ -53,9 +53,17 @@ export async function updateProductCatalog(
   return response.catalog;
 }
 
-export async function deleteProductCatalog(catalogId: string): Promise<void> {
+export async function deleteProductCatalog(
+  catalogId: string,
+  options?: { brandId?: string; metaAccountId?: string }
+): Promise<void> {
+  const params = new URLSearchParams();
+  if (options?.brandId) params.set("brandId", options.brandId);
+  if (options?.metaAccountId) params.set("metaAccountId", options.metaAccountId);
+  const query = params.toString();
+
   await http.request({
-    path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}`,
+    path: `/api/paid-media/product-catalogs/${encodeURIComponent(catalogId)}${query ? `?${query}` : ""}`,
     method: "DELETE",
     cache: "no-store",
   });
