@@ -140,6 +140,77 @@ function formatDetailValue(key: string, value: unknown): string {
   return String(value);
 }
 
+function isVideoUrl(url: string): boolean {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return pathname.endsWith(".mp4") || pathname.endsWith(".mov") || pathname.endsWith(".webm");
+  } catch {
+    return false;
+  }
+}
+
+function CreativeSwapComparison({ originalUrl, newUrl }: { originalUrl: string; newUrl: string }) {
+  return (
+    <Box>
+      <Text size="1" color="gray" weight="medium" className="uppercase tracking-wider mb-2 block">
+        Creative Comparison
+      </Text>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <div className="mb-1.5 flex items-center gap-2">
+            <ShadcnBadge variant="outline">Original</ShadcnBadge>
+          </div>
+          <div className="overflow-hidden rounded-md border bg-[var(--gray-2)]">
+            <div className="relative aspect-[16/9]">
+              {isVideoUrl(originalUrl) ? (
+                <video
+                  src={originalUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <img
+                  src={originalUrl}
+                  alt="Original creative"
+                  className="h-full w-full object-contain"
+                  loading="lazy"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        <div>
+          <div className="mb-1.5 flex items-center gap-2">
+            <ShadcnBadge variant="default">New</ShadcnBadge>
+          </div>
+          <div className="overflow-hidden rounded-md border bg-[var(--gray-2)]">
+            <div className="relative aspect-[16/9]">
+              {isVideoUrl(newUrl) ? (
+                <video
+                  src={newUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <img
+                  src={newUrl}
+                  alt="New creative"
+                  className="h-full w-full object-contain"
+                  loading="lazy"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </Box>
+  );
+}
+
 function DetailSection({ data, label }: { data: Record<string, unknown> | null; label: string }) {
   if (!data || Object.keys(data).length === 0) return null;
 
@@ -167,6 +238,11 @@ function DetailSection({ data, label }: { data: Record<string, unknown> | null; 
 }
 
 function ActionItemContent({ log }: { log: ActionLog }) {
+    const isCreativeSwap =
+      log.actionType === "SWITCH_CREATIVE" &&
+      typeof log.actionPayload?.original_creative_url === "string" &&
+      typeof log.actionPayload?.new_creative_url === "string";
+
     return (
         <Flex direction="column" gap="4" pt="2">
           {log.decisionNote && (
@@ -179,7 +255,14 @@ function ActionItemContent({ log }: { log: ActionLog }) {
               </div>
             </Box>
           )}
-          
+
+          {isCreativeSwap && (
+            <CreativeSwapComparison
+              originalUrl={log.actionPayload.original_creative_url as string}
+              newUrl={log.actionPayload.new_creative_url as string}
+            />
+          )}
+
           <div className="grid gap-4 md:grid-cols-2">
             <DetailSection data={log.paramsChanged} label="Parameters Changed" />
             <DetailSection data={log.actionPayload} label="Action Payload" />
