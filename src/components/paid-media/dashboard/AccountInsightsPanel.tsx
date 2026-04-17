@@ -128,45 +128,47 @@ export function AccountInsightsPanel({
       </CardHeader>
 
       <CardContent className="p-3">
-        {isLoading && !hasAnyInsights ? (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {CATEGORY_CONFIG.map((cat) => (
-              <div
-                key={cat.key}
-                className="rounded-lg border border-border/70 bg-card p-3"
-              >
-                <div className="mb-2.5 flex items-center gap-2">
-                  <Skeleton className="size-7 rounded-md" />
-                  <Skeleton className="h-4 w-24" />
+        <div className="max-h-[clamp(360px,64svh,720px)] overflow-y-auto">
+          {isLoading && !hasAnyInsights ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {CATEGORY_CONFIG.map((cat) => (
+                <div
+                  key={cat.key}
+                  className="rounded-lg border border-border/70 bg-card p-3"
+                >
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <Skeleton className="size-7 rounded-md" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-4/5" />
+                    <Skeleton className="h-3 w-3/5" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-4/5" />
-                  <Skeleton className="h-3 w-3/5" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : error ? (
-          <p className="py-4 text-center text-xs text-destructive">{error}</p>
-        ) : !hasAnyInsights ? (
-          <p className="py-4 text-center text-xs text-muted-foreground">
-            No insights available for the selected date range. Insights appear
-            when there is enough breakdown data to identify patterns.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {CATEGORY_CONFIG.map((cat) => (
-              <InsightCategoryCard
-                key={cat.key}
-                title={cat.title}
-                icon={cat.icon}
-                insights={grouped[cat.key]}
-                accentColor={cat.accent}
-              />
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          ) : error ? (
+            <p className="py-4 text-center text-xs text-destructive">{error}</p>
+          ) : !hasAnyInsights ? (
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              No insights available for the selected date range. Insights appear
+              when there is enough breakdown data to identify patterns.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {CATEGORY_CONFIG.map((cat) => (
+                <InsightCategoryCard
+                  key={cat.key}
+                  title={cat.title}
+                  icon={cat.icon}
+                  insights={grouped[cat.key]}
+                  accentColor={cat.accent}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

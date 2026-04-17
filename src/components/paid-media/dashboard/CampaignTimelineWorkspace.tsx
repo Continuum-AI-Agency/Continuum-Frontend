@@ -743,7 +743,7 @@ function EntityRadarTooltip({ label, comparison, isDcoEnabled, dcoDeltas }: Enti
     <TooltipContent className="w-[320px] border-border/70 bg-background/95 p-3" side="top" align="start">
       <div className="mb-2 text-xs font-medium text-foreground">{label} KPI Delta Radar</div>
       <div className="grid gap-2 md:grid-cols-[1fr_1fr]">
-        <ChartContainer config={radarConfig} className="h-[170px] w-full">
+        <ChartContainer config={radarConfig} className="h-[clamp(140px,22svh,220px)] w-full">
           <RadarChart data={radarData} outerRadius={60}>
             <PolarGrid />
             <PolarAngleAxis dataKey="kpi" tick={{ fontSize: 10 }} />
@@ -2121,7 +2121,7 @@ export function CampaignTimelineWorkspace({
 
         </CardHeader>
 
-        <CardContent className="grid min-h-[72vh] grid-cols-1 gap-2 overflow-hidden p-2.5 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <CardContent className="grid min-h-[clamp(480px,72svh,900px)] grid-cols-1 gap-2 overflow-hidden p-2.5 xl:grid-cols-[minmax(0,1fr)_300px]">
           <div className="flex min-h-0 flex-col gap-2 overflow-hidden">
           <div className="rounded-md border bg-card p-2.5">
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -2236,7 +2236,7 @@ export function CampaignTimelineWorkspace({
                   </div>
                 </div>
 
-                <div className="h-[228px]">
+                <div className="h-[clamp(180px,28svh,280px)]">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={topChartModel.data} margin={{ top: 8, right: 8, left: 2, bottom: 0 }}>
                       <defs>

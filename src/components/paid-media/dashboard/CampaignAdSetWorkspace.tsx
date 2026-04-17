@@ -204,9 +204,9 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   clicks: "#84cc16",
 };
 
-const CHART_HEIGHT_CLASS = "h-[clamp(220px,40vh,340px)]";
-const RAIL_HEIGHT_CLASS = "h-[clamp(320px,58vh,470px)]";
-const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(280px,54vh,440px)]";
+const CHART_HEIGHT_CLASS = "h-[clamp(200px,36svh,340px)]";
+const RAIL_HEIGHT_CLASS = "h-[clamp(280px,52svh,470px)]";
+const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(240px,48svh,440px)]";
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
 
 function formatCurrency(value: number): string {

@@ -367,8 +367,8 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           </Flex>
         </Flex>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="relative h-[400px] sm:h-[500px] xl:h-[600px] overflow-hidden rounded-lg border border-subtle">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="relative h-[clamp(320px,56svh,600px)] overflow-hidden rounded-lg border border-subtle">
             {renderPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
                 <Text size="2" color="gray">
@@ -446,7 +446,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
             </div>
 
             {mode === "country" && cityPoints.length > 0 ? (
-              <div className="pointer-events-none absolute right-3 top-3 rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur">
+              <div className="pointer-events-none absolute right-3 top-3 hidden rounded-lg border border-subtle bg-white/85 px-2 py-1.5 shadow-sm backdrop-blur sm:block">
                 <Text size="1" color="gray">
                   {autoCityMode
                     ? selectedCountryCode
@@ -460,7 +460,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
 
           <div className="rounded-lg border border-subtle bg-white/70 p-3">
             <Heading size="2" mb="2">Top {viewMode === "country" ? "countries" : "cities"}</Heading>
-            <div className="space-y-2">
+            <div className="max-h-[clamp(180px,40svh,360px)] space-y-2 overflow-y-auto pr-1">
               {topEntries.length === 0 ? (
                 <Text size="2" color="gray">No entries available.</Text>
               ) : (
