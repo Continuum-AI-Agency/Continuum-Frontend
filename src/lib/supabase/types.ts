@@ -12,6 +12,294 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  brand_integrations: {
+    Tables: {
+      google_ad_accounts: {
+        Row: {
+          brand_integration_id: string
+          currency_code: string | null
+          customer_id: string
+          descriptive_name: string | null
+          id: string
+          raw_profile: Json | null
+          synced_at: string | null
+          time_zone: string | null
+        }
+        Insert: {
+          brand_integration_id: string
+          currency_code?: string | null
+          customer_id: string
+          descriptive_name?: string | null
+          id?: string
+          raw_profile?: Json | null
+          synced_at?: string | null
+          time_zone?: string | null
+        }
+        Update: {
+          brand_integration_id?: string
+          currency_code?: string | null
+          customer_id?: string
+          descriptive_name?: string | null
+          id?: string
+          raw_profile?: Json | null
+          synced_at?: string | null
+          time_zone?: string | null
+        }
+        Relationships: []
+      }
+      google_dv360_advertisers: {
+        Row: {
+          advertiser_id: string
+          brand_integration_id: string
+          display_name: string | null
+          id: string
+          partner_id: string | null
+          raw_profile: Json | null
+          synced_at: string | null
+        }
+        Insert: {
+          advertiser_id: string
+          brand_integration_id: string
+          display_name?: string | null
+          id?: string
+          partner_id?: string | null
+          raw_profile?: Json | null
+          synced_at?: string | null
+        }
+        Update: {
+          advertiser_id?: string
+          brand_integration_id?: string
+          display_name?: string | null
+          id?: string
+          partner_id?: string | null
+          raw_profile?: Json | null
+          synced_at?: string | null
+        }
+        Relationships: []
+      }
+      google_youtube_channels: {
+        Row: {
+          brand_integration_id: string
+          channel_id: string
+          id: string
+          raw_profile: Json | null
+          synced_at: string | null
+          title: string | null
+        }
+        Insert: {
+          brand_integration_id: string
+          channel_id: string
+          id?: string
+          raw_profile?: Json | null
+          synced_at?: string | null
+          title?: string | null
+        }
+        Update: {
+          brand_integration_id?: string
+          channel_id?: string
+          id?: string
+          raw_profile?: Json | null
+          synced_at?: string | null
+          title?: string | null
+        }
+        Relationships: []
+      }
+      integration_assets: {
+        Row: {
+          brand_integration_id: string
+          provider: string
+          snapshot: Json
+          synced_at: string
+        }
+        Insert: {
+          brand_integration_id: string
+          provider: string
+          snapshot?: Json
+          synced_at?: string
+        }
+        Update: {
+          brand_integration_id?: string
+          provider?: string
+          snapshot?: Json
+          synced_at?: string
+        }
+        Relationships: []
+      }
+      meta_ad_accounts: {
+        Row: {
+          ad_account_id: string
+          ad_account_id_prefixed: string | null
+          brand_integration_id: string
+          business_id: string | null
+          id: string
+          is_business: boolean | null
+          name: string | null
+          permissions: Json | null
+          raw_profile: Json | null
+          synced_at: string | null
+        }
+        Insert: {
+          ad_account_id: string
+          ad_account_id_prefixed?: string | null
+          brand_integration_id: string
+          business_id?: string | null
+          id?: string
+          is_business?: boolean | null
+          name?: string | null
+          permissions?: Json | null
+          raw_profile?: Json | null
+          synced_at?: string | null
+        }
+        Update: {
+          ad_account_id?: string
+          ad_account_id_prefixed?: string | null
+          brand_integration_id?: string
+          business_id?: string | null
+          id?: string
+          is_business?: boolean | null
+          name?: string | null
+          permissions?: Json | null
+          raw_profile?: Json | null
+          synced_at?: string | null
+        }
+        Relationships: []
+      }
+      meta_businesses: {
+        Row: {
+          brand_integration_id: string
+          business_id: string
+          id: string
+          name: string | null
+          raw_profile: Json | null
+        }
+        Insert: {
+          brand_integration_id: string
+          business_id: string
+          id?: string
+          name?: string | null
+          raw_profile?: Json | null
+        }
+        Update: {
+          brand_integration_id?: string
+          business_id?: string
+          id?: string
+          name?: string | null
+          raw_profile?: Json | null
+        }
+        Relationships: []
+      }
+      meta_instagram_accounts: {
+        Row: {
+          ad_account_id: string | null
+          brand_integration_id: string
+          business_id: string | null
+          id: string
+          ig_id: string
+          raw_profile: Json | null
+          username: string | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          brand_integration_id: string
+          business_id?: string | null
+          id?: string
+          ig_id: string
+          raw_profile?: Json | null
+          username?: string | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          brand_integration_id?: string
+          business_id?: string | null
+          id?: string
+          ig_id?: string
+          raw_profile?: Json | null
+          username?: string | null
+        }
+        Relationships: []
+      }
+      meta_pages: {
+        Row: {
+          ad_account_id: string | null
+          brand_integration_id: string
+          business_id: string | null
+          id: string
+          name: string | null
+          page_id: string
+          raw_profile: Json | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          brand_integration_id: string
+          business_id?: string | null
+          id?: string
+          name?: string | null
+          page_id: string
+          raw_profile?: Json | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          brand_integration_id?: string
+          business_id?: string | null
+          id?: string
+          name?: string | null
+          page_id?: string
+          raw_profile?: Json | null
+        }
+        Relationships: []
+      }
+      meta_threads_accounts: {
+        Row: {
+          ad_account_id: string | null
+          brand_integration_id: string
+          business_id: string | null
+          id: string
+          raw_profile: Json | null
+          threads_user_id: string
+          username: string | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          brand_integration_id: string
+          business_id?: string | null
+          id?: string
+          raw_profile?: Json | null
+          threads_user_id: string
+          username?: string | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          brand_integration_id?: string
+          business_id?: string | null
+          id?: string
+          raw_profile?: Json | null
+          threads_user_id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      set_integration_snapshot: {
+        Args: {
+          p_brand_integration_id: string
+          p_provider: string
+          p_snapshot: Json
+          p_synced_at?: string
+        }
+        Returns: undefined
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   brand_profiles: {
     Tables: {
       agent_sessions: {
@@ -853,417 +1141,6 @@ export type Database = {
         }
         Relationships: []
       }
-      jaina_conversation_messages: {
-        Row: {
-          ad_account_id: string | null
-          brand_id: string | null
-          content: string
-          created_at: string
-          id: number
-          role: string
-          session_id: string
-          user_email: string
-        }
-        Insert: {
-          ad_account_id?: string | null
-          brand_id?: string | null
-          content: string
-          created_at?: string
-          id?: never
-          role: string
-          session_id: string
-          user_email: string
-        }
-        Update: {
-          ad_account_id?: string | null
-          brand_id?: string | null
-          content?: string
-          created_at?: string
-          id?: never
-          role?: string
-          session_id?: string
-          user_email?: string
-        }
-        Relationships: []
-      }
-      jaina_conversation_run_events: {
-        Row: {
-          created_at: string
-          event_type: string
-          id: number
-          payload: Json
-          run_id: string
-          user_email: string
-        }
-        Insert: {
-          created_at?: string
-          event_type: string
-          id?: never
-          payload?: Json
-          run_id: string
-          user_email: string
-        }
-        Update: {
-          created_at?: string
-          event_type?: string
-          id?: never
-          payload?: Json
-          run_id?: string
-          user_email?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "jaina_conversation_run_events_run_id_fkey"
-            columns: ["run_id"]
-            isOneToOne: false
-            referencedRelation: "jaina_conversation_runs"
-            referencedColumns: ["run_id"]
-          },
-        ]
-      }
-      jaina_conversation_runs: {
-        Row: {
-          ad_account_id: string | null
-          brand_id: string | null
-          completed_at: string | null
-          created_at: string
-          error_message: string | null
-          id: number
-          query: string | null
-          result_payload: Json | null
-          result_type: string | null
-          run_id: string
-          session_id: string
-          started_at: string | null
-          status: string
-          updated_at: string
-          user_email: string
-        }
-        Insert: {
-          ad_account_id?: string | null
-          brand_id?: string | null
-          completed_at?: string | null
-          created_at?: string
-          error_message?: string | null
-          id?: never
-          query?: string | null
-          result_payload?: Json | null
-          result_type?: string | null
-          run_id: string
-          session_id: string
-          started_at?: string | null
-          status: string
-          updated_at?: string
-          user_email: string
-        }
-        Update: {
-          ad_account_id?: string | null
-          brand_id?: string | null
-          completed_at?: string | null
-          created_at?: string
-          error_message?: string | null
-          id?: never
-          query?: string | null
-          result_payload?: Json | null
-          result_type?: string | null
-          run_id?: string
-          session_id?: string
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-          user_email?: string
-        }
-        Relationships: []
-      }
-      jaina_conversation_sessions: {
-        Row: {
-          ad_account_id: string | null
-          brand_id: string | null
-          conversation_title: string | null
-          created_at: string
-          id: number
-          last_message_at: string | null
-          last_message_preview: string | null
-          last_message_role: string | null
-          session_id: string
-          updated_at: string
-          user_email: string
-        }
-        Insert: {
-          ad_account_id?: string | null
-          brand_id?: string | null
-          conversation_title?: string | null
-          created_at?: string
-          id?: never
-          last_message_at?: string | null
-          last_message_preview?: string | null
-          last_message_role?: string | null
-          session_id: string
-          updated_at?: string
-          user_email: string
-        }
-        Update: {
-          ad_account_id?: string | null
-          brand_id?: string | null
-          conversation_title?: string | null
-          created_at?: string
-          id?: never
-          last_message_at?: string | null
-          last_message_preview?: string | null
-          last_message_role?: string | null
-          session_id?: string
-          updated_at?: string
-          user_email?: string
-        }
-        Relationships: []
-      }
-      organic_calendar_drafts: {
-        Row: {
-          brand_id: string
-          created_at: string
-          id: string
-          platform_account_id: string
-          position: Json | null
-          published_at: string | null
-          scheduled_date: string | null
-          slot_data: Json
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          brand_id: string
-          created_at?: string
-          id?: string
-          platform_account_id: string
-          position?: Json | null
-          published_at?: string | null
-          scheduled_date?: string | null
-          slot_data: Json
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          brand_id?: string
-          created_at?: string
-          id?: string
-          platform_account_id?: string
-          position?: Json | null
-          published_at?: string | null
-          scheduled_date?: string | null
-          slot_data?: Json
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "organic_calendar_drafts_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      organic_chat_messages: {
-        Row: {
-          brand_id: string
-          content: string
-          created_at: string
-          id: number
-          role: string
-          session_id: string
-          user_id: string
-        }
-        Insert: {
-          brand_id: string
-          content: string
-          created_at?: string
-          id?: never
-          role: string
-          session_id: string
-          user_id: string
-        }
-        Update: {
-          brand_id?: string
-          content?: string
-          created_at?: string
-          id?: never
-          role?: string
-          session_id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      organic_chat_sessions: {
-        Row: {
-          brand_id: string
-          created_at: string
-          id: number
-          last_message_at: string | null
-          last_message_preview: string | null
-          last_message_role: string | null
-          session_id: string
-          timezone: string
-          title: string | null
-          updated_at: string
-          user_id: string
-          week_start: string | null
-        }
-        Insert: {
-          brand_id: string
-          created_at?: string
-          id?: never
-          last_message_at?: string | null
-          last_message_preview?: string | null
-          last_message_role?: string | null
-          session_id: string
-          timezone?: string
-          title?: string | null
-          updated_at?: string
-          user_id: string
-          week_start?: string | null
-        }
-        Update: {
-          brand_id?: string
-          created_at?: string
-          id?: never
-          last_message_at?: string | null
-          last_message_preview?: string | null
-          last_message_role?: string | null
-          session_id?: string
-          timezone?: string
-          title?: string | null
-          updated_at?: string
-          user_id?: string
-          week_start?: string | null
-        }
-        Relationships: []
-      }
-      organic_content_plans: {
-        Row: {
-          brand_id: string
-          created_at: string
-          guidance: string | null
-          id: string
-          placements: Json
-          platform_account_ids: Json
-          run_idempotency_key: string | null
-          session_id: string
-          status: string
-          timezone: string
-          updated_at: string
-          user_id: string
-          week_start: string
-        }
-        Insert: {
-          brand_id: string
-          created_at?: string
-          guidance?: string | null
-          id?: string
-          placements?: Json
-          platform_account_ids?: Json
-          run_idempotency_key?: string | null
-          session_id: string
-          status?: string
-          timezone?: string
-          updated_at?: string
-          user_id: string
-          week_start: string
-        }
-        Update: {
-          brand_id?: string
-          created_at?: string
-          guidance?: string | null
-          id?: string
-          placements?: Json
-          platform_account_ids?: Json
-          run_idempotency_key?: string | null
-          session_id?: string
-          status?: string
-          timezone?: string
-          updated_at?: string
-          user_id?: string
-          week_start?: string
-        }
-        Relationships: []
-      }
-      organic_whatsapp_brands: {
-        Row: {
-          brand_id: string
-          created_at: string
-          display_name: string | null
-          id: string
-          updated_at: string
-          user_id: string
-          wa_id: string
-        }
-        Insert: {
-          brand_id: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          updated_at?: string
-          user_id: string
-          wa_id: string
-        }
-        Update: {
-          brand_id?: string
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          updated_at?: string
-          user_id?: string
-          wa_id?: string
-        }
-        Relationships: []
-      }
-      paid_media_ad_objects: {
-        Row: {
-          brand_id: string
-          created_at: string
-          external_object_id: string
-          id: string
-          name: string | null
-          object_type: string
-          platform: string
-          status: string | null
-          updated_at: string
-        }
-        Insert: {
-          brand_id: string
-          created_at?: string
-          external_object_id: string
-          id?: string
-          name?: string | null
-          object_type: string
-          platform: string
-          status?: string | null
-          updated_at?: string
-        }
-        Update: {
-          brand_id?: string
-          created_at?: string
-          external_object_id?: string
-          id?: string
-          name?: string | null
-          object_type?: string
-          platform?: string
-          status?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "paid_media_ad_objects_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       paid_media_campaign_indexes: {
         Row: {
           brand_id: string
@@ -1298,312 +1175,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "paid_media_campaign_indexes_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      paid_media_catalog_products: {
-        Row: {
-          availability: string
-          brand_id: string
-          catalog_id: string
-          created_at: string
-          currency: string | null
-          external_product_id: string
-          id: string
-          image_url: string | null
-          product_url: string | null
-          title: string
-          updated_at: string
-        }
-        Insert: {
-          availability?: string
-          brand_id: string
-          catalog_id: string
-          created_at?: string
-          currency?: string | null
-          external_product_id: string
-          id?: string
-          image_url?: string | null
-          product_url?: string | null
-          title: string
-          updated_at?: string
-        }
-        Update: {
-          availability?: string
-          brand_id?: string
-          catalog_id?: string
-          created_at?: string
-          currency?: string | null
-          external_product_id?: string
-          id?: string
-          image_url?: string | null
-          product_url?: string | null
-          title?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "paid_media_catalog_products_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_catalog_products_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_product_catalogs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      paid_media_product_ad_activity: {
-        Row: {
-          active_from: string | null
-          active_to: string | null
-          ad_object_id: string
-          brand_id: string
-          catalog_id: string
-          created_at: string
-          first_seen_at: string
-          id: string
-          is_active: boolean
-          last_seen_at: string
-          product_id: string
-          source: string
-          sync_job_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          active_from?: string | null
-          active_to?: string | null
-          ad_object_id: string
-          brand_id: string
-          catalog_id: string
-          created_at?: string
-          first_seen_at?: string
-          id?: string
-          is_active?: boolean
-          last_seen_at?: string
-          product_id: string
-          source?: string
-          sync_job_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          active_from?: string | null
-          active_to?: string | null
-          ad_object_id?: string
-          brand_id?: string
-          catalog_id?: string
-          created_at?: string
-          first_seen_at?: string
-          id?: string
-          is_active?: boolean
-          last_seen_at?: string
-          product_id?: string
-          source?: string
-          sync_job_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "paid_media_product_ad_activity_ad_object_id_fkey"
-            columns: ["ad_object_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_ad_objects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_product_ad_activity_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_product_ad_activity_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_product_catalogs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_product_ad_activity_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_catalog_products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      paid_media_product_catalog_links: {
-        Row: {
-          active_from: string | null
-          active_to: string | null
-          ad_object_id: string
-          brand_id: string
-          catalog_id: string
-          created_at: string
-          first_seen_at: string | null
-          id: string
-          is_active: boolean
-          last_seen_at: string | null
-          product_id: string
-          source: string | null
-          sync_job_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          active_from?: string | null
-          active_to?: string | null
-          ad_object_id: string
-          brand_id: string
-          catalog_id: string
-          created_at?: string
-          first_seen_at?: string | null
-          id?: string
-          is_active?: boolean
-          last_seen_at?: string | null
-          product_id: string
-          source?: string | null
-          sync_job_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          active_from?: string | null
-          active_to?: string | null
-          ad_object_id?: string
-          brand_id?: string
-          catalog_id?: string
-          created_at?: string
-          first_seen_at?: string | null
-          id?: string
-          is_active?: boolean
-          last_seen_at?: string | null
-          product_id?: string
-          source?: string | null
-          sync_job_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "paid_media_product_catalog_links_ad_object_id_fkey"
-            columns: ["ad_object_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_ad_objects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_product_catalog_links_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_product_catalog_links_catalog_id_fkey"
-            columns: ["catalog_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_product_catalogs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "paid_media_product_catalog_links_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "paid_media_catalog_products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      paid_media_product_catalogs: {
-        Row: {
-          brand_id: string
-          business_id: string | null
-          catalog_store_id: string | null
-          config: Json
-          created_at: string
-          currency: string | null
-          data_feed_enabled: boolean
-          default_image_url: string | null
-          external_catalog_id: string | null
-          fallback_image_url: string | null
-          feed_count: number
-          feed_url: string | null
-          id: string
-          last_synced_at: string | null
-          linked_ad_object_ids: string[]
-          linked_ad_object_level: string
-          name: string
-          notes: string | null
-          product_count: number
-          product_set_count: number
-          product_tagging_enabled: boolean
-          sync_status: string
-          updated_at: string
-          vertical: string
-        }
-        Insert: {
-          brand_id: string
-          business_id?: string | null
-          catalog_store_id?: string | null
-          config?: Json
-          created_at?: string
-          currency?: string | null
-          data_feed_enabled?: boolean
-          default_image_url?: string | null
-          external_catalog_id?: string | null
-          fallback_image_url?: string | null
-          feed_count?: number
-          feed_url?: string | null
-          id?: string
-          last_synced_at?: string | null
-          linked_ad_object_ids?: string[]
-          linked_ad_object_level?: string
-          name: string
-          notes?: string | null
-          product_count?: number
-          product_set_count?: number
-          product_tagging_enabled?: boolean
-          sync_status?: string
-          updated_at?: string
-          vertical?: string
-        }
-        Update: {
-          brand_id?: string
-          business_id?: string | null
-          catalog_store_id?: string | null
-          config?: Json
-          created_at?: string
-          currency?: string | null
-          data_feed_enabled?: boolean
-          default_image_url?: string | null
-          external_catalog_id?: string | null
-          fallback_image_url?: string | null
-          feed_count?: number
-          feed_url?: string | null
-          id?: string
-          last_synced_at?: string | null
-          linked_ad_object_ids?: string[]
-          linked_ad_object_level?: string
-          name?: string
-          notes?: string | null
-          product_count?: number
-          product_set_count?: number
-          product_tagging_enabled?: boolean
-          sync_status?: string
-          updated_at?: string
-          vertical?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "paid_media_product_catalogs_brand_id_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
@@ -1736,6 +1307,1865 @@ export type Database = {
         }
         Relationships: []
       }
+      user_brand_preferences: {
+        Row: {
+          active_brand_id: string
+          created_at: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_brand_id: string
+          created_at?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_brand_id?: string
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_brand_preferences_active_brand_id_fkey"
+            columns: ["active_brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_integrations: {
+        Row: {
+          access_token_encrypted: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          metadata: Json
+          platform_email: string | null
+          platform_user_id: string | null
+          platform_user_id_normalized: string | null
+          provider: string
+          refresh_token_encrypted: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          platform_email?: string | null
+          platform_user_id?: string | null
+          platform_user_id_normalized?: string | null
+          provider: string
+          refresh_token_encrypted?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          metadata?: Json
+          platform_email?: string | null
+          platform_user_id?: string | null
+          platform_user_id_normalized?: string | null
+          provider?: string
+          refresh_token_encrypted?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_onboarding_states: {
+        Row: {
+          brand_id: string
+          created_at: string
+          is_active: boolean
+          state: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          is_active?: boolean
+          state: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          is_active?: boolean
+          state?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      jaina_conversation_messages: {
+        Row: {
+          ad_account_id: string | null
+          brand_id: string | null
+          content: string | null
+          created_at: string | null
+          id: number | null
+          role: string | null
+          session_id: string | null
+          user_email: string | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          brand_id?: string | null
+          content?: string | null
+          created_at?: string | null
+          id?: number | null
+          role?: string | null
+          session_id?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          brand_id?: string | null
+          content?: string | null
+          created_at?: string | null
+          id?: number | null
+          role?: string | null
+          session_id?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
+      jaina_conversation_run_events: {
+        Row: {
+          created_at: string | null
+          event_type: string | null
+          id: number | null
+          payload: Json | null
+          run_id: string | null
+          user_email: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type?: string | null
+          id?: number | null
+          payload?: Json | null
+          run_id?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string | null
+          id?: number | null
+          payload?: Json | null
+          run_id?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
+      jaina_conversation_runs: {
+        Row: {
+          ad_account_id: string | null
+          brand_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: number | null
+          query: string | null
+          result_payload: Json | null
+          result_type: string | null
+          run_id: string | null
+          session_id: string | null
+          started_at: string | null
+          status: string | null
+          updated_at: string | null
+          user_email: string | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          brand_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: number | null
+          query?: string | null
+          result_payload?: Json | null
+          result_type?: string | null
+          run_id?: string | null
+          session_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          brand_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: number | null
+          query?: string | null
+          result_payload?: Json | null
+          result_type?: string | null
+          run_id?: string | null
+          session_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
+      jaina_conversation_sessions: {
+        Row: {
+          ad_account_id: string | null
+          brand_id: string | null
+          conversation_title: string | null
+          created_at: string | null
+          id: number | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_role: string | null
+          session_id: string | null
+          updated_at: string | null
+          user_email: string | null
+        }
+        Insert: {
+          ad_account_id?: string | null
+          brand_id?: string | null
+          conversation_title?: string | null
+          created_at?: string | null
+          id?: number | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_role?: string | null
+          session_id?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          ad_account_id?: string | null
+          brand_id?: string | null
+          conversation_title?: string | null
+          created_at?: string | null
+          id?: number | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_role?: string | null
+          session_id?: string | null
+          updated_at?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
+      organic_calendar_drafts: {
+        Row: {
+          brand_id: string | null
+          content_json: Json | null
+          content_plan_id: string | null
+          created_at: string | null
+          id: string | null
+          instagram_post_id: string | null
+          platform_account_id: string | null
+          position: Json | null
+          published_at: string | null
+          scheduled_date: string | null
+          slot_data: Json | null
+          status: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          content_json?: Json | null
+          content_plan_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          instagram_post_id?: string | null
+          platform_account_id?: string | null
+          position?: Json | null
+          published_at?: string | null
+          scheduled_date?: string | null
+          slot_data?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          content_json?: Json | null
+          content_plan_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          instagram_post_id?: string | null
+          platform_account_id?: string | null
+          position?: Json | null
+          published_at?: string | null
+          scheduled_date?: string | null
+          slot_data?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_calendar_drafts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organic_chat_messages: {
+        Row: {
+          brand_id: string | null
+          content: string | null
+          created_at: string | null
+          id: number | null
+          role: string | null
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          content?: string | null
+          created_at?: string | null
+          id?: number | null
+          role?: string | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          content?: string | null
+          created_at?: string | null
+          id?: number | null
+          role?: string | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      organic_chat_sessions: {
+        Row: {
+          brand_id: string | null
+          created_at: string | null
+          id: number | null
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_role: string | null
+          session_id: string | null
+          timezone: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string | null
+          week_start: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string | null
+          id?: number | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_role?: string | null
+          session_id?: string | null
+          timezone?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          week_start?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string | null
+          id?: number | null
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_role?: string | null
+          session_id?: string | null
+          timezone?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          week_start?: string | null
+        }
+        Relationships: []
+      }
+      organic_content_plans: {
+        Row: {
+          brand_id: string | null
+          created_at: string | null
+          guidance: string | null
+          id: string | null
+          placements: Json | null
+          platform_account_ids: Json | null
+          run_idempotency_key: string | null
+          session_id: string | null
+          status: string | null
+          timezone: string | null
+          updated_at: string | null
+          user_id: string | null
+          week_start: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string | null
+          guidance?: string | null
+          id?: string | null
+          placements?: Json | null
+          platform_account_ids?: Json | null
+          run_idempotency_key?: string | null
+          session_id?: string | null
+          status?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          week_start?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string | null
+          guidance?: string | null
+          id?: string | null
+          placements?: Json | null
+          platform_account_ids?: Json | null
+          run_idempotency_key?: string | null
+          session_id?: string | null
+          status?: string | null
+          timezone?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          week_start?: string | null
+        }
+        Relationships: []
+      }
+      organic_draft_sessions: {
+        Row: {
+          backlog_drafts: Json | null
+          brand_profile_id: string | null
+          days: Json | null
+          id: string | null
+          saved_at: string | null
+          user_id: string | null
+          week_start_id: string | null
+        }
+        Insert: {
+          backlog_drafts?: Json | null
+          brand_profile_id?: string | null
+          days?: Json | null
+          id?: string | null
+          saved_at?: string | null
+          user_id?: string | null
+          week_start_id?: string | null
+        }
+        Update: {
+          backlog_drafts?: Json | null
+          brand_profile_id?: string | null
+          days?: Json | null
+          id?: string | null
+          saved_at?: string | null
+          user_id?: string | null
+          week_start_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_draft_sessions_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organic_publish_attempts: {
+        Row: {
+          attempted_at: string | null
+          brand_id: string | null
+          caption_sent: string | null
+          completed_at: string | null
+          draft_id: string | null
+          error_code: string | null
+          error_message: string | null
+          id: number | null
+          ig_user_id: string | null
+          instagram_post_id: string | null
+          media_urls: Json | null
+          post_type: string | null
+          status: string | null
+        }
+        Insert: {
+          attempted_at?: string | null
+          brand_id?: string | null
+          caption_sent?: string | null
+          completed_at?: string | null
+          draft_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: number | null
+          ig_user_id?: string | null
+          instagram_post_id?: string | null
+          media_urls?: Json | null
+          post_type?: string | null
+          status?: string | null
+        }
+        Update: {
+          attempted_at?: string | null
+          brand_id?: string | null
+          caption_sent?: string | null
+          completed_at?: string | null
+          draft_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: number | null
+          ig_user_id?: string | null
+          instagram_post_id?: string | null
+          media_urls?: Json | null
+          post_type?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_publish_attempts_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organic_publish_attempts_post_fk"
+            columns: ["instagram_post_id"]
+            isOneToOne: false
+            referencedRelation: "organic_published_posts"
+            referencedColumns: ["instagram_post_id"]
+          },
+        ]
+      }
+      organic_published_posts: {
+        Row: {
+          brand_id: string | null
+          caption: string | null
+          content_snapshot: Json | null
+          created_at: string | null
+          draft_id: string | null
+          ig_user_id: string | null
+          insights_last_synced_at: string | null
+          instagram_post_id: string | null
+          media_urls: Json | null
+          permalink: string | null
+          post_type: string | null
+          published_at: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          caption?: string | null
+          content_snapshot?: Json | null
+          created_at?: string | null
+          draft_id?: string | null
+          ig_user_id?: string | null
+          insights_last_synced_at?: string | null
+          instagram_post_id?: string | null
+          media_urls?: Json | null
+          permalink?: string | null
+          post_type?: string | null
+          published_at?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          caption?: string | null
+          content_snapshot?: Json | null
+          created_at?: string | null
+          draft_id?: string | null
+          ig_user_id?: string | null
+          insights_last_synced_at?: string | null
+          instagram_post_id?: string | null
+          media_urls?: Json | null
+          permalink?: string | null
+          post_type?: string | null
+          published_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_published_posts_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organic_whatsapp_brands: {
+        Row: {
+          brand_id: string | null
+          created_at: string | null
+          display_name: string | null
+          id: string | null
+          updated_at: string | null
+          user_id: string | null
+          wa_id: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          wa_id?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          wa_id?: string | null
+        }
+        Relationships: []
+      }
+      paid_media_ad_objects: {
+        Row: {
+          brand_id: string | null
+          created_at: string | null
+          external_object_id: string | null
+          id: string | null
+          name: string | null
+          object_type: string | null
+          platform: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string | null
+          external_object_id?: string | null
+          id?: string | null
+          name?: string | null
+          object_type?: string | null
+          platform?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string | null
+          external_object_id?: string | null
+          id?: string | null
+          name?: string | null
+          object_type?: string | null
+          platform?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_ad_objects_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_media_catalog_products: {
+        Row: {
+          availability: string | null
+          brand_id: string | null
+          catalog_id: string | null
+          created_at: string | null
+          currency: string | null
+          external_product_id: string | null
+          id: string | null
+          image_url: string | null
+          product_url: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          availability?: string | null
+          brand_id?: string | null
+          catalog_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          external_product_id?: string | null
+          id?: string | null
+          image_url?: string | null
+          product_url?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          availability?: string | null
+          brand_id?: string | null
+          catalog_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          external_product_id?: string | null
+          id?: string | null
+          image_url?: string | null
+          product_url?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_catalog_products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_catalog_products_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_product_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_media_product_ad_activity: {
+        Row: {
+          active_from: string | null
+          active_to: string | null
+          ad_object_id: string | null
+          brand_id: string | null
+          catalog_id: string | null
+          created_at: string | null
+          first_seen_at: string | null
+          id: string | null
+          is_active: boolean | null
+          last_seen_at: string | null
+          product_id: string | null
+          source: string | null
+          sync_job_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id?: string | null
+          brand_id?: string | null
+          catalog_id?: string | null
+          created_at?: string | null
+          first_seen_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          product_id?: string | null
+          source?: string | null
+          sync_job_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id?: string | null
+          brand_id?: string | null
+          catalog_id?: string | null
+          created_at?: string | null
+          first_seen_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          product_id?: string | null
+          source?: string | null
+          sync_job_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_product_ad_activity_ad_object_id_fkey"
+            columns: ["ad_object_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_ad_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_ad_activity_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_ad_activity_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_product_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_ad_activity_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_media_product_catalog_links: {
+        Row: {
+          active_from: string | null
+          active_to: string | null
+          ad_object_id: string | null
+          brand_id: string | null
+          catalog_id: string | null
+          created_at: string | null
+          first_seen_at: string | null
+          id: string | null
+          is_active: boolean | null
+          last_seen_at: string | null
+          product_id: string | null
+          source: string | null
+          sync_job_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id?: string | null
+          brand_id?: string | null
+          catalog_id?: string | null
+          created_at?: string | null
+          first_seen_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          product_id?: string | null
+          source?: string | null
+          sync_job_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id?: string | null
+          brand_id?: string | null
+          catalog_id?: string | null
+          created_at?: string | null
+          first_seen_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          product_id?: string | null
+          source?: string | null
+          sync_job_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_product_catalog_links_ad_object_id_fkey"
+            columns: ["ad_object_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_ad_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_catalog_links_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_catalog_links_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_product_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_catalog_links_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_media_product_catalogs: {
+        Row: {
+          brand_id: string | null
+          business_id: string | null
+          catalog_store_id: string | null
+          config: Json | null
+          created_at: string | null
+          currency: string | null
+          data_feed_enabled: boolean | null
+          default_image_url: string | null
+          external_catalog_id: string | null
+          fallback_image_url: string | null
+          feed_count: number | null
+          feed_url: string | null
+          id: string | null
+          last_synced_at: string | null
+          linked_ad_object_ids: string[] | null
+          linked_ad_object_level: string | null
+          name: string | null
+          notes: string | null
+          product_count: number | null
+          product_set_count: number | null
+          product_tagging_enabled: boolean | null
+          sync_status: string | null
+          updated_at: string | null
+          vertical: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          business_id?: string | null
+          catalog_store_id?: string | null
+          config?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          data_feed_enabled?: boolean | null
+          default_image_url?: string | null
+          external_catalog_id?: string | null
+          fallback_image_url?: string | null
+          feed_count?: number | null
+          feed_url?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          linked_ad_object_ids?: string[] | null
+          linked_ad_object_level?: string | null
+          name?: string | null
+          notes?: string | null
+          product_count?: number | null
+          product_set_count?: number | null
+          product_tagging_enabled?: boolean | null
+          sync_status?: string | null
+          updated_at?: string | null
+          vertical?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          business_id?: string | null
+          catalog_store_id?: string | null
+          config?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          data_feed_enabled?: boolean | null
+          default_image_url?: string | null
+          external_catalog_id?: string | null
+          fallback_image_url?: string | null
+          feed_count?: number | null
+          feed_url?: string | null
+          id?: string | null
+          last_synced_at?: string | null
+          linked_ad_object_ids?: string[] | null
+          linked_ad_object_level?: string | null
+          name?: string | null
+          notes?: string | null
+          product_count?: number | null
+          product_set_count?: number | null
+          product_tagging_enabled?: boolean | null
+          sync_status?: string | null
+          updated_at?: string | null
+          vertical?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_product_catalogs_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategic_analyses: {
+        Row: {
+          active: boolean | null
+          analysis_embedding: string | null
+          analysis_json: Json | null
+          audience_embedding: string | null
+          audience_embedding_model: string | null
+          audience_embedding_text: string | null
+          brand_id: string | null
+          competition_embedding: string | null
+          competition_embedding_model: string | null
+          competition_embedding_text: string | null
+          created_at: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          pmf_embedding: string | null
+          pmf_embedding_model: string | null
+          pmf_embedding_text: string | null
+          product_summary_embedding: string | null
+          product_summary_embedding_model: string | null
+          product_summary_embedding_text: string | null
+          run_id: string | null
+          summary_markdown: string | null
+          updated_at: string | null
+          voice_embedding: string | null
+          voice_embedding_model: string | null
+          voice_embedding_text: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          analysis_embedding?: string | null
+          analysis_json?: Json | null
+          audience_embedding?: string | null
+          audience_embedding_model?: string | null
+          audience_embedding_text?: string | null
+          brand_id?: string | null
+          competition_embedding?: string | null
+          competition_embedding_model?: string | null
+          competition_embedding_text?: string | null
+          created_at?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          pmf_embedding?: string | null
+          pmf_embedding_model?: string | null
+          pmf_embedding_text?: string | null
+          product_summary_embedding?: string | null
+          product_summary_embedding_model?: string | null
+          product_summary_embedding_text?: string | null
+          run_id?: string | null
+          summary_markdown?: string | null
+          updated_at?: string | null
+          voice_embedding?: string | null
+          voice_embedding_model?: string | null
+          voice_embedding_text?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          analysis_embedding?: string | null
+          analysis_json?: Json | null
+          audience_embedding?: string | null
+          audience_embedding_model?: string | null
+          audience_embedding_text?: string | null
+          brand_id?: string | null
+          competition_embedding?: string | null
+          competition_embedding_model?: string | null
+          competition_embedding_text?: string | null
+          created_at?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          pmf_embedding?: string | null
+          pmf_embedding_model?: string | null
+          pmf_embedding_text?: string | null
+          product_summary_embedding?: string | null
+          product_summary_embedding_model?: string | null
+          product_summary_embedding_text?: string | null
+          run_id?: string | null
+          summary_markdown?: string | null
+          updated_at?: string | null
+          voice_embedding?: string | null
+          voice_embedding_model?: string | null
+          voice_embedding_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategic_analyses_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "strategic_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategic_analysis_embeddings: {
+        Row: {
+          brand_id: string | null
+          created_at: string | null
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          id: string | null
+          label: string | null
+          run_id: string | null
+          section: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          id?: string | null
+          label?: string | null
+          run_id?: string | null
+          section?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          id?: string | null
+          label?: string | null
+          run_id?: string | null
+          section?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategic_analysis_embeddings_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "strategic_analysis_embeddings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "strategic_analysis_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      strategic_analysis_runs: {
+        Row: {
+          brand_id: string | null
+          completed_at: string | null
+          error: Json | null
+          id: string | null
+          phases: Json | null
+          result_ref: string | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          brand_id?: string | null
+          completed_at?: string | null
+          error?: Json | null
+          id?: string | null
+          phases?: Json | null
+          result_ref?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          brand_id?: string | null
+          completed_at?: string | null
+          error?: Json | null
+          id?: string | null
+          phases?: Json | null
+          result_ref?: string | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "strategic_analysis_runs_brand_fk"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Functions: {
+      brand_report_embeddings_match: {
+        Args: {
+          p_brand_profile_id: string
+          p_limit?: number
+          p_max_distance?: number
+          p_query: string
+        }
+        Returns: {
+          brand_report_id: string
+          distance: number
+          embedding_model: string
+          embedding_text: string
+        }[]
+      }
+      cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
+      cleanup_old_chat_messages: { Args: never; Returns: undefined }
+      decrypt_token: { Args: { ct: string }; Returns: string }
+      encrypt_token: { Args: { token: string }; Returns: string }
+      fetch_latest_brand_embedding: {
+        Args: { p_brand_id: string; p_run_id?: string }
+        Returns: {
+          brand_id: string
+          embedding: string
+          embedding_model: string
+          embedding_text: string
+          run_id: string
+          updated_at: string
+        }[]
+      }
+      get_active_brand_id: { Args: never; Returns: string }
+      get_brand_integration_summary: {
+        Args: { p_brand_profile_id: string }
+        Returns: {
+          account_name: string
+          account_status: string
+          account_type: string
+          alias: string
+          assignment_id: string
+          external_account_id: string
+          integration_account_id: string
+          linked_at: string
+          platform_key: string
+          provider_integration_id: string
+          settings: Json
+        }[]
+      }
+      get_brand_timezone: { Args: { brand_id: string }; Returns: string }
+      get_user_integration_summary: {
+        Args: { p_user_id: string }
+        Returns: {
+          asset_id: string
+          asset_name: string
+          asset_status: string
+          asset_type: string
+          created_at: string
+          external_account_id: string
+          platform_key: string
+          provider: string
+        }[]
+      }
+      has_brand_access:
+        | { Args: { brand_id: string }; Returns: boolean }
+        | { Args: { p_brand_id: string; p_user_id: string }; Returns: boolean }
+      is_brand_admin: { Args: { brand_id: string }; Returns: boolean }
+      reporting_cache_get_organic_metrics_cache: {
+        Args: {
+          p_external_account_id: string
+          p_platform: string
+          p_range_since: string
+          p_range_until: string
+          p_request_hash: string
+        }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "organic_metrics_cache"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reporting_cache_get_organic_metrics_cache_range: {
+        Args: {
+          p_external_account_id: string
+          p_platform: string
+          p_range_since: string
+          p_range_until: string
+          p_request_hash: string
+        }
+        Returns: unknown[]
+        SetofOptions: {
+          from: "*"
+          to: "organic_metrics_cache"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reporting_cache_upsert_organic_metrics_cache: {
+        Args: {
+          p_brand_id: string
+          p_comparison: Json
+          p_external_account_id: string
+          p_fetched_at: string
+          p_integration_account_id: string
+          p_metrics: Json
+          p_platform: string
+          p_range_json: Json
+          p_range_preset: string
+          p_range_since: string
+          p_range_until: string
+          p_raw_response: Json
+          p_request_hash: string
+        }
+        Returns: unknown
+        SetofOptions: {
+          from: "*"
+          to: "organic_metrics_cache"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      search_brand_report_embeddings: {
+        Args: {
+          p_brand_id: string
+          p_limit?: number
+          p_query_embedding: string
+        }
+        Returns: {
+          brand_profile_id: string
+          embedding_model: string
+          embedding_text: string
+          id: string
+          similarity: number
+          source_phase: string
+          synced_at: string
+        }[]
+      }
+      search_strategic_analysis_embeddings: {
+        Args: {
+          p_brand_id: string
+          p_limit?: number
+          p_query_embedding: string
+        }
+        Returns: {
+          brand_id: string
+          embedding_model: string
+          embedding_text: string
+          id: string
+          label: string
+          run_id: string
+          section: string
+          similarity: number
+          updated_at: string
+        }[]
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  brand_trends: {
+    Tables: {
+      events: {
+        Row: {
+          analysis_tags: string[]
+          brand_id: string
+          confidence: number | null
+          created_at: string
+          description: string
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          event_date: string | null
+          generation_id: string
+          id: string
+          last_used_at: string | null
+          metadata: Json
+          opportunity: string | null
+          platforms: string[]
+          primary_platform: string | null
+          signal_window_end: string | null
+          signal_window_start: string | null
+          source: string | null
+          source_platform_breakdown: Json
+          source_signal_count: number
+          source_url: string | null
+          times_used: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          analysis_tags?: string[]
+          brand_id: string
+          confidence?: number | null
+          created_at?: string
+          description: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          event_date?: string | null
+          generation_id: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json
+          opportunity?: string | null
+          platforms?: string[]
+          primary_platform?: string | null
+          signal_window_end?: string | null
+          signal_window_start?: string | null
+          source?: string | null
+          source_platform_breakdown?: Json
+          source_signal_count?: number
+          source_url?: string | null
+          times_used?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          analysis_tags?: string[]
+          brand_id?: string
+          confidence?: number | null
+          created_at?: string
+          description?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          event_date?: string | null
+          generation_id?: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json
+          opportunity?: string | null
+          platforms?: string[]
+          primary_platform?: string | null
+          signal_window_end?: string | null
+          signal_window_start?: string | null
+          source?: string | null
+          source_platform_breakdown?: Json
+          source_signal_count?: number
+          source_url?: string | null
+          times_used?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generation_execution_leases: {
+        Row: {
+          created_at: string
+          generation_id: string
+          lease_acquired_at: string
+          lease_expires_at: string
+          lease_owner: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          generation_id: string
+          lease_acquired_at?: string
+          lease_expires_at: string
+          lease_owner: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          generation_id?: string
+          lease_acquired_at?: string
+          lease_expires_at?: string
+          lease_owner?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_execution_leases_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: true
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generation_messages: {
+        Row: {
+          brand_id: string
+          created_at: string
+          event_type: string
+          generation_id: string
+          id: number
+          payload: Json
+          progress_percent: number | null
+          queue_message_id: number | null
+          stage: string | null
+          stage_message: string | null
+          status: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          event_type: string
+          generation_id: string
+          id?: never
+          payload?: Json
+          progress_percent?: number | null
+          queue_message_id?: number | null
+          stage?: string | null
+          stage_message?: string | null
+          status: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          event_type?: string
+          generation_id?: string
+          id?: never
+          payload?: Json
+          progress_percent?: number | null
+          queue_message_id?: number | null
+          stage?: string | null
+          stage_message?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_messages_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generations: {
+        Row: {
+          brand_id: string
+          completed_at: string | null
+          country: string | null
+          created_at: string
+          error: string | null
+          generated_by: string | null
+          id: string
+          idempotency_key: string | null
+          metadata: Json
+          model_version: string | null
+          selected_social_platforms: string[]
+          started_at: string | null
+          status: string
+          total_events: number
+          total_questions: number
+          total_trends: number
+          updated_at: string
+          week_start_date: string
+          workflow_version: string | null
+        }
+        Insert: {
+          brand_id: string
+          completed_at?: string | null
+          country?: string | null
+          created_at?: string
+          error?: string | null
+          generated_by?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          model_version?: string | null
+          selected_social_platforms?: string[]
+          started_at?: string | null
+          status?: string
+          total_events?: number
+          total_questions?: number
+          total_trends?: number
+          updated_at?: string
+          week_start_date: string
+          workflow_version?: string | null
+        }
+        Update: {
+          brand_id?: string
+          completed_at?: string | null
+          country?: string | null
+          created_at?: string
+          error?: string | null
+          generated_by?: string | null
+          id?: string
+          idempotency_key?: string | null
+          metadata?: Json
+          model_version?: string | null
+          selected_social_platforms?: string[]
+          started_at?: string | null
+          status?: string
+          total_events?: number
+          total_questions?: number
+          total_trends?: number
+          updated_at?: string
+          week_start_date?: string
+          workflow_version?: string | null
+        }
+        Relationships: []
+      }
+      insight_sources: {
+        Row: {
+          brand_id: string
+          created_at: string
+          generation_id: string
+          id: string
+          insight_id: string
+          insight_type: string
+          platform: string
+          rationale: string | null
+          raw_signal_id: string
+          relevance_weight: number | null
+          tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          generation_id: string
+          id?: string
+          insight_id: string
+          insight_type: string
+          platform: string
+          rationale?: string | null
+          raw_signal_id: string
+          relevance_weight?: number | null
+          tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          generation_id?: string
+          id?: string
+          insight_id?: string
+          insight_type?: string
+          platform?: string
+          rationale?: string | null
+          raw_signal_id?: string
+          relevance_weight?: number | null
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insight_sources_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insight_sources_raw_signal_id_fkey"
+            columns: ["raw_signal_id"]
+            isOneToOne: false
+            referencedRelation: "raw_signals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questions: {
+        Row: {
+          analysis_tags: string[]
+          brand_id: string
+          confidence: number | null
+          content_type_suggestion: string | null
+          created_at: string
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          generation_id: string
+          id: string
+          last_used_at: string | null
+          metadata: Json
+          niche: string
+          question_text: string
+          social_platform: string | null
+          social_platforms: string[]
+          source_platform_breakdown: Json
+          source_signal_count: number
+          times_used: number
+          updated_at: string
+          why_relevant: string | null
+        }
+        Insert: {
+          analysis_tags?: string[]
+          brand_id: string
+          confidence?: number | null
+          content_type_suggestion?: string | null
+          created_at?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json
+          niche: string
+          question_text: string
+          social_platform?: string | null
+          social_platforms?: string[]
+          source_platform_breakdown?: Json
+          source_signal_count?: number
+          times_used?: number
+          updated_at?: string
+          why_relevant?: string | null
+        }
+        Update: {
+          analysis_tags?: string[]
+          brand_id?: string
+          confidence?: number | null
+          content_type_suggestion?: string | null
+          created_at?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json
+          niche?: string
+          question_text?: string
+          social_platform?: string | null
+          social_platforms?: string[]
+          source_platform_breakdown?: Json
+          source_signal_count?: number
+          times_used?: number
+          updated_at?: string
+          why_relevant?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      raw_signals: {
+        Row: {
+          author_handle: string | null
+          body: string
+          brand_id: string
+          collected_at: string
+          created_at: string
+          dedupe_hash: string | null
+          engagement_metrics: Json
+          id: string
+          language: string | null
+          metadata: Json
+          platform: string
+          published_at: string | null
+          raw_payload: Json
+          region: string | null
+          signal_type: string
+          source_id: string
+          source_run_id: string
+          source_url: string | null
+          tags: string[]
+          title: string | null
+          tool_call_id: string | null
+          tool_name: string
+          updated_at: string
+        }
+        Insert: {
+          author_handle?: string | null
+          body: string
+          brand_id: string
+          collected_at?: string
+          created_at?: string
+          dedupe_hash?: string | null
+          engagement_metrics?: Json
+          id?: string
+          language?: string | null
+          metadata?: Json
+          platform: string
+          published_at?: string | null
+          raw_payload?: Json
+          region?: string | null
+          signal_type: string
+          source_id: string
+          source_run_id: string
+          source_url?: string | null
+          tags?: string[]
+          title?: string | null
+          tool_call_id?: string | null
+          tool_name?: string
+          updated_at?: string
+        }
+        Update: {
+          author_handle?: string | null
+          body?: string
+          brand_id?: string
+          collected_at?: string
+          created_at?: string
+          dedupe_hash?: string | null
+          engagement_metrics?: Json
+          id?: string
+          language?: string | null
+          metadata?: Json
+          platform?: string
+          published_at?: string | null
+          raw_payload?: Json
+          region?: string | null
+          signal_type?: string
+          source_id?: string
+          source_run_id?: string
+          source_url?: string | null
+          tags?: string[]
+          title?: string | null
+          tool_call_id?: string | null
+          tool_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_signals_source_run_id_fkey"
+            columns: ["source_run_id"]
+            isOneToOne: false
+            referencedRelation: "source_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_runs: {
+        Row: {
+          brand_id: string
+          created_at: string
+          fetched_total: number
+          generation_id: string | null
+          id: string
+          metadata: Json
+          platforms: string[]
+          provider: string
+          run_notes: string | null
+          status: string
+          updated_at: string
+          week_start_date: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          fetched_total?: number
+          generation_id?: string | null
+          id?: string
+          metadata?: Json
+          platforms?: string[]
+          provider?: string
+          run_notes?: string | null
+          status?: string
+          updated_at?: string
+          week_start_date: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          fetched_total?: number
+          generation_id?: string | null
+          id?: string
+          metadata?: Json
+          platforms?: string[]
+          provider?: string
+          run_notes?: string | null
+          status?: string
+          updated_at?: string
+          week_start_date?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_runs_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       strategic_analyses: {
         Row: {
           active: boolean
@@ -1867,13 +3297,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "strategic_analysis_embeddings_brand_id_fkey"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "strategic_analysis_embeddings_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: false
@@ -1913,117 +3336,817 @@ export type Database = {
           started_at?: string
           status?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "strategic_analysis_runs_brand_fk"
-            columns: ["brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
-      user_brand_preferences: {
+      trends: {
         Row: {
-          active_brand_id: string
+          analysis_tags: string[]
+          brand_id: string
+          confidence: number | null
           created_at: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          active_brand_id: string
-          created_at?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          active_brand_id?: string
-          created_at?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_brand_preferences_active_brand_id_fkey"
-            columns: ["active_brand_id"]
-            isOneToOne: false
-            referencedRelation: "brand_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_integrations: {
-        Row: {
-          access_token_encrypted: string | null
-          created_at: string
-          expires_at: string | null
+          description: string
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          generation_id: string
           id: string
+          last_used_at: string | null
           metadata: Json
-          platform_email: string | null
-          platform_user_id: string | null
-          platform_user_id_normalized: string | null
-          provider: string
-          refresh_token_encrypted: string | null
-          status: string | null
+          platforms: string[]
+          primary_platform: string | null
+          relevance_to_brand: string | null
+          signal_window_end: string | null
+          signal_window_start: string | null
+          source: string | null
+          source_platform_breakdown: Json
+          source_signal_count: number
+          source_url: string | null
+          times_used: number
+          title: string
           updated_at: string
-          user_id: string
         }
         Insert: {
-          access_token_encrypted?: string | null
+          analysis_tags?: string[]
+          brand_id: string
+          confidence?: number | null
           created_at?: string
-          expires_at?: string | null
+          description: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id: string
           id?: string
+          last_used_at?: string | null
           metadata?: Json
-          platform_email?: string | null
-          platform_user_id?: string | null
-          platform_user_id_normalized?: string | null
-          provider: string
-          refresh_token_encrypted?: string | null
-          status?: string | null
+          platforms?: string[]
+          primary_platform?: string | null
+          relevance_to_brand?: string | null
+          signal_window_end?: string | null
+          signal_window_start?: string | null
+          source?: string | null
+          source_platform_breakdown?: Json
+          source_signal_count?: number
+          source_url?: string | null
+          times_used?: number
+          title: string
           updated_at?: string
-          user_id: string
         }
         Update: {
-          access_token_encrypted?: string | null
+          analysis_tags?: string[]
+          brand_id?: string
+          confidence?: number | null
           created_at?: string
-          expires_at?: string | null
+          description?: string
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string
           id?: string
+          last_used_at?: string | null
           metadata?: Json
-          platform_email?: string | null
-          platform_user_id?: string | null
-          platform_user_id_normalized?: string | null
-          provider?: string
-          refresh_token_encrypted?: string | null
-          status?: string | null
+          platforms?: string[]
+          primary_platform?: string | null
+          relevance_to_brand?: string | null
+          signal_window_end?: string | null
+          signal_window_start?: string | null
+          source?: string | null
+          source_platform_breakdown?: Json
+          source_signal_count?: number
+          source_url?: string | null
+          times_used?: number
+          title?: string
           updated_at?: string
-          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trends_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      event_embeddings: {
+        Row: {
+          analysis_tags: string[] | null
+          brand_id: string | null
+          created_at: string | null
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          generation_id: string | null
+          id: string | null
+          platforms: string[] | null
+          primary_platform: string | null
+          source_platform_breakdown: Json | null
+          source_signal_count: number | null
+        }
+        Insert: {
+          analysis_tags?: string[] | null
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string | null
+          id?: string | null
+          platforms?: string[] | null
+          primary_platform?: string | null
+          source_platform_breakdown?: Json | null
+          source_signal_count?: number | null
+        }
+        Update: {
+          analysis_tags?: string[] | null
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string | null
+          id?: string | null
+          platforms?: string[] | null
+          primary_platform?: string | null
+          source_platform_breakdown?: Json | null
+          source_signal_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      question_embeddings: {
+        Row: {
+          analysis_tags: string[] | null
+          brand_id: string | null
+          created_at: string | null
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          generation_id: string | null
+          id: string | null
+          social_platform: string | null
+          social_platforms: string[] | null
+          source_platform_breakdown: Json | null
+          source_signal_count: number | null
+        }
+        Insert: {
+          analysis_tags?: string[] | null
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string | null
+          id?: string | null
+          social_platform?: string | null
+          social_platforms?: string[] | null
+          source_platform_breakdown?: Json | null
+          source_signal_count?: number | null
+        }
+        Update: {
+          analysis_tags?: string[] | null
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string | null
+          id?: string | null
+          social_platform?: string | null
+          social_platforms?: string[] | null
+          source_platform_breakdown?: Json | null
+          source_signal_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trend_embeddings: {
+        Row: {
+          analysis_tags: string[] | null
+          brand_id: string | null
+          created_at: string | null
+          embedding: string | null
+          embedding_model: string | null
+          embedding_text: string | null
+          generation_id: string | null
+          id: string | null
+          platforms: string[] | null
+          primary_platform: string | null
+          source_platform_breakdown: Json | null
+          source_signal_count: number | null
+        }
+        Insert: {
+          analysis_tags?: string[] | null
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string | null
+          id?: string | null
+          platforms?: string[] | null
+          primary_platform?: string | null
+          source_platform_breakdown?: Json | null
+          source_signal_count?: number | null
+        }
+        Update: {
+          analysis_tags?: string[] | null
+          brand_id?: string | null
+          created_at?: string | null
+          embedding?: string | null
+          embedding_model?: string | null
+          embedding_text?: string | null
+          generation_id?: string | null
+          id?: string | null
+          platforms?: string[] | null
+          primary_platform?: string | null
+          source_platform_breakdown?: Json | null
+          source_signal_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trends_generation_id_fkey"
+            columns: ["generation_id"]
+            isOneToOne: false
+            referencedRelation: "generations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Functions: {
+      append_generation_message: {
+        Args: {
+          p_brand_id: string
+          p_event_type: string
+          p_generation_id: string
+          p_payload?: Json
+          p_progress_percent?: number
+          p_stage?: string
+          p_stage_message?: string
+          p_status: string
+        }
+        Returns: Json
+      }
+      claim_generation_execution_lease: {
+        Args: {
+          p_generation_id: string
+          p_lease_owner?: string
+          p_ttl_seconds?: number
+        }
+        Returns: boolean
+      }
+      ingest_raw_signal: {
+        Args: {
+          p_author_handle?: string
+          p_body?: string
+          p_brand_id: string
+          p_dedupe_hash?: string
+          p_engagement_metrics?: Json
+          p_language?: string
+          p_metadata?: Json
+          p_platform: string
+          p_published_at?: string
+          p_raw_payload?: Json
+          p_region?: string
+          p_signal_type: string
+          p_source_id: string
+          p_source_run_id: string
+          p_source_url?: string
+          p_tags?: string[]
+          p_title?: string
+          p_tool_call_id?: string
+          p_tool_name?: string
+        }
+        Returns: {
+          author_handle: string | null
+          body: string
+          brand_id: string
+          collected_at: string
+          created_at: string
+          dedupe_hash: string | null
+          engagement_metrics: Json
+          id: string
+          language: string | null
+          metadata: Json
+          platform: string
+          published_at: string | null
+          raw_payload: Json
+          region: string | null
+          signal_type: string
+          source_id: string
+          source_run_id: string
+          source_url: string | null
+          tags: string[]
+          title: string | null
+          tool_call_id: string | null
+          tool_name: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "raw_signals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      release_generation_execution_lease: {
+        Args: {
+          p_force?: boolean
+          p_generation_id: string
+          p_lease_owner?: string
+        }
+        Returns: boolean
+      }
+      search_events: {
+        Args: {
+          p_brand_id: string
+          p_exclude_selected?: boolean
+          p_limit?: number
+          p_platforms?: string[]
+          p_query_embedding: string
+        }
+        Returns: {
+          analysis_tags: string[]
+          brand_id: string
+          created_at: string
+          description: string
+          event_date: string
+          generation_id: string
+          id: string
+          opportunity: string
+          platforms: string[]
+          primary_platform: string
+          similarity: number
+          source: string
+          source_platform_breakdown: Json
+          source_signal_count: number
+          source_url: string
+          times_used: number
+          title: string
+        }[]
+      }
+      search_questions: {
+        Args: {
+          p_brand_id: string
+          p_exclude_selected?: boolean
+          p_limit?: number
+          p_platforms?: string[]
+          p_query_embedding: string
+        }
+        Returns: {
+          analysis_tags: string[]
+          brand_id: string
+          content_type_suggestion: string
+          created_at: string
+          generation_id: string
+          id: string
+          niche: string
+          question_text: string
+          similarity: number
+          social_platform: string
+          social_platforms: string[]
+          source_platform_breakdown: Json
+          source_signal_count: number
+          times_used: number
+          why_relevant: string
+        }[]
+      }
+      search_trends: {
+        Args: {
+          p_brand_id: string
+          p_exclude_selected?: boolean
+          p_limit?: number
+          p_platforms?: string[]
+          p_query_embedding: string
+        }
+        Returns: {
+          analysis_tags: string[]
+          brand_id: string
+          created_at: string
+          description: string
+          generation_id: string
+          id: string
+          platforms: string[]
+          primary_platform: string
+          relevance_to_brand: string
+          similarity: number
+          source: string
+          source_platform_breakdown: Json
+          source_signal_count: number
+          source_url: string
+          times_used: number
+          title: string
+        }[]
+      }
+      upsert_generation: {
+        Args: {
+          p_brand_id: string
+          p_generated_by?: string
+          p_metadata?: Json
+          p_model_version?: string
+          p_selected_social_platforms?: string[]
+          p_week_start_date: string
+          p_window_end?: string
+          p_window_start?: string
+          p_workflow_version?: string
+        }
+        Returns: string
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  DCO_Campaigns: {
+    Tables: {
+      rule_action_logs: {
+        Row: {
+          action_id: string | null
+          action_payload: Json | null
+          action_type: string
+          actor_id: string | null
+          brand_id: string
+          decision_note: string | null
+          error: string | null
+          evaluation_id: string | null
+          id: string
+          is_automated: boolean
+          is_dry_run: boolean | null
+          meta_account_id: string | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          metadata: Json | null
+          occurred_at: string
+          params_changed: Json | null
+          result: Json | null
+          rule_id: string | null
+          scope_id: string | null
+          scope_type: string
+          status: string | null
+        }
+        Insert: {
+          action_id?: string | null
+          action_payload?: Json | null
+          action_type: string
+          actor_id?: string | null
+          brand_id: string
+          decision_note?: string | null
+          error?: string | null
+          evaluation_id?: string | null
+          id?: string
+          is_automated?: boolean
+          is_dry_run?: boolean | null
+          meta_account_id?: string | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          metadata?: Json | null
+          occurred_at?: string
+          params_changed?: Json | null
+          result?: Json | null
+          rule_id?: string | null
+          scope_id?: string | null
+          scope_type: string
+          status?: string | null
+        }
+        Update: {
+          action_id?: string | null
+          action_payload?: Json | null
+          action_type?: string
+          actor_id?: string | null
+          brand_id?: string
+          decision_note?: string | null
+          error?: string | null
+          evaluation_id?: string | null
+          id?: string
+          is_automated?: boolean
+          is_dry_run?: boolean | null
+          meta_account_id?: string | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          metadata?: Json | null
+          occurred_at?: string
+          params_changed?: Json | null
+          result?: Json | null
+          rule_id?: string | null
+          scope_id?: string | null
+          scope_type?: string
+          status?: string | null
         }
         Relationships: []
       }
-      user_onboarding_states: {
+      timeline_accounts: {
         Row: {
+          account_id: string
+          account_name: string | null
           brand_id: string
-          created_at: string
-          is_active: boolean
-          state: Json
-          updated_at: string
-          user_id: string
+          currency: string | null
+          first_block: string | null
+          hourly_since: string | null
+          last_block: string | null
+          last_built_at: string | null
+          total_blocks: number | null
+          updated_at: string | null
         }
         Insert: {
+          account_id: string
+          account_name?: string | null
           brand_id: string
-          created_at?: string
-          is_active?: boolean
-          state: Json
-          updated_at?: string
-          user_id: string
+          currency?: string | null
+          first_block?: string | null
+          hourly_since?: string | null
+          last_block?: string | null
+          last_built_at?: string | null
+          total_blocks?: number | null
+          updated_at?: string | null
         }
         Update: {
+          account_id?: string
+          account_name?: string | null
           brand_id?: string
+          currency?: string | null
+          first_block?: string | null
+          hourly_since?: string | null
+          last_block?: string | null
+          last_built_at?: string | null
+          total_blocks?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      timeline_ad_blocks: {
+        Row: {
+          account_id: string
+          active_since: string | null
+          active_until: string | null
+          ad_id: string | null
+          ad_name: string | null
+          block_end: string
+          block_start: string
+          boundary_left: string
+          boundary_right: string
+          brand_id: string
+          built_at: string
+          camp_clicks: number | null
+          camp_conversions: number | null
+          camp_cpa: number | null
+          camp_cpc: number | null
+          camp_ctr_pct: number | null
+          camp_impressions: number | null
+          camp_revenue: number | null
+          camp_roas: number | null
+          camp_spend: number | null
+          campaign_active_since: string | null
+          campaign_active_until: string | null
+          campaign_boundary_left: string | null
+          campaign_boundary_right: string | null
+          campaign_id: string
+          campaign_name: string
+          campaign_objective: string | null
+          campaign_status: string | null
+          clicks: number
+          content_hash: string | null
+          conversions: number
+          cpa: number
+          cpc: number
+          created_at: string
+          ctr_pct: number
+          id: string
+          impressions: number
+          resolution: string
+          revenue: number
+          roas: number
+          spend: number
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          account_id: string
+          active_since?: string | null
+          active_until?: string | null
+          ad_id?: string | null
+          ad_name?: string | null
+          block_end: string
+          block_start: string
+          boundary_left?: string
+          boundary_right?: string
+          brand_id: string
+          built_at?: string
+          camp_clicks?: number | null
+          camp_conversions?: number | null
+          camp_cpa?: number | null
+          camp_cpc?: number | null
+          camp_ctr_pct?: number | null
+          camp_impressions?: number | null
+          camp_revenue?: number | null
+          camp_roas?: number | null
+          camp_spend?: number | null
+          campaign_active_since?: string | null
+          campaign_active_until?: string | null
+          campaign_boundary_left?: string | null
+          campaign_boundary_right?: string | null
+          campaign_id: string
+          campaign_name: string
+          campaign_objective?: string | null
+          campaign_status?: string | null
+          clicks?: number
+          content_hash?: string | null
+          conversions?: number
+          cpa?: number
+          cpc?: number
           created_at?: string
-          is_active?: boolean
-          state?: Json
+          ctr_pct?: number
+          id?: string
+          impressions?: number
+          resolution?: string
+          revenue?: number
+          roas?: number
+          spend?: number
+          status?: string
           updated_at?: string
-          user_id?: string
+          version?: number
+        }
+        Update: {
+          account_id?: string
+          active_since?: string | null
+          active_until?: string | null
+          ad_id?: string | null
+          ad_name?: string | null
+          block_end?: string
+          block_start?: string
+          boundary_left?: string
+          boundary_right?: string
+          brand_id?: string
+          built_at?: string
+          camp_clicks?: number | null
+          camp_conversions?: number | null
+          camp_cpa?: number | null
+          camp_cpc?: number | null
+          camp_ctr_pct?: number | null
+          camp_impressions?: number | null
+          camp_revenue?: number | null
+          camp_roas?: number | null
+          camp_spend?: number | null
+          campaign_active_since?: string | null
+          campaign_active_until?: string | null
+          campaign_boundary_left?: string | null
+          campaign_boundary_right?: string | null
+          campaign_id?: string
+          campaign_name?: string
+          campaign_objective?: string | null
+          campaign_status?: string | null
+          clicks?: number
+          content_hash?: string | null
+          conversions?: number
+          cpa?: number
+          cpc?: number
+          created_at?: string
+          ctr_pct?: number
+          id?: string
+          impressions?: number
+          resolution?: string
+          revenue?: number
+          roas?: number
+          spend?: number
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      timeline_blocks: {
+        Row: {
+          account_id: string
+          block_end: string
+          block_start: string
+          brand_id: string
+          built_at: string
+          campaigns: Json
+          content_hash: string | null
+          deltas: Json
+          events: Json
+          id: string
+          resolution: string
+          summary: Json
+          version: number
+        }
+        Insert: {
+          account_id: string
+          block_end: string
+          block_start: string
+          brand_id: string
+          built_at?: string
+          campaigns?: Json
+          content_hash?: string | null
+          deltas?: Json
+          events?: Json
+          id?: string
+          resolution?: string
+          summary?: Json
+          version?: number
+        }
+        Update: {
+          account_id?: string
+          block_end?: string
+          block_start?: string
+          brand_id?: string
+          built_at?: string
+          campaigns?: Json
+          content_hash?: string | null
+          deltas?: Json
+          events?: Json
+          id?: string
+          resolution?: string
+          summary?: Json
+          version?: number
+        }
+        Relationships: []
+      }
+      timeline_events: {
+        Row: {
+          account_id: string
+          block_start: string
+          brand_id: string
+          campaign_id: string | null
+          campaign_name: string | null
+          changes: Json | null
+          created_at: string
+          event_id: string | null
+          id: string
+          is_automated: boolean
+          is_dry_run: boolean | null
+          metrics_at_event: Json | null
+          rule_name: string | null
+          scope: string
+          scope_id: string | null
+          scope_name: string | null
+          summary: string | null
+          timestamp: string
+          type: string
+        }
+        Insert: {
+          account_id: string
+          block_start: string
+          brand_id: string
+          campaign_id?: string | null
+          campaign_name?: string | null
+          changes?: Json | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_automated?: boolean
+          is_dry_run?: boolean | null
+          metrics_at_event?: Json | null
+          rule_name?: string | null
+          scope?: string
+          scope_id?: string | null
+          scope_name?: string | null
+          summary?: string | null
+          timestamp: string
+          type: string
+        }
+        Update: {
+          account_id?: string
+          block_start?: string
+          brand_id?: string
+          campaign_id?: string | null
+          campaign_name?: string | null
+          changes?: Json | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_automated?: boolean
+          is_dry_run?: boolean | null
+          metrics_at_event?: Json | null
+          rule_name?: string | null
+          scope?: string
+          scope_id?: string | null
+          scope_name?: string | null
+          summary?: string | null
+          timestamp?: string
+          type?: string
         }
         Relationships: []
       }
@@ -2032,124 +4155,834 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      brand_report_embeddings_match: {
-        Args: {
-          p_brand_profile_id: string
-          p_limit?: number
-          p_max_distance?: number
-          p_query: string
-        }
-        Returns: {
-          brand_report_id: string
-          distance: number
-          embedding_model: string
-          embedding_text: string
-        }[]
-      }
-      cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
-      cleanup_old_chat_messages: { Args: never; Returns: undefined }
-      decrypt_token: { Args: { ct: string }; Returns: string }
-      encrypt_token: { Args: { token: string }; Returns: string }
-      fetch_latest_brand_embedding: {
-        Args: { p_brand_id: string; p_run_id?: string }
-        Returns: {
+      upsert_ad_blocks: { Args: { rows: Json }; Returns: Json }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  organic: {
+    Tables: {
+      organic_calendar_drafts: {
+        Row: {
           brand_id: string
-          embedding: string
-          embedding_model: string
-          embedding_text: string
-          run_id: string
+          content_json: Json | null
+          content_plan_id: string | null
+          created_at: string
+          id: string
+          instagram_post_id: string | null
+          platform_account_id: string
+          position: Json | null
+          published_at: string | null
+          scheduled_date: string | null
+          slot_data: Json
+          status: string
           updated_at: string
-        }[]
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          content_json?: Json | null
+          content_plan_id?: string | null
+          created_at?: string
+          id?: string
+          instagram_post_id?: string | null
+          platform_account_id: string
+          position?: Json | null
+          published_at?: string | null
+          scheduled_date?: string | null
+          slot_data: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          content_json?: Json | null
+          content_plan_id?: string | null
+          created_at?: string
+          id?: string
+          instagram_post_id?: string | null
+          platform_account_id?: string
+          position?: Json | null
+          published_at?: string | null
+          scheduled_date?: string | null
+          slot_data?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
-      get_active_brand_id: { Args: never; Returns: string }
-      get_brand_integration_summary: {
-        Args: { p_brand_profile_id: string }
-        Returns: {
-          assignment_id: string
+      organic_chat_messages: {
+        Row: {
+          brand_id: string
+          content: string
+          created_at: string
+          id: number
+          role: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          content: string
+          created_at?: string
+          id?: never
+          role: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          content?: string
+          created_at?: string
+          id?: never
+          role?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      organic_chat_sessions: {
+        Row: {
+          brand_id: string
+          created_at: string
+          id: number
+          last_message_at: string | null
+          last_message_preview: string | null
+          last_message_role: string | null
+          session_id: string
+          timezone: string
+          title: string | null
+          updated_at: string
+          user_id: string
+          week_start: string | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          id?: never
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_role?: string | null
+          session_id: string
+          timezone?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+          week_start?: string | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          id?: never
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          last_message_role?: string | null
+          session_id?: string
+          timezone?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+          week_start?: string | null
+        }
+        Relationships: []
+      }
+      organic_content_plans: {
+        Row: {
+          brand_id: string
+          created_at: string
+          guidance: string | null
+          id: string
+          placements: Json
+          platform_account_ids: Json
+          run_idempotency_key: string | null
+          session_id: string
+          status: string
+          timezone: string
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          guidance?: string | null
+          id?: string
+          placements?: Json
+          platform_account_ids?: Json
+          run_idempotency_key?: string | null
+          session_id: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          guidance?: string | null
+          id?: string
+          placements?: Json
+          platform_account_ids?: Json
+          run_idempotency_key?: string | null
+          session_id?: string
+          status?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
+      organic_draft_sessions: {
+        Row: {
+          backlog_drafts: Json
+          brand_profile_id: string
+          days: Json
+          id: string
+          saved_at: string
+          user_id: string
+          week_start_id: string
+        }
+        Insert: {
+          backlog_drafts?: Json
+          brand_profile_id: string
+          days?: Json
+          id?: string
+          saved_at?: string
+          user_id: string
+          week_start_id: string
+        }
+        Update: {
+          backlog_drafts?: Json
+          brand_profile_id?: string
+          days?: Json
+          id?: string
+          saved_at?: string
+          user_id?: string
+          week_start_id?: string
+        }
+        Relationships: []
+      }
+      organic_publish_attempts: {
+        Row: {
+          attempted_at: string
+          brand_id: string
+          caption_sent: string | null
+          completed_at: string | null
+          draft_id: string | null
+          error_code: string | null
+          error_message: string | null
+          id: number
+          ig_user_id: string
+          instagram_post_id: string | null
+          media_urls: Json | null
+          post_type: string
+          status: string
+        }
+        Insert: {
+          attempted_at?: string
+          brand_id: string
+          caption_sent?: string | null
+          completed_at?: string | null
+          draft_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: never
+          ig_user_id: string
+          instagram_post_id?: string | null
+          media_urls?: Json | null
+          post_type: string
+          status: string
+        }
+        Update: {
+          attempted_at?: string
+          brand_id?: string
+          caption_sent?: string | null
+          completed_at?: string | null
+          draft_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: never
+          ig_user_id?: string
+          instagram_post_id?: string | null
+          media_urls?: Json | null
+          post_type?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_publish_attempts_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organic_publish_attempts_post_fk"
+            columns: ["instagram_post_id"]
+            isOneToOne: false
+            referencedRelation: "organic_published_posts"
+            referencedColumns: ["instagram_post_id"]
+          },
+        ]
+      }
+      organic_published_posts: {
+        Row: {
+          brand_id: string
+          caption: string | null
+          content_snapshot: Json | null
+          created_at: string
+          draft_id: string | null
+          ig_user_id: string
+          insights_last_synced_at: string | null
+          instagram_post_id: string
+          media_urls: Json | null
+          permalink: string | null
+          post_type: string
+          published_at: string
+        }
+        Insert: {
+          brand_id: string
+          caption?: string | null
+          content_snapshot?: Json | null
+          created_at?: string
+          draft_id?: string | null
+          ig_user_id: string
+          insights_last_synced_at?: string | null
+          instagram_post_id: string
+          media_urls?: Json | null
+          permalink?: string | null
+          post_type: string
+          published_at: string
+        }
+        Update: {
+          brand_id?: string
+          caption?: string | null
+          content_snapshot?: Json | null
+          created_at?: string
+          draft_id?: string | null
+          ig_user_id?: string
+          insights_last_synced_at?: string | null
+          instagram_post_id?: string
+          media_urls?: Json | null
+          permalink?: string | null
+          post_type?: string
+          published_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organic_published_posts_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "organic_calendar_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organic_whatsapp_brands: {
+        Row: {
+          brand_id: string
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+          wa_id: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          wa_id: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          wa_id?: string
+        }
+        Relationships: []
+      }
+      tiktok_account_metrics: {
+        Row: {
+          avatar_url: string | null
+          bio_description: string | null
+          brand_id: string
+          created_at: string
+          display_name: string | null
+          external_account_id: string
+          fetched_at: string
+          follower_count: number | null
+          following_count: number | null
+          id: string
           integration_account_id: string
-          alias: string | null
-          account_name: string
-          external_account_id: string | null
-          account_status: string | null
-          linked_at: string | null
-          provider_integration_id: string
-          account_type: string | null
-          settings: Json | null
-          platform_key: string | null
-        }[]
+          is_verified: boolean | null
+          likes_count: number | null
+          profile_deep_link: string | null
+          username: string | null
+          video_count: number | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio_description?: string | null
+          brand_id: string
+          created_at?: string
+          display_name?: string | null
+          external_account_id: string
+          fetched_at?: string
+          follower_count?: number | null
+          following_count?: number | null
+          id?: string
+          integration_account_id: string
+          is_verified?: boolean | null
+          likes_count?: number | null
+          profile_deep_link?: string | null
+          username?: string | null
+          video_count?: number | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio_description?: string | null
+          brand_id?: string
+          created_at?: string
+          display_name?: string | null
+          external_account_id?: string
+          fetched_at?: string
+          follower_count?: number | null
+          following_count?: number | null
+          id?: string
+          integration_account_id?: string
+          is_verified?: boolean | null
+          likes_count?: number | null
+          profile_deep_link?: string | null
+          username?: string | null
+          video_count?: number | null
+        }
+        Relationships: []
       }
-      get_brand_timezone: { Args: { brand_id: string }; Returns: string }
-      get_user_integration_summary: {
-        Args: { p_user_id: string }
-        Returns: {
-          asset_id: string
-          asset_name: string
-          asset_status: string | null
-          external_account_id: string | null
-          provider: string
-          asset_type: string | null
-          created_at: string | null
-          platform_key: string | null
-        }[]
+      tiktok_videos: {
+        Row: {
+          brand_id: string
+          comment_count: number | null
+          cover_image_url: string | null
+          create_time: string | null
+          created_at: string
+          duration: number | null
+          embed_html: string | null
+          embed_link: string | null
+          external_account_id: string
+          fetched_at: string
+          height: number | null
+          id: string
+          integration_account_id: string
+          like_count: number | null
+          share_count: number | null
+          share_url: string | null
+          title: string | null
+          updated_at: string
+          video_description: string | null
+          video_id: string
+          view_count: number | null
+          width: number | null
+        }
+        Insert: {
+          brand_id: string
+          comment_count?: number | null
+          cover_image_url?: string | null
+          create_time?: string | null
+          created_at?: string
+          duration?: number | null
+          embed_html?: string | null
+          embed_link?: string | null
+          external_account_id: string
+          fetched_at?: string
+          height?: number | null
+          id?: string
+          integration_account_id: string
+          like_count?: number | null
+          share_count?: number | null
+          share_url?: string | null
+          title?: string | null
+          updated_at?: string
+          video_description?: string | null
+          video_id: string
+          view_count?: number | null
+          width?: number | null
+        }
+        Update: {
+          brand_id?: string
+          comment_count?: number | null
+          cover_image_url?: string | null
+          create_time?: string | null
+          created_at?: string
+          duration?: number | null
+          embed_html?: string | null
+          embed_link?: string | null
+          external_account_id?: string
+          fetched_at?: string
+          height?: number | null
+          id?: string
+          integration_account_id?: string
+          like_count?: number | null
+          share_count?: number | null
+          share_url?: string | null
+          title?: string | null
+          updated_at?: string
+          video_description?: string | null
+          video_id?: string
+          view_count?: number | null
+          width?: number | null
+        }
+        Relationships: []
       }
-      has_brand_access: { Args: { brand_id: string }; Returns: boolean }
-      is_brand_admin: { Args: { brand_id: string }; Returns: boolean }
-      reporting_cache_get_organic_metrics_cache: {
-        Args: {
-          p_external_account_id: string
-          p_platform: string
-          p_range_since: string
-          p_range_until: string
-          p_request_hash: string
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+  paid_media: {
+    Tables: {
+      paid_media_ad_objects: {
+        Row: {
+          brand_id: string
+          created_at: string
+          external_object_id: string
+          id: string
+          name: string | null
+          object_type: string
+          platform: string
+          status: string | null
+          updated_at: string
         }
-        Returns: unknown[]
-        SetofOptions: {
-          from: "*"
-          to: "organic_metrics_cache"
-          isOneToOne: false
-          isSetofReturn: true
+        Insert: {
+          brand_id: string
+          created_at?: string
+          external_object_id: string
+          id?: string
+          name?: string | null
+          object_type: string
+          platform: string
+          status?: string | null
+          updated_at?: string
         }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          external_object_id?: string
+          id?: string
+          name?: string | null
+          object_type?: string
+          platform?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
-      reporting_cache_get_organic_metrics_cache_range: {
-        Args: {
-          p_external_account_id: string
-          p_platform: string
-          p_range_since: string
-          p_range_until: string
-          p_request_hash: string
+      paid_media_catalog_products: {
+        Row: {
+          availability: string
+          brand_id: string
+          catalog_id: string
+          created_at: string
+          currency: string | null
+          external_product_id: string
+          id: string
+          image_url: string | null
+          product_url: string | null
+          title: string
+          updated_at: string
         }
-        Returns: unknown[]
-        SetofOptions: {
-          from: "*"
-          to: "organic_metrics_cache"
-          isOneToOne: false
-          isSetofReturn: true
+        Insert: {
+          availability?: string
+          brand_id: string
+          catalog_id: string
+          created_at?: string
+          currency?: string | null
+          external_product_id: string
+          id?: string
+          image_url?: string | null
+          product_url?: string | null
+          title: string
+          updated_at?: string
         }
+        Update: {
+          availability?: string
+          brand_id?: string
+          catalog_id?: string
+          created_at?: string
+          currency?: string | null
+          external_product_id?: string
+          id?: string
+          image_url?: string | null
+          product_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_catalog_products_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_product_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      reporting_cache_upsert_organic_metrics_cache: {
-        Args: {
-          p_brand_id: string
-          p_comparison: Json
-          p_external_account_id: string
-          p_fetched_at: string
-          p_integration_account_id: string
-          p_metrics: Json
-          p_platform: string
-          p_range_json: Json
-          p_range_preset: string
-          p_range_since: string
-          p_range_until: string
-          p_raw_response: Json
-          p_request_hash: string
+      paid_media_product_ad_activity: {
+        Row: {
+          active_from: string | null
+          active_to: string | null
+          ad_object_id: string
+          brand_id: string
+          catalog_id: string
+          created_at: string
+          first_seen_at: string
+          id: string
+          is_active: boolean
+          last_seen_at: string
+          product_id: string
+          source: string
+          sync_job_id: string | null
+          updated_at: string
         }
-        Returns: unknown
-        SetofOptions: {
-          from: "*"
-          to: "organic_metrics_cache"
-          isOneToOne: true
-          isSetofReturn: false
+        Insert: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id: string
+          brand_id: string
+          catalog_id: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          product_id: string
+          source?: string
+          sync_job_id?: string | null
+          updated_at?: string
         }
+        Update: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id?: string
+          brand_id?: string
+          catalog_id?: string
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string
+          product_id?: string
+          source?: string
+          sync_job_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_product_ad_activity_ad_object_id_fkey"
+            columns: ["ad_object_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_ad_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_ad_activity_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_product_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_ad_activity_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
+      paid_media_product_catalog_links: {
+        Row: {
+          active_from: string | null
+          active_to: string | null
+          ad_object_id: string
+          brand_id: string
+          catalog_id: string
+          created_at: string
+          first_seen_at: string | null
+          id: string
+          is_active: boolean
+          last_seen_at: string | null
+          product_id: string
+          source: string | null
+          sync_job_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id: string
+          brand_id: string
+          catalog_id: string
+          created_at?: string
+          first_seen_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string | null
+          product_id: string
+          source?: string | null
+          sync_job_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active_from?: string | null
+          active_to?: string | null
+          ad_object_id?: string
+          brand_id?: string
+          catalog_id?: string
+          created_at?: string
+          first_seen_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_seen_at?: string | null
+          product_id?: string
+          source?: string | null
+          sync_job_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "paid_media_product_catalog_links_ad_object_id_fkey"
+            columns: ["ad_object_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_ad_objects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_catalog_links_catalog_id_fkey"
+            columns: ["catalog_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_product_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paid_media_product_catalog_links_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "paid_media_catalog_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      paid_media_product_catalogs: {
+        Row: {
+          brand_id: string
+          business_id: string | null
+          catalog_store_id: string | null
+          config: Json
+          created_at: string
+          currency: string | null
+          data_feed_enabled: boolean
+          default_image_url: string | null
+          external_catalog_id: string | null
+          fallback_image_url: string | null
+          feed_count: number
+          feed_url: string | null
+          id: string
+          last_synced_at: string | null
+          linked_ad_object_ids: string[]
+          linked_ad_object_level: string
+          name: string
+          notes: string | null
+          product_count: number
+          product_set_count: number
+          product_tagging_enabled: boolean
+          sync_status: string
+          updated_at: string
+          vertical: string
+        }
+        Insert: {
+          brand_id: string
+          business_id?: string | null
+          catalog_store_id?: string | null
+          config?: Json
+          created_at?: string
+          currency?: string | null
+          data_feed_enabled?: boolean
+          default_image_url?: string | null
+          external_catalog_id?: string | null
+          fallback_image_url?: string | null
+          feed_count?: number
+          feed_url?: string | null
+          id?: string
+          last_synced_at?: string | null
+          linked_ad_object_ids?: string[]
+          linked_ad_object_level?: string
+          name: string
+          notes?: string | null
+          product_count?: number
+          product_set_count?: number
+          product_tagging_enabled?: boolean
+          sync_status?: string
+          updated_at?: string
+          vertical?: string
+        }
+        Update: {
+          brand_id?: string
+          business_id?: string | null
+          catalog_store_id?: string | null
+          config?: Json
+          created_at?: string
+          currency?: string | null
+          data_feed_enabled?: boolean
+          default_image_url?: string | null
+          external_catalog_id?: string | null
+          fallback_image_url?: string | null
+          feed_count?: number
+          feed_url?: string | null
+          id?: string
+          last_synced_at?: string | null
+          linked_ad_object_ids?: string[]
+          linked_ad_object_level?: string
+          name?: string
+          notes?: string | null
+          product_count?: number
+          product_set_count?: number
+          product_tagging_enabled?: boolean
+          sync_status?: string
+          updated_at?: string
+          vertical?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
@@ -3695,6 +6528,36 @@ export type Database = {
           },
         ]
       }
+      workflow_library: {
+        Row: {
+          content: Json
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       meta_targeting_behaviors: {
@@ -4033,6 +6896,53 @@ export type Database = {
           similarity: number
         }[]
       }
+      match_brand_insights_events: {
+        Args: {
+          filter_brand_id: string
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          description: string
+          event_date: string
+          id: string
+          opportunity: string
+          similarity: number
+          title: string
+        }[]
+      }
+      match_brand_insights_questions: {
+        Args: {
+          filter_brand_id: string
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          niche: string
+          question_text: string
+          similarity: number
+          social_platform: string
+          why_relevant: string
+        }[]
+      }
+      match_brand_insights_trends: {
+        Args: {
+          filter_brand_id: string
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          description: string
+          id: string
+          relevance_to_brand: string
+          similarity: number
+          title: string
+        }[]
+      }
       match_jaina_documents:
         | {
             Args: {
@@ -4062,7 +6972,33 @@ export type Database = {
               similarity: number
             }[]
           }
+      match_strategic_analysis_embeddings: {
+        Args: {
+          filter_brand_id: string
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          embedding_text: string
+          id: string
+          label: string
+          section: string
+          similarity: number
+        }[]
+      }
       process_scheduled_reports: { Args: never; Returns: Json }
+      resolve_meta_context_by_brand_id: {
+        Args: { p_brand_id: string }
+        Returns: {
+          access_token: string
+          ad_account_id: string
+          facebook_page_ids: string[]
+          instagram_account_ids: string[]
+          integration_ids: string[]
+          resolution_source: string
+        }[]
+      }
       search_brand_insights_events: {
         Args: {
           p_exclude_selected?: boolean
@@ -4254,7 +7190,22 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  brand_integrations: {
+    Enums: {},
+  },
   brand_profiles: {
+    Enums: {},
+  },
+  brand_trends: {
+    Enums: {},
+  },
+  DCO_Campaigns: {
+    Enums: {},
+  },
+  organic: {
+    Enums: {},
+  },
+  paid_media: {
     Enums: {},
   },
   public: {

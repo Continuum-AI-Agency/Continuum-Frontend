@@ -48,7 +48,9 @@ function generateTypes() {
     }
   }
 
-  const schemas = process.env.SUPABASE_SCHEMAS || 'public,brand_profiles';
+  const schemas =
+    process.env.SUPABASE_SCHEMAS ||
+    'public,brand_profiles,organic,paid_media,brand_trends,brand_integrations,DCO_Campaigns';
 
   const args = ['gen', 'types', 'typescript', '--project-id', projectRef, '--schema', schemas];
 
@@ -68,4 +70,3 @@ function generateTypes() {
 }
 
 generateTypes();
-
