@@ -65,6 +65,10 @@ These rules apply universally to all TypeScript, React, and Next.js code.
     * **Route Handlers (`route.ts`):** For public/unauthenticated API endpoints.
 * **Next.js Caching:** Utilize Next.js native `fetch` caching and revalidation (`next: { revalidate }`) to ensure predictable data freshness and optimal performance (SSR, SSG, ISR).
 
+### API Layer (`src/lib/api/`)
+
+* **Browser → agents-ts:** Client components call the agents-ts backend directly using `http.request()` from `src/lib/api/http.ts`. This client resolves `getApiBaseUrl()` and attaches `Authorization: Bearer ${token}` automatically via `getBrowserAccessToken()`. **Do NOT add Next.js route handlers as thin auth-forwarding proxies** — they add indirection with no benefit. Only add a route handler when genuinely needed server-side (e.g., streaming responses, server secrets, PostHog analytics).
+
 ### State Management
 
 * **Component State First:** Prefer `useState` or `useReducer` for local, component-specific state.

@@ -96,6 +96,7 @@ Root (`/`) redirects to `/login`. Protected routes use `getActiveBrandContext()`
 - `http.ts` / `http.server.ts` — typed fetch wrappers with auth (Bearer token via `getBrowserAccessToken()`)
 - Domain clients follow `*.client.ts` (browser) / `*.server.ts` (RSC/actions) naming
 - Optional Zod schema validation on responses
+- **Browser → agents-ts**: Use `http.ts` directly from client components — it resolves `getApiBaseUrl()` and attaches the Bearer token automatically. Do NOT create Next.js proxy route handlers just to forward requests to the backend with auth; the browser client already handles this.
 
 ### Auth
 
