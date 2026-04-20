@@ -16,10 +16,15 @@ import type { JainaPlan } from "../types";
 
 const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
 
+export type PlanFeedbackPayload =
+  | { type: "approve"; planId: string }
+  | { type: "abandon"; planId: string }
+  | { type: "refine"; planId: string; edits: string };
+
 type PlanSectionProps = {
   plan: JainaPlan;
   isStreaming: boolean;
-  onPlanFeedback?: (payload: { planId: string; approved: boolean; reason?: string }) => void;
+  onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
 };
 
 export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionProps) {
@@ -64,25 +69,13 @@ export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionPr
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() =>
-                  onPlanFeedback?.({
-                    planId: plan.id,
-                    approved: false,
-                    reason: "Rejected by user",
-                  })
-                }
+                onClick={() => onPlanFeedback?.({ type: "abandon", planId: plan.id })}
               >
-                Reject
+                Abandon
               </Button>
               <Button
                 size="sm"
-                onClick={() =>
-                  onPlanFeedback?.({
-                    planId: plan.id,
-                    approved: true,
-                    reason: "Proceed",
-                  })
-                }
+                onClick={() => onPlanFeedback?.({ type: "approve", planId: plan.id })}
               >
                 Approve Plan
               </Button>

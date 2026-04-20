@@ -48,6 +48,7 @@ import {
 import { JainaHeader } from "./components/JainaHeader";
 import { JainaEmptyState } from "./components/JainaEmptyState";
 import { JainaMessageItem } from "./components/JainaMessageItem";
+import type { PlanFeedbackPayload } from "./components/PlanSection";
 import { JainaConversationSidebar } from "./components/JainaConversationSidebar";
 import {
   extractRenderableFallbackFromStructuredContent,
@@ -59,6 +60,10 @@ import {
   resolveReportSignal,
 } from "./jainaUtils";
 import { parsePersistedReportValue } from "./persistedReport";
+import {
+  isPersistedResultStub,
+  parsePersistedResultWrapper,
+} from "@/lib/jaina/unwrapping";
 import type { CampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
 import { extractCampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
@@ -70,8 +75,10 @@ import {
   type JainaConversationMessage,
   type JainaConversationSession,
 } from "@/lib/jaina/conversations";
-import { frontendCheckpointReportSchema, reportAssemblySchema, checkpointReportV2Schema } from "@/lib/jaina/schemas";
+import { frontendCheckpointReportSchema, reportAssemblySchema, checkpointReportV2Schema, type JainaPlanAction } from "@/lib/jaina/schemas";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+
+export { parsePersistedResultWrapper } from "@/lib/jaina/unwrapping";
 
 function ConversationSkeleton() {
   return (
@@ -140,17 +147,65 @@ function resolveReportSummaryForMessage(report: JainaChatMessage["report"] | und
   if (!isUnavailableSummary) return summary;
   if ("type" in report) return summary;
 
-  const firstSectionSummary = report.sections.find((section) =>
+  const v1 = frontendCheckpointReportSchema.safeParse(report);
+  if (!v1.success) return summary;
+
+  const firstSectionSummary = v1.data.sections.find((section) =>
     Boolean(section.summary?.trim())
   )?.summary;
   if (firstSectionSummary) return firstSectionSummary;
 
-  const firstRecommendation = report.strategic_recommendations[0];
+  const firstRecommendation = v1.data.strategic_recommendations[0];
   if (firstRecommendation?.title) {
     return firstRecommendation.rationale
       ? `${firstRecommendation.title}: ${firstRecommendation.rationale}`
       : firstRecommendation.title;
   }
+
+  return summary;
+}
+
+type RenderableContentSources = {
+  sessionTitle?: string;
+  pendingClarification?: { question: string } | null;
+  responseText: string;
+  report?: JainaChatMessage["report"] | null;
+  reportV2?: JainaChatMessage["reportV2"] | null;
+  latestCheckpointSummary?: string;
+  checkpointSummarySource?: "synthesis" | "tool_fallback" | "default_unavailable" | null;
+  plan?: JainaChatMessage["plan"] | null;
+  progress: Parameters<typeof getFinalThought>[0];
+};
+
+function pickRenderableContent(sources: RenderableContentSources): string {
+  const clarification = sources.pendingClarification?.question?.trim();
+  if (clarification) return clarification;
+
+  const safeText = isLikelyStructuredJsonContent(sources.responseText)
+    ? (extractRenderableFallbackFromStructuredContent(sources.responseText) ?? "").trim()
+    : sources.responseText.trim();
+  if (safeText) return safeText;
+
+  const v2Summary = sources.reportV2?.executive_summary?.trim();
+  if (v2Summary) return v2Summary;
+
+  const reportSummary = resolveReportSummaryForMessage(sources.report ?? undefined).trim();
+  if (reportSummary) return reportSummary;
+
+  const checkpointSummary =
+    sources.checkpointSummarySource !== "default_unavailable"
+      ? (sources.latestCheckpointSummary ?? "").trim()
+      : "";
+  if (checkpointSummary) return checkpointSummary;
+
+  const planTitle = sources.plan?.title?.trim();
+  if (planTitle) return planTitle;
+
+  const finalThought = getFinalThought(sources.progress)?.trim();
+  if (finalThought) return finalThought;
+
+  const sessionTitle = sources.sessionTitle?.trim();
+  if (sessionTitle) return sessionTitle;
 
   return "";
 }
@@ -262,7 +317,8 @@ function deriveObjectivesFromPersistedSources(input: {
 }
 
 function mapConversationMessageToChatMessage(
-  message: JainaConversationMessage
+  message: JainaConversationMessage,
+  sessionTitle?: string
 ): JainaChatMessage {
   const persistedReport = parsePersistedReport(message);
   const persistedReportV2 = (() => {
@@ -279,13 +335,19 @@ function mapConversationMessageToChatMessage(
     message,
     report: persistedReport,
   });
+  const unwrappedResult = !persistedReport
+    ? parsePersistedResultWrapper(message.content, sessionTitle)
+    : null;
   const content =
-    persistedReport &&
-    (isFallbackCheckpointMessage(message.content) ||
-      isPersistedErrorMessage(message.content) ||
-      isLikelyStructuredJsonContent(message.content))
-      ? resolveReportSummaryForMessage(persistedReport) || message.content
-      : message.content;
+    unwrappedResult !== null
+      ? unwrappedResult.text ?? ""
+      : persistedReport &&
+        (isFallbackCheckpointMessage(message.content) ||
+          isPersistedErrorMessage(message.content) ||
+          isLikelyStructuredJsonContent(message.content))
+        ? resolveReportSummaryForMessage(persistedReport) || message.content
+        : message.content;
+  const persistedPlan = unwrappedResult?.plan;
 
   return {
     id: `persisted-${message.id}`,
@@ -295,6 +357,7 @@ function mapConversationMessageToChatMessage(
     ...(persistedReport ? { report: persistedReport } : {}),
     ...(persistedReportV2 ? { reportV2: persistedReportV2 } : {}),
     ...(persistedReportAssembly ? { reportAssembly: persistedReportAssembly } : {}),
+    ...(persistedPlan ? { plan: persistedPlan } : {}),
     ...(typeof message.reportAssemblyHtml === "string"
       ? { reportAssemblyHtml: message.reportAssemblyHtml }
       : {}),
@@ -352,7 +415,15 @@ function isPersistedErrorMessage(content: string): boolean {
   );
 }
 
-function mergePersistedMessagesWithLocal(
+function findPendingPlanId(messages: JainaChatMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const plan = messages[i].plan;
+    if (plan?.status === "awaiting_approval") return plan.id;
+  }
+  return null;
+}
+
+export function mergePersistedMessagesWithLocal(
   persistedMessages: JainaChatMessage[],
   localMessages: JainaChatMessage[]
 ): JainaChatMessage[] {
@@ -371,20 +442,63 @@ function mergePersistedMessagesWithLocal(
 
   if (pendingLocal.length > 0) {
     // Dedup: if the last pending user message content already matches the last
-    // persisted user message, the backend has now written this exchange — fall
-    // through to the report-merge path below instead of appending the local copy.
+    // persisted user message, the backend *may* have written this exchange.
+    // We also require the pending assistant to be present in persisted history.
+    // Without this guard, a user-first DB write can cause us to drop the local
+    // assistant (including reasoning/tool traces) on refresh.
     const lastPendingUser = [...pendingLocal].reverse().find((m) => m.role === "user");
+    const lastPendingAssistant = [...pendingLocal].reverse().find(
+      (m) => m.role === "assistant"
+    );
     const lastPersistedUser = [...persistedMessages].reverse().find((m) => m.role === "user");
-    const alreadySynced =
+    const lastPersistedAssistant = [...persistedMessages]
+      .reverse()
+      .find((m) => m.role === "assistant");
+    const localAssistantHasRichState = Boolean(
+      lastPendingAssistant &&
+        (lastPendingAssistant.plan ||
+          lastPendingAssistant.report ||
+          lastPendingAssistant.reportV2 ||
+          lastPendingAssistant.reportAssembly ||
+          (lastPendingAssistant.reasoning?.length ?? 0) > 0 ||
+          (lastPendingAssistant.toolCalls?.length ?? 0) > 0 ||
+          (lastPendingAssistant.toolResults?.length ?? 0) > 0 ||
+          (lastPendingAssistant.objectives?.length ?? 0) > 0)
+    );
+    const persistedAssistantHasMeaningfulContent = Boolean(
+      lastPersistedAssistant &&
+        lastPersistedAssistant.content.trim().length > 0 &&
+        !isFallbackCheckpointMessage(lastPersistedAssistant.content) &&
+        !isPersistedErrorMessage(lastPersistedAssistant.content) &&
+        !isPersistedResultStub(lastPersistedAssistant.content)
+    );
+    const userAlreadySynced =
       lastPendingUser &&
       lastPersistedUser &&
       lastPendingUser.content.trim() === lastPersistedUser.content.trim();
+    const assistantAlreadySynced =
+      !lastPendingAssistant ||
+      Boolean(
+        lastPersistedAssistant &&
+          ((lastPendingAssistant.plan?.id &&
+            lastPersistedAssistant.plan?.id === lastPendingAssistant.plan.id) ||
+            (lastPendingAssistant.report && lastPersistedAssistant.report) ||
+            (lastPendingAssistant.reportV2 && lastPersistedAssistant.reportV2) ||
+            (lastPendingAssistant.content.trim().length > 0 &&
+              lastPendingAssistant.content.trim() ===
+                lastPersistedAssistant.content.trim()) ||
+            (!localAssistantHasRichState && persistedAssistantHasMeaningfulContent))
+      );
+    const alreadySynced = Boolean(userAlreadySynced && assistantAlreadySynced);
 
     if (!alreadySynced) {
       // The current exchange hasn't landed in the DB yet. Return the persisted
       // history (without touching it — the last persisted assistant belongs to a
       // previous exchange, not this one) plus the pending local pair.
-      return [...persistedMessages, ...pendingLocal];
+      const pendingToAppend = userAlreadySynced
+        ? pendingLocal.filter((message) => message.role !== "user")
+        : pendingLocal;
+      return [...persistedMessages, ...pendingToAppend];
     }
     // alreadySynced: fall through — the DB has the new messages so we want the
     // persisted version and can apply report-data enrichment below.
@@ -411,9 +525,17 @@ function mergePersistedMessagesWithLocal(
   for (let index = localMessages.length - 1; index >= 0; index -= 1) {
     const candidate = localMessages[index];
     if (candidate?.role !== "assistant") continue;
+    const candidateHasRichState =
+      Boolean(candidate.plan) ||
+      Boolean(candidate.report) ||
+      Boolean(candidate.reportV2) ||
+      Boolean(candidate.reportAssembly) ||
+      (candidate.reasoning?.length ?? 0) > 0 ||
+      (candidate.toolCalls?.length ?? 0) > 0 ||
+      (candidate.toolResults?.length ?? 0) > 0 ||
+      (candidate.objectives?.length ?? 0) > 0;
     if (
-      candidate.report ||
-      candidate.reportAssembly ||
+      candidateHasRichState ||
       !isFallbackCheckpointMessage(candidate.content)
     ) {
       localAssistant = candidate;
@@ -436,10 +558,30 @@ function mergePersistedMessagesWithLocal(
   const localHasReport = Boolean(
     localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly
   );
+  const persistedPlanOnly =
+    Boolean(persistedAssistant.plan) &&
+    !persistedAssistant.report &&
+    !persistedAssistant.reportV2 &&
+    !persistedAssistant.reportAssembly &&
+    persistedAssistant.content.trim().length === 0;
+  const persistedTraceCount =
+    (persistedAssistant.reasoning?.length ?? 0) +
+    (persistedAssistant.toolCalls?.length ?? 0) +
+    (persistedAssistant.toolResults?.length ?? 0) +
+    (persistedAssistant.objectives?.length ?? 0);
+  const localTraceCount =
+    (localAssistant.reasoning?.length ?? 0) +
+    (localAssistant.toolCalls?.length ?? 0) +
+    (localAssistant.toolResults?.length ?? 0) +
+    (localAssistant.objectives?.length ?? 0);
+  const shouldPreserveLocalTrace = persistedTraceCount === 0 && localTraceCount > 0;
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
     !isPersistedErrorMessage(persistedAssistant.content) &&
-    !(persistedLacksReport && localHasReport)
+    !isPersistedResultStub(persistedAssistant.content) &&
+    !(persistedLacksReport && localHasReport) &&
+    !persistedPlanOnly &&
+    !shouldPreserveLocalTrace
   ) {
     return persistedMessages;
   }
@@ -448,6 +590,7 @@ function mergePersistedMessagesWithLocal(
   mergedMessages[persistedAssistantIndex] = {
     ...persistedAssistant,
     content: localAssistant.content || persistedAssistant.content,
+    plan: localAssistant.plan ?? persistedAssistant.plan,
     finalThought: localAssistant.finalThought ?? persistedAssistant.finalThought,
     renderAsReport: localAssistant.renderAsReport ?? persistedAssistant.renderAsReport,
     reasoning: localAssistant.reasoning ?? persistedAssistant.reasoning,
@@ -510,7 +653,7 @@ export function JainaChatSurface({
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
   const prefersReducedMotion = useReducedMotion();
 
-  const { state, start, cancel, reset, clearMemory, approvePlan } = useJainaChatStream();
+  const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
   const isStreaming = state.status === "streaming" || state.status === "starting";
 
   const [isPlanMode, setIsPlanMode] = React.useState(false);
@@ -714,8 +857,11 @@ export function JainaChatSurface({
           }
           return next;
         });
-        const mappedMessages = (payload.messages ?? []).map(
-          mapConversationMessageToChatMessage
+        const sessionTitleForTarget = normalizeSessionTitle(
+          payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null
+        ) ?? undefined;
+        const mappedMessages = (payload.messages ?? []).map((msg) =>
+          mapConversationMessageToChatMessage(msg, sessionTitleForTarget)
         );
         setMessages(mappedMessages);
         setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
@@ -756,7 +902,12 @@ export function JainaChatSurface({
           return next;
         });
         if (payload.messages) {
-          const mappedMessages = payload.messages.map(mapConversationMessageToChatMessage);
+          const sessionTitleForTarget = normalizeSessionTitle(
+            payload.sessions?.find((s) => s.sessionId === targetSessionId)?.title ?? null
+          ) ?? undefined;
+          const mappedMessages = payload.messages.map((msg) =>
+            mapConversationMessageToChatMessage(msg, sessionTitleForTarget)
+          );
           setMessages((previous) =>
             mergePersistedMessagesWithLocal(mappedMessages, previous)
           );
@@ -779,71 +930,64 @@ export function JainaChatSurface({
 
         const sessionTitle = normalizeSessionTitle(state.plan.title);
         if (sessionTitle) {
-          setSessionTitleById((previous) => ({
-            ...previous,
-            [sessionId]: sessionTitle,
-          }));
+          setSessionTitleById((previous) => {
+            if (previous[sessionId] === sessionTitle) return previous;
+            return { ...previous, [sessionId]: sessionTitle };
+          });
         }
       }
 
-    if (state.status === "streaming" && (state.responseText || state.objectives.length > 0 || state.plan)) {
-      const hasPlanAsResult = Boolean(state.plan) && !state.report && !state.reportV2;
-      const shouldPreferReport =
-        !hasPlanAsResult &&
-        (state.finalContentKind === "report" || Boolean(state.report) || Boolean(state.reportV2));
-      if (shouldPreferReport) {
-        updateMessage(activeResponseId, {
-          content: "Building checkpoint report…",
-          objectives: state.objectives,
-        });
-      } else {
-        const isJsonStart = state.responseText.trim().startsWith("{");
-        updateMessage(activeResponseId, {
-          content:
-            isJsonStart
-              ? "Generating analysis..."
-              : state.responseText || (state.plan?.title ? state.plan.title : "Working through objectives…"),
-          objectives: state.objectives,
-          plan: state.plan ?? undefined,
-        });
-      }
+    if (
+      state.status === "streaming" &&
+      (state.responseText ||
+        state.objectives.length > 0 ||
+        state.plan ||
+        state.report ||
+        state.reportV2 ||
+        state.pendingClarification)
+    ) {
+      const streamingContent = pickRenderableContent({
+        sessionTitle: sessionTitleById[sessionId],
+        pendingClarification: state.pendingClarification,
+        responseText: state.responseText,
+        report: state.report,
+        reportV2: state.reportV2,
+        latestCheckpointSummary: state.latestCheckpointSummary,
+        checkpointSummarySource: state.checkpointSummarySource,
+        plan: state.plan ?? undefined,
+        progress: state.progress,
+      });
+      updateMessage(activeResponseId, {
+        content: streamingContent,
+        objectives: state.objectives,
+        plan: state.plan ?? undefined,
+        report: state.report ?? undefined,
+        reportV2: state.reportV2 ?? undefined,
+        reportAssembly: state.reportAssembly ?? undefined,
+      });
     }
 
     if (state.status === "complete") {
       const completedResponseId = activeResponseId;
       const finalThought = getFinalThought(state.progress);
-      const safeResponseText = isLikelyStructuredJsonContent(state.responseText)
-        ? extractRenderableFallbackFromStructuredContent(state.responseText) || ""
-        : state.responseText;
-      const reportSummary = resolveReportSummaryForMessage(state.report ?? undefined);
-      const checkpointSummary =
-        state.checkpointSummarySource !== "default_unavailable"
-          ? state.latestCheckpointSummary?.trim() ?? ""
-          : "";
-      const resolvedSummary = reportSummary || checkpointSummary;
-      const hasClarificationRequest = Boolean(state.pendingClarification);
+      const content = pickRenderableContent({
+        sessionTitle: sessionTitleById[sessionId],
+        pendingClarification: state.pendingClarification,
+        responseText: state.responseText,
+        report: state.report,
+        reportV2: state.reportV2,
+        latestCheckpointSummary: state.latestCheckpointSummary,
+        checkpointSummarySource: state.checkpointSummarySource,
+        plan: state.plan ?? undefined,
+        progress: state.progress,
+      });
 
+      const hasClarificationRequest = Boolean(state.pendingClarification);
       const reportType =
         state.report && typeof state.report === "object" && "type" in state.report
           ? (state.report as { type?: unknown }).type
           : undefined;
       const isDirectAnswer = reportType === "direct_answer";
-      const hasPlanAsResult = Boolean(state.plan) && !state.report && !state.reportV2;
-      const shouldPreferReport =
-        !hasClarificationRequest &&
-        !isDirectAnswer &&
-        !hasPlanAsResult &&
-        (state.finalContentKind === "report" ||
-          (Boolean(state.report) && state.lastEventType === "response.content_part.done"));
-      const content = shouldPreferReport
-        ? resolvedSummary || "Report ready."
-        : safeResponseText ||
-          state.pendingClarification?.question ||
-          finalThought ||
-          (hasPlanAsResult && state.plan?.title ? state.plan.title : null) ||
-          resolvedSummary ||
-          "Response ready.";
-
       const hasReportSignal = resolveReportSignal(state.progress, state.stateDeltas);
       const reportHasContent = hasReportContent(state.report);
       const renderAsReport = !!(
@@ -851,7 +995,7 @@ export function JainaChatSurface({
         state.report &&
         !isDirectAnswer &&
         reportHasContent &&
-        (hasReportSignal || shouldPreferReport)
+        (hasReportSignal || state.finalContentKind === "report")
       );
 
       updateMessage(completedResponseId, {
@@ -1097,8 +1241,11 @@ export function JainaChatSurface({
           }
           return next;
         });
-        const mappedMessages = (conversationPayload.messages ?? []).map(
-          mapConversationMessageToChatMessage
+        const sessionTitleForTarget = normalizeSessionTitle(
+          conversationPayload.sessions?.find((s) => s.sessionId === mostRecentSessionId)?.title ?? null
+        ) ?? undefined;
+        const mappedMessages = (conversationPayload.messages ?? []).map((msg) =>
+          mapConversationMessageToChatMessage(msg, sessionTitleForTarget)
         );
         setMessages(mappedMessages);
         setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
@@ -1183,7 +1330,14 @@ export function JainaChatSurface({
   ]);
 
   const dispatchMessage = React.useCallback(
-    async (input: { query: string; canvas: boolean; clarificationId?: string; images?: Array<{ url: string; name?: string }> }) => {
+    async (input: {
+      query: string;
+      canvas: boolean;
+      clarificationId?: string;
+      images?: Array<{ url: string; name?: string }>;
+      planAction?: JainaPlanAction;
+      silentUserMessage?: boolean;
+    }) => {
       const query = input.query.trim();
       if (!query) return false;
 
@@ -1242,7 +1396,11 @@ export function JainaChatSurface({
         setShaderState("sweeping");
       }
 
-      setMessages((prev) => [...prev, userMessage, assistantMessage]);
+      setMessages((prev) =>
+        input.silentUserMessage
+          ? [...prev, assistantMessage]
+          : [...prev, userMessage, assistantMessage]
+      );
       setConversationSessions((previous) =>
         upsertConversationSession(previous, {
           sessionId: activeSessionId,
@@ -1269,6 +1427,7 @@ export function JainaChatSurface({
         clarificationId: input.clarificationId,
         userId: userId ?? undefined,
         images: input.images,
+        planAction: input.planAction,
       }).then((result) => {
         if (result.error) {
           show({
@@ -1320,11 +1479,22 @@ export function JainaChatSurface({
         ?.filter((a) => Boolean(a.url))
         .map((a) => ({ url: a.url as string, name: a.name }));
 
+      const pendingPlanId = findPendingPlanId(messages);
+
       const input = {
         query: normalizedQuery,
         canvas: isPlanMode,
         clarificationId: pendingClarificationId,
         ...(images && images.length > 0 ? { images } : {}),
+        ...(pendingPlanId
+          ? {
+              planAction: {
+                type: "refine" as const,
+                plan_id: pendingPlanId,
+                edits: normalizedQuery,
+              },
+            }
+          : {}),
       };
 
       const shouldQueue = shouldQueueSubmission({
@@ -1344,6 +1514,7 @@ export function JainaChatSurface({
       queueMessageForLater,
       isPlanMode,
       isStreaming,
+      messages,
       pendingClarificationId,
     ]
   );
@@ -1550,54 +1721,40 @@ export function JainaChatSurface({
   );
 
   const handlePlanFeedback = React.useCallback(
-    async (payload: { planId: string; approved: boolean; reason?: string }) => {
+    async (payload: PlanFeedbackPayload) => {
+      const nextStatus =
+        payload.type === "approve"
+          ? "approved"
+          : payload.type === "abandon"
+            ? "rejected"
+            : "awaiting_approval";
+
       setMessages((prev) =>
-        prev.map((msg) => {
-          if (msg.plan && msg.plan.id === payload.planId) {
-            return {
-              ...msg,
-              plan: {
-                ...msg.plan,
-                status: payload.approved ? "approved" : "rejected",
-              },
-            };
-          }
-          return msg;
-        })
+        prev.map((msg) =>
+          msg.plan && msg.plan.id === payload.planId
+            ? { ...msg, plan: { ...msg.plan, status: nextStatus } }
+            : msg
+        )
       );
 
-      const result = await approvePlan(payload);
-      if (result.error) {
-        setMessages((prev) =>
-          prev.map((msg) => {
-            if (msg.plan && msg.plan.id === payload.planId) {
-              return {
-                ...msg,
-                plan: {
-                  ...msg.plan,
-                  status: "awaiting_approval",
-                },
-              };
-            }
-            return msg;
-          })
-        );
-        show({
-          title: "Plan decision failed",
-          description: result.error,
-          variant: "error",
-        });
-        return;
-      }
+      const queryByType: Record<PlanFeedbackPayload["type"], string> = {
+        approve: "approved",
+        abandon: "abandoned",
+        refine: "refine plan",
+      };
 
-      const statusLabel = payload.approved ? "approved" : "rejected";
-      show({
-        title: "Plan decision sent",
-        description: `Plan ${statusLabel}.`,
-        variant: payload.approved ? "success" : "warning",
+      await dispatchMessage({
+        query: queryByType[payload.type],
+        canvas: isPlanMode,
+        planAction: {
+          type: payload.type,
+          plan_id: payload.planId,
+          ...(payload.type === "refine" ? { edits: payload.edits } : {}),
+        },
+        silentUserMessage: payload.type !== "refine",
       });
     },
-    [approvePlan, show]
+    [dispatchMessage, isPlanMode]
   );
 
   const handleClearMemory = React.useCallback(async () => {

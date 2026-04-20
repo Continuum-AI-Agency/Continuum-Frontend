@@ -55,6 +55,14 @@ const JainaChatSurface = dynamic(
   { ssr: false, loading: () => <JainaSkeleton /> }
 );
 
+const ReportJobsBell = dynamic(
+  () =>
+    import(
+      "@/components/paid-media/jaina/components/ReportJobsBell"
+    ).then((mod) => mod.ReportJobsBell),
+  { ssr: false }
+);
+
 type PaidMediaClientPageProps = {
   brandProfileId: string;
   brandName: string;
@@ -226,22 +234,25 @@ export default function PaidMediaClientPage({
             onSelect={setSelectedAdAccount}
             initialTimelineAccounts={initialAccounts}
           />
-          <TabsList className="h-9">
-            <TabsTrigger
-              value="dashboard"
-              onMouseEnter={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
-              onFocus={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
-            >
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger
-              value="jaina"
-              onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
-              onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
-            >
-              Jaina Analyst
-            </TabsTrigger>
-          </TabsList>
+          <div className="flex items-center gap-2">
+            <ReportJobsBell brandProfileId={brandProfileId} />
+            <TabsList className="h-9">
+              <TabsTrigger
+                value="dashboard"
+                onMouseEnter={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
+                onFocus={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
+              >
+                Dashboard
+              </TabsTrigger>
+              <TabsTrigger
+                value="jaina"
+                onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
+                onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
+              >
+                Jaina Analyst
+              </TabsTrigger>
+            </TabsList>
+          </div>
         </div>
 
         <TabsContent value="dashboard" className="box-border flex-1 min-h-0 pt-2 overflow-auto">

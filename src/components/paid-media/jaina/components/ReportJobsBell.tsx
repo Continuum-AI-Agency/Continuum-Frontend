@@ -1,0 +1,149 @@
+"use client";
+
+import { useState } from "react";
+import {
+  BellIcon,
+  CheckCircle2Icon,
+  DownloadIcon,
+  LoaderIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { http } from "@/lib/api/http";
+import {
+  useReportJobsRealtime,
+  type ReportJob,
+} from "@/hooks/useReportJobsRealtime";
+
+type Props = {
+  brandProfileId: string;
+};
+
+const statusConfig = {
+  pending: {
+    Icon: LoaderIcon,
+    className: "text-muted-foreground",
+    label: "Queued",
+  },
+  running: {
+    Icon: LoaderIcon,
+    className: "text-blue-500 animate-spin",
+    label: "Generating",
+  },
+  done: {
+    Icon: CheckCircle2Icon,
+    className: "text-emerald-500",
+    label: "Ready",
+  },
+  failed: {
+    Icon: XCircleIcon,
+    className: "text-red-500",
+    label: "Failed",
+  },
+};
+
+async function fetchSignedUrl(jobId: string): Promise<string> {
+  const data = await http.request<{ url: string }>({
+    path: `/api/agents/jaina/reports/jobs/${jobId}/file-url`,
+  });
+  return data.url;
+}
+
+function JobRow({ job }: { job: ReportJob }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { Icon, className, label } = statusConfig[job.status];
+
+  const handleDownload = async () => {
+    setIsDownloading(true);
+    try {
+      const url = await fetchSignedUrl(job.id);
+      window.open(url, "_blank");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-start gap-3 rounded-md px-3 py-2.5 hover:bg-muted/50">
+      <Icon className={cn("mt-0.5 size-4 shrink-0", className)} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium">{label}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
+          </span>
+        </div>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          {job.ad_account_id ?? job.id}
+        </p>
+        {job.status === "failed" && job.error_message && (
+          <p className="mt-0.5 line-clamp-2 text-xs text-red-500">
+            {job.error_message}
+          </p>
+        )}
+      </div>
+      {job.status === "done" && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0"
+          disabled={isDownloading}
+          onClick={handleDownload}
+          aria-label="Download report"
+        >
+          <DownloadIcon className="size-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function ReportJobsBell({ brandProfileId }: Props) {
+  const { jobs, unreadCount, markAllRead } =
+    useReportJobsRealtime(brandProfileId);
+
+  return (
+    <Popover onOpenChange={(open) => { if (open) markAllRead(); }}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative size-9"
+          aria-label={
+            unreadCount > 0 ? `${unreadCount} report updates` : "Report jobs"
+          }
+        >
+          <BellIcon className="size-4" />
+          {unreadCount > 0 && (
+            <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-2">
+        <p className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Report Jobs
+        </p>
+        {jobs.length === 0 ? (
+          <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+            No report jobs this session.
+          </p>
+        ) : (
+          <div className="max-h-72 space-y-0.5 overflow-y-auto">
+            {jobs.map((job) => (
+              <JobRow key={job.id} job={job} />
+            ))}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}

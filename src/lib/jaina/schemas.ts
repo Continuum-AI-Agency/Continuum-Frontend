@@ -25,6 +25,14 @@ export type HandoffTraceEntry = z.infer<typeof handoffTraceEntrySchema>;
 // Request/Response Schemas
 // ============================================================================
 
+export const jainaPlanActionSchema = z.object({
+  type: z.enum(["approve", "refine", "abandon"]),
+  plan_id: z.string().min(1),
+  edits: z.string().optional(),
+});
+
+export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
+
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
@@ -35,6 +43,7 @@ export const jainaChatRequestSchema = z.object({
       id: z.string().min(1),
     })
     .optional(),
+  plan_action: jainaPlanActionSchema.optional(),
   context: z.object({
     adAccountId: z.string().min(1),
     brandId: z.string().min(1),
@@ -336,12 +345,29 @@ export const checkpointBlockCategoryV2Schema = z.enum([
 ]);
 export type CheckpointBlockCategoryV2 = z.infer<typeof checkpointBlockCategoryV2Schema>;
 
+const BLOCK_PRIORITY_RANK: Record<string, number> = {
+  primary: 0,
+  secondary: 1,
+  tertiary: 2,
+};
+
+const blockPriorityV2Schema = z.preprocess((value) => {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized in BLOCK_PRIORITY_RANK) return BLOCK_PRIORITY_RANK[normalized];
+    const parsed = Number(normalized);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return value;
+}, z.number().int().nonnegative().default(0));
+
 const checkpointBlockBaseV2Schema = z.object({
   block_id: z.string().min(1),
   category: checkpointBlockCategoryV2Schema,
   scope: z.string().min(1),
   title: z.string().min(1),
-  priority: z.number().int().nonnegative().default(0),
+  priority: blockPriorityV2Schema,
 });
 
 export const highlightItemSchema = z.object({
@@ -384,7 +410,7 @@ export const chartBlockV2Schema = checkpointBlockBaseV2Schema.extend({
   category: z.literal("chart"),
   chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar"]),
   category_key: z.string(),
-  value_key: z.string().optional(),
+  value_key: z.string().nullish(),
   value_format: valueFormatSchema.optional(),
   data: z.array(z.record(z.string(), z.unknown())),
   chart_config: z.record(z.string(), chartConfigEntrySchema),
@@ -413,7 +439,7 @@ export const insightItemV2Schema = z.object({
   rationale: z.string().optional(),
   impact: z.string().optional(),
   severity: severitySchema.optional(),
-  priority: z.enum(["now", "soon", "later"]).optional(),
+  priority: z.enum(["now", "next", "soon", "later"]).optional(),
 });
 export type InsightItemV2 = z.infer<typeof insightItemV2Schema>;
 
@@ -427,7 +453,7 @@ export const comparisonPairSchema = z.object({
   label: z.string(),
   before: z.union([z.number(), z.string()]),
   after: z.union([z.number(), z.string()]),
-  unit: z.string().optional(),
+  unit: z.string().nullish(),
   format: valueFormatSchema.optional(),
   change: z.number().optional(),
   change_direction: changeDirectionSchema.optional(),
@@ -591,7 +617,7 @@ export type ProgressEventData = Exclude<z.infer<typeof progressEventSchema>["dat
 export const stateDeltaSchema = streamEventSchema(
   "state.delta",
   z.object({
-    source: z.string(),
+    source: z.string().optional(),
     delta: z.record(z.string(), z.unknown()),
   })
 );

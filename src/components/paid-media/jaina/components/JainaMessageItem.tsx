@@ -22,7 +22,7 @@ import {
 import type { JainaChatMessage } from "../types";
 import { ObjectivesQueue } from "./ObjectivesQueue";
 import { ThinkingWindow } from "./ThinkingWindow";
-import { PlanSection } from "./PlanSection";
+import { PlanSection, type PlanFeedbackPayload } from "./PlanSection";
 import { ClarificationBanner } from "./ClarificationBanner";
 import { MessageActionBar } from "./MessageActionBar";
 import { CreativesSection } from "./CreativesSection";
@@ -70,7 +70,7 @@ type JainaMessageItemProps = {
   activeResponseId: string | null;
   state: JainaStreamState;
   onSuggestionClick?: (query: string) => void;
-  onPlanFeedback?: (payload: { planId: string; approved: boolean; reason?: string }) => void;
+  onPlanFeedback?: (payload: PlanFeedbackPayload) => void;
   onRegenerate?: () => void;
   onFocusInput?: () => void;
 };
@@ -137,7 +137,12 @@ export function JainaMessageItem({
 
   const shouldRenderInlineReport = Boolean(structuredReport && hasReportContent(structuredReport));
   const isStructuredJsonContent = isLikelyStructuredJsonMessage(message.content);
-  const shouldHideMarkdownContent = isStructuredJsonContent;
+  const hasStructuredChild = Boolean(
+    shouldRenderInlineReport || reportV2 || plan || message.pendingClarification
+  );
+  const shouldHideMarkdownContent = isStructuredJsonContent && hasStructuredChild;
+  const trimmedContent = message.content.trim();
+  const hasRenderableContent = trimmedContent.length > 0 && !shouldHideMarkdownContent;
 
   const structuredFallbackContent = React.useMemo(() => {
     if (shouldRenderInlineReport || reportV2) return null;
@@ -146,6 +151,20 @@ export function JainaMessageItem({
       (isStructuredJsonContent ? extractRenderableFallbackFromStructuredContent(message.content) : null)
     );
   }, [isStructuredJsonContent, message.content, report, reportV2, shouldRenderInlineReport]);
+
+  const showStreamingPlaceholder =
+    isStreaming &&
+    message.role === "assistant" &&
+    !hasRenderableContent &&
+    !structuredFallbackContent &&
+    !hasStructuredChild;
+
+  const showStaticFallback =
+    !isStreaming &&
+    message.role === "assistant" &&
+    !hasRenderableContent &&
+    !structuredFallbackContent &&
+    !hasStructuredChild;
 
   const artifacts = isStreaming ? state.artifacts : message.artifacts;
   const toolCreatives = React.useMemo(() => {
@@ -168,7 +187,7 @@ export function JainaMessageItem({
           <Text size="2" className="font-medium">{message.content}</Text>
         ) : (
           <>
-            {!shouldHideMarkdownContent ? (
+            {hasRenderableContent ? (
               <div className="relative">
                 <SafeMarkdown
                   content={message.content}
@@ -185,6 +204,14 @@ export function JainaMessageItem({
                   />
                 ) : null}
               </div>
+            ) : null}
+
+            {showStreamingPlaceholder ? <RotatingMessage /> : null}
+
+            {showStaticFallback ? (
+              <Text size="2" className="text-muted-foreground">
+                Response complete.
+              </Text>
             ) : null}
 
             {structuredFallbackContent ? (

@@ -1560,6 +1560,61 @@ describe("reduceJainaStreamEvent plan + hitl events", () => {
     expect(state.plan?.steps[0]?.title).toContain("Identify active campaigns");
     expect(state.plan?.steps[1]?.title).toContain("Drill into underperforming campaigns");
   });
+
+  it("keeps plan state through response.done after a plan_ready-only exchange", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.created",
+      data: { id: "resp_plan_only" },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.plan_ready",
+      data: {
+        item_id: "item_plan_only",
+        part_id: "part_plan_only",
+        plan: {
+          plan_id: "fallback_uqc00d",
+          chat_title: "Recommend Budget Reallocations For This Week BY Campaign",
+          objectives: [
+            {
+              objective_id: "objective_campaign_1",
+              task: "Analyze campaign performance and rank winners.",
+            },
+          ],
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.content_part.done",
+      data: {
+        item_id: "item_plan_only",
+        part_id: "part_plan_only",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_item.done",
+      data: { item_id: "item_plan_only" },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.done",
+      data: {
+        id: "resp_plan_only",
+        object: "realtime.response",
+        status: "completed",
+        output: [],
+      },
+    } as any);
+
+    expect(state.status).toBe("complete");
+    expect(state.plan?.id).toBe("fallback_uqc00d");
+    expect(state.plan?.title).toBe("Recommend Budget Reallocations For This Week BY Campaign");
+    expect(state.plan?.steps[0]?.title).toContain("Analyze campaign performance");
+  });
 });
 
 describe("reduceJainaStreamEvent tool hydration compatibility", () => {
@@ -1703,7 +1758,28 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
     expect(state.plan?.steps.length).toBe(1);
   });
 
-  it("promotes checkpoint_report JSON text in adk.event to main report state", () => {
+  it("never promotes thought events carrying checkpoint_report JSON into state.report", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "thought",
+      data: {
+        text: JSON.stringify({
+          checkpoint_report: {
+            report_metadata: { title: "From Thought" },
+            blocks: [{ scope: "account", title: "Block", summary: "Hidden" }],
+          },
+        }),
+      },
+    } as any);
+
+    expect(state.report).toBeNull();
+    expect(state.reportJson).toBe("");
+    expect(state.progress.length).toBe(1);
+    expect(state.progress[0]?.stage).toBe("thinking");
+  });
+
+  it("never promotes adk.event text parts carrying checkpoint_report JSON into state.report", () => {
     let state = createInitialJainaStreamState();
 
     state = reduceJainaStreamEvent(state, {
@@ -1716,21 +1792,8 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
             {
               text: JSON.stringify({
                 checkpoint_report: {
-                  report_metadata: {
-                    title: "Weekly Campaign Performance & Budget Analysis",
-                    date_range: "Last 7 Days",
-                  },
-                  blocks: [
-                    {
-                      scope: "account",
-                      title: "Account Performance Summary",
-                      summary: "ROAS is stable at high spend levels.",
-                      data: {
-                        headers: ["Metric", "Value"],
-                        rows: [["Total Spend", "$151,593.91"]],
-                      },
-                    },
-                  ],
+                  report_metadata: { title: "From adk" },
+                  blocks: [{ scope: "account", title: "Block", summary: "Hidden" }],
                 },
               }),
               thoughtSignature: "sig_1",
@@ -1740,53 +1803,9 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
       },
     } as any);
 
-    expect(state.progress.length).toBe(0);
-    const report = asStructuredReport(state);
-    expect(report.report_title).toBe("Weekly Campaign Performance & Budget Analysis");
-    expect(report.sections.length).toBeGreaterThan(0);
-    expect(report.sections[0]?.heading).toBe("Account Performance Summary");
-    expect(state.finalContentKind).toBe("report");
-  });
-
-  it("promotes nested content.parts checkpoint payloads emitted via thought events", () => {
-    let state = createInitialJainaStreamState();
-
-    const thoughtEnvelope = JSON.stringify({
-      content: {
-        role: "model",
-        parts: [
-          {
-            text: JSON.stringify({
-              type: "checkpoint_report",
-              report: {
-                executive_summary: "Recovered nested thought payload",
-                sections: [],
-                performance_snapshot: [],
-                strategic_recommendations: [],
-                follow_up_questions: [],
-                handoff_trace: [],
-                execution_objectives: [],
-                cached_sources: [],
-                graphs: [],
-              },
-            }),
-            thoughtSignature: "sig_1",
-          },
-        ],
-      },
-    });
-
-    state = reduceJainaStreamEvent(state, {
-      type: "thought",
-      data: {
-        text: thoughtEnvelope,
-      },
-    } as any);
-
-    expect(state.progress.length).toBe(0);
-    const report = asStructuredReport(state);
-    expect(report.executive_summary).toBe("Recovered nested thought payload");
-    expect(state.finalContentKind).toBe("report");
+    expect(state.report).toBeNull();
+    expect(state.reportJson).toBe("");
+    expect(state.progress.length).toBeGreaterThan(0);
   });
 
   it("keeps arbitrary thought JSON visible in reasoning when it is not report-like", () => {
@@ -1809,149 +1828,6 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
     expect(state.report).toBeNull();
   });
 
-  it("promotes schema-valid report assembly thought JSON without checkpoint keywords", () => {
-    let state = createInitialJainaStreamState();
-
-    state = reduceJainaStreamEvent(state, {
-      type: "thought",
-      data: {
-        text: JSON.stringify({
-          header: {
-            title: "Weekly Report",
-            period: "Last 7 days",
-            report_tags: ["health"],
-          },
-          summary: {
-            narrative: "Assembly summary from thought payload.",
-          },
-          metrics: [
-            {
-              label: "ROAS",
-              planned: 2,
-              actual: 2.4,
-              index_percent: 120,
-              unit: "x",
-              deviation_type: "positive",
-            },
-          ],
-          charts: [],
-          insights: [],
-          recommendations: [],
-        }),
-      },
-    } as any);
-
-    expect(state.progress.length).toBe(0);
-    const report = asStructuredReport(state);
-    expect(report.report_title).toBe("Weekly Report");
-    expect(report.executive_summary).toContain("Assembly summary from thought payload.");
-    expect(state.finalContentKind).toBe("report");
-  });
-
-  it("overwrites report payload for the same event id with the latest version", () => {
-    let state = createInitialJainaStreamState();
-
-    state = reduceJainaStreamEvent(state, {
-      id: "evt_same_1",
-      type: "thought",
-      data: {
-        text: JSON.stringify({
-          checkpoint_report: {
-            report_metadata: { title: "Same Event" },
-            blocks: [
-              {
-                scope: "account",
-                title: "V1 Block",
-                summary: "Richer first payload",
-              },
-            ],
-          },
-        }),
-      },
-    } as any);
-
-    state = reduceJainaStreamEvent(state, {
-      id: "evt_same_1",
-      type: "thought",
-      data: {
-        text: JSON.stringify({
-          executive_summary: "V2 overwrite payload",
-          sections: [],
-          performance_snapshot: [],
-          strategic_recommendations: [],
-          follow_up_questions: [],
-          handoff_trace: [],
-          execution_objectives: [],
-          cached_sources: [],
-          graphs: [],
-        }),
-      },
-    } as any);
-
-    const report = asStructuredReport(state);
-    expect(report.executive_summary).toBe("V2 overwrite payload");
-    expect(report.blocks.length).toBe(0);
-  });
-
-  it("does not use current response id as report overwrite event id", () => {
-    let state = createInitialJainaStreamState();
-
-    state = reduceJainaStreamEvent(state, {
-      type: "response.created",
-      data: {
-        id: "resp_same",
-        object: "realtime.response",
-        status: "in_progress",
-        status_details: null,
-        output: [],
-      },
-    } as any);
-
-    state = reduceJainaStreamEvent(state, {
-      id: "resp_same",
-      type: "thought",
-      data: {
-        text: JSON.stringify({
-          checkpoint_report: {
-            report_metadata: { title: "Response ID Safeguard" },
-            blocks: [
-              {
-                scope: "account",
-                title: "Rich Block",
-                summary: "Rich version should remain.",
-                data: {
-                  headers: ["Metric", "Value"],
-                  rows: [["Spend", "$100"]],
-                },
-              },
-            ],
-          },
-        }),
-      },
-    } as any);
-
-    state = reduceJainaStreamEvent(state, {
-      id: "resp_same",
-      type: "thought",
-      data: {
-        text: JSON.stringify({
-          executive_summary: "Sparse overwrite that should not replace rich block data",
-          sections: [],
-          performance_snapshot: [],
-          strategic_recommendations: [],
-          follow_up_questions: [],
-          handoff_trace: [],
-          execution_objectives: [],
-          cached_sources: [],
-          graphs: [],
-        }),
-      },
-    } as any);
-
-    const report = asStructuredReport(state);
-    expect(report.report_title).toBe("Response ID Safeguard");
-    expect(report.blocks.length).toBeGreaterThan(0);
-  });
 });
 
 describe("parseJainaStreamEvent compatibility guards", () => {
@@ -2200,5 +2076,208 @@ describe("normalizeCheckpointReportPayload strictness", () => {
     expect(report.executive_summary).toBe("Nested report envelope");
     expect(report.sections[0]?.summary).toBe("Nested summary");
     expect(report.sections[0]?.highlights[0]?.text).toBe("Nested highlight");
+  });
+});
+
+describe("reduceJainaStreamEvent plan capture from heartbeat state.delta", () => {
+  it("captures objective_plan from a state.delta with no source field", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "state.delta",
+      data: {
+        delta: {
+          objective_plan: {
+            plan_id: "fallback_zhj63a",
+            intent: "analysis",
+            chat_title: "Which Creatives Are Winning",
+            objectives: [
+              { task: "Analyze ad-level performance", scope: "ad" },
+              { task: "Summarize findings", scope: "account" },
+            ],
+          },
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    expect(state.plan).not.toBeNull();
+    expect(state.plan?.id).toBe("fallback_zhj63a");
+    expect(state.plan?.title).toBe("Which Creatives Are Winning");
+    expect(state.plan?.steps.length).toBeGreaterThan(0);
+  });
+
+  it("captures objective_plan from a state.delta with arbitrary source", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "state.delta",
+      data: {
+        source: "some_arbitrary_label",
+        delta: {
+          objective_plan: {
+            plan_id: "plan_xyz",
+            chat_title: "Arbitrary Source Plan",
+            objectives: [{ task: "Do something" }],
+          },
+        },
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("plan_xyz");
+    expect(state.plan?.title).toBe("Arbitrary Source Plan");
+  });
+
+  it("builds a minimal plan from a key=value response.plan.delta string", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.plan.delta",
+      data: {
+        delta:
+          "plan_id=fallback_abc123; intent=analysis; objectives=2; date_preset=last_7d",
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    expect(state.plan).not.toBeNull();
+    expect(state.plan?.id).toBe("fallback_abc123");
+    expect(state.plan?.title).toMatch(/analysis/i);
+  });
+
+  it("preserves plan captured by state.delta when response.plan.delta fails JSON parse", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "state.delta",
+      data: {
+        delta: {
+          objective_plan: {
+            plan_id: "captured_first",
+            chat_title: "Captured First",
+            objectives: [{ task: "Task A" }],
+          },
+        },
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("captured_first");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.plan.delta",
+      data: {
+        delta: "plan_id=captured_first; intent=analysis",
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("captured_first");
+    expect(state.plan?.title).toBe("Captured First");
+  });
+});
+
+describe("reduceJainaStreamEvent text delta routing", () => {
+  it("appends text-kind deltas to responseText even when finalContentKind is report", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.content_part.added",
+      data: {
+        item_id: "item_1",
+        part: { id: "part_text", type: "text" },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_1",
+        part_id: "part_json",
+        report: {
+          executive_summary: "Header summary",
+        },
+      },
+    } as any);
+
+    expect(state.finalContentKind).toBe("report");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_1",
+        part_id: "part_text",
+        delta: "Hello from text part.",
+      },
+    } as any);
+
+    expect(state.responseText).toContain("Hello from text part.");
+  });
+
+  it("routes json-part deltas into reportJson and not into responseText", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.content_part.added",
+      data: {
+        item_id: "item_2",
+        part: { id: "part_json_1", type: "json" },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.output_text.delta",
+      data: {
+        item_id: "item_2",
+        part_id: "part_json_1",
+        delta: '{"executive_summary":"partial",',
+      },
+    } as any);
+
+    expect(state.reportJson).toContain("executive_summary");
+    expect(state.responseText).toBe("");
+  });
+
+  it("preserves explicit chat_title when later key=value plan delta carries only intent", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "state.delta",
+      data: {
+        source: "objectives_init",
+        delta: {
+          objective_plan: {
+            plan_id: "fallback_foo",
+            intent: "analysis",
+            chat_title: "Give ME A 7-day Campaign Health Brief With",
+            objectives: [{ objective_id: "o1", task: "do thing" }],
+          },
+        },
+      },
+    } as any);
+
+    expect(state.plan?.title).toBe("Give ME A 7-day Campaign Health Brief With");
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.plan.delta",
+      data: {
+        delta: "plan_id=fallback_foo; intent=analysis; objectives=1; date_preset=last_7d",
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("fallback_foo");
+    expect(state.plan?.title).toBe("Give ME A 7-day Campaign Health Brief With");
+  });
+
+  it("uses derived intent title only when no previous plan exists", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.plan.delta",
+      data: {
+        delta: "plan_id=fresh_bar; intent=analysis; objectives=1",
+      },
+    } as any);
+
+    expect(state.plan?.id).toBe("fresh_bar");
+    expect(state.plan?.title).toBe("Analysis plan");
   });
 });

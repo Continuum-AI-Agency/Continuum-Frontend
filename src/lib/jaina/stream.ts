@@ -57,6 +57,14 @@ import {
 import type { CampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
 import { z } from "zod";
 import type { JainaPlan } from "@/components/paid-media/jaina/types";
+import {
+  extractArrayFieldByKeys,
+  extractObjectFieldByKeys,
+  extractStringFieldByKeys,
+  parseLooseJsonCandidate,
+  shouldAttemptStringReportExtraction,
+  unwrapReportEnvelope,
+} from "./unwrapping";
 
 export type JainaStreamStatus = "idle" | "starting" | "streaming" | "complete" | "error";
 
@@ -519,37 +527,6 @@ function normalizeHandoffTraceEntry(value: unknown): HandoffTraceEntry | null {
   };
 }
 
-function unwrapReportEnvelope(value: unknown): unknown {
-  let current: unknown = value;
-
-  for (let i = 0; i < 4; i += 1) {
-    const record = asRecord(current);
-    if (!record) break;
-
-    const nestedReport = asRecord(record.report);
-    if (nestedReport) {
-      current = nestedReport;
-      continue;
-    }
-
-    const nestedPayload = asRecord(record.payload);
-    if (nestedPayload) {
-      current = nestedPayload;
-      continue;
-    }
-
-    const nestedData = asRecord(record.data);
-    if (nestedData) {
-      current = nestedData;
-      continue;
-    }
-
-    break;
-  }
-
-  return current;
-}
-
 function hasStructuredReportContent(report: FrontendCheckpointReport): boolean {
   return Boolean(
     report.executive_summary ||
@@ -809,32 +786,6 @@ function parseReportFromAccumulatedText(reportJson: string): ReportPayload | nul
   return bestReport;
 }
 
-function parseLooseJsonCandidate(candidate: string): unknown | null {
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    try {
-      return JSON.parse(sanitizeJsonStringLiterals(candidate));
-    } catch {
-      return null;
-    }
-  }
-}
-
-function shouldAttemptStringReportExtraction(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return true;
-  return (
-    trimmed.includes("checkpoint_report") ||
-    trimmed.includes("executive_summary") ||
-    trimmed.includes("performance_snapshot") ||
-    trimmed.includes("sections") ||
-    trimmed.includes("blocks") ||
-    trimmed.includes("strategic_recommendations")
-  );
-}
-
 function extractReportPayloadFromUnknown(
   value: unknown,
   depth = 0
@@ -932,260 +883,6 @@ function pickRicherReport(
   return scoreReport(candidateReport) >= scoreReport(currentReport)
     ? candidateReport
     : currentReport;
-}
-
-function getStreamEventId(
-  event: ParsedJainaStreamEvent,
-  currentResponseId?: string
-): string | undefined {
-  const record = asRecord(event);
-  if (!record) return undefined;
-  const rootEventId = getNonEmptyString(record.event_id);
-  if (rootEventId) return rootEventId;
-
-  const dataRecord = asRecord(record.data);
-  const dataEventId = dataRecord ? getNonEmptyString(dataRecord.event_id) : undefined;
-  if (dataEventId) return dataEventId;
-
-  const fallbackId = getNonEmptyString(record.id);
-  if (fallbackId && fallbackId !== currentResponseId) {
-    return fallbackId;
-  }
-
-  return undefined;
-}
-
-function mergeReportForEventId(input: {
-  currentReport: ReportPayload | null;
-  candidateReport: ReportPayload;
-  currentSourceEventId?: string;
-  incomingEventId?: string;
-}): { report: ReportPayload; reportSourceEventId?: string } {
-  const { currentReport, candidateReport, currentSourceEventId, incomingEventId } = input;
-  if (incomingEventId && currentSourceEventId === incomingEventId) {
-    return {
-      report: candidateReport,
-      reportSourceEventId: incomingEventId,
-    };
-  }
-
-  return {
-    report: pickRicherReport(currentReport, candidateReport) ?? candidateReport,
-    reportSourceEventId: incomingEventId ?? currentSourceEventId,
-  };
-}
-
-function skipWhitespace(text: string, index: number): number {
-  let cursor = index;
-  while (cursor < text.length && /\s/.test(text[cursor])) {
-    cursor += 1;
-  }
-  return cursor;
-}
-
-function sanitizeJsonStringLiterals(input: string): string {
-  let inString = false;
-  let isEscaped = false;
-  let output = "";
-
-  for (const char of input) {
-    if (!inString) {
-      if (char === "\"") inString = true;
-      output += char;
-      continue;
-    }
-
-    if (isEscaped) {
-      isEscaped = false;
-      output += char;
-      continue;
-    }
-
-    if (char === "\\") {
-      isEscaped = true;
-      output += char;
-      continue;
-    }
-
-    if (char === "\"") {
-      inString = false;
-      output += char;
-      continue;
-    }
-
-    if (char === "\n") {
-      output += "\\n";
-      continue;
-    }
-    if (char === "\r") {
-      output += "\\r";
-      continue;
-    }
-    if (char === "\t") {
-      output += "\\t";
-      continue;
-    }
-
-    output += char;
-  }
-
-  return output;
-}
-
-function findJsonValueStartByKey(text: string, key: string): number | null {
-  let searchFrom = 0;
-  let latestValueStart: number | null = null;
-  while (searchFrom < text.length) {
-    const keyIndex = text.indexOf(`"${key}"`, searchFrom);
-    if (keyIndex === -1) break;
-    let cursor = skipWhitespace(text, keyIndex + key.length + 2);
-    if (text[cursor] !== ":") {
-      searchFrom = keyIndex + 1;
-      continue;
-    }
-    cursor = skipWhitespace(text, cursor + 1);
-    latestValueStart = cursor;
-    searchFrom = keyIndex + 1;
-  }
-  return latestValueStart;
-}
-
-function extractBalancedJsonSegment(
-  text: string,
-  startIndex: number,
-  openChar: "{" | "["
-): string | null {
-  const closeChar = openChar === "{" ? "}" : "]";
-  if (text[startIndex] !== openChar) return null;
-
-  let depth = 0;
-  let inString = false;
-  let isEscaped = false;
-
-  for (let cursor = startIndex; cursor < text.length; cursor += 1) {
-    const char = text[cursor];
-
-    if (inString) {
-      if (isEscaped) {
-        isEscaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        isEscaped = true;
-        continue;
-      }
-      if (char === "\"") {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === "\"") {
-      inString = true;
-      continue;
-    }
-    if (char === openChar) {
-      depth += 1;
-      continue;
-    }
-    if (char === closeChar) {
-      depth -= 1;
-      if (depth === 0) {
-        return text.slice(startIndex, cursor + 1);
-      }
-    }
-  }
-
-  return null;
-}
-
-function extractStringFieldByKeys(
-  text: string,
-  keys: string[]
-): string | undefined {
-  for (const key of keys) {
-    const valueStart = findJsonValueStartByKey(text, key);
-    if (valueStart === null || text[valueStart] !== "\"") continue;
-
-    let cursor = valueStart + 1;
-    let isEscaped = false;
-    while (cursor < text.length) {
-      const char = text[cursor];
-      if (isEscaped) {
-        isEscaped = false;
-        cursor += 1;
-        continue;
-      }
-      if (char === "\\") {
-        isEscaped = true;
-        cursor += 1;
-        continue;
-      }
-      if (char === "\"") {
-        const encoded = text.slice(valueStart, cursor + 1);
-        try {
-          return JSON.parse(encoded);
-        } catch {
-          try {
-            return JSON.parse(sanitizeJsonStringLiterals(encoded));
-          } catch {
-            return undefined;
-          }
-        }
-      }
-      cursor += 1;
-    }
-  }
-  return undefined;
-}
-
-function extractArrayFieldByKeys(text: string, keys: string[]): unknown[] | undefined {
-  for (const key of keys) {
-    const valueStart = findJsonValueStartByKey(text, key);
-    if (valueStart === null || text[valueStart] !== "[") continue;
-    const segment = extractBalancedJsonSegment(text, valueStart, "[");
-    if (!segment) continue;
-    try {
-      const parsed = JSON.parse(segment);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      try {
-        const parsed = JSON.parse(sanitizeJsonStringLiterals(segment));
-        if (Array.isArray(parsed)) return parsed;
-      } catch {
-        continue;
-      }
-    }
-  }
-  return undefined;
-}
-
-function extractObjectFieldByKeys(
-  text: string,
-  keys: string[]
-): Record<string, unknown> | undefined {
-  for (const key of keys) {
-    const valueStart = findJsonValueStartByKey(text, key);
-    if (valueStart === null || text[valueStart] !== "{") continue;
-    const segment = extractBalancedJsonSegment(text, valueStart, "{");
-    if (!segment) continue;
-    try {
-      const parsed = JSON.parse(segment);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
-    } catch {
-      try {
-        const parsed = JSON.parse(sanitizeJsonStringLiterals(segment));
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          return parsed as Record<string, unknown>;
-        }
-      } catch {
-        continue;
-      }
-    }
-  }
-  return undefined;
 }
 
 function parsePartialReportFromAccumulatedText(
@@ -1331,50 +1028,6 @@ function looksLikeStructuredReportDelta(delta: string): boolean {
     trimmed.includes("\"kpis\"") ||
     trimmed.includes("\"budget\"")
   );
-}
-
-function looksLikeCheckpointReportPayload(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-  return (
-    trimmed.includes("checkpoint_report") ||
-    trimmed.includes("\"checkpoint_report\"") ||
-    trimmed.includes("\"report_metadata\"") ||
-    (trimmed.includes("\"executive_summary\"") &&
-      (trimmed.includes("\"sections\"") ||
-        trimmed.includes("\"blocks\"") ||
-        trimmed.includes("\"performance_snapshot\"") ||
-        trimmed.includes("\"strategic_recommendations\"")))
-  );
-}
-
-function parseStructuredReportFromText(text: string): ReportPayload | null {
-  const strictSchemaMatch = parseReportFromAccumulatedText(text);
-  if (strictSchemaMatch) {
-    if ("type" in strictSchemaMatch && strictSchemaMatch.type === "direct_answer") {
-      return null;
-    }
-    return strictSchemaMatch;
-  }
-
-  const looksLikeReportText =
-    looksLikeCheckpointReportPayload(text) ||
-    text.includes("checkpoint_report") ||
-    text.includes("\"executive_summary\"") ||
-    text.includes("\"performance_snapshot\"") ||
-    text.includes("\"strategic_recommendations\"") ||
-    text.includes("\"follow_up_questions\"") ||
-    text.includes("\"sections\"") ||
-    text.includes("\"blocks\"");
-  if (!looksLikeReportText) {
-    return null;
-  }
-  const parsedReport = parsePartialReportFromAccumulatedText(text);
-  if (!parsedReport) return null;
-  if ("type" in parsedReport && parsedReport.type === "direct_answer") {
-    return null;
-  }
-  return parsedReport;
 }
 
 export function parseJainaStreamEvent(line: string): ParsedJainaStreamEvent | null {
@@ -1556,6 +1209,60 @@ function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
     map.set(objective.id, objective);
   }
   return Array.from(map.values());
+}
+
+function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
+  const hasPlanId =
+    typeof payload.plan_id === "string" ||
+    typeof payload.id === "string";
+  const hasObjectives =
+    Array.isArray(payload.objectives) ||
+    Array.isArray(payload.execution_objectives);
+  return hasPlanId && hasObjectives;
+}
+
+function parsePlanFromKeyValueDelta(
+  delta: string,
+  previous: JainaPlan | null
+): JainaPlan | null {
+  const trimmed = delta.trim();
+  if (!trimmed || trimmed.startsWith("{") || trimmed.startsWith("[")) return null;
+  if (!trimmed.includes("=")) return null;
+  const record: Record<string, string> = {};
+  for (const segment of trimmed.split(";")) {
+    const [rawKey, ...rest] = segment.split("=");
+    if (!rawKey || rest.length === 0) continue;
+    const key = rawKey.trim();
+    const value = rest.join("=").trim();
+    if (!key) continue;
+    record[key] = value;
+  }
+  const planId = record.plan_id ?? record.id;
+  if (!planId) return null;
+  const explicitTitle = record.chat_title ?? record.title;
+  const derivedTitle = record.intent ? `${capitalize(record.intent)} plan` : undefined;
+  const explicitDescription = record.description ?? record.summary;
+  const derivedDescription = record.date_preset ? `Scope: ${record.date_preset}` : undefined;
+  if (previous && previous.id === planId) {
+    return {
+      ...previous,
+      ...(explicitTitle ? { title: explicitTitle } : {}),
+      ...(explicitDescription ? { description: explicitDescription } : {}),
+    };
+  }
+  return {
+    id: planId,
+    title: explicitTitle ?? derivedTitle ?? previous?.title ?? "Execution Plan",
+    description:
+      explicitDescription ?? derivedDescription ?? previous?.description ?? "Review this execution plan.",
+    status: previous?.status ?? "pending",
+    steps: previous?.steps ?? [],
+  };
+}
+
+function capitalize(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 function normalizeObjectiveListFromPayload(payload: Record<string, unknown>): JainaObjective[] {
@@ -1811,7 +1518,6 @@ export function reduceJainaStreamEvent(
   state: JainaStreamState,
   event: ParsedJainaStreamEvent
 ): JainaStreamState {
-  const streamEventId = getStreamEventId(event, state.responseId);
   const nextBase: JainaStreamState = {
     ...state,
     status: state.status === "idle" ? "streaming" : state.status,
@@ -1827,7 +1533,9 @@ export function reduceJainaStreamEvent(
       }
 
       const nextPlanJson = `${state.planJson}${payload.delta}`;
-      const nextPlan = parsePlanFromAccumulatedDelta(nextPlanJson, state.plan);
+      const nextPlan =
+        parsePlanFromAccumulatedDelta(nextPlanJson, state.plan) ??
+        parsePlanFromKeyValueDelta(payload.delta, state.plan);
       return {
         ...nextBase,
         planJson: nextPlanJson,
@@ -1836,10 +1544,14 @@ export function reduceJainaStreamEvent(
     }
     case "response.plan_ready": {
       const parsed = responsePlanReadySchema.safeParse(event);
-      if (!parsed.success || !parsed.data.data?.plan) {
+      const planFromSchema = parsed.success ? asRecord(parsed.data.data?.plan) : null;
+      const eventRecord = asRecord(event);
+      const dataRecord = asRecord(eventRecord?.data);
+      const planRecord = planFromSchema ?? asRecord(dataRecord?.plan) ?? asRecord(eventRecord?.plan);
+
+      if (!planRecord) {
         return nextBase;
       }
-      const planRecord = parsed.data.data.plan;
       const planJson = JSON.stringify(planRecord);
       const nextPlan = parsePlanFromAccumulatedDelta(planJson, state.plan);
       const planObjectives = normalizeObjectiveListFromPayload(planRecord);
@@ -2136,6 +1848,7 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         itemId: parsed.data.data.item_id,
         partId: parsed.data.data.part.id,
+        ...(parsed.data.data.part.type === "text" ? { reportJson: "" } : {}),
         contentPartKinds: {
           ...state.contentPartKinds,
           [parsed.data.data.part.id]: parsed.data.data.part.type,
@@ -2374,22 +2087,6 @@ export function reduceJainaStreamEvent(
       if (!parsed.success) {
         return nextBase;
       }
-      const structuredReport = parseStructuredReportFromText(parsed.data.text);
-      if (structuredReport) {
-        const merged = mergeReportForEventId({
-          currentReport: state.report,
-          candidateReport: structuredReport,
-          currentSourceEventId: state.reportSourceEventId,
-          incomingEventId: streamEventId,
-        });
-        return {
-          ...nextBase,
-          reportJson: `${state.reportJson}${parsed.data.text}`,
-          report: merged.report,
-          reportSourceEventId: merged.reportSourceEventId,
-          finalContentKind: "report",
-        };
-      }
       const detail = formatThoughtDetail(parsed.data.text);
       return {
         ...nextBase,
@@ -2442,23 +2139,6 @@ export function reduceJainaStreamEvent(
 
       for (const part of parsed.data.content.parts) {
         if ("text" in part) {
-          const structuredReport = parseStructuredReportFromText(part.text);
-          if (structuredReport) {
-            const merged = mergeReportForEventId({
-              currentReport: nextState.report,
-              candidateReport: structuredReport,
-              currentSourceEventId: nextState.reportSourceEventId,
-              incomingEventId: streamEventId,
-            });
-            nextState = {
-              ...nextState,
-              reportJson: `${nextState.reportJson}${part.text}`,
-              report: merged.report,
-              reportSourceEventId: merged.reportSourceEventId,
-              finalContentKind: "report",
-            };
-            continue;
-          }
           const detail = formatThoughtDetail(part.text);
           const inferredPlan = looksLikePlanDelta(part.text)
             ? parsePlanFromAccumulatedDelta(part.text, nextState.plan)
@@ -2670,22 +2350,19 @@ export function reduceJainaStreamEvent(
       const partKind = payload.part_id
         ? state.contentPartKinds[payload.part_id]
         : undefined;
-      const shouldParseAsReport =
+      const deltaLooksStructured = looksLikeStructuredReportDelta(payload.delta);
+      const accumulateReportJson =
         partKind === "json" ||
-        state.finalContentKind === "report" ||
-        state.reportJson.trim().length > 0 ||
-        looksLikeStructuredReportDelta(payload.delta);
-      const nextReportJson = shouldParseAsReport
+        deltaLooksStructured ||
+        state.reportJson.trim().length > 0;
+      const nextReportJson = accumulateReportJson
         ? `${state.reportJson}${payload.delta}`
         : state.reportJson;
-      const parsedReport = shouldParseAsReport
+      const parsedReport = accumulateReportJson
         ? parseReportFromAccumulatedText(nextReportJson) ??
           parsePartialReportFromAccumulatedText(nextReportJson)
         : null;
-      const shouldAppendDeltaToResponseText =
-        !shouldParseAsReport &&
-        state.reportJson.trim().length === 0 &&
-        !looksLikeStructuredReportDelta(payload.delta);
+      const appendToResponseText = partKind !== "json" && !deltaLooksStructured;
 
       return {
         ...nextBase,
@@ -2693,7 +2370,7 @@ export function reduceJainaStreamEvent(
           ? { outputItemId: payload.item_id }
           : {}),
         reportJson: nextReportJson,
-        responseText: shouldAppendDeltaToResponseText
+        responseText: appendToResponseText
           ? `${state.responseText}${payload.delta}`
           : state.responseText,
         report: pickRicherReport(state.report, parsedReport),
@@ -2798,24 +2475,14 @@ export function reduceJainaStreamEvent(
           },
         })),
       ];
-      if (payload.source === "objectives_init") {
-        const deltaObjectives = normalizeObjectiveListFromPayload(toolDeltaPayload);
-        const objectivePlanRecord = asRecord(toolDeltaPayload.objective_plan);
-        let nextPlan = state.plan;
-        if (objectivePlanRecord) {
-          const planJson = JSON.stringify(objectivePlanRecord);
-          nextPlan = parsePlanFromAccumulatedDelta(planJson, state.plan) ?? state.plan;
-        }
-        return {
-          ...nextBase,
-          stateDeltas: nextStateDeltas,
-          toolCalls: mergedToolCalls,
-          toolResults: mergedToolResults,
-          progress: nextProgress,
-          objectives: deltaObjectives.length > 0 ? deltaObjectives : state.objectives,
-          plan: nextPlan,
-          ...checkpointSummaryPatch,
-        };
+      const deltaObjectives = normalizeObjectiveListFromPayload(toolDeltaPayload);
+      const objectivePlanRecord =
+        asRecord(toolDeltaPayload.objective_plan) ??
+        (looksLikePlanRecord(toolDeltaPayload) ? toolDeltaPayload : null);
+      let planFromDelta: typeof state.plan = state.plan;
+      if (objectivePlanRecord) {
+        const planJson = JSON.stringify(objectivePlanRecord);
+        planFromDelta = parsePlanFromAccumulatedDelta(planJson, state.plan) ?? state.plan;
       }
 
       if (payload.source !== "hitl_feedback") {
@@ -2825,6 +2492,8 @@ export function reduceJainaStreamEvent(
           toolCalls: mergedToolCalls,
           toolResults: mergedToolResults,
           progress: nextProgress,
+          objectives: deltaObjectives.length > 0 ? deltaObjectives : state.objectives,
+          plan: planFromDelta,
           ...checkpointSummaryPatch,
         };
       }

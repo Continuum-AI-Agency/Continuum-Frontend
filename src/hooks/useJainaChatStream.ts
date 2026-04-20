@@ -4,13 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import {
-  feedbackApprovalCommandSchema,
   jainaChatRequestSchema,
-  parsePlanDecisionPayload,
-  planDecisionCommandSchema,
-  planApprovalCommandSchema,
   type JainaChatStreamRequest,
-  type ResponsePlanDecisionEventData,
+  type JainaPlanAction,
 } from "@/lib/jaina/schemas";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import {
@@ -29,14 +25,10 @@ type JainaChatInput = {
   clarificationId?: string;
   userId?: string;
   images?: Array<{ url: string; name?: string }>;
+  planAction?: JainaPlanAction;
 };
 
 type StartResult = { error?: string };
-type ApprovePlanInput = { planId: string; approved: boolean; reason?: string };
-type ApprovePlanResult = {
-  error?: string;
-  decision?: ResponsePlanDecisionEventData;
-};
 
 export function useJainaChatStream() {
   const [state, setState] = useState<JainaStreamState>(() => createInitialJainaStreamState());
@@ -87,100 +79,6 @@ export function useJainaChatStream() {
     [getAccessToken]
   );
 
-  const approvePlan = useCallback(
-    async (input: ApprovePlanInput): Promise<ApprovePlanResult> => {
-      let decisionPayload;
-      let compatibilityPayload;
-      let legacyPayload;
-      try {
-        decisionPayload = planDecisionCommandSchema.parse({
-          type: "plan.decision",
-          data: {
-            decision: input.approved ? "approve" : "deny",
-            planId: input.planId,
-            reason: input.reason,
-          },
-        });
-
-        compatibilityPayload = feedbackApprovalCommandSchema.parse({
-          type: "feedback",
-          data: {
-            approved: input.approved,
-            planId: input.planId,
-            reason: input.reason,
-          },
-        });
-
-        legacyPayload = planApprovalCommandSchema.parse({
-          type: "plan.approval",
-          data: {
-            plan_id: input.planId,
-            approved: input.approved,
-            note: input.reason,
-          },
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Invalid plan approval payload";
-        return { error: message };
-      }
-
-      try {
-        const token = await getAccessToken();
-        const response = await fetch("/api/agents/jaina/chat/plan/decision", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            primary: decisionPayload,
-            compatibility: compatibilityPayload,
-            legacy: legacyPayload,
-          }),
-        });
-
-        if (!response.ok) {
-          const detail = await response
-            .text()
-            .catch(() => "Failed to submit plan approval.");
-          throw new Error(detail || "Failed to submit plan approval.");
-        }
-
-        const rawDecision = await response.json().catch(() => null);
-        const payload =
-          rawDecision && typeof rawDecision === "object" && "data" in rawDecision
-            ? (rawDecision as { data: unknown }).data
-            : rawDecision;
-
-        const parsedDecision = parsePlanDecisionPayload(payload);
-        if (!parsedDecision) {
-          return {};
-        }
-
-        setState((prev) => {
-          const nextPlan =
-            prev.plan && prev.plan.id === parsedDecision.plan_id
-              ? { ...prev.plan, status: parsedDecision.status }
-              : prev.plan;
-          return {
-            ...prev,
-            plan: nextPlan,
-            pendingPlan: null,
-            lastPlanDecision: parsedDecision,
-          };
-        });
-
-        return { decision: parsedDecision };
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Failed to submit plan approval.";
-        return { error: message };
-      }
-    },
-    [getAccessToken]
-  );
-
   const start = useCallback(
     async (input: JainaChatInput): Promise<StartResult> => {
       reset();
@@ -199,6 +97,7 @@ export function useJainaChatStream() {
           clarification: input.clarificationId
             ? { id: input.clarificationId }
             : undefined,
+          ...(input.planAction ? { plan_action: input.planAction } : {}),
           context: {
             adAccountId: input.adAccountId,
             brandId: input.brandId,
@@ -267,6 +166,5 @@ export function useJainaChatStream() {
     cancel,
     reset,
     clearMemory,
-    approvePlan,
   };
 }
