@@ -12,18 +12,31 @@ const PaidMediaReportingWidget = dynamic(
   { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> },
 );
 
+const BudgetPacingWidget = dynamic(
+  () =>
+    import("@/components/paid-media/budget-pacing/BudgetPacingWidget").then((m) => ({
+      default: m.BudgetPacingWidget,
+    })),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-lg" /> },
+);
+
 type PaidDashboardViewProps = {
   brandId: string;
 };
 
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <PaidMediaReportingWidget brandId={brandId} />
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
+        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <PaidMediaReportingWidget brandId={brandId} />
+        </div>
+        <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+          <DCOActionsWidget brandId={brandId} />
+        </div>
       </div>
       <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-        <DCOActionsWidget brandId={brandId} />
+        <BudgetPacingWidget brandId={brandId} />
       </div>
     </div>
   );
