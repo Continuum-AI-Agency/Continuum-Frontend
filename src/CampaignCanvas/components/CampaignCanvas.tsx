@@ -328,7 +328,7 @@ export const CampaignCanvas = () => {
                <Panel position="top-right">
                   <Badge variant="secondary" className="gap-2 px-3 py-1 text-xs font-medium border shadow-sm animate-in fade-in slide-in-from-top-2">
                     <MousePointer2 className="h-3 w-3" />
-                    {selectedCount} nodes selected
+                    <span className="tabular-nums">{selectedCount}</span> nodes selected
                   </Badge>
                </Panel>
             )}
