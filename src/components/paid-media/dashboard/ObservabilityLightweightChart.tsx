@@ -16,6 +16,7 @@ import {
 } from "lightweight-charts";
 
 import { useTheme } from "@/components/theme-provider";
+import type { ActionStatus } from "@/lib/types/dco";
 import { cn } from "@/lib/utils";
 
 export type ObservabilityChartPoint = {
@@ -49,7 +50,7 @@ export type ObservabilityChartMarker = {
   adSetId?: string | null;
   adId?: string | null;
   actionCount?: number;
-  status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
+  status?: ActionStatus;
 };
 
 export type ObservabilityChartMarkerSelection = {
@@ -91,7 +92,7 @@ type OverlayMarker = {
   position: "aboveBar" | "belowBar" | "inBar";
   scopeType?: string;
   actionCount: number;
-  status?: "APPROVED" | "FAILED" | "PENDING" | "SUCCESS";
+  status?: ActionStatus;
   source: ObservabilityChartMarker;
 };
 
