@@ -31,16 +31,21 @@ function KpiCard({ label, value, subLabel, progressValue, valueClassName }: KpiC
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className={cn("text-xl font-semibold tabular-nums", valueClassName)}>{value}</p>
       {subLabel && <p className="text-muted-foreground text-xs">{subLabel}</p>}
-      <Progress value={progressValue} className="h-1" />
+      <Progress value={Math.min(100, progressValue)} className="h-1" />
     </div>
   );
 }
 
 export function BudgetPacingSummaryStrip({ data }: Props) {
   const { summary } = data;
+  const isDaily = summary.accountBudgetPeriod === "daily";
+  const isLifetime = summary.accountBudgetPeriod === "lifetime";
 
+  // For daily accounts: compare today's spend to daily budget cap
+  // For lifetime accounts: compare all-time spend to total budget
+  const spendValue = isDaily ? summary.totalTodaySpend : summary.totalSpend;
   const spentPct = summary.totalBudget > 0
-    ? (summary.totalSpend / summary.totalBudget) * 100
+    ? (spendValue / summary.totalBudget) * 100
     : 0;
 
   const remainingPct = summary.totalBudget > 0
@@ -48,27 +53,33 @@ export function BudgetPacingSummaryStrip({ data }: Props) {
     : 0;
 
   const isRemainingCritical =
+    isLifetime &&
     summary.totalBudget > 0 &&
     summary.totalBudgetRemaining / summary.totalBudget < 0.1;
+
+  const budgetLabel = isDaily ? "Daily Budget Cap" : isLifetime ? "Total Budget" : "Budget";
+  const spendLabel = isDaily ? "Today's Spend" : "Spend to Date";
+  const remainingLabel = isDaily ? "Today's Remaining" : "Remaining";
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <KpiCard
-        label="Total Budget"
-        value={formatCurrency(summary.totalBudget)}
+        label={budgetLabel}
+        value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudget) : "—"}
+        subLabel={isDaily ? "per day" : undefined}
         progressValue={100}
       />
 
       <KpiCard
-        label="Spend to Date"
-        value={formatCurrency(summary.totalSpend)}
-        subLabel={`${spentPct.toFixed(1)}% spent`}
+        label={spendLabel}
+        value={formatCurrency(spendValue)}
+        subLabel={summary.totalBudget > 0 ? `${Math.min(spentPct, 999).toFixed(1)}% of cap` : undefined}
         progressValue={spentPct}
       />
 
       <KpiCard
-        label="Remaining"
-        value={formatCurrency(summary.totalBudgetRemaining)}
+        label={remainingLabel}
+        value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudgetRemaining) : "—"}
         valueClassName={isRemainingCritical ? "text-red-500" : undefined}
         progressValue={remainingPct}
       />

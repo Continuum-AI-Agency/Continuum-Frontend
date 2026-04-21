@@ -63,6 +63,14 @@ const ReportJobsBell = dynamic(
   { ssr: false }
 );
 
+const BudgetPacingWidget = dynamic(
+  () =>
+    import("@/components/paid-media/budget-pacing/BudgetPacingWidget").then(
+      (mod) => mod.BudgetPacingWidget
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> }
+);
+
 type PaidMediaClientPageProps = {
   brandProfileId: string;
   brandName: string;
@@ -245,6 +253,13 @@ export default function PaidMediaClientPage({
                 Dashboard
               </TabsTrigger>
               <TabsTrigger
+                value="budget"
+                onMouseEnter={() => { void import("@/components/paid-media/budget-pacing/BudgetPacingWidget"); }}
+                onFocus={() => { void import("@/components/paid-media/budget-pacing/BudgetPacingWidget"); }}
+              >
+                Budget
+              </TabsTrigger>
+              <TabsTrigger
                 value="jaina"
                 onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
                 onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
@@ -260,6 +275,12 @@ export default function PaidMediaClientPage({
             brandId={brandProfileId}
             adAccountId={selectedAdAccount}
           />
+        </TabsContent>
+
+        <TabsContent value="budget" className="box-border flex-1 min-h-0 pt-2 overflow-auto">
+          <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+            <BudgetPacingWidget brandId={brandProfileId} />
+          </div>
         </TabsContent>
 
         <TabsContent value="jaina" className="box-border flex-1 min-h-0 pt-2 flex flex-col overflow-hidden">

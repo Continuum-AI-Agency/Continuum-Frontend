@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
-import { BudgetPacingChart } from "./BudgetPacingChart";
+import { BudgetPacingChart, type RangeOption } from "./BudgetPacingChart";
 import { BudgetPacingSummaryStrip } from "./BudgetPacingSummaryStrip";
 import { BudgetPacingTable } from "./BudgetPacingTable";
 
@@ -38,6 +38,8 @@ function BudgetPacingLoadingSkeleton() {
 export function BudgetPacingWidget({ brandId }: Props) {
   const [state, setState] = useState<LoadState>({ status: "idle" });
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [selectedRange, setSelectedRange] = useState<RangeOption>("14d");
 
   const { integrations, isLoading: integrationsLoading } = useBrandIntegrations(brandId);
   const adAccounts = integrations?.["facebook"]?.accounts ?? [];
@@ -52,25 +54,21 @@ export function BudgetPacingWidget({ brandId }: Props) {
   const fetchPacing = useCallback(
     async (accountId: string) => {
       setState({ status: "loading" });
+      setFocusKey(null);
       try {
         const supabase = createSupabaseBrowserClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
 
         const res = await fetch("/api/paid-media/budget-pacing", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(session?.access_token
-              ? { Authorization: `Bearer ${session.access_token}` }
-              : {}),
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
           },
           body: JSON.stringify({ brandId, adAccountId: accountId }),
         });
 
         if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-
         const json = await res.json();
         setState({ status: "success", data: json });
       } catch (err) {
@@ -93,10 +91,7 @@ export function BudgetPacingWidget({ brandId }: Props) {
         </div>
 
         <Flex align="center" gap="2">
-          <Select.Root
-            value={selectedAccountId ?? ""}
-            onValueChange={setSelectedAccountId}
-          >
+          <Select.Root value={selectedAccountId ?? ""} onValueChange={setSelectedAccountId}>
             <Select.Trigger />
             <Select.Content>
               {adAccounts.map((account) => (
@@ -114,9 +109,7 @@ export function BudgetPacingWidget({ brandId }: Props) {
             variant="ghost"
             size="1"
             disabled={state.status === "loading" || !selectedAccountId}
-            onClick={() => {
-              if (selectedAccountId) fetchPacing(selectedAccountId);
-            }}
+            onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId); }}
           >
             <ReloadIcon />
           </IconButton>
@@ -134,18 +127,26 @@ export function BudgetPacingWidget({ brandId }: Props) {
       {state.status === "success" && (
         <div className="space-y-4">
           <BudgetPacingSummaryStrip data={state.data} />
-          <BudgetPacingChart campaigns={state.data.campaigns} />
-          <BudgetPacingTable campaigns={state.data.campaigns} />
+          <BudgetPacingChart
+            campaigns={state.data.campaigns}
+            focusKey={focusKey}
+            selectedRange={selectedRange}
+            onRangeChange={setSelectedRange}
+          />
+          <BudgetPacingTable
+            campaigns={state.data.campaigns}
+            focusKey={focusKey}
+            onFocusKey={setFocusKey}
+            selectedRange={selectedRange}
+          />
         </div>
       )}
 
-      {state.status === "idle" &&
-        adAccounts.length === 0 &&
-        !integrationsLoading && (
-          <Text size="2" color="gray" align="center" as="p" className="py-8">
-            No Meta ad accounts connected.
-          </Text>
-        )}
+      {state.status === "idle" && adAccounts.length === 0 && !integrationsLoading && (
+        <Text size="2" color="gray" align="center" as="p" className="py-8">
+          No Meta ad accounts connected.
+        </Text>
+      )}
     </div>
   );
 }
