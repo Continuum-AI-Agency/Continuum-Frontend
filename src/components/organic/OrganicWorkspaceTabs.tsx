@@ -19,16 +19,19 @@ type Props = {
   plannerSlot: React.ReactNode;
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
+  agentSlot?: React.ReactNode;
 };
 
-export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetchParams }: Props) {
+export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetchParams, agentSlot }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
-  const [activeView, setActiveView] = React.useState<"planner" | "metrics">(initialView);
-  // Track whether metrics tab has ever been shown — once mounted, keep it alive
-  // so switching back doesn't re-fetch / re-mount the chart components.
+  const initialView: "planner" | "metrics" | "agent" =
+    tabParam === "metrics" ? "metrics" : tabParam === "agent" ? "agent" : "planner";
+  const [activeView, setActiveView] = React.useState<"planner" | "metrics" | "agent">(initialView);
+  // Track whether metrics/agent tabs have ever been shown — once mounted, keep alive
+  // so switching back doesn't re-fetch / re-mount the components.
   const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === "metrics");
+  const [agentEverShown, setAgentEverShown] = React.useState(initialView === "agent");
 
   // Prefetch metrics data while user is on the planner tab
   React.useEffect(() => {
@@ -50,20 +53,23 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
   }, [activeView, metricsPrefetchParams]);
 
   React.useEffect(() => {
-    const nextView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
+    const nextView: "planner" | "metrics" | "agent" =
+      tabParam === "metrics" ? "metrics" : tabParam === "agent" ? "agent" : "planner";
     if (nextView !== activeView) {
       setActiveView(nextView);
       if (nextView === "metrics") setMetricsEverShown(true);
+      if (nextView === "agent") setAgentEverShown(true);
     }
   }, [activeView, tabParam]);
 
   const handleValueChange = React.useCallback(
     (value: string) => {
-      const nextView: "planner" | "metrics" = value === "planner" ? "planner" : "metrics";
+      const nextView = value as "planner" | "metrics" | "agent";
 
       const apply = () => {
         setActiveView(nextView);
         if (nextView === "metrics") setMetricsEverShown(true);
+        if (nextView === "agent") setAgentEverShown(true);
         // Use history.replaceState instead of router.replace to avoid triggering
         // a Next.js server re-render (which would flash the Suspense fallback).
         const params = new URLSearchParams(searchParams.toString());
@@ -83,6 +89,9 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
           <Tabs.List>
             <Tabs.Trigger value="planner">Planner</Tabs.Trigger>
             <Tabs.Trigger value="metrics">Metrics Dashboard</Tabs.Trigger>
+            {agentSlot !== undefined && (
+              <Tabs.Trigger value="agent">Agent</Tabs.Trigger>
+            )}
           </Tabs.List>
         </Tabs.Root>
       </div>
@@ -94,6 +103,10 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
           {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
           {metricsEverShown && (
             <div className="h-full w-full" hidden={activeView !== "metrics"}>{metricsSlot}</div>
+          )}
+          {/* Defer agent mount until first viewed, then keep alive */}
+          {agentSlot !== undefined && agentEverShown && (
+            <div className="h-full w-full" hidden={activeView !== "agent"}>{agentSlot}</div>
           )}
         </div>
       </ViewTransition>

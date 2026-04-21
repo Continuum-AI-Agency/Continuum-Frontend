@@ -1,6 +1,12 @@
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { Callout, Heading } from "@radix-ui/themes";
 import { LightningBoltIcon } from "@radix-ui/react-icons";
+
+const OrganicAgentPanel = dynamic(
+  () => import("@/components/organic/agent/OrganicAgentPanel").then((m) => m.OrganicAgentPanel),
+  { ssr: false }
+);
 
 import { OrganicMetricsDashboardLazy } from "@/components/organic/OrganicMetricsDashboardLazy";
 import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
@@ -287,6 +293,12 @@ async function OrganicContent({
             integrationAccountId: metricAccountsByPlatform[initialMetricsPlatform][0]?.integrationAccountId ?? "",
             platform: initialMetricsPlatform,
           }}
+          agentSlot={
+            <OrganicAgentPanel
+              brandId={brandProfileId}
+              platformAccountIds={platformAccountIds}
+            />
+          }
         />
       </div>
     </>
