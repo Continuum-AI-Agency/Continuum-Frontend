@@ -2,7 +2,7 @@
 
 import React, { startTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { Tabs } from "@radix-ui/themes";
+import { Tabs, Text } from "@radix-ui/themes";
 import { prefetchMetricsDashboard } from "@/lib/prefetch/organic-metrics-cache";
 
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
@@ -94,6 +94,9 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
             )}
           </Tabs.List>
         </Tabs.Root>
+        <Text size="1" className="mt-1 block text-pretty text-muted-foreground">
+          Planner opens instantly. Metrics and Agent stay mounted after first open so context and scroll position are preserved.
+        </Text>
       </div>
 
       <ViewTransition>

@@ -48,6 +48,12 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 import {
   ChartContainer,
@@ -452,14 +458,14 @@ function PostGalleryCard({
       onClick={onSelect}
       aria-label={`Open analytics for ${post.title ?? post.mediaType ?? post.id}`}
       className={cn(
-        "group relative block w-full overflow-hidden rounded-xl border border-subtle bg-surface text-left transition-all duration-200",
+        "group relative block w-full overflow-hidden rounded-xl border border-subtle bg-surface text-left transition-[transform,box-shadow,opacity,border-color] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1",
         selected
           ? "ring-2 ring-blue-500/60 border-blue-400/60 shadow-lg shadow-blue-500/15"
           : "hover:-translate-y-0.5 hover:shadow-md"
       )}
     >
-      <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90", mediaHeightClass)}>
+      <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10", mediaHeightClass)}>
         {preview ? (
           video && !isTikTok ? (
             <Reel className="h-full w-full" data={reelData} defaultMuted>
@@ -481,7 +487,7 @@ function PostGalleryCard({
               <img
                 src={preview}
                 alt={post.title ?? post.caption ?? "Post media"}
-                className="h-full w-full object-contain"
+                className="h-full w-full object-contain outline outline-1 outline-black/10 dark:outline-white/10"
               />
               {isTikTok && post.permalink ? (
                 <a
@@ -502,14 +508,14 @@ function PostGalleryCard({
           )
         ) : (
           <Box className="h-full w-full flex items-center justify-center">
-            <Text size="1" color="gray">No media</Text>
+            <Text size="1" color="gray">Media preview unavailable</Text>
           </Box>
         )}
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <div className="absolute inset-x-0 bottom-0 p-3">
             <Text size="1" className="line-clamp-5 text-white">
-              {post.caption?.trim().length ? post.caption : "No caption"}
+              {post.caption?.trim().length ? post.caption : "Caption unavailable"}
             </Text>
             <Flex align="center" justify="between" mt="2">
               <Text size="1" className="text-white/85">{formatDateTime(post.timestamp)}</Text>
@@ -673,7 +679,7 @@ function PostSnapshotPanel({
               )
             ) : (
               <Box className="flex min-h-[180px] items-center justify-center">
-                <Text size="1" color="gray">No preview available</Text>
+                <Text size="1" color="gray">Preview unavailable for this post</Text>
               </Box>
             )}
           </Box>
@@ -754,7 +760,7 @@ function PostSnapshotPanel({
               </div>
             </Flex>
             {series.length === 0 ? (
-              <Text size="1" color="gray">No trend data for this post yet.</Text>
+              <Text size="1" color="gray">No metric trend data is available for this post yet.</Text>
             ) : (
               <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
                 <LineChart data={series}>
@@ -779,7 +785,7 @@ function PostSnapshotPanel({
           <PostCommentsPanel comments={post.comments} />
 
           <Text size="1" className="line-clamp-8">
-            {post.caption?.trim().length ? post.caption : "No caption available for this post."}
+            {post.caption?.trim().length ? post.caption : "Caption unavailable for this post."}
           </Text>
         </Box>
       </Card>
@@ -812,10 +818,10 @@ function MetricCard({
   const hasInsights = insights && insights.length > 0;
 
   const cardContent = (
-    <Card
-      variant="surface"
-      className={cn(
-        "border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-all duration-200 motion-reduce:transition-none",
+      <Card
+        variant="surface"
+        className={cn(
+        "border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none",
         compact ? "min-h-[50px]" : "min-h-[70px]",
         active ? "border-blue-500/70 bg-blue-500/10 shadow-blue-500/10" : "",
         interactive ? "hover:-translate-y-0.5 hover:shadow-md" : "",
@@ -844,7 +850,7 @@ function MetricCard({
           {!compact && (
             <span
               className={cn(
-                "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                "rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide",
                 direction === "up" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "",
                 direction === "down" ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "",
                 direction === "flat" ? "bg-slate-500/15 text-slate-700 dark:text-slate-300" : ""
@@ -854,7 +860,7 @@ function MetricCard({
             </span>
           )}
         </Flex>
-        <Text size="4" weight="bold" className="leading-tight font-mono tracking-tight">{formatNumber(value)}</Text>
+        <Text size="4" weight="bold" className="leading-tight tabular-nums tracking-tight">{formatNumber(value)}</Text>
         {compact ? (
           <Text
             size="1"
@@ -1089,7 +1095,7 @@ function Dashboard({
             <Text size="1" color="gray">At-a-glance metrics with last 24h delta</Text>
           ) : null}
         </Box>
-        <Text size="1" color="gray" className="font-mono tracking-tight">
+        <Text size="1" color="gray" className="tabular-nums tracking-tight">
           {data.range.since} - {data.range.until}
         </Text>
       </Flex>
@@ -1161,7 +1167,7 @@ function Dashboard({
               </Flex>
 
               {accountSeries.length === 0 ? (
-                <Text size="2" color="gray">No trend data available for this metric and window.</Text>
+                <Text size="2" color="gray">No metric history is available for this metric in the selected window.</Text>
               ) : (
                 <ChartContainer config={drilldownChartConfig} className="h-56 w-full">
                   <LineChart data={accountSeries}>
@@ -1294,7 +1300,7 @@ function Dashboard({
               <Separator my="2" size="4" />
               <Text size="1" color="gray" mb="1">Age</Text>
               {demographicsLoading ? (
-                <div className="h-28 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+                <div className="h-28 w-full animate-pulse rounded-lg bg-muted/70" />
               ) : ageDemographics.length === 0 ? (
                 <Text size="1" color="gray">Age breakdown unavailable.</Text>
               ) : (
@@ -1333,7 +1339,7 @@ function Dashboard({
               </Flex>
 
               {(data.posts ?? []).length === 0 ? (
-                <Text size="2" color="gray">No posts were returned for this account.</Text>
+                <Text size="2" color="gray">No posts were found for this account in the selected window.</Text>
               ) : (
                 <div className="mx-auto w-full">
                   <motion.div
@@ -1827,8 +1833,14 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               </Text>
             </Box>
           </Flex>
+        </Flex>
 
-          <Flex align="center" gap="2" wrap="wrap">
+        <Flex direction="column" gap="2" className="mt-2 rounded-lg border border-subtle bg-background/60 px-2 py-2 sm:px-3">
+          <Text size="1" className="text-pretty text-muted-foreground">
+            Switch platform and account to compare KPI momentum. Export options are grouped under one menu to keep controls focused.
+          </Text>
+          <Flex align="center" justify="between" gap="2" wrap="wrap">
+            <Flex align="center" gap="2" wrap="wrap">
             <Select.Root value={platform} onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}>
               <Select.Trigger variant="surface" radius="large" style={{ width: "150px" }}>
                 {{ instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" }[platform]}
@@ -1895,7 +1907,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 <TabsTrigger value="posts" className="px-4 text-xs">Posts</TabsTrigger>
               </TabsList>
             </Tabs>
+            </Flex>
 
+            <Flex align="center" gap="2" wrap="wrap">
             <Button
               variant="surface"
               radius="large"
@@ -1907,31 +1921,38 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               Refresh
             </Button>
 
-            <Button
-              variant="surface"
-              radius="large"
-              onClick={() => {
-                void handleExportReport("csv");
-              }}
-              disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
-              aria-label="Export last thirty day organic report as csv"
-            >
-              <DownloadIcon className={cn(exportingReportFormat === "csv" && "animate-pulse")} />
-              {exportingReportFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
-            </Button>
-
-            <Button
-              variant="surface"
-              radius="large"
-              onClick={() => {
-                void handleExportReport("html");
-              }}
-              disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
-              aria-label="Export last thirty day organic report as html"
-            >
-              <DownloadIcon className={cn(exportingReportFormat === "html" && "animate-pulse")} />
-              {exportingReportFormat === "html" ? "Exporting HTML..." : "Export HTML"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="surface"
+                  radius="large"
+                  disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
+                  aria-label="Open organic report export options"
+                >
+                  <DownloadIcon className={cn(exportingReportFormat !== null && "animate-pulse")} />
+                  {exportingReportFormat ? `Exporting ${exportingReportFormat.toUpperCase()}...` : "Export"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void handleExportReport("csv");
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void handleExportReport("html");
+                  }}
+                  disabled={exportingReportFormat !== null}
+                >
+                  Export HTML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            </Flex>
           </Flex>
         </Flex>
 
@@ -1943,8 +1964,8 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           ) : null}
           {platformAccounts.length === 0 ? (
             <Callout.Root color="blue" variant="surface">
-              <Callout.Text>
-                No {platform} accounts are linked to this brand profile.
+              <Callout.Text className="text-pretty">
+                No {platform} account is connected for this brand yet. Connect one in Integrations to unlock reporting.
               </Callout.Text>
             </Callout.Root>
           ) : (
@@ -2004,7 +2025,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <Text color="gray" size="2">Select an account to view organic reporting.</Text>
+                  <Text color="gray" size="2" className="text-pretty">
+                    Select an account above to load organic reporting and post-level performance.
+                  </Text>
                 </motion.div>
               )}
             </AnimatePresence>

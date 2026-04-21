@@ -92,6 +92,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
       const weekStart = monday.toISOString().slice(0, 10);
 
       const existingMessages = state.messages.map((m) => ({
+        id: m.id,
         role: m.role,
         content: m.content,
       }));
@@ -99,7 +100,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
       start({
         brandId,
         sessionId: state.sessionId,
-        messages: [...existingMessages, { role: "user" as const, content }],
+        messages: [...existingMessages, { id: messageId, role: "user" as const, content }],
         weekStart,
         timezone,
         platformAccountIds,

@@ -34,7 +34,7 @@ export type ConversationMessage = {
 export type AgentChatInput = {
   brandId: string
   sessionId: string
-  messages: Array<{ role: "user" | "assistant"; content: string }>
+  messages: Array<{ id: string; role: "user" | "assistant"; content: string }>
   weekStart?: string
   timezone?: string
   platformAccountIds?: Record<string, string>
