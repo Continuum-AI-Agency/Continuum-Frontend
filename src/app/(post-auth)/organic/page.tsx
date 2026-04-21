@@ -32,8 +32,8 @@ type OrganicPageProps = {
 function OrganicContentSkeleton() {
   return (
     <div className="flex h-full w-full flex-col gap-3">
-      <div className="h-8 w-48 animate-pulse rounded-md bg-gray-200 dark:bg-gray-800" />
-      <div className="min-h-0 flex-1 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-900" />
+      <div className="h-8 w-48 animate-pulse rounded-md bg-muted/70" />
+      <div className="min-h-0 flex-1 animate-pulse rounded-lg bg-muted/70" />
     </div>
   );
 }
@@ -248,7 +248,10 @@ async function OrganicContent({
             <Callout.Icon>
               <LightningBoltIcon />
             </Callout.Icon>
-            <Callout.Text>{insightsError}</Callout.Text>
+            <Callout.Text className="text-pretty">
+              We couldn't load trend intelligence right now. You can keep planning posts while we retry.
+              {insightsError ? ` (${insightsError})` : ""}
+            </Callout.Text>
           </Callout.Root>
         ) : null}
         {showNoTrendsMessage ? (
@@ -256,7 +259,9 @@ async function OrganicContent({
             <Callout.Icon>
               <LightningBoltIcon />
             </Callout.Icon>
-            <Callout.Text>No trends yet. You can still plan posts without them.</Callout.Text>
+            <Callout.Text className="text-pretty">
+              Trend coverage is still warming up for this brand. You can publish normally now and add trend-driven posts as signals arrive.
+            </Callout.Text>
           </Callout.Root>
         ) : null}
       </div>

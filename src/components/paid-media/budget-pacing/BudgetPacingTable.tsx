@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { BudgetPacingEntry, BudgetPacingAdSetEntry } from "@/lib/schemas/budgetPacing";
@@ -271,7 +271,7 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
         placeholder="Search campaigns…"
         value={query}
         onChange={(e) => { setQuery(e.target.value); setVisibleCount(PAGE_SIZE); }}
-        className="w-full rounded border border-border/60 bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        className="w-full rounded border border-border/60 bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
       />
 
       <div className="rounded-lg border border-border/60 overflow-hidden">
@@ -302,17 +302,19 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
                     hasAdSets ? (
                       <button
                         type="button"
-                        className="shrink-0 rounded p-0.5 hover:bg-muted"
+                        className="flex shrink-0 items-center justify-center rounded p-1.5 hover:bg-muted min-w-[28px] min-h-[28px] active:scale-[0.96] transition-[transform,background-color]"
                         onClick={(e) => toggleExpand(campaign.campaignId, e)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") toggleExpand(campaign.campaignId, e);
                         }}
                         aria-label={isExpanded ? "Collapse adsets" : "Expand adsets"}
                       >
-                        {isExpanded
-                          ? <ChevronDown className="size-3.5 text-muted-foreground" />
-                          : <ChevronRight className="size-3.5 text-muted-foreground" />
-                        }
+                        <ChevronRight
+                          className={cn(
+                            "size-4 text-muted-foreground transition-transform duration-200",
+                            isExpanded && "rotate-90"
+                          )}
+                        />
                       </button>
                     ) : (
                       <span className="w-4 shrink-0" />
@@ -340,7 +342,7 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
             <button
               type="button"
               onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
-              className="w-full py-2.5 text-center text-xs text-muted-foreground transition-colors hover:bg-muted/50"
+              className="w-full py-2.5 text-center text-xs text-muted-foreground transition-[transform,background-color] hover:bg-muted/50 active:scale-[0.96]"
             >
               Show {Math.min(PAGE_SIZE, remaining)} more of {remaining} remaining
             </button>

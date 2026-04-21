@@ -20,7 +20,7 @@ const statusConfig: Record<PaceStatus, { label: string; className: string }> = {
   },
   overspending: {
     label: "Overspending",
-    className: "bg-red-500/15 text-red-500",
+    className: "bg-red-500/15 text-red-500 dark:text-red-400",
   },
 };
 

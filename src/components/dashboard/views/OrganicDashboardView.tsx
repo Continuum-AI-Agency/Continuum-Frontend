@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Text } from "@radix-ui/themes";
 import type { InstagramAccountOption } from "@/components/dashboard/InstagramOrganicReportingWidget";
 import { BrandTrendsPanel } from "@/components/brand-insights/BrandTrendsPanel";
 import { BrandInsightsGenerateButton } from "@/components/brand-insights/BrandInsightsGenerateButton";
@@ -34,10 +35,22 @@ export function OrganicDashboardView({
 }: OrganicDashboardViewProps) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
-      <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
+      <section className="space-y-2">
+        <div className="px-1">
+          <Text size="3" weight="medium" className="text-balance">Organic Performance Snapshot</Text>
+          <Text size="2" className="text-pretty text-muted-foreground">
+            Read account KPIs and post-level velocity without leaving the dashboard.
+          </Text>
+        </div>
         <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
-      </div>
-      <div className="rounded-lg bg-card shadow-sm overflow-hidden">
+      </section>
+      <section className="space-y-2">
+        <div className="px-1">
+          <Text size="3" weight="medium">Trend Intelligence</Text>
+          <Text size="2" className="text-muted-foreground">
+            Keep the publishing plan aligned with current demand shifts.
+          </Text>
+        </div>
         <BrandTrendsPanel
           trends={trendsAndEvents.trends}
           events={trendsAndEvents.events}
@@ -48,7 +61,7 @@ export function OrganicDashboardView({
           status={trendsAndEvents.status ?? insightsStatus}
           statusSlot={<BrandInsightsGenerateButton brandId={brandId} />}
         />
-      </div>
+      </section>
     </div>
   );
 }

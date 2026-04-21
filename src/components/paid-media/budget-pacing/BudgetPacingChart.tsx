@@ -132,7 +132,7 @@ export function BudgetPacingChart({ campaigns, focusKey, selectedRange, onRangeC
               type="button"
               onClick={() => onRangeChange(opt.value)}
               className={cn(
-                "rounded px-2 py-0.5 text-xs font-medium transition-colors",
+                "rounded px-2 py-0.5 text-xs font-medium transition-[transform,background-color,color] active:scale-[0.96]",
                 selectedRange === opt.value
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
