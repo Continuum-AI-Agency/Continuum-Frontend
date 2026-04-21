@@ -19,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
 import { AccountInsightsPanel } from "./AccountInsightsPanel";
@@ -428,10 +429,13 @@ export function PaidMediaDashboard({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 min-w-[250px] justify-start text-left text-xs font-normal"
+                      className={cn(
+                        "h-8 min-w-[220px] justify-start text-left text-xs font-normal gap-1.5",
+                        customRangeOpen && "border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20",
+                      )}
                     >
-                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                      {customRangeLabel}
+                      <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{customRangeLabel}</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-auto p-0">
@@ -442,10 +446,7 @@ export function PaidMediaDashboard({
                       selected={customRangeSelection}
                       onSelect={handleCustomRangeSelect}
                       numberOfMonths={2}
-                      classNames={{
-                        head_row: "hidden",
-                        head_cell: "hidden",
-                      }}
+                      disabled={{ after: new Date() }}
                     />
                   </PopoverContent>
                 </Popover>
