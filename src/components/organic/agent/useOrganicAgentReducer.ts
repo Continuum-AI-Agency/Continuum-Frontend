@@ -39,7 +39,11 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
 
     case "HYDRATE_JOBS": {
       const merged = { ...state.jobs }
-      for (const job of action.jobs) merged[job.jobId] = job
+      const jobs = Array.isArray(action.jobs) ? action.jobs : []
+      for (const job of jobs) {
+        if (!job || typeof job.jobId !== "string") continue
+        merged[job.jobId] = job
+      }
       return { ...state, jobs: merged, isHydrated: true }
     }
 

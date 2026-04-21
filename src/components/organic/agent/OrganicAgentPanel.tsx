@@ -47,8 +47,11 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
           `${getApiBaseUrl()}/api/organic/agent/sessions/${sessionId}/jobs?brand_id=${encodeURIComponent(brandId)}&limit=50`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
-          .then((res) => (res.ok ? (res.json() as Promise<AgentJobState[]>) : ([] as AgentJobState[])))
-          .then((jobs) => dispatch({ type: "HYDRATE_JOBS", jobs }));
+          .then((res) => (res.ok ? (res.json() as Promise<unknown>) : ([] as unknown)))
+          .then((payload) => {
+            const jobs = normalizeHydratedJobs(payload);
+            dispatch({ type: "HYDRATE_JOBS", jobs });
+          });
       })
       .catch(() => dispatch({ type: "HYDRATE_JOBS", jobs: [] }));
   }, [state.sessionId, brandId]);
@@ -171,4 +174,13 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
       </div>
     </div>
   );
+}
+
+function normalizeHydratedJobs(payload: unknown): AgentJobState[] {
+  if (Array.isArray(payload)) return payload as AgentJobState[];
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.jobs)) return record.jobs as AgentJobState[];
+  if (Array.isArray(record.data)) return record.data as AgentJobState[];
+  return [];
 }
