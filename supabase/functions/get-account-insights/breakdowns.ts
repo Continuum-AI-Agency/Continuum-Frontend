@@ -1,4 +1,9 @@
-const PURCHASE_ACTION_TYPES = new Set(["omni_purchase"]);
+import {
+  extractActionMetric,
+  extractPurchaseRoas,
+  PURCHASE_ACTION_TYPES,
+  toNumber,
+} from "./metrics.ts";
 
 export type InsightRow = Record<string, unknown>;
 
@@ -87,37 +92,10 @@ export type BreakdownData = {
   devices: DeviceBreakdown[];
 };
 
-const toNumber = (value: unknown): number => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number.parseFloat(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
-};
-
 const round = (value: number, digits = 4): number => {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 };
-
-const asArray = (value: unknown): unknown[] =>
-  Array.isArray(value) ? value : [];
-
-const extractActionMetric = (
-  values: unknown,
-  actionTypes: Set<string>
-): number =>
-  asArray(values)
-    .map((item) => {
-      if (!item || typeof item !== "object") return 0;
-      const record = item as Record<string, unknown>;
-      const actionType =
-        typeof record.action_type === "string" ? record.action_type : "";
-      if (!actionTypes.has(actionType)) return 0;
-      return toNumber(record.value);
-    })
-    .reduce((sum, value) => sum + value, 0);
 
 function parseMetrics(row: InsightRow) {
   const spend = toNumber(row.spend);
@@ -128,6 +106,7 @@ function parseMetrics(row: InsightRow) {
     PURCHASE_ACTION_TYPES
   );
   const purchases = extractActionMetric(row.actions, PURCHASE_ACTION_TYPES);
+  const purchaseRoas = extractPurchaseRoas(row.purchase_roas);
 
   return {
     spend: round(spend),
@@ -137,7 +116,12 @@ function parseMetrics(row: InsightRow) {
     cpc: clicks > 0 ? round(spend / clicks) : 0,
     conversions: round(purchases),
     conversion_value: round(purchaseValue),
-    roas: spend > 0 ? round(purchaseValue / spend) : 0,
+    roas:
+      purchaseRoas > 0
+        ? round(purchaseRoas)
+        : spend > 0
+          ? round(purchaseValue / spend)
+          : 0,
   };
 }
 
@@ -155,7 +139,7 @@ async function fetchInsightsWithBreakdowns(args: {
   const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
   const params = new URLSearchParams({
     fields:
-      "spend,impressions,clicks,cpc,ctr,actions,action_values,cost_per_action_type",
+      "spend,impressions,clicks,cpc,ctr,actions,action_values,purchase_roas,cost_per_action_type",
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     breakdowns: args.breakdowns,
     level: args.level ?? "account",
@@ -216,7 +200,7 @@ export async function fetchDailyTimeSeries(args: {
   const rawId = args.adAccountId.replace(/^act_/, "");
   const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
   const params = new URLSearchParams({
-    fields: "spend,impressions,clicks,actions,action_values",
+    fields: "spend,impressions,clicks,actions,action_values,purchase_roas",
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     time_increment: "1",
     level: "account",
@@ -272,7 +256,7 @@ export async function fetchCampaignMetrics(args: {
   const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
   const params = new URLSearchParams({
     fields:
-      "campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+      "campaign_id,campaign_name,spend,impressions,clicks,actions,action_values,purchase_roas",
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     level: "campaign",
     access_token: args.accessToken,

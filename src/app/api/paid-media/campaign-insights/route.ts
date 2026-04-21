@@ -29,6 +29,17 @@ const rangeSchema = z
     }
   });
 
+const budgetPacingContextSchema = z.object({
+  pacePct: z.number(),
+  paceStatus: z.enum(["on_pace", "underspending", "overspending"]),
+  totalBudget: z.number(),
+  spendToDate: z.number(),
+  budgetRemaining: z.number(),
+  daysRemaining: z.number().nullable(),
+  budgetType: z.enum(["daily", "lifetime"]),
+  projectedEndSpend: z.number(),
+});
+
 const requestSchema = z.object({
   brandId: z.string(),
   adAccountId: z.string(),
@@ -37,6 +48,7 @@ const requestSchema = z.object({
   campaignObjective: z.string().optional(),
   range: rangeSchema,
   forceRefresh: z.boolean().optional(),
+  budgetPacing: budgetPacingContextSchema.optional(),
 });
 
 export async function POST(request: Request) {

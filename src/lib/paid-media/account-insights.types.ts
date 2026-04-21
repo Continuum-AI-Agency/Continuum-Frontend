@@ -61,7 +61,7 @@ export type FormatBreakdown = z.infer<typeof FormatBreakdownSchema>;
 export type DeviceBreakdown = z.infer<typeof DeviceBreakdownSchema>;
 export type AccountBreakdownsResponse = z.infer<typeof AccountBreakdownsResponseSchema>;
 
-export type InsightCategory = "formats" | "placements" | "audiences" | "creative";
+export type InsightCategory = "formats" | "placements" | "audiences" | "creative" | "budget";
 
 export type InsightSeverity = "positive" | "negative" | "neutral";
 
@@ -80,7 +80,7 @@ export type ComputedInsight = {
 };
 
 export const ComputedInsightSchema = z.object({
-  category: z.enum(["formats", "placements", "audiences", "creative"]),
+  category: z.enum(["formats", "placements", "audiences", "creative", "budget"]),
   text: z.string(),
   severity: z.enum(["positive", "negative", "neutral"]),
   source: z.enum(["computed", "llm"]),

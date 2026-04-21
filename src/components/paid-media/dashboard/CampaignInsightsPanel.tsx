@@ -4,7 +4,6 @@ import * as React from "react";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import {
   BarChart3Icon,
-  LayoutGridIcon,
   MapPinIcon,
   PaletteIcon,
   UsersIcon,
@@ -14,14 +13,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAccountInsights } from "@/hooks/useAccountInsights";
+import { useCampaignInsights } from "@/hooks/useCampaignInsights";
 import type { ComputedInsight, InsightCategory } from "@/lib/paid-media/account-insights.types";
 import type { PaidMediaTimeRange } from "./timeRange";
 import { InsightCategoryCard } from "./InsightCategoryCard";
 
-type AccountInsightsPanelProps = {
+type CampaignInsightsPanelProps = {
   brandId: string;
   adAccountId: string;
+  campaignId: string;
+  campaignName?: string;
+  campaignObjective?: string;
   timeRange: PaidMediaTimeRange;
 };
 
@@ -32,10 +34,10 @@ const CATEGORY_CONFIG: ReadonlyArray<{
   accent: string;
 }> = [
   {
-    key: "formats",
-    title: "Formats",
-    icon: LayoutGridIcon,
-    accent: "bg-violet-500/90",
+    key: "budget",
+    title: "Budget & Pacing",
+    icon: WalletIcon,
+    accent: "bg-emerald-500/90",
   },
   {
     key: "placements",
@@ -54,12 +56,6 @@ const CATEGORY_CONFIG: ReadonlyArray<{
     title: "Creative / Visual",
     icon: PaletteIcon,
     accent: "bg-rose-500/90",
-  },
-  {
-    key: "budget",
-    title: "Budget & Pacing",
-    icon: WalletIcon,
-    accent: "bg-emerald-500/90",
   },
 ];
 
@@ -81,15 +77,21 @@ function groupByCategory(
   return grouped;
 }
 
-export function AccountInsightsPanel({
+export function CampaignInsightsPanel({
   brandId,
   adAccountId,
+  campaignId,
+  campaignName,
+  campaignObjective,
   timeRange,
-}: AccountInsightsPanelProps) {
+}: CampaignInsightsPanelProps) {
   const { insights, expiresAt, isLoading, error, refresh } =
-    useAccountInsights({
+    useCampaignInsights({
       brandId,
       adAccountId,
+      campaignId,
+      campaignName,
+      campaignObjective,
       timeRange,
     });
 
@@ -113,7 +115,7 @@ export function AccountInsightsPanel({
       <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/20 px-4 py-2.5">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <BarChart3Icon className="size-4 text-muted-foreground" />
-          Account Insights
+          Campaign Insights
         </CardTitle>
         <div className="flex items-center gap-2">
           {stalenessLabel && (

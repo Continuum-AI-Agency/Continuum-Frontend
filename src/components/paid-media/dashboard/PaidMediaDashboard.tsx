@@ -22,6 +22,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
 import { AccountInsightsPanel } from "./AccountInsightsPanel";
+import { CampaignInsightsPanel } from "./CampaignInsightsPanel";
 import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
 import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
 import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
@@ -541,11 +542,22 @@ export function PaidMediaDashboard({
               onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
             />
 
-            <AccountInsightsPanel
-              brandId={brandId}
-              adAccountId={adAccountId}
-              timeRange={timeRange}
-            />
+            {selectedCampaignId ? (
+              <CampaignInsightsPanel
+                brandId={brandId}
+                adAccountId={adAccountId}
+                campaignId={selectedCampaignId}
+                campaignName={campaigns.find((c) => c.id === selectedCampaignId)?.name}
+                campaignObjective={campaigns.find((c) => c.id === selectedCampaignId)?.objective}
+                timeRange={timeRange}
+              />
+            ) : (
+              <AccountInsightsPanel
+                brandId={brandId}
+                adAccountId={adAccountId}
+                timeRange={timeRange}
+              />
+            )}
           </>
         ) : (
           <Card>

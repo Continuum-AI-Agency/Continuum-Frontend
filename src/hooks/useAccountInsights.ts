@@ -6,6 +6,7 @@ import type {
   AccountInsightsResponse,
   ComputedInsight,
 } from "@/lib/paid-media/account-insights.types";
+import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
 import type { PaidMediaTimeRange } from "@/components/paid-media/dashboard/timeRange";
 
 type UseAccountInsightsParams = {
@@ -41,6 +42,68 @@ function buildRequestBody(params: UseAccountInsightsParams) {
   };
 }
 
+function fmt(n: number): string {
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function deriveBudgetInsights(pacing: BudgetPacingResponse): ComputedInsight[] {
+  const insights: ComputedInsight[] = [];
+  const { summary, campaigns } = pacing;
+
+  const statusLabel =
+    summary.paceStatus === "on_pace"
+      ? "on pace"
+      : summary.paceStatus === "overspending"
+        ? "overspending"
+        : "underspending";
+
+  insights.push({
+    category: "budget",
+    text: `Account is ${statusLabel} at ${summary.overallPacePct.toFixed(0)}% — ${fmt(summary.totalBudgetRemaining)} of ${fmt(summary.totalBudget)} total budget remaining`,
+    severity:
+      summary.paceStatus === "on_pace"
+        ? "positive"
+        : summary.paceStatus === "overspending"
+          ? "negative"
+          : "neutral",
+    source: "computed",
+    metric: "pace",
+    value: summary.overallPacePct,
+  });
+
+  const overspending = campaigns.filter((c) => c.paceStatus === "overspending");
+  if (overspending.length > 0) {
+    const names = overspending
+      .slice(0, 3)
+      .map((c) => c.campaignName)
+      .join(", ");
+    const extra = overspending.length > 3 ? ` +${overspending.length - 3} more` : "";
+    insights.push({
+      category: "budget",
+      text: `${overspending.length} campaign${overspending.length !== 1 ? "s" : ""} overspending: ${names}${extra}`,
+      severity: "negative",
+      source: "computed",
+      metric: "spend",
+      recommendation: "Review and adjust budgets for overspending campaigns",
+    });
+  }
+
+  const underspending = campaigns.filter((c) => c.paceStatus === "underspending");
+  if (underspending.length > 0) {
+    insights.push({
+      category: "budget",
+      text: `${underspending.length} campaign${underspending.length !== 1 ? "s" : ""} underspending`,
+      severity: "neutral",
+      source: "computed",
+      metric: "spend",
+      recommendation:
+        "Consider increasing bids or expanding targeting for underdelivering campaigns",
+    });
+  }
+
+  return insights;
+}
+
 export function useAccountInsights(
   params: UseAccountInsightsParams
 ): UseAccountInsightsReturn {
@@ -70,29 +133,47 @@ export function useAccountInsights(
     setIsLoading(true);
     setError(null);
 
-    const controller = new AbortController();
+    const insightsController = new AbortController();
+    const pacingController = new AbortController();
 
-    fetch("/api/paid-media/account-insights", {
+    const insightsFetch = fetch("/api/paid-media/account-insights", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         buildRequestBody({ brandId, adAccountId, timeRange })
       ),
-      signal: controller.signal,
+      signal: insightsController.signal,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          (body as Record<string, string>).error ??
+            `Request failed with status ${response.status}`
+        );
+      }
+      return response.json() as Promise<AccountInsightsResponse>;
+    });
+
+    const pacingFetch = fetch("/api/paid-media/budget-pacing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ brandId, adAccountId }),
+      signal: pacingController.signal,
     })
-      .then(async (response) => {
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(
-            (body as Record<string, string>).error ??
-              `Request failed with status ${response.status}`
-          );
-        }
-        return response.json();
+      .then(async (r) => {
+        if (!r.ok) return null;
+        return r.json() as Promise<BudgetPacingResponse>;
       })
-      .then((resp: AccountInsightsResponse) => {
+      .catch(() => null);
+
+    Promise.all([insightsFetch, pacingFetch])
+      .then(([insightsResp, pacingResp]) => {
         if (requestId !== requestIdRef.current) return;
-        setData(resp);
+        const budgetInsights = pacingResp ? deriveBudgetInsights(pacingResp) : [];
+        setData({
+          ...insightsResp,
+          insights: [...insightsResp.insights, ...budgetInsights],
+        });
         setError(null);
       })
       .catch((err: unknown) => {
@@ -109,7 +190,8 @@ export function useAccountInsights(
       });
 
     return () => {
-      controller.abort();
+      insightsController.abort();
+      pacingController.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, adAccountId, timeRangeKey, enabled, refreshTick]);
