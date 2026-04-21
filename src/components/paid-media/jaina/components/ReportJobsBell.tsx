@@ -71,7 +71,7 @@ function JobRow({ job }: { job: ReportJob }) {
   };
 
   return (
-    <div className="flex items-start gap-3 rounded-md px-3 py-2.5 hover:bg-muted/50">
+    <div className="flex items-start gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted/50">
       <Icon className={cn("mt-0.5 size-4 shrink-0", className)} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
@@ -93,7 +93,7 @@ function JobRow({ job }: { job: ReportJob }) {
         <Button
           variant="ghost"
           size="icon"
-          className="size-7 shrink-0"
+          className="size-8 shrink-0 active:scale-[0.96] transition-[transform]"
           disabled={isDownloading}
           onClick={handleDownload}
           aria-label="Download report"
@@ -115,14 +115,14 @@ export function ReportJobsBell({ brandProfileId }: Props) {
         <Button
           variant="ghost"
           size="icon"
-          className="relative size-9"
+          className="relative size-9 active:scale-[0.96] transition-[transform]"
           aria-label={
             unreadCount > 0 ? `${unreadCount} report updates` : "Report jobs"
           }
         >
           <BellIcon className="size-4" />
           {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+            <span className="absolute right-1.5 top-1.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold tabular-nums text-primary-foreground">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}

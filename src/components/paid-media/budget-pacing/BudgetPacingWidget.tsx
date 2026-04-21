@@ -111,7 +111,7 @@ export function BudgetPacingWidget({ brandId }: Props) {
             disabled={state.status === "loading" || !selectedAccountId}
             onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId); }}
           >
-            <ReloadIcon />
+            <ReloadIcon className={state.status === "loading" ? "animate-spin" : undefined} />
           </IconButton>
         </Flex>
       </Flex>
