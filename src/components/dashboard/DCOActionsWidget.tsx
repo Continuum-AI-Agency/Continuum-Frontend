@@ -75,6 +75,8 @@ const getStatusVariant = (status: ActionStatus): "default" | "secondary" | "dest
   switch (status) {
     case "APPROVED": return "default";
     case "SUCCESS": return "default";
+    case "EXECUTED": return "secondary";
+    case "REJECTED": return "destructive";
     case "FAILED": return "destructive";
     case "PENDING": return "secondary";
     default: return "outline";
@@ -238,10 +240,12 @@ function DetailSection({ data, label }: { data: Record<string, unknown> | null; 
 }
 
 function ActionItemContent({ log }: { log: ActionLog }) {
+    const hasOriginalCreativeUrl = typeof log.actionPayload?.original_creative_url === "string";
+    const hasNewCreativeUrl = typeof log.actionPayload?.new_creative_url === "string";
     const isCreativeSwap =
-      log.actionType === "SWITCH_CREATIVE" &&
-      typeof log.actionPayload?.original_creative_url === "string" &&
-      typeof log.actionPayload?.new_creative_url === "string";
+      (log.actionType === "SWITCH_CREATIVE" || log.actionType === "CREATIVE_SWITCH_EXTERNAL") &&
+      hasOriginalCreativeUrl &&
+      hasNewCreativeUrl;
 
     return (
         <Flex direction="column" gap="4" pt="2">
@@ -493,6 +497,8 @@ function FilterControls({
           <SelectItem value="all">All Status</SelectItem>
           <SelectItem value="APPROVED">Approved</SelectItem>
           <SelectItem value="SUCCESS">Success</SelectItem>
+          <SelectItem value="EXECUTED">Executed</SelectItem>
+          <SelectItem value="REJECTED">Rejected</SelectItem>
           <SelectItem value="FAILED">Failed</SelectItem>
           <SelectItem value="PENDING">Pending</SelectItem>
         </SelectContent>
@@ -511,8 +517,12 @@ function FilterControls({
           <SelectItem value="ALERT_ACCOUNT">Alert Account</SelectItem>
           <SelectItem value="NOOP">No-op</SelectItem>
           <SelectItem value="SWITCH_CREATIVE">Switch Creative</SelectItem>
+          <SelectItem value="CREATIVE_SWITCH_EXTERNAL">Creative Switch External</SelectItem>
           <SelectItem value="ADJUST_BUDGET">Adjust Budget</SelectItem>
           <SelectItem value="SCALE_BUDGET">Scale Budget</SelectItem>
+          <SelectItem value="SCALE_CAMPAIGN">Scale Campaign</SelectItem>
+          <SelectItem value="SCALE_AD">Scale Ad</SelectItem>
+          <SelectItem value="PAUSE_AD">Pause Ad</SelectItem>
           <SelectItem value="CREATE_VARIANT">Create Variant</SelectItem>
           <SelectItem value="ARCHIVE_ENTITY">Archive Entity</SelectItem>
         </SelectContent>
