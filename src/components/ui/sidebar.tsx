@@ -263,8 +263,8 @@ const Sidebar = React.forwardRef<
             "relative bg-transparent",
             isIconCollapsible
               ? variant === "floating" || variant === "inset"
-                ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-                : "w-(--sidebar-width-icon)"
+                ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))] group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear"
+                : "w-(--sidebar-width-icon) group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear"
               : "w-(--sidebar-width) transition-[width] duration-200 ease-linear",
             !isIconCollapsible && "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
