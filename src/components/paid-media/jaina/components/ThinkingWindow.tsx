@@ -22,9 +22,8 @@ import {
   AgentHeader,
   AgentContent,
 } from "@/components/ai-elements/agent";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
-import { ThinkingStatusGrid } from "./ThinkingStatusGrid";
+import { SparkleSpinner } from "./SparkleSpinner";
 import {
   buildThinkingSegments,
   clusterToolEntries,
@@ -41,6 +40,78 @@ import {
   ArrowRightLeftIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "motion/react";
+
+const STAGE_LABELS: Record<string, string> = {
+  synthesis_start: "Writing report",
+  delegation_start: "Delegating",
+  canvas_start: "Updating canvas",
+  assembly_start: "Assembling",
+  delegation_complete: "Delegation complete",
+};
+
+type SpawnWorkerOutput = {
+  agent_id?: string;
+  task_id?: string;
+  status?: string;
+  evidence?: string[];
+  insights?: string[];
+  recommendations?: string[];
+};
+
+function renderSpawnWorkerOutput(output: unknown): React.ReactNode {
+  if (!output || typeof output !== "object") return null;
+  const out = output as SpawnWorkerOutput;
+  return (
+    <div className="flex flex-col gap-2 mt-1">
+      {out.agent_id && (
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+          <span className="font-mono">{out.agent_id}</span>
+          {out.task_id && <><span>·</span><span>{out.task_id}</span></>}
+        </div>
+      )}
+      {out.evidence && out.evidence.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Evidence</p>
+          <ul className="flex flex-col gap-0.5">
+            {out.evidence.map((item, i) => (
+              <li key={i} className="flex gap-1.5 text-[11px] text-foreground/70">
+                <span className="text-muted-foreground/50 shrink-0">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {out.insights && out.insights.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wide">Insights</p>
+          <ul className="flex flex-col gap-0.5">
+            {out.insights.map((item, i) => (
+              <li key={i} className="flex gap-1.5 text-[11px] text-foreground/80">
+                <span className="text-amber-500/60 shrink-0">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {out.recommendations && out.recommendations.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-medium text-[#5A48F9]/80 uppercase tracking-wide">Recommendations</p>
+          <ul className="flex flex-col gap-0.5">
+            {out.recommendations.map((item, i) => (
+              <li key={i} className="flex gap-1.5 text-[11px] text-foreground/80">
+                <span className="text-[#5A48F9]/60 shrink-0">·</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type ThinkingWindowProps = {
   reasoning: JainaProgressEntry[];
@@ -65,6 +136,15 @@ export function ThinkingWindow({
     [reasoning, safeToolCalls]
   );
 
+  const currentStage = React.useMemo(() => {
+    if (!isStreaming) return null;
+    for (let i = reasoning.length - 1; i >= 0; i--) {
+      const stage = reasoning[i].stage;
+      if (stage && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
+    }
+    return null;
+  }, [reasoning, isStreaming]);
+
   const thoughtCount = segments.reduce(
     (count, segment) =>
       segment.kind === "thought" ? count + segment.entries.length : count,
@@ -85,16 +165,28 @@ export function ThinkingWindow({
           type="button"
           className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
         >
-          <ThinkingStatusGrid isActive={isStreaming} className="shrink-0" />
+          <SparkleSpinner isActive={isStreaming} className="text-foreground/60" />
           <span className="flex-1 text-left">
             {isStreaming ? (
-              <Shimmer as="span" className="text-sm font-medium">
-                Thinking...
-              </Shimmer>
+              <span className="text-sm font-medium">Thinking...</span>
             ) : (
               <span className="font-medium">Reasoning trace</span>
             )}
           </span>
+          <AnimatePresence>
+            {currentStage && (
+              <motion.span
+                key={currentStage}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {currentStage}
+              </motion.span>
+            )}
+          </AnimatePresence>
           <div className="flex items-center gap-1.5">
             {toolCount > 0 && (
               <Badge variant="secondary" className="text-[10px] px-1.5">
@@ -172,6 +264,43 @@ export function ThinkingWindow({
             );
           }
 
+          if (segment.kind === "agent_lifecycle") {
+            const isActive = isStreaming && isLast && !segment.completeStatus;
+            const statusColor = segment.completeStatus === "failed"
+              ? "text-destructive"
+              : segment.completeStatus === "completed"
+              ? "text-emerald-500"
+              : "text-muted-foreground";
+
+            return (
+              <ChainOfThoughtStep
+                key={segment.id}
+                icon={ArrowRightLeftIcon}
+                label={`Delegated to ${segment.agentLabel}`}
+                status={isActive ? "active" : "complete"}
+              >
+                <Agent className="mt-1">
+                  <AgentHeader name={segment.agentLabel} />
+                  {(segment.taskDescription || segment.durationMs !== undefined || segment.error) ? (
+                    <AgentContent>
+                      {segment.taskDescription && (
+                        <p className="text-[11px] text-foreground/70">{segment.taskDescription}</p>
+                      )}
+                      {segment.durationMs !== undefined && (
+                        <p className={cn("text-[10px] mt-1", statusColor)}>
+                          {segment.completeStatus ?? "running"} · {(segment.durationMs / 1000).toFixed(1)}s
+                        </p>
+                      )}
+                      {segment.error && (
+                        <p className="text-[10px] text-destructive mt-1">{segment.error}</p>
+                      )}
+                    </AgentContent>
+                  ) : null}
+                </Agent>
+              </ChainOfThoughtStep>
+            );
+          }
+
           // tools segment
           const resolved = resolveToolEntries(
             segment.toolRefs,
@@ -202,6 +331,7 @@ export function ThinkingWindow({
                               value={entry.toolResult.output ?? entry.toolResult.error}
                             />
                           ) : null}
+                          {entry.name === "spawn_worker" && renderSpawnWorkerOutput(entry.toolResult?.output)}
                         </ToolContent>
                       </Tool>
                     );
@@ -248,6 +378,7 @@ export function ThinkingWindow({
                                   value={entry.toolResult.output ?? entry.toolResult.error}
                                 />
                               ) : null}
+                              {entry.name === "spawn_worker" && renderSpawnWorkerOutput(entry.toolResult?.output)}
                             </ToolContent>
                           </Tool>
                         ))}

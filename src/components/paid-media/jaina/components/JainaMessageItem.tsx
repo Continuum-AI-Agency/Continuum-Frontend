@@ -152,12 +152,16 @@ export function JainaMessageItem({
     );
   }, [isStructuredJsonContent, message.content, report, reportV2, shouldRenderInlineReport]);
 
+  const hasThinkingContent =
+    (reasoning?.length ?? 0) > 0 || (toolCalls?.length ?? 0) > 0;
+
   const showStreamingPlaceholder =
     isStreaming &&
     message.role === "assistant" &&
     !hasRenderableContent &&
     !structuredFallbackContent &&
-    !hasStructuredChild;
+    !hasStructuredChild &&
+    !hasThinkingContent;
 
   const showStaticFallback =
     !isStreaming &&

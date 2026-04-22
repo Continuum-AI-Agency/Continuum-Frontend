@@ -32,6 +32,8 @@ import {
   handoffStartSchema,
   handoffCompleteSchema,
   agentEnvelopeSchema,
+  agentSpawnEventSchema,
+  agentCompleteEventSchema,
   toolCallSchema,
   toolResultSchema,
   thoughtEventSchema,
@@ -2081,6 +2083,46 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
+    case "agent.spawn": {
+      const parsed = agentSpawnEventSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success) {
+        return nextBase;
+      }
+      const data = parsed.data;
+      return {
+        ...nextBase,
+        progress: [
+          ...state.progress,
+          {
+            stage: "agent_spawn",
+            at: new Date().toISOString(),
+            detail: data.task_description ?? `Agent ${data.agent_id} spawned`,
+            data: { ...data, spawn_ts: Date.now() },
+          },
+        ],
+      };
+    }
+    case "agent.complete": {
+      const parsed = agentCompleteEventSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success) {
+        return nextBase;
+      }
+      const data = parsed.data;
+      return {
+        ...nextBase,
+        progress: [
+          ...state.progress,
+          {
+            stage: "agent_complete",
+            at: new Date().toISOString(),
+            detail: `Agent ${data.agent_id} ${data.status ?? "complete"}`,
+            data,
+          },
+        ],
+      };
+    }
+    case "canvas.context.loaded":
+      return nextBase;
 
     case "thought": {
       const parsed = thoughtEventSchema.safeParse((event as { data?: unknown }).data ?? {});
@@ -2137,7 +2179,7 @@ export function reduceJainaStreamEvent(
         };
       }
 
-      for (const part of parsed.data.content.parts) {
+      for (const part of parsed.data.content?.parts ?? []) {
         if ("text" in part) {
           const detail = formatThoughtDetail(part.text);
           const inferredPlan = looksLikePlanDelta(part.text)
@@ -2226,6 +2268,70 @@ export function reduceJainaStreamEvent(
             ],
           };
         }
+      }
+
+      // Handle flat format: top-level functionResponse (no content.parts wrapper)
+      if (!parsed.data.content && parsed.data.functionResponse) {
+        const fr = parsed.data.functionResponse;
+        const isError =
+          typeof (fr.response as Record<string, unknown>)?.error === "string";
+        const resultRecord: ToolResultEventData = {
+          id: fr.id,
+          name: fr.name,
+          ok: !isError,
+          cached: false,
+          output: fr.response,
+          error: isError
+            ? String((fr.response as Record<string, unknown>).error)
+            : undefined,
+        };
+        nextState = {
+          ...nextState,
+          toolResults: [...nextState.toolResults, resultRecord],
+          progress: [
+            ...nextState.progress,
+            {
+              stage: "tool_complete",
+              at: new Date().toISOString(),
+              detail: `Finished tool: ${formatToolLabel(fr.name)}`,
+              data: {
+                stage: "tool_complete",
+                tool_name: fr.name,
+                tool_call_id: fr.id,
+                author,
+              },
+            },
+          ],
+        };
+      }
+
+      // Handle flat format: top-level functionCall (no content.parts wrapper)
+      if (!parsed.data.content && parsed.data.functionCall) {
+        const fc = parsed.data.functionCall;
+        const callRecord: ToolCallEventData = {
+          id: fc.id,
+          name: fc.name,
+          args: fc.args,
+          metadata: { source: "adk.event", author },
+        };
+        nextState = {
+          ...nextState,
+          toolCalls: [...nextState.toolCalls, callRecord],
+          progress: [
+            ...nextState.progress,
+            {
+              stage: "tool_start",
+              at: new Date().toISOString(),
+              detail: `Running tool: ${formatToolLabel(fc.name)}`,
+              data: {
+                stage: "tool_start",
+                tool_name: fc.name,
+                tool_call_id: fc.id,
+                author,
+              },
+            },
+          ],
+        };
       }
 
       return nextState;
