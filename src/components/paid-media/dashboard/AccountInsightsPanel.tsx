@@ -57,7 +57,7 @@ const CATEGORY_CONFIG: ReadonlyArray<{
   },
   {
     key: "budget",
-    title: "Budget & Pacing",
+    title: "Budget Pace",
     icon: WalletIcon,
     accent: "bg-emerald-500/90",
   },

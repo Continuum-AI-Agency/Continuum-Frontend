@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Text } from "@radix-ui/themes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
+import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
 
 const PaidMediaReportingWidget = dynamic(
   () =>
@@ -26,28 +28,31 @@ type PaidDashboardViewProps = {
 };
 
 export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<PaidPerformanceMetricKey>("spend");
+
   return (
     <div className="space-y-4">
       <section className="space-y-2">
         <div className="px-1">
-          <Text size="3" weight="medium" className="text-balance">Performance and Action Signals</Text>
-          <Text size="2" className="text-pretty text-muted-foreground">
-            Compare spend momentum with DCO execution activity in a single view.
-          </Text>
+          <Text size="3" weight="medium" className="text-balance">Performance & Actions</Text>
         </div>
         <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
-          <PaidMediaReportingWidget brandId={brandId} />
+          <PaidMediaReportingWidget
+            brandId={brandId}
+            onAccountChange={setSelectedAccountId}
+            selectedMetric={selectedMetric}
+            onSelectedMetricChange={setSelectedMetric}
+          />
           <DCOActionsWidget brandId={brandId} />
         </div>
       </section>
       <section className="space-y-2">
-        <div className="px-1">
-          <Text size="3" weight="medium">Budget Pace</Text>
-          <Text size="2" className="text-muted-foreground">
-            Track pacing pressure before it turns into underdelivery.
-          </Text>
-        </div>
-        <BudgetPacingWidget brandId={brandId} />
+        <BudgetPacingWidget
+          brandId={brandId}
+          selectedAccountId={selectedAccountId}
+          selectedMetric={selectedMetric}
+        />
       </section>
     </div>
   );

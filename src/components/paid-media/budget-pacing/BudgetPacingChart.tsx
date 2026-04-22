@@ -10,6 +10,7 @@ import {
 } from "@/components/paid-media/dashboard/ObservabilityLightweightChart";
 
 export type RangeOption = "7d" | "14d" | "30d" | "all";
+export type BudgetPacingTrendMode = "spend" | "pace";
 
 export const RANGE_OPTIONS: ReadonlyArray<{ value: RangeOption; label: string; seconds: number | null }> = [
   { value: "7d", label: "7D", seconds: 7 * 86400 },
@@ -25,6 +26,7 @@ type Props = {
   focusKey: string | null;
   selectedRange: RangeOption;
   onRangeChange: (r: RangeOption) => void;
+  metricMode?: BudgetPacingTrendMode;
   title?: string;
 };
 
@@ -32,19 +34,44 @@ function toTimestamp(date: string): UTCTimestamp {
   return Math.floor(new Date(date + "T12:00:00Z").getTime() / 1000) as UTCTimestamp;
 }
 
-function buildSeries(trend: DailyPoint[]): ObservabilityChartSeries[] {
+function buildSeries(
+  trend: DailyPoint[],
+  metricMode: BudgetPacingTrendMode
+): ObservabilityChartSeries[] {
   const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
+  if (metricMode === "pace") {
+    return [
+      {
+        id: "actual-pace",
+        label: "Pace",
+        color: "#3b82f6",
+        dashed: false,
+        points: sorted.map((p) => ({
+          time: toTimestamp(p.date),
+          value: p.target > 0 ? (p.spend / p.target) * 100 : 0,
+        })),
+      },
+      {
+        id: "target-pace",
+        label: "Target Pace",
+        color: "#f59e0b",
+        dashed: true,
+        points: sorted.map((p) => ({ time: toTimestamp(p.date), value: 100 })),
+      },
+    ];
+  }
+
   return [
     {
       id: "actual-spend",
-      label: "Actual Spend",
+      label: "Spend",
       color: "#3b82f6",
       dashed: false,
       points: sorted.map((p) => ({ time: toTimestamp(p.date), value: p.spend })),
     },
     {
       id: "target-pace",
-      label: "Target Pace",
+      label: "Target",
       color: "#f59e0b",
       dashed: true,
       points: sorted.map((p) => ({ time: toTimestamp(p.date), value: p.target })),
@@ -104,7 +131,14 @@ function resolveTrend(campaigns: BudgetPacingEntry[], focusKey: string | null): 
   return aggregateTrend(campaigns);
 }
 
-export function BudgetPacingChart({ campaigns, focusKey, selectedRange, onRangeChange, title = "Budget Pacing" }: Props) {
+export function BudgetPacingChart({
+  campaigns,
+  focusKey,
+  selectedRange,
+  onRangeChange,
+  metricMode = "spend",
+  title,
+}: Props) {
   const hasTrendData = campaigns.some((c) => c.dailyTrend.length > 0 || c.adSets.some((a) => a.dailyTrend.length > 0));
 
   if (!hasTrendData) {
@@ -112,7 +146,7 @@ export function BudgetPacingChart({ campaigns, focusKey, selectedRange, onRangeC
   }
 
   const trend = resolveTrend(campaigns, focusKey);
-  const series = buildSeries(trend);
+  const series = buildSeries(trend, metricMode);
   const focusLabel = focusKey ? resolveFocusLabel(campaigns, focusKey) : null;
   const activeWindowSeconds = RANGE_OPTIONS.find((r) => r.value === selectedRange)?.seconds ?? null;
 
@@ -120,7 +154,7 @@ export function BudgetPacingChart({ campaigns, focusKey, selectedRange, onRangeC
     <div className="bg-background/80 border border-border/60 rounded-lg p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <p className="text-sm font-medium shrink-0">{title}</p>
+          {title && <p className="text-sm font-medium shrink-0">{title}</p>}
           {focusLabel && (
             <span className="truncate text-xs text-muted-foreground">— {focusLabel}</span>
           )}
