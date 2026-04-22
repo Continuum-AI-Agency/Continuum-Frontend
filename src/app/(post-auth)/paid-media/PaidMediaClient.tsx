@@ -279,7 +279,7 @@ export default function PaidMediaClientPage({
 
         <TabsContent value="budget" className="box-border flex-1 min-h-0 pt-2 overflow-auto">
           <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-            <BudgetPacingWidget brandId={brandProfileId} />
+            <BudgetPacingWidget brandId={brandProfileId} selectedAccountId={selectedAdAccount} />
           </div>
         </TabsContent>
 
