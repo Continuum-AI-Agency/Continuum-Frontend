@@ -111,16 +111,49 @@ function JobCard({
   }
 
   if (job.status === "completed") {
-    const caption = job.placement?.copy?.caption ?? "";
+    const card = job.uiPostCard;
+    const caption = card?.caption ?? job.placement?.copy?.caption ?? "";
+    const hashtags = card?.hashtags ?? [];
+    const quality = card?.quality ?? null;
+    const format = card?.format ?? null;
     return (
       <Card className="overflow-hidden">
         <CardContent className="flex flex-col gap-2 p-3">
           <div className="flex items-center justify-between gap-2">
-            <PlatformBadge platform={job.platform} />
-            <Badge variant="soft" color="green" size="1">Ready</Badge>
+            <div className="flex items-center gap-1.5">
+              <PlatformBadge platform={job.platform} />
+              {format && (
+                <Badge variant="soft" color="gray" size="1">{format}</Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {quality != null && (
+                <Badge variant="soft" color={quality.passed ? "green" : "orange"} size="1">
+                  {Math.round(quality.score * 100)}%
+                </Badge>
+              )}
+              <Badge variant="soft" color="green" size="1">Ready</Badge>
+            </div>
           </div>
           {caption && (
             <p className="line-clamp-2 text-xs text-foreground">{caption}</p>
+          )}
+          {hashtags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {hashtags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                >
+                  {tag.startsWith("#") ? tag : `#${tag}`}
+                </span>
+              ))}
+              {hashtags.length > 3 && (
+                <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                  +{hashtags.length - 3}
+                </span>
+              )}
+            </div>
           )}
           {scheduledLabel && (
             <p className="text-xs text-muted-foreground">{scheduledLabel}</p>

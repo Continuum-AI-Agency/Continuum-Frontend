@@ -11,6 +11,7 @@ import { initialPanelState, panelReducer } from "./useOrganicAgentReducer";
 import { mapPlacementToDraft } from "./mapPlacementToDraft";
 import { JobGrid } from "./JobGrid";
 import { ToolCallChip } from "./ToolCallChip";
+import { TrendChartCard } from "./TrendChartCard";
 import type { AgentJobState } from "./types";
 
 type OrganicAgentPanelProps = {
@@ -157,6 +158,15 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
                     {msg.toolCalls.map((tc) => (
                       <ToolCallChip key={tc.toolCallId} toolCall={tc} />
                     ))}
+                  </div>
+                )}
+                {msg.uiCards && msg.uiCards.length > 0 && (
+                  <div className="space-y-2">
+                    {msg.uiCards.map((card, i) =>
+                      card.type === "trend_chart" ? (
+                        <TrendChartCard key={i} chart={card.data} />
+                      ) : null
+                    )}
                   </div>
                 )}
               </div>
