@@ -8,6 +8,7 @@ import { compositeImages } from './compositeImages';
 import {
   getVideoGeneratorBackendModel,
   getVideoGeneratorReferenceMode,
+  supportsVideoGeneratorFrameInputs,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
 } from './videoModel';
@@ -438,8 +439,9 @@ export function buildVeoPayload(
   let firstFrame: GenerationPayload['firstFrame'] = undefined;
   let lastFrame: GenerationPayload['lastFrame'] = undefined;
   let referenceVideo: GenerationPayload['referenceVideo'] = undefined;
+  let imageReferences: GenerationPayload['imageReferences'] = undefined;
 
-  if (referenceMode === 'frames') {
+  if (supportsVideoGeneratorFrameInputs(model)) {
     const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
     firstFrame = frame0Input?.image
       ? { data: frame0Input.image, mimeType: 'image/png', filename: frame0Input.fileName || 'frame-0.png' }
@@ -475,7 +477,7 @@ export function buildVeoPayload(
     }
   }
 
-  if (model === 'kling-omni') {
+  if (model === 'kling-omni' || model === 'seedance-2.0') {
     const refVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
     if (refVideoInput?.data) {
       referenceVideo = {
@@ -486,7 +488,7 @@ export function buildVeoPayload(
     }
   }
 
-  const referenceImages = referenceMode === 'images' || model === 'kling-omni'
+  const referenceImages = referenceMode === 'images' || model === 'kling-omni' || model === 'seedance-2.0' || model === 'pixverse-v6'
     ? (() => {
         const edges = allEdges.filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'));
         const injectionParts: string[] = [];
@@ -525,6 +527,14 @@ export function buildVeoPayload(
     })()
     : undefined;
 
+  if (model === 'seedance-2.0') {
+    imageReferences = referenceImages?.map((image, index) => ({
+      data: image.data,
+      mimeType: image.mimeType,
+      filename: image.filename ?? `seedance-ref-${index + 1}.png`,
+    }));
+  }
+
   const backendModel = getVideoGeneratorBackendModel(model);
 
   return {
@@ -539,6 +549,7 @@ export function buildVeoPayload(
     firstFrame,
     lastFrame,
     referenceVideo,
+    imageReferences,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
 }
@@ -591,6 +602,11 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     reference_video: payload.referenceVideo
       ? { data: payload.referenceVideo.data, mime_type: payload.referenceVideo.mimeType, filename: payload.referenceVideo.filename }
       : undefined,
+    image_references: payload.imageReferences?.map((image) => ({
+      data: image.data,
+      mime_type: image.mimeType,
+      filename: image.filename,
+    })),
     reference_images: payload.referenceImages?.map((img) => ({
       data: img.data,
       mime_type: img.mimeType,
