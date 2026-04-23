@@ -92,9 +92,11 @@ function AppSidebarInner() {
       collapsible="icon"
       className="border-r border-[var(--color-border)] bg-[var(--sidebar)] backdrop-blur-xl"
     >
-      <SidebarHeader className="flex items-center justify-between px-3">
-        <BrandSwitcher />
-        <div className="flex items-center gap-0.5">
+      <SidebarHeader className="flex items-center justify-between gap-1 overflow-hidden px-3">
+        <div className="min-w-0 flex-1">
+          <BrandSwitcher />
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
           {state !== "collapsed" && (
               <Tooltip>
                 <TooltipTrigger asChild>
