@@ -1,4 +1,4 @@
-import type { AgentJobState, ConversationMessage, ToolCallEvent } from "./types"
+import type { AgentJobState, ConversationMessage, ToolCallEvent, UiCard } from "./types"
 
 export type PanelState = {
   sessionId: string | null
@@ -19,6 +19,7 @@ export type PanelAction =
   | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown }
   | { type: "STREAM_COMPLETE" }
   | { type: "STREAM_ERROR"; error: string }
+  | { type: "STREAM_UI_CARD"; card: UiCard }
   | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
 
 export function initialPanelState(): PanelState {
@@ -100,6 +101,17 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
                     : tc
                 ),
               }
+            : m
+        ),
+      }
+
+    case "STREAM_UI_CARD":
+      if (!state.streamingMessageId) return state
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === state.streamingMessageId
+            ? { ...m, uiCards: [...(m.uiCards ?? []), action.card] }
             : m
         ),
       }

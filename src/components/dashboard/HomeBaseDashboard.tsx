@@ -20,14 +20,7 @@ export function HomeBaseDashboard({
   return (
     <div className="w-full">
       <div className="sticky top-0 z-10 shrink-0 px-4 py-3 border-b flex items-center justify-between bg-background">
-        <div className="space-y-1">
-          <Text size="1" className="uppercase tracking-[0.14em] text-muted-foreground">Dashboard</Text>
-          <Text size="2" className="text-pretty text-muted-foreground">
-            {isPaidView
-              ? "Paid performance, pacing, and action flow"
-              : "Organic planning and signal quality"}
-          </Text>
-        </div>
+        <Text size="1" className="uppercase tracking-[0.14em] text-muted-foreground">Dashboard</Text>
         <Tabs.Root value={activeView} onValueChange={(v) => setActiveView(v as "paid" | "organic")}>
           <Tabs.List size="2">
             <Tabs.Trigger value="paid">Paid Media</Tabs.Trigger>
@@ -37,18 +30,6 @@ export function HomeBaseDashboard({
       </div>
 
       <div className={cn("p-4 space-y-3 transition-colors duration-200", isPaidView ? "bg-amber-500/[0.04]" : "bg-emerald-500/[0.04]")}>
-        <div className="flex flex-wrap items-end justify-between gap-2 rounded-lg border border-subtle bg-background/70 px-3 py-2">
-          <div>
-            <Text size="3" weight="medium" className="text-balance">
-              {isPaidView ? "Paid Media Operations" : "Organic Growth Workspace"}
-            </Text>
-            <Text size="2" className="text-pretty text-muted-foreground">
-              {isPaidView
-                ? "Monitor campaign momentum, action logs, and pacing in one lane."
-                : "Plan calendar output while validating performance and trend coverage."}
-            </Text>
-          </div>
-        </div>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={activeView}

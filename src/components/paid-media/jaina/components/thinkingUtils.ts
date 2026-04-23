@@ -1,10 +1,23 @@
 import type { ToolCallEventData, ToolResultEventData } from "@/lib/jaina/schemas";
 import type { JainaProgressEntry } from "@/lib/jaina/stream";
 
+export type AgentLifecycleSegment = {
+  kind: "agent_lifecycle";
+  id: string;
+  agentId: string;
+  agentLabel: string;
+  taskDescription?: string;
+  spawnTs?: number;
+  completeStatus?: "completed" | "failed" | "cancelled";
+  durationMs?: number;
+  error?: string;
+};
+
 export type ThinkingSegment =
   | { kind: "thought"; id: string; entries: JainaProgressEntry[] }
   | { kind: "tools"; id: string; toolRefs: string[] }
-  | { kind: "handoff"; id: string; from: string | null; to: string; objective: string | null; status: "started" | "completed" | "failed" };
+  | { kind: "handoff"; id: string; from: string | null; to: string; objective: string | null; status: "started" | "completed" | "failed" }
+  | AgentLifecycleSegment;
 
 export type ResolvedToolEntry = {
   id: string;
@@ -29,9 +42,18 @@ export function formatToolLabel(toolName: string): string {
     : toolName.replace(/_/g, " ");
 }
 
+const KNOWN_AGENT_LABELS: Record<string, string> = {
+  l2_worker_agent: "Worker Agent",
+  strategist: "Strategist",
+  canvas_agent: "Canvas Agent",
+  synthesis_agent: "Synthesis",
+  routing_agent: "Router",
+};
+
 export function formatAgentLabel(scope: string): string {
-  if (scope === "router") return "Router";
-  return scope
+  const normalized = scope.startsWith("Jaina_") ? scope.slice("Jaina_".length) : scope;
+  if (normalized in KNOWN_AGENT_LABELS) return KNOWN_AGENT_LABELS[normalized];
+  return normalized
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -159,6 +181,61 @@ export function buildThinkingSegments(
   };
 
   for (const entry of reasoning) {
+    if (entry.stage === "agent_spawn") {
+      flushThoughts();
+      flushTools();
+      const data = entry.data as Record<string, unknown> | undefined;
+      const agentId = typeof data?.agent_id === "string" ? data.agent_id : "unknown";
+      segments.push({
+        kind: "agent_lifecycle",
+        id: `agent-${segments.length + 1}`,
+        agentId,
+        agentLabel: formatAgentLabel(agentId),
+        taskDescription: typeof data?.task_description === "string" ? data.task_description : undefined,
+        spawnTs: typeof data?.spawn_ts === "number" ? data.spawn_ts : undefined,
+      });
+      continue;
+    }
+
+    if (entry.stage === "agent_complete") {
+      flushThoughts();
+      flushTools();
+      const data = entry.data as Record<string, unknown> | undefined;
+      const agentId = typeof data?.agent_id === "string" ? data.agent_id : "unknown";
+      const existingIndex = [...segments].reverse().findIndex(
+        (s) => s.kind === "agent_lifecycle" && s.agentId === agentId
+      );
+      if (existingIndex !== -1) {
+        const realIndex = segments.length - 1 - existingIndex;
+        const existing = segments[realIndex] as AgentLifecycleSegment;
+        segments[realIndex] = {
+          ...existing,
+          completeStatus: data?.status === "failed"
+            ? "failed"
+            : data?.status === "cancelled"
+            ? "cancelled"
+            : "completed",
+          durationMs: typeof data?.duration_ms === "number" ? data.duration_ms : undefined,
+          error: typeof data?.error === "string" ? data.error : undefined,
+        };
+      } else {
+        segments.push({
+          kind: "agent_lifecycle",
+          id: `agent-${segments.length + 1}`,
+          agentId,
+          agentLabel: formatAgentLabel(agentId),
+          completeStatus: data?.status === "failed"
+            ? "failed"
+            : data?.status === "cancelled"
+            ? "cancelled"
+            : "completed",
+          durationMs: typeof data?.duration_ms === "number" ? data.duration_ms : undefined,
+          error: typeof data?.error === "string" ? data.error : undefined,
+        });
+      }
+      continue;
+    }
+
     if (entry.stage === "handoff_start" || entry.stage === "handoff_complete") {
       flushThoughts();
       flushTools();

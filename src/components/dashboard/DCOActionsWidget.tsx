@@ -636,7 +636,7 @@ export function DCOActionsWidget({
             <Box>
               <Heading size="4">DCO Actions</Heading>
               <Text color="gray" size="2">
-                Automated actions from the last {dateRangeDays} days
+                Last {dateRangeDays}d automated actions
               </Text>
             </Box>
           </Flex>

@@ -7,7 +7,10 @@ import { BudgetPacingStatusBadge } from "./BudgetPacingStatusBadge";
 
 type Props = {
   data: BudgetPacingResponse;
+  activeKey?: BudgetPacingSummaryCardKey;
 };
+
+export type BudgetPacingSummaryCardKey = "budget" | "spend" | "remaining" | "pace";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -23,11 +26,17 @@ type KpiCardProps = {
   subLabel?: React.ReactNode;
   progressValue: number;
   valueClassName?: string;
+  active?: boolean;
 };
 
-function KpiCard({ label, value, subLabel, progressValue, valueClassName }: KpiCardProps) {
+function KpiCard({ label, value, subLabel, progressValue, valueClassName, active }: KpiCardProps) {
   return (
-    <div className="bg-background/80 border border-border/60 rounded-lg p-3 flex flex-col gap-2">
+    <div
+      className={cn(
+        "bg-background/80 border border-border/60 rounded-lg p-3 flex flex-col gap-2",
+        active && "ring-1 ring-primary bg-accent/10"
+      )}
+    >
       <p className="text-muted-foreground text-xs">{label}</p>
       <p className={cn("text-xl font-semibold tabular-nums", valueClassName)}>{value}</p>
       {subLabel && <p className="text-muted-foreground text-xs">{subLabel}</p>}
@@ -36,7 +45,7 @@ function KpiCard({ label, value, subLabel, progressValue, valueClassName }: KpiC
   );
 }
 
-export function BudgetPacingSummaryStrip({ data }: Props) {
+export function BudgetPacingSummaryStrip({ data, activeKey }: Props) {
   const { summary } = data;
   const isDaily = summary.accountBudgetPeriod === "daily";
   const isLifetime = summary.accountBudgetPeriod === "lifetime";
@@ -68,6 +77,7 @@ export function BudgetPacingSummaryStrip({ data }: Props) {
         value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudget) : "—"}
         subLabel={isDaily ? "per day" : undefined}
         progressValue={100}
+        active={activeKey === "budget"}
       />
 
       <KpiCard
@@ -75,6 +85,7 @@ export function BudgetPacingSummaryStrip({ data }: Props) {
         value={formatCurrency(spendValue)}
         subLabel={summary.totalBudget > 0 ? `${Math.min(spentPct, 999).toFixed(1)}% of cap` : undefined}
         progressValue={spentPct}
+        active={activeKey === "spend"}
       />
 
       <KpiCard
@@ -82,10 +93,11 @@ export function BudgetPacingSummaryStrip({ data }: Props) {
         value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudgetRemaining) : "—"}
         valueClassName={isRemainingCritical ? "text-red-500" : undefined}
         progressValue={remainingPct}
+        active={activeKey === "remaining"}
       />
 
       <KpiCard
-        label="Overall Pace"
+        label="Pace"
         value={
           <span className="flex items-center gap-2">
             {summary.overallPacePct.toFixed(1)}%
@@ -93,6 +105,7 @@ export function BudgetPacingSummaryStrip({ data }: Props) {
           </span>
         }
         progressValue={Math.min(100, summary.overallPacePct)}
+        active={activeKey === "pace"}
       />
     </div>
   );

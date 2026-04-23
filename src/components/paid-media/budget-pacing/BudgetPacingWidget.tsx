@@ -2,17 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { Callout, Flex, IconButton, Select, Text } from "@radix-ui/themes";
+import { Callout, Flex, IconButton, Text } from "@radix-ui/themes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
-import { BudgetPacingChart, type RangeOption } from "./BudgetPacingChart";
-import { BudgetPacingSummaryStrip } from "./BudgetPacingSummaryStrip";
+import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
+import { BudgetPacingChart, type BudgetPacingTrendMode, type RangeOption } from "./BudgetPacingChart";
+import { BudgetPacingSummaryStrip, type BudgetPacingSummaryCardKey } from "./BudgetPacingSummaryStrip";
 import { BudgetPacingTable } from "./BudgetPacingTable";
 
 type Props = {
   brandId: string;
+  selectedAccountId: string | null;
+  selectedMetric?: PaidPerformanceMetricKey;
 };
 
 type LoadState =
@@ -20,6 +22,19 @@ type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "success"; data: BudgetPacingResponse };
+
+function mapMetricToSummaryCard(metric?: PaidPerformanceMetricKey): BudgetPacingSummaryCardKey {
+  if (metric === "roas" || metric === "ctr") return "pace";
+  if (metric === "impressions") return "budget";
+  if (metric === "clicks") return "spend";
+  if (metric === "cpc" || metric === "cpa") return "spend";
+  return "spend";
+}
+
+function mapMetricToTrendMode(metric?: PaidPerformanceMetricKey): BudgetPacingTrendMode {
+  if (metric === "roas" || metric === "ctr") return "pace";
+  return "spend";
+}
 
 function BudgetPacingLoadingSkeleton() {
   return (
@@ -35,21 +50,12 @@ function BudgetPacingLoadingSkeleton() {
   );
 }
 
-export function BudgetPacingWidget({ brandId }: Props) {
+export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric }: Props) {
   const [state, setState] = useState<LoadState>({ status: "idle" });
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<RangeOption>("14d");
-
-  const { integrations, isLoading: integrationsLoading } = useBrandIntegrations(brandId);
-  const adAccounts = integrations?.["facebook"]?.accounts ?? [];
-
-  useEffect(() => {
-    if (adAccounts.length > 0 && !selectedAccountId) {
-      const first = adAccounts[0];
-      setSelectedAccountId(first.externalAccountId ?? first.integrationAccountId);
-    }
-  }, [adAccounts, selectedAccountId]);
+  const summaryCard = mapMetricToSummaryCard(selectedMetric);
+  const trendMode = mapMetricToTrendMode(selectedMetric);
 
   const fetchPacing = useCallback(
     async (accountId: string) => {
@@ -86,34 +92,18 @@ export function BudgetPacingWidget({ brandId }: Props) {
     <div className="space-y-4 p-4">
       <Flex align="center" justify="between">
         <div>
-          <h3 className="text-sm font-semibold">Budget Pacing</h3>
-          <p className="text-xs text-muted-foreground">Campaign spend vs. target</p>
+          <h3 className="text-sm font-semibold">Budget Pace</h3>
+          <p className="text-xs text-muted-foreground">Spend vs target</p>
         </div>
 
-        <Flex align="center" gap="2">
-          <Select.Root value={selectedAccountId ?? ""} onValueChange={setSelectedAccountId}>
-            <Select.Trigger />
-            <Select.Content>
-              {adAccounts.map((account) => (
-                <Select.Item
-                  key={account.integrationAccountId}
-                  value={account.externalAccountId ?? account.integrationAccountId}
-                >
-                  {account.name || account.integrationAccountId}
-                </Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-
-          <IconButton
-            variant="ghost"
-            size="1"
-            disabled={state.status === "loading" || !selectedAccountId}
-            onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId); }}
-          >
-            <ReloadIcon className={state.status === "loading" ? "animate-spin" : undefined} />
-          </IconButton>
-        </Flex>
+        <IconButton
+          variant="ghost"
+          size="1"
+          disabled={state.status === "loading" || !selectedAccountId}
+          onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId); }}
+        >
+          <ReloadIcon className={state.status === "loading" ? "animate-spin" : undefined} />
+        </IconButton>
       </Flex>
 
       {state.status === "loading" && <BudgetPacingLoadingSkeleton />}
@@ -126,12 +116,13 @@ export function BudgetPacingWidget({ brandId }: Props) {
 
       {state.status === "success" && (
         <div className="space-y-4">
-          <BudgetPacingSummaryStrip data={state.data} />
+          <BudgetPacingSummaryStrip data={state.data} activeKey={summaryCard} />
           <BudgetPacingChart
             campaigns={state.data.campaigns}
             focusKey={focusKey}
             selectedRange={selectedRange}
             onRangeChange={setSelectedRange}
+            metricMode={trendMode}
           />
           <BudgetPacingTable
             campaigns={state.data.campaigns}
@@ -142,9 +133,9 @@ export function BudgetPacingWidget({ brandId }: Props) {
         </div>
       )}
 
-      {state.status === "idle" && adAccounts.length === 0 && !integrationsLoading && (
+      {state.status === "idle" && !selectedAccountId && (
         <Text size="2" color="gray" align="center" as="p" className="py-8">
-          No Meta ad accounts connected.
+          No ad account selected.
         </Text>
       )}
     </div>

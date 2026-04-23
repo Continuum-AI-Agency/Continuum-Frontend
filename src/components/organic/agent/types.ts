@@ -9,6 +9,41 @@ export type ToolCallEvent = {
   result?: unknown
 }
 
+export type UiTrendChart = {
+  chartType: "bar"
+  title: string
+  windows: number[]
+  series: Array<{
+    label: "Trends" | "Events" | "Questions"
+    data: Array<{ window: number; value: number }>
+  }>
+  topSignals: Array<{
+    id: string
+    title: string
+    type: "trend" | "event" | "question"
+    confidence: number | null
+    platform: string | null
+    windowDays: number
+  }>
+}
+
+export type UiPostCard = {
+  draftId: string
+  jobId: string
+  brandId: string
+  platform: string
+  scheduledAt: string
+  caption: string | null
+  hashtags: string[]
+  imageUrl: string | null
+  format: string | null
+  topic: string | null
+  quality: { score: number; passed: boolean } | null
+  trendId: string | null
+}
+
+export type UiCard = { type: "trend_chart"; data: UiTrendChart }
+
 export type AgentJobState = {
   jobId: string
   brandId: string
@@ -22,6 +57,7 @@ export type AgentJobState = {
   error?: { code?: string; message: string }
   draftId?: string
   placement?: CalendarPlacement
+  uiPostCard?: UiPostCard
 }
 
 export type ConversationMessage = {
@@ -29,6 +65,7 @@ export type ConversationMessage = {
   role: "user" | "assistant"
   content: string
   toolCalls?: ToolCallEvent[]
+  uiCards?: UiCard[]
 }
 
 export type AgentChatInput = {

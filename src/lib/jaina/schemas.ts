@@ -717,6 +717,25 @@ export const handoffCompleteSchema = streamEventSchema(
   })
 );
 
+export const agentSpawnEventSchema = z.object({
+  agent_id: z.string(),
+  task_id: z.string().optional(),
+  task_description: z.string().optional(),
+  parent_agent_id: z.string().optional(),
+});
+export type AgentSpawnEventData = z.infer<typeof agentSpawnEventSchema>;
+
+export const agentCompleteEventSchema = z.object({
+  agent_id: z.string(),
+  task_id: z.string().optional(),
+  status: z.enum(["completed", "failed", "cancelled"]).optional(),
+  duration_ms: z.number().optional(),
+  error: z.string().optional(),
+});
+export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
+
+export const canvasContextLoadedEventSchema = z.object({}).passthrough();
+
 export const agentEnvelopeSchema = streamEventSchema(
   "agent.envelope",
   z.object({
@@ -902,6 +921,9 @@ export type JainaStreamEvent =
   | z.infer<typeof handoffStartSchema>
   | z.infer<typeof handoffCompleteSchema>
   | z.infer<typeof agentEnvelopeSchema>
+  | { type: "agent.spawn"; data: AgentSpawnEventData }
+  | { type: "agent.complete"; data: AgentCompleteEventData }
+  | { type: "canvas.context.loaded"; data: Record<string, unknown> }
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaSchema>
   | z.infer<typeof responseReportAssemblySchema>
@@ -1213,6 +1235,18 @@ export type ThoughtEventData = z.infer<typeof thoughtEventSchema>;
 
 export const adkEventSchema = z.object({
   author: z.string().optional(),
+  // Top-level flat format (backend may omit content wrapper)
+  functionResponse: z.object({
+    name: z.string(),
+    id: z.string(),
+    response: z.record(z.string(), z.unknown()),
+  }).optional(),
+  functionCall: z.object({
+    name: z.string(),
+    id: z.string(),
+    args: z.record(z.string(), z.unknown()),
+  }).optional(),
+  // Structured format with parts array
   content: z.object({
     role: z.string().optional(),
     parts: z.array(
@@ -1234,7 +1268,7 @@ export const adkEventSchema = z.object({
         }),
       ])
     ),
-  }),
+  }).optional(),
 }).passthrough();
 
 export type AdkEventData = z.infer<typeof adkEventSchema>;

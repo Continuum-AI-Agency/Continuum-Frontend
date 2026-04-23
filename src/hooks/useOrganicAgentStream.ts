@@ -6,7 +6,7 @@ import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import { getApiBaseUrl } from "@/lib/api/config";
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
-import type { AgentChatInput, AgentJobState } from "@/components/organic/agent/types";
+import type { AgentChatInput, AgentJobState, UiTrendChart, UiPostCard } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
 
 function parseJobUpdate(
@@ -39,6 +39,7 @@ function parseJobUpdate(
       return {
         jobId,
         brandId,
+        status: "running",
         draftId: event.draftId as string,
         placement: event.placement as CalendarPlacement,
       };
@@ -155,6 +156,22 @@ export function useOrganicAgentStream(dispatch: React.Dispatch<PanelAction>) {
               case "response.done":
                 dispatch({ type: "STREAM_COMPLETE" });
                 break;
+              case "ui.trend_chart":
+                dispatch({
+                  type: "STREAM_UI_CARD",
+                  card: { type: "trend_chart", data: event as unknown as UiTrendChart },
+                });
+                break;
+              case "ui.post_card": {
+                const postCard = event as unknown as UiPostCard;
+                if (postCard.jobId) {
+                  dispatch({
+                    type: "JOB_UPDATE",
+                    job: { jobId: postCard.jobId, brandId: postCard.brandId, uiPostCard: postCard },
+                  });
+                }
+                break;
+              }
               case "job.enqueued":
               case "job.progress":
               case "draft.ready":
