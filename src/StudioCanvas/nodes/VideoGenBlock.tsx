@@ -40,6 +40,8 @@ import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import {
   getVideoGeneratorImageLimit,
   getVideoGeneratorReferenceMode,
+  supportsVideoGeneratorFrameInputs,
+  supportsVideoGeneratorReferenceVideo,
   resolveVideoGeneratorModel,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
@@ -81,8 +83,8 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
 
   const model = resolveVideoGeneratorModel({ type: 'videoGen', data: data as unknown as Record<string, unknown> });
   const modelLabel = VIDEO_GENERATOR_MODEL_LABELS[model];
-  const supportsFrameInputs = model === 'veo-3.1-fast';
-  const supportsReferenceVideo = model === 'kling-omni';
+  const supportsFrameInputs = supportsVideoGeneratorFrameInputs(model);
+  const supportsReferenceVideo = supportsVideoGeneratorReferenceVideo(model);
   const supportsReferenceImages = model !== 'veo-3.1-fast';
 
   const [isHovered, setIsHovered] = useState(false);
