@@ -488,7 +488,7 @@ export function buildVeoPayload(
     }
   }
 
-  const referenceImages = referenceMode === 'images' || model === 'kling-omni' || model === 'seedance-2.0' || model === 'pixverse-v6'
+  const referenceImages = referenceMode === 'images' || model === 'kling-omni'
     ? (() => {
         const edges = allEdges.filter((e) => e.target === node.id && (e.targetHandle === 'ref-image' || e.targetHandle === 'ref-images'));
         const injectionParts: string[] = [];
@@ -528,11 +528,15 @@ export function buildVeoPayload(
     : undefined;
 
   if (model === 'seedance-2.0') {
-    imageReferences = referenceImages?.map((image, index) => ({
+    const mappedImageReferences = referenceImages?.map((image, index) => ({
       data: image.data,
       mimeType: image.mimeType,
       filename: image.filename ?? `seedance-ref-${index + 1}.png`,
     }));
+
+    imageReferences = mappedImageReferences && mappedImageReferences.length > 0
+      ? mappedImageReferences
+      : undefined;
   }
 
   const backendModel = getVideoGeneratorBackendModel(model);

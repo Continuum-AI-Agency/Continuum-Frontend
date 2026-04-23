@@ -3,6 +3,7 @@ import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnr
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 import { NodeOutput } from '../types/execution';
+import { getVideoGeneratorTargetHandles } from './videoModel';
 
 describe('buildNodePayload', () => {
   describe('buildNanoGenPayload', () => {
@@ -241,8 +242,25 @@ describe('buildNodePayload', () => {
         } as any,
       };
 
-      const payload = buildVeoPayload(node, new Map(), [], []);
+      const edges: Edge[] = [
+        { id: 'i1', source: 'img-ref', target: 'pixverse', sourceHandle: 'image', targetHandle: 'ref-image' },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('img-ref', { type: 'image', base64: 'pixverse_image', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
       expect(payload?.model).toBe('pixverse-v6');
+      expect(payload?.referenceImages?.[0]?.data).toBe('pixverse_image');
+    });
+
+    it('should expose a single Pixverse ref-image target handle', () => {
+      expect(getVideoGeneratorTargetHandles('pixverse-v6')).toEqual([
+        'prompt-in',
+        'prompt',
+        'negative',
+        'ref-image',
+      ]);
     });
 
     it('should include Seedance image references when present', () => {

@@ -78,6 +78,9 @@ export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): stri
       VIDEO_REFERENCE_VIDEO_HANDLE,
     ];
   }
+  if (model === "pixverse-v6") {
+    return ["prompt-in", "prompt", "negative", "ref-image"];
+  }
   if (model === "seedance-2.0") {
     return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES, ...VIDEO_FRAME_HANDLES, VIDEO_REFERENCE_VIDEO_HANDLE];
   }
