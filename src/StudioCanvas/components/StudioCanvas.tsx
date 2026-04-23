@@ -213,15 +213,15 @@ const createNodeConfig = (
     };
   }
 
-    if (type === 'videoGen' || type === 'veoDirector' || type === 'veoFast') {
-      const model =
-        options?.model ??
-        (type === 'veoDirector' ? 'veo-3.1' : type === 'veoFast' ? 'veo-3.1-fast' : DEFAULT_VIDEO_GENERATOR_MODEL);
-      const referenceMode = getVideoGeneratorReferenceMode(model);
-      return {
-        data: { model, prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode },
-        style: { width: 512, height: 288 },
-      };
+  if (type === 'videoGen' || type === 'veoDirector' || type === 'veoFast') {
+    const model =
+      options?.model ??
+      (type === 'veoDirector' ? 'veo-3.1' : type === 'veoFast' ? 'veo-3.1-fast' : DEFAULT_VIDEO_GENERATOR_MODEL);
+    const referenceMode = getVideoGeneratorReferenceMode(model);
+    return {
+      data: { model, prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode },
+      style: { width: 512, height: 288 },
+    };
   }
 
   if (type === 'extendVideo') {

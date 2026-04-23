@@ -92,7 +92,7 @@ Target handles:
 Source handles:
 - `video`
 
-### `pixverse-v6`
+### `videoGen` (model: `pixverse-v6`)
 Purpose: Fal-backed image-to-video generation with a single reference image.
 
 Target handles:
@@ -104,7 +104,11 @@ Target handles:
 Source handles:
 - `video`
 
-### `seedance-2.0`
+Notes:
+- Pixverse v6 is limited to one reference image.
+- The implementation and `isValidConnection` surface only `ref-image` for this model.
+
+### `videoGen` (model: `seedance-2.0`)
 Purpose: Fal-backed image-to-video generation with image lists and optional first/last frame support.
 
 Target handles:
