@@ -186,11 +186,15 @@ export function buildThinkingSegments(
       flushTools();
       const data = entry.data as Record<string, unknown> | undefined;
       const agentId = typeof data?.agent_id === "string" ? data.agent_id : "unknown";
+      const agentLabel =
+        typeof data?.display_name === "string" ? data.display_name :
+        typeof data?.name === "string" ? data.name :
+        formatAgentLabel(agentId);
       segments.push({
         kind: "agent_lifecycle",
         id: `agent-${segments.length + 1}`,
         agentId,
-        agentLabel: formatAgentLabel(agentId),
+        agentLabel,
         taskDescription: typeof data?.task_description === "string" ? data.task_description : undefined,
         spawnTs: typeof data?.spawn_ts === "number" ? data.spawn_ts : undefined,
       });
@@ -223,7 +227,10 @@ export function buildThinkingSegments(
           kind: "agent_lifecycle",
           id: `agent-${segments.length + 1}`,
           agentId,
-          agentLabel: formatAgentLabel(agentId),
+          agentLabel:
+            typeof data?.display_name === "string" ? data.display_name :
+            typeof data?.name === "string" ? data.name :
+            formatAgentLabel(agentId),
           completeStatus: data?.status === "failed"
             ? "failed"
             : data?.status === "cancelled"

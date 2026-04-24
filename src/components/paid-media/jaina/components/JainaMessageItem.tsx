@@ -142,7 +142,14 @@ export function JainaMessageItem({
   );
   const shouldHideMarkdownContent = isStructuredJsonContent && hasStructuredChild;
   const trimmedContent = message.content.trim();
-  const hasRenderableContent = trimmedContent.length > 0 && !shouldHideMarkdownContent;
+
+  // Suppress SafeMarkdown when it would just repeat the report's executive summary
+  const isRedundantReportContent = Boolean(
+    trimmedContent &&
+    reportV2?.executive_summary?.trim() === trimmedContent
+  );
+
+  const hasRenderableContent = trimmedContent.length > 0 && !shouldHideMarkdownContent && !isRedundantReportContent;
 
   const structuredFallbackContent = React.useMemo(() => {
     if (shouldRenderInlineReport || reportV2) return null;
@@ -321,10 +328,6 @@ export function JainaMessageItem({
                   Analysis complete
                 </motion.span>
               </Checkpoint>
-            ) : null}
-
-            {isStreaming && !message.content ? (
-              <RotatingMessage />
             ) : null}
 
             {!isStreaming && message.status === "done" ? (

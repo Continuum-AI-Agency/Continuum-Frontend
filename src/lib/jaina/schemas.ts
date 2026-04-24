@@ -408,7 +408,7 @@ export const chartConfigEntrySchema = z.object({
 
 export const chartBlockV2Schema = checkpointBlockBaseV2Schema.extend({
   category: z.literal("chart"),
-  chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar"]),
+  chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar", "radar"]),
   category_key: z.string(),
   value_key: z.string().nullish(),
   value_format: valueFormatSchema.optional(),
@@ -722,6 +722,9 @@ export const agentSpawnEventSchema = z.object({
   task_id: z.string().optional(),
   task_description: z.string().optional(),
   parent_agent_id: z.string().optional(),
+  started_at: z.string().optional(),
+  display_name: z.string().optional(),
+  name: z.string().optional(),
 });
 export type AgentSpawnEventData = z.infer<typeof agentSpawnEventSchema>;
 
@@ -731,6 +734,8 @@ export const agentCompleteEventSchema = z.object({
   status: z.enum(["completed", "failed", "cancelled"]).optional(),
   duration_ms: z.number().optional(),
   error: z.string().optional(),
+  display_name: z.string().optional(),
+  name: z.string().optional(),
 });
 export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
 
@@ -768,6 +773,8 @@ export const responseBlockDeltaSchema = streamEventSchema(
     sequence: z.number().int().nonnegative(),
     source: z.string(),
     agent: z.string().optional(),
+    block_category: z.string().optional(),
+    chart_type: z.string().optional(),
     block: checkpointReportBlockSchema,
   })
 );
@@ -778,6 +785,8 @@ export const responseBlockDeltaV2Schema = streamEventSchema(
     sequence: z.number().int().nonnegative(),
     source: z.string(),
     agent: z.string().optional(),
+    block_category: z.string().optional(),
+    chart_type: z.string().optional(),
     block: checkpointBlockV2Schema,
   })
 );

@@ -1663,6 +1663,10 @@ export function reduceJainaStreamEvent(
       const v2Parsed = responseBlockDeltaV2Schema.safeParse(event);
       if (v2Parsed.success && v2Parsed.data.data) {
         const v2Payload = v2Parsed.data.data;
+        // Contract: only "chart" blocks are streamed; skip anything else
+        if (v2Payload.block_category && v2Payload.block_category !== "chart") {
+          return nextBase;
+        }
         if (state.blockDeltasV2.some((entry) => entry.sequence === v2Payload.sequence)) {
           return nextBase;
         }
