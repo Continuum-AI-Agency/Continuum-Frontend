@@ -1,6 +1,5 @@
 "use client";
 
-import { Text } from "@radix-ui/themes";
 import type { CreativeArtifact } from "@/lib/jaina/schemas";
 import { CreativeCard } from "./CreativeCard";
 
@@ -12,13 +11,13 @@ export function CreativesSection({ creatives }: CreativesSectionProps) {
   if (creatives.length === 0) return null;
 
   return (
-    <div className="mt-6 space-y-4">
-      <Text size="3" className="font-semibold text-foreground/90">
-        Creatives
-      </Text>
-      <div className="flex flex-wrap gap-4">
-        {creatives.map((creative) => (
-          <CreativeCard key={creative.id} creative={creative} />
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-medium text-muted-foreground">
+        {creatives.length} creative{creatives.length !== 1 ? "s" : ""}
+      </p>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {creatives.map((creative, i) => (
+          <CreativeCard key={creative.id} creative={creative} index={i} />
         ))}
       </div>
     </div>
