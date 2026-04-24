@@ -6,7 +6,6 @@ import { OrganicAgentPanelLazy } from "@/components/organic/agent/OrganicAgentPa
 import { OrganicMetricsDashboardLazy } from "@/components/organic/OrganicMetricsDashboardLazy";
 import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
 import { OrganicCalendarWorkspace } from "@/components/organic/primitives/OrganicCalendarWorkspace";
-import { BrandInsightsAutoGenerate } from "@/components/brand-insights/BrandInsightsAutoGenerate";
 import {
   ORGANIC_PLATFORMS,
   ORGANIC_MVP_PLATFORM_KEYS,
@@ -20,7 +19,6 @@ import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { deriveMetricAccountsByPlatform } from "@/lib/organic/metricAccounts";
 import { redirect } from "next/navigation";
-import { shouldAutoGenerateBrandInsights } from "@/lib/brand-insights/auto-generate";
 import type { OrganicTrendGroup, OrganicTrendType } from "@/components/organic/primitives/types";
 
 type OrganicPageProps = {
@@ -213,12 +211,6 @@ async function OrganicContent({
       reason instanceof Error ? reason.message : "Unable to load brand insights for this brand.";
   }
 
-  const shouldAutoGenerateInsights = shouldAutoGenerateBrandInsights({
-    insights,
-    errorMessage: insightsError,
-  });
-
-
   const showNoTrendsMessage = selectorTrends.length === 0;
   const metricAccountsByPlatform = deriveMetricAccountsByPlatform({
     integrationSummary,
@@ -236,10 +228,6 @@ async function OrganicContent({
   return (
     <>
       <div className="shrink-0 space-y-2">
-        <BrandInsightsAutoGenerate
-          brandId={brandProfileId}
-          shouldGenerate={shouldAutoGenerateInsights}
-        />
         <Heading size="5" className="text-foreground">
           Organic Planner
         </Heading>
