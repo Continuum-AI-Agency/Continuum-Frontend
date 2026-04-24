@@ -265,10 +265,6 @@ export function JainaMessageItem({
               isStreaming={isStreaming}
             />
 
-            {spawnWorkerResults.length > 0 ? (
-              <WorkerInsightsPanel results={spawnWorkerResults} />
-            ) : null}
-
             {plan ? (
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
@@ -320,6 +316,10 @@ export function JainaMessageItem({
             ) : (
               <CreativesSection creatives={allCreatives} />
             )}
+
+            {spawnWorkerResults.length > 0 ? (
+              <WorkerInsightsPanel results={spawnWorkerResults} />
+            ) : null}
 
             {!isStreaming && message.status === "done" && (reportV2 || shouldRenderInlineReport) ? (
               <Checkpoint className="pt-1">

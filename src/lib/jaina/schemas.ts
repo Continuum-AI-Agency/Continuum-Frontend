@@ -721,10 +721,10 @@ export const agentSpawnEventSchema = z.object({
   agent_id: z.string(),
   task_id: z.string().optional(),
   task_description: z.string().optional(),
-  parent_agent_id: z.string().optional(),
+  parent_agent_id: z.string().nullable().optional(),
   started_at: z.string().optional(),
-  display_name: z.string().optional(),
-  name: z.string().optional(),
+  display_name: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
 });
 export type AgentSpawnEventData = z.infer<typeof agentSpawnEventSchema>;
 
@@ -734,8 +734,8 @@ export const agentCompleteEventSchema = z.object({
   status: z.enum(["completed", "failed", "cancelled"]).optional(),
   duration_ms: z.number().optional(),
   error: z.string().optional(),
-  display_name: z.string().optional(),
-  name: z.string().optional(),
+  display_name: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
 });
 export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
 

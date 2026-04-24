@@ -22,7 +22,8 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
           initial={{ opacity: 0, scale: 0.88 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.22, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
-          className="w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-border/50 transition-all hover:ring-2 hover:ring-primary/50 hover:shadow-md hover:-translate-y-0.5"
+          className="relative w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-border/50 transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-primary/50 hover:shadow-lg hover:z-10"
+          style={{ transformOrigin: "bottom center" }}
         >
           <AspectRatio ratio={1}>
             {imageUrl ? (
@@ -41,8 +42,21 @@ export function CreativeCard({ creative, index }: CreativeCardProps) {
         </motion.div>
       </HoverCardTrigger>
 
-      <HoverCardContent side="bottom" align="start" sideOffset={6} className="w-64 p-3">
-        <div className="flex flex-col gap-2">
+      <HoverCardContent side="bottom" align="start" sideOffset={10} className="w-72 p-0 overflow-hidden">
+        {/* Image preview */}
+        {imageUrl && (
+          <AspectRatio ratio={4 / 3}>
+            <img
+              src={imageUrl}
+              alt={creative.headline || "Creative"}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </AspectRatio>
+        )}
+
+        {/* Details */}
+        <div className="flex flex-col gap-2 p-3">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-medium leading-snug text-foreground">
               {creative.headline || "Creative"}
