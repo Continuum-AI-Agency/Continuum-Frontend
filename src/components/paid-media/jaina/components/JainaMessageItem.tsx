@@ -30,26 +30,46 @@ import { JainaInlineReport } from "./JainaInlineReport";
 import { JainaReportV2 } from "./JainaReportV2";
 import { WorkerInsightsPanel } from "./WorkerInsightsPanel";
 
-function extractCreativeFromToolResult(toolResult: ToolResultEventData): CreativeArtifact | null {
-  if (!toolResult.ok || !toolResult.output) return null;
+function makeCreativeArtifact(details: Record<string, unknown>): CreativeArtifact | null {
+  const imageUrl = details.image_url ? String(details.image_url) : null;
+  const thumbUrl = details.thumbnail_url ? String(details.thumbnail_url) : null;
+  const url = imageUrl || thumbUrl;
+  if (!url) return null;
+  const objectType = typeof details.object_type === "string" ? details.object_type.toUpperCase() : null;
+  return {
+    id: String(details.id || `creative-${Date.now()}`),
+    type: "creative",
+    url,
+    thumbnail_url: thumbUrl ?? undefined,
+    post_copy: details.body ? String(details.body) : undefined,
+    headline: details.title ? String(details.title) : undefined,
+    description: details.name ? String(details.name) : undefined,
+    call_to_action: details.call_to_action_type ? String(details.call_to_action_type) : undefined,
+    format: objectType === "VIDEO" ? "video" : objectType === "PHOTO" ? "image" : undefined,
+  };
+}
+
+function extractCreativesFromToolResult(toolResult: ToolResultEventData): CreativeArtifact[] {
+  if (!toolResult.ok || !toolResult.output) return [];
   const output = toolResult.output as Record<string, unknown>;
+
+  // Batch format: { results: [{ ok, creative_details, ... }] }
+  const results = output.results;
+  if (Array.isArray(results)) {
+    return results
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && r.ok !== false && !!r.creative_details)
+      .map((r) => makeCreativeArtifact(r.creative_details as Record<string, unknown>))
+      .filter((c): c is CreativeArtifact => c !== null);
+  }
+
+  // Single creative format: { creative_details: { ... } }
   const creativeDetails = output.creative_details as Record<string, unknown> | undefined;
   if (creativeDetails) {
-    return {
-      id: String(creativeDetails.id || `creative-${Date.now()}`),
-      type: "creative",
-      url: String(creativeDetails.image_url || ""),
-      thumbnail_url: creativeDetails.thumbnail_url ? String(creativeDetails.thumbnail_url) : undefined,
-      post_copy: creativeDetails.body ? String(creativeDetails.body) : undefined,
-      headline: creativeDetails.title ? String(creativeDetails.title) : undefined,
-      description: creativeDetails.name ? String(creativeDetails.name) : undefined,
-      call_to_action: creativeDetails.call_to_action_type ? String(creativeDetails.call_to_action_type) : undefined,
-    };
+    const c = makeCreativeArtifact(creativeDetails);
+    return c ? [c] : [];
   }
-  if (typeof output.preview_iframe === "string") {
-    return { id: `preview-${Date.now()}`, type: "creative", url: "", format: "video" };
-  }
-  return null;
+
+  return [];
 }
 
 function isLikelyStructuredJsonMessage(content: string): boolean {
@@ -181,9 +201,7 @@ export function JainaMessageItem({
   const artifacts = isStreaming ? state.artifacts : message.artifacts;
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
-    return toolResults
-      .map(extractCreativeFromToolResult)
-      .filter((c): c is CreativeArtifact => c !== null);
+    return toolResults.flatMap(extractCreativesFromToolResult);
   }, [toolResults]);
   const allCreatives = [...toolCreatives, ...(artifacts?.creatives ?? [])];
 
