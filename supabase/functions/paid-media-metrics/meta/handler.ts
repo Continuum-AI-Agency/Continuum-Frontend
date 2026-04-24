@@ -210,21 +210,33 @@ const fetchMetaInsights = async (args: {
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     level: args.level,
     time_increment: "1",
+    limit: "100",
     access_token: args.accessToken,
   });
 
-  const insightsResponse = await fetch(`${insightsUrl}?${insightsParams.toString()}`);
-  if (!insightsResponse.ok) {
-    const errorData = await insightsResponse.json().catch(() => ({}));
-    args.log(`Meta insights API error (${args.label})`, {
-      status: insightsResponse.status,
-      error: errorData,
-    });
-    throw new Error(`Failed to fetch ${args.label} insights from Meta API`);
+  const allRows: MetaInsightRow[] = [];
+  let nextUrl: string | null = `${insightsUrl}?${insightsParams.toString()}`;
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      args.log(`Meta insights API error (${args.label})`, {
+        status: response.status,
+        error: errorData,
+      });
+      throw new Error(`Failed to fetch ${args.label} insights from Meta API`);
+    }
+
+    const page = await response.json().catch(() => ({}));
+    if (Array.isArray(page?.data)) {
+      allRows.push(...page.data);
+    }
+
+    nextUrl = typeof page?.paging?.next === "string" ? page.paging.next : null;
   }
 
-  const insightsData = await insightsResponse.json().catch(() => ({}));
-  return Array.isArray(insightsData?.data) ? insightsData.data : [];
+  return allRows;
 };
 
 export async function handleMetaMetrics(params: any, req: Request) {
