@@ -5,6 +5,7 @@ import {
   readMetaEdgeCache,
   writeMetaEdgeCache,
 } from "../_shared/meta-edge-cache.ts";
+import { authorizeSupabaseEdgeRequest } from "../_shared/supabase-edge-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,22 +137,27 @@ serve(async (req: Request) => {
       });
     }
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const supabaseToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const auth = await authorizeSupabaseEdgeRequest({
+      authHeader: req.headers.get("Authorization"),
+      serviceRoleKey,
+      getUser: (accessToken) => supabase.auth.getUser(accessToken),
+    });
+
+    if (!auth.ok) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    log("Looking for access token for ad account:", adAccountId);
+    log("Looking for access token for ad account:", {
+      adAccountId,
+      actorKind: auth.actorKind,
+    });
 
     const cacheKey = buildMetaEdgeCacheKey({
       resource: "adsets",
