@@ -6,6 +6,7 @@ import type { BrandRole } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { normalizeBrandDocumentStoragePath } from "@/lib/brands/document-download";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
@@ -158,14 +159,11 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
 }
 
 export async function createSignedDocumentUrlAction(storagePath: string): Promise<string> {
-  if (!storagePath) {
-    throw new Error("Storage path is required");
-  }
-
+  const normalizedStoragePath = normalizeBrandDocumentStoragePath(storagePath);
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.storage
     .from("brand-docs")
-    .createSignedUrl(storagePath, 60, { download: true });
+    .createSignedUrl(normalizedStoragePath, 60, { download: true });
 
   if (error || !data?.signedUrl) {
     throw new Error(error?.message ?? "Failed to generate signed URL");
