@@ -30,6 +30,7 @@ import {
 import { useCalendarSelection } from "../hooks/useCalendarSelection"
 import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
+import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistence"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
@@ -221,6 +222,15 @@ export function OrganicCalendarWorkspaceClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const weekStartId = formatDayId(weekStart)
+
+  useCalendarDraftPersistence({
+    brandProfileId,
+    weekStartId,
+    calendarDays,
+    setCalendarDays,
+    updateDraftById,
+    platformAccountIds,
+  })
 
   React.useEffect(() => {
     setPersistedWeekStartId(weekStartId)
