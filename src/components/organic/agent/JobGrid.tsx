@@ -74,9 +74,10 @@ function JobCard({
   }
 
   if (job.status === "running") {
-    const stageLabel = job.stage
-      ? job.stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-      : "Working";
+    const stageLabel =
+      typeof job.stage === "string" && job.stage
+        ? job.stage.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+        : "Working";
     return (
       <Card className="overflow-hidden">
         <CardContent className="flex flex-col gap-2 p-3">

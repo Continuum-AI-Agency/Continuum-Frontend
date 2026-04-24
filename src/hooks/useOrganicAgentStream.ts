@@ -39,7 +39,6 @@ function parseJobUpdate(
       return {
         jobId,
         brandId,
-        status: "running",
         draftId: event.draftId as string,
         placement: event.placement as CalendarPlacement,
       };
