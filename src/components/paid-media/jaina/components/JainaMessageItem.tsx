@@ -28,6 +28,7 @@ import { MessageActionBar } from "./MessageActionBar";
 import { CreativesSection } from "./CreativesSection";
 import { JainaInlineReport } from "./JainaInlineReport";
 import { JainaReportV2 } from "./JainaReportV2";
+import { WorkerInsightsPanel } from "./WorkerInsightsPanel";
 
 function extractCreativeFromToolResult(toolResult: ToolResultEventData): CreativeArtifact | null {
   if (!toolResult.ok || !toolResult.output) return null;
@@ -186,6 +187,14 @@ export function JainaMessageItem({
   }, [toolResults]);
   const allCreatives = [...toolCreatives, ...(artifacts?.creatives ?? [])];
 
+  const spawnWorkerResults = React.useMemo(() => {
+    if (!toolResults) return [];
+    return toolResults.filter(
+      (r): r is ToolResultEventData & { output: Record<string, unknown> } =>
+        r.name === "spawn_worker" && r.ok && !!r.output
+    );
+  }, [toolResults]);
+
   return (
     <Message role={message.role}>
       <motion.div
@@ -255,6 +264,10 @@ export function JainaMessageItem({
               toolResults={toolResults ?? []}
               isStreaming={isStreaming}
             />
+
+            {spawnWorkerResults.length > 0 ? (
+              <WorkerInsightsPanel results={spawnWorkerResults} />
+            ) : null}
 
             {plan ? (
               <motion.div

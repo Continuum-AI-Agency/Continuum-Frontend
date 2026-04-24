@@ -156,6 +156,17 @@ export function ThinkingWindow({
     0
   );
 
+  const lastThoughtPreview = React.useMemo(() => {
+    for (let i = reasoning.length - 1; i >= 0; i--) {
+      const entry = reasoning[i];
+      if (entry.stage === "thinking") {
+        const detail = toMarkdownDetail(entry.detail);
+        if (detail) return detail;
+      }
+    }
+    return null;
+  }, [reasoning]);
+
   if (segments.length === 0) return null;
 
   return (
@@ -207,6 +218,21 @@ export function ThinkingWindow({
           />
         </button>
       </CollapsibleTrigger>
+
+      <AnimatePresence>
+        {lastThoughtPreview && !isOpen && (
+          <motion.p
+            key={lastThoughtPreview.slice(0, 20)}
+            initial={{ opacity: 0, y: -2 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="px-3 pb-2 text-[11px] leading-relaxed text-muted-foreground/60 line-clamp-2"
+          >
+            {lastThoughtPreview}
+          </motion.p>
+        )}
+      </AnimatePresence>
 
       <ChainOfThoughtContent className="space-y-1 px-2 pb-3">
         {segments.map((segment, segmentIndex) => {
