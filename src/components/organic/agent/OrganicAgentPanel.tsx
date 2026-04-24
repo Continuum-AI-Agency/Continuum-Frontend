@@ -155,8 +155,8 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
                 <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="space-y-1">
-                    {msg.toolCalls.map((tc) => (
-                      <ToolCallChip key={tc.toolCallId} toolCall={tc} />
+                    {msg.toolCalls.map((tc, i) => (
+                      <ToolCallChip key={tc.toolCallId ?? i} toolCall={tc} />
                     ))}
                   </div>
                 )}
