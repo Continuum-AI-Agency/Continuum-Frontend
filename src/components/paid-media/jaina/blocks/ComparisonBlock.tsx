@@ -40,10 +40,10 @@ export default function ComparisonBlock({ block }: ComparisonBlockProps) {
                 <tr key={`${pair.label}-${index}`} className="border-b border-border/30 last:border-0">
                   <td className="px-3 py-2 font-medium text-foreground"><MediaText>{pair.label}</MediaText></td>
                   <td className="px-3 py-2 tabular-nums text-right">
-                    {formatValue(pair.before, pair.format)}
+                    {formatValue(pair.before, pair.format ?? undefined)}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-right">
-                    {formatValue(pair.after, pair.format)}
+                    {formatValue(pair.after, pair.format ?? undefined)}
                   </td>
                   <td className={cn("px-3 py-2 text-right tabular-nums", color)}>
                     {pair.change_direction === "up" && (

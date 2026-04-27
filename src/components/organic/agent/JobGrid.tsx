@@ -5,6 +5,7 @@ import { AlertCircle, Loader2, X } from "lucide-react";
 import { Badge } from "@radix-ui/themes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import type { AgentJobState } from "./types";
 
 type JobGridProps = {
@@ -29,6 +30,52 @@ function PlatformBadge({ platform }: { platform: string | undefined }) {
       {platform}
     </Badge>
   );
+}
+
+function toQualityPercent(score: number | undefined | null): number | null {
+  if (typeof score !== "number" || !Number.isFinite(score)) return null;
+  return score <= 1 ? Math.round(score * 100) : Math.round(score);
+}
+
+function getCombinedHashtags(job: AgentJobState, fallbackHashtags: string[]): string[] {
+  if (fallbackHashtags.length > 0) return fallbackHashtags;
+  const hashtags = job.placement?.copy?.hashtags;
+  if (!hashtags) return [];
+  return [...(hashtags.high ?? []), ...(hashtags.medium ?? []), ...(hashtags.low ?? [])];
+}
+
+type PlacementQualityDetails = {
+  passed: boolean | null;
+  overallScore: number | null;
+  summary: string | null;
+  requiredFixes: string[];
+  blockingIssues: string[];
+};
+
+function getPlacementQualityDetails(job: AgentJobState): PlacementQualityDetails {
+  const quality = (job.placement as { quality?: unknown } | undefined)?.quality;
+  if (!quality || typeof quality !== "object") {
+    return {
+      passed: null,
+      overallScore: null,
+      summary: null,
+      requiredFixes: [],
+      blockingIssues: [],
+    };
+  }
+
+  const record = quality as Record<string, unknown>;
+  return {
+    passed: typeof record.passed === "boolean" ? record.passed : null,
+    overallScore: typeof record.overallScore === "number" ? record.overallScore : null,
+    summary: typeof record.summary === "string" ? record.summary : null,
+    requiredFixes: Array.isArray(record.requiredFixes)
+      ? record.requiredFixes.filter((value): value is string => typeof value === "string")
+      : [],
+    blockingIssues: Array.isArray(record.blockingIssues)
+      ? record.blockingIssues.filter((value): value is string => typeof value === "string")
+      : [],
+  };
 }
 
 function JobCard({
@@ -113,11 +160,22 @@ function JobCard({
 
   if (job.status === "completed") {
     const card = job.uiPostCard;
+    const placementQuality = getPlacementQualityDetails(job);
     const caption = card?.caption ?? job.placement?.copy?.caption ?? "";
-    const hashtags = card?.hashtags ?? [];
-    const quality = card?.quality ?? null;
-    const format = card?.format ?? null;
-    return (
+    const hashtags = getCombinedHashtags(job, card?.hashtags ?? []);
+    const score = toQualityPercent(card?.quality?.score ?? placementQuality.overallScore);
+    const passed = card?.quality?.passed ?? placementQuality.passed ?? false;
+    const format = card?.format ?? job.placement?.content?.format ?? job.placement?.content?.type ?? null;
+    const qualitySummary = placementQuality.summary;
+    const requiredFixes = placementQuality.requiredFixes;
+    const blockingIssues = placementQuality.blockingIssues;
+    const creativeIdea = job.placement?.creative?.creativeIdea ?? null;
+    const mediaPrompt = job.placement?.creative?.mediaSuggestion?.prompt ?? null;
+    const cta = job.placement?.content?.cta ?? null;
+    const trendId = card?.trendId ?? job.placement?.seed?.trendId ?? job.trendId ?? null;
+    const topic = card?.topic ?? job.placement?.content?.titleTopic ?? null;
+
+    const previewCard = (
       <Card className="overflow-hidden">
         <CardContent className="flex flex-col gap-2 p-3">
           <div className="flex items-center justify-between gap-2">
@@ -128,9 +186,9 @@ function JobCard({
               )}
             </div>
             <div className="flex items-center gap-1">
-              {quality != null && (
-                <Badge variant="soft" color={quality.passed ? "green" : "orange"} size="1">
-                  {Math.round(quality.score * 100)}%
+              {score != null && (
+                <Badge variant="soft" color={passed ? "green" : "orange"} size="1">
+                  {score}%
                 </Badge>
               )}
               <Badge variant="soft" color="green" size="1">Ready</Badge>
@@ -161,6 +219,84 @@ function JobCard({
           )}
         </CardContent>
       </Card>
+    );
+
+    return (
+      <HoverCard openDelay={120}>
+        <HoverCardTrigger asChild>
+          <div>{previewCard}</div>
+        </HoverCardTrigger>
+        <HoverCardContent align="start" className="w-[380px] space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <PlatformBadge platform={job.platform} />
+            {format && (
+              <Badge variant="soft" color="gray" size="1">{format}</Badge>
+            )}
+            {score != null && (
+              <Badge variant="soft" color={passed ? "green" : "orange"} size="1">
+                Quality {score}%
+              </Badge>
+            )}
+            {topic && (
+              <Badge variant="soft" color="indigo" size="1">{topic}</Badge>
+            )}
+          </div>
+
+          {caption && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Caption</p>
+              <p className="max-h-24 overflow-y-auto text-xs leading-relaxed text-foreground">{caption}</p>
+            </div>
+          )}
+
+          {qualitySummary && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Quality Summary</p>
+              <p className="text-xs leading-relaxed text-foreground">{qualitySummary}</p>
+            </div>
+          )}
+
+          {requiredFixes.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Required Fixes</p>
+              <ul className="list-disc space-y-1 pl-4 text-xs text-foreground">
+                {requiredFixes.slice(0, 4).map((fix: string, index: number) => (
+                  <li key={`${job.jobId}-fix-${index}`}>{fix}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {blockingIssues.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Blocking Issues</p>
+              <ul className="list-disc space-y-1 pl-4 text-xs text-destructive">
+                {blockingIssues.slice(0, 4).map((issue: string, index: number) => (
+                  <li key={`${job.jobId}-block-${index}`}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(creativeIdea || mediaPrompt || cta || trendId) && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Creative Context</p>
+              {creativeIdea && (
+                <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">Idea:</span> {creativeIdea}</p>
+              )}
+              {mediaPrompt && (
+                <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">Prompt:</span> {mediaPrompt}</p>
+              )}
+              {cta && (
+                <p className="text-xs leading-relaxed text-foreground"><span className="font-medium">CTA:</span> {cta}</p>
+              )}
+              {trendId && (
+                <p className="text-xs leading-relaxed text-muted-foreground"><span className="font-medium">Trend:</span> {trendId}</p>
+              )}
+            </div>
+          )}
+        </HoverCardContent>
+      </HoverCard>
     );
   }
 

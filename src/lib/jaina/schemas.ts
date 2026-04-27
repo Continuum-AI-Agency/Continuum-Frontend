@@ -371,9 +371,9 @@ const checkpointBlockBaseV2Schema = z.object({
 });
 
 export const highlightItemSchema = z.object({
-  category: z.string().optional(),
+  category: z.string().nullish(),
   text: z.string(),
-  severity: severitySchema.optional(),
+  severity: severitySchema.nullish(),
 });
 export type HighlightItem = z.infer<typeof highlightItemSchema>;
 
@@ -388,10 +388,10 @@ export const metricItemV2Schema = z.object({
   label: z.string(),
   value: z.union([z.number(), z.string()]),
   unit: z.string().nullish(),
-  format: valueFormatSchema.optional(),
+  format: valueFormatSchema.nullish(),
   change: z.number().nullish(),
   change_direction: changeDirectionSchema.nullish(),
-  severity: severitySchema.optional(),
+  severity: severitySchema.nullish(),
 });
 export type MetricItemV2 = z.infer<typeof metricItemV2Schema>;
 
@@ -420,8 +420,8 @@ export type ChartBlockV2 = z.infer<typeof chartBlockV2Schema>;
 export const tableColumnV2Schema = z.object({
   key: z.string(),
   label: z.string(),
-  format: valueFormatSchema.optional(),
-  align: z.enum(["left", "center", "right"]).optional(),
+  format: valueFormatSchema.nullish(),
+  align: z.enum(["left", "center", "right"]).nullish(),
 });
 export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
 
@@ -437,10 +437,10 @@ export const insightItemV2Schema = z.object({
   item_type: z.enum(["recommendation", "insight", "action", "question"]),
   title: z.string(),
   summary: z.string(),
-  rationale: z.string().optional(),
-  impact: z.string().optional(),
-  severity: severitySchema.optional(),
-  priority: z.enum(["now", "next", "soon", "later"]).optional(),
+  rationale: z.string().nullish(),
+  impact: z.string().nullish(),
+  severity: severitySchema.nullish(),
+  priority: z.enum(["now", "next", "soon", "later"]).nullish(),
 });
 export type InsightItemV2 = z.infer<typeof insightItemV2Schema>;
 
@@ -455,10 +455,10 @@ export const comparisonPairSchema = z.object({
   before: z.union([z.number(), z.string()]),
   after: z.union([z.number(), z.string()]),
   unit: z.string().nullish(),
-  format: valueFormatSchema.optional(),
-  change: z.number().optional(),
-  change_direction: changeDirectionSchema.optional(),
-  severity: severitySchema.optional(),
+  format: valueFormatSchema.nullish(),
+  change: z.number().nullish(),
+  change_direction: changeDirectionSchema.nullish(),
+  severity: severitySchema.nullish(),
 });
 export type ComparisonPair = z.infer<typeof comparisonPairSchema>;
 

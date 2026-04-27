@@ -24,10 +24,10 @@ export function MetricCard({ metric }: MetricCardProps) {
     <div className="rounded-lg border border-border/60 bg-background/80 p-3">
       <p className="text-xs text-muted-foreground">{metric.label}</p>
       <p className="text-xl font-semibold tabular-nums">
-        {formatValue(metric.value, metric.format)}
+        {formatValue(metric.value, metric.format ?? undefined)}
       </p>
       {hasChange && (
-        <span className={`flex items-center gap-0.5 text-xs ${resolveChangeColor(metric.severity)}`}>
+        <span className={`flex items-center gap-0.5 text-xs ${resolveChangeColor(metric.severity ?? undefined)}`}>
           {metric.change_direction === "up" ? (
             <ArrowUpIcon className="size-3" />
           ) : (
