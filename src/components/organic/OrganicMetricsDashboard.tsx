@@ -902,7 +902,11 @@ function MetricCard({
   return (
     <Popover>
       <PopoverTrigger asChild>{cardContent}</PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="w-80 p-3">
+      <PopoverContent
+        side="bottom"
+        align="start"
+        className="w-[min(20rem,calc(100vw-2rem))] max-h-[min(70svh,26rem)] overflow-y-auto p-3"
+      >
         <Text size="2" weight="medium" className="mb-2 block">{label} Insights</Text>
         <Flex direction="column" gap="2">
           {insights.map((insight, i) => (
@@ -1815,7 +1819,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const demographicsLoading = demographicsState.status === "loading";
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
+    <Card variant="surface" className="h-full min-h-0 overflow-hidden border border-subtle bg-surface flex flex-col">
       <Box p="4" className="flex-1 min-h-0 flex flex-col">
         <Flex align="center" justify="between" gap="3" wrap="wrap">
           <Flex align="center" gap="2" wrap="wrap">
@@ -1839,10 +1843,10 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           <Text size="1" className="text-pretty text-muted-foreground">
             Switch platform and account to compare KPI momentum. Export options are grouped under one menu to keep controls focused.
           </Text>
-          <Flex align="center" justify="between" gap="2" wrap="wrap">
-            <Flex align="center" gap="2" wrap="wrap">
+          <div className="grid w-full gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+            <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center">
             <Select.Root value={platform} onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}>
-              <Select.Trigger variant="surface" radius="large" style={{ width: "150px" }}>
+              <Select.Trigger variant="surface" radius="large" className="w-full sm:w-[11rem]">
                 {{ instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" }[platform]}
               </Select.Trigger>
               <Select.Content>
@@ -1859,7 +1863,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               <Select.Trigger
                 variant="surface"
                 radius="large"
-                style={{ width: "130px" }}
+                className="w-full sm:w-[9rem]"
                 disabled={viewMode === "posts"}
               >
                 {rangeLabel(rangePreset)}
@@ -1882,7 +1886,11 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 }));
               }}
             >
-              <Select.Trigger variant="surface" radius="large" style={{ minWidth: "230px" }}>
+              <Select.Trigger
+                variant="surface"
+                radius="large"
+                className="w-full sm:col-span-2 sm:min-w-[16rem] sm:w-[20rem] lg:w-[22rem]"
+              >
                 {selectedAccount?.name ?? `Select a ${platform} account`}
               </Select.Trigger>
               <Select.Content position="popper" variant="solid" highContrast>
@@ -1900,22 +1908,23 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
             <Tabs
               value={viewMode}
               onValueChange={(value) => setViewMode(value as MetricsViewMode)}
-              className="gap-0"
+              className="w-full gap-0 xl:w-auto"
             >
-              <TabsList className="h-10 rounded-lg border border-subtle bg-muted/20 p-1">
+              <TabsList className="grid h-10 w-full grid-cols-2 rounded-lg border border-subtle bg-muted/20 p-1 xl:inline-flex xl:w-auto">
                 <TabsTrigger value="account" className="px-4 text-xs">Account</TabsTrigger>
                 <TabsTrigger value="posts" className="px-4 text-xs">Posts</TabsTrigger>
               </TabsList>
             </Tabs>
-            </Flex>
+            </div>
 
-            <Flex align="center" gap="2" wrap="wrap">
+            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-[auto_auto] sm:justify-start lg:w-auto lg:justify-end">
             <Button
               variant="surface"
               radius="large"
               onClick={handleRefresh}
               disabled={!selectedAccountId || isLoadingView || isPending}
               aria-label="Refresh organic analytics"
+              className="w-full"
             >
               <ReloadIcon className={cn(isLoadingView && "animate-spin")} />
               Refresh
@@ -1928,6 +1937,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                   radius="large"
                   disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
                   aria-label="Open organic report export options"
+                  className="w-full"
                 >
                   <DownloadIcon className={cn(exportingReportFormat !== null && "animate-pulse")} />
                   {exportingReportFormat ? `Exporting ${exportingReportFormat.toUpperCase()}...` : "Export"}
@@ -1952,11 +1962,17 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            </Flex>
-          </Flex>
+            </div>
+          </div>
         </Flex>
 
-        <Box pt="3" className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", isPending && "opacity-60 pointer-events-none transition-opacity duration-150")}>
+        <Box
+          pt="3"
+          className={cn(
+            "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1",
+            isPending && "opacity-60 pointer-events-none transition-opacity duration-150"
+          )}
+        >
           {reportError ? (
             <Callout.Root color="red" variant="surface" mb="3">
               <Callout.Text>{reportError}</Callout.Text>

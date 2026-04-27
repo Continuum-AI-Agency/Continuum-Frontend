@@ -377,4 +377,23 @@ export function isStreamingPlaceholderMessage(content: string): boolean {
   );
 }
 
+export function normalizeJainaMarkdownTables(content: string): string {
+  // Backend sends table rows separated by "; " instead of newlines.
+  // Replace "; |" with "\n|" to produce valid GFM table rows.
+  let out = content.replace(/;\s+(?=\|)/g, '\n');
+
+  // Table headers sometimes appear inline with preceding prose, e.g.:
+  // "• Recommendations: | Header | ROAS |"
+  // GFM tables require the header row on its own line, so split it out.
+  out = out
+    .split('\n')
+    .map(line => {
+      const m = line.match(/^([^|]+)(\|.+\|)\s*$/);
+      return m ? `${m[1].trimEnd()}\n\n${m[2]}` : line;
+    })
+    .join('\n');
+
+  return out;
+}
+
 export { hasReportContent };

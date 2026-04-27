@@ -18,6 +18,7 @@ import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
   isStreamingPlaceholderMessage,
+  normalizeJainaMarkdownTables,
 } from "../jainaUtils";
 import type { JainaChatMessage } from "../types";
 import { ObjectivesQueue } from "./ObjectivesQueue";
@@ -228,7 +229,7 @@ export function JainaMessageItem({
             {hasRenderableContent ? (
               <div className="relative">
                 <SafeMarkdown
-                  content={message.content}
+                  content={normalizeJainaMarkdownTables(message.content)}
                   className="text-[15px] leading-7 text-foreground"
                   mode={isStreaming ? "streaming" : "static"}
                   isAnimating={isStreaming}
@@ -254,7 +255,7 @@ export function JainaMessageItem({
 
             {structuredFallbackContent ? (
               <SafeMarkdown
-                content={structuredFallbackContent}
+                content={normalizeJainaMarkdownTables(structuredFallbackContent)}
                 className="text-[15px] leading-7 text-foreground"
                 mode="static"
                 isAnimating={false}

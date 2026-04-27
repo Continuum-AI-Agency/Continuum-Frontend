@@ -367,8 +367,8 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
           </Flex>
         </Flex>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] xl:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="relative h-[clamp(320px,56svh,600px)] overflow-hidden rounded-lg border border-subtle">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="relative h-[clamp(240px,48svh,560px)] sm:h-[clamp(280px,52svh,580px)] overflow-hidden rounded-lg border border-subtle">
             {renderPoints.length === 0 ? (
               <div className="flex h-full items-center justify-center bg-muted/20 p-4 text-center">
                 <Text size="2" color="gray">
@@ -386,7 +386,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
                 minZoom={0.7}
                 maxZoom={8}
                 attributionControl={false}
-                onViewportChange={(viewport) => {
+                onViewportChange={(viewport: { zoom: number }) => {
                   setMapZoom(viewport.zoom);
                 }}
               >
@@ -460,7 +460,7 @@ export function OrganicAudienceLocationMapCard({ countryEntries, cityEntries, ti
 
           <div className="rounded-lg border border-subtle bg-white/70 p-3">
             <Heading size="2" mb="2">Top {viewMode === "country" ? "countries" : "cities"}</Heading>
-            <div className="max-h-[clamp(180px,40svh,360px)] space-y-2 overflow-y-auto pr-1">
+            <div className="space-y-2 overflow-y-auto pr-1 xl:max-h-[clamp(180px,40svh,360px)]">
               {topEntries.length === 0 ? (
                 <Text size="2" color="gray">No entries available.</Text>
               ) : (

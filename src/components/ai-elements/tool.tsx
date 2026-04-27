@@ -72,7 +72,8 @@ export function Tool({ children, type, state, defaultOpen = false }: ToolProps) 
 
 export function ToolHeader({ title }: { title?: string }) {
   const { type, state } = useTool();
-  const displayTitle = title || type.replace("tool-", "").replace(/_/g, " ");
+  const safeType = typeof type === "string" && type.trim().length > 0 ? type : "unknown_tool";
+  const displayTitle = title || safeType.replace("tool-", "").replace(/_/g, " ");
 
   return (
     <Collapsible.Trigger asChild>

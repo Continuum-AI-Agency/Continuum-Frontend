@@ -5,63 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import { getApiBaseUrl } from "@/lib/api/config";
-import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
-import type { AgentChatInput, AgentJobState, UiTrendChart, UiPostCard } from "@/components/organic/agent/types";
+import type { AgentChatInput } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
-
-function parseJobUpdate(
-  type: string,
-  event: Record<string, unknown>
-): Partial<AgentJobState> & { jobId: string } {
-  const jobId = event.jobId as string;
-  const brandId = event.brandId as string;
-
-  switch (type) {
-    case "job.enqueued":
-      return {
-        jobId,
-        brandId,
-        platform: event.platform as string | undefined,
-        scheduledAt: event.scheduledAt as string | undefined,
-        trendId: event.trendId as string | null | undefined,
-        status: "queued",
-      };
-    case "job.progress":
-      return {
-        jobId,
-        brandId,
-        status: "running",
-        stage: event.stage as string | undefined,
-        agentName: event.agentName as string | undefined,
-        message: event.message as string | undefined,
-      };
-    case "draft.ready":
-      return {
-        jobId,
-        brandId,
-        draftId: event.draftId as string,
-        placement: event.placement as CalendarPlacement,
-      };
-    case "job.completed":
-      return {
-        jobId,
-        brandId,
-        status: "completed",
-        draftId: event.draftId as string,
-      };
-    case "job.failed":
-      return {
-        jobId,
-        brandId,
-        status: "failed",
-        error: event.error as { code?: string; message: string },
-      };
-    case "job.cancelled":
-      return { jobId, brandId, status: "cancelled" };
-    default:
-      return { jobId, brandId };
-  }
-}
+import { parseOrganicStreamEvent } from "@/components/organic/agent/streamEventParser";
 
 export function useOrganicAgentStream(dispatch: React.Dispatch<PanelAction>) {
   const [isStreaming, setIsStreaming] = useState(false);
@@ -126,58 +72,48 @@ export function useOrganicAgentStream(dispatch: React.Dispatch<PanelAction>) {
               return;
             }
 
-            const type = event.type as string;
+            const type = typeof event.type === "string" ? event.type : undefined;
+            const parsed = parseOrganicStreamEvent(event);
 
-            switch (type) {
-              case "response.output_text.delta":
-                dispatch({ type: "STREAM_DELTA", delta: (event.delta as string) ?? "" });
+            switch (parsed.kind) {
+              case "delta":
+                dispatch({ type: "STREAM_DELTA", delta: parsed.delta });
                 break;
-              case "tool.call":
-                dispatch({
-                  type: "STREAM_TOOL_CALL",
-                  event: {
-                    toolCallId: event.toolCallId as string,
-                    toolName: event.toolName as string,
-                    args: event.args,
-                  },
-                });
+              case "toolCall":
+                dispatch({ type: "STREAM_TOOL_CALL", event: parsed.event });
                 break;
-              case "tool.result":
+              case "toolResult":
                 dispatch({
                   type: "STREAM_TOOL_RESULT",
-                  toolCallId: event.toolCallId as string,
-                  result: event.result,
+                  toolCallId: parsed.toolCallId,
+                  result: parsed.result,
                 });
                 break;
-              case "response.error":
-                dispatch({ type: "STREAM_ERROR", error: event.message as string });
+              case "error":
+                dispatch({ type: "STREAM_ERROR", error: parsed.message });
                 break;
-              case "response.done":
+              case "complete":
                 dispatch({ type: "STREAM_COMPLETE" });
                 break;
-              case "ui.trend_chart":
+              case "uiCard":
+                dispatch({ type: "STREAM_UI_CARD", card: parsed.card });
+                break;
+              case "postCard":
                 dispatch({
-                  type: "STREAM_UI_CARD",
-                  card: { type: "trend_chart", data: event as unknown as UiTrendChart },
+                  type: "JOB_UPDATE",
+                  job: { jobId: parsed.card.jobId, brandId: parsed.card.brandId, uiPostCard: parsed.card },
                 });
                 break;
-              case "ui.post_card": {
-                const postCard = event as unknown as UiPostCard;
-                if (postCard.jobId) {
-                  dispatch({
-                    type: "JOB_UPDATE",
-                    job: { jobId: postCard.jobId, brandId: postCard.brandId, uiPostCard: postCard },
-                  });
-                }
+              case "jobUpdate":
+                dispatch({ type: "JOB_UPDATE", job: parsed.job });
                 break;
-              }
-              case "job.enqueued":
-              case "job.progress":
-              case "draft.ready":
-              case "job.completed":
-              case "job.failed":
-              case "job.cancelled":
-                dispatch({ type: "JOB_UPDATE", job: parseJobUpdate(type, event) });
+              case "ignored":
+                break;
+              case "invalid":
+                console.warn("[organic-agent-stream] Invalid event payload ignored", {
+                  type: parsed.type ?? type,
+                  payload: event,
+                });
                 break;
             }
           },

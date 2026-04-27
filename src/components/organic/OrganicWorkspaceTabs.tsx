@@ -100,16 +100,16 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
       </div>
 
       <ViewTransition>
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {/* Always render planner — it's the default tab */}
-          <div className="h-full w-full" hidden={activeView !== "planner"}>{plannerSlot}</div>
+          <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "planner"}>{plannerSlot}</div>
           {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
           {metricsEverShown && (
-            <div className="h-full w-full" hidden={activeView !== "metrics"}>{metricsSlot}</div>
+            <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "metrics"}>{metricsSlot}</div>
           )}
           {/* Defer agent mount until first viewed, then keep alive */}
           {agentSlot !== undefined && agentEverShown && (
-            <div className="h-full w-full" hidden={activeView !== "agent"}>{agentSlot}</div>
+            <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "agent"}>{agentSlot}</div>
           )}
         </div>
       </ViewTransition>

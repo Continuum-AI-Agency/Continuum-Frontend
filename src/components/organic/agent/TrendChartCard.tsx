@@ -26,7 +26,10 @@ const BAR_MAX_H = 68;
 type Props = { chart: UiTrendChart };
 
 export function TrendChartCard({ chart }: Props) {
-  const { title, windows, series, topSignals } = chart;
+  const title = typeof chart?.title === "string" ? chart.title : "";
+  const windows = Array.isArray(chart?.windows) ? chart.windows : [];
+  const series = Array.isArray(chart?.series) ? chart.series : [];
+  const topSignals = Array.isArray(chart?.topSignals) ? chart.topSignals : [];
 
   const maxValue = Math.max(1, ...series.flatMap((s) => s.data.map((d) => d.value)));
 
