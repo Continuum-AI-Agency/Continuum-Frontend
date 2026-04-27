@@ -387,10 +387,10 @@ export type NarrativeBlockV2 = z.infer<typeof narrativeBlockV2Schema>;
 export const metricItemV2Schema = z.object({
   label: z.string(),
   value: z.union([z.number(), z.string()]),
-  unit: z.string().optional(),
+  unit: z.string().nullish(),
   format: valueFormatSchema.optional(),
-  change: z.number().optional(),
-  change_direction: changeDirectionSchema.optional(),
+  change: z.number().nullish(),
+  change_direction: changeDirectionSchema.nullish(),
   severity: severitySchema.optional(),
 });
 export type MetricItemV2 = z.infer<typeof metricItemV2Schema>;
@@ -429,6 +429,7 @@ export const dataTableBlockV2Schema = checkpointBlockBaseV2Schema.extend({
   category: z.literal("data_table"),
   columns: z.array(tableColumnV2Schema).min(1),
   rows: z.array(z.record(z.string(), z.unknown())),
+  notes: z.string().nullish(),
 });
 export type DataTableBlockV2 = z.infer<typeof dataTableBlockV2Schema>;
 
@@ -676,6 +677,10 @@ export const toolBatchSchema = streamEventSchema(
       metadata: z.record(z.string(), z.unknown()),
       correlation_id: z.string().optional().nullable(),
       parent_correlation_id: z.string().nullable().optional(),
+      agent_id: z.string().nullable().optional(),
+      parent_agent_id: z.string().nullable().optional(),
+      display_name: z.string().nullable().optional(),
+      agent_name: z.string().nullable().optional(),
     })),
     results: z.array(z.object({
       id: z.string(),
@@ -980,6 +985,8 @@ export const toolCallSchema = z.object({
   name: z.string(),
   args: z.record(z.string(), z.unknown()),
   metadata: z.record(z.string(), z.unknown()),
+  display_name: z.string().nullable().optional(),
+  agent_name: z.string().nullable().optional(),
 });
 
 export type ToolCallEventData = z.infer<typeof toolCallSchema>;

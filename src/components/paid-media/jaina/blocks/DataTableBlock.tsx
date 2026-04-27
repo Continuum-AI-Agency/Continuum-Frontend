@@ -52,6 +52,9 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
           </tbody>
         </table>
       </div>
+      {block.notes && (
+        <p className="mt-1.5 text-xs text-muted-foreground/70 italic">{block.notes}</p>
+      )}
     </div>
   );
 }

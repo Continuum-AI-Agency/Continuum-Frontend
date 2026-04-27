@@ -13,6 +13,7 @@ import { JobGrid } from "./JobGrid";
 import { ToolCallChip } from "./ToolCallChip";
 import { TrendChartCard } from "./TrendChartCard";
 import type { AgentJobState } from "./types";
+import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 
 type OrganicAgentPanelProps = {
   brandId: string;
@@ -152,7 +153,16 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
           state.messages.map((msg) => (
             <Message key={msg.id} role={msg.role}>
               <div className="space-y-2">
-                <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
+                {msg.role === "assistant" ? (
+                  <SafeMarkdown
+                    content={msg.content}
+                    className="text-[15px] leading-7 text-foreground"
+                    mode={msg.id === state.streamingMessageId ? "streaming" : "static"}
+                    isAnimating={msg.id === state.streamingMessageId}
+                  />
+                ) : (
+                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
+                )}
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="space-y-1">
                     {msg.toolCalls.map((tc, i) => (
