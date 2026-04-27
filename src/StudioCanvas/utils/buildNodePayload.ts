@@ -377,7 +377,13 @@ export function buildNanoGenPayload(
       ? 'gemini-3-pro-image-preview'
       : data.model === 'nano-banana-2'
         ? 'gemini-3.1-flash-image-preview'
-      : data.model;
+        : data.model === 'gpt-image-2'
+          ? 'openai/gpt-image-2/edit'
+          : data.model === 'flux-2-pro'
+            ? 'fal-ai/flux-2-pro/edit'
+            : data.model === 'flux-2-max'
+              ? 'fal-ai/flux-2-max/edit'
+              : data.model;
   const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
   const imageSize = data.model === 'nano-banana-pro'
     ? (data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K' ? data.imageSize : '1K')

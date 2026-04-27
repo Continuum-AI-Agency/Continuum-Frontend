@@ -84,11 +84,12 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           ...(node.data as NanoGenNodeData),
           model,
           imageSize:
-            model === 'nano-banana'
+            model === 'nano-banana' || model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max'
               ? undefined
               : model === 'nano-banana-pro'
                 ? (isProSize ? currentSize : '1K')
                 : (isNano2Size ? currentSize : '512px'),
+          maxReferenceImages: model === 'gpt-image-2' || model === 'flux-2-pro' || model === 'flux-2-max' ? 1 : undefined,
         },
       }));
       triggerSave();
@@ -146,7 +147,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   }, [executionControls, id, brandId]);
 
   const previewImage = data.generatedImage;
-  const refImageLimit = 14;
+  const refImageLimit = data.maxReferenceImages ?? 14;
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = getAspectRatioValue(aspectRatio);
   const fileBaseName = `image-${id}`;
@@ -157,7 +158,13 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     ? 'Nano Banana Pro'
     : data.model === 'nano-banana-2'
       ? 'Nano Banana 2'
-      : 'Nano Banana';
+      : data.model === 'gpt-image-2'
+        ? 'GPT Image 2'
+        : data.model === 'flux-2-pro'
+          ? 'FLUX.2 Pro'
+          : data.model === 'flux-2-max'
+            ? 'FLUX.2 Max'
+            : 'Nano Banana';
   const generatorDescription = `${modelLabel}${isHighFidelityNanoModel ? ` • ${currentImageSize}` : ''} • ${aspectRatio}`;
 
   const handleDownload = useCallback(() => {
@@ -341,6 +348,24 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
             >
               Nano Banana 2
             </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem
+              checked={data.model === 'gpt-image-2'}
+              onClick={() => handleModelChange('gpt-image-2')}
+            >
+              GPT Image 2
+            </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem
+              checked={data.model === 'flux-2-pro'}
+              onClick={() => handleModelChange('flux-2-pro')}
+            >
+              FLUX.2 Pro
+            </ContextMenuCheckboxItem>
+            <ContextMenuCheckboxItem
+              checked={data.model === 'flux-2-max'}
+              onClick={() => handleModelChange('flux-2-max')}
+            >
+              FLUX.2 Max
+            </ContextMenuCheckboxItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
         {isHighFidelityNanoModel && (
@@ -372,7 +397,9 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
           <ContextMenuSubContent className="w-36">
             {(data.model === 'nano-banana-2'
               ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4']
-              : ['1:1', '16:9', '9:16', '4:3', '3:4']
+              : data.model === 'flux-2-pro' || data.model === 'flux-2-max'
+                ? ['1:1', '4:5', '5:4', '16:9', '9:16', '4:3', '3:4', '21:9']
+                : ['1:1', '16:9', '9:16', '4:3', '3:4']
             ).map((value) => (
               <ContextMenuCheckboxItem
                 key={value}
