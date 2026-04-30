@@ -1494,8 +1494,78 @@ describe("reduceJainaStreamEvent canonical report events", () => {
       ],
     } as any);
 
-    expect(state.objectives.length).toBe(1);
-    expect(state.objectives[0]?.id).toBe("objective-finalize");
+    expect(state.objectives.length).toBe(3);
+    expect(
+      state.objectives.find((objective) => objective.id === "objective-finalize")
+        ?.status
+    ).toBe("pending");
+  });
+
+  it("keeps completed objectives crossed off across stale snapshots", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "collect_metrics",
+            title: "Collect metrics",
+            status: "in_progress",
+          },
+        ],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objective.updated",
+      data: {
+        objective_id: "collect_metrics",
+        status: "completed",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "collect_metrics",
+            title: "Collect metrics",
+            status: "pending",
+          },
+        ],
+      },
+    } as any);
+
+    expect(state.objectives[0]?.status).toBe("completed");
+  });
+
+  it("allows failed objectives to recover through explicit updates", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "inspect_creatives",
+            title: "Inspect creatives",
+            status: "failed",
+          },
+        ],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objective.updated",
+      data: {
+        objective_id: "inspect_creatives",
+        status: "completed",
+      },
+    } as any);
+
+    expect(state.objectives[0]?.status).toBe("completed");
   });
 });
 

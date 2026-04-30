@@ -70,6 +70,15 @@ import {
 
 export type JainaStreamStatus = "idle" | "starting" | "streaming" | "complete" | "error";
 
+export type ActiveWorkerInfo = {
+  agentId: string;
+  displayName: string;
+  lastToolName?: string;
+  lastToolState?: "calling" | "returned" | "cached" | "failed";
+  outputBytes?: number;
+  error?: string;
+};
+
 const compatibilityStreamEventSchema = z.object({
   type: z.enum([
     "response.output_json.delta",
@@ -140,6 +149,7 @@ export type JainaStreamState = {
   }>;
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
+  activeWorkers: Record<string, ActiveWorkerInfo>;
   stateDeltas: StateDeltaEventData[];
   artifacts: ArtifactDeltaEventData;
   canvasActions: CampaignCanvasActionsEnvelope[];
@@ -174,6 +184,7 @@ export function createInitialJainaStreamState(): JainaStreamState {
     blockDeltas: [],
     toolCalls: [],
     toolResults: [],
+    activeWorkers: {},
     stateDeltas: [],
     artifacts: {},
     canvasActions: [],
@@ -1213,6 +1224,76 @@ function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
   return Array.from(map.values());
 }
 
+const snapshotObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
+  pending: 0,
+  in_progress: 1,
+  failed: 2,
+  completed: 3,
+};
+
+function mergeObjectiveSnapshotStatus(
+  existingStatus: JainaObjectiveStatus,
+  incomingStatus: JainaObjectiveStatus
+): JainaObjectiveStatus {
+  return snapshotObjectiveStatusRank[incomingStatus] >=
+    snapshotObjectiveStatusRank[existingStatus]
+    ? incomingStatus
+    : existingStatus;
+}
+
+function mergeObjectiveSnapshots(
+  currentObjectives: JainaObjective[],
+  incomingObjectives: JainaObjective[]
+): JainaObjective[] {
+  if (incomingObjectives.length === 0) return currentObjectives;
+
+  const byId = new Map<string, JainaObjective>();
+  const titleToId = new Map<string, string>();
+
+  for (const objective of currentObjectives) {
+    byId.set(objective.id, objective);
+    titleToId.set(objective.title.trim().toLowerCase(), objective.id);
+  }
+
+  for (const incoming of incomingObjectives) {
+    const titleKey = incoming.title.trim().toLowerCase();
+    const targetId = byId.has(incoming.id)
+      ? incoming.id
+      : titleToId.get(titleKey) ?? incoming.id;
+    const existing = byId.get(targetId);
+
+    if (!existing) {
+      byId.set(targetId, incoming);
+      titleToId.set(titleKey, targetId);
+      continue;
+    }
+
+    const merged: JainaObjective = {
+      ...existing,
+      ...incoming,
+      id: targetId,
+      title: incoming.title || existing.title,
+      description: incoming.description ?? existing.description,
+      status: mergeObjectiveSnapshotStatus(existing.status, incoming.status),
+    };
+
+    byId.set(targetId, merged);
+    titleToId.set(merged.title.trim().toLowerCase(), targetId);
+  }
+
+  return Array.from(byId.values());
+}
+
+function mergeExplicitObjectiveStatus(
+  existingStatus: JainaObjectiveStatus | undefined,
+  incomingStatus: JainaObjectiveStatus
+): JainaObjectiveStatus {
+  if (existingStatus === "completed" && incomingStatus !== "completed") {
+    return "completed";
+  }
+  return incomingStatus;
+}
+
 function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
   const hasPlanId =
     typeof payload.plan_id === "string" ||
@@ -1343,7 +1424,11 @@ function upsertObjective(
   if (!normalized) return currentObjectives;
 
   const targetId = existingMatch?.id ?? normalized.id;
-  const withTargetId: JainaObjective = { ...normalized, id: targetId };
+  const withTargetId: JainaObjective = {
+    ...normalized,
+    id: targetId,
+    status: mergeExplicitObjectiveStatus(existingMatch?.status, normalized.status),
+  };
   const nextObjectives = currentObjectives.filter(
     (objective) => objective.id !== targetId
   );
@@ -1561,7 +1646,7 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         plan: nextPlan ?? state.plan,
         planJson: nextPlan ? planJson : state.planJson,
-        objectives: planObjectives.length > 0 ? planObjectives : state.objectives,
+        objectives: mergeObjectiveSnapshots(state.objectives, planObjectives),
       };
     }
     case "hitl.paused": {
@@ -1817,6 +1902,7 @@ export function reduceJainaStreamEvent(
         blockDeltas: [],
         toolCalls: [],
         toolResults: [],
+        activeWorkers: {},
         stateDeltas: [],
         artifacts: {},
         canvasActions: [],
@@ -1875,7 +1961,7 @@ export function reduceJainaStreamEvent(
       }
       return {
         ...nextBase,
-        objectives,
+        objectives: mergeObjectiveSnapshots(state.objectives, objectives),
       };
     }
     case "response.objective.updated": {
@@ -2023,11 +2109,111 @@ export function reduceJainaStreamEvent(
         });
       }
 
+      let nextActiveWorkers = state.activeWorkers;
+      for (const call of parsed.data.data.calls) {
+        const pid = call.parent_agent_id ?? null;
+        if (pid && pid in nextActiveWorkers) {
+          nextActiveWorkers = {
+            ...nextActiveWorkers,
+            [pid]: { ...nextActiveWorkers[pid], lastToolName: call.name, lastToolState: "calling" as const, outputBytes: undefined, error: undefined },
+          };
+        }
+      }
+      for (const res of newResults) {
+        const pid = (res as { parent_agent_id?: string | null }).parent_agent_id ?? null;
+        if (pid && pid in nextActiveWorkers) {
+          nextActiveWorkers = {
+            ...nextActiveWorkers,
+            [pid]: {
+              ...nextActiveWorkers[pid],
+              lastToolName: res.name,
+              lastToolState: (res.ok ? (res.cached ? "cached" : "returned") : "failed") as ActiveWorkerInfo["lastToolState"],
+              outputBytes: (res as { output_bytes?: number }).output_bytes,
+              error: res.ok ? undefined : res.error,
+            },
+          };
+        }
+      }
+
       return {
         ...nextBase,
         toolCalls: nextToolCalls,
         toolResults: nextToolResults,
+        activeWorkers: nextActiveWorkers,
         progress: nextProgress,
+      };
+    }
+    case "tool.call": {
+      const raw = asRecord((event as { data?: unknown }).data) ?? {};
+      // Individual tool.call events use "input" for args; normalize before parsing
+      const normalized = { ...raw, args: raw.args ?? raw.input ?? {}, metadata: raw.metadata ?? {} };
+      const parsed = toolCallSchema.safeParse(normalized);
+      if (!parsed.success) return nextBase;
+      const call = parsed.data;
+      const { merged: nextToolCalls, added } = mergeToolCalls(state.toolCalls, [call]);
+      if (added.length === 0) return nextBase;
+      const parentAgentId = call.parent_agent_id ?? null;
+      let nextActiveWorkers = state.activeWorkers;
+      if (parentAgentId && parentAgentId in state.activeWorkers) {
+        nextActiveWorkers = {
+          ...state.activeWorkers,
+          [parentAgentId]: {
+            ...state.activeWorkers[parentAgentId],
+            lastToolName: call.name,
+            lastToolState: "calling",
+            outputBytes: undefined,
+            error: undefined,
+          },
+        };
+      }
+      return {
+        ...nextBase,
+        toolCalls: nextToolCalls,
+        activeWorkers: nextActiveWorkers,
+        progress: [
+          ...state.progress,
+          {
+            stage: "tool_start",
+            at: new Date().toISOString(),
+            detail: `Executing ${call.name}`,
+            data: call,
+          },
+        ],
+      };
+    }
+    case "tool.result": {
+      const parsed = toolResultSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success) return nextBase;
+      const result = parsed.data;
+      const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [result]);
+      if (added.length === 0) return nextBase;
+      const parentAgentId = result.parent_agent_id ?? null;
+      let nextActiveWorkers = state.activeWorkers;
+      if (parentAgentId && parentAgentId in state.activeWorkers) {
+        nextActiveWorkers = {
+          ...state.activeWorkers,
+          [parentAgentId]: {
+            ...state.activeWorkers[parentAgentId],
+            lastToolName: result.name,
+            lastToolState: result.ok ? (result.cached ? "cached" : "returned") : "failed",
+            outputBytes: result.output_bytes,
+            error: result.ok ? undefined : result.error,
+          },
+        };
+      }
+      return {
+        ...nextBase,
+        toolResults: nextToolResults,
+        activeWorkers: nextActiveWorkers,
+        progress: [
+          ...state.progress,
+          {
+            stage: "tool_complete",
+            at: new Date().toISOString(),
+            detail: `Completed ${result.name}`,
+            data: result,
+          },
+        ],
       };
     }
     case "handoff.start": {
@@ -2093,8 +2279,14 @@ export function reduceJainaStreamEvent(
         return nextBase;
       }
       const data = parsed.data;
+      const displayName =
+        data.display_name ?? data.name ?? data.agent_id;
       return {
         ...nextBase,
+        activeWorkers: {
+          ...state.activeWorkers,
+          [data.agent_id]: { agentId: data.agent_id, displayName },
+        },
         progress: [
           ...state.progress,
           {
@@ -2112,8 +2304,10 @@ export function reduceJainaStreamEvent(
         return nextBase;
       }
       const data = parsed.data;
+      const { [data.agent_id]: _removed, ...remainingWorkers } = state.activeWorkers;
       return {
         ...nextBase,
+        activeWorkers: remainingWorkers,
         progress: [
           ...state.progress,
           {
@@ -2602,7 +2796,7 @@ export function reduceJainaStreamEvent(
           toolCalls: mergedToolCalls,
           toolResults: mergedToolResults,
           progress: nextProgress,
-          objectives: deltaObjectives.length > 0 ? deltaObjectives : state.objectives,
+          objectives: mergeObjectiveSnapshots(state.objectives, deltaObjectives),
           plan: planFromDelta,
           ...checkpointSummaryPatch,
         };

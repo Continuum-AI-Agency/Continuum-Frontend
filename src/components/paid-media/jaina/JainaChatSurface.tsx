@@ -279,6 +279,66 @@ function normalizePersistedObjectiveStatus(
   return "pending";
 }
 
+const messageObjectiveStatusRank: Record<"pending" | "in_progress" | "completed" | "failed", number> = {
+  pending: 0,
+  in_progress: 1,
+  failed: 2,
+  completed: 3,
+};
+
+function mergeMessageObjectives(
+  persistedObjectives: JainaChatMessage["objectives"],
+  localObjectives: JainaChatMessage["objectives"]
+): JainaChatMessage["objectives"] | undefined {
+  if (!localObjectives || localObjectives.length === 0) return persistedObjectives;
+  if (!persistedObjectives || persistedObjectives.length === 0) return localObjectives;
+
+  const byId = new Map<string, NonNullable<JainaChatMessage["objectives"]>[number]>();
+  const titleToId = new Map<string, string>();
+
+  for (const objective of persistedObjectives) {
+    byId.set(objective.id, objective);
+    titleToId.set(objective.title.trim().toLowerCase(), objective.id);
+  }
+
+  for (const localObjective of localObjectives) {
+    const titleKey = localObjective.title.trim().toLowerCase();
+    const targetId = byId.has(localObjective.id)
+      ? localObjective.id
+      : titleToId.get(titleKey) ?? localObjective.id;
+    const persistedObjective = byId.get(targetId);
+
+    if (!persistedObjective) {
+      byId.set(targetId, localObjective);
+      titleToId.set(titleKey, targetId);
+      continue;
+    }
+
+    const localRank = messageObjectiveStatusRank[localObjective.status];
+    const persistedRank = messageObjectiveStatusRank[persistedObjective.status];
+    const status =
+      localRank >= persistedRank ? localObjective.status : persistedObjective.status;
+
+    byId.set(targetId, {
+      ...persistedObjective,
+      ...localObjective,
+      id: targetId,
+      title: localObjective.title || persistedObjective.title,
+      description: localObjective.description ?? persistedObjective.description,
+      status,
+    });
+  }
+
+  return Array.from(byId.values());
+}
+
+function objectivesChanged(
+  previous: JainaChatMessage["objectives"],
+  next: JainaChatMessage["objectives"]
+): boolean {
+  return JSON.stringify(previous ?? []) !== JSON.stringify(next ?? []);
+}
+
 function deriveObjectivesFromPersistedSources(input: {
   message: JainaConversationMessage;
   report: JainaChatMessage["report"] | undefined;
@@ -575,6 +635,14 @@ export function mergePersistedMessagesWithLocal(
     (localAssistant.toolResults?.length ?? 0) +
     (localAssistant.objectives?.length ?? 0);
   const shouldPreserveLocalTrace = persistedTraceCount === 0 && localTraceCount > 0;
+  const mergedObjectives = mergeMessageObjectives(
+    persistedAssistant.objectives,
+    localAssistant.objectives
+  );
+  const hasObjectiveUpgrade = objectivesChanged(
+    persistedAssistant.objectives,
+    mergedObjectives
+  );
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
     !isPersistedErrorMessage(persistedAssistant.content) &&
@@ -583,6 +651,14 @@ export function mergePersistedMessagesWithLocal(
     !persistedPlanOnly &&
     !shouldPreserveLocalTrace
   ) {
+    if (hasObjectiveUpgrade) {
+      const mergedMessages = [...persistedMessages];
+      mergedMessages[persistedAssistantIndex] = {
+        ...persistedAssistant,
+        objectives: mergedObjectives,
+      };
+      return mergedMessages;
+    }
     return persistedMessages;
   }
 
@@ -604,7 +680,7 @@ export function mergePersistedMessagesWithLocal(
     artifacts: localAssistant.artifacts ?? persistedAssistant.artifacts,
     pendingClarification:
       localAssistant.pendingClarification ?? persistedAssistant.pendingClarification,
-    objectives: localAssistant.objectives ?? persistedAssistant.objectives,
+    objectives: mergedObjectives,
   };
   return mergedMessages;
 }

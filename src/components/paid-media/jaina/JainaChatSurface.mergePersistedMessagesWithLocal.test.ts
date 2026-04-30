@@ -171,4 +171,49 @@ describe("mergePersistedMessagesWithLocal", () => {
 
     expect(assistant.content).toBe("Final analysis summary from persisted history.");
   });
+
+  it("does not downgrade completed local objectives during persisted refresh", () => {
+    const persisted: JainaChatMessage[] = [
+      baseUserMessage,
+      {
+        id: "persisted-assistant",
+        role: "assistant",
+        content: "Final analysis summary from persisted history.",
+        createdAt: "2026-04-17T09:20:05.000Z",
+        objectives: [
+          {
+            id: "collect-metrics",
+            title: "Collect metrics",
+            status: "pending",
+          },
+        ],
+      },
+    ];
+
+    const local: JainaChatMessage[] = [
+      {
+        ...baseUserMessage,
+        id: "local-user",
+      },
+      {
+        id: "local-assistant",
+        role: "assistant",
+        content: "Final analysis summary from persisted history.",
+        createdAt: "2026-04-17T09:20:05.000Z",
+        objectives: [
+          {
+            id: "collect-metrics",
+            title: "Collect metrics",
+            status: "completed",
+          },
+        ],
+      },
+    ];
+
+    const merged = mergePersistedMessagesWithLocal(persisted, local);
+    const assistant = merged[merged.length - 1];
+
+    expect(assistant.content).toBe("Final analysis summary from persisted history.");
+    expect(assistant.objectives?.[0]?.status).toBe("completed");
+  });
 });

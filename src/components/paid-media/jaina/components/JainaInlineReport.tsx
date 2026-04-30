@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Badge, Button, Heading, Text } from "@radix-ui/themes";
-import { DownloadIcon } from "lucide-react";
+import { DownloadIcon, FileCode2Icon } from "lucide-react";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -11,7 +11,7 @@ import {
   hasReportContent,
 } from "@/lib/jaina/schemas";
 import { buildJitSnapshotFallbackTables } from "../reportTableUtils";
-import { downloadJainaReportPdf } from "../reportExport";
+import { downloadJainaReportHtml, downloadJainaReportPdf } from "../reportExport";
 import { JainaReportCharts, isJainaChartInput } from "./JainaReportCharts";
 import { JainaReportMetrics } from "./JainaReportMetrics";
 import { JainaReportRecommendations } from "./JainaReportRecommendations";
@@ -59,6 +59,22 @@ export function JainaInlineReport({
       show({
         title: "Export failed",
         description: "Unable to generate PDF report right now.",
+        variant: "error",
+      });
+    }
+  }, [fallbackTables, report, show]);
+
+  const handleHtmlExport = React.useCallback(() => {
+    if (!report) return;
+    try {
+      downloadJainaReportHtml({
+        report,
+        fallbackTables,
+      });
+    } catch {
+      show({
+        title: "Export failed",
+        description: "Unable to generate HTML report right now.",
         variant: "error",
       });
     }
@@ -168,6 +184,24 @@ export function JainaInlineReport({
           </Suggestions>
         </div>
       ) : null}
+
+      <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+        <Text size="1" className="text-muted-foreground">
+          Export includes summary, metrics, charts, tables, recommendations, and follow-up prompts.
+        </Text>
+        <Button
+          type="button"
+          size="1"
+          variant="surface"
+          color="gray"
+          onClick={handleHtmlExport}
+          disabled={isStreaming}
+          aria-label="Export response as HTML"
+        >
+          <FileCode2Icon className="size-3.5" />
+          Export HTML
+        </Button>
+      </footer>
     </section>
   );
 }

@@ -11,20 +11,18 @@ import {
   frontendCheckpointReportSchema,
   hasReportContent,
   type CreativeArtifact,
-  type ToolCallEventData,
   type ToolResultEventData,
 } from "@/lib/jaina/schemas";
 import type { JainaStreamState } from "@/lib/jaina/stream";
 import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
-  formatToolLabel,
   isStreamingPlaceholderMessage,
   normalizeJainaMarkdownTables,
 } from "../jainaUtils";
 import type { JainaChatMessage } from "../types";
 import { ObjectivesQueue } from "./ObjectivesQueue";
-import { ThinkingWindow } from "./ThinkingWindow";
+import { LatestJainaThought, ThinkingWindow } from "./ThinkingWindow";
 import { PlanSection, type PlanFeedbackPayload } from "./PlanSection";
 import { ClarificationBanner } from "./ClarificationBanner";
 import { MessageActionBar } from "./MessageActionBar";
@@ -134,33 +132,6 @@ function RotatingMessage() {
   );
 }
 
-function ToolCallChip({
-  call,
-  result,
-}: {
-  call: ToolCallEventData;
-  result: ToolResultEventData | undefined;
-}) {
-  const status = result ? (result.ok ? "done" : "error") : "running";
-  const agentLabel = call.display_name ?? call.agent_name ?? null;
-  return (
-    <div className="flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground">
-      {status === "running" && (
-        <span className="size-1.5 shrink-0 rounded-full bg-amber-400 animate-pulse" />
-      )}
-      {status === "done" && (
-        <CheckCircle2Icon className="size-3 shrink-0 text-emerald-500" />
-      )}
-      {status === "error" && (
-        <span className="size-1.5 shrink-0 rounded-full bg-destructive" />
-      )}
-      <span className="font-medium text-foreground/70">{formatToolLabel(call.name)}</span>
-      {agentLabel && (
-        <span className="text-muted-foreground/50">· {agentLabel}</span>
-      )}
-    </div>
-  );
-}
 
 export function JainaMessageItem({
   message,
@@ -307,24 +278,22 @@ export function JainaMessageItem({
 
             <ObjectivesQueue objectives={objectives ?? []} isStreaming={isStreaming} />
 
-            {(toolCalls?.length ?? 0) > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {(toolCalls ?? []).map((call) => (
-                  <ToolCallChip
-                    key={call.id}
-                    call={call}
-                    result={(toolResults ?? []).find((r) => r.id === call.id)}
-                  />
-                ))}
-              </div>
-            )}
-
             <ThinkingWindow
               reasoning={reasoning ?? []}
               toolCalls={toolCalls ?? []}
               toolResults={toolResults ?? []}
               isStreaming={isStreaming}
             />
+
+            <AnimatePresence mode="wait">
+              {isStreaming ? (
+                <LatestJainaThought
+                  key="latest-jaina-thought"
+                  reasoning={reasoning ?? []}
+                  isStreaming={isStreaming}
+                />
+              ) : null}
+            </AnimatePresence>
 
             {plan ? (
               <motion.div

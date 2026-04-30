@@ -693,6 +693,9 @@ export const toolBatchSchema = streamEventSchema(
       error: z.string().optional(),
       correlation_id: z.string().optional().nullable(),
       parent_correlation_id: z.string().nullable().optional(),
+      parent_agent_id: z.string().nullable().optional(),
+      output_bytes: z.number().optional(),
+      output_tokens_est: z.number().optional(),
     })),
   })
 );
@@ -983,10 +986,14 @@ export const jainaStreamEventSchema = z.union([
 export const toolCallSchema = z.object({
   id: z.string(),
   name: z.string(),
-  args: z.record(z.string(), z.unknown()),
-  metadata: z.record(z.string(), z.unknown()),
+  args: z.record(z.string(), z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
   display_name: z.string().nullable().optional(),
   agent_name: z.string().nullable().optional(),
+  parent_agent_id: z.string().nullable().optional(),
+  agent_id: z.string().nullable().optional(),
+  correlation_id: z.string().nullable().optional(),
+  parent_correlation_id: z.string().nullable().optional(),
 });
 
 export type ToolCallEventData = z.infer<typeof toolCallSchema>;
@@ -1000,6 +1007,10 @@ export const toolResultSchema = z.object({
   duration_ms: z.number().optional(),
   output: z.unknown().optional(),
   error: z.string().optional(),
+  parent_agent_id: z.string().nullable().optional(),
+  output_bytes: z.number().optional(),
+  output_tokens_est: z.number().optional(),
+  correlation_id: z.string().nullable().optional(),
 });
 
 export type ToolResultEventData = z.infer<typeof toolResultSchema>;

@@ -12,10 +12,7 @@ import {
 } from "@/components/ai-elements/chain-of-thought";
 import {
   Tool,
-  ToolContent,
   ToolHeader,
-  ToolInput,
-  ToolOutput,
 } from "@/components/ai-elements/tool";
 import {
   Agent,
@@ -50,75 +47,59 @@ const STAGE_LABELS: Record<string, string> = {
   delegation_complete: "Delegation complete",
 };
 
-type SpawnWorkerOutput = {
-  agent_id?: string;
-  task_id?: string;
-  status?: string;
-  evidence?: string[];
-  insights?: string[];
-  recommendations?: string[];
-};
-
-function renderSpawnWorkerOutput(output: unknown): React.ReactNode {
-  if (!output || typeof output !== "object") return null;
-  const out = output as SpawnWorkerOutput;
-  return (
-    <div className="flex flex-col gap-2 mt-1">
-      {out.agent_id && (
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-          <span className="font-mono">{out.agent_id}</span>
-          {out.task_id && <><span>·</span><span>{out.task_id}</span></>}
-        </div>
-      )}
-      {out.evidence && out.evidence.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Evidence</p>
-          <ul className="flex flex-col gap-0.5">
-            {out.evidence.map((item, i) => (
-              <li key={i} className="flex gap-1.5 text-[11px] text-foreground/70">
-                <span className="text-muted-foreground/50 shrink-0">·</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {out.insights && out.insights.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <p className="text-[10px] font-medium text-amber-500/80 uppercase tracking-wide">Insights</p>
-          <ul className="flex flex-col gap-0.5">
-            {out.insights.map((item, i) => (
-              <li key={i} className="flex gap-1.5 text-[11px] text-foreground/80">
-                <span className="text-amber-500/60 shrink-0">·</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {out.recommendations && out.recommendations.length > 0 && (
-        <div className="flex flex-col gap-1">
-          <p className="text-[10px] font-medium text-[#5A48F9]/80 uppercase tracking-wide">Recommendations</p>
-          <ul className="flex flex-col gap-0.5">
-            {out.recommendations.map((item, i) => (
-              <li key={i} className="flex gap-1.5 text-[11px] text-foreground/80">
-                <span className="text-[#5A48F9]/60 shrink-0">·</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
 type ThinkingWindowProps = {
   reasoning: JainaProgressEntry[];
   toolCalls: JainaStreamState["toolCalls"];
   toolResults: JainaStreamState["toolResults"];
   isStreaming: boolean;
 };
+
+export function getLatestStreamingThought(
+  reasoning: JainaProgressEntry[]
+): string | null {
+  for (let i = reasoning.length - 1; i >= 0; i -= 1) {
+    const entry = reasoning[i];
+    if (entry.stage !== "thinking") continue;
+    const detail = toMarkdownDetail(entry.detail);
+    if (detail) return detail;
+  }
+  return null;
+}
+
+type LatestJainaThoughtProps = {
+  reasoning: JainaProgressEntry[];
+  isStreaming: boolean;
+};
+
+export function LatestJainaThought({
+  reasoning,
+  isStreaming,
+}: LatestJainaThoughtProps) {
+  const latestThought = React.useMemo(
+    () => (isStreaming ? getLatestStreamingThought(reasoning) : null),
+    [isStreaming, reasoning]
+  );
+
+  if (!latestThought) return null;
+
+  return (
+    <motion.div
+      key={latestThought}
+      initial={{ opacity: 0, y: -3 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -3 }}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-lg border border-border/50 bg-muted/25 px-3 py-2.5"
+    >
+      <SafeMarkdown
+        content={latestThought}
+        className="text-xs leading-relaxed text-foreground/80"
+        mode="streaming"
+        isAnimating
+      />
+    </motion.div>
+  );
+}
 
 export function ThinkingWindow({
   reasoning,
@@ -155,17 +136,6 @@ export function ThinkingWindow({
       segment.kind === "tools" ? count + segment.toolRefs.length : count,
     0
   );
-
-  const lastThoughtPreview = React.useMemo(() => {
-    for (let i = reasoning.length - 1; i >= 0; i--) {
-      const entry = reasoning[i];
-      if (entry.stage === "thinking") {
-        const detail = toMarkdownDetail(entry.detail);
-        if (detail) return detail;
-      }
-    }
-    return null;
-  }, [reasoning]);
 
   if (segments.length === 0) return null;
 
@@ -218,21 +188,6 @@ export function ThinkingWindow({
           />
         </button>
       </CollapsibleTrigger>
-
-      <AnimatePresence>
-        {lastThoughtPreview && !isOpen && (
-          <motion.p
-            key={lastThoughtPreview.slice(0, 20)}
-            initial={{ opacity: 0, y: -2 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="px-3 pb-2 text-[11px] leading-relaxed text-muted-foreground/60 line-clamp-2"
-          >
-            {lastThoughtPreview}
-          </motion.p>
-        )}
-      </AnimatePresence>
 
       <ChainOfThoughtContent className="space-y-1 px-2 pb-3">
         {segments.map((segment, segmentIndex) => {
@@ -298,6 +253,25 @@ export function ThinkingWindow({
               ? "text-emerald-500"
               : "text-muted-foreground";
 
+            const workerResolved = segment.workerToolRefs?.length
+              ? resolveToolEntries(segment.workerToolRefs, safeToolCalls, safeToolResults)
+              : [];
+            const lastWorkerEntry = workerResolved[workerResolved.length - 1];
+            let workerStatusLine: string | null = null;
+            if (lastWorkerEntry) {
+              const res = lastWorkerEntry.toolResult;
+              if (res) {
+                if (!res.ok) workerStatusLine = `${lastWorkerEntry.name} failed${res.error ? ` — ${res.error}` : ""}`;
+                else if (res.cached) workerStatusLine = `${lastWorkerEntry.name} (cached)`;
+                else {
+                  const bytes = (res as { output_bytes?: number }).output_bytes;
+                  workerStatusLine = bytes ? `${lastWorkerEntry.name} returned (${bytes}B)` : `${lastWorkerEntry.name} returned`;
+                }
+              } else {
+                workerStatusLine = `calling ${lastWorkerEntry.name}…`;
+              }
+            }
+
             return (
               <ChainOfThoughtStep
                 key={segment.id}
@@ -307,21 +281,27 @@ export function ThinkingWindow({
               >
                 <Agent className="mt-1">
                   <AgentHeader name={segment.agentLabel} />
-                  {(segment.taskDescription || segment.durationMs !== undefined || segment.error) ? (
-                    <AgentContent>
-                      {segment.taskDescription && (
-                        <p className="text-[11px] text-foreground/70">{segment.taskDescription}</p>
-                      )}
-                      {segment.durationMs !== undefined && (
-                        <p className={cn("text-[10px] mt-1", statusColor)}>
-                          {segment.completeStatus ?? "running"} · {(segment.durationMs / 1000).toFixed(1)}s
-                        </p>
-                      )}
-                      {segment.error && (
-                        <p className="text-[10px] text-destructive mt-1">{segment.error}</p>
-                      )}
-                    </AgentContent>
-                  ) : null}
+                  <AgentContent>
+                    {segment.taskDescription && (
+                      <p className="text-[11px] text-foreground/70">{segment.taskDescription}</p>
+                    )}
+                    {isActive && workerStatusLine && (
+                      <p className="text-[10px] text-muted-foreground/70 mt-0.5 truncate">{workerStatusLine}</p>
+                    )}
+                    {segment.durationMs !== undefined && (
+                      <p className={cn("text-[10px] mt-1", statusColor)}>
+                        {segment.completeStatus ?? "running"} · {(segment.durationMs / 1000).toFixed(1)}s
+                      </p>
+                    )}
+                    {segment.error && (
+                      <p className="text-[10px] text-destructive mt-1">{segment.error}</p>
+                    )}
+                    {workerResolved.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground/50 mt-1">
+                        {workerResolved.filter(e => e.state !== "running").length}/{workerResolved.length} tools done
+                      </p>
+                    )}
+                  </AgentContent>
                 </Agent>
               </ChainOfThoughtStep>
             );
@@ -349,16 +329,7 @@ export function ThinkingWindow({
                     const entry = cluster.entries[0];
                     return (
                       <Tool key={entry.id} type={entry.name} state={entry.state}>
-                        <ToolHeader title={formatToolLabel(entry.name)} />
-                        <ToolContent>
-                          <ToolInput value={entry.toolCall?.args ?? {}} />
-                          {entry.toolResult ? (
-                            <ToolOutput
-                              value={entry.toolResult.output ?? entry.toolResult.error}
-                            />
-                          ) : null}
-                          {entry.name === "spawn_worker" && renderSpawnWorkerOutput(entry.toolResult?.output)}
-                        </ToolContent>
+                        <ToolHeader title={formatToolLabel(entry.name)} showDisclosure={false} />
                       </Tool>
                     );
                   }
@@ -396,16 +367,7 @@ export function ThinkingWindow({
                       <div className="space-y-1.5 px-3 pb-3">
                         {cluster.entries.map((entry) => (
                           <Tool key={entry.id} type={entry.name} state={entry.state}>
-                            <ToolHeader title={formatToolLabel(entry.name)} />
-                            <ToolContent>
-                              <ToolInput value={entry.toolCall?.args ?? {}} />
-                              {entry.toolResult ? (
-                                <ToolOutput
-                                  value={entry.toolResult.output ?? entry.toolResult.error}
-                                />
-                              ) : null}
-                              {entry.name === "spawn_worker" && renderSpawnWorkerOutput(entry.toolResult?.output)}
-                            </ToolContent>
+                            <ToolHeader title={formatToolLabel(entry.name)} showDisclosure={false} />
                           </Tool>
                         ))}
                       </div>

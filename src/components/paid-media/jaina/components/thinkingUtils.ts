@@ -11,6 +11,7 @@ export type AgentLifecycleSegment = {
   completeStatus?: "completed" | "failed" | "cancelled";
   durationMs?: number;
   error?: string;
+  workerToolRefs?: string[];
 };
 
 export type ThinkingSegment =
@@ -151,6 +152,13 @@ export function resolveToolRef(
   return `name:${toolName}`;
 }
 
+function getParentAgentId(entry: JainaProgressEntry): string | null {
+  const data = entry.data;
+  if (!data || typeof data !== "object") return null;
+  const id = (data as Record<string, unknown>).parent_agent_id;
+  return typeof id === "string" ? id : null;
+}
+
 export function buildThinkingSegments(
   reasoning: JainaProgressEntry[],
   toolCalls: ToolCallEventData[]
@@ -159,6 +167,7 @@ export function buildThinkingSegments(
   const currentThoughtEntries: JainaProgressEntry[] = [];
   const currentToolRefs: string[] = [];
   const usedCallIds = new Set<string>();
+  const agentSegmentIndex = new Map<string, number>();
 
   const flushThoughts = () => {
     if (currentThoughtEntries.length === 0) return;
@@ -190,6 +199,7 @@ export function buildThinkingSegments(
         typeof data?.display_name === "string" ? data.display_name :
         typeof data?.name === "string" ? data.name :
         formatAgentLabel(agentId);
+      agentSegmentIndex.set(agentId, segments.length);
       segments.push({
         kind: "agent_lifecycle",
         id: `agent-${segments.length + 1}`,
@@ -197,6 +207,7 @@ export function buildThinkingSegments(
         agentLabel,
         taskDescription: typeof data?.task_description === "string" ? data.task_description : undefined,
         spawnTs: typeof data?.spawn_ts === "number" ? data.spawn_ts : undefined,
+        workerToolRefs: [],
       });
       continue;
     }
@@ -263,8 +274,18 @@ export function buildThinkingSegments(
     if (isToolProgressEntry(entry)) {
       flushThoughts();
       const toolRef = resolveToolRef(entry, toolCalls, usedCallIds);
-      if (toolRef && !currentToolRefs.includes(toolRef)) {
-        currentToolRefs.push(toolRef);
+      if (toolRef) {
+        const parentAgentId = getParentAgentId(entry);
+        const workerIdx = parentAgentId ? agentSegmentIndex.get(parentAgentId) : undefined;
+        if (workerIdx !== undefined) {
+          const seg = segments[workerIdx] as AgentLifecycleSegment;
+          const refs = seg.workerToolRefs ?? [];
+          if (!refs.includes(toolRef)) {
+            segments[workerIdx] = { ...seg, workerToolRefs: [...refs, toolRef] };
+          }
+        } else if (!currentToolRefs.includes(toolRef)) {
+          currentToolRefs.push(toolRef);
+        }
       }
       continue;
     }
