@@ -321,7 +321,10 @@ async function generateFresh(args: {
   const periodComparison = computePeriodComparison(breakdowns, previousBreakdowns);
 
   // Step 6: Build response with campaign metadata
-  const allInsights = [...computed, ...llmInsights];
+  const allInsights = [...computed, ...llmInsights].map((insight) => ({
+    ...insight,
+    campaign_id: campaignId,
+  }));
   const ttl = hasLlmInsights ? INSIGHT_TTL_MS : PARTIAL_TTL_MS;
   const nowTime = new Date();
   const expiresAt = new Date(nowTime.getTime() + ttl);

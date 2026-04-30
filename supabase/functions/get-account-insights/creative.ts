@@ -9,6 +9,8 @@ import {
 export type AdCreativeBreakdown = {
   ad_id: string;
   ad_name: string;
+  campaign_id: string;
+  adset_id: string;
   spend: number;
   impressions: number;
   clicks: number;
@@ -35,7 +37,7 @@ export async function fetchAdLevelInsights(args: {
   const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
   const params = new URLSearchParams({
     fields:
-      "ad_id,ad_name,spend,impressions,clicks,actions,action_values,purchase_roas,frequency",
+      "ad_id,ad_name,campaign_id,adset_id,spend,impressions,clicks,actions,action_values,purchase_roas,frequency",
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     level: "ad",
     access_token: args.accessToken,
@@ -70,6 +72,8 @@ export async function fetchAdLevelInsights(args: {
       return {
         ad_id: String(row.ad_id ?? ""),
         ad_name: String(row.ad_name ?? ""),
+        campaign_id: String(row.campaign_id ?? ""),
+        adset_id: String(row.adset_id ?? ""),
         spend: round(spend),
         impressions: Math.round(impressions),
         clicks: Math.round(clicks),
