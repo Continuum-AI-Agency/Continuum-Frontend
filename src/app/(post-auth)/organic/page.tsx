@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { Callout, Heading } from "@radix-ui/themes";
+import { Callout } from "@radix-ui/themes";
 import { LightningBoltIcon } from "@radix-ui/react-icons";
 import { OrganicAgentPanelLazy } from "@/components/organic/agent/OrganicAgentPanelLazy";
 
@@ -224,20 +224,16 @@ async function OrganicContent({
     metricAccountsByPlatform.instagram.length > 0 ? "instagram"
     : metricAccountsByPlatform.tiktok.length > 0 ? "tiktok"
     : "facebook";
-
-  return (
-    <>
-      <div className="shrink-0 space-y-2">
-        <Heading size="5" className="text-foreground">
-          Organic Planner
-        </Heading>
+  const noticeSlot = insightsError || showNoTrendsMessage
+    ? (
+      <>
         {insightsError ? (
           <Callout.Root color="red" variant="surface">
             <Callout.Icon>
               <LightningBoltIcon />
             </Callout.Icon>
             <Callout.Text className="text-pretty">
-              We couldn't load trend intelligence right now. You can keep planning posts while we retry.
+              We could not load trend intelligence right now. You can keep planning posts while we retry.
               {insightsError ? ` (${insightsError})` : ""}
             </Callout.Text>
           </Callout.Root>
@@ -252,44 +248,49 @@ async function OrganicContent({
             </Callout.Text>
           </Callout.Root>
         ) : null}
-      </div>
-      <div className="min-h-0 flex-1">
-        <OrganicWorkspaceTabs
-          plannerSlot={(
-            <OrganicCalendarWorkspace
-              trendTypes={trendTypes}
-              trends={selectorTrends}
-              activePlatforms={fallbackPlatforms}
-              platformAccountIds={platformAccountIds}
-              maxTrendSelections={5}
-              brandProfileId={brandProfileId}
-              brandName={brandName}
-              initialSelectedDraftId={initialSelectedDraftId}
-              initialWeekStart={initialWeekStart}
-              initialView={initialView}
-            />
-          )}
-          metricsSlot={(
-            <OrganicMetricsDashboardLazy
-              brandId={brandProfileId}
-              accountsByPlatform={metricAccountsByPlatform}
-              initialPlatform={initialMetricsPlatform}
-            />
-          )}
-          metricsPrefetchParams={{
-            brandId: brandProfileId,
-            integrationAccountId: metricAccountsByPlatform[initialMetricsPlatform][0]?.integrationAccountId ?? "",
-            platform: initialMetricsPlatform,
-          }}
-          agentSlot={
-            <OrganicAgentPanelLazy
-              brandId={brandProfileId}
-              platformAccountIds={platformAccountIds}
-            />
-          }
-        />
-      </div>
-    </>
+      </>
+    )
+    : null;
+
+  return (
+    <div className="h-full min-h-0">
+      <OrganicWorkspaceTabs
+        noticeSlot={noticeSlot}
+        plannerSlot={(
+          <OrganicCalendarWorkspace
+            trendTypes={trendTypes}
+            trends={selectorTrends}
+            activePlatforms={fallbackPlatforms}
+            platformAccountIds={platformAccountIds}
+            maxTrendSelections={5}
+            brandProfileId={brandProfileId}
+            brandName={brandName}
+            initialSelectedDraftId={initialSelectedDraftId}
+            initialWeekStart={initialWeekStart}
+            initialView={initialView}
+            postedContentAccountsByPlatform={metricAccountsByPlatform}
+          />
+        )}
+        metricsSlot={(
+          <OrganicMetricsDashboardLazy
+            brandId={brandProfileId}
+            accountsByPlatform={metricAccountsByPlatform}
+            initialPlatform={initialMetricsPlatform}
+          />
+        )}
+        metricsPrefetchParams={{
+          brandId: brandProfileId,
+          integrationAccountId: metricAccountsByPlatform[initialMetricsPlatform][0]?.integrationAccountId ?? "",
+          platform: initialMetricsPlatform,
+        }}
+        agentSlot={
+          <OrganicAgentPanelLazy
+            brandId={brandProfileId}
+            platformAccountIds={platformAccountIds}
+          />
+        }
+      />
+    </div>
   );
 }
 
@@ -312,10 +313,10 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
     typeof initialViewRaw === "string" &&
     (VALID_VIEWS as readonly string[]).includes(initialViewRaw)
       ? (initialViewRaw as "week" | "month" | "list")
-      : "week";
+      : "month";
 
   return (
-    <div className="flex h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full flex-col gap-2 overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+    <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
       <Suspense fallback={<OrganicContentSkeleton />}>
         <OrganicContent
           initialSelectedDraftId={initialSelectedDraftId}

@@ -4,6 +4,7 @@ import * as React from "react"
 
 import { buildWeekDays } from "@/components/organic/primitives/calendar-utils"
 import type { OrganicCalendarDay, OrganicCalendarDraft } from "@/components/organic/primitives/types"
+import { request } from "@/lib/api/http"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"
 import {
@@ -79,6 +80,53 @@ export function useCalendarDraftPersistence({
   const syncInFlightRef = React.useRef(false)
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), [])
 
+  const refetch = React.useCallback(async () => {
+    if (!brandProfileId || !weekStartId) return
+
+    const weekEnd = (() => {
+      const [year, month, day] = weekStartId.split("-").map(Number)
+      const next = new Date(Date.UTC(year, month - 1, day))
+      next.setUTCDate(next.getUTCDate() + 6)
+      const nextYear = next.getUTCFullYear()
+      const nextMonth = String(next.getUTCMonth() + 1).padStart(2, "0")
+      const nextDay = String(next.getUTCDate()).padStart(2, "0")
+      return `${nextYear}-${nextMonth}-${nextDay}`
+    })()
+
+    const params = new URLSearchParams({ brandId: brandProfileId, start: weekStartId, end: weekEnd })
+    const { drafts } = await request<{ drafts: PersistedOrganicDraftRow[] }>({
+      path: `/api/organic/calendar/drafts?${params}`,
+    })
+
+    const days = weekScaffold(weekStartId).map((day) => ({ ...day, slots: [] as OrganicCalendarDraft[] }))
+    const dedupedByDraftId = new Map<string, { updatedAt: number; entry: CalendarEntry }>()
+    const knownIds = new Set<string>()
+
+    for (const row of drafts) {
+      if (!row?.id) continue
+
+      const entry = mapPersistedRowToCalendarEntry(row, days)
+      if (!entry) continue
+      if (!isDayIdInWeekRange(entry.dayId, weekStartId)) continue
+
+      const updatedAt = parseUpdatedAt(row.updated_at)
+      const existing = dedupedByDraftId.get(entry.draft.id)
+      if (!existing || updatedAt >= existing.updatedAt) {
+        dedupedByDraftId.set(entry.draft.id, { updatedAt, entry })
+      }
+      knownIds.add(row.id)
+    }
+
+    for (const { entry } of dedupedByDraftId.values()) {
+      const day = days.find((item) => item.id === entry.dayId)
+      if (!day) continue
+      day.slots.push(entry.draft)
+    }
+
+    setCalendarDays(days)
+    knownBackendIdsRef.current = knownIds
+  }, [brandProfileId, setCalendarDays, weekStartId])
+
   React.useEffect(() => {
     if (!brandProfileId || !weekStartId) return
 
@@ -89,59 +137,7 @@ export function useCalendarDraftPersistence({
 
     const load = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        const weekEnd = (() => {
-          const [year, month, day] = weekStartId.split("-").map(Number)
-          const next = new Date(Date.UTC(year, month - 1, day))
-          next.setUTCDate(next.getUTCDate() + 6)
-          const nextYear = next.getUTCFullYear()
-          const nextMonth = String(next.getUTCMonth() + 1).padStart(2, "0")
-          const nextDay = String(next.getUTCDate()).padStart(2, "0")
-          return `${nextYear}-${nextMonth}-${nextDay}`
-        })()
-
-        const organicSchema = supabase.schema("organic" as never) as any
-        const { data, error } = await organicSchema
-          .from("organic_calendar_drafts")
-          .select("id, status, scheduled_date, slot_data, platform_account_id, instagram_post_id, updated_at")
-          .eq("brand_id", brandProfileId)
-          .eq("user_id", user.id)
-          .or(`and(scheduled_date.gte.${weekStartId},scheduled_date.lte.${weekEnd}),scheduled_date.is.null`)
-          .order("updated_at", { ascending: false })
-
-        if (error) return
-
-        const rows = (data ?? []) as PersistedOrganicDraftRow[]
-
-        const days = weekScaffold(weekStartId).map((day) => ({ ...day, slots: [] as OrganicCalendarDraft[] }))
-        const dedupedByDraftId = new Map<string, { updatedAt: number; entry: CalendarEntry }>()
-        const knownIds = new Set<string>()
-
-        for (const row of rows) {
-          if (!row?.id) continue
-
-          const entry = mapPersistedRowToCalendarEntry(row, days)
-          if (!entry) continue
-          if (!isDayIdInWeekRange(entry.dayId, weekStartId)) continue
-
-          const updatedAt = parseUpdatedAt(row.updated_at)
-          const existing = dedupedByDraftId.get(entry.draft.id)
-          if (!existing || updatedAt >= existing.updatedAt) {
-            dedupedByDraftId.set(entry.draft.id, { updatedAt, entry })
-          }
-          knownIds.add(row.id)
-        }
-
-        for (const { entry } of dedupedByDraftId.values()) {
-          const day = days.find((item) => item.id === entry.dayId)
-          if (!day) continue
-          day.slots.push(entry.draft)
-        }
-
-        setCalendarDays(days)
-        knownBackendIdsRef.current = knownIds
+        await refetch()
       } catch {
         // Best-effort hydration; local cache remains usable.
       } finally {
@@ -150,7 +146,7 @@ export function useCalendarDraftPersistence({
     }
 
     void load()
-  }, [brandProfileId, setCalendarDays, supabase, weekStartId])
+  }, [brandProfileId, refetch, weekStartId])
 
   React.useEffect(() => {
     if (!brandProfileId) return
@@ -246,6 +242,7 @@ export function useCalendarDraftPersistence({
           }
 
           lastSyncedSignatureRef.current = signature
+          await refetch()
         } finally {
           syncInFlightRef.current = false
         }
@@ -255,5 +252,5 @@ export function useCalendarDraftPersistence({
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [brandProfileId, calendarDays, platformAccountIds, supabase, updateDraftById, weekStartId])
+  }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById, weekStartId])
 }

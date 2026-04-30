@@ -181,6 +181,25 @@ export type OrganicCalendarDay = {
   slots: OrganicCalendarDraft[]
 }
 
+export type OrganicCalendarPostedContentSource = "published_posts" | "external"
+
+export type OrganicCalendarPostedContent = {
+  id: string
+  source: OrganicCalendarPostedContentSource
+  platform: OrganicPlatformTag
+  integrationAccountId?: string
+  externalPostId?: string
+  timestamp: string
+  dayId: string
+  timeLabel: string
+  title: string
+  caption?: string
+  permalink?: string
+  mediaType?: string
+  mediaUrl?: string | null
+  thumbnailUrl?: string | null
+}
+
 export type OrganicCreationStepStatus = "complete" | "active" | "upcoming"
 
 export type OrganicCreationStep = {

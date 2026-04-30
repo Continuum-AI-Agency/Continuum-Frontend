@@ -12,8 +12,9 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { cn } from "@/lib/utils"
-import type { OrganicCalendarDay, OrganicCalendarDraft } from "./types"
+import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicCalendarPostedContent } from "./types"
 import type { PlannerPlatform } from "./planner-platforms"
 import { formatDayId } from "./calendar-utils"
 
@@ -29,8 +30,9 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 type OrganicMonthlyCalendarProps = {
   days: OrganicCalendarDay[]
-  weekStart: Date
+  monthAnchorDate: Date
   platforms: PlannerPlatform[]
+  postedContent: OrganicCalendarPostedContent[]
   selectedDraftId: string | null
   onSelectDraft: (id: string) => void
   onCreatePost: (options: { dayId: string; platformKey: string }) => void
@@ -128,9 +130,87 @@ function DraftChip({
   )
 }
 
+function PostedContentHover({ post }: { post: OrganicCalendarPostedContent }) {
+  const mediaUrl = post.thumbnailUrl ?? post.mediaUrl
+
+  return (
+    <div className="w-[272px] overflow-hidden rounded-xl border border-border/80 bg-card shadow-2xl shadow-black/20">
+      {mediaUrl ? (
+        <div className="aspect-square overflow-hidden bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={mediaUrl}
+            alt={post.title}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      ) : null}
+      <div className="space-y-2 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Posted
+          </span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {post.platform} {post.timeLabel}
+          </span>
+        </div>
+        <p className="line-clamp-2 text-sm font-semibold leading-tight text-foreground">
+          {post.title}
+        </p>
+        {post.caption ? (
+          <p className="line-clamp-5 text-xs leading-relaxed text-muted-foreground">
+            {post.caption}
+          </p>
+        ) : null}
+        {post.permalink ? (
+          <a
+            href={post.permalink}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-xs font-medium text-primary hover:underline"
+          >
+            Open post
+          </a>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function PostedContentChip({ post }: { post: OrganicCalendarPostedContent }) {
+  const colorClass = PLATFORM_CHIP_COLORS[post.platform] ?? "bg-emerald-600/80 text-white"
+
+  return (
+    <HoverCard openDelay={300} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex w-full cursor-default items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[10px] font-medium leading-tight opacity-90 ring-0 transition-opacity hover:opacity-100",
+            colorClass
+          )}
+          title={post.title}
+        >
+          <span className="shrink-0 text-[9px] font-bold uppercase">{post.timeLabel}</span>
+          <span className="truncate">{post.title}</span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        className="p-0 border-none bg-transparent shadow-none"
+        avoidCollisions
+      >
+        <PostedContentHover post={post} />
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
 export function OrganicMonthlyCalendar({
   days,
-  weekStart,
+  monthAnchorDate,
   selectedDraftId,
   onSelectDraft,
   onCreatePost,
@@ -138,6 +218,7 @@ export function OrganicMonthlyCalendar({
   onNextMonth,
   onRegenerate,
   onDeleteDraft,
+  postedContent,
 }: OrganicMonthlyCalendarProps) {
   const todayId = React.useMemo(() => formatDayId(new Date()), [])
 
@@ -151,10 +232,21 @@ export function OrganicMonthlyCalendar({
     return map
   }, [days])
 
-  const gridCells = React.useMemo(() => buildMonthGrid(weekStart), [weekStart])
+  const postedByDayId = React.useMemo(() => {
+    const map = new Map<string, OrganicCalendarPostedContent[]>()
+    postedContent.forEach((post) => {
+      const items = map.get(post.dayId) ?? []
+      items.push(post)
+      map.set(post.dayId, items)
+    })
+    map.forEach((items) => items.sort((a, b) => a.timestamp.localeCompare(b.timestamp)))
+    return map
+  }, [postedContent])
 
-  const currentMonth = weekStart.getMonth()
-  const currentYear = weekStart.getFullYear()
+  const gridCells = React.useMemo(() => buildMonthGrid(monthAnchorDate), [monthAnchorDate])
+
+  const currentMonth = monthAnchorDate.getMonth()
+  const currentYear = monthAnchorDate.getFullYear()
   const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
     new Date(currentYear, currentMonth, 1)
   )
@@ -191,8 +283,10 @@ export function OrganicMonthlyCalendar({
             const isCurrentMonth = date.getMonth() === currentMonth
             const isToday = dayId === todayId
             const drafts = draftsByDayId.get(dayId) ?? []
-            const visibleDrafts = drafts.slice(0, 3)
-            const overflowCount = drafts.length - visibleDrafts.length
+            const posts = postedByDayId.get(dayId) ?? []
+            const visibleDrafts = drafts.slice(0, Math.max(0, 3 - Math.min(posts.length, 2)))
+            const visiblePosts = posts.slice(0, Math.max(1, 3 - visibleDrafts.length))
+            const overflowCount = drafts.length + posts.length - visibleDrafts.length - visiblePosts.length
 
             return (
               <div
@@ -233,6 +327,9 @@ export function OrganicMonthlyCalendar({
                       onRegenerate={onRegenerate}
                       onDelete={onDeleteDraft}
                     />
+                  ))}
+                  {visiblePosts.map((post) => (
+                    <PostedContentChip key={post.id} post={post} />
                   ))}
                   {overflowCount > 0 && (
                     <span className="pl-1 text-[9px] text-muted-foreground/70">

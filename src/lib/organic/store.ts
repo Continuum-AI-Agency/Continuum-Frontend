@@ -172,7 +172,7 @@ function sanitizePersistedCalendarState(
   const viewMode: "week" | "month" | "list" =
     state?.viewMode === "week" || state?.viewMode === "month" || state?.viewMode === "list"
       ? state.viewMode
-      : "week";
+      : "month";
 
   // Strip large binary blobs (assetBase64) to keep sessionStorage lean.
   const days: OrganicCalendarDay[] = Array.isArray(state?.days)
@@ -201,7 +201,7 @@ export const useCalendarStore = create<CalendarState>()(
       gridError: null,
       gridJobId: null,
       scheduledEvents: {},
-      viewMode: "week",
+      viewMode: "month",
       eventHistory: [],
       backlogDrafts: [],
       weekCache: {},
@@ -505,4 +505,3 @@ export const useCalendarStore = create<CalendarState>()(
     }
   )
 );
-

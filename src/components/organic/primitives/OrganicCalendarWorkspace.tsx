@@ -3,6 +3,7 @@ import type { OrganicTrendType, OrganicCalendarDay, OrganicCreationStep, Organic
 import type { Trend } from "@/lib/organic/trends"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 import { buildWeekDays, startOfWeek } from "./calendar-utils"
+import type { CalendarPostAccountsByPlatform } from "@/lib/organic/calendar-posts"
 
 const defaultCreationSteps: OrganicCreationStep[] = [
   {
@@ -51,6 +52,7 @@ type OrganicCalendarWorkspaceProps = {
   initialWeekStart?: string | null
   initialSelectedDraftId?: string | null
   initialView?: "week" | "month" | "list"
+  postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform
 }
 
 export function OrganicCalendarWorkspace({
@@ -66,6 +68,7 @@ export function OrganicCalendarWorkspace({
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
+  postedContentAccountsByPlatform,
 }: OrganicCalendarWorkspaceProps) {
   const resolvedWeekStart =
     initialWeekStart && !Number.isNaN(new Date(initialWeekStart).getTime())
@@ -90,6 +93,7 @@ export function OrganicCalendarWorkspace({
       userId={userId}
       instagramAccountId={instagramAccountId}
       initialView={initialView}
+      postedContentAccountsByPlatform={postedContentAccountsByPlatform}
     />
   )
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useState, useCallback, useEffect, useReducer, useRef } from "react";
 import { Message } from "@/components/ai-elements/message";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
@@ -10,10 +10,13 @@ import { useOrganicAgentStream } from "@/hooks/useOrganicAgentStream";
 import { initialPanelState, panelReducer } from "./useOrganicAgentReducer";
 import { mapPlacementToDraft } from "./mapPlacementToDraft";
 import { JobGrid } from "./JobGrid";
-import { ToolCallChip } from "./ToolCallChip";
+import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
 import { TrendChartCard } from "./TrendChartCard";
 import type { AgentJobState } from "./types";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
+import { useOrganicSessions } from "./useOrganicSessions";
+import { OrganicSessionSidebar, OrganicSessionTrigger } from "./OrganicSessionSidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type OrganicAgentPanelProps = {
   brandId: string;
@@ -27,16 +30,30 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
   const syncedJobsRef = useRef(new Set<string>());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Derive stable session ID from sessionStorage on mount
+  const {
+    sessions,
+    isLoadingSessions,
+    isLoadingMessages,
+    activeSessionId,
+    startNewSession,
+    selectSession,
+    refreshSessions,
+  } = useOrganicSessions(brandId);
+
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Load messages when activeSessionId is set by the hook on initial fetch
   useEffect(() => {
-    const storageKey = `organic-agent-session:${brandId}`;
-    let sessionId = sessionStorage.getItem(storageKey);
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      sessionStorage.setItem(storageKey, sessionId);
-    }
-    dispatch({ type: "SESSION_INIT", sessionId });
-  }, [brandId]);
+    if (!activeSessionId) return;
+    selectSession(activeSessionId).then((msgs) => {
+      dispatch({
+        type: "SESSION_SWITCH",
+        sessionId: activeSessionId,
+        messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId]);
 
   // Rehydrate jobs from previous session
   useEffect(() => {
@@ -78,9 +95,32 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages]);
 
+  const handleSelectSession = useCallback(
+    async (sessionId: string) => {
+      if (isStreaming) return;
+      setSheetOpen(false);
+      dispatch({ type: "LOAD_MESSAGES_START" });
+      const msgs = await selectSession(sessionId);
+      dispatch({
+        type: "SESSION_SWITCH",
+        sessionId,
+        messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+      });
+    },
+    [isStreaming, selectSession]
+  );
+
+  const handleNewSession = useCallback(() => {
+    if (isStreaming) return;
+    const id = startNewSession();
+    dispatch({ type: "SESSION_SWITCH", sessionId: id, messages: [] });
+    setSheetOpen(false);
+  }, [isStreaming, startNewSession]);
+
   const handleSubmit = useCallback(
     (value: string) => {
-      if (!value.trim() || !state.sessionId || isStreaming) return;
+      const currentSessionId = state.sessionId ?? activeSessionId;
+      if (!value.trim() || !currentSessionId || isStreaming) return;
 
       const content = value.trim();
       const messageId = crypto.randomUUID();
@@ -101,14 +141,14 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
 
       start({
         brandId,
-        sessionId: state.sessionId,
+        sessionId: currentSessionId,
         messages: [...existingMessages, { id: messageId, role: "user" as const, content }],
         weekStart,
         timezone,
         platformAccountIds,
-      });
+      }).then(() => refreshSessions()).catch(() => {});
     },
-    [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start]
+    [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, refreshSessions]
   );
 
   const handleRetry = useCallback(
@@ -132,10 +172,18 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
   );
 
   const jobs = Object.values(state.jobs);
-  const inputDisabled = isStreaming || !state.sessionId;
+  const inputDisabled = isStreaming || (!state.sessionId && !activeSessionId);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 p-3">
+      <div className="flex shrink-0 items-center gap-2 pb-1">
+        <OrganicSessionTrigger
+          sessionCount={sessions.length}
+          isLoading={isLoadingSessions}
+          onClick={() => setSheetOpen(true)}
+        />
+      </div>
+
       {jobs.length > 0 && (
         <div className="max-h-52 shrink-0 overflow-y-auto">
           <JobGrid jobs={jobs} onRetryAction={handleRetry} onCancelAction={handleCancel} />
@@ -143,7 +191,13 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1">
-        {state.messages.length === 0 ? (
+        {isLoadingMessages ? (
+          <div className="space-y-3 p-1">
+            <Skeleton className="h-10 w-3/4" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-10 w-1/2" />
+          </div>
+        ) : state.messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <p className="max-w-xs text-center text-sm text-muted-foreground">
               Ask the agent to schedule posts, explore trends, or plan your week.
@@ -163,13 +217,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
                 ) : (
                   <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
                 )}
-                {msg.toolCalls && msg.toolCalls.length > 0 && (
-                  <div className="space-y-1">
-                    {msg.toolCalls.map((tc, i) => (
-                      <ToolCallChip key={tc.toolCallId ?? i} toolCall={tc} />
-                    ))}
-                  </div>
-                )}
+                <OrganicThinkingPanel
+                  toolCalls={msg.toolCalls ?? []}
+                  isStreaming={msg.id === state.streamingMessageId}
+                />
                 {msg.uiCards && msg.uiCards.length > 0 && (
                   <div className="space-y-2">
                     {msg.uiCards.map((card, i) =>
@@ -193,6 +244,17 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
           placeholder="Plan me 3 posts this week on the beauty trend…"
         />
       </div>
+
+      <OrganicSessionSidebar
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        isLoading={isLoadingSessions}
+        isStreaming={isStreaming}
+        onNewSession={handleNewSession}
+        onSelectSession={handleSelectSession}
+      />
     </div>
   );
 }

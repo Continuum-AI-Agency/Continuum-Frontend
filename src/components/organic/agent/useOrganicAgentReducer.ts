@@ -21,6 +21,8 @@ export type PanelAction =
   | { type: "STREAM_ERROR"; error: string }
   | { type: "STREAM_UI_CARD"; card: UiCard }
   | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
+  | { type: "SESSION_SWITCH"; sessionId: string; messages: ConversationMessage[] }
+  | { type: "LOAD_MESSAGES_START" }
 
 export function initialPanelState(): PanelState {
   return {
@@ -140,6 +142,23 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
             ...action.job,
           } as AgentJobState,
         },
+      }
+
+    case "LOAD_MESSAGES_START":
+      return {
+        ...state,
+        messages: [],
+        jobs: {},
+        streamingMessageId: null,
+        isHydrated: false,
+      }
+
+    case "SESSION_SWITCH":
+      return {
+        ...initialPanelState(),
+        sessionId: action.sessionId,
+        messages: action.messages,
+        isHydrated: true,
       }
 
     default:
