@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { Text } from "@radix-ui/themes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
@@ -32,22 +31,21 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   const [selectedMetric, setSelectedMetric] = useState<PaidPerformanceMetricKey>("spend");
 
   return (
-    <div className="space-y-4">
-      <section className="space-y-2">
-        <div className="px-1">
-          <Text size="3" weight="medium" className="text-balance">Performance & Actions</Text>
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 items-start">
-          <PaidMediaReportingWidget
-            brandId={brandId}
-            onAccountChange={setSelectedAccountId}
-            selectedMetric={selectedMetric}
-            onSelectedMetricChange={setSelectedMetric}
-          />
-          <DCOActionsWidget brandId={brandId} />
-        </div>
+    <div className="grid min-h-[680px] gap-3 xl:h-[calc(100dvh-8.5rem)] xl:grid-cols-[minmax(0,1fr)_360px] xl:grid-rows-[minmax(0,1fr)_minmax(220px,0.46fr)]">
+      <section className="min-h-[420px] xl:min-h-0">
+        <PaidMediaReportingWidget
+          brandId={brandId}
+          onAccountChange={setSelectedAccountId}
+          selectedMetric={selectedMetric}
+          onSelectedMetricChange={setSelectedMetric}
+        />
       </section>
-      <section className="space-y-2">
+
+      <aside className="min-h-[360px] xl:row-span-2 xl:min-h-0">
+        <DCOActionsWidget brandId={brandId} variant="rail" className="h-full" />
+      </aside>
+
+      <section className="min-h-[280px] overflow-hidden rounded-xl border bg-card">
         <BudgetPacingWidget
           brandId={brandId}
           selectedAccountId={selectedAccountId}

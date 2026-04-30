@@ -16,7 +16,6 @@ import {
   OpenInNewWindowIcon,
   PinTopIcon,
   ReloadIcon,
-  MagnifyingGlassIcon,
   ChevronDownIcon,
 } from "@radix-ui/react-icons";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,6 +48,7 @@ import {
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
 import { DEFAULT_DATE_RANGE_DAYS, type DateRangeDays, getDateRangeFromDays } from "@/lib/dco/dateRange";
 import type { ActionLog, ActionType, ActionStatus } from "@/lib/types/dco";
+import { cn } from "@/lib/utils";
 
 function formatTimestamp(isoString: string): string {
   const date = new Date(isoString);
@@ -553,13 +553,15 @@ interface DCOActionsWidgetProps {
   metaAccountId?: string;
   campaignId?: string;
   className?: string;
+  variant?: "table" | "rail";
 }
 
 export function DCOActionsWidget({ 
   brandId, 
   metaAccountId,
   campaignId,
-  className 
+  className,
+  variant = "table",
 }: DCOActionsWidgetProps) {
   const {
     logs,
@@ -624,6 +626,168 @@ export function DCOActionsWidget({
     }));
     setFilters({ campaignId });
   }, [campaignId, setFilters]);
+
+  if (variant === "rail") {
+    const visibleLogs = logs.slice(0, 8);
+
+    return (
+      <TooltipProvider>
+        <section className={cn("flex h-full min-h-0 flex-col rounded-xl border bg-card", className)}>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b px-3 py-2.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <ActivityLogIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <h3 className="truncate text-sm font-semibold">DCO actions</h3>
+              </div>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {pagination.totalCount} actions · last {dateRangeDays}d
+              </p>
+            </div>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <IconButton variant="ghost" color="gray" size="1" onClick={refresh} disabled={isLoading}>
+                  <ReloadIcon className={isLoading ? "animate-spin" : undefined} />
+                </IconButton>
+              </TooltipTrigger>
+              <TooltipContent>Refresh actions</TooltipContent>
+            </Tooltip>
+          </div>
+
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <Select
+              value={filterState.status ?? ""}
+              onValueChange={(value) => handleFilterChange("status", value === "all" ? undefined : value)}
+            >
+              <SelectTrigger className="h-7 min-w-0 flex-1 rounded-md px-2 text-[11px]">
+                <SelectValue placeholder="All status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All status</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="SUCCESS">Success</SelectItem>
+                <SelectItem value="EXECUTED">Executed</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+                <SelectItem value="FAILED">Failed</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={dateRangeDays.toString()}
+              onValueChange={(value) => handleDateRangeChange(Number(value) as DateRangeDays)}
+            >
+              <SelectTrigger className="h-7 w-[84px] rounded-md px-2 text-[11px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7d</SelectItem>
+                <SelectItem value="30">30d</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            {error ? (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3">
+                <p className="text-xs text-destructive">{error}</p>
+                <button
+                  type="button"
+                  onClick={refresh}
+                  className="mt-2 text-xs font-medium text-destructive underline-offset-4 hover:underline"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
+
+            {isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <Skeleton key={`dco-rail-row-${index}`} className="h-[74px] rounded-lg" />
+                ))}
+              </div>
+            ) : null}
+
+            {!isLoading && !error && visibleLogs.length === 0 ? (
+              <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed px-4 text-center">
+                <p className="text-sm font-medium">No recent actions</p>
+                <p className="mt-1 text-xs text-muted-foreground">Automation activity will appear here.</p>
+              </div>
+            ) : null}
+
+            {!isLoading && !error && visibleLogs.length > 0 ? (
+              <div className="space-y-1.5">
+                {visibleLogs.map((log) => {
+                  const isExpanded = expandedRows.has(log.id);
+
+                  return (
+                    <div key={log.id} className="rounded-lg border bg-background/40">
+                      <button
+                        type="button"
+                        onClick={() => toggleRow(log.id)}
+                        className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-2.5 py-2 text-left"
+                      >
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <ShadcnBadge variant={getStatusVariant(log.status)} className="h-5 px-1.5 text-[10px]">
+                              {log.status}
+                            </ShadcnBadge>
+                            <span className="truncate text-[11px] text-muted-foreground">{log.scopeType}</span>
+                          </span>
+                          <span className="mt-1 block truncate text-xs font-medium">
+                            {log.actionType.replace(/_/g, " ")}
+                          </span>
+                          {log.decisionNote ? (
+                            <span className="mt-0.5 block line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                              {log.decisionNote}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                          {formatTimestamp(log.occurredAt)}
+                        </span>
+                      </button>
+
+                      {isExpanded ? (
+                        <div className="border-t p-2">
+                          <ActionItemContent log={log} />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          {pagination.totalPages > 1 ? (
+            <div className="flex items-center justify-between border-t px-3 py-2 text-[11px] text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => goToPage(pagination.page - 1)}
+                disabled={!pagination.hasPrevPage}
+                className="font-medium text-foreground disabled:pointer-events-none disabled:opacity-35"
+              >
+                Prev
+              </button>
+              <span>
+                {pagination.page} / {pagination.totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => goToPage(pagination.page + 1)}
+                disabled={!pagination.hasNextPage}
+                className="font-medium text-foreground disabled:pointer-events-none disabled:opacity-35"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
+        </section>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>
