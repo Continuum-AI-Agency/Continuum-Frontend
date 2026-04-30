@@ -33,13 +33,13 @@ function KpiCard({ label, value, subLabel, progressValue, valueClassName, active
   return (
     <div
       className={cn(
-        "bg-background/80 border border-border/60 rounded-lg p-3 flex flex-col gap-2",
+        "flex min-h-[4.5rem] flex-col gap-1.5 rounded-lg border border-border/60 bg-background/80 p-2.5",
         active && "ring-1 ring-primary bg-accent/10"
       )}
     >
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className={cn("text-xl font-semibold tabular-nums", valueClassName)}>{value}</p>
-      {subLabel && <p className="text-muted-foreground text-xs">{subLabel}</p>}
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className={cn("text-lg font-semibold tabular-nums leading-none", valueClassName)}>{value}</p>
+      {subLabel && <p className="text-[11px] text-muted-foreground">{subLabel}</p>}
       <Progress value={Math.min(100, progressValue)} className="h-1" />
     </div>
   );
@@ -71,7 +71,7 @@ export function BudgetPacingSummaryStrip({ data, activeKey }: Props) {
   const remainingLabel = isDaily ? "Today's Remaining" : "Remaining";
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <KpiCard
         label={budgetLabel}
         value={summary.totalBudget > 0 ? formatCurrency(summary.totalBudget) : "—"}

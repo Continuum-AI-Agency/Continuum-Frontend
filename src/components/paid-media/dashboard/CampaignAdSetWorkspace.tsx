@@ -17,7 +17,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -180,6 +180,7 @@ type CampaignAdSetWorkspaceProps = {
   onSelectedCampaignChange?: (campaignId: string | undefined) => void;
   onEditCampaignIndex?: (indexId: string) => void;
   onDeleteCampaignIndex?: (indexId: string) => void;
+  toolbarSlot?: React.ReactNode;
 };
 
 const METRICS: MetricKey[] = ["spend", "roas", "ctr", "cpc", "cpa", "impressions", "clicks"];
@@ -204,9 +205,9 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   clicks: "#84cc16",
 };
 
-const CHART_HEIGHT_CLASS = "h-[clamp(200px,36svh,340px)]";
-const RAIL_HEIGHT_CLASS = "h-[clamp(280px,52svh,470px)]";
-const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(240px,48svh,440px)]";
+const CHART_HEIGHT_CLASS = "h-[clamp(260px,42svh,460px)]";
+const RAIL_HEIGHT_CLASS = "h-[clamp(340px,60svh,560px)]";
+const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(300px,56svh,520px)]";
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
 
 function formatCurrency(value: number): string {
@@ -447,11 +448,32 @@ export function buildAggregatedMetricsContext(
       trends: entity.trends,
     }))
   );
+  const spendContributors = entities.filter((entity) => typeof entity.metrics?.spend === "number").length;
+  const comparison: PaidMetricsComparison = { ...aggregate.comparison };
+  if (aggregate.comparison.spend) {
+    comparison.spend = {
+      ...aggregate.comparison.spend,
+      current:
+        spendContributors > 0
+          ? aggregate.comparison.spend.current / spendContributors
+          : aggregate.comparison.spend.current,
+      previous:
+        spendContributors > 0
+          ? aggregate.comparison.spend.previous / spendContributors
+          : aggregate.comparison.spend.previous,
+    };
+  }
 
   return {
-    metrics: aggregate.metrics,
-    comparison: aggregate.comparison,
-    trends: aggregate.trends,
+    metrics: {
+      ...aggregate.metrics,
+      spend: spendContributors > 0 ? aggregate.metrics.spend / spendContributors : aggregate.metrics.spend,
+    },
+    comparison,
+    trends: aggregate.trends.map((point) => ({
+      ...point,
+      spend: spendContributors > 0 && typeof point.spend === "number" ? point.spend / spendContributors : point.spend,
+    })),
   };
 }
 
@@ -568,6 +590,7 @@ export function CampaignAdSetWorkspace({
   onSelectedCampaignChange,
   onEditCampaignIndex,
   onDeleteCampaignIndex,
+  toolbarSlot,
 }: CampaignAdSetWorkspaceProps) {
   const [viewMode, setViewMode] = React.useState<ViewMode>("campaigns");
   const [campaignQuery, setCampaignQuery] = React.useState("");
@@ -1152,7 +1175,6 @@ export function CampaignAdSetWorkspace({
       if (eligibleCampaigns.length === 0) return current;
       return { type: "campaign", id: eligibleCampaigns[0].id };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignIndexes, eligibleCampaigns, selectedCampaignIndexId]);
 
   // Recovers scope when the user removes the active entity from compare while
@@ -1642,21 +1664,20 @@ export function CampaignAdSetWorkspace({
   }, [adsByAdSet, applyAdSetSelectionById, loadAdsForAdSet, scope?.id, scope?.type]);
 
   return (
-    <Card className="overflow-hidden border-border/70">
-      <CardHeader className="border-b border-border/70 bg-muted/20 px-3 py-2">
+    <Card className="h-full min-h-[var(--dashboard-min-panel-height)] gap-0 overflow-hidden border-border/70 py-0">
+      <div className="border-b border-border/70 bg-muted/20 px-2 py-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <CardTitle className="truncate text-sm">Campaign Explorer</CardTitle>
-            <span className="hidden text-[11px] text-muted-foreground lg:inline">
-              Compare campaigns/indexes and drill into ad sets.
-            </span>
+            <div className="truncate text-sm font-semibold">Explorer</div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            {toolbarSlot}
             <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
               <Button
                 variant={viewMode === "campaigns" ? "secondary" : "ghost"}
-                size="xs"
+                size="sm"
+                className="h-8 px-3 text-xs"
                 onClick={() => {
                   setViewMode("campaigns");
                   onSelectedCampaignChange?.(undefined);
@@ -1666,7 +1687,8 @@ export function CampaignAdSetWorkspace({
               </Button>
               <Button
                 variant={viewMode === "adsets" ? "secondary" : "ghost"}
-                size="xs"
+                size="sm"
+                className="h-8 px-3 text-xs"
                 onClick={() => setViewMode("adsets")}
               >
                 Ad Sets
@@ -1675,14 +1697,16 @@ export function CampaignAdSetWorkspace({
 
             <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
               <Button
-                size="xs"
+                size="sm"
+                className="h-8 px-3 text-xs"
                 variant={resolution === "daily" ? "secondary" : "ghost"}
                 onClick={() => handleResolutionChange("daily")}
               >
                 Daily
               </Button>
               <Button
-                size="xs"
+                size="sm"
+                className="h-8 px-3 text-xs"
                 variant={resolution === "hourly" ? "secondary" : "ghost"}
                 onClick={() => handleResolutionChange("hourly")}
               >
@@ -1698,7 +1722,8 @@ export function CampaignAdSetWorkspace({
                   return (
                     <Button
                       key={`hourly-slice-${label}`}
-                      size="xs"
+                      size="sm"
+                      className="h-8 px-2.5 text-xs"
                       variant={isActive ? "secondary" : "ghost"}
                       onClick={() => setHourlySlice(slice)}
                     >
@@ -1709,43 +1734,33 @@ export function CampaignAdSetWorkspace({
               </div>
             ) : null}
 
-            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background px-2 py-0.5">
+            <div className="flex h-9 items-center gap-2 rounded-md border border-border/70 bg-background px-2.5">
               <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
               <span className="text-[11px] font-medium">Active only</span>
             </div>
           </div>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-0">
+      <CardContent className="min-h-0 p-0">
         {viewMode === "campaigns" ? (
-          <section className="grid gap-2 pb-2 pl-2 pr-0 pt-2 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="rounded-md border border-border/70 bg-card p-2.5">
+          <section className="grid min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="rounded-md border border-border/70 bg-card p-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">Compare Timeline</div>
-                  <div className="text-xs text-muted-foreground">
-                    {selectedCompareSummary
-                      ? selectedCompareEntities.length === 1
-                        ? `Metric cards and timeline for ${selectedCompareSummary}.`
-                        : `Aggregated metric cards and timeline for ${selectedCompareSummary}.`
-                      : "Select campaigns or indexes to compare."}
-                  </div>
-                </div>
                 <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
-                  Active KPI: {labelForMetric(campaignMetric)}
+                  {selectedCompareSummary ?? "No selection"} · {labelForMetric(campaignMetric)}
                 </span>
               </div>
 
-              <ScrollArea className="mt-2.5 w-full">
-                <div className="flex min-w-max gap-2 pb-1">
+              <ScrollArea className="mt-1.5 w-full">
+                <div className="flex min-w-max gap-1.5 pb-1">
                   {campaignMetricCards.map((card) => (
                     <button
                       key={`campaign-metric-card-${card.metric}`}
                       type="button"
                       onClick={() => setCampaignMetric(card.metric)}
                       className={cn(
-                        "w-[156px] cursor-pointer rounded-md border px-2 py-1.5 text-left transition-colors",
+                        "w-[140px] cursor-pointer rounded-md border px-2 py-1 text-left transition-colors",
                         campaignMetric === card.metric
                           ? "border-primary/60 bg-primary/[0.07]"
                           : "border-border/70 bg-background hover:bg-muted/40"
@@ -1755,7 +1770,7 @@ export function CampaignAdSetWorkspace({
                         <span className="text-[11px] font-medium text-muted-foreground">{card.label}</span>
                         <span className="text-xs font-semibold">{formatMetric(card.metric, card.value)}</span>
                       </div>
-                      <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <div className="mt-1 flex items-center justify-between gap-2">
                         <span
                           className={cn(
                             "text-[10px] font-medium",
@@ -1769,8 +1784,8 @@ export function CampaignAdSetWorkspace({
                           {card.changePct == null ? "No change data" : formatDeltaPercent(card.changePct)}
                         </span>
                       </div>
-                      <div className="mt-1.5 h-10">
-                        {card.spark.length > 0 ? (
+                      {card.spark.length > 0 ? (
+                        <div className="mt-1 h-8">
                           <ObservabilityLightweightChart
                             compact
                             series={[
@@ -1784,16 +1799,14 @@ export function CampaignAdSetWorkspace({
                               },
                             ]}
                           />
-                        ) : (
-                          <div className="h-full rounded bg-muted/50" />
-                        )}
-                      </div>
+                        </div>
+                      ) : null}
                     </button>
                   ))}
                 </div>
               </ScrollArea>
 
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 {compareChartSeries.map((line) => (
                   <span
                     key={`legend-${line.id}`}
@@ -1807,7 +1820,7 @@ export function CampaignAdSetWorkspace({
 
               <ContextMenu>
                 <ContextMenuTrigger>
-                  <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
+                  <div className={cn("mt-1.5", CHART_HEIGHT_CLASS)}>
                     {compareChartSeries.length > 0 ? (
                       <ObservabilityLightweightChart
                         series={compareChartSeries}
@@ -1890,7 +1903,7 @@ export function CampaignAdSetWorkspace({
               </ContextMenu>
             </div>
 
-            <aside className="rounded-l-md rounded-r-none border border-r-0 border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <aside className="rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="space-y-2 p-2">
                 <Input
                   value={campaignQuery}
@@ -2346,15 +2359,15 @@ export function CampaignAdSetWorkspace({
             </aside>
           </section>
         ) : (
-          <section className="grid gap-2 pb-2 pl-2 pr-0 pt-2 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="space-y-3">
+          <section className="grid min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="space-y-1.5">
               {adSetErrors.length > 0 ? (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                   {adSetErrors[0]}
                 </div>
               ) : null}
 
-              <div className="rounded-md border border-border/70 p-2.5">
+              <div className="rounded-md border border-border/70 p-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">
@@ -2371,19 +2384,19 @@ export function CampaignAdSetWorkspace({
                     </div>
                   </div>
                   <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
-                    Active KPI: {labelForMetric(adSetMetric)}
+                    {labelForMetric(adSetMetric)}
                   </span>
                 </div>
 
-                <ScrollArea className="mt-2.5 w-full">
-                  <div className="flex min-w-max gap-2 pb-1">
+                <ScrollArea className="mt-1.5 w-full">
+                  <div className="flex min-w-max gap-1.5 pb-1">
                     {adSetMetricCards.map((card) => (
                       <button
                         key={`adset-metric-card-${card.metric}`}
                         type="button"
                         onClick={() => setAdSetMetric(card.metric)}
                         className={cn(
-                          "w-[156px] cursor-pointer rounded-md border px-2 py-1.5 text-left transition-colors",
+                          "w-[140px] cursor-pointer rounded-md border px-2 py-1 text-left transition-colors",
                           adSetMetric === card.metric
                             ? "border-primary/60 bg-primary/[0.07]"
                             : "border-border/70 bg-background hover:bg-muted/40"
@@ -2393,7 +2406,7 @@ export function CampaignAdSetWorkspace({
                           <span className="text-[11px] font-medium text-muted-foreground">{card.label}</span>
                           <span className="text-xs font-semibold">{formatMetric(card.metric, card.value)}</span>
                         </div>
-                        <div className="mt-1.5 flex items-center justify-between gap-2">
+                        <div className="mt-1 flex items-center justify-between gap-2">
                           <span
                             className={cn(
                               "text-[10px] font-medium",
@@ -2407,8 +2420,8 @@ export function CampaignAdSetWorkspace({
                             {card.changePct == null ? "No change data" : formatDeltaPercent(card.changePct)}
                           </span>
                         </div>
-                        <div className="mt-1.5 h-10">
-                          {card.spark.length > 0 ? (
+                        {card.spark.length > 0 ? (
+                          <div className="mt-1 h-8">
                             <ObservabilityLightweightChart
                               compact
                               series={[
@@ -2422,16 +2435,14 @@ export function CampaignAdSetWorkspace({
                                 },
                               ]}
                             />
-                          ) : (
-                            <div className="h-full rounded bg-muted/50" />
-                          )}
-                        </div>
+                          </div>
+                        ) : null}
                       </button>
                     ))}
                   </div>
                 </ScrollArea>
 
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {adSetChartSeries.map((line) => (
                     <span
                       key={`adset-legend-${line.id}`}
@@ -2445,7 +2456,7 @@ export function CampaignAdSetWorkspace({
 
                 <ContextMenu>
                   <ContextMenuTrigger>
-                    <div className={cn("mt-2.5", CHART_HEIGHT_CLASS)}>
+                    <div className={cn("mt-1.5", CHART_HEIGHT_CLASS)}>
                       {adSetChartSeries.length > 0 ? (
                         <ObservabilityLightweightChart
                           series={adSetChartSeries}
@@ -2637,7 +2648,7 @@ export function CampaignAdSetWorkspace({
               </div>
             </div>
 
-            <aside className="rounded-l-md rounded-r-none border border-r-0 border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <aside className="rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="space-y-2 p-2">
                 <Button
                   variant="outline"

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { AccountInsightsResponseSchema } from "@/lib/paid-media/account-insights.types";
+import { CampaignInsightsResponseSchema } from "@/lib/paid-media/account-insights.types";
 
 const isoDaySchema = z
   .string()
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const validated = AccountInsightsResponseSchema.safeParse(data);
+    const validated = CampaignInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
       console.error(
         "Invalid response from get-campaign-insights:",

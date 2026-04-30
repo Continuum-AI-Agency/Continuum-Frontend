@@ -77,6 +77,8 @@ export type ComputedInsight = {
   delta?: number;
   recommendation?: string;
   estimated_impact?: string;
+  campaign_id?: string;
+  adset_id?: string;
 };
 
 export const ComputedInsightSchema = z.object({
@@ -89,6 +91,8 @@ export const ComputedInsightSchema = z.object({
   delta: z.number().optional(),
   recommendation: z.string().optional(),
   estimated_impact: z.string().optional(),
+  campaign_id: z.string().optional(),
+  adset_id: z.string().optional(),
 });
 
 export const DailyDataPointSchema = z.object({
@@ -127,3 +131,11 @@ export const AccountInsightsResponseSchema = z.object({
 });
 
 export type AccountInsightsResponse = z.infer<typeof AccountInsightsResponseSchema>;
+
+export const CampaignInsightsResponseSchema = AccountInsightsResponseSchema.extend({
+  campaign_id: z.string(),
+  campaign_name: z.string().optional(),
+  campaign_objective: z.string().optional(),
+});
+
+export type CampaignInsightsResponse = z.infer<typeof CampaignInsightsResponseSchema>;

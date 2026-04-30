@@ -109,8 +109,8 @@ export function AccountInsightsPanel({
   }, [expiresAt]);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/20 px-4 py-2.5">
+    <Card className="overflow-hidden border-border/70">
+      <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/20 px-3 py-2">
         <CardTitle className="flex items-center gap-2 text-sm font-medium">
           <BarChart3Icon className="size-4 text-muted-foreground" />
           Account Insights
@@ -135,14 +135,14 @@ export function AccountInsightsPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="p-3">
-        <div className="max-h-[clamp(360px,64svh,720px)] overflow-y-auto">
+      <CardContent className="p-2">
+        <div className="max-h-[clamp(220px,34svh,420px)] overflow-y-auto">
           {isLoading && !hasAnyInsights ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
               {CATEGORY_CONFIG.map((cat) => (
                 <div
                   key={cat.key}
-                  className="rounded-lg border border-border/70 bg-card p-3"
+                  className="rounded-lg border border-border/70 bg-card p-2.5"
                 >
                   <div className="mb-2.5 flex items-center gap-2">
                     <Skeleton className="size-7 rounded-md" />
@@ -159,12 +159,9 @@ export function AccountInsightsPanel({
           ) : error ? (
             <p className="py-4 text-center text-xs text-destructive">{error}</p>
           ) : !hasAnyInsights ? (
-            <p className="py-4 text-center text-xs text-muted-foreground">
-              No insights available for the selected date range. Insights appear
-              when there is enough breakdown data to identify patterns.
-            </p>
+            <p className="py-4 text-center text-xs text-muted-foreground">No insights for this range yet.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
               {CATEGORY_CONFIG.map((cat) => (
                 <InsightCategoryCard
                   key={cat.key}

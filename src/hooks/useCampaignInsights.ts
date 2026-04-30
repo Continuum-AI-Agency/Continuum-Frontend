@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import type {
-  AccountInsightsResponse,
+  CampaignInsightsResponse,
   ComputedInsight,
 } from "@/lib/paid-media/account-insights.types";
 import type { BudgetPacingEntry } from "@/lib/schemas/budgetPacing";
@@ -114,7 +114,7 @@ export function useCampaignInsights(
 ): UseCampaignInsightsReturn {
   const { brandId, adAccountId, campaignId, timeRange, enabled = true } = params;
 
-  const [data, setData] = React.useState<AccountInsightsResponse | null>(null);
+  const [data, setData] = React.useState<CampaignInsightsResponse | null>(null);
   const [pacing, setPacing] = React.useState<BudgetPacingEntry | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -158,7 +158,7 @@ export function useCampaignInsights(
             `Request failed with status ${response.status}`
         );
       }
-      return response.json() as Promise<AccountInsightsResponse>;
+      return response.json() as Promise<CampaignInsightsResponse>;
     });
 
     const pacingFetch = fetch("/api/paid-media/budget-pacing", {
@@ -179,11 +179,14 @@ export function useCampaignInsights(
       .then(([insightsResp, pacingEntry]) => {
         if (requestId !== requestIdRef.current) return;
         const budgetInsights = pacingEntry
-          ? deriveBudgetInsights(pacingEntry)
+          ? deriveBudgetInsights(pacingEntry).map((i) => ({ ...i, campaign_id: campaignId ?? undefined }))
           : [];
+        const stampedInsights = insightsResp.insights.map((i) =>
+          i.campaign_id ? i : { ...i, campaign_id: campaignId ?? undefined }
+        );
         setData({
           ...insightsResp,
-          insights: [...budgetInsights, ...insightsResp.insights],
+          insights: [...budgetInsights, ...stampedInsights],
         });
         setPacing(pacingEntry);
         setError(null);

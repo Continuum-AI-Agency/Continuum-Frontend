@@ -38,14 +38,14 @@ function mapMetricToTrendMode(metric?: PaidPerformanceMetricKey): BudgetPacingTr
 
 function BudgetPacingLoadingSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,0.9fr)_minmax(0,1fr)] gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[...Array(4)].map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-lg" />
+          <Skeleton key={i} className="h-16 rounded-lg" />
         ))}
       </div>
-      <Skeleton className="h-56 rounded-lg" />
-      <Skeleton className="h-48 rounded-lg" />
+      <Skeleton className="min-h-0 rounded-lg" />
+      <Skeleton className="min-h-0 rounded-lg" />
     </div>
   );
 }
@@ -89,11 +89,11 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
   }, [selectedAccountId, fetchPacing]);
 
   return (
-    <div className="space-y-4 p-4">
-      <Flex align="center" justify="between">
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+      <Flex align="center" justify="between" className="min-h-10 border-b border-border/70 px-2 py-1.5 sm:px-3">
         <div>
           <h3 className="text-sm font-semibold">Budget Pace</h3>
-          <p className="text-xs text-muted-foreground">Spend vs target</p>
+          <p className="text-[11px] text-muted-foreground">Spend vs target</p>
         </div>
 
         <IconButton
@@ -106,38 +106,40 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
         </IconButton>
       </Flex>
 
-      {state.status === "loading" && <BudgetPacingLoadingSkeleton />}
+      <div className="min-h-0 overflow-y-auto p-2 sm:p-3">
+        {state.status === "loading" && <BudgetPacingLoadingSkeleton />}
 
-      {state.status === "error" && (
-        <Callout.Root color="red" size="1">
-          <Callout.Text>{state.message}</Callout.Text>
-        </Callout.Root>
-      )}
+        {state.status === "error" && (
+          <Callout.Root color="red" size="1">
+            <Callout.Text>{state.message}</Callout.Text>
+          </Callout.Root>
+        )}
 
-      {state.status === "success" && (
-        <div className="space-y-4">
-          <BudgetPacingSummaryStrip data={state.data} activeKey={summaryCard} />
-          <BudgetPacingChart
-            campaigns={state.data.campaigns}
-            focusKey={focusKey}
-            selectedRange={selectedRange}
-            onRangeChange={setSelectedRange}
-            metricMode={trendMode}
-          />
-          <BudgetPacingTable
-            campaigns={state.data.campaigns}
-            focusKey={focusKey}
-            onFocusKey={setFocusKey}
-            selectedRange={selectedRange}
-          />
-        </div>
-      )}
+        {state.status === "success" && (
+          <div className="grid min-h-full gap-3 xl:grid-rows-[auto_minmax(260px,0.9fr)_minmax(280px,1fr)]">
+            <BudgetPacingSummaryStrip data={state.data} activeKey={summaryCard} />
+            <BudgetPacingChart
+              campaigns={state.data.campaigns}
+              focusKey={focusKey}
+              selectedRange={selectedRange}
+              onRangeChange={setSelectedRange}
+              metricMode={trendMode}
+            />
+            <BudgetPacingTable
+              campaigns={state.data.campaigns}
+              focusKey={focusKey}
+              onFocusKey={setFocusKey}
+              selectedRange={selectedRange}
+            />
+          </div>
+        )}
 
-      {state.status === "idle" && !selectedAccountId && (
-        <Text size="2" color="gray" align="center" as="p" className="py-8">
-          No ad account selected.
-        </Text>
-      )}
-    </div>
+        {state.status === "idle" && !selectedAccountId && (
+          <Text size="2" color="gray" align="center" as="p" className="py-8">
+            No ad account selected.
+          </Text>
+        )}
+      </div>
+    </section>
   );
 }

@@ -275,21 +275,20 @@ export function DCOActionAlertsBox({
   }, [onRefresh, refresh]);
 
   return (
-    <div className={cn("grid h-[min(72vh,680px)] min-h-0 gap-3 lg:grid-cols-[220px_minmax(0,1fr)]", className)}>
-      <aside className="rounded-md border border-border/70 bg-muted/10 p-2">
-        <div className="px-1">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menu</div>
-          <p className="mt-1 text-[11px] text-muted-foreground">{contextLabel}</p>
-        </div>
+    <div className={cn("grid h-[min(72vh,680px)] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2", className)}>
+      <aside className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/10 p-2">
+        <span className="rounded border border-border/70 bg-background px-2 py-1 text-[11px] text-muted-foreground">
+          {contextLabel}
+        </span>
 
-        <div className="mt-2 space-y-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
           {(Object.keys(QUICK_VIEW_LABEL) as QuickView[]).map((view) => (
             <button
               key={`alerts-quick-view-${view}`}
               type="button"
               onClick={() => setQuickView(view)}
               className={cn(
-                "w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                "h-7 rounded-md px-2 text-left text-xs transition-colors",
                 quickView === view
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -300,9 +299,9 @@ export function DCOActionAlertsBox({
           ))}
         </div>
 
-        <div className="mt-3 space-y-2 border-t border-border/70 pt-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-8 w-[8.5rem] text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -317,7 +316,7 @@ export function DCOActionAlertsBox({
           </Select>
 
           <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-8 w-[8rem] text-xs">
               <SelectValue placeholder="Scope" />
             </SelectTrigger>
             <SelectContent>
@@ -331,7 +330,7 @@ export function DCOActionAlertsBox({
           </Select>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-8 w-[8.5rem] text-xs">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
@@ -345,11 +344,11 @@ export function DCOActionAlertsBox({
       </aside>
 
       <section className="flex min-h-0 flex-col rounded-md border border-border/70 bg-background">
-        <div className="space-y-2 border-b border-border/70 p-2.5">
+        <div className="space-y-2 border-b border-border/70 p-2">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold">Automation Alerts Console</div>
-              <p className="text-xs text-muted-foreground">
+              <div className="text-sm font-semibold">DCO Actions</div>
+              <p className="text-[11px] text-muted-foreground">
                 {pagination.totalCount} total events · {filteredLogs.length} visible
               </p>
             </div>

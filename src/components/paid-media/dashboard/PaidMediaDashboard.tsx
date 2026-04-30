@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { BellIcon, CalendarIcon, ReloadIcon } from "@radix-ui/react-icons";
-import { Box, Card, Flex, IconButton, Select, Text } from "@radix-ui/themes";
+import { BellIcon, CalendarIcon, InfoCircledIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { Select } from "@radix-ui/themes";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { format, parseISO } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -387,141 +387,171 @@ export function PaidMediaDashboard({
     }
   }, [loadCampaignIndexes]);
 
-  return (
-    <Box className="w-full">
-      <Flex direction="column" gap="2">
-        <Flex justify="end" align="center" wrap="wrap" gap="2" className="px-1">
-          <Select.Root value={platform} onValueChange={handlePlatformChange}>
-            <Select.Trigger placeholder="Select platform" className="min-h-8 min-w-[110px] text-xs" />
-            <Select.Content>
-              <Select.Item value="meta">Meta</Select.Item>
-              <Select.Item value="google-ads" disabled>
-                Google Ads
-              </Select.Item>
-              <Select.Item value="dv360" disabled>
-                DV360
-              </Select.Item>
-            </Select.Content>
-          </Select.Root>
+  const dashboardToolbar = (
+    <>
+      {loadState.status === "loading-campaigns" ? (
+        <span className="rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          Loading
+        </span>
+      ) : null}
 
-          <Select.Root value={timeRangePreset} onValueChange={handleTimeRangeChange}>
-            <Select.Trigger placeholder="Select time range" className="min-h-8 min-w-[120px] text-xs" />
-            <Select.Content>
-              {TIME_RANGE_OPTIONS.map((option) => (
-                <Select.Item key={option.value} value={option.value}>
-                  {option.label}
-                </Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
+      <Select.Root value={platform} onValueChange={handlePlatformChange}>
+        <Select.Trigger placeholder="Select platform" className="min-h-8 min-w-[110px] text-xs" />
+        <Select.Content>
+          <Select.Item value="meta">Meta</Select.Item>
+          <Select.Item value="google-ads" disabled>
+            Google Ads
+          </Select.Item>
+          <Select.Item value="dv360" disabled>
+            DV360
+          </Select.Item>
+        </Select.Content>
+      </Select.Root>
 
-          <AnimatePresence initial={false}>
-            {timeRangePreset === "custom" && (
-              <motion.div
-                key="custom-range-calendar"
-                initial={prefersReducedMotion ? false : { opacity: 0, y: -6, scale: 0.985 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.985 }}
-                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "h-8 min-w-[220px] justify-start text-left text-xs font-normal gap-1.5",
-                        customRangeOpen && "border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20",
-                      )}
-                    >
-                      <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{customRangeLabel}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-auto p-0">
-                    <Calendar
-                      mode="range"
-                      initialFocus
-                      defaultMonth={customRangeSelection.from}
-                      selected={customRangeSelection}
-                      onSelect={handleCustomRangeSelect}
-                      numberOfMonths={2}
-                      disabled={{ after: new Date() }}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      <Select.Root value={timeRangePreset} onValueChange={handleTimeRangeChange}>
+        <Select.Trigger placeholder="Select time range" className="min-h-8 min-w-[120px] text-xs" />
+        <Select.Content>
+          {TIME_RANGE_OPTIONS.map((option) => (
+            <Select.Item key={option.value} value={option.value}>
+              {option.label}
+            </Select.Item>
+          ))}
+        </Select.Content>
+      </Select.Root>
 
-          <Popover open={indexDialogOpen} onOpenChange={setIndexDialogOpen} modal={false}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => {
-                  setSelectedCampaignIndexId("all");
-                }}
-              >
-                New index
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="z-[60] w-[min(96vw,560px)] p-0">
-              <CampaignIndexManagerDialog
-                campaigns={campaigns.map((campaign) => ({
-                  id: campaign.id,
-                  name: campaign.name,
-                  status: campaign.status,
-                }))}
-                initialValue={dialogInitialValue}
-                saving={savingIndex}
-                onCancel={() => setIndexDialogOpen(false)}
-                onSave={(draft) => void saveCampaignIndex(draft)}
-              />
-            </PopoverContent>
-          </Popover>
-
-          <DropdownMenu open={alertsPanelOpen} onOpenChange={setAlertsPanelOpen} modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 text-xs">
-                <BellIcon className="mr-1.5 h-3.5 w-3.5" />
-                Alerts
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[min(96vw,1100px)] p-0">
-              <DCOActionAlertsBox
-                brandId={brandId}
-                metaAccountId={adAccountId ?? undefined}
-                campaignId={selectedCampaignId}
-                onRefresh={() => setAlertsRefreshTick((current) => current + 1)}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <IconButton
-            variant="soft"
-            onClick={handleRefresh}
-            disabled={loadState.status === "loading-campaigns"}
-            className="h-8 w-8"
+      <AnimatePresence initial={false}>
+        {timeRangePreset === "custom" && (
+          <motion.div
+            key="custom-range-calendar"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: -6, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.985 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           >
-            <ReloadIcon className={loadState.status === "loading-campaigns" ? "animate-spin" : ""} />
-          </IconButton>
-        </Flex>
-
-        {loadState.status === "error" && (
-          <Card>
-            <Flex direction="column" gap="2" p="4">
-              <Text color="red" weight="bold">
-                Error
-              </Text>
-              <Text color="red">{loadState.message}</Text>
-            </Flex>
-          </Card>
+            <Popover open={customRangeOpen} onOpenChange={setCustomRangeOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "h-8 min-w-[220px] justify-start gap-1.5 text-left text-xs font-normal",
+                    customRangeOpen && "border-primary/60 bg-primary/5 text-primary ring-1 ring-primary/20"
+                  )}
+                >
+                  <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{customRangeLabel}</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-auto p-0">
+                <Calendar
+                  mode="range"
+                  initialFocus
+                  defaultMonth={customRangeSelection.from}
+                  selected={customRangeSelection}
+                  onSelect={handleCustomRangeSelect}
+                  numberOfMonths={2}
+                  disabled={{ after: new Date() }}
+                />
+              </PopoverContent>
+            </Popover>
+          </motion.div>
         )}
+      </AnimatePresence>
 
+      <Popover open={indexDialogOpen} onOpenChange={setIndexDialogOpen} modal={false}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              setSelectedCampaignIndexId("all");
+            }}
+          >
+            New index
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="z-[60] w-[min(96vw,560px)] p-0">
+          <CampaignIndexManagerDialog
+            campaigns={campaigns.map((campaign) => ({
+              id: campaign.id,
+              name: campaign.name,
+              status: campaign.status,
+            }))}
+            initialValue={dialogInitialValue}
+            saving={savingIndex}
+            onCancel={() => setIndexDialogOpen(false)}
+            onSave={(draft) => void saveCampaignIndex(draft)}
+          />
+        </PopoverContent>
+      </Popover>
+
+      <DropdownMenu open={alertsPanelOpen} onOpenChange={setAlertsPanelOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-8 text-xs">
+            <BellIcon className="mr-1.5 h-3.5 w-3.5" />
+            Alerts
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[min(96vw,1100px)] p-0">
+          <DCOActionAlertsBox
+            brandId={brandId}
+            metaAccountId={adAccountId ?? undefined}
+            campaignId={selectedCampaignId}
+            onRefresh={() => setAlertsRefreshTick((current) => current + 1)}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="h-8 w-8 text-muted-foreground"
+            aria-label="Chart attribution"
+          >
+            <InfoCircledIcon className="h-4 w-4" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 text-xs text-muted-foreground">
+          Charting library provided by{" "}
+          <a
+            href="https://www.tradingview.com/lightweight-charts/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            TradingView Lightweight Charts
+          </a>
+          .
+        </PopoverContent>
+      </Popover>
+
+      <Button
+        variant="secondary"
+        size="icon-sm"
+        onClick={handleRefresh}
+        disabled={loadState.status === "loading-campaigns"}
+        className="h-8 w-8"
+        aria-label="Refresh campaigns"
+      >
+        <ReloadIcon className={loadState.status === "loading-campaigns" ? "animate-spin" : ""} />
+      </Button>
+    </>
+  );
+
+  return (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card">
+      {loadState.status === "error" ? (
+        <div className="border-b border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {loadState.message}
+        </div>
+      ) : null}
+
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1">
         {adAccountId ? (
-          <>
+          <div className="grid min-h-full gap-1.5 xl:grid-rows-[minmax(0,1fr)_auto]">
             <CampaignAdSetWorkspace
               brandId={brandId}
               accountId={adAccountId}
@@ -541,46 +571,34 @@ export function PaidMediaDashboard({
                 setIndexDialogOpen(true);
               }}
               onDeleteCampaignIndex={(indexId) => void deleteCampaignIndex(indexId)}
+              toolbarSlot={dashboardToolbar}
             />
 
-            {selectedCampaignId ? (
-              <CampaignInsightsPanel
-                brandId={brandId}
-                adAccountId={adAccountId}
-                campaignId={selectedCampaignId}
-                campaignName={campaigns.find((c) => c.id === selectedCampaignId)?.name}
-                campaignObjective={campaigns.find((c) => c.id === selectedCampaignId)?.objective}
-                timeRange={timeRange}
-              />
-            ) : (
-              <AccountInsightsPanel
-                brandId={brandId}
-                adAccountId={adAccountId}
-                timeRange={timeRange}
-              />
-            )}
-          </>
+            <div className="min-h-0">
+              {selectedCampaignId ? (
+                <CampaignInsightsPanel
+                  brandId={brandId}
+                  adAccountId={adAccountId}
+                  campaignId={selectedCampaignId}
+                  campaignName={campaigns.find((c) => c.id === selectedCampaignId)?.name}
+                  campaignObjective={campaigns.find((c) => c.id === selectedCampaignId)?.objective}
+                  timeRange={timeRange}
+                />
+              ) : (
+                <AccountInsightsPanel
+                  brandId={brandId}
+                  adAccountId={adAccountId}
+                  timeRange={timeRange}
+                />
+              )}
+            </div>
+          </div>
         ) : (
-          <Card>
-            <Box className="p-8 text-center text-muted-foreground">
-              Select an ad account from the top-left selector to view campaigns.
-            </Box>
-          </Card>
+          <div className="grid h-full min-h-[18rem] place-items-center rounded-lg border border-dashed border-border/70 bg-background/70 p-6 text-center text-sm text-muted-foreground">
+            Select an ad account to view campaigns.
+          </div>
         )}
-
-        <Text size="1" color="gray" className="pb-1 text-center">
-          Charting library generously provided by{" "}
-          <a
-            href="https://www.tradingview.com/lightweight-charts/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
-          >
-            Trading View
-          </a>
-          .
-        </Text>
-      </Flex>
-    </Box>
+      </div>
+    </section>
   );
 }
