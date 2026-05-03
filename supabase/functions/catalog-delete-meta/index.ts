@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const META_API_VERSION = "v23.0";
 
@@ -93,16 +94,15 @@ serve(async (req: Request) => {
       return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
-      p_ad_account_id: payload.metaAccountId,
+    const accessToken = await resolveMetaAccessToken({
+      brandId: payload.brandId,
+      adAccountId: payload.metaAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
     });
 
-    if (tokenError) {
-      log("Meta token RPC failed", tokenError);
-      return jsonResponse({ error: "Unable to resolve Meta access token" }, 500);
-    }
-
-    if (!accessToken || typeof accessToken !== "string") {
+    if (!accessToken) {
       return jsonResponse({ error: "Meta account not configured or access token missing" }, 404);
     }
 

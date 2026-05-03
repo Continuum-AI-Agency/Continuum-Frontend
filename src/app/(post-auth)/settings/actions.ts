@@ -60,6 +60,35 @@ export async function removeMemberAction(
   await repo.removeMember(brandId, { userId: memberId, email });
 }
 
+export async function changeMemberRoleAction(
+  brandId: string,
+  userId: string,
+  role: Exclude<BrandRole, "owner">,
+): Promise<void> {
+  if (!brandId) throw new Error("brandId is required");
+  if (!userId) throw new Error("userId is required");
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const { error } = await supabase.functions.invoke<{ ok: true } | { error: string }>(
+    "brand_invite",
+    {
+      body: { action: "change_role", brandId, userId, role },
+      headers: session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined,
+    },
+  );
+
+  if (error) {
+    const message = await getFunctionsInvokeErrorMessage(error);
+    throw new Error(message ?? error.message ?? "Unable to change role");
+  }
+}
+
 export async function createMagicLinkAction(
   brandId: string,
   email: string,

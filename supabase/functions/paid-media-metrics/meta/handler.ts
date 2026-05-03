@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { resolveMetaAccessToken } from "../../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -354,12 +355,16 @@ export async function handleMetaMetrics(params: any, req: Request) {
       }
     }
 
-    const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
-      p_ad_account_id: adAccountId,
+    const accessToken = await resolveMetaAccessToken({
+      brandId,
+      adAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
     });
 
-    if (tokenError || !accessToken) {
-      log("No access token found for ad account", { adAccountId, error: tokenError });
+    if (!accessToken) {
+      log("No access token found for ad account", { adAccountId });
       return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

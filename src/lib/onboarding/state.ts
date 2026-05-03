@@ -103,6 +103,7 @@ const brandMemberSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   role: brandRoleSchema,
+  isRecentlyAccepted: z.boolean().optional(),
 });
 
 const brandInviteSchema = z.object({

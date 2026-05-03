@@ -5,6 +5,7 @@ import {
   readMetaEdgeCache,
   writeMetaEdgeCache,
 } from "../_shared/meta-edge-cache.ts";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -228,13 +229,13 @@ serve(async (req: Request) => {
       });
     }
 
-    const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
-      p_ad_account_id: adAccountId,
+    const accessToken = await resolveMetaAccessToken({
+      brandId,
+      adAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
     });
-
-    if (tokenError) {
-      log("Error fetching access token via RPC:", tokenError);
-    }
 
     if (!accessToken) {
       return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {

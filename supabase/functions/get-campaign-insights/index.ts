@@ -7,6 +7,7 @@ import {
 import { computeHeuristicInsights } from "../get-account-insights/compute.ts";
 import { detectAllAnomalies } from "../get-account-insights/anomalies.ts";
 import { generateCampaignInsights } from "./gemini.ts";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -202,7 +203,7 @@ serve(async (req: Request) => {
             if (runtime?.waitUntil) {
               runtime.waitUntil(
                 generateFresh({
-                  supabase, adAccountId, campaignId,
+                  supabase, brandId, supabaseToken, adAccountId, campaignId,
                   campaignName: resolvedName, campaignObjective: resolvedObjective,
                   sinceStr, untilStr, prevSinceStr, prevUntilStr,
                   rangePreset: range?.preset || "last_7d", cacheKey,
@@ -224,7 +225,7 @@ serve(async (req: Request) => {
     log("Cache MISS — generating campaign insights");
 
     const response = await generateFresh({
-      supabase, adAccountId, campaignId,
+      supabase, brandId, supabaseToken, adAccountId, campaignId,
       campaignName: resolvedName, campaignObjective: resolvedObjective,
       sinceStr, untilStr, prevSinceStr, prevUntilStr,
       rangePreset: range?.preset || "last_7d", cacheKey, log,
@@ -244,6 +245,8 @@ serve(async (req: Request) => {
 
 async function generateFresh(args: {
   supabase: ReturnType<typeof createClient>;
+  brandId: string;
+  supabaseToken: string;
   adAccountId: string;
   campaignId: string;
   campaignName: string;
@@ -257,17 +260,20 @@ async function generateFresh(args: {
   log: (msg: string, extra?: unknown) => void;
 }) {
   const {
-    supabase, adAccountId, campaignId, campaignName, campaignObjective,
+    supabase, brandId, supabaseToken, adAccountId, campaignId, campaignName, campaignObjective,
     sinceStr, untilStr, prevSinceStr, prevUntilStr, rangePreset, cacheKey, log,
   } = args;
 
-  const { data: accessToken, error: tokenError } = await supabase.rpc(
-    "get_meta_access_token",
-    { p_ad_account_id: adAccountId }
-  );
+  const accessToken = await resolveMetaAccessToken({
+    brandId,
+    adAccountId,
+    userToken: supabaseToken,
+    actorKind: "user",
+    log,
+  });
 
-  if (tokenError || !accessToken) {
-    log("No access token", { adAccountId, error: tokenError });
+  if (!accessToken) {
+    log("No access token", { adAccountId });
     throw new Error("Meta account not configured or access token missing");
   }
 

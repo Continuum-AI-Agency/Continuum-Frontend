@@ -14,6 +14,7 @@ import type {
   RequestBody,
 } from "./lib/types.ts";
 import { CACHE_TTL_MS } from "./lib/types.ts";
+import { resolveMetaAccessToken as resolveBrandScopedMetaToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,16 +37,17 @@ function createSupabaseAdminClient() {
 
 async function resolveMetaAccessToken(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
-  integrationAccount: IntegrationAccountRow
+  integrationAccount: IntegrationAccountRow,
+  context: { brandId: string; userToken: string },
 ) {
   if (integrationAccount.ad_account_id) {
-    const { data: token } = await supabase.rpc("get_meta_access_token", {
-      p_ad_account_id: integrationAccount.ad_account_id,
+    const token = await resolveBrandScopedMetaToken({
+      brandId: context.brandId,
+      adAccountId: integrationAccount.ad_account_id,
+      userToken: context.userToken,
+      actorKind: "user",
     });
-
-    if (token && typeof token === "string" && token.length > 0) {
-      return token;
-    }
+    if (token && token.length > 0) return token;
   }
 
   const { data: integrationRow, error: integrationError } = await supabase
@@ -357,7 +359,10 @@ serve(async (req) => {
       });
     }
 
-    const token = await resolveMetaAccessToken(supabase, account);
+    const token = await resolveMetaAccessToken(supabase, account, {
+      brandId: body.brandId,
+      userToken: supabaseToken,
+    });
 
     const analytics = await fetchPlatformAnalytics({
       account,

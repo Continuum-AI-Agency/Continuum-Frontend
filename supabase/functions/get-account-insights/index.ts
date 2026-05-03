@@ -10,6 +10,7 @@ import { fetchAdLevelInsights } from "./creative.ts";
 import { computeHeuristicInsights } from "./compute.ts";
 import { generateParallelInsights } from "./gemini.ts";
 import { detectAllAnomalies } from "./anomalies.ts";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -224,6 +225,8 @@ serve(async (req: Request) => {
               runtime.waitUntil(
                 generateFreshInsights({
                   supabase,
+                  brandId,
+                  supabaseToken,
                   adAccountId,
                   sinceStr,
                   untilStr,
@@ -254,6 +257,8 @@ serve(async (req: Request) => {
 
     const response = await generateFreshInsights({
       supabase,
+      brandId,
+      supabaseToken,
       adAccountId,
       sinceStr,
       untilStr,
@@ -287,6 +292,8 @@ serve(async (req: Request) => {
 
 async function generateFreshInsights(args: {
   supabase: ReturnType<typeof createClient>;
+  brandId: string;
+  supabaseToken: string;
   adAccountId: string;
   sinceStr: string;
   untilStr: string;
@@ -298,6 +305,8 @@ async function generateFreshInsights(args: {
 }) {
   const {
     supabase,
+    brandId,
+    supabaseToken,
     adAccountId,
     sinceStr,
     untilStr,
@@ -309,18 +318,19 @@ async function generateFreshInsights(args: {
   } = args;
 
   // Step 0: Fetch access token + read campaign objectives from cache (parallel)
-  const [tokenResult, objectiveMap] = await Promise.all([
-    supabase.rpc("get_meta_access_token", { p_ad_account_id: adAccountId }),
+  const [accessToken, objectiveMap] = await Promise.all([
+    resolveMetaAccessToken({
+      brandId,
+      adAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
+    }),
     readCampaignObjectives(supabase, adAccountId, log),
   ]);
 
-  const { data: accessToken, error: tokenError } = tokenResult;
-
-  if (tokenError || !accessToken) {
-    log("No access token for ad account", {
-      adAccountId,
-      error: tokenError,
-    });
+  if (!accessToken) {
+    log("No access token for ad account", { adAccountId });
     throw new Error("Meta account not configured or access token missing");
   }
 
