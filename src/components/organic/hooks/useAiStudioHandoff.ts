@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { useToast } from "@/components/ui/ToastProvider"
 import {
-  AI_STUDIO_LAST_DRAFT_STORAGE_KEY,
+  brandStorageKeyAiStudioLastDraft,
   buildAiStudioHandoffStorageCandidates,
   buildAiStudioStorageKey,
   buildPendingApplyStorageKey,
@@ -18,25 +18,32 @@ import {
   type PlannerAiStudioRevision,
 } from "@/lib/organic/ai-studio-bridge"
 import { getLocalStorageJSON, setLocalStorageJSON, removeLocalStorage } from "@/lib/storage"
-import { STORAGE_KEY_AI_STUDIO_KEY_INDEX } from "@/lib/storage-keys"
+import {
+  brandStorageKeyAiStudioKeyIndex,
+  migrateLegacyAiStudioKeyIndex,
+} from "@/lib/storage-keys"
 import type { OrganicCalendarDraft } from "../primitives/types"
 
-function readDraftKeyIndex(): string[] {
-  return getLocalStorageJSON<string[]>(STORAGE_KEY_AI_STUDIO_KEY_INDEX, [])
+function readDraftKeyIndex(brandId: string): string[] {
+  if (!brandId) return []
+  migrateLegacyAiStudioKeyIndex(brandId)
+  return getLocalStorageJSON<string[]>(brandStorageKeyAiStudioKeyIndex(brandId), [])
 }
 
-function registerDraftKey(storageKey: string): void {
-  const index = readDraftKeyIndex()
+function registerDraftKey(brandId: string, storageKey: string): void {
+  if (!brandId) return
+  const index = readDraftKeyIndex(brandId)
   if (!index.includes(storageKey)) {
-    setLocalStorageJSON(STORAGE_KEY_AI_STUDIO_KEY_INDEX, [...index, storageKey])
+    setLocalStorageJSON(brandStorageKeyAiStudioKeyIndex(brandId), [...index, storageKey])
   }
 }
 
-function pruneStaleAiStudioContextEntries(activeDraftId: string): void {
+function pruneStaleAiStudioContextEntries(brandId: string, activeDraftId: string): void {
+  if (!brandId) return
   const activeKey = buildAiStudioStorageKey(activeDraftId)
-  const staleKeys = readDraftKeyIndex().filter((k) => k !== activeKey)
+  const staleKeys = readDraftKeyIndex(brandId).filter((k) => k !== activeKey)
   staleKeys.forEach((k) => removeLocalStorage(k))
-  setLocalStorageJSON(STORAGE_KEY_AI_STUDIO_KEY_INDEX, [activeKey])
+  setLocalStorageJSON(brandStorageKeyAiStudioKeyIndex(brandId), [activeKey])
 }
 
 type UseAiStudioHandoffOptions = {
@@ -129,6 +136,7 @@ export function useAiStudioHandoff({
   const persistAiStudioContext = React.useCallback(
     (payload: PlannerAiStudioHandoff): boolean => {
       if (typeof window === "undefined") return false
+      if (!brandProfileId) return false
       const storageKey = buildAiStudioStorageKey(payload.draftId)
       const candidates = buildAiStudioHandoffStorageCandidates(payload)
       let didPruneStaleEntries = false
@@ -137,19 +145,19 @@ export function useAiStudioHandoff({
         setLocalStorageJSON(storageKey, candidate)
         const written = getLocalStorageJSON<unknown>(storageKey, null)
         if (written !== null) {
-          registerDraftKey(storageKey)
-          setLocalStorageJSON(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, payload.draftId)
+          registerDraftKey(brandProfileId, storageKey)
+          setLocalStorageJSON(brandStorageKeyAiStudioLastDraft(brandProfileId), payload.draftId)
           return true
         }
         if (!didPruneStaleEntries) {
-          pruneStaleAiStudioContextEntries(payload.draftId)
+          pruneStaleAiStudioContextEntries(brandProfileId, payload.draftId)
           didPruneStaleEntries = true
         }
       }
 
       return false
     },
-    []
+    [brandProfileId]
   )
 
   // Debounced persist of handoff context when selected draft changes

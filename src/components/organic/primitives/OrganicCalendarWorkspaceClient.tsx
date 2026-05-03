@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/resizable"
 import { TrendWorkbench } from "./TrendWorkbench"
 import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
-import { AI_STUDIO_LAST_DRAFT_STORAGE_KEY } from "@/lib/organic/ai-studio-bridge"
+import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge"
 import { getLocalStorageJSON } from "@/lib/storage"
 import { CalendarToolbar } from "./CalendarToolbar"
 import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
@@ -353,13 +353,17 @@ export function OrganicCalendarWorkspaceClient({
     }
 
     // Resolve the active single-selection draft
+    const lastDraftKey = brandProfileId
+      ? brandStorageKeyAiStudioLastDraft(brandProfileId)
+      : null
+
     if (selectedId && !allDraftIds.has(selectedId)) {
       // Current selection is stale -- attempt to restore a preferred draft
       // instead of nulling out then re-selecting on the next render cycle.
       if (typeof window !== "undefined") {
         const preferredDraftId =
           initialSelectedDraftId ??
-          getLocalStorageJSON<string | null>(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, null)
+          (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null)
         if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
           setSelectedDraftId(preferredDraftId)
           return
@@ -373,13 +377,14 @@ export function OrganicCalendarWorkspaceClient({
     if (!selectedId && typeof window !== "undefined") {
       const preferredDraftId =
         initialSelectedDraftId ??
-        getLocalStorageJSON<string | null>(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, null)
+        (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null)
       if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
         setSelectedDraftId(preferredDraftId)
       }
     }
   }, [
     allDraftIds,
+    brandProfileId,
     initialSelectedDraftId,
     selectedId,
     selectedIds,

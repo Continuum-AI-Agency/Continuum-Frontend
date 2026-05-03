@@ -29,15 +29,15 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider"
-import { useRouter } from "next/navigation"
+import { useSwitchBrand } from "@/hooks/useSwitchBrand"
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions"
 import { getBrandMenuItemLabel } from "@/lib/brands/brand-switcher-utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function BrandSwitcher() {
   const { isMobile } = useSidebar()
-  const { activeBrandId, brandSummaries, selectBrand, isSwitching } = useActiveBrandContext()
-  const router = useRouter()
+  const { activeBrandId, brandSummaries, isSwitching } = useActiveBrandContext()
+  const switchBrand = useSwitchBrand()
   const [isCreating, startCreate] = React.useTransition()
   const [menuOpen, setMenuOpen] = React.useState(false)
 
@@ -57,14 +57,7 @@ export function BrandSwitcher() {
 
   const handleBrandSelect = (brandId: string) => {
     setMenuOpen(false);
-
-    const targetBrand = brandSummaries.find(b => b.id === brandId);
-
-    void selectBrand(brandId).then(() => {
-      if (targetBrand?.completed && typeof window !== 'undefined' && window.location.pathname.startsWith('/onboarding')) {
-        router.push('/dashboard');
-      }
-    });
+    void switchBrand(brandId);
   };
 
   const TeamLogo = activeTeam.logo;

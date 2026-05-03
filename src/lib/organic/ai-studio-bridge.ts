@@ -7,6 +7,10 @@ export const AI_STUDIO_LAST_DRAFT_STORAGE_KEY = `${STORAGE_PREFIX}:last-draft-id
 export const AI_STUDIO_PENDING_APPLY_PREFIX = `${STORAGE_PREFIX}:pending-apply`;
 export const AI_STUDIO_SESSION_HISTORY_PREFIX = `${STORAGE_PREFIX}:session-history`;
 
+export function brandStorageKeyAiStudioLastDraft(brandId: string): string {
+  return `${AI_STUDIO_LAST_DRAFT_STORAGE_KEY}:b:${brandId}`;
+}
+
 export type OrganicPostType = "post" | "reel" | "carousel";
 export type OrganicPlatformForStudio = "instagram" | "linkedin";
 export type OrganicWorkflowConcept =

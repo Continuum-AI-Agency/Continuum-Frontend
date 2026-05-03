@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/components/theme-provider";
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import { useSwitchBrand } from "@/hooks/useSwitchBrand";
 import {
   getActiveBrandLabel,
   getBrandMenuItemLabel,
@@ -30,7 +31,8 @@ type BrandSwitcherMenuProps = {
 export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const router = useRouter();
   const { logout, isPending } = useAuth();
-  const { activeBrandId, brandSummaries, isSwitching, selectBrand, user } = useActiveBrandContext();
+  const { activeBrandId, brandSummaries, isSwitching, user } = useActiveBrandContext();
+  const switchBrand = useSwitchBrand();
   const { appearance, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [isCreating, startCreate] = React.useTransition();
@@ -112,9 +114,7 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                   if (brand.id === activeBrandId) {
                     return;
                   }
-
-                  await selectBrand(brand.id);
-                  router.refresh();
+                  await switchBrand(brand.id);
                 }}
                 className="flex items-center justify-between gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
               >
