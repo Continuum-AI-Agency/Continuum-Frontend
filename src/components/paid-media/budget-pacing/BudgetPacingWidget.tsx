@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { ReloadIcon } from "@radix-ui/react-icons";
 import { Callout, Flex, IconButton, Text } from "@radix-ui/themes";
+import { useShallow } from "zustand/react/shallow";
 import { Skeleton } from "@/components/ui/skeleton";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
 import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
 import { BudgetPacingChart, type BudgetPacingTrendMode, type RangeOption } from "./BudgetPacingChart";
 import { BudgetPacingSummaryStrip, type BudgetPacingSummaryCardKey } from "./BudgetPacingSummaryStrip";
 import { BudgetPacingTable } from "./BudgetPacingTable";
+import {
+  makeBudgetPacingKey,
+  usePaidMediaPerformanceStore,
+} from "@/lib/paid-media/performance-store";
 
 type Props = {
   brandId: string;
@@ -51,37 +55,37 @@ function BudgetPacingLoadingSkeleton() {
 }
 
 export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric }: Props) {
-  const [state, setState] = useState<LoadState>({ status: "idle" });
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const [selectedRange, setSelectedRange] = useState<RangeOption>("14d");
   const summaryCard = mapMetricToSummaryCard(selectedMetric);
   const trendMode = mapMetricToTrendMode(selectedMetric);
+  const cacheKey = useMemo(() => {
+    if (!selectedAccountId) return null;
+    return makeBudgetPacingKey({ brandId, adAccountId: selectedAccountId });
+  }, [brandId, selectedAccountId]);
+
+  const { entry, loadBudgetPacing } = usePaidMediaPerformanceStore(
+    useShallow((store) => ({
+      entry: cacheKey ? store.budgetPacing[cacheKey] : undefined,
+      loadBudgetPacing: store.loadBudgetPacing,
+    }))
+  );
+
+  const state: LoadState = useMemo(() => {
+    if (!selectedAccountId) return { status: "idle" };
+    if (!entry) return { status: "idle" };
+    if (entry.status === "loading") return { status: "loading" };
+    if (entry.status === "error") return { status: "error", message: entry.error ?? "Failed to load budget pacing" };
+    if (entry.status === "success" && entry.data) return { status: "success", data: entry.data };
+    return { status: "idle" };
+  }, [entry, selectedAccountId]);
 
   const fetchPacing = useCallback(
-    async (accountId: string) => {
-      setState({ status: "loading" });
+    async (accountId: string, force = false) => {
       setFocusKey(null);
-      try {
-        const supabase = createSupabaseBrowserClient();
-        const { data: { session } } = await supabase.auth.getSession();
-
-        const res = await fetch("/api/paid-media/budget-pacing", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-          body: JSON.stringify({ brandId, adAccountId: accountId }),
-        });
-
-        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-        const json = await res.json();
-        setState({ status: "success", data: json });
-      } catch (err) {
-        setState({ status: "error", message: (err as Error).message });
-      }
+      await loadBudgetPacing({ brandId, adAccountId: accountId }, { force }).catch(() => undefined);
     },
-    [brandId]
+    [brandId, loadBudgetPacing]
   );
 
   useEffect(() => {
@@ -100,7 +104,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
           variant="ghost"
           size="1"
           disabled={state.status === "loading" || !selectedAccountId}
-          onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId); }}
+          onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId, true); }}
         >
           <ReloadIcon className={state.status === "loading" ? "animate-spin" : undefined} />
         </IconButton>

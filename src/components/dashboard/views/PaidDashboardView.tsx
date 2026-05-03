@@ -4,6 +4,11 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
 
 const PaidMediaReportingWidget = dynamic(
@@ -31,27 +36,35 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   const [selectedMetric, setSelectedMetric] = useState<PaidPerformanceMetricKey>("spend");
 
   return (
-    <div className="grid min-h-[680px] gap-3 xl:h-[calc(100dvh-8.5rem)] xl:grid-cols-[minmax(0,1fr)_360px] xl:grid-rows-[minmax(0,1fr)_minmax(220px,0.46fr)]">
-      <section className="min-h-[420px] xl:min-h-0">
-        <PaidMediaReportingWidget
-          brandId={brandId}
-          onAccountChange={setSelectedAccountId}
-          selectedMetric={selectedMetric}
-          onSelectedMetricChange={setSelectedMetric}
-        />
-      </section>
-
-      <aside className="min-h-[360px] xl:row-span-2 xl:min-h-0">
-        <DCOActionsWidget brandId={brandId} variant="rail" className="h-full" />
-      </aside>
-
-      <section className="min-h-[280px] overflow-hidden rounded-xl border bg-card">
-        <BudgetPacingWidget
-          brandId={brandId}
-          selectedAccountId={selectedAccountId}
-          selectedMetric={selectedMetric}
-        />
-      </section>
+    <div className="h-full min-h-[680px]">
+      <ResizablePanelGroup orientation="horizontal">
+        <ResizablePanel defaultSize={72} minSize={50}>
+          <ResizablePanelGroup orientation="vertical">
+            <ResizablePanel defaultSize={65} minSize={35} className="min-h-[420px] xl:min-h-0">
+              <PaidMediaReportingWidget
+                brandId={brandId}
+                onAccountChange={setSelectedAccountId}
+                selectedMetric={selectedMetric}
+                onSelectedMetricChange={setSelectedMetric}
+              />
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel defaultSize={35} minSize={20} className="min-h-[280px] xl:min-h-0">
+              <div className="h-full overflow-hidden rounded-xl border bg-card">
+                <BudgetPacingWidget
+                  brandId={brandId}
+                  selectedAccountId={selectedAccountId}
+                  selectedMetric={selectedMetric}
+                />
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={28} minSize={15} maxSize={45} className="min-h-[360px] xl:min-h-0">
+          <DCOActionsWidget brandId={brandId} variant="rail" className="h-full" />
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

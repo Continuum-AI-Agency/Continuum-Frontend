@@ -74,6 +74,7 @@ export function HomeBaseDashboard({
         <div className="min-h-0 overflow-y-auto p-2 sm:p-3">
           <motion.div
             data-dashboard-panel="paid"
+            className="h-full"
             animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 1 : 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ display: isPaidView ? "block" : "none" }}
@@ -83,6 +84,7 @@ export function HomeBaseDashboard({
 
           <motion.div
             data-dashboard-panel="organic"
+            className="h-full"
             animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 0.98 : 1 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ display: isPaidView ? "none" : "block" }}

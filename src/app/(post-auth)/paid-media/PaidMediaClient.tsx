@@ -13,11 +13,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { PanelRightOpen, PanelRightClose } from "lucide-react";
 import { prefetchPaidMediaDashboard } from "@/lib/prefetch/paid-media-cache";
 
-const PAID_MEDIA_TABS = ["dashboard", "budget", "jaina"] as const;
+const PAID_MEDIA_TABS = ["dashboard", "performance", "jaina"] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
 
-function isPaidMediaTab(value: string | null): value is PaidMediaTab {
-  return PAID_MEDIA_TABS.some((tab) => tab === value);
+function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
+  if (value === "budget") return "performance";
+  return PAID_MEDIA_TABS.some((tab) => tab === value) ? (value as PaidMediaTab) : null;
 }
 
 const CampaignCanvas = dynamic(
@@ -74,10 +75,10 @@ const ReportJobsBell = dynamic(
   { ssr: false }
 );
 
-const BudgetPacingWidget = dynamic(
+const CampaignPerformanceTab = dynamic(
   () =>
-    import("@/components/paid-media/budget-pacing/BudgetPacingWidget").then(
-      (mod) => mod.BudgetPacingWidget
+    import("@/components/paid-media/performance/CampaignPerformanceTab").then(
+      (mod) => mod.CampaignPerformanceTab
     ),
   { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> }
 );
@@ -98,6 +99,7 @@ export default function PaidMediaClientPage({
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get("tab");
+  const normalizedTabParam = normalizePaidMediaTab(tabParam);
   const { user } = useSession();
   const [, startTabTransition] = React.useTransition();
   
@@ -106,7 +108,7 @@ export default function PaidMediaClientPage({
   );
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
-    isPaidMediaTab(tabParam) ? tabParam : "dashboard"
+    normalizedTabParam ?? "dashboard"
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
@@ -125,16 +127,17 @@ export default function PaidMediaClientPage({
   }, [brandProfileId, initialAdAccountId]);
 
   React.useEffect(() => {
-    if (isPaidMediaTab(tabParam)) {
-      setActiveTab((current) => (current === tabParam ? current : tabParam));
+    if (normalizedTabParam) {
+      setActiveTab((current) => (current === normalizedTabParam ? current : normalizedTabParam));
     }
-  }, [tabParam]);
+  }, [normalizedTabParam]);
 
   const handleTabChange = (value: string) => {
-    if (!isPaidMediaTab(value)) return;
-    setActiveTab(value);
+    const normalizedTab = normalizePaidMediaTab(value);
+    if (!normalizedTab) return;
+    setActiveTab(normalizedTab);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", value);
+    params.set("tab", normalizedTab);
     startTabTransition(() => {
       router.replace(`?${params.toString()}`, { scroll: false });
     });
@@ -282,12 +285,12 @@ export default function PaidMediaClientPage({
                 Dashboard
               </TabsTrigger>
               <TabsTrigger
-                value="budget"
+                value="performance"
                 className="px-3 text-xs"
-                onMouseEnter={() => { void import("@/components/paid-media/budget-pacing/BudgetPacingWidget"); }}
-                onFocus={() => { void import("@/components/paid-media/budget-pacing/BudgetPacingWidget"); }}
+                onMouseEnter={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
+                onFocus={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
               >
-                Budget
+                Performance
               </TabsTrigger>
               <TabsTrigger
                 value="jaina"
@@ -308,10 +311,8 @@ export default function PaidMediaClientPage({
           />
         </TabsContent>
 
-        <TabsContent value="budget" className="box-border min-h-0 overflow-hidden">
-          <div className="h-full min-h-0 overflow-hidden rounded-lg border bg-card shadow-sm">
-            <BudgetPacingWidget brandId={brandProfileId} selectedAccountId={selectedAdAccount} />
-          </div>
+        <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
+          <CampaignPerformanceTab brandId={brandProfileId} adAccountId={selectedAdAccount} />
         </TabsContent>
 
         <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">

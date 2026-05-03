@@ -20,14 +20,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
+import { usePaidMediaPerformanceStore } from "@/lib/paid-media/performance-store";
+import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
 import { AccountInsightsPanel } from "./AccountInsightsPanel";
 import { CampaignInsightsPanel } from "./CampaignInsightsPanel";
 import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
 import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
 import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
-import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 import {
   buildDefaultCustomRange,
   TIME_RANGE_OPTIONS,
@@ -36,25 +36,7 @@ import {
   type TimePreset,
 } from "./timeRange";
 
-type Campaign = {
-  id: string;
-  name: string;
-  status: string;
-  objective?: string;
-  dailyBudget?: string;
-  lifetimeBudget?: string;
-  metrics?: {
-    spend: number;
-    roas: number;
-    ctr: number;
-    cpc: number;
-    cpa: number;
-    impressions: number;
-    clicks: number;
-  };
-  comparison?: PaidMetricsComparison;
-  trends?: PaidMetricsTrendPoint[];
-};
+type Campaign = CampaignPerformanceRow;
 
 type Platform = "meta" | "google-ads" | "dv360";
 type TimelineResolution = "daily" | "hourly";
@@ -76,33 +58,11 @@ type IndexSaveDraft = {
   campaignIds: string[];
 };
 
-async function mapWithConcurrency<T, U>(
-  items: T[],
-  limit: number,
-  mapper: (item: T) => Promise<U>
-): Promise<U[]> {
-  if (items.length === 0) return [];
-
-  const safeLimit = Math.max(1, Math.min(limit, items.length));
-  const results = new Array<U>(items.length);
-  let cursor = 0;
-
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await mapper(items[index]);
-    }
-  };
-
-  await Promise.all(Array.from({ length: safeLimit }, () => worker()));
-  return results;
-}
-
 export function PaidMediaDashboard({
   brandId,
   adAccountId,
 }: PaidMediaDashboardProps) {
+  const loadCampaignPerformance = usePaidMediaPerformanceStore((state) => state.loadCampaignPerformance);
   const [platform, setPlatform] = React.useState<Platform>("meta");
   const defaultCustomRange = React.useMemo(() => buildDefaultCustomRange(), []);
   const [timeRangePreset, setTimeRangePreset] = React.useState<TimePreset>("last_7d");
@@ -167,57 +127,14 @@ export function PaidMediaDashboard({
     setLoadState({ status: "loading-campaigns" });
 
     try {
-      const supabase = createSupabaseBrowserClient();
-
-      const { data, error: fetchError } = await supabase.functions.invoke(
-        `fetch-meta-campaigns?brandId=${brandId}&adAccountId=${adAccountId}`,
+      const campaignsWithMetrics = await loadCampaignPerformance(
         {
-          method: "POST",
-          body: {
-            brandId,
-            adAccountId,
-          },
-        }
-      );
-
-      if (fetchError) {
-        throw new Error(`Failed to fetch campaigns: ${fetchError.message}`);
-      }
-
-      const rawCampaigns = data?.campaigns ?? [];
-
-      const campaignsWithMetrics = await mapWithConcurrency(
-        rawCampaigns,
-        6,
-        async (campaign: Campaign) => {
-          try {
-            const metricsResponse = await fetch("/api/paid-metrics", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                platform,
-                brandId,
-                accountId: adAccountId,
-                campaignId: campaign.id,
-                range: metricsRange,
-              }),
-            });
-
-            if (metricsResponse.ok) {
-              const metricsData = await metricsResponse.json();
-              return {
-                ...campaign,
-                metrics: metricsData.metrics,
-                comparison: metricsData.comparison,
-                trends: metricsData.trends,
-              };
-            }
-          } catch (err) {
-            console.error(`Failed to load metrics for campaign ${campaign.id}`, err);
-          }
-
-          return campaign;
-        }
+          brandId,
+          adAccountId,
+          platform,
+          range: metricsRange,
+        },
+        { force: false }
       );
 
       if (requestId !== loadCampaignsRequestIdRef.current) {
@@ -235,7 +152,7 @@ export function PaidMediaDashboard({
         message: error instanceof Error ? error.message : "Failed to load campaigns",
       });
     }
-  }, [adAccountId, brandId, metricsRange, platform]);
+  }, [adAccountId, brandId, loadCampaignPerformance, metricsRange, platform]);
 
   const loadCampaignIndexes = React.useCallback(async () => {
     if (!adAccountId) {
