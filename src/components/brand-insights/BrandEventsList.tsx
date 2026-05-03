@@ -8,9 +8,10 @@ import { brandInsightsEventSchema, type BrandInsightsEvent } from "@/lib/schemas
 type BrandEventsListProps = {
   events: BrandInsightsEvent[];
   platforms?: string[];
+  density?: "default" | "compact";
 };
 
-export function BrandEventsList({ events, platforms = [] }: BrandEventsListProps) {
+export function BrandEventsList({ events, platforms = [], density = "default" }: BrandEventsListProps) {
   const normalizedEvents = useMemo(() => {
     const parsed = brandInsightsEventSchema.array().safeParse(events);
     return parsed.success ? parsed.data : [];
@@ -42,6 +43,7 @@ export function BrandEventsList({ events, platforms = [] }: BrandEventsListProps
       secondaryHeaderLabel="Date"
       emptyTitle="No dated events yet"
       emptyDescription="No event opportunities were found in this generation window."
+      density={density}
       scrollWithinSection
     />
   );

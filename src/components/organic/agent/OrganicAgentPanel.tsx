@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { Message } from "@/components/ai-elements/message";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
@@ -9,13 +9,13 @@ import { useCalendarStore } from "@/lib/organic/store";
 import { useOrganicAgentStream } from "@/hooks/useOrganicAgentStream";
 import { initialPanelState, panelReducer } from "./useOrganicAgentReducer";
 import { mapPlacementToDraft } from "./mapPlacementToDraft";
+import type { AgentJobState } from "./types";
 import { JobGrid } from "./JobGrid";
 import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
 import { TrendChartCard } from "./TrendChartCard";
-import type { AgentJobState } from "./types";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useOrganicSessions } from "./useOrganicSessions";
-import { OrganicSessionSidebar, OrganicSessionTrigger } from "./OrganicSessionSidebar";
+import { OrganicSessionSidebar } from "./OrganicSessionSidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type OrganicAgentPanelProps = {
@@ -39,8 +39,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
     selectSession,
     refreshSessions,
   } = useOrganicSessions(brandId);
-
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Load messages when activeSessionId is set by the hook on initial fetch
   useEffect(() => {
@@ -98,7 +96,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
   const handleSelectSession = useCallback(
     async (sessionId: string) => {
       if (isStreaming) return;
-      setSheetOpen(false);
       dispatch({ type: "LOAD_MESSAGES_START" });
       const msgs = await selectSession(sessionId);
       dispatch({
@@ -114,7 +111,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
     if (isStreaming) return;
     const id = startNewSession();
     dispatch({ type: "SESSION_SWITCH", sessionId: id, messages: [] });
-    setSheetOpen(false);
   }, [isStreaming, startNewSession]);
 
   const handleSubmit = useCallback(
@@ -175,15 +171,17 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
   const inputDisabled = isStreaming || (!state.sessionId && !activeSessionId);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-3">
-      <div className="flex shrink-0 items-center gap-2 pb-1">
-        <OrganicSessionTrigger
-          sessionCount={sessions.length}
-          isLoading={isLoadingSessions}
-          onClick={() => setSheetOpen(true)}
-        />
-      </div>
+    <div className="flex h-full min-h-0">
+      <OrganicSessionSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        isLoading={isLoadingSessions}
+        isInteractionDisabled={isStreaming}
+        onNewSession={handleNewSession}
+        onSelectSession={handleSelectSession}
+      />
 
+      <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
       {jobs.length > 0 && (
         <div className="max-h-52 shrink-0 overflow-y-auto">
           <JobGrid jobs={jobs} onRetryAction={handleRetry} onCancelAction={handleCancel} />
@@ -244,17 +242,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
           placeholder="Plan me 3 posts this week on the beauty trend…"
         />
       </div>
-
-      <OrganicSessionSidebar
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        isLoading={isLoadingSessions}
-        isStreaming={isStreaming}
-        onNewSession={handleNewSession}
-        onSelectSession={handleSelectSession}
-      />
+      </div>
     </div>
   );
 }

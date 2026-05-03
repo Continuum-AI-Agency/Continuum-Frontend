@@ -33,12 +33,16 @@ export function OrganicDashboardView({
   insightsStatus,
 }: OrganicDashboardViewProps) {
   return (
-    <div className="grid min-h-[680px] gap-3 xl:h-[calc(100dvh-8.5rem)] xl:grid-cols-[minmax(0,1fr)_380px]">
-      <section className="min-h-[520px] xl:min-h-0">
-        <InstagramOrganicReportingWidget brandId={brandId} accounts={instagramAccounts} />
+    <div className="flex h-full min-h-[680px] min-w-0 flex-col gap-2 overflow-y-auto pr-1">
+      <section className="shrink-0">
+        <InstagramOrganicReportingWidget
+          brandId={brandId}
+          accounts={instagramAccounts}
+          className="min-h-[390px]"
+        />
       </section>
 
-      <aside className="min-h-[520px] xl:min-h-0">
+      <section className="min-h-[360px] flex-1">
         <BrandTrendsPanel
           trends={trendsAndEvents.trends}
           events={trendsAndEvents.events}
@@ -50,7 +54,7 @@ export function OrganicDashboardView({
           statusSlot={<BrandInsightsGenerateButton brandId={brandId} />}
           className="h-full"
         />
-      </aside>
+      </section>
     </div>
   );
 }

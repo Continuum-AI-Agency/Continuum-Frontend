@@ -2,7 +2,6 @@ import { Calendar, Clock3, Globe2, LineChart } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import type { BrandInsightsTrend, BrandInsightsEvent, BrandInsightsQuestionsByNiche } from "@/lib/schemas/brandInsights";
 import { BrandTrendsTabs } from "./BrandTrendsTabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,12 +37,12 @@ function formatDate(value?: string) {
 
 function BrandTrendsPanelSkeleton() {
   return (
-    <Card className="flex flex-col h-full min-h-0 border shadow-none">
-      <CardHeader className="gap-2 border-b pb-3">
+    <Card className="flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none">
+      <CardHeader className="gap-1 border-b px-2 py-1.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
             <Skeleton className="h-3 w-28" />
-            <Skeleton className="h-5 w-52" />
+            <Skeleton className="h-4 w-44" />
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Skeleton className="h-6 w-20 rounded-full" />
@@ -51,12 +50,8 @@ function BrandTrendsPanelSkeleton() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 p-3 space-y-3">
-        <div className="flex justify-end gap-2">
-          <Skeleton className="h-8 w-28 rounded-md" />
-          <Skeleton className="h-8 w-36 rounded-md" />
-        </div>
-        <Skeleton className="h-9 w-full rounded-lg" />
+      <CardContent className="min-h-0 flex-1 space-y-1.5 p-2">
+        <Skeleton className="h-8 w-full rounded-lg" />
         <div className="flex gap-2">
           <Skeleton className="h-9 flex-1 rounded-md" />
           <Skeleton className="h-9 w-20 rounded-md" />
@@ -102,49 +97,44 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <Card className={cn("flex flex-col h-full min-h-0 border shadow-none", className)}>
-      <CardHeader className="gap-2 border-b pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1.5">
-            <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
-              <LineChart className="h-3.5 w-3.5" />
+    <Card className={cn("flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none", className)}>
+      <CardHeader className="gap-0 border-b px-2 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px] font-semibold tracking-wide uppercase">
+              <LineChart className="h-3 w-3" />
               Brand Insights
             </p>
-            <CardTitle className="text-xl tracking-tight">Current trend signals</CardTitle>
+            <CardTitle className="truncate text-sm tracking-tight">Current trend signals</CardTitle>
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
             {actionSlot}
             {country ? (
-              <Badge variant="outline">
-                <Globe2 className="mr-1 h-3.5 w-3.5" />
+              <Badge variant="outline" className="h-6 text-[11px]">
+                <Globe2 className="mr-1 h-3 w-3" />
                 {country}
               </Badge>
             ) : null}
             {weekLabel ? (
-              <Badge variant="outline">
-                <Calendar className="mr-1 h-3.5 w-3.5" />
+              <Badge variant="outline" className="h-6 text-[11px]">
+                <Calendar className="mr-1 h-3 w-3" />
                 {weekLabel}
               </Badge>
             ) : null}
             {generatedLabel ? (
-              <Badge variant="outline">
-                <Clock3 className="mr-1 h-3.5 w-3.5" />
+              <Badge variant="outline" className="h-6 text-[11px]">
+                <Clock3 className="mr-1 h-3 w-3" />
                 {generatedLabel}
               </Badge>
             ) : null}
-            {status ? <Badge variant="secondary">{status}</Badge> : null}
+            {status ? <Badge variant="secondary" className="h-6 text-[11px]">{status}</Badge> : null}
+            {statusSlot}
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col p-3 gap-3">
-        {statusSlot ? (
-          <>
-            {statusSlot}
-            <Separator />
-          </>
-        ) : null}
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-2">
         <div className="min-h-0 flex-1">
           <BrandTrendsTabs
             trends={trends}

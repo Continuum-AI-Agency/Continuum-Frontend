@@ -1,115 +1,24 @@
 "use client"
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { OrganicSession } from "@/lib/organic/agent-sessions"
-import { HistoryIcon, PlusIcon } from "lucide-react"
-
-type OrganicSessionTriggerProps = {
-  sessionCount: number
-  isLoading: boolean
-  onClick: () => void
-}
-
-export function OrganicSessionTrigger({ sessionCount, isLoading, onClick }: OrganicSessionTriggerProps) {
-  return (
-    <Button type="button" size="sm" variant="ghost" onClick={onClick} disabled={isLoading} className="gap-1.5">
-      <HistoryIcon className="size-3.5" />
-      Sessions
-      {sessionCount > 1 && (
-        <Badge variant="secondary" className="px-1.5 py-0 text-xs h-auto">
-          {sessionCount}
-        </Badge>
-      )}
-    </Button>
-  )
-}
+import { PlusIcon } from "lucide-react"
 
 type OrganicSessionSidebarProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
   sessions: OrganicSession[]
   activeSessionId: string | null
   isLoading: boolean
-  isStreaming: boolean
+  isInteractionDisabled: boolean
   onNewSession: () => void
   onSelectSession: (sessionId: string) => void
 }
 
-export function OrganicSessionSidebar({
-  open,
-  onOpenChange,
-  sessions,
-  activeSessionId,
-  isLoading,
-  isStreaming,
-  onNewSession,
-  onSelectSession,
-}: OrganicSessionSidebarProps) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="w-72 p-0 flex flex-col">
-        <SheetHeader className="flex-row items-center justify-between px-4 py-3 border-b shrink-0">
-          <SheetTitle className="text-sm font-medium">Conversations</SheetTitle>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onNewSession}
-            disabled={isStreaming}
-            className="gap-1.5 h-7 text-xs"
-          >
-            <PlusIcon className="size-3.5" />
-            New
-          </Button>
-        </SheetHeader>
-
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-lg px-3 py-2.5 space-y-1.5">
-                  <Skeleton className="h-3.5 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </div>
-              ))
-            ) : sessions.length === 0 ? (
-              <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                No conversations yet
-              </p>
-            ) : (
-              sessions.map((session) => (
-                <SessionItem
-                  key={session.sessionId}
-                  session={session}
-                  isActive={session.sessionId === activeSessionId}
-                  isDisabled={isStreaming}
-                  onClick={() => onSelectSession(session.sessionId)}
-                />
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
-  )
-}
-
-type SessionItemProps = {
-  session: OrganicSession
-  isActive: boolean
-  isDisabled: boolean
-  onClick: () => void
-}
-
 function formatSessionTime(value: string | null): string {
-  if (!value) return ""
+  if (!value) return "No activity"
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
+  if (Number.isNaN(date.getTime())) return "No activity"
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
@@ -118,31 +27,81 @@ function formatSessionTime(value: string | null): string {
   }).format(date)
 }
 
-function SessionItem({ session, isActive, isDisabled, onClick }: SessionItemProps) {
-  const preview = session.lastMessagePreview ?? session.title ?? "New conversation"
-  const time = formatSessionTime(session.lastMessageAt ?? session.createdAt)
+function getSessionTitle(session: OrganicSession): string {
+  if (session.title?.trim()) return session.title
+  if (session.lastMessagePreview) return session.lastMessagePreview
+  return "New conversation"
+}
 
+export function OrganicSessionSidebar({
+  sessions,
+  activeSessionId,
+  isLoading,
+  isInteractionDisabled,
+  onNewSession,
+  onSelectSession,
+}: OrganicSessionSidebarProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={isDisabled}
-      className={cn(
-        "w-full rounded-lg py-2.5 text-left transition-colors",
-        isActive
-          ? "bg-primary/10 border-l-2 border-primary pl-[10px] pr-3"
-          : "pl-3 pr-3 hover:bg-muted/50",
-        isDisabled && "opacity-50 pointer-events-none"
-      )}
-    >
-      <p className="line-clamp-2 text-sm leading-snug text-foreground">
-        {preview}
-      </p>
-      {time && (
-        <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-          {time}
-        </p>
-      )}
-    </button>
+    <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-72 md:border-b-0 md:border-r">
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+        <p className="text-sm font-medium tracking-tight">Conversations</p>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          onClick={onNewSession}
+          disabled={isInteractionDisabled}
+          className="h-6 gap-1 px-2 text-xs"
+        >
+          <PlusIcon className="size-3" />
+          New
+        </Button>
+      </div>
+
+      <ScrollArea className="max-h-44 md:max-h-none md:flex-1">
+        <div className="flex gap-2 p-2 md:flex-col">
+          {isLoading && sessions.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-muted-foreground">Loading conversations…</p>
+          ) : null}
+
+          {!isLoading && sessions.length === 0 ? (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              Start a chat to create your first conversation.
+            </p>
+          ) : null}
+
+          {sessions.map((session) => {
+            const isActive = session.sessionId === activeSessionId
+            return (
+              <button
+                key={session.sessionId}
+                type="button"
+                onClick={() => onSelectSession(session.sessionId)}
+                disabled={isInteractionDisabled || isActive}
+                className={cn(
+                  "flex min-w-[220px] flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors md:min-w-0",
+                  isActive
+                    ? "border-primary/70 bg-primary/10"
+                    : "border-border/60 bg-background/40 hover:border-border hover:bg-background/70",
+                  isInteractionDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                )}
+              >
+                <span className="line-clamp-2 w-full text-xs font-medium text-primary">
+                  {getSessionTitle(session)}
+                </span>
+                <div className="flex w-full items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {session.lastMessageRole ?? "session"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatSessionTime(session.lastMessageAt ?? session.createdAt)}
+                  </span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </ScrollArea>
+    </aside>
   )
 }

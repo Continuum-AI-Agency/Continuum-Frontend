@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowDownIcon, ArrowUpIcon, InstagramLogoIcon } from "@radix-ui/react-icons";
 import {
   Badge,
   Box,
@@ -9,13 +8,11 @@ import {
   Flex,
   Grid,
   Heading,
-  IconButton,
   Select,
   Text,
-  Separator,
 } from "@radix-ui/themes";
 import React from "react";
-import { Bar, BarChart, CartesianGrid, XAxis, LineChart, Line, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { CartesianGrid, XAxis, LineChart, Line, YAxis, PieChart, Pie, Cell } from "recharts";
 
 import {
   ChartContainer,
@@ -23,7 +20,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { fetchOrganicMetrics, type InsightsRequest, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
+import { fetchOrganicMetrics, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
 import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicMetrics } from "@/lib/schemas/organicMetrics";
 import { cn } from "@/lib/utils";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
@@ -39,6 +36,7 @@ type Props = {
   brandId: string;
   accounts: InstagramAccountOption[];
   initialPlatform?: OrganicPlatform;
+  className?: string;
 };
 
 type ViewMode = "overview" | "trends";
@@ -58,6 +56,11 @@ type MetricCard = {
   label: string;
   value: number;
 };
+
+type TrendDataPoint = {
+  date: string;
+  value?: number;
+} & Partial<Record<MetricKey, number>>;
 
 const METRIC_LABELS: Record<string, string> = {
   reach: "Reach",
@@ -106,7 +109,7 @@ function generateSampleTrendData(range: { since: string; until: string }, metric
     const dateStr = date.toISOString().split('T')[0];
     const baseMultiplier = 0.7 + Math.random() * 0.6; 
 
-    const dayData: any = { date: dateStr };
+    const dayData: TrendDataPoint = { date: dateStr };
     
     if (specificMetric) {
        const totalValue = metrics[specificMetric as keyof typeof metrics] as number | undefined;
@@ -354,7 +357,7 @@ function getColorForType(type: string): string {
   }
 }
 
-export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlatform = "instagram" }: Props) {
+export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlatform = "instagram", className }: Props) {
   const [platform, setPlatform] = React.useState<OrganicPlatform>(initialPlatform);
   const firstAccountId = accounts[0]?.integrationAccountId ?? null;
   const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(firstAccountId);
@@ -422,8 +425,8 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
   }, [brandId, selectedAccountId, viewMode, platform]);
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
-      <Box p="4" className="flex-1 min-h-0 flex flex-col">
+    <Card variant="surface" className={cn("border border-subtle bg-surface flex flex-col", className)}>
+      <Box p="4" className="min-h-0 flex flex-col">
         <Flex align="center" justify="between" gap="3" wrap="wrap">
           <Flex align="center" gap="2">
             <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
@@ -496,7 +499,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
           </Flex>
         </Flex>
 
-        <Box pt="4" className="flex-1 min-h-0 overflow-y-auto">
+        <Box pt="3" className="min-h-0">
           {platform !== "instagram" ? (
              <Box py="8">
                 <Flex direction="column" align="center" justify="center" gap="3">
@@ -575,8 +578,8 @@ function MetricsPanel({
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="4" className="h-full min-h-0">
-      <Grid columns={{ initial: "1", lg: "1" }} gap="4" className="h-full min-h-0">
+    <Flex direction="column" gap="3" className="min-h-0">
+      <Grid columns={{ initial: "1", lg: "1" }} gap="3" className="min-h-0">
         <Box className="w-full">
           <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
             {metricCards.map((item) => {
@@ -622,8 +625,8 @@ function MetricsPanel({
           </Grid>
         </Box>
 
-        <Box className="w-full h-full min-h-[300px] mt-4">
-          <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
+        <Box className="w-full min-h-[280px]">
+          <Card variant="surface" className="border border-subtle bg-surface flex flex-col">
             <Box p="3" className="flex-1 flex flex-col min-h-0">
               <Flex align="center" justify="between" gap="2" mb="2">
                 <Box>
