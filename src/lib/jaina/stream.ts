@@ -1554,6 +1554,108 @@ function hydrateToolsFromStateDelta(delta: Record<string, unknown>): {
   };
 }
 
+function normalizeToolProgressData(
+  tool: ToolCallEventData | ToolResultEventData,
+  stage: "tool_start" | "tool_complete",
+  source: string
+): Record<string, unknown> {
+  return {
+    ...tool,
+    stage,
+    source,
+    tool_name: tool.name,
+    tool_call_id: tool.id,
+  };
+}
+
+function getEnvelopeString(
+  envelope: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = envelope[key] ?? payload[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getEnvelopeRecord(value: unknown): Record<string, unknown> {
+  return asRecord(value) ?? {};
+}
+
+function buildToolCallFromEnvelope(
+  envelope: Record<string, unknown>
+): ToolCallEventData | null {
+  const payload = getEnvelopeRecord(envelope.payload);
+  const name = getEnvelopeString(envelope, payload, ["name", "tool_name"]);
+  if (!name) return null;
+  const id =
+    getEnvelopeString(envelope, payload, ["id", "tool_call_id"]) ??
+    getEnvelopeString(envelope, payload, ["correlation_id"]) ??
+    `${name}-${Date.now()}`;
+
+  return {
+    id,
+    name,
+    args: getEnvelopeRecord(payload.args ?? payload.input),
+    metadata: { source: "agent.envelope", ...payload },
+    correlation_id:
+      getEnvelopeString(envelope, payload, ["correlation_id"]) ?? undefined,
+    parent_correlation_id:
+      getEnvelopeString(envelope, payload, ["parent_correlation_id"]) ?? null,
+    agent_id: getEnvelopeString(envelope, payload, ["agent_id"]) ?? null,
+    parent_agent_id:
+      getEnvelopeString(envelope, payload, ["parent_agent_id"]) ?? null,
+    display_name:
+      getEnvelopeString(envelope, payload, ["display_name"]) ?? null,
+    agent_name: getEnvelopeString(envelope, payload, ["agent_name"]) ?? null,
+  };
+}
+
+function buildToolResultFromEnvelope(
+  envelope: Record<string, unknown>
+): ToolResultEventData | null {
+  const payload = getEnvelopeRecord(envelope.payload);
+  const name = getEnvelopeString(envelope, payload, ["name", "tool_name"]);
+  if (!name) return null;
+  const id =
+    getEnvelopeString(envelope, payload, ["id", "tool_call_id"]) ??
+    getEnvelopeString(envelope, payload, ["correlation_id"]) ??
+    `${name}-${Date.now()}`;
+  const event = getEnvelopeString(envelope, payload, ["event"]);
+  const error = getEnvelopeString(envelope, payload, ["error"]);
+
+  return {
+    id,
+    name,
+    ok: event !== "error" && !error,
+    cached: Boolean(payload.cached),
+    duration_ms:
+      typeof payload.duration_ms === "number" ? payload.duration_ms : undefined,
+    output: payload.output,
+    error,
+    output_bytes:
+      typeof payload.output_bytes === "number" ? payload.output_bytes : undefined,
+    output_tokens_est:
+      typeof payload.output_tokens_est === "number"
+        ? payload.output_tokens_est
+        : undefined,
+    correlation_id:
+      getEnvelopeString(envelope, payload, ["correlation_id"]) ?? undefined,
+    parent_correlation_id:
+      getEnvelopeString(envelope, payload, ["parent_correlation_id"]) ?? null,
+    agent_id: getEnvelopeString(envelope, payload, ["agent_id"]) ?? null,
+    parent_agent_id:
+      getEnvelopeString(envelope, payload, ["parent_agent_id"]) ?? null,
+    display_name:
+      getEnvelopeString(envelope, payload, ["display_name"]) ?? null,
+    agent_name: getEnvelopeString(envelope, payload, ["agent_name"]) ?? null,
+  };
+}
+
 function mergeToolCalls(
   existing: ToolCallEventData[],
   incoming: ToolCallEventData[]
@@ -2096,7 +2198,7 @@ export function reduceJainaStreamEvent(
             stage: "tool_start",
             at: new Date().toISOString(),
             detail: `Executing ${call.name}`,
-            data: call,
+            data: normalizeToolProgressData(call, "tool_start", "tool.batch"),
           });
         }
       }
@@ -2105,13 +2207,13 @@ export function reduceJainaStreamEvent(
           stage: "tool_complete",
           at: new Date().toISOString(),
           detail: `Completed ${res.name}`,
-          data: res,
+          data: normalizeToolProgressData(res, "tool_complete", "tool.batch"),
         });
       }
 
       let nextActiveWorkers = state.activeWorkers;
       for (const call of parsed.data.data.calls) {
-        const pid = call.parent_agent_id ?? null;
+        const pid = call.agent_id ?? call.parent_agent_id ?? null;
         if (pid && pid in nextActiveWorkers) {
           nextActiveWorkers = {
             ...nextActiveWorkers,
@@ -2120,7 +2222,7 @@ export function reduceJainaStreamEvent(
         }
       }
       for (const res of newResults) {
-        const pid = (res as { parent_agent_id?: string | null }).parent_agent_id ?? null;
+        const pid = res.agent_id ?? res.parent_agent_id ?? null;
         if (pid && pid in nextActiveWorkers) {
           nextActiveWorkers = {
             ...nextActiveWorkers,
@@ -2152,7 +2254,7 @@ export function reduceJainaStreamEvent(
       const call = parsed.data;
       const { merged: nextToolCalls, added } = mergeToolCalls(state.toolCalls, [call]);
       if (added.length === 0) return nextBase;
-      const parentAgentId = call.parent_agent_id ?? null;
+      const parentAgentId = call.agent_id ?? call.parent_agent_id ?? null;
       let nextActiveWorkers = state.activeWorkers;
       if (parentAgentId && parentAgentId in state.activeWorkers) {
         nextActiveWorkers = {
@@ -2176,7 +2278,7 @@ export function reduceJainaStreamEvent(
             stage: "tool_start",
             at: new Date().toISOString(),
             detail: `Executing ${call.name}`,
-            data: call,
+            data: normalizeToolProgressData(call, "tool_start", "tool.call"),
           },
         ],
       };
@@ -2187,7 +2289,7 @@ export function reduceJainaStreamEvent(
       const result = parsed.data;
       const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [result]);
       if (added.length === 0) return nextBase;
-      const parentAgentId = result.parent_agent_id ?? null;
+      const parentAgentId = result.agent_id ?? result.parent_agent_id ?? null;
       let nextActiveWorkers = state.activeWorkers;
       if (parentAgentId && parentAgentId in state.activeWorkers) {
         nextActiveWorkers = {
@@ -2211,7 +2313,7 @@ export function reduceJainaStreamEvent(
             stage: "tool_complete",
             at: new Date().toISOString(),
             detail: `Completed ${result.name}`,
-            data: result,
+            data: normalizeToolProgressData(result, "tool_complete", "tool.result"),
           },
         ],
       };
@@ -2259,16 +2361,143 @@ export function reduceJainaStreamEvent(
       if (!parsed.success || !parsed.data.data) {
         return { ...nextBase, status: "error", error: "Malformed agent.envelope event" };
       }
-      const data = parsed.data.data;
+      const envelope = parsed.data.data.envelope;
+      const envelopeRecord = envelope as Record<string, unknown>;
+      const payload = getEnvelopeRecord(envelope.payload);
+      const now = new Date().toISOString();
+
+      if (envelope.kind === "tool") {
+        if (envelope.event === "start") {
+          const toolCall = buildToolCallFromEnvelope(envelopeRecord);
+          if (!toolCall) return nextBase;
+          const { merged: nextToolCalls, added } = mergeToolCalls(state.toolCalls, [toolCall]);
+          if (added.length === 0) return nextBase;
+          return {
+            ...nextBase,
+            toolCalls: nextToolCalls,
+            progress: [
+              ...state.progress,
+              {
+                stage: "tool_start",
+                at: now,
+                detail: `Executing ${toolCall.name}`,
+                data: normalizeToolProgressData(toolCall, "tool_start", "agent.envelope"),
+              },
+            ],
+          };
+        }
+
+        const toolResult = buildToolResultFromEnvelope(envelopeRecord);
+        if (!toolResult) return nextBase;
+        const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [toolResult]);
+        if (added.length === 0) return nextBase;
+        return {
+          ...nextBase,
+          toolResults: nextToolResults,
+          progress: [
+            ...state.progress,
+            {
+              stage: "tool_complete",
+              at: now,
+              detail: `${envelope.event === "error" ? "Failed" : "Completed"} ${toolResult.name}`,
+              data: normalizeToolProgressData(toolResult, "tool_complete", "agent.envelope"),
+            },
+          ],
+        };
+      }
+
+      if (envelope.kind === "agent") {
+        const agentId =
+          getEnvelopeString(envelopeRecord, payload, ["agent_id"]) ??
+          envelope.correlation_id;
+        const displayName =
+          getEnvelopeString(envelopeRecord, payload, ["display_name", "name", "agent_name"]) ??
+          agentId;
+        if (envelope.event === "start") {
+          return {
+            ...nextBase,
+            activeWorkers: {
+              ...state.activeWorkers,
+              [agentId]: { agentId, displayName },
+            },
+            progress: [
+              ...state.progress,
+              {
+                stage: "agent_spawn",
+                at: now,
+                detail:
+                  getEnvelopeString(envelopeRecord, payload, ["task_description"]) ??
+                  `Agent ${agentId} spawned`,
+                data: {
+                  ...payload,
+                  agent_id: agentId,
+                  display_name: displayName,
+                  name: getEnvelopeString(envelopeRecord, payload, ["name"]),
+                  parent_agent_id:
+                    getEnvelopeString(envelopeRecord, payload, ["parent_agent_id"]) ?? null,
+                  task_id:
+                    getEnvelopeString(envelopeRecord, payload, ["task_id"]) ??
+                    envelope.correlation_id,
+                  task_description:
+                    getEnvelopeString(envelopeRecord, payload, ["task_description"]) ??
+                    undefined,
+                  started_at: envelope.timestamp,
+                  spawn_ts: Date.now(),
+                },
+              },
+            ],
+          };
+        }
+
+        const { [agentId]: _removed, ...remainingWorkers } = state.activeWorkers;
+        return {
+          ...nextBase,
+          activeWorkers: remainingWorkers,
+          progress: [
+            ...state.progress,
+            {
+              stage: "agent_complete",
+              at: now,
+              detail: `Agent ${agentId} ${envelope.event}`,
+              data: {
+                ...payload,
+                agent_id: agentId,
+                display_name: displayName,
+                name: getEnvelopeString(envelopeRecord, payload, ["name"]),
+                task_id:
+                  getEnvelopeString(envelopeRecord, payload, ["task_id"]) ??
+                  envelope.correlation_id,
+                status: envelope.event === "error" ? "failed" : "completed",
+                duration_ms:
+                  typeof payload.duration_ms === "number"
+                    ? payload.duration_ms
+                    : undefined,
+                error: getEnvelopeString(envelopeRecord, payload, ["error"]),
+              },
+            },
+          ],
+        };
+      }
+
       return {
         ...nextBase,
         progress: [
           ...state.progress,
           {
-            stage: "agent_event",
-            at: new Date().toISOString(),
-            detail: `Agent ${data.envelope.kind} ${data.envelope.event}`,
-            data,
+            stage: envelope.event === "start" ? "handoff_start" : "handoff_complete",
+            at: now,
+            detail: `Handoff ${envelope.event}`,
+            data: {
+              ...payload,
+              correlation_id: envelope.correlation_id,
+              parent_correlation_id: envelope.parent_correlation_id,
+              from_scope: payload.from_scope ?? null,
+              to_scope: envelope.scope ?? payload.to_scope ?? "unknown",
+              display_name: envelope.display_name ?? payload.display_name ?? null,
+              name: envelope.name ?? payload.name ?? null,
+              objective: payload.objective ?? null,
+              status: envelope.event === "error" ? "failed" : "completed",
+            },
           },
         ],
       };

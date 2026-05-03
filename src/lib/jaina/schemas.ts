@@ -670,33 +670,8 @@ export type CanvasActionsProposedEventData = Exclude<
 export const toolBatchSchema = streamEventSchema(
   "tool.batch",
   z.object({
-    calls: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      args: z.record(z.string(), z.unknown()),
-      metadata: z.record(z.string(), z.unknown()),
-      correlation_id: z.string().optional().nullable(),
-      parent_correlation_id: z.string().nullable().optional(),
-      agent_id: z.string().nullable().optional(),
-      parent_agent_id: z.string().nullable().optional(),
-      display_name: z.string().nullable().optional(),
-      agent_name: z.string().nullable().optional(),
-    })),
-    results: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      ok: z.boolean(),
-      cached: z.boolean(),
-      shared: z.boolean().optional(),
-      duration_ms: z.number().optional(),
-      output: z.unknown().optional(),
-      error: z.string().optional(),
-      correlation_id: z.string().optional().nullable(),
-      parent_correlation_id: z.string().nullable().optional(),
-      parent_agent_id: z.string().nullable().optional(),
-      output_bytes: z.number().optional(),
-      output_tokens_est: z.number().optional(),
-    })),
+    calls: z.array(z.lazy(() => toolCallSchema)),
+    results: z.array(z.lazy(() => toolResultSchema)),
   })
 );
 
@@ -708,7 +683,9 @@ export const handoffStartSchema = streamEventSchema(
     to_scope: z.string(),
     objective: z.string().nullable(),
     entity_id: z.string().nullable(),
-  })
+    display_name: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
+  }).passthrough()
 );
 
 export const handoffCompleteSchema = streamEventSchema(
@@ -722,7 +699,9 @@ export const handoffCompleteSchema = streamEventSchema(
     to_scope: z.string(),
     objective: z.string().nullable(),
     entity_id: z.string().nullable(),
-  })
+    display_name: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
+  }).passthrough()
 );
 
 export const agentSpawnEventSchema = z.object({
@@ -739,7 +718,7 @@ export type AgentSpawnEventData = z.infer<typeof agentSpawnEventSchema>;
 export const agentCompleteEventSchema = z.object({
   agent_id: z.string(),
   task_id: z.string().optional(),
-  status: z.enum(["completed", "failed", "cancelled"]).optional(),
+  status: z.enum(["completed", "failed", "cancelled", "partial"]).optional(),
   duration_ms: z.number().optional(),
   error: z.string().optional(),
   display_name: z.string().nullable().optional(),
@@ -761,8 +740,13 @@ export const agentEnvelopeSchema = streamEventSchema(
       session_id: z.string().nullable(),
       scope: z.string().nullable(),
       timestamp: z.string(),
+      display_name: z.string().nullable().optional(),
+      name: z.string().nullable().optional(),
+      agent_id: z.string().nullable().optional(),
+      parent_agent_id: z.string().nullable().optional(),
+      agent_name: z.string().nullable().optional(),
       payload: z.record(z.string(), z.unknown()),
-    }),
+    }).passthrough(),
   })
 );
 
@@ -969,6 +953,9 @@ export const jainaStreamEventSchema = z.union([
   handoffStartSchema,
   handoffCompleteSchema,
   agentEnvelopeSchema,
+  z.object({ type: z.literal("agent.spawn"), data: agentSpawnEventSchema }),
+  z.object({ type: z.literal("agent.complete"), data: agentCompleteEventSchema }),
+  z.object({ type: z.literal("canvas.context.loaded"), data: z.record(z.string(), z.unknown()) }),
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
   responseReportAssemblySchema,
@@ -1007,10 +994,26 @@ export const toolResultSchema = z.object({
   duration_ms: z.number().optional(),
   output: z.unknown().optional(),
   error: z.string().optional(),
+  output_omitted: z.literal(true).optional(),
+  output_summary: z
+    .object({
+      omitted: z.literal(true),
+      type: z.string(),
+      keys: z.array(z.string()).optional(),
+      item_count: z.number().optional(),
+      approx_bytes: z.number().optional(),
+      char_count: z.number().optional(),
+    })
+    .passthrough()
+    .optional(),
+  display_name: z.string().nullable().optional(),
+  agent_name: z.string().nullable().optional(),
+  agent_id: z.string().nullable().optional(),
   parent_agent_id: z.string().nullable().optional(),
   output_bytes: z.number().optional(),
   output_tokens_est: z.number().optional(),
   correlation_id: z.string().nullable().optional(),
+  parent_correlation_id: z.string().nullable().optional(),
 });
 
 export type ToolResultEventData = z.infer<typeof toolResultSchema>;

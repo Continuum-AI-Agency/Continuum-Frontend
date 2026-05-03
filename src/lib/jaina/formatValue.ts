@@ -13,6 +13,47 @@ type FormatOptions = {
   locale?: string;
 };
 
+type MetricDisplayFormatInput = {
+  label?: string | null;
+  format?: ValueFormat | string | null;
+  unit?: string | null;
+};
+
+function isConversionCountLabel(label: string): boolean {
+  const normalized = label.toLowerCase();
+  const namesCountMetric = /\b(conversions?|purchases?)\b/.test(normalized);
+  const namesRateMetric =
+    /\b(rate|cvr|percentage|percent|pct|ratio)\b/.test(normalized) ||
+    normalized.includes("%");
+  const namesValueMetric =
+    /\b(value|revenue|roas|cost|cpa|cpc|cpm|cac|per)\b/.test(normalized);
+
+  return namesCountMetric && !namesRateMetric && !namesValueMetric;
+}
+
+function isPercentUnit(unit?: string | null): boolean {
+  if (!unit) return false;
+  const normalized = unit.trim().toLowerCase();
+  return normalized === "%" || normalized === "percent" || normalized === "percentage";
+}
+
+export function resolveMetricDisplayFormat({
+  label,
+  format,
+  unit,
+}: MetricDisplayFormatInput): ValueFormat | string | undefined {
+  const resolvedFormat = format ?? undefined;
+  if (
+    label &&
+    isConversionCountLabel(label) &&
+    (resolvedFormat === "percent" || isPercentUnit(unit))
+  ) {
+    return "number";
+  }
+
+  return resolvedFormat;
+}
+
 export function formatValue(
   value: string | number,
   format?: ValueFormat | string,

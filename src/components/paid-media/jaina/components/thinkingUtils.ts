@@ -8,7 +8,7 @@ export type AgentLifecycleSegment = {
   agentLabel: string;
   taskDescription?: string;
   spawnTs?: number;
-  completeStatus?: "completed" | "failed" | "cancelled";
+  completeStatus?: "completed" | "failed" | "cancelled" | "partial";
   durationMs?: number;
   error?: string;
   workerToolRefs?: string[];
@@ -117,8 +117,11 @@ export function getProgressValueAsString(data: unknown, key: string): string {
 export function resolveToolProgressMetadata(entry: JainaProgressEntry) {
   const toolCallId =
     getProgressValueAsString(entry.data, "tool_call_id") ||
-    getProgressValueAsString(entry.data, "call_id");
-  const toolName = getProgressValueAsString(entry.data, "tool_name");
+    getProgressValueAsString(entry.data, "call_id") ||
+    getProgressValueAsString(entry.data, "id");
+  const toolName =
+    getProgressValueAsString(entry.data, "tool_name") ||
+    getProgressValueAsString(entry.data, "name");
   return { toolCallId, toolName };
 }
 
@@ -152,11 +155,23 @@ export function resolveToolRef(
   return `name:${toolName}`;
 }
 
-function getParentAgentId(entry: JainaProgressEntry): string | null {
+function getToolAgentId(entry: JainaProgressEntry): string | null {
   const data = entry.data;
   if (!data || typeof data !== "object") return null;
-  const id = (data as Record<string, unknown>).parent_agent_id;
-  return typeof id === "string" ? id : null;
+  const record = data as Record<string, unknown>;
+  const agentId = record.agent_id;
+  if (typeof agentId === "string" && agentId.trim()) return agentId;
+  const parentAgentId = record.parent_agent_id;
+  return typeof parentAgentId === "string" && parentAgentId.trim()
+    ? parentAgentId
+    : null;
+}
+
+function isInternalCoreHandoff(data: Record<string, unknown> | undefined) {
+  const toScope = typeof data?.to_scope === "string" ? data.to_scope : "";
+  const displayName = typeof data?.display_name === "string" ? data.display_name : "";
+  const name = typeof data?.name === "string" ? data.name : "";
+  return toScope.toLowerCase() === "core" && !displayName.trim() && !name.trim();
 }
 
 export function buildThinkingSegments(
@@ -229,6 +244,8 @@ export function buildThinkingSegments(
             ? "failed"
             : data?.status === "cancelled"
             ? "cancelled"
+            : data?.status === "partial"
+            ? "partial"
             : "completed",
           durationMs: typeof data?.duration_ms === "number" ? data.duration_ms : undefined,
           error: typeof data?.error === "string" ? data.error : undefined,
@@ -246,6 +263,8 @@ export function buildThinkingSegments(
             ? "failed"
             : data?.status === "cancelled"
             ? "cancelled"
+            : data?.status === "partial"
+            ? "partial"
             : "completed",
           durationMs: typeof data?.duration_ms === "number" ? data.duration_ms : undefined,
           error: typeof data?.error === "string" ? data.error : undefined,
@@ -258,11 +277,22 @@ export function buildThinkingSegments(
       flushThoughts();
       flushTools();
       const data = entry.data as Record<string, unknown> | undefined;
+      if (isInternalCoreHandoff(data)) {
+        continue;
+      }
+      const toLabel =
+        typeof data?.display_name === "string" && data.display_name.trim()
+          ? data.display_name
+          : typeof data?.name === "string" && data.name.trim()
+            ? data.name
+            : typeof data?.to_scope === "string"
+              ? data.to_scope
+              : "unknown";
       segments.push({
         kind: "handoff",
         id: `handoff-${segments.length + 1}`,
         from: typeof data?.from_scope === "string" ? data.from_scope : null,
-        to: typeof data?.to_scope === "string" ? data.to_scope : "unknown",
+        to: toLabel,
         objective: typeof data?.objective === "string" ? data.objective : null,
         status: entry.stage === "handoff_start"
           ? "started"
@@ -275,8 +305,8 @@ export function buildThinkingSegments(
       flushThoughts();
       const toolRef = resolveToolRef(entry, toolCalls, usedCallIds);
       if (toolRef) {
-        const parentAgentId = getParentAgentId(entry);
-        const workerIdx = parentAgentId ? agentSegmentIndex.get(parentAgentId) : undefined;
+        const agentId = getToolAgentId(entry);
+        const workerIdx = agentId ? agentSegmentIndex.get(agentId) : undefined;
         if (workerIdx !== undefined) {
           const seg = segments[workerIdx] as AgentLifecycleSegment;
           const refs = seg.workerToolRefs ?? [];

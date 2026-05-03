@@ -136,4 +136,51 @@ describe("Jaina thinking UI", () => {
 
     expect(screen.queryByTestId("safe-markdown")).toBeNull();
   });
+
+  it("renders sub-agent lifecycle with its tool names underneath", () => {
+    render(
+      <ThinkingWindow
+        reasoning={[
+          {
+            stage: "agent_spawn",
+            at: "2026-04-29T10:00:00.000Z",
+            detail: "Analyze budget pacing",
+            data: {
+              agent_id: "agent_budget",
+              display_name: "Budget Analyst",
+              task_description: "Analyze budget pacing",
+            },
+          },
+          {
+            stage: "tool_start",
+            at: "2026-04-29T10:00:01.000Z",
+            detail: "Running fetch_budget_pacing",
+            data: {
+              stage: "tool_start",
+              tool_name: "fetch_budget_pacing",
+              tool_call_id: "call_budget",
+              agent_id: "agent_budget",
+            },
+          },
+        ]}
+        toolCalls={[
+          {
+            id: "call_budget",
+            name: "fetch_budget_pacing",
+            args: { hidden: true },
+            metadata: {},
+            agent_id: "agent_budget",
+          },
+        ]}
+        toolResults={[]}
+        isStreaming
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /thinking/i }));
+
+    expect(screen.getByText("Budget Analyst")).toBeTruthy();
+    expect(screen.getByText("fetch budget pacing")).toBeTruthy();
+    expect(screen.queryByText(/hidden/i)).toBeNull();
+  });
 });

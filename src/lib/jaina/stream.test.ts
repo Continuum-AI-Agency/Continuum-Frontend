@@ -1723,6 +1723,60 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
     expect(state.toolCalls[0].correlation_id).toBe("corr_1");
     expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
     expect(state.progress.some((entry) => entry.stage === "tool_complete")).toBe(true);
+    expect(state.progress[0]?.data.tool_name).toBe("fetch_metrics");
+    expect(state.progress[0]?.data.tool_call_id).toBe("tool_batch_1");
+  });
+
+  it("hydrates tool and agent observability from canonical agent.envelope events", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "agent.envelope",
+      data: {
+        envelope: {
+          version: "1",
+          kind: "agent",
+          event: "start",
+          correlation_id: "agent_corr",
+          parent_correlation_id: null,
+          session_id: "session_1",
+          scope: "analysis",
+          timestamp: "2026-04-29T10:00:00.000Z",
+          display_name: "Budget Analyst",
+          agent_id: "agent_budget",
+          payload: {
+            task_id: "task_budget",
+            task_description: "Analyze budget pacing",
+          },
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "agent.envelope",
+      data: {
+        envelope: {
+          version: "1",
+          kind: "tool",
+          event: "start",
+          correlation_id: "tool_corr",
+          parent_correlation_id: "agent_corr",
+          session_id: "session_1",
+          scope: "analysis",
+          timestamp: "2026-04-29T10:00:01.000Z",
+          agent_id: "agent_budget",
+          payload: {
+            name: "fetch_budget_pacing",
+            args: { account_id: "act_123" },
+          },
+        },
+      },
+    } as any);
+
+    expect(state.progress.some((entry) => entry.stage === "agent_spawn")).toBe(true);
+    expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
+    expect(state.toolCalls[0]?.name).toBe("fetch_budget_pacing");
+    expect(state.toolCalls[0]?.agent_id).toBe("agent_budget");
   });
 
   it("hydrates tool calls/results from canonical response.progress stages", () => {
@@ -1941,6 +1995,37 @@ describe("parseJainaStreamEvent compatibility guards", () => {
 
     expect(event).not.toBeNull();
     expect(event?.type).toBe("tool.batch");
+  });
+
+  it("accepts canonical agent lifecycle events", () => {
+    const spawned = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "agent.spawn",
+        data: {
+          agent_id: "agent_budget",
+          task_id: "task_budget",
+          task_description: "Analyze budget pacing",
+          started_at: "2026-04-29T10:00:00.000Z",
+          display_name: "Budget Analyst",
+        },
+      })
+    );
+    const completed = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "agent.complete",
+        data: {
+          agent_id: "agent_budget",
+          task_id: "task_budget",
+          status: "partial",
+          duration_ms: 1250,
+        },
+      })
+    );
+
+    expect(spawned).not.toBeNull();
+    expect(spawned?.type).toBe("agent.spawn");
+    expect(completed).not.toBeNull();
+    expect(completed?.type).toBe("agent.complete");
   });
 
   it("accepts objective checklist stream events", () => {

@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  reportAssemblySchema,
+  type FrontendCheckpointReport,
+  type ReportAssembly,
+} from "./schemas";
 
 export const jainaConversationRoleSchema = z.enum(["user", "assistant"]);
 export type JainaConversationRole = z.infer<typeof jainaConversationRoleSchema>;
@@ -140,6 +145,81 @@ export type BackendConversationMessagesResponse = z.infer<
   typeof backendConversationMessagesResponseSchema
 >;
 
+function normalizeReportAssemblyForConversationLoad(
+  reportAssembly: ReportAssembly
+): FrontendCheckpointReport {
+  const snapshot = reportAssembly.metrics.map((metric) => ({
+    metric: metric.label,
+    value: metric.actual,
+    change: metric.index_percent,
+    suffix: metric.unit === "%" ? "%" : undefined,
+    context: `Planned: ${metric.planned}`,
+    status:
+      metric.deviation_type === "positive"
+        ? "positive"
+        : metric.deviation_type === "negative"
+          ? "risk"
+          : "neutral",
+  }));
+
+  const recommendations = reportAssembly.recommendations.map((entry) => {
+    if (typeof entry === "string") {
+      return {
+        title: entry,
+        rationale: entry,
+        expected_impact: null,
+        priority: "MEDIUM",
+      };
+    }
+
+    return {
+      title: entry.title,
+      rationale: entry.rationale,
+      expected_impact: entry.expected_impact,
+      priority: entry.priority,
+    };
+  });
+
+  return {
+    language: "en",
+    report_title: reportAssembly.header.title,
+    executive_summary: reportAssembly.summary.narrative,
+    budget: null,
+    performance_snapshot: snapshot,
+    blocks: [],
+    sections: [
+      {
+        heading: reportAssembly.header.title,
+        scope: reportAssembly.header.period,
+        summary: reportAssembly.summary.principal_deviation || "",
+        highlights: reportAssembly.insights,
+        tables: [],
+        actions: recommendations,
+        confidence: null,
+        cached_sources: [],
+        graphs: reportAssembly.charts,
+      },
+    ],
+    strategic_recommendations: recommendations,
+    follow_up_questions: [],
+    handoff_trace: [],
+    execution_objectives: [],
+    cached_sources: [],
+    graphs: reportAssembly.charts,
+  };
+}
+
+function deriveReportFromConversationMetadata(
+  row: BackendConversationMessage
+): unknown {
+  if (row.report !== undefined) return row.report;
+
+  const parsedAssembly = reportAssemblySchema.safeParse(row.report_assembly);
+  if (!parsedAssembly.success) return undefined;
+
+  return normalizeReportAssemblyForConversationLoad(parsedAssembly.data);
+}
+
 export function mapConversationSessionRow(
   row: BackendConversationSession
 ): JainaConversationSession {
@@ -159,6 +239,8 @@ export function mapConversationSessionRow(
 export function mapConversationMessageRow(
   row: BackendConversationMessage
 ): JainaConversationMessage {
+  const report = deriveReportFromConversationMetadata(row);
+
   return {
     id: row.id,
     sessionId: row.session_id,
@@ -166,7 +248,7 @@ export function mapConversationMessageRow(
     adAccountId: row.ad_account_id ?? null,
     role: row.role,
     content: row.content,
-    ...(row.report !== undefined ? { report: row.report } : {}),
+    ...(report !== undefined ? { report } : {}),
     ...(row.report_assembly !== undefined
       ? { reportAssembly: row.report_assembly }
       : {}),

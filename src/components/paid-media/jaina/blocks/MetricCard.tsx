@@ -2,7 +2,7 @@
 
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import type { MetricItemV2 } from "@/lib/jaina/schemas";
-import { formatValue } from "@/lib/jaina/formatValue";
+import { formatValue, resolveMetricDisplayFormat } from "@/lib/jaina/formatValue";
 
 type MetricCardProps = { metric: MetricItemV2 };
 
@@ -19,12 +19,17 @@ function resolveChangeColor(severity?: string): string {
 
 export function MetricCard({ metric }: MetricCardProps) {
   const hasChange = metric.change !== undefined;
+  const displayFormat = resolveMetricDisplayFormat({
+    label: metric.label,
+    format: metric.format,
+    unit: metric.unit,
+  });
 
   return (
     <div className="rounded-lg border border-border/60 bg-background/80 p-3">
       <p className="text-xs text-muted-foreground">{metric.label}</p>
       <p className="text-xl font-semibold tabular-nums">
-        {formatValue(metric.value, metric.format ?? undefined)}
+        {formatValue(metric.value, displayFormat)}
       </p>
       {hasChange && (
         <span className={`flex items-center gap-0.5 text-xs ${resolveChangeColor(metric.severity ?? undefined)}`}>

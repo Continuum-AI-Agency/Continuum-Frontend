@@ -249,6 +249,8 @@ export function ThinkingWindow({
             const isActive = isStreaming && isLast && !segment.completeStatus;
             const statusColor = segment.completeStatus === "failed"
               ? "text-destructive"
+              : segment.completeStatus === "partial"
+              ? "text-amber-500"
               : segment.completeStatus === "completed"
               ? "text-emerald-500"
               : "text-muted-foreground";
@@ -297,9 +299,16 @@ export function ThinkingWindow({
                       <p className="text-[10px] text-destructive mt-1">{segment.error}</p>
                     )}
                     {workerResolved.length > 0 && (
-                      <p className="text-[10px] text-muted-foreground/50 mt-1">
-                        {workerResolved.filter(e => e.state !== "running").length}/{workerResolved.length} tools done
-                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        <p className="text-[10px] text-muted-foreground/50">
+                          {workerResolved.filter(e => e.state !== "running").length}/{workerResolved.length} tools done
+                        </p>
+                        {workerResolved.map((entry) => (
+                          <Tool key={entry.id} type={entry.name} state={entry.state}>
+                            <ToolHeader title={formatToolLabel(entry.name)} showDisclosure={false} />
+                          </Tool>
+                        ))}
+                      </div>
                     )}
                   </AgentContent>
                 </Agent>
