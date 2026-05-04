@@ -32,7 +32,13 @@ export function BrandedNotFound() {
         </h1>
 
         <div className="mt-10 max-w-sm">
-          <h2 className="text-3xl font-semibold text-white">
+          <h2
+            className="text-3xl font-semibold"
+            style={{
+              color: "#f8fafc",
+              textShadow: "0 2px 18px rgba(0,0,0,0.72)",
+            }}
+          >
             We can&apos;t find that page.
           </h2>
           <p className="mt-4 font-mono text-sm leading-6 text-zinc-400">
