@@ -145,7 +145,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
-  const previewImage = data.generatedImage;
+  const previewImage = (data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl;
   const refImageLimit = 14;
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = getAspectRatioValue(aspectRatio);

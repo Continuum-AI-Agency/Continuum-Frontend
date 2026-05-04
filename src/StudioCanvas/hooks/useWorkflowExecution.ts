@@ -162,18 +162,29 @@ export function useWorkflowExecution() {
               const imageBase64 = parsedImage?.base64 ?? (rawImageString ? rawImageString.replace(/^data:image\/[^;]+;base64,/, "") : undefined);
               const normalizedImageBase64 = imageBase64 ? imageBase64.replace(/\s+/g, "") : undefined;
               const imageMimeType = parsedImage?.mimeType ?? parsed.mime_type ?? "image/png";
+              const imageUrl =
+                typeof parsed.signed_url === "string"
+                  ? parsed.signed_url
+                  : typeof parsed.storage?.signed_url === "string"
+                    ? parsed.storage?.signed_url
+                    : typeof parsed.download_url === "string"
+                      ? parsed.download_url
+                      : undefined;
+              const persistentImageUrl = imageUrl && !imageUrl.startsWith("data:") ? imageUrl : undefined;
 
               if (eventName === "image" && normalizedImageBase64) {
                 console.info("[studio] image event received", {
                   nodeId,
                   mimeType: imageMimeType,
                   base64Length: normalizedImageBase64.length,
+                  hasUrl: Boolean(persistentImageUrl),
                 });
                 if (expectedMedium === "image") {
                   finalOutput = {
                     type: "image",
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
+                    url: persistentImageUrl,
                   };
                 }
               }
@@ -224,6 +235,7 @@ export function useWorkflowExecution() {
                     type: "image",
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
+                    url: persistentImageUrl,
                   };
                 } else if (expectedMedium === "video" && videoUrl) {
                   finalOutput = {

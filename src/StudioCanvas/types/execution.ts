@@ -10,9 +10,9 @@ export type NodeExecutionState = {
   output?: NodeOutput;
 };
 
-export type NodeOutput = 
+export type NodeOutput =
   | { type: 'text'; value: string }
-  | { type: 'image'; base64: string; mimeType: string }
+  | { type: 'image'; base64: string; mimeType: string; url?: string }
   | { type: 'video'; url: string; posterBase64?: string };
 
 export interface WorkflowExecutionContext {

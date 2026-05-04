@@ -21,7 +21,7 @@ const runtimeNodeKeys = [
 
 const dataUrlPattern = /^data:([a-z]+\/[a-z0-9-+.]+)(;[a-z0-9=[\]!#$%&'*+.^_`{|}~-]+)*;base64,/i;
 const base64LikePattern = /^[a-z0-9+/=]+$/i;
-const minBase64Length = 128;
+const minBase64Length = 32;
 
 function isEncodedPayload(value: string): boolean {
   const trimmed = value.trim();
@@ -47,9 +47,7 @@ function stripRuntimeNodeData(
     delete next[key];
   });
 
-  const mediaKeys = preserveGeneratedOutputs
-    ? ['image', 'video', 'audio']
-    : ['image', 'video', 'audio', 'generatedImage', 'generatedVideo'];
+  const mediaKeys = ['image', 'video', 'audio'];
   mediaKeys.forEach(key => {
     const val = next[key];
     if (typeof val === 'string' && isEncodedPayload(val)) {
@@ -59,11 +57,20 @@ function stripRuntimeNodeData(
     }
   });
 
-  if (preserveGeneratedOutputs) {
+  if (!preserveGeneratedOutputs) {
+    delete next.generatedImage;
+    delete next.generatedVideo;
+  } else {
     if (next.generatedImage && typeof next.generatedImage === 'object') {
       delete next.generatedImage;
     }
     if (next.generatedVideo && typeof next.generatedVideo === 'object') {
+      delete next.generatedVideo;
+    }
+    if (typeof next.generatedImage === 'string' && isEncodedPayload(next.generatedImage)) {
+      delete next.generatedImage;
+    }
+    if (typeof next.generatedVideo === 'string' && isEncodedPayload(next.generatedVideo)) {
       delete next.generatedVideo;
     }
   }

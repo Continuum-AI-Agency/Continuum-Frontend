@@ -138,12 +138,14 @@ function resolveExtendVideoInput(
 
   if (isVideoGeneratorNodeType(sourceNode?.type) || sourceNode?.type === 'extendVideo') {
     const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
+    const generatedVideoUrl = (sourceNode.data as any).generatedVideoUrl as string | undefined;
     const parsed = parseDataUrl(generatedVideo);
     if (parsed?.base64) {
       return { data: parsed.base64, mimeType: parsed.mimeType };
     }
-    if (typeof generatedVideo === 'string' && generatedVideo.trim()) {
-      return { uri: generatedVideo.trim() };
+    const fallbackUri = (typeof generatedVideo === 'string' && generatedVideo.trim()) || (typeof generatedVideoUrl === 'string' && generatedVideoUrl.trim());
+    if (fallbackUri) {
+      return { uri: fallbackUri };
     }
   }
 

@@ -351,31 +351,43 @@ function collectApplyAssetCandidates(nodes: StudioNode[]): ApplyAssetCandidate[]
 
   sorted.forEach((node) => {
     if (node.type === "nanoGen") {
+      const nodeData = node.data as { generatedImage?: unknown; generatedImageUrl?: unknown };
       const generatedImage =
-        typeof (node.data as { generatedImage?: unknown }).generatedImage === "string"
-          ? ((node.data as { generatedImage?: string }).generatedImage ?? "").trim()
+        typeof nodeData.generatedImage === "string"
+          ? (nodeData.generatedImage ?? "").trim()
           : "";
-      if (!generatedImage) return;
+      const generatedImageUrl =
+        typeof nodeData.generatedImageUrl === "string"
+          ? (nodeData.generatedImageUrl ?? "").trim()
+          : "";
+      const source = generatedImage || generatedImageUrl;
+      if (!source) return;
       imageCandidates.push({
         nodeId: node.id,
         role: `image_${imageCandidates.length + 1}`,
         kind: "image",
-        source: generatedImage,
+        source,
       });
       return;
     }
 
     if (node.type === "videoGen" || node.type === "extendVideo") {
+      const nodeData = node.data as { generatedVideo?: unknown; generatedVideoUrl?: unknown };
       const generatedVideo =
-        typeof (node.data as { generatedVideo?: unknown }).generatedVideo === "string"
-          ? ((node.data as { generatedVideo?: string }).generatedVideo ?? "").trim()
+        typeof nodeData.generatedVideo === "string"
+          ? (nodeData.generatedVideo ?? "").trim()
           : "";
-      if (!generatedVideo) return;
+      const generatedVideoUrl =
+        typeof nodeData.generatedVideoUrl === "string"
+          ? (nodeData.generatedVideoUrl ?? "").trim()
+          : "";
+      const source = generatedVideo || generatedVideoUrl;
+      if (!source) return;
       videoCandidates.push({
         nodeId: node.id,
         role: `video_${videoCandidates.length + 1}`,
         kind: "video",
-        source: generatedVideo,
+        source,
       });
     }
   });

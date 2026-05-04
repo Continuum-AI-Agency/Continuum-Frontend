@@ -41,6 +41,7 @@ export interface NanoGenNodeData extends BaseNodeData {
   scheduler?: string;
   promptEnhancement?: boolean;
   generatedImage?: string | Blob;
+  generatedImageUrl?: string;
 }
 
 export interface StringNodeData extends BaseNodeData {
@@ -95,11 +96,13 @@ export interface VideoGenNodeData extends BaseNodeData {
   referenceMode?: 'images' | 'frames' | 'omni';
   frameList?: FrameSlot[];
   generatedVideo?: string | Blob;
+  generatedVideoUrl?: string;
 }
 
 export interface ExtendVideoNodeData extends BaseNodeData {
   prompt?: string;
   generatedVideo?: string | Blob;
+  generatedVideoUrl?: string;
 }
 
 export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData;

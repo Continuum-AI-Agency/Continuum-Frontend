@@ -44,12 +44,14 @@ export function NanoGenNode({ id, data, selected }: NodeProps<ReactFlowNode<Nano
   const refImageCount = connectedEdges.filter(e => e.targetHandle === 'ref-images').length;
   const isPromptConnected = connectedEdges.some(e => e.targetHandle === 'prompt');
 
+  const displayImage = (data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl;
+
   const status: NodeExecutionStatus = useMemo(() => {
     if (data.isExecuting) return 'running';
     if (data.error) return 'error';
-    if (data.generatedImage) return 'success';
+    if (data.generatedImage || data.generatedImageUrl) return 'success';
     return 'idle';
-  }, [data.isExecuting, data.error, data.generatedImage]);
+  }, [data.isExecuting, data.error, data.generatedImage, data.generatedImageUrl]);
 
   const handleModelChange = useCallback((value: string) => {
     const model = value as NanoGenNodeData['model'];
@@ -231,10 +233,10 @@ export function NanoGenNode({ id, data, selected }: NodeProps<ReactFlowNode<Nano
           </div>
         )}
 
-        {data.generatedImage && (
+        {displayImage && (
           <div className="mt-2 overflow-hidden rounded-md border border-border/70 bg-black/85">
             <AspectRatio ratio={ratio} className="w-full">
-              <img src={data.generatedImage as string} alt="Generated" className="h-full w-full object-contain" />
+              <img src={displayImage as string} alt="Generated" className="h-full w-full object-contain" />
             </AspectRatio>
           </div>
         )}
