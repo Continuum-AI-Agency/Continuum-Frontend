@@ -102,6 +102,7 @@ export function ChatSurface({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
           Accept: "text/event-stream",
         },
         body: JSON.stringify({ prompt: currentPrompt }),

@@ -542,15 +542,19 @@ export async function executeWorkflow(
             const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
             const supabase = createSupabaseBrowserClient();
             const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+            const token = session?.access_token;
 
             console.info("[studio] using token for fast enrichment", token ? "present" : "missing");
+            if (!token) {
+                throw new Error("Authentication session required for prompt enrichment");
+            }
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
+                    'apikey': process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
                     'Accept': 'text/event-stream',
                 },
                 body: JSON.stringify({ prompt: payload.prompt }),
