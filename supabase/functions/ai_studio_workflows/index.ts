@@ -12,7 +12,7 @@ import type { WorkflowRow } from "./types.ts";
 import { sanitizeWorkflowNodes } from "./sanitize.ts";
 import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
-const DEFAULT_MAX_PAYLOAD_BYTES = 30 * 1024 * 1024;
+const DEFAULT_MAX_PAYLOAD_BYTES = 200 * 1024 * 1024;
 const MAX_PAYLOAD_BYTES = Number(Deno.env.get("AI_STUDIO_WORKFLOWS_MAX_BYTES")) || DEFAULT_MAX_PAYLOAD_BYTES;
 const decoder = new TextDecoder();
 
@@ -57,7 +57,17 @@ async function handleList(req: Request, input: Extract<WorkflowAction, { action:
 async function handleCreate(req: Request, input: Extract<WorkflowAction, { action: "create" }>) {
   const supabase = createSupabaseForRequest(req);
   await requireUser(req, supabase);
-  const sanitizedNodes = sanitizeWorkflowNodes(input.nodes ?? []);
+  const { nodes: sanitizedNodes, warnings } = sanitizeWorkflowNodes(input.nodes ?? []);
+
+  if (warnings.length > 0) {
+    const totalBytes = warnings.reduce((acc, warning) => acc + warning.bytes, 0);
+    console.warn("[ai_studio_workflows] dropped base64 payloads from save", {
+      brandProfileId: input.brandProfileId,
+      droppedFields: warnings.length,
+      totalBytes,
+      sample: warnings.slice(0, 5),
+    });
+  }
 
   const { data, error } = await supabase
     .schema("brand_profiles")
@@ -75,7 +85,21 @@ async function handleCreate(req: Request, input: Extract<WorkflowAction, { actio
     .single();
 
   if (error) return json({ error: error.message }, 400);
-  return json({ workflow: data as WorkflowRow });
+  return json({
+    workflow: data as WorkflowRow,
+    warnings: warnings.length > 0
+      ? {
+          message: "Base64 payloads were stripped before save. Persist generated media as URLs to keep them in saved workflows.",
+          droppedFields: warnings.length,
+          totalBytes: warnings.reduce((acc, warning) => acc + warning.bytes, 0),
+          fields: warnings.map((warning) => ({
+            nodeId: warning.nodeId,
+            path: warning.path,
+            bytes: warning.bytes,
+          })),
+        }
+      : undefined,
+  });
 }
 
 async function handler(req: Request): Promise<Response> {
