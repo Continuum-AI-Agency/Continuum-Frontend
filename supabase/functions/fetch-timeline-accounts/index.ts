@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,12 +65,9 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(accessToken);
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(accessToken);
 
-    if (authError || !user) {
+    if (authError || !claimsData?.claims?.sub) {
       log("auth failed", { authError });
       return jsonResponse({ error: "Unauthorized" }, 401);
     }

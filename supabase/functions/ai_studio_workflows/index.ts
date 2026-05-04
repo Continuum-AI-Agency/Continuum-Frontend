@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { workflowActionSchema, type WorkflowAction } from "./validators.ts";
 import type { WorkflowRow } from "./types.ts";
 import { sanitizeWorkflowNodes } from "./sanitize.ts";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const DEFAULT_MAX_PAYLOAD_BYTES = 30 * 1024 * 1024;
 const MAX_PAYLOAD_BYTES = Number(Deno.env.get("AI_STUDIO_WORKFLOWS_MAX_BYTES")) || DEFAULT_MAX_PAYLOAD_BYTES;
@@ -30,15 +31,17 @@ function createSupabaseForRequest(req: Request) {
   return createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
 }
 
-async function requireUser(supabase: ReturnType<typeof createSupabaseForRequest>) {
-  const { data, error } = await supabase.auth.getUser();
+async function requireUser(req: Request, supabase: ReturnType<typeof createSupabaseForRequest>) {
+  const { data, error } = await supabase.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (error) throw error;
-  if (!data.user) throw new Error("Not authenticated");
+  if (!data.claims?.sub) throw new Error("Not authenticated");
 }
 
 async function handleList(req: Request, input: Extract<WorkflowAction, { action: "list" }>) {
   const supabase = createSupabaseForRequest(req);
-  await requireUser(supabase);
+  await requireUser(req, supabase);
 
   const { data, error } = await supabase
     .schema("brand_profiles")
@@ -53,7 +56,7 @@ async function handleList(req: Request, input: Extract<WorkflowAction, { action:
 
 async function handleCreate(req: Request, input: Extract<WorkflowAction, { action: "create" }>) {
   const supabase = createSupabaseForRequest(req);
-  await requireUser(supabase);
+  await requireUser(req, supabase);
   const sanitizedNodes = sanitizeWorkflowNodes(input.nodes ?? []);
 
   const { data, error } = await supabase

@@ -9,6 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { promptTemplateActionSchema, type PromptTemplateAction } from "./validators.ts";
 import type { PromptTemplateRow } from "./types.ts";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -25,15 +26,17 @@ function createSupabaseForRequest(req: Request) {
   return createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
 }
 
-async function requireUser(supabase: ReturnType<typeof createSupabaseForRequest>) {
-  const { data, error } = await supabase.auth.getUser();
+async function requireUser(req: Request, supabase: ReturnType<typeof createSupabaseForRequest>) {
+  const { data, error } = await supabase.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (error) throw error;
-  if (!data.user) throw new Error("Not authenticated");
+  if (!data.claims?.sub) throw new Error("Not authenticated");
 }
 
 async function handleList(req: Request, input: Extract<PromptTemplateAction, { action: "list" }>) {
   const supabase = createSupabaseForRequest(req);
-  await requireUser(supabase);
+  await requireUser(req, supabase);
 
   let query = supabase
     .schema("brand_profiles")
@@ -53,7 +56,7 @@ async function handleList(req: Request, input: Extract<PromptTemplateAction, { a
 
 async function handleCreate(req: Request, input: Extract<PromptTemplateAction, { action: "create" }>) {
   const supabase = createSupabaseForRequest(req);
-  await requireUser(supabase);
+  await requireUser(req, supabase);
 
   const { data, error } = await supabase
     .schema("brand_profiles")
@@ -75,7 +78,7 @@ async function handleCreate(req: Request, input: Extract<PromptTemplateAction, {
 
 async function handleUpdate(req: Request, input: Extract<PromptTemplateAction, { action: "update" }>) {
   const supabase = createSupabaseForRequest(req);
-  await requireUser(supabase);
+  await requireUser(req, supabase);
 
   const updatePayload: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -98,7 +101,7 @@ async function handleUpdate(req: Request, input: Extract<PromptTemplateAction, {
 
 async function handleDelete(req: Request, input: Extract<PromptTemplateAction, { action: "delete" }>) {
   const supabase = createSupabaseForRequest(req);
-  await requireUser(supabase);
+  await requireUser(req, supabase);
 
   const { error } = await supabase
     .schema("brand_profiles")

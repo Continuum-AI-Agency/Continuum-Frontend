@@ -1,58 +1,217 @@
-
-[functions.process-brand-insights]
+[functions.admin-list-users]
 enabled = true
-verify_jwt = true
-import_map = "./functions/process-brand-insights/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/process-brand-insights/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/process-brand-insights/*.html" ]
+verify_jwt = false
+entrypoint = "./functions/admin-list-users/index.ts"
 
-[functions.process-brand-insights-context]
+[functions.admin-set-admin]
 enabled = true
-verify_jwt = true
-import_map = "./functions/process-brand-insights-context/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/process-brand-insights-context/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/process-brand-insights-context/*.html" ]
+verify_jwt = false
+entrypoint = "./functions/admin-set-admin/index.ts"
 
-[functions.impersonate-user]
+[functions.admin-update-tier]
 enabled = true
-verify_jwt = true
-import_map = "./functions/impersonate-user/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/impersonate-user/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/impersonate-user/*.html" ]
+verify_jwt = false
+entrypoint = "./functions/admin-update-tier/index.ts"
+
+[functions.ai_studio_workflows]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/ai_studio_workflows/index.ts"
 
 [functions.auth-send-email]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/auth-send-email/index.ts"
 
-[functions.fetch-timeline-blocks]
+[functions.brand-draft-audience]
 enabled = true
-verify_jwt = true
-entrypoint = "./functions/fetch-timeline-blocks/index.ts"
+verify_jwt = false
+entrypoint = "./functions/brand-draft-audience/index.ts"
+
+[functions.brand-draft-voice]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/brand-draft-voice/index.ts"
+
+[functions.brand_invite]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/brand_invite/index.ts"
+
+[functions.catalog-backfill-history]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/catalog-backfill-history/index.ts"
+
+[functions.catalog-create-meta]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/catalog-create-meta/index.ts"
+
+[functions.catalog-delete-meta]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/catalog-delete-meta/index.ts"
+
+[functions.catalog-reconcile-activity]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/catalog-reconcile-activity/index.ts"
+
+[functions.catalog-sync-meta]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/catalog-sync-meta/index.ts"
+
+[functions.delete_brand_profile]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/delete_brand_profile/index.ts"
+
+[functions.embed_document]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/embed_document/index.ts"
+
+[functions.fetch-account-breakdowns]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-account-breakdowns/index.ts"
+
+[functions.fetch-ad-accounts-for-selector]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-ad-accounts-for-selector/index.ts"
+
+[functions.fetch-brand-integrations]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-brand-integrations/index.ts"
+
+[functions.fetch-campaigns-for-selector]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-campaigns-for-selector/index.ts"
+
+[functions.fetch-meta-ads]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-meta-ads/index.ts"
+
+[functions.fetch-meta-adsets]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-meta-adsets/index.ts"
+
+[functions.fetch-meta-campaigns]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-meta-campaigns/index.ts"
+
+[functions.fetch-organic-analytics]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-organic-analytics/index.ts"
+
+[functions.fetch-organic-metrics]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-organic-metrics/index.ts"
+
+[functions.fetch-rule-action-logs]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-rule-action-logs/index.ts"
+
+[functions.fetch-tiktok-data]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/fetch-tiktok-data/index.ts"
 
 [functions.fetch-timeline-accounts]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/fetch-timeline-accounts/index.ts"
 
-[functions.jaina-speech-to-text]
+[functions.fetch-timeline-blocks]
 enabled = true
-verify_jwt = true
-entrypoint = "./functions/jaina-speech-to-text/index.ts"
+verify_jwt = false
+entrypoint = "./functions/fetch-timeline-blocks/index.ts"
+
+[functions.get-account-insights]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-account-insights/index.ts"
+
+[functions.get-budget-pacing]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-budget-pacing/index.ts"
+
+[functions.get-campaign-insights]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-campaign-insights/index.ts"
+
+[functions.get-organic-insights]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-organic-insights/index.ts"
+
+[functions.impersonate-user]
+enabled = true
+verify_jwt = false
+import_map = "./functions/impersonate-user/deno.json"
+entrypoint = "./functions/impersonate-user/index.ts"
+
+[functions.integration_accounts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/integration_accounts/index.ts"
 
 [functions.jaina-speech-realtime]
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/jaina-speech-realtime/index.ts"
+
+[functions.jaina-speech-to-text]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/jaina-speech-to-text/index.ts"
+
+[functions.paid-media-metrics]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/paid-media-metrics/index.ts"
+
+[functions.process-brand-insights]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-brand-insights/deno.json"
+entrypoint = "./functions/process-brand-insights/index.ts"
+
+[functions.process-brand-insights-context]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-brand-insights-context/deno.json"
+entrypoint = "./functions/process-brand-insights-context/index.ts"
+
+[functions.prompt-fast-enrich]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/prompt-fast-enrich/index.ts"
+
+[functions.prompt_templates]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/prompt_templates/index.ts"
+
+[functions.update_brand_integration_accounts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update_brand_integration_accounts/index.ts"
+
+[functions.update_integration_account_assets]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/update_integration_account_assets/index.ts"

@@ -19,44 +19,50 @@ describe("supabase-edge-auth", () => {
     expect(isServiceRoleToken("service-role-token", undefined)).toBe(false);
   });
 
-  test("authorizes service role requests without user lookup", async () => {
-    let getUserCalls = 0;
+  test("authorizes opted-in service role requests without claims lookup", async () => {
+    let getClaimsCalls = 0;
 
     const result = await authorizeSupabaseEdgeRequest({
       authHeader: "Bearer service-role-token",
       serviceRoleKey: "service-role-token",
-      getUser: async () => {
-        getUserCalls += 1;
-        return { data: { user: null }, error: new Error("should not run") };
+      allowServiceRole: true,
+      getClaims: async () => {
+        getClaimsCalls += 1;
+        return { data: { claims: null }, error: new Error("should not run") };
       },
     });
 
     expect(result).toEqual({ ok: true, actorKind: "service_role", userId: null });
-    expect(getUserCalls).toBe(0);
+    expect(getClaimsCalls).toBe(0);
   });
 
-  test("authorizes user JWT requests through Supabase auth", async () => {
+  test("authorizes user JWT requests through verified claims", async () => {
     const result = await authorizeSupabaseEdgeRequest({
       authHeader: "Bearer user-token",
       serviceRoleKey: "service-role-token",
-      getUser: async (accessToken) => ({
-        data: { user: accessToken === "user-token" ? { id: "user-1" } : null },
+      getClaims: async (accessToken) => ({
+        data: { claims: accessToken === "user-token" ? { sub: "user-1" } : null },
       }),
     });
 
-    expect(result).toEqual({ ok: true, actorKind: "user", userId: "user-1" });
+    expect(result).toEqual({
+      ok: true,
+      actorKind: "user",
+      userId: "user-1",
+      claims: { sub: "user-1" },
+    });
   });
 
   test("rejects missing and invalid tokens", async () => {
     const missing = await authorizeSupabaseEdgeRequest({
       authHeader: null,
       serviceRoleKey: "service-role-token",
-      getUser: async () => ({ data: { user: { id: "user-1" } } }),
+      getClaims: async () => ({ data: { claims: { sub: "user-1" } } }),
     });
     const invalid = await authorizeSupabaseEdgeRequest({
       authHeader: "Bearer anon-token",
       serviceRoleKey: "service-role-token",
-      getUser: async () => ({ data: { user: null }, error: new Error("invalid") }),
+      getClaims: async () => ({ data: { claims: null }, error: new Error("invalid") }),
     });
 
     expect(missing).toEqual({ ok: false, error: "Unauthorized" });

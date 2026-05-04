@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,16 +34,17 @@ serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: callerData, error: callerError } = await adminClient.auth.getUser(token);
-  if (callerError || !callerData?.user) return json({ error: "Invalid token" }, 401);
-  const callerIsAdmin = Boolean((callerData.user.app_metadata as Record<string, unknown> | undefined)?.is_admin);
+  const { data: callerData, error: callerError } = await adminClient.auth.getClaims(token);
+  const callerUserId = callerData?.claims?.sub;
+  if (callerError || !callerUserId) return json({ error: "Invalid token" }, 401);
+  const callerIsAdmin = Boolean((callerData.claims?.app_metadata as Record<string, unknown> | undefined)?.is_admin);
   if (!callerIsAdmin) return json({ error: "Forbidden" }, 403);
 
   const { userId, isAdmin } = (await req.json().catch(() => ({}))) as RequestBody;
   if (!userId || typeof isAdmin !== "boolean") return json({ error: "userId and isAdmin required" }, 400);
 
   // Prevent demoting self out of admin to avoid lockout
-  if (callerData.user.id === userId && !isAdmin) {
+  if (callerUserId === userId && !isAdmin) {
     return json({ error: "You cannot revoke your own admin status" }, 400);
   }
 

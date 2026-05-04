@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "./lib/cors.ts";
 import { lookupIntegrationAccount, resolveTikTokAccessToken } from "./lib/token.ts";
 import { fetchUserInfo, fetchVideoList, fetchVideosByIds } from "./lib/tiktok-api.ts";
@@ -69,11 +69,8 @@ serve(async (req) => {
     const supabaseToken = authHeader.startsWith("Bearer ")
       ? authHeader.slice(7)
       : "";
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
+    if (authError || !claimsData?.claims?.sub) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 

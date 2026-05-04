@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authorizeSupabaseEdgeRequest } from "../_shared/supabase-edge-auth.ts";
 import { streamGeminiTextDeltas, prefetchBrandContext } from "./geminiClient.ts";
 import type { BrandContextSources } from "./geminiClient.ts";
 
@@ -53,6 +54,19 @@ serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const auth = await authorizeSupabaseEdgeRequest({
+      authHeader: req.headers.get("Authorization"),
+      getClaims: (accessToken) => supabase.auth.getClaims(accessToken),
+    });
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json",
+        },
+      });
+    }
 
     const abortController = new AbortController();
     req.signal?.addEventListener("abort", () => abortController.abort());

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const META_API_VERSION = "v23.0";
@@ -68,12 +68,9 @@ serve(async (req: Request) => {
     const supabaseToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
 
-    if (authError || !user) {
+    if (authError || !claimsData?.claims?.sub) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 

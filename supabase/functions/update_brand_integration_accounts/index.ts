@@ -1,5 +1,6 @@
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const InputSchema = z.object({
   brandProfileId: z.string().uuid(),
@@ -56,6 +57,12 @@ async function handler(req: Request): Promise<Response> {
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } }
   );
+  const { data: claimsData, error: authError } = await supabase.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
+  if (authError || !claimsData?.claims?.sub) {
+    return json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { data: existing, error: existingError } = await supabase
     .schema("brand_profiles")

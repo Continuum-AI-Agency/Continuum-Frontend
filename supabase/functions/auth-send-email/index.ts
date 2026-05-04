@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const RESEND_FROM = "Continuum <product@trycontinuum.ai>";
+const SEND_EMAIL_HOOK_SECRET = Deno.env.get("SEND_EMAIL_HOOK_SECRET")?.replace("v1,whsec_", "");
 
 interface AuthHookPayload {
   user: {
@@ -39,7 +41,23 @@ function buildLoginUrl(redirectTo: string, token: string): string {
 
 serve(async (req) => {
   try {
-    const payload: AuthHookPayload = await req.json();
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        headers: { "Content-Type": "application/json" },
+        status: 405,
+      });
+    }
+
+    if (!SEND_EMAIL_HOOK_SECRET) {
+      throw new Error("Missing SEND_EMAIL_HOOK_SECRET");
+    }
+
+    const rawPayload = await req.text();
+    const webhook = new Webhook(SEND_EMAIL_HOOK_SECRET);
+    const payload = webhook.verify(
+      rawPayload,
+      Object.fromEntries(req.headers),
+    ) as AuthHookPayload;
     const { user, email_data } = payload;
     const { email } = user;
     const { token, email_action_type, redirect_to } = email_data;

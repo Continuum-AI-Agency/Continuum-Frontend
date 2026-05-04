@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,10 +34,9 @@ serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-  // Auth & authorize caller
-  const { data: userData, error: userError } = await adminClient.auth.getUser(token);
-  if (userError || !userData?.user) return json({ error: "Invalid token" }, 401);
-  const isAdmin = Boolean((userData.user.app_metadata as Record<string, unknown> | undefined)?.is_admin);
+  const { data: userData, error: userError } = await adminClient.auth.getClaims(token);
+  if (userError || !userData?.claims?.sub) return json({ error: "Invalid token" }, 401);
+  const isAdmin = Boolean((userData.claims?.app_metadata as Record<string, unknown> | undefined)?.is_admin);
   if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
   const body = (await req.json().catch(() => ({}))) as RequestBody;

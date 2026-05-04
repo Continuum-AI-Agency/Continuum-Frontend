@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseDateRange } from "./lib/date.ts";
 import { fetchFacebookAnalytics } from "./lib/facebook.ts";
 import { enrichCityDemographicsWithGoogleGeocoding } from "./lib/geocoding.ts";
@@ -172,12 +172,9 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     const supabaseToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
 
-    if (authError || !user) {
+    if (authError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

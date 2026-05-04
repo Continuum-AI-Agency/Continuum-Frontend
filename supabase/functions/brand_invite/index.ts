@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -271,12 +272,14 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData, error: userError } = await authed.auth.getUser();
+  const { data: userData, error: userError } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (userError) {
     logger.error("Auth user lookup failed", { error: userError });
     return json({ error: "Not authenticated" }, 401);
   }
-  const inviterId = userData?.user?.id ?? "";
+  const inviterId = userData?.claims?.sub ?? "";
   if (!inviterId) return json({ error: "Not authenticated" }, 401);
 
   logger.info("Invite create requested", {
@@ -436,9 +439,15 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>, lo
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData } = await authed.auth.getUser();
-  const user = userData?.user;
-  if (!user) return json({ error: "Not authenticated" }, 401);
+  const { data: userData } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
+  const user = {
+    id: userData?.claims?.sub ?? "",
+    email: typeof userData?.claims?.email === "string" ? userData.claims.email : undefined,
+    user_metadata: (userData?.claims?.user_metadata ?? {}) as Record<string, unknown>,
+  };
+  if (!user.id) return json({ error: "Not authenticated" }, 401);
 
   logger.info("Invite accept requested", {
     brandId: input.brandId,
@@ -524,13 +533,15 @@ async function handleRemoveMember(req: Request, input: z.infer<typeof InputSchem
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData, error: userError } = await authed.auth.getUser();
+  const { data: userData, error: userError } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (userError) {
     logger.error("Auth user lookup failed", { error: userError });
     return json({ error: "Not authenticated" }, 401);
   }
 
-  const actorId = userData?.user?.id ?? "";
+  const actorId = userData?.claims?.sub ?? "";
   if (!actorId) return json({ error: "Not authenticated" }, 401);
 
   const permissionError = await assertOwnerOrAdmin(authed, input.brandId, actorId, logger);
@@ -612,12 +623,14 @@ async function handleChangeRole(req: Request, input: z.infer<typeof InputSchema>
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData, error: userError } = await authed.auth.getUser();
+  const { data: userData, error: userError } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (userError) {
     logger.error("Auth user lookup failed", { error: userError });
     return json({ error: "Not authenticated" }, 401);
   }
-  const actorId = userData?.user?.id ?? "";
+  const actorId = userData?.claims?.sub ?? "";
   if (!actorId) return json({ error: "Not authenticated" }, 401);
 
   const permissionError = await assertOwnerOrAdmin(authed, input.brandId, actorId, logger);

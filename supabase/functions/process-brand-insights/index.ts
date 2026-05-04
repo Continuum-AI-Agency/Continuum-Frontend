@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.29.2";
+import { authorizeSupabaseEdgeRequest } from "../_shared/supabase-edge-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,6 +130,15 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+  const auth = await authorizeSupabaseEdgeRequest({
+    authHeader: req.headers.get("Authorization"),
+    serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+    allowServiceRole: true,
+    getClaims: (accessToken) => supabase.auth.getClaims(accessToken),
+  });
+  if (!auth.ok) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
 
   const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
 

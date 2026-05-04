@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   buildMetaEdgeCacheKey,
   readMetaEdgeCache,
@@ -145,7 +145,8 @@ serve(async (req: Request) => {
     const auth = await authorizeSupabaseEdgeRequest({
       authHeader: req.headers.get("Authorization"),
       serviceRoleKey,
-      getUser: (accessToken) => supabase.auth.getUser(accessToken),
+      allowServiceRole: true,
+      getClaims: (accessToken) => supabase.auth.getClaims(accessToken),
     });
 
     if (!auth.ok) {
