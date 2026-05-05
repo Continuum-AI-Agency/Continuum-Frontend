@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { parsePersistedReportValue } from "./persistedReport";
+import {
+  parsePersistedReportV2Value,
+  parsePersistedReportValue,
+} from "./persistedReport";
 
 describe("parsePersistedReportValue", () => {
   it("parses report payload from persisted report column", () => {
@@ -109,6 +112,119 @@ describe("parsePersistedReportValue", () => {
     expect(parsed?.executive_summary).toBe("Stable week with improving efficiency");
     expect(parsed?.sections[0]?.heading).toBe("Executive Narrative");
     expect(parsed?.blocks.length).toBeGreaterThan(0);
+  });
+
+  it("preserves settled V2 checkpoint report blocks without legacy stripping", () => {
+    const content = JSON.stringify({
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_v2",
+        part_id: "part_v2",
+        report: {
+          language: "en",
+          executive_summary: "Pilot comparison summary",
+          blocks: [
+            {
+              block_id: "narrative_summary",
+              category: "narrative",
+              scope: "account",
+              title: "Pilot Performance & Tracking Analysis",
+              priority: "primary",
+              body: "The exposed group had stronger engagement but no revenue tracking.",
+              highlights: [],
+            },
+            {
+              block_id: "metric_grid_groups",
+              category: "metric_grid",
+              scope: "account",
+              title: "Group Executive Summary",
+              priority: "primary",
+              metrics: [
+                {
+                  label: "Exposed Spend",
+                  value: 388997.51,
+                  format: "currency",
+                  severity: "neutral",
+                },
+              ],
+            },
+            {
+              block_id: "incrementality_analysis",
+              category: "comparison",
+              scope: "account",
+              title: "Incrementality Analysis",
+              priority: "primary",
+              before_label: "Control",
+              after_label: "Exposed",
+              pairs: [
+                {
+                  label: "Total Revenue",
+                  before: 978843.28,
+                  after: 0,
+                  change: -978843.28,
+                  format: "currency",
+                  severity: "risk",
+                },
+              ],
+            },
+            {
+              block_id: "campaign_comparison_table",
+              category: "data_table",
+              scope: "campaign",
+              title: "Campaign Performance Comparison",
+              priority: "secondary",
+              columns: [
+                { key: "name", label: "Campaign Name", format: "text" },
+                { key: "spend", label: "Spend", format: "currency" },
+              ],
+              rows: [{ name: "Continuum - Generales", spend: 168906.8 }],
+              notes: null,
+            },
+            {
+              block_id: "revenue_trend_chart",
+              category: "chart",
+              scope: "account",
+              title: "Daily Revenue Comparison",
+              priority: "secondary",
+              chart_type: "line",
+              category_key: "date",
+              value_key: null,
+              value_format: "number",
+              data: [{ date: "2026-05-01", control: 33900, exposed: 0 }],
+              chart_config: {
+                control: { color: "#4B7BFF", label: "Control Revenue" },
+                exposed: { color: "#FF4B4B", label: "Exposed Revenue" },
+              },
+            },
+          ],
+          follow_up_questions: ["Should I verify custom conversion events?"],
+          media_map: {},
+          _meta: {
+            schema_version: "2",
+            block_count: 5,
+            has_charts: true,
+            has_media: false,
+            has_citations: false,
+            primary_scope: "account",
+          },
+        },
+      },
+    });
+
+    const parsed = parsePersistedReportV2Value({
+      report: undefined,
+      content,
+    });
+
+    expect(parsed?.blocks).toHaveLength(5);
+    expect(parsed?.blocks[0]?.category).toBe("narrative");
+    expect(parsed?.blocks[0]?.body).toContain("stronger engagement");
+    expect(parsed?.blocks[1]?.category).toBe("metric_grid");
+    expect(parsed?.blocks[1]?.metrics[0]?.label).toBe("Exposed Spend");
+    expect(parsed?.blocks[3]?.category).toBe("data_table");
+    expect(parsed?.blocks[3]?.rows[0]?.name).toBe("Continuum - Generales");
+    expect(parsed?.blocks[4]?.category).toBe("chart");
+    expect(parsed?.blocks[4]?.chart_config.control.label).toBe("Control Revenue");
   });
 
   it("parses near-json checkpoint content that contains raw newlines in strings", () => {
@@ -237,5 +353,28 @@ describe("parsePersistedReportValue", () => {
     });
 
     expect(parsed).toBeUndefined();
+  });
+
+  it("parses report payload nested under result_payload wrappers", () => {
+    const parsed = parsePersistedReportValue({
+      report: {
+        result_payload: {
+          checkpoint_report: {
+            executive_summary: "Hydrated from run payload wrapper",
+            sections: [],
+            performance_snapshot: [],
+            strategic_recommendations: [],
+            follow_up_questions: [],
+            handoff_trace: [],
+            execution_objectives: [],
+            cached_sources: [],
+            graphs: [],
+          },
+        },
+      },
+      content: "ignored",
+    });
+
+    expect(parsed?.executive_summary).toBe("Hydrated from run payload wrapper");
   });
 });

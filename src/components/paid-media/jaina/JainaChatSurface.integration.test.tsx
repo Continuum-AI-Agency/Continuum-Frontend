@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ReactNode } from "react";
 
 import { createInitialJainaStreamState, type JainaStreamState } from "@/lib/jaina/stream";
+import { useJainaConversationSidebarStore } from "@/lib/jaina/conversation-sidebar-store";
 
 Object.assign(global.window, {
   SyntaxError: globalThis.SyntaxError,
@@ -122,6 +123,7 @@ mock.module("./components/JainaMessageItem", () => ({
     const plan = message.plan as { id?: string; title?: string } | undefined;
     const reasoning = (message.reasoning as unknown[] | undefined) ?? [];
     const report = message.report as { blocks?: unknown[] } | undefined;
+    const reportV2 = message.reportV2 as { blocks?: unknown[] } | undefined;
     return (
       <div
         data-testid={`${String(message.role)}-message`}
@@ -140,14 +142,17 @@ mock.module("./components/JainaMessageItem", () => ({
           {String(reasoning.length)}
         </span>
         <span data-testid={`${String(message.role)}-report-block-count`}>
-          {String(report?.blocks?.length ?? 0)}
+          {String(reportV2?.blocks?.length ?? report?.blocks?.length ?? 0)}
+        </span>
+        <span data-testid={`${String(message.role)}-report-kind`}>
+          {reportV2 ? "v2" : report ? "legacy" : "none"}
         </span>
       </div>
     );
   },
 }));
 
-const { JainaChatSurface } = await import("./JainaChatSurface");
+const { JainaChatSurface, mergePersistedMessagesWithLocal } = await import("./JainaChatSurface");
 
 type MockFetchResponse = {
   ok: boolean;
@@ -169,6 +174,7 @@ describe("JainaChatSurface integration", () => {
   beforeEach(() => {
     cleanup();
     streamState = createInitialJainaStreamState();
+    useJainaConversationSidebarStore.getState().clear();
 
     startMock.mockClear();
     cancelMock.mockClear();
@@ -183,7 +189,95 @@ describe("JainaChatSurface integration", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    useJainaConversationSidebarStore.getState().clear();
     cleanup();
+  });
+
+  it("keeps local V2 checkpoint blocks when a settled snapshot only has legacy report data", () => {
+    const merged = mergePersistedMessagesWithLocal(
+      [
+        {
+          id: "persisted-1",
+          role: "user",
+          content: "Build a pilot comparison dashboard",
+          createdAt: "2026-05-05T22:40:00.000Z",
+        },
+        {
+          id: "persisted-2",
+          role: "assistant",
+          content: "Pilot comparison summary",
+          createdAt: "2026-05-05T22:41:00.000Z",
+          status: "done",
+          report: {
+            language: "en",
+            report_title: "",
+            executive_summary: "Pilot comparison summary",
+            budget: null,
+            performance_snapshot: [],
+            blocks: [],
+            sections: [],
+            strategic_recommendations: [],
+            follow_up_questions: [],
+            handoff_trace: [],
+            execution_objectives: [],
+            cached_sources: [],
+            graphs: [],
+          },
+        },
+      ],
+      [
+        {
+          id: "local-user",
+          role: "user",
+          content: "Build a pilot comparison dashboard",
+          createdAt: "2026-05-05T22:40:00.000Z",
+        },
+        {
+          id: "local-assistant",
+          role: "assistant",
+          content: "Pilot comparison summary",
+          createdAt: "2026-05-05T22:41:00.000Z",
+          status: "done",
+          reportV2: {
+            language: "en",
+            executive_summary: "Pilot comparison summary",
+            follow_up_questions: [],
+            media_map: {},
+            _meta: {
+              schema_version: "2",
+              block_count: 2,
+              has_charts: false,
+              has_media: false,
+              primary_scope: "account",
+            },
+            blocks: [
+              {
+                block_id: "narrative_summary",
+                category: "narrative",
+                scope: "account",
+                title: "Pilot Performance",
+                priority: 0,
+                body: "The exposed group had stronger engagement.",
+                highlights: [],
+              },
+              {
+                block_id: "metric_grid_groups",
+                category: "metric_grid",
+                scope: "account",
+                title: "Group Executive Summary",
+                priority: 0,
+                metrics: [{ label: "Exposed CTR", value: 0.0106, format: "percent" }],
+              },
+            ],
+          },
+        },
+      ]
+    );
+
+    const assistant = merged.at(-1);
+    expect(assistant?.id).toBe("persisted-2");
+    expect(assistant?.reportV2?.blocks).toHaveLength(2);
+    expect(assistant?.reportV2?.blocks[1]?.category).toBe("metric_grid");
   });
 
   it("keeps plan + reasoning visible after response.done snapshot refresh", async () => {
@@ -473,7 +567,9 @@ describe("JainaChatSurface integration", () => {
 
     await waitFor(() => {
       const reportBlockCount = screen.getAllByTestId("assistant-report-block-count").at(-1);
+      const reportKind = screen.getAllByTestId("assistant-report-kind").at(-1);
       expect(reportBlockCount?.textContent).toBe("1");
+      expect(reportKind?.textContent).toBe("v2");
     });
   });
 });

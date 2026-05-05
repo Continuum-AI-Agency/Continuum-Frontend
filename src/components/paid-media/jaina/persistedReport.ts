@@ -1,6 +1,8 @@
 import {
+  checkpointReportV2Schema,
   hasReportContent,
   reportPayloadSchema,
+  type CheckpointReportV2,
   type ReportPayload,
 } from "@/lib/jaina/schemas";
 import {
@@ -13,6 +15,11 @@ function parseReportPayload(value: unknown): ReportPayload | undefined {
   const parsed = reportPayloadSchema.safeParse(value);
   if (!parsed.success) return undefined;
   return hasReportContent(parsed.data) ? parsed.data : undefined;
+}
+
+function parseReportV2Payload(value: unknown): CheckpointReportV2 | undefined {
+  const parsed = checkpointReportV2Schema.safeParse(value);
+  return parsed.success && parsed.data.blocks.length > 0 ? parsed.data : undefined;
 }
 
 function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | undefined {
@@ -50,6 +57,7 @@ function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | unde
   }
   const record = unwrapped as Record<string, unknown>;
   const prioritizedKeys = [
+    "result_payload",
     "checkpoint_report",
     "report",
     "payload",
@@ -71,6 +79,63 @@ function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | unde
   return undefined;
 }
 
+function parseReportV2FromUnknown(value: unknown, depth = 0): CheckpointReportV2 | undefined {
+  if (depth > 6 || value == null) return undefined;
+
+  if (typeof value === "string") {
+    const embeddedCandidates = extractJsonObjectCandidates(value);
+    for (const embedded of embeddedCandidates) {
+      const parsed = parseReportV2FromUnknown(embedded, depth + 1);
+      if (parsed) return parsed;
+    }
+
+    const looseParsed = parseLooseJsonCandidate(value.trim());
+    if (looseParsed != null && looseParsed !== value) {
+      const parsed = parseReportV2FromUnknown(looseParsed, depth + 1);
+      if (parsed) return parsed;
+    }
+    return undefined;
+  }
+
+  const unwrapped = unwrapReportEnvelope(value);
+  const direct = parseReportV2Payload(unwrapped);
+  if (direct) return direct;
+
+  if (Array.isArray(unwrapped)) {
+    for (const item of unwrapped) {
+      const parsed = parseReportV2FromUnknown(item, depth + 1);
+      if (parsed) return parsed;
+    }
+    return undefined;
+  }
+
+  if (!unwrapped || typeof unwrapped !== "object") {
+    return undefined;
+  }
+  const record = unwrapped as Record<string, unknown>;
+  const prioritizedKeys = [
+    "result_payload",
+    "checkpoint_report",
+    "report",
+    "payload",
+    "data",
+    "content",
+    "parts",
+    "text",
+    "detail",
+    "message",
+    "response",
+  ];
+
+  for (const key of prioritizedKeys) {
+    if (!(key in record)) continue;
+    const parsed = parseReportV2FromUnknown(record[key], depth + 1);
+    if (parsed) return parsed;
+  }
+
+  return undefined;
+}
+
 export function parsePersistedReportValue(input: {
   report: unknown;
   content: string;
@@ -84,6 +149,25 @@ export function parsePersistedReportValue(input: {
 
   for (const entry of input.reasoning ?? []) {
     const parsed = parseReportFromUnknown(entry);
+    if (parsed) return parsed;
+  }
+
+  return undefined;
+}
+
+export function parsePersistedReportV2Value(input: {
+  report: unknown;
+  content: string;
+  reasoning?: unknown[];
+}): CheckpointReportV2 | undefined {
+  const direct = parseReportV2FromUnknown(input.report);
+  if (direct) return direct;
+
+  const embeddedReport = parseReportV2FromUnknown(input.content);
+  if (embeddedReport) return embeddedReport;
+
+  for (const entry of input.reasoning ?? []) {
+    const parsed = parseReportV2FromUnknown(entry);
     if (parsed) return parsed;
   }
 

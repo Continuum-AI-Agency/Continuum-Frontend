@@ -145,6 +145,52 @@ export type BackendConversationMessagesResponse = z.infer<
   typeof backendConversationMessagesResponseSchema
 >;
 
+export const jainaConversationRunsHydrationQuerySchema = z.object({
+  brandId: z.string().min(1),
+  adAccountId: z.string().min(1).optional(),
+  sessionId: z.string().min(1),
+  limit: z.coerce.number().int().min(1).max(500).default(250),
+});
+export type JainaConversationRunsHydrationQuery = z.infer<
+  typeof jainaConversationRunsHydrationQuerySchema
+>;
+
+export const backendConversationRunSchema = z.object({
+  id: z.number().int().nonnegative().nullable().optional(),
+  run_id: z.string().nullable().optional(),
+  session_id: z.string().nullable().optional(),
+  brand_id: z.string().nullable().optional(),
+  ad_account_id: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  result_type: z.string().nullable().optional(),
+  result_payload: z.unknown().nullable().optional(),
+  query: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+});
+export type BackendConversationRun = z.infer<typeof backendConversationRunSchema>;
+
+export const jainaConversationRunSchema = z.object({
+  id: z.number().int().nonnegative().nullable().optional(),
+  runId: z.string().nullable(),
+  sessionId: z.string().nullable(),
+  brandId: z.string().nullable(),
+  adAccountId: z.string().nullable(),
+  status: z.string().nullable(),
+  resultType: z.string().nullable(),
+  resultPayload: z.unknown().nullable(),
+  query: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+export type JainaConversationRun = z.infer<typeof jainaConversationRunSchema>;
+
+export const jainaConversationRunsHydrationResponseSchema = z.object({
+  sessionId: z.string().min(1),
+  runs: z.array(jainaConversationRunSchema),
+});
+export type JainaConversationRunsHydrationResponse = z.infer<
+  typeof jainaConversationRunsHydrationResponseSchema
+>;
+
 function normalizeReportAssemblyForConversationLoad(
   reportAssembly: ReportAssembly
 ): FrontendCheckpointReport {
@@ -281,6 +327,23 @@ export function mapConversationCreateResponse(
     brandId: row.brand_id ?? null,
     adAccountId: row.ad_account_id ?? null,
     title: row.conversation_title ?? null,
+  };
+}
+
+export function mapConversationRunRow(
+  row: BackendConversationRun
+): JainaConversationRun {
+  return {
+    id: row.id ?? null,
+    runId: row.run_id ?? null,
+    sessionId: row.session_id ?? null,
+    brandId: row.brand_id ?? null,
+    adAccountId: row.ad_account_id ?? null,
+    status: row.status ?? null,
+    resultType: row.result_type ?? null,
+    resultPayload: row.result_payload ?? null,
+    query: row.query ?? null,
+    createdAt: row.created_at ?? null,
   };
 }
 
