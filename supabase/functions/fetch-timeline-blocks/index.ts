@@ -584,12 +584,14 @@ serve(async (req: Request) => {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
+    const userId = claimsData.claims.sub;
+
     const { data: membership, error: membershipError } = await supabase
       .schema("brand_profiles")
       .from("permissions")
       .select("brand_profile_id")
       .eq("brand_profile_id", brandId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (membershipError) {

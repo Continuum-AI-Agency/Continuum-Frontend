@@ -120,12 +120,14 @@ serve(async (req: Request) => {
       });
     }
 
+    const userId = claimsData.claims.sub;
+
     const { data: permission, error: permError } = await supabase
       .schema("brand_profiles")
       .from("permissions")
       .select("role")
       .eq("brand_profile_id", brandId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (permError || !permission) {
@@ -137,7 +139,7 @@ serve(async (req: Request) => {
         .eq("id", brandId)
         .maybeSingle();
 
-      if (brandError || !brand || brand.created_by !== user.id) {
+      if (brandError || !brand || brand.created_by !== userId) {
         return new Response(
           JSON.stringify({ error: "Forbidden: No access to this brand" }),
           {

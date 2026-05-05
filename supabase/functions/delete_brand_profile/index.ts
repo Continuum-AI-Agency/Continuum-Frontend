@@ -126,7 +126,7 @@ async function assertUserAccess(
     return { status: 403, message: "Forbidden" };
   }
 
-  const email = userResult.user.email?.toLowerCase() ?? "";
+  const email = (claimsResult?.claims?.email as string | undefined)?.toLowerCase() ?? "";
   const members = Array.isArray(onboardingRow.state.members)
     ? (onboardingRow.state.members as Array<{ email?: string; role?: string }>)
     : [];

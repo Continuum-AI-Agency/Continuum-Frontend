@@ -258,11 +258,13 @@ serve(async (req: Request) => {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
+    const userId = claimsData.claims.sub;
+
     const { data: permissionRow, error: permissionError } = await supabase
       .schema("brand_profiles")
       .from("permissions")
       .select("user_id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("brand_profile_id", payload.brandId)
       .maybeSingle();
 

@@ -282,7 +282,8 @@ serve(async (req: Request) => {
       );
     }
 
-    log("Auth OK, user:", user.id);
+    const userId = claimsData.claims.sub;
+    log("Auth OK, user:", userId);
 
     // Cache read from dedicated budget_pacing_cache table
     if (!forceRefresh) {

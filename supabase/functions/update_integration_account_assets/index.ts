@@ -111,6 +111,8 @@ async function handler(req: Request): Promise<Response> {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const userId = authData.claims.sub;
+
   const { assetIds, selectedAssetIds } = input;
   const service = createServiceClient();
 
@@ -160,7 +162,7 @@ async function handler(req: Request): Promise<Response> {
 
   const integrationRowsTyped = (integrationRows ?? []) as UserIntegrationRow[];
   const ownedIntegrationIds = new Set(
-    integrationRowsTyped.filter(row => row.user_id === authData.user.id).map(row => row.id)
+    integrationRowsTyped.filter(row => row.user_id === userId).map(row => row.id)
   );
   const unauthorized = integrationIds.filter(id => !ownedIntegrationIds.has(id));
   if (unauthorized.length > 0) {
