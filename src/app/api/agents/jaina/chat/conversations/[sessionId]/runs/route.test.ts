@@ -15,6 +15,7 @@ const getSessionMock = mock(() =>
 );
 
 const fromMock = mock();
+const schemaMock = mock(() => ({ from: fromMock }));
 
 mock.module("@/lib/supabase/server", () => ({
   createSupabaseServerClient: () =>
@@ -23,7 +24,7 @@ mock.module("@/lib/supabase/server", () => ({
         getUser: getUserMock,
         getSession: getSessionMock,
       },
-      from: fromMock,
+      schema: schemaMock,
     }),
 }));
 
@@ -33,6 +34,7 @@ describe("Jaina conversation runs hydration route", () => {
   beforeEach(() => {
     getUserMock.mockClear();
     getSessionMock.mockClear();
+    schemaMock.mockClear();
     fromMock.mockClear();
   });
 
@@ -77,6 +79,7 @@ describe("Jaina conversation runs hydration route", () => {
     });
 
     expect(response.status).toBe(200);
+    expect(schemaMock).toHaveBeenCalledWith("brand_profiles");
     expect(fromMock).toHaveBeenCalledWith("jaina_conversation_runs");
     expect(queryBuilder.eq.mock.calls).toEqual(
       expect.arrayContaining([

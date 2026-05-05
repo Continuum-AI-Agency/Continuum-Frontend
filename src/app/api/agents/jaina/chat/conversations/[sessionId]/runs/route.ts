@@ -79,6 +79,7 @@ export async function GET(request: Request, context: RunsRouteContext) {
   try {
     const supabase = await createSupabaseServerClient();
     let query = supabase
+      .schema("brand_profiles")
       .from("jaina_conversation_runs")
       .select(
         "id, run_id, session_id, brand_id, ad_account_id, status, result_type, result_payload, query, created_at"

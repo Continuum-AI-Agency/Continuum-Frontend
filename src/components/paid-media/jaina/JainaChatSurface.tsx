@@ -328,6 +328,13 @@ function hydrateMessagesWithConversationRuns(
   messages: JainaChatMessage[],
   runs: JainaConversationRun[]
 ): { messages: JainaChatMessage[]; changed: boolean } {
+  type HydratedRunPayload = {
+    report: JainaChatMessage["report"] | undefined;
+    reportV2: JainaChatMessage["reportV2"] | undefined;
+    reportAssembly: JainaChatMessage["reportAssembly"] | undefined;
+    objectives: JainaChatMessage["objectives"] | undefined;
+  };
+
   const hydrateableAssistantCount = messages.reduce((count, message) => {
     if (
       message.role !== "assistant" ||
@@ -366,14 +373,7 @@ function hydrateMessagesWithConversationRuns(
       };
     })
     .filter(
-      (
-        value
-      ): value is {
-        report?: JainaChatMessage["report"];
-        reportV2?: JainaChatMessage["reportV2"];
-        reportAssembly?: JainaChatMessage["reportAssembly"];
-        objectives?: JainaChatMessage["objectives"];
-      } => Boolean(value)
+      (value): value is HydratedRunPayload => value !== null
     );
 
   if (hydratedPayloads.length === 0) {
