@@ -2232,6 +2232,67 @@ describe("normalizeCheckpointReportPayload strictness", () => {
     expect(report.sections[0]?.summary).toBe("Nested summary");
     expect(report.sections[0]?.highlights[0]?.text).toBe("Nested highlight");
   });
+
+  it("keeps object-based summary fields for executive and section summaries", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_object_summary",
+        part_id: "part_object_summary",
+        report: {
+          summary: {
+            description: "Executive summary preserved from summary object.",
+          },
+          sections: [
+            {
+              scope: "account",
+              summary: {
+                narrative: "Section narrative preserved from summary object.",
+                title: "Fallback section title",
+              },
+              insights: [
+                {
+                  text: "Insight text survives.",
+                },
+              ],
+              recommendations: [
+                {
+                  title: "Prioritize winning creatives",
+                  rationale: "Highest CTR at lower CPM.",
+                },
+              ],
+              tables: [
+                {
+                  title: "Section table",
+                  headers: ["A"],
+                  rows: [["1"]],
+                },
+              ],
+              graphs: [
+                {
+                  title: "Section chart",
+                  chart_type: "line",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe(
+      "Executive summary preserved from summary object."
+    );
+    expect(report.sections[0]?.summary).toBe(
+      "Section narrative preserved from summary object."
+    );
+    expect(report.sections[0]?.highlights[0]?.text).toBe("Insight text survives.");
+    expect(report.sections[0]?.actions[0]?.title).toBe("Prioritize winning creatives");
+  });
 });
 
 describe("reduceJainaStreamEvent plan capture from heartbeat state.delta", () => {

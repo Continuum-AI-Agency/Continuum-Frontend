@@ -387,6 +387,31 @@ function normalizeGraph(value: unknown): Record<string, unknown> | null {
   return title ? { ...record, title } : record;
 }
 
+const summaryFieldPriority = [
+  "narrative",
+  "summary",
+  "text",
+  "description",
+  "overview",
+  "title",
+  "principal_deviation",
+] as const;
+
+function extractSummaryText(value: unknown): string | undefined {
+  const summaryText = getNonEmptyString(value);
+  if (summaryText) return summaryText;
+
+  const record = asRecord(value);
+  if (!record) return undefined;
+
+  for (const field of summaryFieldPriority) {
+    const candidate = getNonEmptyString(record[field]);
+    if (candidate) return candidate;
+  }
+
+  return undefined;
+}
+
 function normalizeTable(
   value: unknown
 ): FrontendCheckpointReport["sections"][number]["tables"][number] | null {
@@ -494,7 +519,7 @@ function normalizeSection(
     heading: getNonEmptyString(record.heading) ?? getNonEmptyString(record.title) ?? "Analysis",
     scope: getNonEmptyString(record.scope) ?? "account",
     summary:
-      getNonEmptyString(record.summary) ??
+      extractSummaryText(record.summary) ??
       getNonEmptyString(record.content) ??
       getNonEmptyString(record.section_summary) ??
       getNonEmptyString(record.analysis_summary) ??
@@ -716,9 +741,7 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
       "",
     executive_summary:
       getNonEmptyString(payloadRecord.executive_summary) ??
-      getNonEmptyString(summaryRecord?.narrative) ??
-      getNonEmptyString(summaryRecord?.overview) ??
-      getNonEmptyString(payloadRecord.summary) ??
+      extractSummaryText(payloadRecord.summary) ??
       getNonEmptyString(payloadRecord.title) ??
       "",
     budget: asRecord(payloadRecord.budget) ?? null,
@@ -922,14 +945,9 @@ function parsePartialReportFromAccumulatedText(
       raw.title = summaryTitle;
     }
 
-    const overview = getNonEmptyString(summaryObject.overview);
-    if (overview) {
-      raw.summary = overview;
-    }
-
-    const narrative = getNonEmptyString(summaryObject.narrative);
-    if (narrative) {
-      raw.summary = narrative;
+    const summaryText = extractSummaryText(summaryObject);
+    if (summaryText) {
+      raw.summary = summaryText;
     }
 
     const keyFindings = asArray(summaryObject.key_findings);
