@@ -69,6 +69,7 @@ export default async function SettingsPage() {
             <Grid columns={{ initial: "1", lg: "12" }} gap="6" align="start">
               <GlassPanel className="p-6 h-full lg:col-span-7 xl:col-span-8">
                 <BrandSettingsPanel
+                  key={activeBrandId}
                   data={{
                     brandName: brandProfile?.name ?? "Untitled Brand",
                     logoPath: brandProfile?.logoPath ?? null,
@@ -80,7 +81,7 @@ export default async function SettingsPage() {
                 />
               </GlassPanel>
               <GlassPanel className="p-6 h-full lg:col-span-5 xl:col-span-4">
-                <BrandIntegrationsSection initialSummary={integrationSummary} />
+                <BrandIntegrationsSection key={activeBrandId} initialSummary={integrationSummary} />
               </GlassPanel>
               <GlassPanel className="p-6 lg:col-span-12">
                 <RunStrategicAnalysisButton brandProfileId={activeBrandId} />

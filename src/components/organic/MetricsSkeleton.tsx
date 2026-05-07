@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Card, Flex, Grid, Heading, Text } from "@radix-ui/themes";
+import { Box, Card, Flex, Grid } from "@radix-ui/themes";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -121,34 +121,20 @@ function TrendsPanelSkeleton() {
  */
 export function OrganicMetricsWidgetSkeleton() {
   return (
-    <Card variant="surface" className="border border-subtle bg-surface">
-      <Box p="4">
-        {/* Header section */}
-        <Flex align="center" justify="between" gap="3" wrap="wrap">
-          <Flex align="center" gap="2">
-            {/* Instagram badge skeleton - circular */}
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <Box>
-              <Skeleton className="h-5 w-[200px] rounded mb-1" />
-              <Skeleton className="h-4 w-[150px] rounded" />
-            </Box>
-          </Flex>
-
-          {/* Selectors skeleton */}
-          <Flex align="center" gap="2">
-            {/* View mode selector */}
-            <Skeleton className="h-9 w-[120px] rounded" />
-            {/* Account selector */}
-            <Skeleton className="h-9 w-[200px] rounded" />
-          </Flex>
+    <Card variant="surface" className="h-full border border-subtle bg-surface">
+      <Box className="border-b px-3 py-1.5">
+        <Flex align="center" gap="2" wrap="wrap">
+          <Skeleton className="hidden h-7 w-7 rounded-full sm:block" />
+          <Skeleton className="h-8 w-36 rounded-md" />
+          <Skeleton className="h-8 w-28 rounded-md" />
+          <Skeleton className="h-8 min-w-52 flex-1 rounded-md" />
+          <Skeleton className="h-8 w-32 rounded-md" />
+          <Skeleton className="ml-auto h-8 w-20 rounded-md" />
         </Flex>
+      </Box>
 
-        {/* Content section */}
-        <Box pt="4">
-          <Flex align="center" justify="center" gap="2">
-            <Skeleton className="h-4 w-[150px] rounded" />
-          </Flex>
-        </Box>
+      <Box p="3">
+        <MetricsGridSkeleton />
       </Box>
     </Card>
   );

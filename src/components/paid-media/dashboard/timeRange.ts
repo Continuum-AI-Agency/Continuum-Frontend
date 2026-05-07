@@ -81,11 +81,7 @@ export function resolveTimeRangeWindow(
   };
 }
 
-export function toMetricsRange(range: PaidMediaTimeRange): {
-  preset: TimePreset;
-  since?: string;
-  until?: string;
-} {
+export function toMetricsRange(range: PaidMediaTimeRange): PaidMediaTimeRange {
   if (range.preset !== "custom") {
     return { preset: range.preset };
   }

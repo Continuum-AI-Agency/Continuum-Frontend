@@ -1,5 +1,6 @@
 import { Container, Flex, Heading, Text } from "@radix-ui/themes";
 import { BrandIntegrationsCard } from "@/components/settings/BrandIntegrationsCard";
+import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection";
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
@@ -37,6 +38,7 @@ export default async function IntegrationsPage() {
           Manage which social and ads accounts are linked to your active brand profile. OAuth flows remain managed
           centrally by Continuum.
         </Text>
+        <BrandGrantsSection brandProfileId={activeBrandId} />
         <GlassPanel className="p-6">
           <BrandIntegrationsCard summary={integrationSummary} showHeader={false} />
         </GlassPanel>

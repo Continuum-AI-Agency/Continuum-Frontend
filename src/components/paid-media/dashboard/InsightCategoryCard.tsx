@@ -38,6 +38,7 @@ const METRIC_LABELS: Record<string, string> = {
   spend: "Spend",
   frequency: "Frequency",
   spend_concentration: "Concentration",
+  pace: "Pace %",
 };
 
 export function InsightCategoryCard({
@@ -47,17 +48,17 @@ export function InsightCategoryCard({
   accentColor,
 }: InsightCategoryCardProps) {
   return (
-    <div className="rounded-lg border border-border/70 bg-card p-3">
-      <div className="mb-2.5 flex items-center gap-2">
+    <div className="rounded-lg border border-border/70 bg-card p-2.5">
+      <div className="mb-2 flex items-center gap-2">
         <div
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-md",
+            "flex size-6 shrink-0 items-center justify-center rounded-md",
             accentColor
           )}
         >
-          <Icon className="size-3.5 text-white" />
+          <Icon className="size-3 text-white" />
         </div>
-        <span className="text-sm font-medium">{title}</span>
+        <span className="text-xs font-medium">{title}</span>
       </div>
 
       {insights.length === 0 ? (
@@ -65,7 +66,7 @@ export function InsightCategoryCard({
           Not enough data to surface insights
         </p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="space-y-2">
           {insights.map((insight, idx) => (
             <li key={idx} className="flex items-start gap-2">
               <span

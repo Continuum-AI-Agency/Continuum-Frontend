@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import * as storeRegistry from "@/lib/storage/storeRegistry";
 import type { 
   OrganicCalendarDay, 
   OrganicCalendarDraft, 
@@ -121,6 +122,7 @@ interface CalendarState {
   clearEventHistory: () => void;
   clearGhosts: () => void;
   clearCalendar: () => void;
+  resetForBrandSwitch: () => void;
 
   addScheduledEvent: (date: string, event: Omit<ScheduledEvent, "id">) => void;
   updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
@@ -172,7 +174,7 @@ function sanitizePersistedCalendarState(
   const viewMode: "week" | "month" | "list" =
     state?.viewMode === "week" || state?.viewMode === "month" || state?.viewMode === "list"
       ? state.viewMode
-      : "week";
+      : "month";
 
   // Strip large binary blobs (assetBase64) to keep sessionStorage lean.
   const days: OrganicCalendarDay[] = Array.isArray(state?.days)
@@ -201,7 +203,7 @@ export const useCalendarStore = create<CalendarState>()(
       gridError: null,
       gridJobId: null,
       scheduledEvents: {},
-      viewMode: "week",
+      viewMode: "month",
       eventHistory: [],
       backlogDrafts: [],
       weekCache: {},
@@ -490,6 +492,25 @@ export const useCalendarStore = create<CalendarState>()(
 
       setWeekCache: (weekId, days) =>
         set((state) => ({ weekCache: { ...state.weekCache, [weekId]: days } })),
+
+      resetForBrandSwitch: () =>
+        set({
+          days: [],
+          ghosts: {},
+          selectedDraftId: null,
+          selectedDraftIds: [],
+          selectedTrendIds: [],
+          persistedWeekStartId: null,
+          accountContext: { igAccountId: null, brandId: null },
+          gridStatus: "idle",
+          gridProgress: { percent: 0 },
+          gridError: null,
+          gridJobId: null,
+          scheduledEvents: {},
+          eventHistory: [],
+          backlogDrafts: [],
+          weekCache: {},
+        }),
     }),
     {
       name: "organic-calendar-storage",
@@ -506,3 +527,21 @@ export const useCalendarStore = create<CalendarState>()(
   )
 );
 
+// Register a teardown so brand switching wipes the calendar's persisted state.
+// The store's storage key is not brand-scoped (would require Zustand re-mount);
+// instead we reset in-memory state and clear the sessionStorage entry on switch.
+if (typeof window !== "undefined") {
+  storeRegistry.register({
+    name: "organic-calendar",
+    teardown: () => {
+      try {
+        useCalendarStore.getState().resetForBrandSwitch();
+        window.sessionStorage.removeItem("organic-calendar-storage");
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[organic-calendar] teardown failed", error);
+        }
+      }
+    },
+  });
+}

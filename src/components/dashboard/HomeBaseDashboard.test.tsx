@@ -1,11 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render } from "@testing-library/react";
 import { describe, expect, it } from "bun:test";
 import { Theme } from "@radix-ui/themes";
 
 import { HomeBaseDashboard } from "./HomeBaseDashboard";
 
 function renderDashboard() {
-  render(
+  return render(
     <Theme>
       <HomeBaseDashboard
         paidViewSlot={<div>Paid slot</div>}
@@ -15,14 +15,20 @@ function renderDashboard() {
   );
 }
 
+function getDashboardPanel(container: HTMLElement, panel: "paid" | "organic") {
+  return Array.from(container.getElementsByTagName("div")).find(
+    (element) => element.getAttribute("data-dashboard-panel") === panel,
+  ) as HTMLDivElement;
+}
+
 describe("HomeBaseDashboard", () => {
   it("defaults to organic tab and content", () => {
-    renderDashboard();
+    const { container } = renderDashboard();
 
-    expect(screen.getByText("Social metrics & Trend signals")).toBeTruthy();
+    expect(container.textContent).toContain("Social metrics & Trend signals");
 
-    const paidContainer = screen.getByText("Paid slot").parentElement as HTMLDivElement;
-    const organicContainer = screen.getByText("Organic slot").parentElement as HTMLDivElement;
+    const paidContainer = getDashboardPanel(container, "paid");
+    const organicContainer = getDashboardPanel(container, "organic");
 
     expect(paidContainer.style.display).toBe("none");
     expect(organicContainer.style.display).toBe("block");

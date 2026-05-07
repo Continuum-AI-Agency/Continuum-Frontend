@@ -6,6 +6,7 @@ import type { BrandRole } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { normalizeBrandDocumentStoragePath } from "@/lib/brands/document-download";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
@@ -57,6 +58,35 @@ export async function removeMemberAction(
 ): Promise<void> {
   const repo = createBrandProfileRepository();
   await repo.removeMember(brandId, { userId: memberId, email });
+}
+
+export async function changeMemberRoleAction(
+  brandId: string,
+  userId: string,
+  role: Exclude<BrandRole, "owner">,
+): Promise<void> {
+  if (!brandId) throw new Error("brandId is required");
+  if (!userId) throw new Error("userId is required");
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const { error } = await supabase.functions.invoke<{ ok: true } | { error: string }>(
+    "brand_invite",
+    {
+      body: { action: "change_role", brandId, userId, role },
+      headers: session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined,
+    },
+  );
+
+  if (error) {
+    const message = await getFunctionsInvokeErrorMessage(error);
+    throw new Error(message ?? error.message ?? "Unable to change role");
+  }
 }
 
 export async function createMagicLinkAction(
@@ -158,14 +188,11 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
 }
 
 export async function createSignedDocumentUrlAction(storagePath: string): Promise<string> {
-  if (!storagePath) {
-    throw new Error("Storage path is required");
-  }
-
+  const normalizedStoragePath = normalizeBrandDocumentStoragePath(storagePath);
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.storage
     .from("brand-docs")
-    .createSignedUrl(storagePath, 60, { download: true });
+    .createSignedUrl(normalizedStoragePath, 60, { download: true });
 
   if (error || !data?.signedUrl) {
     throw new Error(error?.message ?? "Failed to generate signed URL");

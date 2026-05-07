@@ -8,6 +8,7 @@ import {
   Card,
   Flex,
   Heading,
+  IconButton,
   Select,
   Separator,
   Text,
@@ -48,6 +49,12 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 import {
   ChartContainer,
@@ -452,14 +459,14 @@ function PostGalleryCard({
       onClick={onSelect}
       aria-label={`Open analytics for ${post.title ?? post.mediaType ?? post.id}`}
       className={cn(
-        "group relative block w-full overflow-hidden rounded-xl border border-subtle bg-surface text-left transition-all duration-200",
+        "group relative block w-full overflow-hidden rounded-xl border border-subtle bg-surface text-left transition-[transform,box-shadow,opacity,border-color] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1",
         selected
           ? "ring-2 ring-blue-500/60 border-blue-400/60 shadow-lg shadow-blue-500/15"
           : "hover:-translate-y-0.5 hover:shadow-md"
       )}
     >
-      <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90", mediaHeightClass)}>
+      <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10", mediaHeightClass)}>
         {preview ? (
           video && !isTikTok ? (
             <Reel className="h-full w-full" data={reelData} defaultMuted>
@@ -481,7 +488,7 @@ function PostGalleryCard({
               <img
                 src={preview}
                 alt={post.title ?? post.caption ?? "Post media"}
-                className="h-full w-full object-contain"
+                className="h-full w-full object-contain outline outline-1 outline-black/10 dark:outline-white/10"
               />
               {isTikTok && post.permalink ? (
                 <a
@@ -502,14 +509,14 @@ function PostGalleryCard({
           )
         ) : (
           <Box className="h-full w-full flex items-center justify-center">
-            <Text size="1" color="gray">No media</Text>
+            <Text size="1" color="gray">Media preview unavailable</Text>
           </Box>
         )}
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <div className="absolute inset-x-0 bottom-0 p-3">
             <Text size="1" className="line-clamp-5 text-white">
-              {post.caption?.trim().length ? post.caption : "No caption"}
+              {post.caption?.trim().length ? post.caption : "Caption unavailable"}
             </Text>
             <Flex align="center" justify="between" mt="2">
               <Text size="1" className="text-white/85">{formatDateTime(post.timestamp)}</Text>
@@ -673,7 +680,7 @@ function PostSnapshotPanel({
               )
             ) : (
               <Box className="flex min-h-[180px] items-center justify-center">
-                <Text size="1" color="gray">No preview available</Text>
+                <Text size="1" color="gray">Preview unavailable for this post</Text>
               </Box>
             )}
           </Box>
@@ -713,7 +720,7 @@ function PostSnapshotPanel({
                     key={metricKey}
                     type="button"
                     className={cn(
-                      "min-h-10 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                      "h-8 rounded px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                       selectedMetric === metricKey
                         ? "bg-accent/20 text-foreground"
                         : "text-muted-foreground"
@@ -730,7 +737,7 @@ function PostSnapshotPanel({
                 <button
                   type="button"
                   className={cn(
-                    "min-h-10 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                    "h-8 rounded px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                     drilldownWindow === "7d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                   )}
                   onClick={() => onWindowChange("7d")}
@@ -742,7 +749,7 @@ function PostSnapshotPanel({
                 <button
                   type="button"
                   className={cn(
-                    "min-h-10 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                    "h-8 rounded px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                     drilldownWindow === "30d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                   )}
                   onClick={() => onWindowChange("30d")}
@@ -754,7 +761,7 @@ function PostSnapshotPanel({
               </div>
             </Flex>
             {series.length === 0 ? (
-              <Text size="1" color="gray">No trend data for this post yet.</Text>
+              <Text size="1" color="gray">No metric trend data is available for this post yet.</Text>
             ) : (
               <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
                 <LineChart data={series}>
@@ -779,7 +786,7 @@ function PostSnapshotPanel({
           <PostCommentsPanel comments={post.comments} />
 
           <Text size="1" className="line-clamp-8">
-            {post.caption?.trim().length ? post.caption : "No caption available for this post."}
+            {post.caption?.trim().length ? post.caption : "Caption unavailable for this post."}
           </Text>
         </Box>
       </Card>
@@ -812,11 +819,11 @@ function MetricCard({
   const hasInsights = insights && insights.length > 0;
 
   const cardContent = (
-    <Card
-      variant="surface"
-      className={cn(
-        "border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-all duration-200 motion-reduce:transition-none",
-        compact ? "min-h-[50px]" : "min-h-[70px]",
+      <Card
+        variant="surface"
+        className={cn(
+        "border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-200 motion-reduce:transition-none",
+        compact ? "min-h-[48px]" : "min-h-[60px]",
         active ? "border-blue-500/70 bg-blue-500/10 shadow-blue-500/10" : "",
         interactive ? "hover:-translate-y-0.5 hover:shadow-md" : "",
         hasInsights ? "ring-1 ring-violet-400/30" : ""
@@ -829,7 +836,7 @@ function MetricCard({
         aria-label={ariaLabel ?? label}
         aria-pressed={interactive ? active : undefined}
         className={cn(
-          "h-full w-full rounded-[inherit] px-2.5 py-2 text-left",
+          "h-full w-full rounded-[inherit] px-2.5 py-1.5 text-left",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1",
           interactive ? "cursor-pointer" : "cursor-default"
         )}
@@ -844,7 +851,7 @@ function MetricCard({
           {!compact && (
             <span
               className={cn(
-                "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                "rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide",
                 direction === "up" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "",
                 direction === "down" ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "",
                 direction === "flat" ? "bg-slate-500/15 text-slate-700 dark:text-slate-300" : ""
@@ -854,7 +861,7 @@ function MetricCard({
             </span>
           )}
         </Flex>
-        <Text size="4" weight="bold" className="leading-tight font-mono tracking-tight">{formatNumber(value)}</Text>
+        <Text size={compact ? "3" : "4"} weight="bold" className="leading-tight tabular-nums tracking-tight">{formatNumber(value)}</Text>
         {compact ? (
           <Text
             size="1"
@@ -896,7 +903,11 @@ function MetricCard({
   return (
     <Popover>
       <PopoverTrigger asChild>{cardContent}</PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="w-80 p-3">
+      <PopoverContent
+        side="bottom"
+        align="start"
+        className="w-[min(20rem,calc(100vw-2rem))] max-h-[min(70svh,26rem)] overflow-y-auto p-3"
+      >
         <Text size="2" weight="medium" className="mb-2 block">{label} Insights</Text>
         <Flex direction="column" gap="2">
           {insights.map((insight, i) => (
@@ -922,7 +933,6 @@ function MetricCard({
 
 function Dashboard({
   data,
-  accountName,
   viewMode,
   postDetailsById,
   loadingPostId,
@@ -937,7 +947,6 @@ function Dashboard({
   rangePreset,
 }: {
   data: OrganicMetricsResponse;
-  accountName?: string | null;
   viewMode: MetricsViewMode;
   postDetailsById?: Record<string, OrganicPost>;
   loadingPostId?: string | null;
@@ -1077,30 +1086,16 @@ function Dashboard({
   return (
     <Flex
       direction="column"
-      gap="3"
-      className="rounded-xl border border-subtle bg-[linear-gradient(160deg,rgba(59,130,246,0.04)_0%,rgba(14,165,233,0.03)_48%,rgba(255,255,255,0.92)_100%)] p-2 sm:p-3 shadow-sm pb-10"
+      gap="2"
+      className="min-h-0 pb-6"
     >
-      <Flex align="center" justify="between" wrap="wrap" gap="2">
-        <Box>
-          <Heading size="2" className="tracking-tight">
-            {isAccountView ? "Account Snapshot" : "Posts"}
-          </Heading>
-          {isAccountView ? (
-            <Text size="1" color="gray">At-a-glance metrics with last 24h delta</Text>
-          ) : null}
-        </Box>
-        <Text size="1" color="gray" className="font-mono tracking-tight">
-          {data.range.since} - {data.range.until}
-        </Text>
-      </Flex>
-
       {isAccountView ? (
         <motion.div
           key={`kpi-${data.range.since}-${data.range.until}`}
           initial="hidden"
           animate="visible"
           variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.05 } } }}
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"
         >
           {getKpiConfig(platform).map((metric) => (
             <motion.div
@@ -1124,8 +1119,8 @@ function Dashboard({
       ) : null}
 
       {isAccountView ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card variant="surface" className="border border-subtle bg-surface lg:col-span-2 xl:col-span-2">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.75fr)]">
+          <Card variant="surface" className="border border-subtle bg-surface xl:row-span-2">
             <Box p="3">
               <Flex align="center" justify="between" mb="2" wrap="wrap" gap="2">
                 <Box>
@@ -1136,7 +1131,7 @@ function Dashboard({
                   <button
                     type="button"
                     className={cn(
-                      "min-h-11 rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                      "h-8 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                       drilldownWindow === "7d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                     )}
                     onClick={() => setDrilldownWindow("7d")}
@@ -1148,7 +1143,7 @@ function Dashboard({
                   <button
                     type="button"
                     className={cn(
-                      "min-h-11 rounded px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
+                      "h-8 rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
                       drilldownWindow === "30d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
                     )}
                     onClick={() => setDrilldownWindow("30d")}
@@ -1161,9 +1156,9 @@ function Dashboard({
               </Flex>
 
               {accountSeries.length === 0 ? (
-                <Text size="2" color="gray">No trend data available for this metric and window.</Text>
+                <Text size="2" color="gray">No metric history is available for this metric in the selected window.</Text>
               ) : (
-                <ChartContainer config={drilldownChartConfig} className="h-56 w-full">
+                <ChartContainer config={drilldownChartConfig} className="h-[min(42vh,24rem)] min-h-64 w-full">
                   <LineChart data={accountSeries}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="date" tickFormatter={(value) => formatShortDate(value)} minTickGap={20} />
@@ -1294,7 +1289,7 @@ function Dashboard({
               <Separator my="2" size="4" />
               <Text size="1" color="gray" mb="1">Age</Text>
               {demographicsLoading ? (
-                <div className="h-28 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+                <div className="h-28 w-full animate-pulse rounded-lg bg-muted/70" />
               ) : ageDemographics.length === 0 ? (
                 <Text size="1" color="gray">Age breakdown unavailable.</Text>
               ) : (
@@ -1325,15 +1320,8 @@ function Dashboard({
         <>
           <Card variant="surface" className="border border-subtle bg-surface">
             <Box p="3">
-              <Flex align="center" justify="between" mb="2" gap="2">
-                <Text size="1" color="gray">
-                  Select a post to load post-level metrics
-                </Text>
-                <Badge color="blue" variant="soft">@{accountName ?? data.accountId}</Badge>
-              </Flex>
-
               {(data.posts ?? []).length === 0 ? (
-                <Text size="2" color="gray">No posts were returned for this account.</Text>
+                <Text size="2" color="gray">No posts were found for this account in the selected window.</Text>
               ) : (
                 <div className="mx-auto w-full">
                   <motion.div
@@ -1345,7 +1333,7 @@ function Dashboard({
                     )}
                   >
                     <motion.div layout className="min-w-0">
-                      <div ref={postsScrollerRef} className="mx-auto max-h-[74vh] w-full overflow-y-auto px-1">
+                      <div ref={postsScrollerRef} className="mx-auto max-h-[calc(100dvh-11rem)] w-full overflow-y-auto px-1">
                         <div
                           className={cn(
                             "mx-auto grid gap-3 sm:gap-4",
@@ -1809,28 +1797,15 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const demographicsLoading = demographicsState.status === "loading";
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
-      <Box p="4" className="flex-1 min-h-0 flex flex-col">
-        <Flex align="center" justify="between" gap="3" wrap="wrap">
-          <Flex align="center" gap="2" wrap="wrap">
-            <Badge color="gray" variant="soft" radius="full">
-              <PlatformIcon platform={platform} />
-            </Badge>
-            <Box>
-              <Text weight="medium" style={{ textTransform: "capitalize" }}>
-                {platform} organic reporting
-              </Text>
-              <Text color="gray" size="2" className="tracking-tight">
-                {viewMode === "posts"
-                  ? `Rolling ${POST_GALLERY_WINDOW_DAYS}d windows (up to 3 months)`
-                  : rangeLabel(rangePreset)}
-              </Text>
-            </Box>
-          </Flex>
+    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-subtle bg-surface">
+      <div className="flex min-h-10 flex-wrap items-center gap-2 border-b px-2 py-1.5 sm:px-3">
+        <Badge color="gray" variant="soft" radius="full" className="hidden sm:inline-flex">
+          <PlatformIcon platform={platform} />
+        </Badge>
 
-          <Flex align="center" gap="2" wrap="wrap">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <Select.Root value={platform} onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}>
-              <Select.Trigger variant="surface" radius="large" style={{ width: "150px" }}>
+              <Select.Trigger variant="surface" radius="large" className="h-8 w-[8.75rem] text-xs">
                 {{ instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" }[platform]}
               </Select.Trigger>
               <Select.Content>
@@ -1847,7 +1822,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
               <Select.Trigger
                 variant="surface"
                 radius="large"
-                style={{ width: "130px" }}
+                className="h-8 w-[7.5rem] text-xs"
                 disabled={viewMode === "posts"}
               >
                 {rangeLabel(rangePreset)}
@@ -1870,7 +1845,11 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 }));
               }}
             >
-              <Select.Trigger variant="surface" radius="large" style={{ minWidth: "230px" }}>
+              <Select.Trigger
+                variant="surface"
+                radius="large"
+                className="h-8 min-w-[13rem] max-w-[22rem] flex-1 text-xs"
+              >
                 {selectedAccount?.name ?? `Select a ${platform} account`}
               </Select.Trigger>
               <Select.Content position="popper" variant="solid" highContrast>
@@ -1888,54 +1867,68 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
             <Tabs
               value={viewMode}
               onValueChange={(value) => setViewMode(value as MetricsViewMode)}
-              className="gap-0"
+              className="w-auto gap-0"
             >
-              <TabsList className="h-10 rounded-lg border border-subtle bg-muted/20 p-1">
-                <TabsTrigger value="account" className="px-4 text-xs">Account</TabsTrigger>
-                <TabsTrigger value="posts" className="px-4 text-xs">Posts</TabsTrigger>
+              <TabsList className="inline-flex h-8 w-auto rounded-lg border border-subtle bg-muted/20 p-0.5">
+                <TabsTrigger value="account" className="px-3 text-xs">Account</TabsTrigger>
+                <TabsTrigger value="posts" className="px-3 text-xs">Posts</TabsTrigger>
               </TabsList>
             </Tabs>
+        </div>
 
-            <Button
-              variant="surface"
-              radius="large"
-              onClick={handleRefresh}
-              disabled={!selectedAccountId || isLoadingView || isPending}
-              aria-label="Refresh organic analytics"
-            >
-              <ReloadIcon className={cn(isLoadingView && "animate-spin")} />
-              Refresh
-            </Button>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <IconButton
+            variant="surface"
+            radius="large"
+            size="2"
+            onClick={handleRefresh}
+            disabled={!selectedAccountId || isLoadingView || isPending}
+            aria-label="Refresh organic analytics"
+          >
+            <ReloadIcon className={cn(isLoadingView && "animate-spin")} />
+          </IconButton>
 
-            <Button
-              variant="surface"
-              radius="large"
-              onClick={() => {
-                void handleExportReport("csv");
-              }}
-              disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
-              aria-label="Export last thirty day organic report as csv"
-            >
-              <DownloadIcon className={cn(exportingReportFormat === "csv" && "animate-pulse")} />
-              {exportingReportFormat === "csv" ? "Exporting CSV..." : "Export CSV"}
-            </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="surface"
+                radius="large"
+                disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
+                aria-label="Open organic report export options"
+                className="h-8 px-2 text-xs"
+              >
+                <DownloadIcon className={cn(exportingReportFormat !== null && "animate-pulse")} />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleExportReport("csv");
+                }}
+                disabled={exportingReportFormat !== null}
+              >
+                Export CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void handleExportReport("html");
+                }}
+                disabled={exportingReportFormat !== null}
+              >
+                Export HTML
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
 
-            <Button
-              variant="surface"
-              radius="large"
-              onClick={() => {
-                void handleExportReport("html");
-              }}
-              disabled={!selectedAccountId || isLoadingView || exportingReportFormat !== null}
-              aria-label="Export last thirty day organic report as html"
-            >
-              <DownloadIcon className={cn(exportingReportFormat === "html" && "animate-pulse")} />
-              {exportingReportFormat === "html" ? "Exporting HTML..." : "Export HTML"}
-            </Button>
-          </Flex>
-        </Flex>
-
-        <Box pt="3" className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", isPending && "opacity-60 pointer-events-none transition-opacity duration-150")}>
+        <div
+          className={cn(
+            "min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-2 sm:p-3",
+            isPending && "opacity-60 pointer-events-none transition-opacity duration-150"
+          )}
+        >
           {reportError ? (
             <Callout.Root color="red" variant="surface" mb="3">
               <Callout.Text>{reportError}</Callout.Text>
@@ -1943,8 +1936,8 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           ) : null}
           {platformAccounts.length === 0 ? (
             <Callout.Root color="blue" variant="surface">
-              <Callout.Text>
-                No {platform} accounts are linked to this brand profile.
+              <Callout.Text className="text-pretty">
+                No {platform} account is connected for this brand yet. Connect one in Integrations to unlock reporting.
               </Callout.Text>
             </Callout.Root>
           ) : (
@@ -1981,7 +1974,6 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 >
                   <Dashboard
                     data={dashboardData}
-                    accountName={selectedAccount?.name}
                     viewMode={viewMode}
                     postDetailsById={postDetailsById}
                     loadingPostId={loadingPostId}
@@ -2004,13 +1996,14 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <Text color="gray" size="2">Select an account to view organic reporting.</Text>
+                  <Text color="gray" size="2" className="text-pretty">
+                    Select an account above to load organic reporting and post-level performance.
+                  </Text>
                 </motion.div>
               )}
             </AnimatePresence>
           )}
-        </Box>
-      </Box>
-    </Card>
+        </div>
+    </section>
   );
 }

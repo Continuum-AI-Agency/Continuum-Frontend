@@ -30,6 +30,8 @@ import {
 import { useCalendarSelection } from "../hooks/useCalendarSelection"
 import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
+import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistence"
+import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
@@ -45,7 +47,7 @@ import {
 } from "@/components/ui/resizable"
 import { TrendWorkbench } from "./TrendWorkbench"
 import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
-import { AI_STUDIO_LAST_DRAFT_STORAGE_KEY } from "@/lib/organic/ai-studio-bridge"
+import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge"
 import { getLocalStorageJSON } from "@/lib/storage"
 import { CalendarToolbar } from "./CalendarToolbar"
 import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
@@ -55,6 +57,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { CalendarPostAccountsByPlatform } from "@/lib/organic/calendar-posts"
 
 const OrganicMonthlyCalendar = dynamic(
   () => import("./OrganicMonthlyCalendar").then((m) => m.OrganicMonthlyCalendar)
@@ -82,6 +85,7 @@ type OrganicCalendarWorkspaceClientProps = {
   initialWeekStart?: string | null
   initialSelectedDraftId?: string | null
   initialView?: "week" | "month" | "list"
+  postedContentAccountsByPlatform?: CalendarPostAccountsByPlatform
 }
 
 const NOOP_STRING = (_id: string) => {}
@@ -105,6 +109,7 @@ export function OrganicCalendarWorkspaceClient({
   initialWeekStart,
   initialSelectedDraftId,
   initialView,
+  postedContentAccountsByPlatform,
 }: OrganicCalendarWorkspaceClientProps) {
   const {
     days: calendarDays,
@@ -212,6 +217,7 @@ export function OrganicCalendarWorkspaceClient({
   )
 
   const [weekStart, setWeekStart] = React.useState<Date>(resolvedInitialWeekStart)
+  const [monthAnchorDate, setMonthAnchorDate] = React.useState<Date>(resolvedInitialWeekStart)
   const [localGridViewMode, setLocalGridViewMode] = React.useState<"day" | "week">("week")
   const [trendsDrawerOpen, setTrendsDrawerOpen] = React.useState(false)
 
@@ -221,6 +227,36 @@ export function OrganicCalendarWorkspaceClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const weekStartId = formatDayId(weekStart)
+
+  useCalendarDraftPersistence({
+    brandProfileId,
+    weekStartId,
+    calendarDays,
+    setCalendarDays,
+    updateDraftById,
+    platformAccountIds,
+  })
+
+  const postedContentAccounts = React.useMemo<CalendarPostAccountsByPlatform>(
+    () => ({
+      instagram: postedContentAccountsByPlatform?.instagram ?? [],
+      facebook: postedContentAccountsByPlatform?.facebook ?? [],
+      tiktok: postedContentAccountsByPlatform?.tiktok ?? [],
+    }),
+    [postedContentAccountsByPlatform]
+  )
+
+  const {
+    posts: postedContent,
+    isFetchingExternal: isFetchingPostedContent,
+    fetchExternalPosts,
+  } = useCalendarPostedContent({
+    brandProfileId,
+    viewMode,
+    weekStart,
+    monthAnchorDate,
+    accountsByPlatform: postedContentAccounts,
+  })
 
   React.useEffect(() => {
     setPersistedWeekStartId(weekStartId)
@@ -282,18 +318,18 @@ export function OrganicCalendarWorkspaceClient({
   }, [handleWeekChange, weekStart])
 
   const handlePreviousMonth = React.useCallback(() => {
-    const prev = new Date(weekStart)
+    const prev = new Date(monthAnchorDate)
     prev.setDate(1)
     prev.setMonth(prev.getMonth() - 1)
-    handleWeekChange(prev)
-  }, [handleWeekChange, weekStart])
+    setMonthAnchorDate(prev)
+  }, [monthAnchorDate])
 
   const handleNextMonth = React.useCallback(() => {
-    const next = new Date(weekStart)
+    const next = new Date(monthAnchorDate)
     next.setDate(1)
     next.setMonth(next.getMonth() + 1)
-    handleWeekChange(next)
-  }, [handleWeekChange, weekStart])
+    setMonthAnchorDate(next)
+  }, [monthAnchorDate])
 
   const drafts = React.useMemo(
     () => calendarDays.flatMap((day) => day.slots),
@@ -317,13 +353,17 @@ export function OrganicCalendarWorkspaceClient({
     }
 
     // Resolve the active single-selection draft
+    const lastDraftKey = brandProfileId
+      ? brandStorageKeyAiStudioLastDraft(brandProfileId)
+      : null
+
     if (selectedId && !allDraftIds.has(selectedId)) {
       // Current selection is stale -- attempt to restore a preferred draft
       // instead of nulling out then re-selecting on the next render cycle.
       if (typeof window !== "undefined") {
         const preferredDraftId =
           initialSelectedDraftId ??
-          getLocalStorageJSON<string | null>(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, null)
+          (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null)
         if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
           setSelectedDraftId(preferredDraftId)
           return
@@ -337,13 +377,14 @@ export function OrganicCalendarWorkspaceClient({
     if (!selectedId && typeof window !== "undefined") {
       const preferredDraftId =
         initialSelectedDraftId ??
-        getLocalStorageJSON<string | null>(AI_STUDIO_LAST_DRAFT_STORAGE_KEY, null)
+        (lastDraftKey ? getLocalStorageJSON<string | null>(lastDraftKey, null) : null)
       if (preferredDraftId && allDraftIds.has(preferredDraftId)) {
         setSelectedDraftId(preferredDraftId)
       }
     }
   }, [
     allDraftIds,
+    brandProfileId,
     initialSelectedDraftId,
     selectedId,
     selectedIds,
@@ -587,6 +628,9 @@ export function OrganicCalendarWorkspaceClient({
                 gridProgress={gridProgress}
                 gridStatus={gridStatus}
                 gridError={gridError}
+                postedContentCount={postedContent.length}
+                isFetchingPostedContent={isFetchingPostedContent}
+                onFetchPostedContent={fetchExternalPosts}
               />
             </motion.div>
 
@@ -658,8 +702,9 @@ export function OrganicCalendarWorkspaceClient({
                   >
                     <OrganicMonthlyCalendar
                       days={calendarDays}
-                      weekStart={weekStart}
+                      monthAnchorDate={monthAnchorDate}
                       platforms={plannerPlatforms}
+                      postedContent={postedContent}
                       selectedDraftId={selectedId}
                       onSelectDraft={(id) => handleSelect(id, false)}
                       onCreatePost={({ dayId, platformKey }) =>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { AccountInsightsResponseSchema } from "@/lib/paid-media/account-insights.types";
+import { CampaignInsightsResponseSchema } from "@/lib/paid-media/account-insights.types";
 
 const isoDaySchema = z
   .string()
@@ -29,6 +29,17 @@ const rangeSchema = z
     }
   });
 
+const budgetPacingContextSchema = z.object({
+  pacePct: z.number(),
+  paceStatus: z.enum(["on_pace", "underspending", "overspending"]),
+  totalBudget: z.number(),
+  spendToDate: z.number(),
+  budgetRemaining: z.number(),
+  daysRemaining: z.number().nullable(),
+  budgetType: z.enum(["daily", "lifetime"]),
+  projectedEndSpend: z.number(),
+});
+
 const requestSchema = z.object({
   brandId: z.string(),
   adAccountId: z.string(),
@@ -37,6 +48,7 @@ const requestSchema = z.object({
   campaignObjective: z.string().optional(),
   range: rangeSchema,
   forceRefresh: z.boolean().optional(),
+  budgetPacing: budgetPacingContextSchema.optional(),
 });
 
 export async function POST(request: Request) {
@@ -68,7 +80,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const validated = AccountInsightsResponseSchema.safeParse(data);
+    const validated = CampaignInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
       console.error(
         "Invalid response from get-campaign-insights:",

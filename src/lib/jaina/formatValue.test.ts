@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatValue } from "./formatValue";
+import { formatValue, resolveMetricDisplayFormat } from "./formatValue";
 
 describe("formatValue", () => {
   test("currency formats with dollar sign", () => {
@@ -53,5 +53,43 @@ describe("formatValue", () => {
 
   test("default format for numbers uses locale formatting", () => {
     expect(formatValue(12450)).toBe("12,450");
+  });
+});
+
+describe("resolveMetricDisplayFormat", () => {
+  test("treats conversion count cards as numbers when percent metadata leaks in", () => {
+    expect(
+      resolveMetricDisplayFormat({
+        label: "Conversions",
+        format: "percent",
+      })
+    ).toBe("number");
+    expect(
+      resolveMetricDisplayFormat({
+        label: "Purchase conversions",
+        unit: "%",
+      })
+    ).toBe("number");
+  });
+
+  test("keeps conversion rate and value metrics in their explicit formats", () => {
+    expect(
+      resolveMetricDisplayFormat({
+        label: "Conversion rate",
+        format: "percent",
+      })
+    ).toBe("percent");
+    expect(
+      resolveMetricDisplayFormat({
+        label: "Conversion value",
+        format: "currency",
+      })
+    ).toBe("currency");
+    expect(
+      resolveMetricDisplayFormat({
+        label: "Cost per conversion",
+        format: "currency",
+      })
+    ).toBe("currency");
   });
 });

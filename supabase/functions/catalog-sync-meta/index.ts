@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -252,19 +253,18 @@ serve(async (req: Request) => {
     const supabaseToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
+    if (authError || !claimsData?.claims?.sub) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
+
+    const userId = claimsData.claims.sub;
 
     const { data: permissionRow, error: permissionError } = await supabase
       .schema("brand_profiles")
       .from("permissions")
       .select("user_id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("brand_profile_id", payload.brandId)
       .maybeSingle();
 
@@ -292,13 +292,17 @@ serve(async (req: Request) => {
       return jsonResponse({ error: "Catalog not found for brand" }, 404);
     }
 
-    log("Resolving Meta access token via RPC", { adAccountId: payload.adAccountId });
-    const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
-      p_ad_account_id: payload.adAccountId,
+    log("Resolving Meta access token via brand-gated RPC", {
+      brandId: payload.brandId,
+      adAccountId: payload.adAccountId,
     });
-    if (tokenError) {
-      log("Meta token RPC failed", tokenError);
-    }
+    const accessToken = await resolveMetaAccessToken({
+      brandId: payload.brandId,
+      adAccountId: payload.adAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
+    });
     if (!accessToken) {
       return jsonResponse({ error: "Meta account not configured or access token missing" }, 404);
     }

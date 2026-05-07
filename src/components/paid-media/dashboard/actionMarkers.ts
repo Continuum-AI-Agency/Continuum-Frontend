@@ -28,13 +28,17 @@ const ACTION_STATUS_COLOR: Record<ActionStatus, string> = {
   FAILED: "#ef4444",
   PENDING: "#f59e0b",
   SUCCESS: "#10b981",
+  EXECUTED: "#0ea5e9",
+  REJECTED: "#ef4444",
 };
 
 const ACTION_STATUS_WEIGHT: Record<ActionStatus, number> = {
   FAILED: 4,
-  PENDING: 3,
-  APPROVED: 2,
-  SUCCESS: 1,
+  REJECTED: 3,
+  PENDING: 2,
+  APPROVED: 1,
+  SUCCESS: 0,
+  EXECUTED: 0,
 };
 
 function toUtcTimestamp(isoDate: string): number | null {

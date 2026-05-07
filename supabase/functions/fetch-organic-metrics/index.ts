@@ -2,12 +2,13 @@
 // Main entry point for the edge function
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "./cors.ts";
 import { getDateParams } from "./date-utils.ts";
 import { fetchFacebookMetrics } from "./facebook-metrics.ts";
 import { fetchInstagramMetrics } from "./instagram-metrics.ts";
 import { PlatformType, RequestParams } from "./types.ts";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -55,6 +56,17 @@ serve(async (req) => {
   }
 
   try {
+    const authClient = createSupabaseAdminClient();
+    const { data: claimsData, error: authError } = await authClient.auth.getClaims(
+      extractBearerToken(req.headers.get("Authorization")),
+    );
+    if (authError || !claimsData?.claims?.sub) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const {
       platform, 
       accountId, 

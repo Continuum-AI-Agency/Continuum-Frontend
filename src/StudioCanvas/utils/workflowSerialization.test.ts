@@ -140,7 +140,7 @@ describe('workflowSerialization', () => {
     expect((snapshot.nodes[0].data as any).image).toBeUndefined();
   });
 
-  it('preserves generated outputs when requested', () => {
+  it('always strips base64 generatedImage/generatedVideo even with preserveGeneratedOutputs', () => {
     const snapshot = serializeWorkflowSnapshot(
       [
         buildNode({
@@ -149,7 +149,7 @@ describe('workflowSerialization', () => {
           data: {
             model: 'nano-banana',
             positivePrompt: 'hero shot',
-            generatedImage: 'data:image/png;base64,keep-generated-image',
+            generatedImage: 'data:image/png;base64,strip-base64',
             generatedVideo: 'https://cdn.example.com/generated.mp4',
             image: 'data:image/png;base64,strip-input-image',
           } as any,
@@ -161,9 +161,47 @@ describe('workflowSerialization', () => {
     );
 
     const generatorNode = snapshot.nodes.find((node) => node.id === 'gen');
-    expect((generatorNode?.data as any)?.generatedImage).toBe('data:image/png;base64,keep-generated-image');
+    expect((generatorNode?.data as any)?.generatedImage).toBeUndefined();
     expect((generatorNode?.data as any)?.generatedVideo).toBe('https://cdn.example.com/generated.mp4');
     expect((generatorNode?.data as any)?.image).toBeUndefined();
+  });
+
+  it('persists generatedImageUrl/generatedVideoUrl while dropping base64 fields', () => {
+    const snapshot = serializeWorkflowSnapshot(
+      [
+        buildNode({
+          id: 'gen',
+          type: 'nanoGen',
+          data: {
+            model: 'nano-banana',
+            positivePrompt: '',
+            generatedImage: 'data:image/png;base64,base64-payload',
+            generatedImageUrl: 'https://cdn.example.com/generated.png',
+          } as any,
+        }),
+        buildNode({
+          id: 'video-gen',
+          type: 'videoGen',
+          data: {
+            model: 'veo-3.1',
+            prompt: '',
+            enhancePrompt: false,
+            generatedVideo: 'data:video/mp4;base64,base64-video-payload',
+            generatedVideoUrl: 'https://cdn.example.com/generated.mp4',
+          } as any,
+        }),
+      ],
+      [],
+      'bezier'
+    );
+
+    const imageGenNode = snapshot.nodes.find((node) => node.id === 'gen');
+    expect((imageGenNode?.data as any)?.generatedImage).toBeUndefined();
+    expect((imageGenNode?.data as any)?.generatedImageUrl).toBe('https://cdn.example.com/generated.png');
+
+    const videoGenNode = snapshot.nodes.find((node) => node.id === 'video-gen');
+    expect((videoGenNode?.data as any)?.generatedVideo).toBeUndefined();
+    expect((videoGenNode?.data as any)?.generatedVideoUrl).toBe('https://cdn.example.com/generated.mp4');
   });
 
   it('preserves style and dimensions during serialization', () => {

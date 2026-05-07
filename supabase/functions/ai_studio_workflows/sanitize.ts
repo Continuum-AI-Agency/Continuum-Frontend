@@ -10,74 +10,70 @@ function isEncodedPayload(value: string): boolean {
   return base64LikePattern.test(trimmed);
 }
 
-function stripEncodedString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  return isEncodedPayload(value) ? undefined : value;
+export type SanitizeWarning = {
+  nodeId?: string;
+  path: string;
+  bytes: number;
+  preview: string;
+};
+
+export type SanitizeResult = {
+  nodes: unknown[];
+  warnings: SanitizeWarning[];
+};
+
+function stripValue(
+  value: unknown,
+  path: string,
+  warnings: SanitizeWarning[],
+  nodeId?: string,
+): unknown {
+  if (typeof value === "string") {
+    if (isEncodedPayload(value)) {
+      warnings.push({
+        nodeId,
+        path,
+        bytes: value.length,
+        preview: value.slice(0, 48),
+      });
+      return undefined;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const next: unknown[] = [];
+    for (let i = 0; i < value.length; i++) {
+      const item = stripValue(value[i], `${path}[${i}]`, warnings, nodeId);
+      if (item !== undefined) next.push(item);
+    }
+    return next;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const key of Object.keys(record)) {
+      const stripped = stripValue(record[key], `${path}.${key}`, warnings, nodeId);
+      if (stripped !== undefined) next[key] = stripped;
+    }
+    return next;
+  }
+
+  return value;
 }
 
-function sanitizeNodeData(data: Record<string, unknown>): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...data };
-  const image = stripEncodedString(next.image);
-  if (image === undefined && typeof next.image === "string") delete next.image;
-  const video = stripEncodedString(next.video);
-  if (video === undefined && typeof next.video === "string") delete next.video;
-  const audio = stripEncodedString(next.audio);
-  if (audio === undefined && typeof next.audio === "string") delete next.audio;
-
-  if (Array.isArray(next.inputs)) {
-    const sanitizedInputs = next.inputs
-      .map((input) => {
-        if (!input || typeof input !== "object") return null;
-        const record = input as Record<string, unknown>;
-        const sanitizedSrc = stripEncodedString(record.src);
-        if (sanitizedSrc === undefined && typeof record.src === "string") return null;
-        return { ...record, src: sanitizedSrc ?? record.src };
-      })
-      .filter((input): input is Record<string, unknown> => Boolean(input));
-    next.inputs = sanitizedInputs;
-  }
-
-  if (Array.isArray(next.frameList)) {
-    const sanitizedFrames = next.frameList
-      .map((frame) => {
-        if (!frame || typeof frame !== "object") return null;
-        const record = frame as Record<string, unknown>;
-        const sanitizedSrc = stripEncodedString(record.src);
-        const nextFrame: Record<string, unknown> = { ...record };
-        if (sanitizedSrc === undefined && typeof record.src === "string") {
-          delete nextFrame.src;
-        } else if (sanitizedSrc !== undefined) {
-          nextFrame.src = sanitizedSrc;
-        }
-        return nextFrame;
-      })
-      .filter((frame): frame is Record<string, unknown> => Boolean(frame));
-    next.frameList = sanitizedFrames;
-  }
-
-  if (Array.isArray(next.documents)) {
-    const sanitizedDocuments = next.documents
-      .map((doc) => {
-        if (!doc || typeof doc !== "object") return null;
-        const record = doc as Record<string, unknown>;
-        const sanitizedContent = stripEncodedString(record.content);
-        return {
-          ...record,
-          content: sanitizedContent ?? (typeof record.content === "string" ? "" : ""),
-        };
-      })
-      .filter((doc): doc is Record<string, unknown> => Boolean(doc));
-    next.documents = sanitizedDocuments;
-  }
-
-  return next;
+function sanitizeNode(node: unknown, warnings: SanitizeWarning[]): unknown {
+  if (!node || typeof node !== "object") return node;
+  const record = node as Record<string, unknown>;
+  const nodeId = typeof record.id === "string" ? record.id : undefined;
+  if (!record.data || typeof record.data !== "object") return node;
+  const sanitizedData = stripValue(record.data, "data", warnings, nodeId);
+  return { ...record, data: sanitizedData ?? {} };
 }
 
-export function sanitizeWorkflowNodes(nodes: unknown[]): unknown[] {
-  return nodes.map((node) => {
-    if (!node || typeof node !== "object") return node;
-    const record = node as Record<string, unknown>;
-    if (!record.data || typeof record.data !== "object") return node;
-    return { ...record, data: sanitizeNodeData(record.data as Record<string, unknown>) };
-  });
+export function sanitizeWorkflowNodes(nodes: unknown[]): SanitizeResult {
+  const warnings: SanitizeWarning[] = [];
+  const sanitized = nodes.map((node) => sanitizeNode(node, warnings));
+  return { nodes: sanitized, warnings };
 }

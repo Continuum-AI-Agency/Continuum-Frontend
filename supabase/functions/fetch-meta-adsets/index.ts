@@ -1,10 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   buildMetaEdgeCacheKey,
   readMetaEdgeCache,
   writeMetaEdgeCache,
 } from "../_shared/meta-edge-cache.ts";
+import { authorizeSupabaseEdgeRequest, extractBearerToken } from "../_shared/supabase-edge-auth.ts";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,22 +138,28 @@ serve(async (req: Request) => {
       });
     }
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const supabaseToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const auth = await authorizeSupabaseEdgeRequest({
+      authHeader: req.headers.get("Authorization"),
+      serviceRoleKey,
+      allowServiceRole: true,
+      getClaims: (accessToken) => supabase.auth.getClaims(accessToken),
+    });
+
+    if (!auth.ok) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    log("Looking for access token for ad account:", adAccountId);
+    log("Looking for access token for ad account:", {
+      adAccountId,
+      actorKind: auth.actorKind,
+    });
 
     const cacheKey = buildMetaEdgeCacheKey({
       resource: "adsets",
@@ -171,12 +179,13 @@ serve(async (req: Request) => {
       });
     }
 
-    const { data: accessToken, error: tokenError } = await supabase
-      .rpc("get_meta_access_token", { p_ad_account_id: adAccountId });
-
-    if (tokenError) {
-      log("Error fetching access token via RPC:", tokenError);
-    }
+    const accessToken = await resolveMetaAccessToken({
+      brandId,
+      adAccountId,
+      userToken: extractBearerToken(req.headers.get("Authorization")),
+      actorKind: auth.actorKind,
+      log,
+    });
 
     if (!accessToken) {
       log("No access token found for ad account in any schema", adAccountId);

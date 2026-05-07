@@ -288,7 +288,7 @@ export type Database = {
           p_brand_integration_id: string
           p_provider: string
           p_snapshot: Json
-          p_synced_at?: string
+          p_synced_at: string
         }
         Returns: undefined
       }
@@ -629,6 +629,54 @@ export type Database = {
           },
         ]
       }
+      brand_integration_grants: {
+        Row: {
+          brand_profile_id: string
+          granted_at: string
+          granted_by: string
+          id: string
+          integration_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          granted_at?: string
+          granted_by: string
+          id?: string
+          integration_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          granted_at?: string
+          granted_by?: string
+          id?: string
+          integration_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_integration_grants_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_integration_grants_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "user_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_profile_integration_accounts: {
         Row: {
           alias: string | null
@@ -868,6 +916,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "brand_reports_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budget_pacing_cache: {
+        Row: {
+          ad_account_id: string
+          brand_profile_id: string
+          created_at: string
+          expires_at: string
+          fetched_at: string
+          id: string
+          payload: Json
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id: string
+          brand_profile_id: string
+          created_at?: string
+          expires_at: string
+          fetched_at?: string
+          id?: string
+          payload: Json
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string
+          brand_profile_id?: string
+          created_at?: string
+          expires_at?: string
+          fetched_at?: string
+          id?: string
+          payload?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_pacing_cache_brand_profile_id_fkey"
             columns: ["brand_profile_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
@@ -1184,6 +1273,7 @@ export type Database = {
       }
       permissions: {
         Row: {
+          acknowledged_at: string | null
           brand_profile_id: string
           created_at: string
           email: string | null
@@ -1194,6 +1284,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          acknowledged_at?: string | null
           brand_profile_id: string
           created_at?: string
           email?: string | null
@@ -1204,6 +1295,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          acknowledged_at?: string | null
           brand_profile_id?: string
           created_at?: string
           email?: string | null
@@ -2520,6 +2612,10 @@ export type Database = {
           settings: Json
         }[]
       }
+      get_brand_integration_token: {
+        Args: { p_brand_profile_id: string; p_provider: string }
+        Returns: string
+      }
       get_brand_timezone: { Args: { brand_id: string }; Returns: string }
       get_user_integration_summary: {
         Args: { p_user_id: string }
@@ -2534,10 +2630,33 @@ export type Database = {
           provider: string
         }[]
       }
+      grant_integration_to_brand: {
+        Args: { p_brand_profile_id: string; p_integration_id: string }
+        Returns: string
+      }
       has_brand_access:
         | { Args: { brand_id: string }; Returns: boolean }
         | { Args: { p_brand_id: string; p_user_id: string }; Returns: boolean }
       is_brand_admin: { Args: { brand_id: string }; Returns: boolean }
+      list_brand_integrations: {
+        Args: { p_brand_profile_id: string }
+        Returns: {
+          grant_id: string
+          granted_at: string
+          granted_by: string
+          integration_id: string
+          provider: string
+        }[]
+      }
+      list_my_connection_grants: {
+        Args: never
+        Returns: {
+          brand_name: string
+          brand_profile_id: string
+          granted_at: string
+          integration_id: string
+        }[]
+      }
       reporting_cache_get_organic_metrics_cache: {
         Args: {
           p_external_account_id: string
@@ -2593,6 +2712,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      revoke_integration_from_brand: {
+        Args: { p_grant_id: string }
+        Returns: undefined
       }
       search_brand_report_embeddings: {
         Args: {
@@ -4516,6 +4639,72 @@ export type Database = {
         }
         Relationships: []
       }
+      post_generation_jobs: {
+        Row: {
+          account_id: string | null
+          brand_id: string
+          cancel_requested: boolean
+          completed_at: string | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          job_id: string
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          brand_id: string
+          cancel_requested?: boolean
+          completed_at?: string | null
+          draft_id?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          expires_at?: string
+          guidance_prompt?: string | null
+          job_id?: string
+          platform: string
+          progress?: Json
+          scheduled_at: string
+          session_id: string
+          started_at?: string | null
+          status?: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          brand_id?: string
+          cancel_requested?: boolean
+          completed_at?: string | null
+          draft_id?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          expires_at?: string
+          guidance_prompt?: string | null
+          job_id?: string
+          platform?: string
+          progress?: Json
+          scheduled_at?: string
+          session_id?: string
+          started_at?: string | null
+          status?: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tiktok_account_metrics: {
         Row: {
           avatar_url: string | null
@@ -4653,10 +4842,130 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cancel_post_generation_job: {
+        Args: { p_job_id: string }
+        Returns: {
+          account_id: string | null
+          brand_id: string
+          cancel_requested: boolean
+          completed_at: string | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          job_id: string
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_generation_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_post_generation_job: {
+        Args: {
+          p_draft_id?: string
+          p_error?: Json
+          p_job_id: string
+          p_status: Database["organic"]["Enums"]["post_generation_job_status"]
+        }
+        Returns: undefined
+      }
+      enqueue_post_generation_job: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_guidance_prompt: string
+          p_platform: string
+          p_scheduled_at: string
+          p_session_id: string
+          p_trend_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      get_post_generation_job: {
+        Args: { p_job_id: string }
+        Returns: {
+          account_id: string | null
+          brand_id: string
+          cancel_requested: boolean
+          completed_at: string | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          job_id: string
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "post_generation_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      list_post_generation_jobs_by_session: {
+        Args: { p_brand_id: string; p_limit?: number; p_session_id: string }
+        Returns: {
+          account_id: string | null
+          brand_id: string
+          cancel_requested: boolean
+          completed_at: string | null
+          draft_id: string | null
+          enqueued_at: string
+          error: Json | null
+          expires_at: string
+          guidance_prompt: string | null
+          job_id: string
+          platform: string
+          progress: Json
+          scheduled_at: string
+          session_id: string
+          started_at: string | null
+          status: Database["organic"]["Enums"]["post_generation_job_status"]
+          trend_id: string | null
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "post_generation_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      update_post_generation_job_progress: {
+        Args: { p_job_id: string; p_progress: Json }
+        Returns: undefined
+      }
     }
     Enums: {
-      [_ in never]: never
+      post_generation_job_status:
+        | "queued"
+        | "running"
+        | "completed"
+        | "failed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4974,6 +5283,57 @@ export type Database = {
           sync_status?: string
           updated_at?: string
           vertical?: string
+        }
+        Relationships: []
+      }
+      report_jobs: {
+        Row: {
+          ad_account_id: string
+          artifact_grounding: Json | null
+          brand_id: string
+          campaign_ids: string[] | null
+          campaign_targets: Json | null
+          created_at: string
+          directionality: string | null
+          error_message: string | null
+          file_path: string | null
+          file_url: string | null
+          job_id: string
+          status: string
+          updated_at: string
+          user_email: string | null
+        }
+        Insert: {
+          ad_account_id: string
+          artifact_grounding?: Json | null
+          brand_id: string
+          campaign_ids?: string[] | null
+          campaign_targets?: Json | null
+          created_at?: string
+          directionality?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          file_url?: string | null
+          job_id: string
+          status?: string
+          updated_at?: string
+          user_email?: string | null
+        }
+        Update: {
+          ad_account_id?: string
+          artifact_grounding?: Json | null
+          brand_id?: string
+          campaign_ids?: string[] | null
+          campaign_targets?: Json | null
+          created_at?: string
+          directionality?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          file_url?: string | null
+          job_id?: string
+          status?: string
+          updated_at?: string
+          user_email?: string | null
         }
         Relationships: []
       }
@@ -7203,7 +7563,15 @@ export const Constants = {
     Enums: {},
   },
   organic: {
-    Enums: {},
+    Enums: {
+      post_generation_job_status: [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
+    },
   },
   paid_media: {
     Enums: {},

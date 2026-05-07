@@ -1,66 +1,99 @@
 "use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { motion } from "motion/react";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Badge } from "@/components/ui/badge";
-import { CreativeArtifact } from "@/lib/jaina/schemas";
+import { ImageIcon } from "lucide-react";
+import type { CreativeArtifact } from "@/lib/jaina/schemas";
 
 interface CreativeCardProps {
   creative: CreativeArtifact;
+  index: number;
 }
 
-export function CreativeCard({ creative }: CreativeCardProps) {
+export function CreativeCard({ creative, index }: CreativeCardProps) {
   const imageUrl = creative.thumbnail_url || creative.url;
-  
+
   return (
-    <Card className="max-w-md overflow-hidden border border-white/10 bg-black/20">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-white/90">
-            {creative.headline || "Creative"}
-          </CardTitle>
-          {creative.platform && (
-            <Badge variant="secondary" className="text-xs capitalize">
-              {creative.platform}
-            </Badge>
-          )}
-        </div>
-        {creative.description && (
-          <CardDescription className="text-xs text-white/60 mt-1">
-            {creative.description}
-          </CardDescription>
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.88 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.22, delay: index * 0.04, ease: [0.16, 1, 0.3, 1] }}
+          className="relative w-[76px] shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 ring-border/50 transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-primary/50 hover:shadow-lg hover:z-10"
+          style={{ transformOrigin: "bottom center" }}
+        >
+          <AspectRatio ratio={1}>
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={creative.headline || "Creative"}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-muted/40">
+                <ImageIcon className="size-5 text-muted-foreground/30" />
+              </div>
+            )}
+          </AspectRatio>
+        </motion.div>
+      </HoverCardTrigger>
+
+      <HoverCardContent side="bottom" align="start" sideOffset={10} className="w-72 p-0 overflow-hidden">
+        {/* Image preview */}
+        {imageUrl && (
+          <AspectRatio ratio={4 / 3}>
+            <img
+              src={imageUrl}
+              alt={creative.headline || "Creative"}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
+          </AspectRatio>
         )}
-      </CardHeader>
-      <CardContent className="px-0 pb-0">
-        <div className="relative">
-          <img
-            src={imageUrl}
-            alt={creative.headline || "Creative asset"}
-            className="aspect-video w-full object-cover"
-            loading="lazy"
-          />
-          {creative.format && (
-            <Badge 
-              className="absolute top-2 right-2 bg-black/60 text-white text-xs capitalize"
-            >
-              {creative.format}
-            </Badge>
+
+        {/* Details */}
+        <div className="flex flex-col gap-2 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-medium leading-snug text-foreground">
+              {creative.headline || "Creative"}
+            </p>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              {creative.platform && (
+                <Badge variant="secondary" className="text-[10px] capitalize">
+                  {creative.platform}
+                </Badge>
+              )}
+              {creative.format && (
+                <Badge variant="outline" className="text-[10px] capitalize">
+                  {creative.format}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {creative.description && (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {creative.description}
+            </p>
           )}
-        </div>
-        {creative.post_copy && (
-          <div className="p-4 bg-white/5">
-            <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
+
+          {creative.post_copy && (
+            <p className="line-clamp-4 border-l-2 border-border pl-2 text-xs leading-relaxed text-foreground/75">
               {creative.post_copy}
             </p>
-          </div>
-        )}
-        {creative.call_to_action && (
-          <div className="px-4 pb-4 pt-2">
-            <Badge variant="outline" className="text-xs text-white/70 border-white/20">
-              CTA: {creative.call_to_action}
+          )}
+
+          {creative.call_to_action && (
+            <Badge variant="secondary" className="w-fit text-[10px]">
+              {creative.call_to_action}
             </Badge>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
 }

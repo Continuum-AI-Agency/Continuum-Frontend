@@ -10,7 +10,7 @@ export async function executeFlow() {
 
   // Reset
   nodes.forEach(n => {
-     if (n.type !== 'string' && n.type !== 'image') updateNodeData(n.id, { isExecuting: true, generatedImage: undefined, generatedVideo: undefined });
+     if (n.type !== 'string' && n.type !== 'image') updateNodeData(n.id, { isExecuting: true, generatedImage: undefined, generatedImageUrl: undefined, generatedVideo: undefined, generatedVideoUrl: undefined });
   });
 
   // Find Nano Gen Nodes

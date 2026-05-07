@@ -16,7 +16,7 @@ async function DashboardLayoutContent({
 }: {
   children: React.ReactNode;
 }) {
-  const { activeBrandId, brandSummaries, user } = await getActiveBrandContext();
+  const { activeBrandId, brandSummaries, user, permissions } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
   }
@@ -26,6 +26,7 @@ async function DashboardLayoutContent({
       activeBrandId={activeBrandId}
       brandSummaries={brandSummaries}
       user={user}
+      permissions={permissions}
     >
       {children}
     </DashboardLayoutShell>

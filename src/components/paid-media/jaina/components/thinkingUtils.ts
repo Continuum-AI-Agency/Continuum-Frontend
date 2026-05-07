@@ -1,10 +1,24 @@
 import type { ToolCallEventData, ToolResultEventData } from "@/lib/jaina/schemas";
 import type { JainaProgressEntry } from "@/lib/jaina/stream";
 
+export type AgentLifecycleSegment = {
+  kind: "agent_lifecycle";
+  id: string;
+  agentId: string;
+  agentLabel: string;
+  taskDescription?: string;
+  spawnTs?: number;
+  completeStatus?: "completed" | "failed" | "cancelled" | "partial";
+  durationMs?: number;
+  error?: string;
+  workerToolRefs?: string[];
+};
+
 export type ThinkingSegment =
   | { kind: "thought"; id: string; entries: JainaProgressEntry[] }
   | { kind: "tools"; id: string; toolRefs: string[] }
-  | { kind: "handoff"; id: string; from: string | null; to: string; objective: string | null; status: "started" | "completed" | "failed" };
+  | { kind: "handoff"; id: string; from: string | null; to: string; objective: string | null; status: "started" | "completed" | "failed" }
+  | AgentLifecycleSegment;
 
 export type ResolvedToolEntry = {
   id: string;
@@ -29,9 +43,18 @@ export function formatToolLabel(toolName: string): string {
     : toolName.replace(/_/g, " ");
 }
 
+const KNOWN_AGENT_LABELS: Record<string, string> = {
+  l2_worker_agent: "Worker Agent",
+  strategist: "Strategist",
+  canvas_agent: "Canvas Agent",
+  synthesis_agent: "Synthesis",
+  routing_agent: "Router",
+};
+
 export function formatAgentLabel(scope: string): string {
-  if (scope === "router") return "Router";
-  return scope
+  const normalized = scope.startsWith("Jaina_") ? scope.slice("Jaina_".length) : scope;
+  if (normalized in KNOWN_AGENT_LABELS) return KNOWN_AGENT_LABELS[normalized];
+  return normalized
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -94,8 +117,11 @@ export function getProgressValueAsString(data: unknown, key: string): string {
 export function resolveToolProgressMetadata(entry: JainaProgressEntry) {
   const toolCallId =
     getProgressValueAsString(entry.data, "tool_call_id") ||
-    getProgressValueAsString(entry.data, "call_id");
-  const toolName = getProgressValueAsString(entry.data, "tool_name");
+    getProgressValueAsString(entry.data, "call_id") ||
+    getProgressValueAsString(entry.data, "id");
+  const toolName =
+    getProgressValueAsString(entry.data, "tool_name") ||
+    getProgressValueAsString(entry.data, "name");
   return { toolCallId, toolName };
 }
 
@@ -129,6 +155,25 @@ export function resolveToolRef(
   return `name:${toolName}`;
 }
 
+function getToolAgentId(entry: JainaProgressEntry): string | null {
+  const data = entry.data;
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  const agentId = record.agent_id;
+  if (typeof agentId === "string" && agentId.trim()) return agentId;
+  const parentAgentId = record.parent_agent_id;
+  return typeof parentAgentId === "string" && parentAgentId.trim()
+    ? parentAgentId
+    : null;
+}
+
+function isInternalCoreHandoff(data: Record<string, unknown> | undefined) {
+  const toScope = typeof data?.to_scope === "string" ? data.to_scope : "";
+  const displayName = typeof data?.display_name === "string" ? data.display_name : "";
+  const name = typeof data?.name === "string" ? data.name : "";
+  return toScope.toLowerCase() === "core" && !displayName.trim() && !name.trim();
+}
+
 export function buildThinkingSegments(
   reasoning: JainaProgressEntry[],
   toolCalls: ToolCallEventData[]
@@ -137,6 +182,7 @@ export function buildThinkingSegments(
   const currentThoughtEntries: JainaProgressEntry[] = [];
   const currentToolRefs: string[] = [];
   const usedCallIds = new Set<string>();
+  const agentSegmentIndex = new Map<string, number>();
 
   const flushThoughts = () => {
     if (currentThoughtEntries.length === 0) return;
@@ -159,15 +205,94 @@ export function buildThinkingSegments(
   };
 
   for (const entry of reasoning) {
+    if (entry.stage === "agent_spawn") {
+      flushThoughts();
+      flushTools();
+      const data = entry.data as Record<string, unknown> | undefined;
+      const agentId = typeof data?.agent_id === "string" ? data.agent_id : "unknown";
+      const agentLabel =
+        typeof data?.display_name === "string" ? data.display_name :
+        typeof data?.name === "string" ? data.name :
+        formatAgentLabel(agentId);
+      agentSegmentIndex.set(agentId, segments.length);
+      segments.push({
+        kind: "agent_lifecycle",
+        id: `agent-${segments.length + 1}`,
+        agentId,
+        agentLabel,
+        taskDescription: typeof data?.task_description === "string" ? data.task_description : undefined,
+        spawnTs: typeof data?.spawn_ts === "number" ? data.spawn_ts : undefined,
+        workerToolRefs: [],
+      });
+      continue;
+    }
+
+    if (entry.stage === "agent_complete") {
+      flushThoughts();
+      flushTools();
+      const data = entry.data as Record<string, unknown> | undefined;
+      const agentId = typeof data?.agent_id === "string" ? data.agent_id : "unknown";
+      const existingIndex = [...segments].reverse().findIndex(
+        (s) => s.kind === "agent_lifecycle" && s.agentId === agentId
+      );
+      if (existingIndex !== -1) {
+        const realIndex = segments.length - 1 - existingIndex;
+        const existing = segments[realIndex] as AgentLifecycleSegment;
+        segments[realIndex] = {
+          ...existing,
+          completeStatus: data?.status === "failed"
+            ? "failed"
+            : data?.status === "cancelled"
+            ? "cancelled"
+            : data?.status === "partial"
+            ? "partial"
+            : "completed",
+          durationMs: typeof data?.duration_ms === "number" ? data.duration_ms : undefined,
+          error: typeof data?.error === "string" ? data.error : undefined,
+        };
+      } else {
+        segments.push({
+          kind: "agent_lifecycle",
+          id: `agent-${segments.length + 1}`,
+          agentId,
+          agentLabel:
+            typeof data?.display_name === "string" ? data.display_name :
+            typeof data?.name === "string" ? data.name :
+            formatAgentLabel(agentId),
+          completeStatus: data?.status === "failed"
+            ? "failed"
+            : data?.status === "cancelled"
+            ? "cancelled"
+            : data?.status === "partial"
+            ? "partial"
+            : "completed",
+          durationMs: typeof data?.duration_ms === "number" ? data.duration_ms : undefined,
+          error: typeof data?.error === "string" ? data.error : undefined,
+        });
+      }
+      continue;
+    }
+
     if (entry.stage === "handoff_start" || entry.stage === "handoff_complete") {
       flushThoughts();
       flushTools();
       const data = entry.data as Record<string, unknown> | undefined;
+      if (isInternalCoreHandoff(data)) {
+        continue;
+      }
+      const toLabel =
+        typeof data?.display_name === "string" && data.display_name.trim()
+          ? data.display_name
+          : typeof data?.name === "string" && data.name.trim()
+            ? data.name
+            : typeof data?.to_scope === "string"
+              ? data.to_scope
+              : "unknown";
       segments.push({
         kind: "handoff",
         id: `handoff-${segments.length + 1}`,
         from: typeof data?.from_scope === "string" ? data.from_scope : null,
-        to: typeof data?.to_scope === "string" ? data.to_scope : "unknown",
+        to: toLabel,
         objective: typeof data?.objective === "string" ? data.objective : null,
         status: entry.stage === "handoff_start"
           ? "started"
@@ -179,8 +304,18 @@ export function buildThinkingSegments(
     if (isToolProgressEntry(entry)) {
       flushThoughts();
       const toolRef = resolveToolRef(entry, toolCalls, usedCallIds);
-      if (toolRef && !currentToolRefs.includes(toolRef)) {
-        currentToolRefs.push(toolRef);
+      if (toolRef) {
+        const agentId = getToolAgentId(entry);
+        const workerIdx = agentId ? agentSegmentIndex.get(agentId) : undefined;
+        if (workerIdx !== undefined) {
+          const seg = segments[workerIdx] as AgentLifecycleSegment;
+          const refs = seg.workerToolRefs ?? [];
+          if (!refs.includes(toolRef)) {
+            segments[workerIdx] = { ...seg, workerToolRefs: [...refs, toolRef] };
+          }
+        } else if (!currentToolRefs.includes(toolRef)) {
+          currentToolRefs.push(toolRef);
+        }
       }
       continue;
     }

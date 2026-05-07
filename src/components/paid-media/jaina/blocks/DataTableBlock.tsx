@@ -32,14 +32,14 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                   const displayValue =
                     raw == null
                       ? "—"
-                      : formatValue(raw as string | number, column.format);
+                      : formatValue(raw as string | number, column.format ?? undefined);
                   return (
                     <td
                       key={column.key}
                       className="px-3 py-2 tabular-nums"
                       style={{ textAlign: column.align ?? "left" }}
                     >
-                      {column.format === "text" || !column.format ? (
+                      {!column.format || column.format === "text" ? (
                         <MediaText>{displayValue}</MediaText>
                       ) : (
                         displayValue
@@ -52,6 +52,9 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
           </tbody>
         </table>
       </div>
+      {block.notes && (
+        <p className="mt-1.5 text-xs text-muted-foreground/70 italic">{block.notes}</p>
+      )}
     </div>
   );
 }

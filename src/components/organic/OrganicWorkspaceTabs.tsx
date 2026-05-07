@@ -2,12 +2,16 @@
 
 import React, { startTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { Tabs } from "@radix-ui/themes";
 import { prefetchMetricsDashboard } from "@/lib/prefetch/organic-metrics-cache";
+import { cn } from "@/lib/utils";
 
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
 // Stable @types/react doesn't include it yet, so we pull it at runtime via cast.
-const ViewTransition = (React as unknown as { ViewTransition: React.ComponentType<{ children: React.ReactNode }> }).ViewTransition;
+const ViewTransition =
+  (React as unknown as { ViewTransition?: React.ComponentType<{ children: React.ReactNode }> }).ViewTransition ??
+  function ViewTransitionFallback({ children }: { children: React.ReactNode }) {
+    return <>{children}</>;
+  };
 
 type MetricsPrefetchParams = {
   brandId: string;
@@ -19,16 +23,32 @@ type Props = {
   plannerSlot: React.ReactNode;
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
+  agentSlot?: React.ReactNode;
+  noticeSlot?: React.ReactNode;
 };
 
-export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetchParams }: Props) {
+const WORKSPACE_LABELS: Record<"planner" | "metrics" | "agent", string> = {
+  planner: "Planner",
+  metrics: "Metrics",
+  agent: "Agent",
+};
+
+export function OrganicWorkspaceTabs({
+  plannerSlot,
+  metricsSlot,
+  metricsPrefetchParams,
+  agentSlot,
+  noticeSlot,
+}: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
-  const [activeView, setActiveView] = React.useState<"planner" | "metrics">(initialView);
-  // Track whether metrics tab has ever been shown — once mounted, keep it alive
-  // so switching back doesn't re-fetch / re-mount the chart components.
+  const initialView: "planner" | "metrics" | "agent" =
+    tabParam === "metrics" ? "metrics" : tabParam === "agent" ? "agent" : "planner";
+  const [activeView, setActiveView] = React.useState<"planner" | "metrics" | "agent">(initialView);
+  // Track whether metrics/agent tabs have ever been shown — once mounted, keep alive
+  // so switching back doesn't re-fetch / re-mount the components.
   const [metricsEverShown, setMetricsEverShown] = React.useState(initialView === "metrics");
+  const [agentEverShown, setAgentEverShown] = React.useState(initialView === "agent");
 
   // Prefetch metrics data while user is on the planner tab
   React.useEffect(() => {
@@ -50,20 +70,23 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
   }, [activeView, metricsPrefetchParams]);
 
   React.useEffect(() => {
-    const nextView: "planner" | "metrics" = tabParam === "metrics" ? "metrics" : "planner";
+    const nextView: "planner" | "metrics" | "agent" =
+      tabParam === "metrics" ? "metrics" : tabParam === "agent" ? "agent" : "planner";
     if (nextView !== activeView) {
       setActiveView(nextView);
       if (nextView === "metrics") setMetricsEverShown(true);
+      if (nextView === "agent") setAgentEverShown(true);
     }
   }, [activeView, tabParam]);
 
   const handleValueChange = React.useCallback(
     (value: string) => {
-      const nextView: "planner" | "metrics" = value === "planner" ? "planner" : "metrics";
+      const nextView = value as "planner" | "metrics" | "agent";
 
       const apply = () => {
         setActiveView(nextView);
         if (nextView === "metrics") setMetricsEverShown(true);
+        if (nextView === "agent") setAgentEverShown(true);
         // Use history.replaceState instead of router.replace to avoid triggering
         // a Next.js server re-render (which would flash the Suspense fallback).
         const params = new URLSearchParams(searchParams.toString());
@@ -77,23 +100,48 @@ export function OrganicWorkspaceTabs({ plannerSlot, metricsSlot, metricsPrefetch
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-      <div className="shrink-0 px-1 pb-1">
-        <Tabs.Root value={activeView} onValueChange={handleValueChange}>
-          <Tabs.List>
-            <Tabs.Trigger value="planner">Planner</Tabs.Trigger>
-            <Tabs.Trigger value="metrics">Metrics Dashboard</Tabs.Trigger>
-          </Tabs.List>
-        </Tabs.Root>
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
+      <div className="flex min-h-10 items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-3">
+        <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
+
+        <nav className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5" aria-label="Organic workspace">
+          {(["planner", "metrics", ...(agentSlot !== undefined ? ["agent"] : [])] as Array<"planner" | "metrics" | "agent">).map((view) => {
+            const isActive = activeView === view;
+
+            return (
+              <button
+                key={view}
+                type="button"
+                onClick={() => handleValueChange(view)}
+                className={cn(
+                  "h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm",
+                  isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+                aria-pressed={isActive}
+              >
+                {WORKSPACE_LABELS[view]}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       <ViewTransition>
-        <div className="flex-1 min-h-0">
+        <div className="min-h-0 overflow-hidden p-2 sm:p-3">
+          {noticeSlot ? (
+            <div className="mb-2 grid gap-2">
+              {noticeSlot}
+            </div>
+          ) : null}
           {/* Always render planner — it's the default tab */}
-          <div className="h-full w-full" hidden={activeView !== "planner"}>{plannerSlot}</div>
+          <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "planner"}>{plannerSlot}</div>
           {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}
           {metricsEverShown && (
-            <div className="h-full w-full" hidden={activeView !== "metrics"}>{metricsSlot}</div>
+            <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "metrics"}>{metricsSlot}</div>
+          )}
+          {/* Defer agent mount until first viewed, then keep alive */}
+          {agentSlot !== undefined && agentEverShown && (
+            <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "agent"}>{agentSlot}</div>
           )}
         </div>
       </ViewTransition>

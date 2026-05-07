@@ -15,7 +15,7 @@ import { formatMiB } from '@/lib/ai-studio/referenceDrop';
 import { useStudioStore } from '../stores/useStudioStore';
 import { serializeWorkflowSnapshot } from '../utils/workflowSerialization';
 
-const WORKFLOW_PAYLOAD_MAX_BYTES = 30 * 1024 * 1024;
+const WORKFLOW_PAYLOAD_MAX_BYTES = 200 * 1024 * 1024;
 
 const saveWorkflowSchema = z.object({
   name: z.string().min(1, 'Workflow name is required'),

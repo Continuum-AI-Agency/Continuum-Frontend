@@ -1,8 +1,16 @@
 import type { InsightRow } from "./breakdowns.ts";
+import {
+  extractActionMetric,
+  extractPurchaseRoas,
+  PURCHASE_ACTION_TYPES,
+  toNumber,
+} from "./metrics.ts";
 
 export type AdCreativeBreakdown = {
   ad_id: string;
   ad_name: string;
+  campaign_id: string;
+  adset_id: string;
   spend: number;
   impressions: number;
   clicks: number;
@@ -13,39 +21,10 @@ export type AdCreativeBreakdown = {
   frequency: number;
 };
 
-const PURCHASE_ACTION_TYPES = new Set(["omni_purchase"]);
-
-const toNumber = (value: unknown): number => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number.parseFloat(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
-};
-
 const round = (value: number, digits = 4): number => {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
 };
-
-const asArray = (value: unknown): unknown[] =>
-  Array.isArray(value) ? value : [];
-
-const extractActionMetric = (
-  values: unknown,
-  actionTypes: Set<string>
-): number =>
-  asArray(values)
-    .map((item) => {
-      if (!item || typeof item !== "object") return 0;
-      const record = item as Record<string, unknown>;
-      const actionType =
-        typeof record.action_type === "string" ? record.action_type : "";
-      if (!actionTypes.has(actionType)) return 0;
-      return toNumber(record.value);
-    })
-    .reduce((sum, value) => sum + value, 0);
 
 export async function fetchAdLevelInsights(args: {
   adAccountId: string;
@@ -58,7 +37,7 @@ export async function fetchAdLevelInsights(args: {
   const url = `https://graph.facebook.com/v23.0/act_${rawId}/insights`;
   const params = new URLSearchParams({
     fields:
-      "ad_id,ad_name,spend,impressions,clicks,actions,action_values,frequency",
+      "ad_id,ad_name,campaign_id,adset_id,spend,impressions,clicks,actions,action_values,purchase_roas,frequency",
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     level: "ad",
     access_token: args.accessToken,
@@ -88,17 +67,25 @@ export async function fetchAdLevelInsights(args: {
         PURCHASE_ACTION_TYPES
       );
       const purchases = extractActionMetric(row.actions, PURCHASE_ACTION_TYPES);
+      const purchaseRoas = extractPurchaseRoas(row.purchase_roas);
 
       return {
         ad_id: String(row.ad_id ?? ""),
         ad_name: String(row.ad_name ?? ""),
+        campaign_id: String(row.campaign_id ?? ""),
+        adset_id: String(row.adset_id ?? ""),
         spend: round(spend),
         impressions: Math.round(impressions),
         clicks: Math.round(clicks),
         ctr: impressions > 0 ? round((clicks / impressions) * 100) : 0,
         conversions: round(purchases),
         conversion_value: round(purchaseValue),
-        roas: spend > 0 ? round(purchaseValue / spend) : 0,
+        roas:
+          purchaseRoas > 0
+            ? round(purchaseRoas)
+            : spend > 0
+              ? round(purchaseValue / spend)
+              : 0,
         frequency: round(toNumber(row.frequency), 2),
       };
     })

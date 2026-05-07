@@ -32,6 +32,8 @@ import {
   handoffStartSchema,
   handoffCompleteSchema,
   agentEnvelopeSchema,
+  agentSpawnEventSchema,
+  agentCompleteEventSchema,
   toolCallSchema,
   toolResultSchema,
   thoughtEventSchema,
@@ -67,6 +69,15 @@ import {
 } from "./unwrapping";
 
 export type JainaStreamStatus = "idle" | "starting" | "streaming" | "complete" | "error";
+
+export type ActiveWorkerInfo = {
+  agentId: string;
+  displayName: string;
+  lastToolName?: string;
+  lastToolState?: "calling" | "returned" | "cached" | "failed";
+  outputBytes?: number;
+  error?: string;
+};
 
 const compatibilityStreamEventSchema = z.object({
   type: z.enum([
@@ -138,6 +149,7 @@ export type JainaStreamState = {
   }>;
   toolCalls: ToolCallEventData[];
   toolResults: ToolResultEventData[];
+  activeWorkers: Record<string, ActiveWorkerInfo>;
   stateDeltas: StateDeltaEventData[];
   artifacts: ArtifactDeltaEventData;
   canvasActions: CampaignCanvasActionsEnvelope[];
@@ -172,6 +184,7 @@ export function createInitialJainaStreamState(): JainaStreamState {
     blockDeltas: [],
     toolCalls: [],
     toolResults: [],
+    activeWorkers: {},
     stateDeltas: [],
     artifacts: {},
     canvasActions: [],
@@ -374,6 +387,31 @@ function normalizeGraph(value: unknown): Record<string, unknown> | null {
   return title ? { ...record, title } : record;
 }
 
+const summaryFieldPriority = [
+  "narrative",
+  "summary",
+  "text",
+  "description",
+  "overview",
+  "title",
+  "principal_deviation",
+] as const;
+
+function extractSummaryText(value: unknown): string | undefined {
+  const summaryText = getNonEmptyString(value);
+  if (summaryText) return summaryText;
+
+  const record = asRecord(value);
+  if (!record) return undefined;
+
+  for (const field of summaryFieldPriority) {
+    const candidate = getNonEmptyString(record[field]);
+    if (candidate) return candidate;
+  }
+
+  return undefined;
+}
+
 function normalizeTable(
   value: unknown
 ): FrontendCheckpointReport["sections"][number]["tables"][number] | null {
@@ -481,7 +519,7 @@ function normalizeSection(
     heading: getNonEmptyString(record.heading) ?? getNonEmptyString(record.title) ?? "Analysis",
     scope: getNonEmptyString(record.scope) ?? "account",
     summary:
-      getNonEmptyString(record.summary) ??
+      extractSummaryText(record.summary) ??
       getNonEmptyString(record.content) ??
       getNonEmptyString(record.section_summary) ??
       getNonEmptyString(record.analysis_summary) ??
@@ -703,9 +741,7 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
       "",
     executive_summary:
       getNonEmptyString(payloadRecord.executive_summary) ??
-      getNonEmptyString(summaryRecord?.narrative) ??
-      getNonEmptyString(summaryRecord?.overview) ??
-      getNonEmptyString(payloadRecord.summary) ??
+      extractSummaryText(payloadRecord.summary) ??
       getNonEmptyString(payloadRecord.title) ??
       "",
     budget: asRecord(payloadRecord.budget) ?? null,
@@ -909,14 +945,9 @@ function parsePartialReportFromAccumulatedText(
       raw.title = summaryTitle;
     }
 
-    const overview = getNonEmptyString(summaryObject.overview);
-    if (overview) {
-      raw.summary = overview;
-    }
-
-    const narrative = getNonEmptyString(summaryObject.narrative);
-    if (narrative) {
-      raw.summary = narrative;
+    const summaryText = extractSummaryText(summaryObject);
+    if (summaryText) {
+      raw.summary = summaryText;
     }
 
     const keyFindings = asArray(summaryObject.key_findings);
@@ -1211,6 +1242,76 @@ function dedupeObjectives(objectives: JainaObjective[]): JainaObjective[] {
   return Array.from(map.values());
 }
 
+const snapshotObjectiveStatusRank: Record<JainaObjectiveStatus, number> = {
+  pending: 0,
+  in_progress: 1,
+  failed: 2,
+  completed: 3,
+};
+
+function mergeObjectiveSnapshotStatus(
+  existingStatus: JainaObjectiveStatus,
+  incomingStatus: JainaObjectiveStatus
+): JainaObjectiveStatus {
+  return snapshotObjectiveStatusRank[incomingStatus] >=
+    snapshotObjectiveStatusRank[existingStatus]
+    ? incomingStatus
+    : existingStatus;
+}
+
+function mergeObjectiveSnapshots(
+  currentObjectives: JainaObjective[],
+  incomingObjectives: JainaObjective[]
+): JainaObjective[] {
+  if (incomingObjectives.length === 0) return currentObjectives;
+
+  const byId = new Map<string, JainaObjective>();
+  const titleToId = new Map<string, string>();
+
+  for (const objective of currentObjectives) {
+    byId.set(objective.id, objective);
+    titleToId.set(objective.title.trim().toLowerCase(), objective.id);
+  }
+
+  for (const incoming of incomingObjectives) {
+    const titleKey = incoming.title.trim().toLowerCase();
+    const targetId = byId.has(incoming.id)
+      ? incoming.id
+      : titleToId.get(titleKey) ?? incoming.id;
+    const existing = byId.get(targetId);
+
+    if (!existing) {
+      byId.set(targetId, incoming);
+      titleToId.set(titleKey, targetId);
+      continue;
+    }
+
+    const merged: JainaObjective = {
+      ...existing,
+      ...incoming,
+      id: targetId,
+      title: incoming.title || existing.title,
+      description: incoming.description ?? existing.description,
+      status: mergeObjectiveSnapshotStatus(existing.status, incoming.status),
+    };
+
+    byId.set(targetId, merged);
+    titleToId.set(merged.title.trim().toLowerCase(), targetId);
+  }
+
+  return Array.from(byId.values());
+}
+
+function mergeExplicitObjectiveStatus(
+  existingStatus: JainaObjectiveStatus | undefined,
+  incomingStatus: JainaObjectiveStatus
+): JainaObjectiveStatus {
+  if (existingStatus === "completed" && incomingStatus !== "completed") {
+    return "completed";
+  }
+  return incomingStatus;
+}
+
 function looksLikePlanRecord(payload: Record<string, unknown>): boolean {
   const hasPlanId =
     typeof payload.plan_id === "string" ||
@@ -1341,7 +1442,11 @@ function upsertObjective(
   if (!normalized) return currentObjectives;
 
   const targetId = existingMatch?.id ?? normalized.id;
-  const withTargetId: JainaObjective = { ...normalized, id: targetId };
+  const withTargetId: JainaObjective = {
+    ...normalized,
+    id: targetId,
+    status: mergeExplicitObjectiveStatus(existingMatch?.status, normalized.status),
+  };
   const nextObjectives = currentObjectives.filter(
     (objective) => objective.id !== targetId
   );
@@ -1467,6 +1572,108 @@ function hydrateToolsFromStateDelta(delta: Record<string, unknown>): {
   };
 }
 
+function normalizeToolProgressData(
+  tool: ToolCallEventData | ToolResultEventData,
+  stage: "tool_start" | "tool_complete",
+  source: string
+): Record<string, unknown> {
+  return {
+    ...tool,
+    stage,
+    source,
+    tool_name: tool.name,
+    tool_call_id: tool.id,
+  };
+}
+
+function getEnvelopeString(
+  envelope: Record<string, unknown>,
+  payload: Record<string, unknown>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = envelope[key] ?? payload[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function getEnvelopeRecord(value: unknown): Record<string, unknown> {
+  return asRecord(value) ?? {};
+}
+
+function buildToolCallFromEnvelope(
+  envelope: Record<string, unknown>
+): ToolCallEventData | null {
+  const payload = getEnvelopeRecord(envelope.payload);
+  const name = getEnvelopeString(envelope, payload, ["name", "tool_name"]);
+  if (!name) return null;
+  const id =
+    getEnvelopeString(envelope, payload, ["id", "tool_call_id"]) ??
+    getEnvelopeString(envelope, payload, ["correlation_id"]) ??
+    `${name}-${Date.now()}`;
+
+  return {
+    id,
+    name,
+    args: getEnvelopeRecord(payload.args ?? payload.input),
+    metadata: { source: "agent.envelope", ...payload },
+    correlation_id:
+      getEnvelopeString(envelope, payload, ["correlation_id"]) ?? undefined,
+    parent_correlation_id:
+      getEnvelopeString(envelope, payload, ["parent_correlation_id"]) ?? null,
+    agent_id: getEnvelopeString(envelope, payload, ["agent_id"]) ?? null,
+    parent_agent_id:
+      getEnvelopeString(envelope, payload, ["parent_agent_id"]) ?? null,
+    display_name:
+      getEnvelopeString(envelope, payload, ["display_name"]) ?? null,
+    agent_name: getEnvelopeString(envelope, payload, ["agent_name"]) ?? null,
+  };
+}
+
+function buildToolResultFromEnvelope(
+  envelope: Record<string, unknown>
+): ToolResultEventData | null {
+  const payload = getEnvelopeRecord(envelope.payload);
+  const name = getEnvelopeString(envelope, payload, ["name", "tool_name"]);
+  if (!name) return null;
+  const id =
+    getEnvelopeString(envelope, payload, ["id", "tool_call_id"]) ??
+    getEnvelopeString(envelope, payload, ["correlation_id"]) ??
+    `${name}-${Date.now()}`;
+  const event = getEnvelopeString(envelope, payload, ["event"]);
+  const error = getEnvelopeString(envelope, payload, ["error"]);
+
+  return {
+    id,
+    name,
+    ok: event !== "error" && !error,
+    cached: Boolean(payload.cached),
+    duration_ms:
+      typeof payload.duration_ms === "number" ? payload.duration_ms : undefined,
+    output: payload.output,
+    error,
+    output_bytes:
+      typeof payload.output_bytes === "number" ? payload.output_bytes : undefined,
+    output_tokens_est:
+      typeof payload.output_tokens_est === "number"
+        ? payload.output_tokens_est
+        : undefined,
+    correlation_id:
+      getEnvelopeString(envelope, payload, ["correlation_id"]) ?? undefined,
+    parent_correlation_id:
+      getEnvelopeString(envelope, payload, ["parent_correlation_id"]) ?? null,
+    agent_id: getEnvelopeString(envelope, payload, ["agent_id"]) ?? null,
+    parent_agent_id:
+      getEnvelopeString(envelope, payload, ["parent_agent_id"]) ?? null,
+    display_name:
+      getEnvelopeString(envelope, payload, ["display_name"]) ?? null,
+    agent_name: getEnvelopeString(envelope, payload, ["agent_name"]) ?? null,
+  };
+}
+
 function mergeToolCalls(
   existing: ToolCallEventData[],
   incoming: ToolCallEventData[]
@@ -1559,7 +1766,7 @@ export function reduceJainaStreamEvent(
         ...nextBase,
         plan: nextPlan ?? state.plan,
         planJson: nextPlan ? planJson : state.planJson,
-        objectives: planObjectives.length > 0 ? planObjectives : state.objectives,
+        objectives: mergeObjectiveSnapshots(state.objectives, planObjectives),
       };
     }
     case "hitl.paused": {
@@ -1661,6 +1868,10 @@ export function reduceJainaStreamEvent(
       const v2Parsed = responseBlockDeltaV2Schema.safeParse(event);
       if (v2Parsed.success && v2Parsed.data.data) {
         const v2Payload = v2Parsed.data.data;
+        // Contract: only "chart" blocks are streamed; skip anything else
+        if (v2Payload.block_category && v2Payload.block_category !== "chart") {
+          return nextBase;
+        }
         if (state.blockDeltasV2.some((entry) => entry.sequence === v2Payload.sequence)) {
           return nextBase;
         }
@@ -1811,6 +2022,7 @@ export function reduceJainaStreamEvent(
         blockDeltas: [],
         toolCalls: [],
         toolResults: [],
+        activeWorkers: {},
         stateDeltas: [],
         artifacts: {},
         canvasActions: [],
@@ -1869,7 +2081,7 @@ export function reduceJainaStreamEvent(
       }
       return {
         ...nextBase,
-        objectives,
+        objectives: mergeObjectiveSnapshots(state.objectives, objectives),
       };
     }
     case "response.objective.updated": {
@@ -2004,7 +2216,7 @@ export function reduceJainaStreamEvent(
             stage: "tool_start",
             at: new Date().toISOString(),
             detail: `Executing ${call.name}`,
-            data: call,
+            data: normalizeToolProgressData(call, "tool_start", "tool.batch"),
           });
         }
       }
@@ -2013,15 +2225,115 @@ export function reduceJainaStreamEvent(
           stage: "tool_complete",
           at: new Date().toISOString(),
           detail: `Completed ${res.name}`,
-          data: res,
+          data: normalizeToolProgressData(res, "tool_complete", "tool.batch"),
         });
+      }
+
+      let nextActiveWorkers = state.activeWorkers;
+      for (const call of parsed.data.data.calls) {
+        const pid = call.agent_id ?? call.parent_agent_id ?? null;
+        if (pid && pid in nextActiveWorkers) {
+          nextActiveWorkers = {
+            ...nextActiveWorkers,
+            [pid]: { ...nextActiveWorkers[pid], lastToolName: call.name, lastToolState: "calling" as const, outputBytes: undefined, error: undefined },
+          };
+        }
+      }
+      for (const res of newResults) {
+        const pid = res.agent_id ?? res.parent_agent_id ?? null;
+        if (pid && pid in nextActiveWorkers) {
+          nextActiveWorkers = {
+            ...nextActiveWorkers,
+            [pid]: {
+              ...nextActiveWorkers[pid],
+              lastToolName: res.name,
+              lastToolState: (res.ok ? (res.cached ? "cached" : "returned") : "failed") as ActiveWorkerInfo["lastToolState"],
+              outputBytes: (res as { output_bytes?: number }).output_bytes,
+              error: res.ok ? undefined : res.error,
+            },
+          };
+        }
       }
 
       return {
         ...nextBase,
         toolCalls: nextToolCalls,
         toolResults: nextToolResults,
+        activeWorkers: nextActiveWorkers,
         progress: nextProgress,
+      };
+    }
+    case "tool.call": {
+      const raw = asRecord((event as { data?: unknown }).data) ?? {};
+      // Individual tool.call events use "input" for args; normalize before parsing
+      const normalized = { ...raw, args: raw.args ?? raw.input ?? {}, metadata: raw.metadata ?? {} };
+      const parsed = toolCallSchema.safeParse(normalized);
+      if (!parsed.success) return nextBase;
+      const call = parsed.data;
+      const { merged: nextToolCalls, added } = mergeToolCalls(state.toolCalls, [call]);
+      if (added.length === 0) return nextBase;
+      const parentAgentId = call.agent_id ?? call.parent_agent_id ?? null;
+      let nextActiveWorkers = state.activeWorkers;
+      if (parentAgentId && parentAgentId in state.activeWorkers) {
+        nextActiveWorkers = {
+          ...state.activeWorkers,
+          [parentAgentId]: {
+            ...state.activeWorkers[parentAgentId],
+            lastToolName: call.name,
+            lastToolState: "calling",
+            outputBytes: undefined,
+            error: undefined,
+          },
+        };
+      }
+      return {
+        ...nextBase,
+        toolCalls: nextToolCalls,
+        activeWorkers: nextActiveWorkers,
+        progress: [
+          ...state.progress,
+          {
+            stage: "tool_start",
+            at: new Date().toISOString(),
+            detail: `Executing ${call.name}`,
+            data: normalizeToolProgressData(call, "tool_start", "tool.call"),
+          },
+        ],
+      };
+    }
+    case "tool.result": {
+      const parsed = toolResultSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success) return nextBase;
+      const result = parsed.data;
+      const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [result]);
+      if (added.length === 0) return nextBase;
+      const parentAgentId = result.agent_id ?? result.parent_agent_id ?? null;
+      let nextActiveWorkers = state.activeWorkers;
+      if (parentAgentId && parentAgentId in state.activeWorkers) {
+        nextActiveWorkers = {
+          ...state.activeWorkers,
+          [parentAgentId]: {
+            ...state.activeWorkers[parentAgentId],
+            lastToolName: result.name,
+            lastToolState: result.ok ? (result.cached ? "cached" : "returned") : "failed",
+            outputBytes: result.output_bytes,
+            error: result.ok ? undefined : result.error,
+          },
+        };
+      }
+      return {
+        ...nextBase,
+        toolResults: nextToolResults,
+        activeWorkers: nextActiveWorkers,
+        progress: [
+          ...state.progress,
+          {
+            stage: "tool_complete",
+            at: new Date().toISOString(),
+            detail: `Completed ${result.name}`,
+            data: normalizeToolProgressData(result, "tool_complete", "tool.result"),
+          },
+        ],
       };
     }
     case "handoff.start": {
@@ -2067,20 +2379,195 @@ export function reduceJainaStreamEvent(
       if (!parsed.success || !parsed.data.data) {
         return { ...nextBase, status: "error", error: "Malformed agent.envelope event" };
       }
-      const data = parsed.data.data;
+      const envelope = parsed.data.data.envelope;
+      const envelopeRecord = envelope as Record<string, unknown>;
+      const payload = getEnvelopeRecord(envelope.payload);
+      const now = new Date().toISOString();
+
+      if (envelope.kind === "tool") {
+        if (envelope.event === "start") {
+          const toolCall = buildToolCallFromEnvelope(envelopeRecord);
+          if (!toolCall) return nextBase;
+          const { merged: nextToolCalls, added } = mergeToolCalls(state.toolCalls, [toolCall]);
+          if (added.length === 0) return nextBase;
+          return {
+            ...nextBase,
+            toolCalls: nextToolCalls,
+            progress: [
+              ...state.progress,
+              {
+                stage: "tool_start",
+                at: now,
+                detail: `Executing ${toolCall.name}`,
+                data: normalizeToolProgressData(toolCall, "tool_start", "agent.envelope"),
+              },
+            ],
+          };
+        }
+
+        const toolResult = buildToolResultFromEnvelope(envelopeRecord);
+        if (!toolResult) return nextBase;
+        const { merged: nextToolResults, added } = mergeToolResults(state.toolResults, [toolResult]);
+        if (added.length === 0) return nextBase;
+        return {
+          ...nextBase,
+          toolResults: nextToolResults,
+          progress: [
+            ...state.progress,
+            {
+              stage: "tool_complete",
+              at: now,
+              detail: `${envelope.event === "error" ? "Failed" : "Completed"} ${toolResult.name}`,
+              data: normalizeToolProgressData(toolResult, "tool_complete", "agent.envelope"),
+            },
+          ],
+        };
+      }
+
+      if (envelope.kind === "agent") {
+        const agentId =
+          getEnvelopeString(envelopeRecord, payload, ["agent_id"]) ??
+          envelope.correlation_id;
+        const displayName =
+          getEnvelopeString(envelopeRecord, payload, ["display_name", "name", "agent_name"]) ??
+          agentId;
+        if (envelope.event === "start") {
+          return {
+            ...nextBase,
+            activeWorkers: {
+              ...state.activeWorkers,
+              [agentId]: { agentId, displayName },
+            },
+            progress: [
+              ...state.progress,
+              {
+                stage: "agent_spawn",
+                at: now,
+                detail:
+                  getEnvelopeString(envelopeRecord, payload, ["task_description"]) ??
+                  `Agent ${agentId} spawned`,
+                data: {
+                  ...payload,
+                  agent_id: agentId,
+                  display_name: displayName,
+                  name: getEnvelopeString(envelopeRecord, payload, ["name"]),
+                  parent_agent_id:
+                    getEnvelopeString(envelopeRecord, payload, ["parent_agent_id"]) ?? null,
+                  task_id:
+                    getEnvelopeString(envelopeRecord, payload, ["task_id"]) ??
+                    envelope.correlation_id,
+                  task_description:
+                    getEnvelopeString(envelopeRecord, payload, ["task_description"]) ??
+                    undefined,
+                  started_at: envelope.timestamp,
+                  spawn_ts: Date.now(),
+                },
+              },
+            ],
+          };
+        }
+
+        const { [agentId]: _removed, ...remainingWorkers } = state.activeWorkers;
+        return {
+          ...nextBase,
+          activeWorkers: remainingWorkers,
+          progress: [
+            ...state.progress,
+            {
+              stage: "agent_complete",
+              at: now,
+              detail: `Agent ${agentId} ${envelope.event}`,
+              data: {
+                ...payload,
+                agent_id: agentId,
+                display_name: displayName,
+                name: getEnvelopeString(envelopeRecord, payload, ["name"]),
+                task_id:
+                  getEnvelopeString(envelopeRecord, payload, ["task_id"]) ??
+                  envelope.correlation_id,
+                status: envelope.event === "error" ? "failed" : "completed",
+                duration_ms:
+                  typeof payload.duration_ms === "number"
+                    ? payload.duration_ms
+                    : undefined,
+                error: getEnvelopeString(envelopeRecord, payload, ["error"]),
+              },
+            },
+          ],
+        };
+      }
+
       return {
         ...nextBase,
         progress: [
           ...state.progress,
           {
-            stage: "agent_event",
+            stage: envelope.event === "start" ? "handoff_start" : "handoff_complete",
+            at: now,
+            detail: `Handoff ${envelope.event}`,
+            data: {
+              ...payload,
+              correlation_id: envelope.correlation_id,
+              parent_correlation_id: envelope.parent_correlation_id,
+              from_scope: payload.from_scope ?? null,
+              to_scope: envelope.scope ?? payload.to_scope ?? "unknown",
+              display_name: envelope.display_name ?? payload.display_name ?? null,
+              name: envelope.name ?? payload.name ?? null,
+              objective: payload.objective ?? null,
+              status: envelope.event === "error" ? "failed" : "completed",
+            },
+          },
+        ],
+      };
+    }
+    case "agent.spawn": {
+      const parsed = agentSpawnEventSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success) {
+        return nextBase;
+      }
+      const data = parsed.data;
+      const displayName =
+        data.display_name ?? data.name ?? data.agent_id;
+      return {
+        ...nextBase,
+        activeWorkers: {
+          ...state.activeWorkers,
+          [data.agent_id]: { agentId: data.agent_id, displayName },
+        },
+        progress: [
+          ...state.progress,
+          {
+            stage: "agent_spawn",
             at: new Date().toISOString(),
-            detail: `Agent ${data.envelope.kind} ${data.envelope.event}`,
+            detail: data.task_description ?? `Agent ${data.agent_id} spawned`,
+            data: { ...data, spawn_ts: Date.now() },
+          },
+        ],
+      };
+    }
+    case "agent.complete": {
+      const parsed = agentCompleteEventSchema.safeParse((event as { data?: unknown }).data ?? {});
+      if (!parsed.success) {
+        return nextBase;
+      }
+      const data = parsed.data;
+      const { [data.agent_id]: _removed, ...remainingWorkers } = state.activeWorkers;
+      return {
+        ...nextBase,
+        activeWorkers: remainingWorkers,
+        progress: [
+          ...state.progress,
+          {
+            stage: "agent_complete",
+            at: new Date().toISOString(),
+            detail: `Agent ${data.agent_id} ${data.status ?? "complete"}`,
             data,
           },
         ],
       };
     }
+    case "canvas.context.loaded":
+      return nextBase;
 
     case "thought": {
       const parsed = thoughtEventSchema.safeParse((event as { data?: unknown }).data ?? {});
@@ -2137,7 +2624,7 @@ export function reduceJainaStreamEvent(
         };
       }
 
-      for (const part of parsed.data.content.parts) {
+      for (const part of parsed.data.content?.parts ?? []) {
         if ("text" in part) {
           const detail = formatThoughtDetail(part.text);
           const inferredPlan = looksLikePlanDelta(part.text)
@@ -2226,6 +2713,70 @@ export function reduceJainaStreamEvent(
             ],
           };
         }
+      }
+
+      // Handle flat format: top-level functionResponse (no content.parts wrapper)
+      if (!parsed.data.content && parsed.data.functionResponse) {
+        const fr = parsed.data.functionResponse;
+        const isError =
+          typeof (fr.response as Record<string, unknown>)?.error === "string";
+        const resultRecord: ToolResultEventData = {
+          id: fr.id,
+          name: fr.name,
+          ok: !isError,
+          cached: false,
+          output: fr.response,
+          error: isError
+            ? String((fr.response as Record<string, unknown>).error)
+            : undefined,
+        };
+        nextState = {
+          ...nextState,
+          toolResults: [...nextState.toolResults, resultRecord],
+          progress: [
+            ...nextState.progress,
+            {
+              stage: "tool_complete",
+              at: new Date().toISOString(),
+              detail: `Finished tool: ${formatToolLabel(fr.name)}`,
+              data: {
+                stage: "tool_complete",
+                tool_name: fr.name,
+                tool_call_id: fr.id,
+                author,
+              },
+            },
+          ],
+        };
+      }
+
+      // Handle flat format: top-level functionCall (no content.parts wrapper)
+      if (!parsed.data.content && parsed.data.functionCall) {
+        const fc = parsed.data.functionCall;
+        const callRecord: ToolCallEventData = {
+          id: fc.id,
+          name: fc.name,
+          args: fc.args,
+          metadata: { source: "adk.event", author },
+        };
+        nextState = {
+          ...nextState,
+          toolCalls: [...nextState.toolCalls, callRecord],
+          progress: [
+            ...nextState.progress,
+            {
+              stage: "tool_start",
+              at: new Date().toISOString(),
+              detail: `Running tool: ${formatToolLabel(fc.name)}`,
+              data: {
+                stage: "tool_start",
+                tool_name: fc.name,
+                tool_call_id: fc.id,
+                author,
+              },
+            },
+          ],
+        };
       }
 
       return nextState;
@@ -2492,7 +3043,7 @@ export function reduceJainaStreamEvent(
           toolCalls: mergedToolCalls,
           toolResults: mergedToolResults,
           progress: nextProgress,
-          objectives: deltaObjectives.length > 0 ? deltaObjectives : state.objectives,
+          objectives: mergeObjectiveSnapshots(state.objectives, deltaObjectives),
           plan: planFromDelta,
           ...checkpointSummaryPatch,
         };

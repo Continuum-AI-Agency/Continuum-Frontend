@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  reportAssemblySchema,
+  type FrontendCheckpointReport,
+  type ReportAssembly,
+} from "./schemas";
 
 export const jainaConversationRoleSchema = z.enum(["user", "assistant"]);
 export type JainaConversationRole = z.infer<typeof jainaConversationRoleSchema>;
@@ -140,6 +145,127 @@ export type BackendConversationMessagesResponse = z.infer<
   typeof backendConversationMessagesResponseSchema
 >;
 
+export const jainaConversationRunsHydrationQuerySchema = z.object({
+  brandId: z.string().min(1),
+  adAccountId: z.string().min(1).optional(),
+  sessionId: z.string().min(1),
+  limit: z.coerce.number().int().min(1).max(500).default(250),
+});
+export type JainaConversationRunsHydrationQuery = z.infer<
+  typeof jainaConversationRunsHydrationQuerySchema
+>;
+
+export const backendConversationRunSchema = z.object({
+  id: z.number().int().nonnegative().nullable().optional(),
+  run_id: z.string().nullable().optional(),
+  session_id: z.string().nullable().optional(),
+  brand_id: z.string().nullable().optional(),
+  ad_account_id: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  result_type: z.string().nullable().optional(),
+  result_payload: z.unknown().nullable().optional(),
+  query: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+});
+export type BackendConversationRun = z.infer<typeof backendConversationRunSchema>;
+
+export const jainaConversationRunSchema = z.object({
+  id: z.number().int().nonnegative().nullable().optional(),
+  runId: z.string().nullable(),
+  sessionId: z.string().nullable(),
+  brandId: z.string().nullable(),
+  adAccountId: z.string().nullable(),
+  status: z.string().nullable(),
+  resultType: z.string().nullable(),
+  resultPayload: z.unknown().nullable(),
+  query: z.string().nullable(),
+  createdAt: z.string().nullable(),
+});
+export type JainaConversationRun = z.infer<typeof jainaConversationRunSchema>;
+
+export const jainaConversationRunsHydrationResponseSchema = z.object({
+  sessionId: z.string().min(1),
+  runs: z.array(jainaConversationRunSchema),
+});
+export type JainaConversationRunsHydrationResponse = z.infer<
+  typeof jainaConversationRunsHydrationResponseSchema
+>;
+
+function normalizeReportAssemblyForConversationLoad(
+  reportAssembly: ReportAssembly
+): FrontendCheckpointReport {
+  const snapshot = reportAssembly.metrics.map((metric) => ({
+    metric: metric.label,
+    value: metric.actual,
+    change: metric.index_percent,
+    suffix: metric.unit === "%" ? "%" : undefined,
+    context: `Planned: ${metric.planned}`,
+    status:
+      metric.deviation_type === "positive"
+        ? "positive"
+        : metric.deviation_type === "negative"
+          ? "risk"
+          : "neutral",
+  }));
+
+  const recommendations = reportAssembly.recommendations.map((entry) => {
+    if (typeof entry === "string") {
+      return {
+        title: entry,
+        rationale: entry,
+        expected_impact: null,
+        priority: "MEDIUM",
+      };
+    }
+
+    return {
+      title: entry.title,
+      rationale: entry.rationale,
+      expected_impact: entry.expected_impact,
+      priority: entry.priority,
+    };
+  });
+
+  return {
+    language: "en",
+    report_title: reportAssembly.header.title,
+    executive_summary: reportAssembly.summary.narrative,
+    budget: null,
+    performance_snapshot: snapshot,
+    blocks: [],
+    sections: [
+      {
+        heading: reportAssembly.header.title,
+        scope: reportAssembly.header.period,
+        summary: reportAssembly.summary.principal_deviation || "",
+        highlights: reportAssembly.insights,
+        tables: [],
+        actions: recommendations,
+        confidence: null,
+        cached_sources: [],
+        graphs: reportAssembly.charts,
+      },
+    ],
+    strategic_recommendations: recommendations,
+    follow_up_questions: [],
+    handoff_trace: [],
+    execution_objectives: [],
+    cached_sources: [],
+    graphs: reportAssembly.charts,
+  };
+}
+
+function deriveReportFromConversationMetadata(
+  row: BackendConversationMessage
+): unknown {
+  if (row.report !== undefined) return row.report;
+
+  const parsedAssembly = reportAssemblySchema.safeParse(row.report_assembly);
+  if (!parsedAssembly.success) return undefined;
+
+  return normalizeReportAssemblyForConversationLoad(parsedAssembly.data);
+}
+
 export function mapConversationSessionRow(
   row: BackendConversationSession
 ): JainaConversationSession {
@@ -159,6 +285,8 @@ export function mapConversationSessionRow(
 export function mapConversationMessageRow(
   row: BackendConversationMessage
 ): JainaConversationMessage {
+  const report = deriveReportFromConversationMetadata(row);
+
   return {
     id: row.id,
     sessionId: row.session_id,
@@ -166,7 +294,7 @@ export function mapConversationMessageRow(
     adAccountId: row.ad_account_id ?? null,
     role: row.role,
     content: row.content,
-    ...(row.report !== undefined ? { report: row.report } : {}),
+    ...(report !== undefined ? { report } : {}),
     ...(row.report_assembly !== undefined
       ? { reportAssembly: row.report_assembly }
       : {}),
@@ -199,6 +327,23 @@ export function mapConversationCreateResponse(
     brandId: row.brand_id ?? null,
     adAccountId: row.ad_account_id ?? null,
     title: row.conversation_title ?? null,
+  };
+}
+
+export function mapConversationRunRow(
+  row: BackendConversationRun
+): JainaConversationRun {
+  return {
+    id: row.id ?? null,
+    runId: row.run_id ?? null,
+    sessionId: row.session_id ?? null,
+    brandId: row.brand_id ?? null,
+    adAccountId: row.ad_account_id ?? null,
+    status: row.status ?? null,
+    resultType: row.result_type ?? null,
+    resultPayload: row.result_payload ?? null,
+    query: row.query ?? null,
+    createdAt: row.created_at ?? null,
   };
 }
 

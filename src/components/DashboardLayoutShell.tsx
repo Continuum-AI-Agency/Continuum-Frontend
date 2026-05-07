@@ -7,6 +7,7 @@ import { ActiveBrandProvider } from "./providers/ActiveBrandProvider";
 import { StrategicAnalysisRealtimeListener } from "./strategic-analyses/StrategicAnalysisRealtimeListener";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CommandPaletteProvider } from "./navigation/CommandPaletteProvider";
+import { BrandWelcomeBanner } from "./welcome/BrandWelcomeBanner";
 import dynamic from "next/dynamic";
 
 const CommandPalette = dynamic(
@@ -25,11 +26,17 @@ export type BrandSummary = {
   isPending?: boolean;
 };
 
+export type BrandPermission = {
+  brand_profile_id: string;
+  role: string | null;
+};
+
 type DashboardLayoutShellProps = {
   children: React.ReactNode;
   activeBrandId: string;
   brandSummaries: BrandSummary[];
   user: User | null;
+  permissions: BrandPermission[];
 };
 
 export default function DashboardLayoutShell({
@@ -37,9 +44,10 @@ export default function DashboardLayoutShell({
   activeBrandId,
   brandSummaries,
   user,
+  permissions,
 }: DashboardLayoutShellProps) {
   return (
-    <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries} user={user}>
+    <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries} user={user} permissions={permissions}>
       <CommandPaletteProvider>
         <StrategicAnalysisRealtimeListener brandId={activeBrandId} />
         <div className="relative">
@@ -59,6 +67,7 @@ export default function DashboardLayoutShell({
             <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
               <DashboardHeader />
               <main className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
+                <BrandWelcomeBanner />
                 <div className="w-full h-full min-h-0">{children}</div>
               </main>
             </SidebarInset>

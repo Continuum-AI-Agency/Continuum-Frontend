@@ -20,16 +20,24 @@ import { isAdminUser } from "@/lib/brands/brand-switcher-utils"
 import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes"
 import { useCommandPalette } from "./CommandPaletteProvider"
 import { getLocalStorageJSON, setLocalStorageJSON } from "@/lib/storage"
-import { STORAGE_KEY_RECENT_PAGES, recentPagesSchema, type RecentPage } from "@/lib/storage-keys"
+import {
+  brandStorageKeyRecentPages,
+  migrateLegacyRecentPages,
+  recentPagesSchema,
+  type RecentPage,
+} from "@/lib/storage-keys"
 
 const MAX_RECENT = 5
 
-function readRecent(): RecentPage[] {
-  return getLocalStorageJSON(STORAGE_KEY_RECENT_PAGES, [], recentPagesSchema)
+function readRecent(brandId: string): RecentPage[] {
+  if (!brandId) return []
+  migrateLegacyRecentPages(brandId)
+  return getLocalStorageJSON(brandStorageKeyRecentPages(brandId), [], recentPagesSchema)
 }
 
-function saveRecent(pages: RecentPage[]) {
-  setLocalStorageJSON(STORAGE_KEY_RECENT_PAGES, pages)
+function saveRecent(brandId: string, pages: RecentPage[]) {
+  if (!brandId) return
+  setLocalStorageJSON(brandStorageKeyRecentPages(brandId), pages)
 }
 
 export function CommandPalette() {
@@ -42,10 +50,10 @@ export function CommandPalette() {
 
   const [recentPages, setRecentPages] = React.useState<RecentPage[]>([])
 
-  // Load recent pages when palette opens
+  // Load recent pages when palette opens (or brand changes)
   React.useEffect(() => {
-    if (open) setRecentPages(readRecent())
-  }, [open])
+    if (open) setRecentPages(readRecent(activeBrandId))
+  }, [open, activeBrandId])
 
   function run(fn: () => void, recent?: RecentPage) {
     setOpen(false)
@@ -55,7 +63,7 @@ export function CommandPalette() {
         MAX_RECENT,
       )
       setRecentPages(updated)
-      saveRecent(updated)
+      saveRecent(activeBrandId, updated)
     }
     fn()
   }

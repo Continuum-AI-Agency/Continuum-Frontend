@@ -1494,8 +1494,78 @@ describe("reduceJainaStreamEvent canonical report events", () => {
       ],
     } as any);
 
-    expect(state.objectives.length).toBe(1);
-    expect(state.objectives[0]?.id).toBe("objective-finalize");
+    expect(state.objectives.length).toBe(3);
+    expect(
+      state.objectives.find((objective) => objective.id === "objective-finalize")
+        ?.status
+    ).toBe("pending");
+  });
+
+  it("keeps completed objectives crossed off across stale snapshots", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "collect_metrics",
+            title: "Collect metrics",
+            status: "in_progress",
+          },
+        ],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objective.updated",
+      data: {
+        objective_id: "collect_metrics",
+        status: "completed",
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "collect_metrics",
+            title: "Collect metrics",
+            status: "pending",
+          },
+        ],
+      },
+    } as any);
+
+    expect(state.objectives[0]?.status).toBe("completed");
+  });
+
+  it("allows failed objectives to recover through explicit updates", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objectives",
+      data: {
+        objectives: [
+          {
+            id: "inspect_creatives",
+            title: "Inspect creatives",
+            status: "failed",
+          },
+        ],
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.objective.updated",
+      data: {
+        objective_id: "inspect_creatives",
+        status: "completed",
+      },
+    } as any);
+
+    expect(state.objectives[0]?.status).toBe("completed");
   });
 });
 
@@ -1653,6 +1723,60 @@ describe("reduceJainaStreamEvent tool hydration compatibility", () => {
     expect(state.toolCalls[0].correlation_id).toBe("corr_1");
     expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
     expect(state.progress.some((entry) => entry.stage === "tool_complete")).toBe(true);
+    expect(state.progress[0]?.data.tool_name).toBe("fetch_metrics");
+    expect(state.progress[0]?.data.tool_call_id).toBe("tool_batch_1");
+  });
+
+  it("hydrates tool and agent observability from canonical agent.envelope events", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "agent.envelope",
+      data: {
+        envelope: {
+          version: "1",
+          kind: "agent",
+          event: "start",
+          correlation_id: "agent_corr",
+          parent_correlation_id: null,
+          session_id: "session_1",
+          scope: "analysis",
+          timestamp: "2026-04-29T10:00:00.000Z",
+          display_name: "Budget Analyst",
+          agent_id: "agent_budget",
+          payload: {
+            task_id: "task_budget",
+            task_description: "Analyze budget pacing",
+          },
+        },
+      },
+    } as any);
+
+    state = reduceJainaStreamEvent(state, {
+      type: "agent.envelope",
+      data: {
+        envelope: {
+          version: "1",
+          kind: "tool",
+          event: "start",
+          correlation_id: "tool_corr",
+          parent_correlation_id: "agent_corr",
+          session_id: "session_1",
+          scope: "analysis",
+          timestamp: "2026-04-29T10:00:01.000Z",
+          agent_id: "agent_budget",
+          payload: {
+            name: "fetch_budget_pacing",
+            args: { account_id: "act_123" },
+          },
+        },
+      },
+    } as any);
+
+    expect(state.progress.some((entry) => entry.stage === "agent_spawn")).toBe(true);
+    expect(state.progress.some((entry) => entry.stage === "tool_start")).toBe(true);
+    expect(state.toolCalls[0]?.name).toBe("fetch_budget_pacing");
+    expect(state.toolCalls[0]?.agent_id).toBe("agent_budget");
   });
 
   it("hydrates tool calls/results from canonical response.progress stages", () => {
@@ -1873,6 +1997,37 @@ describe("parseJainaStreamEvent compatibility guards", () => {
     expect(event?.type).toBe("tool.batch");
   });
 
+  it("accepts canonical agent lifecycle events", () => {
+    const spawned = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "agent.spawn",
+        data: {
+          agent_id: "agent_budget",
+          task_id: "task_budget",
+          task_description: "Analyze budget pacing",
+          started_at: "2026-04-29T10:00:00.000Z",
+          display_name: "Budget Analyst",
+        },
+      })
+    );
+    const completed = parseJainaStreamEvent(
+      JSON.stringify({
+        type: "agent.complete",
+        data: {
+          agent_id: "agent_budget",
+          task_id: "task_budget",
+          status: "partial",
+          duration_ms: 1250,
+        },
+      })
+    );
+
+    expect(spawned).not.toBeNull();
+    expect(spawned?.type).toBe("agent.spawn");
+    expect(completed).not.toBeNull();
+    expect(completed?.type).toBe("agent.complete");
+  });
+
   it("accepts objective checklist stream events", () => {
     const initEvent = parseJainaStreamEvent(
       JSON.stringify({
@@ -2076,6 +2231,67 @@ describe("normalizeCheckpointReportPayload strictness", () => {
     expect(report.executive_summary).toBe("Nested report envelope");
     expect(report.sections[0]?.summary).toBe("Nested summary");
     expect(report.sections[0]?.highlights[0]?.text).toBe("Nested highlight");
+  });
+
+  it("keeps object-based summary fields for executive and section summaries", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_object_summary",
+        part_id: "part_object_summary",
+        report: {
+          summary: {
+            description: "Executive summary preserved from summary object.",
+          },
+          sections: [
+            {
+              scope: "account",
+              summary: {
+                narrative: "Section narrative preserved from summary object.",
+                title: "Fallback section title",
+              },
+              insights: [
+                {
+                  text: "Insight text survives.",
+                },
+              ],
+              recommendations: [
+                {
+                  title: "Prioritize winning creatives",
+                  rationale: "Highest CTR at lower CPM.",
+                },
+              ],
+              tables: [
+                {
+                  title: "Section table",
+                  headers: ["A"],
+                  rows: [["1"]],
+                },
+              ],
+              graphs: [
+                {
+                  title: "Section chart",
+                  chart_type: "line",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    const report = asStructuredReport(state);
+    expect(report.executive_summary).toBe(
+      "Executive summary preserved from summary object."
+    );
+    expect(report.sections[0]?.summary).toBe(
+      "Section narrative preserved from summary object."
+    );
+    expect(report.sections[0]?.highlights[0]?.text).toBe("Insight text survives.");
+    expect(report.sections[0]?.actions[0]?.title).toBe("Prioritize winning creatives");
   });
 });
 

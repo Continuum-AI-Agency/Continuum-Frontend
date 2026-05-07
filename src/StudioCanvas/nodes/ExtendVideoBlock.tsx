@@ -40,9 +40,11 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
     await executeWorkflow(executionControls, { targetNodeId: id, clearDownstream: false, brandId });
   }, [executionControls, id, brandId]);
 
+  const displayVideo = (data.generatedVideo as string | Blob | undefined) ?? data.generatedVideoUrl;
+
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
-      data: data.generatedVideo as string | Blob | undefined,
+      data: displayVideo as string | Blob | undefined,
       baseName: `extended-video-${id}`,
       fallbackExtension: 'mp4',
     });
@@ -54,7 +56,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
         variant: 'warning',
       });
     }
-  }, [data.generatedVideo, id, show]);
+  }, [displayVideo, id, show]);
 
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
   const generatorDescription = 'Extend Video • 16:9';
@@ -101,10 +103,10 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
               <div className="absolute inset-0 flex items-center justify-center bg-muted p-4">
                 <GenerationPulseLoader />
               </div>
-            ) : data.generatedVideo ? (
+            ) : displayVideo ? (
               <div className="relative h-full w-full bg-black/85">
                 <video
-                  src={data.generatedVideo as string}
+                  src={displayVideo as string}
                   controls
                   className="h-full w-full object-contain"
                 />
@@ -205,7 +207,7 @@ export function ExtendVideoBlock({ id, data, selected }: NodeProps<ReactFlowNode
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem onClick={handleDownload} disabled={!data.generatedVideo}>
+          <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
             <DownloadIcon className="mr-2 h-4 w-4" />
             Download Output
           </ContextMenuItem>

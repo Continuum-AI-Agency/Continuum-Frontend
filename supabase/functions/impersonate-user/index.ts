@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,10 +27,14 @@ serve(async (req) => {
       throw new Error('No authorization header');
     }
     
-    const { data: { user: adminUser }, error: authError } = await supabaseAdmin.auth
-      .getUser(authHeader.replace('Bearer ', ''));
+    const { data: claimsData, error: authError } = await supabaseAdmin.auth
+      .getClaims(authHeader.replace('Bearer ', ''));
+    const adminUser = {
+      id: claimsData?.claims?.sub,
+      app_metadata: claimsData?.claims?.app_metadata as Record<string, unknown> | undefined,
+    };
     
-    if (authError || !adminUser) {
+    if (authError || !adminUser.id) {
       console.error("Auth error:", authError);
       throw new Error('Invalid authentication');
     }

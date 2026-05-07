@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
-import type { BrandSummary } from "@/components/DashboardLayoutShell";
+import type { BrandPermission, BrandSummary } from "@/components/DashboardLayoutShell";
 import { switchActiveBrandAction } from "@/app/(post-auth)/settings/actions";
 import { switchBrand } from "@/lib/brands/switch-brand";
 import { useToastContext, type ToastOptions } from "@/components/ui/ToastProvider";
@@ -9,12 +9,18 @@ import { useSession } from "@/hooks/useSession";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 
+export type SelectBrandResult = {
+  switched: boolean;
+  prevBrandId: string;
+};
+
 type ActiveBrandContextValue = {
   activeBrandId: string;
   brandSummaries: BrandSummary[];
+  permissions: BrandPermission[];
   isSwitching: boolean;
   switchingToBrandId: string | null;
-  selectBrand: (brandId: string) => Promise<void>;
+  selectBrand: (brandId: string) => Promise<SelectBrandResult>;
   updateBrandName: (brandId: string, name: string) => void;
   user: User | null;
 };
@@ -24,6 +30,7 @@ const ActiveBrandContext = createContext<ActiveBrandContextValue | null>(null);
 type ActiveBrandProviderProps = {
   activeBrandId: string;
   brandSummaries: BrandSummary[];
+  permissions: BrandPermission[];
   user: User | null;
   children: React.ReactNode;
 };
@@ -31,11 +38,13 @@ type ActiveBrandProviderProps = {
 export function ActiveBrandProvider({
   activeBrandId,
   brandSummaries,
+  permissions,
   user: initialUser,
   children,
 }: ActiveBrandProviderProps) {
   const [selectedBrandId, setSelectedBrandId] = useState(activeBrandId);
   const [summaries, setSummaries] = useState<BrandSummary[]>(brandSummaries);
+  const [perms, setPerms] = useState<BrandPermission[]>(permissions);
   const [switchingToBrandId, setSwitchingToBrandId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const toast = useToastContext();
@@ -95,6 +104,10 @@ export function ActiveBrandProvider({
     setSummaries(brandSummaries);
   }, [brandSummaries]);
 
+  useEffect(() => {
+    setPerms(permissions);
+  }, [permissions]);
+
   const updateBrandName = React.useCallback((brandId: string, name: string) => {
     setSummaries(prev =>
       prev.map(brand => (brand.id === brandId ? { ...brand, name } : brand))
@@ -109,7 +122,7 @@ export function ActiveBrandProvider({
 
   const selectBrand = React.useCallback(
     async (brandId: string) =>
-      new Promise<void>(resolve => {
+      new Promise<SelectBrandResult>(resolve => {
         const requestId = `${brandId}-${Date.now()}`;
         switchRequestRef.current = requestId;
         setSwitchingToBrandId(brandId);
@@ -118,6 +131,13 @@ export function ActiveBrandProvider({
           const { activeBrandId: currentActive, selectedBrandId: previous, router: r, showToast: st } = stateRef.current;
           setSelectedBrandId(brandId);
           try {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("brand:switching", {
+                  detail: { prevBrandId: currentActive, nextBrandId: brandId },
+                })
+              );
+            }
             const switched = await switchBrand({
               targetBrandId: brandId,
               activeBrandId: currentActive,
@@ -127,13 +147,15 @@ export function ActiveBrandProvider({
 
             // A newer switch started — discard this result
             if (switchRequestRef.current !== requestId) {
-              resolve();
+              resolve({ switched: false, prevBrandId: previous });
               return;
             }
 
             if (!switched) {
               setSelectedBrandId(previous);
             }
+            resolve({ switched, prevBrandId: previous });
+            return;
           } catch (error) {
             if (switchRequestRef.current === requestId) {
               setSelectedBrandId(previous);
@@ -143,11 +165,11 @@ export function ActiveBrandProvider({
                 variant: "error",
               });
             }
+            resolve({ switched: false, prevBrandId: previous });
           } finally {
             if (switchRequestRef.current === requestId) {
               setSwitchingToBrandId(null);
             }
-            resolve();
           }
         });
       }),
@@ -160,13 +182,14 @@ export function ActiveBrandProvider({
     () => ({
       activeBrandId: selectedBrandId,
       brandSummaries: summaries,
+      permissions: perms,
       isSwitching,
       switchingToBrandId,
       selectBrand,
       updateBrandName,
       user,
     }),
-    [isSwitching, switchingToBrandId, selectBrand, selectedBrandId, summaries, updateBrandName, user]
+    [isSwitching, perms, switchingToBrandId, selectBrand, selectedBrandId, summaries, updateBrandName, user]
   );
 
   return <ActiveBrandContext.Provider value={value}>{children}</ActiveBrandContext.Provider>;

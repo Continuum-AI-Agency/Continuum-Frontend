@@ -70,9 +70,16 @@ export function Tool({ children, type, state, defaultOpen = false }: ToolProps) 
   );
 }
 
-export function ToolHeader({ title }: { title?: string }) {
+export function ToolHeader({
+  title,
+  showDisclosure = true,
+}: {
+  title?: string;
+  showDisclosure?: boolean;
+}) {
   const { type, state } = useTool();
-  const displayTitle = title || type.replace("tool-", "").replace(/_/g, " ");
+  const safeType = typeof type === "string" && type.trim().length > 0 ? type : "unknown_tool";
+  const displayTitle = title || safeType.replace("tool-", "").replace(/_/g, " ");
 
   return (
     <Collapsible.Trigger asChild>
@@ -81,15 +88,17 @@ export function ToolHeader({ title }: { title?: string }) {
         className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-white/5 transition-colors rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Flex align="center" gap="2">
-          <CodeIcon className="text-purple-400" />
+          <CodeIcon className="text-muted-foreground" />
           <Text size="2" weight="medium" className="text-secondary">
             {displayTitle}
           </Text>
           {state === "running" && <Spinner size={12} />}
         </Flex>
-        <div className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400">
-          <ChevronDownIcon />
-        </div>
+        {showDisclosure ? (
+          <div className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400">
+            <ChevronDownIcon />
+          </div>
+        ) : null}
       </button>
     </Collapsible.Trigger>
   );

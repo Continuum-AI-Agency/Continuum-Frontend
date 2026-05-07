@@ -20,6 +20,8 @@ export type HeuristicInsight = {
   delta?: number;
   recommendation?: string;
   estimated_impact?: string;
+  campaign_id?: string;
+  adset_id?: string;
 };
 
 const MIN_SPEND_SHARE = 0.08;
@@ -346,6 +348,8 @@ function computeCreativeInsights(
           metric: "roas",
           value: byRoas[0].roas,
           recommendation: `Increase budget allocation to "${byRoas[0].ad_name}" to scale top performer`,
+          campaign_id: byRoas[0].campaign_id || undefined,
+          adset_id: byRoas[0].adset_id || undefined,
         });
       }
 
@@ -369,6 +373,8 @@ function computeCreativeInsights(
               estimatedGain > 0
                 ? `~${fmtCurrency(estimatedGain)} potential revenue gain`
                 : undefined,
+            campaign_id: worst.campaign_id || undefined,
+            adset_id: worst.adset_id || undefined,
           });
         }
       }
@@ -389,6 +395,8 @@ function computeCreativeInsights(
           metric: "frequency",
           value: ad.frequency,
           recommendation: `Refresh creative for "${ad.ad_name}" — high frequency with below-average CTR signals audience fatigue`,
+          campaign_id: ad.campaign_id || undefined,
+          adset_id: ad.adset_id || undefined,
         });
       }
 

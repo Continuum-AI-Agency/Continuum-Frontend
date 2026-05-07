@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   fetchAllBreakdowns,
   fetchDailyTimeSeries,
@@ -7,6 +7,7 @@ import {
 import { computeHeuristicInsights } from "../get-account-insights/compute.ts";
 import { detectAllAnomalies } from "../get-account-insights/anomalies.ts";
 import { generateCampaignInsights } from "./gemini.ts";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -97,11 +98,8 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
+    if (authError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -202,7 +200,7 @@ serve(async (req: Request) => {
             if (runtime?.waitUntil) {
               runtime.waitUntil(
                 generateFresh({
-                  supabase, adAccountId, campaignId,
+                  supabase, brandId, supabaseToken, adAccountId, campaignId,
                   campaignName: resolvedName, campaignObjective: resolvedObjective,
                   sinceStr, untilStr, prevSinceStr, prevUntilStr,
                   rangePreset: range?.preset || "last_7d", cacheKey,
@@ -224,7 +222,7 @@ serve(async (req: Request) => {
     log("Cache MISS — generating campaign insights");
 
     const response = await generateFresh({
-      supabase, adAccountId, campaignId,
+      supabase, brandId, supabaseToken, adAccountId, campaignId,
       campaignName: resolvedName, campaignObjective: resolvedObjective,
       sinceStr, untilStr, prevSinceStr, prevUntilStr,
       rangePreset: range?.preset || "last_7d", cacheKey, log,
@@ -244,6 +242,8 @@ serve(async (req: Request) => {
 
 async function generateFresh(args: {
   supabase: ReturnType<typeof createClient>;
+  brandId: string;
+  supabaseToken: string;
   adAccountId: string;
   campaignId: string;
   campaignName: string;
@@ -257,17 +257,20 @@ async function generateFresh(args: {
   log: (msg: string, extra?: unknown) => void;
 }) {
   const {
-    supabase, adAccountId, campaignId, campaignName, campaignObjective,
+    supabase, brandId, supabaseToken, adAccountId, campaignId, campaignName, campaignObjective,
     sinceStr, untilStr, prevSinceStr, prevUntilStr, rangePreset, cacheKey, log,
   } = args;
 
-  const { data: accessToken, error: tokenError } = await supabase.rpc(
-    "get_meta_access_token",
-    { p_ad_account_id: adAccountId }
-  );
+  const accessToken = await resolveMetaAccessToken({
+    brandId,
+    adAccountId,
+    userToken: supabaseToken,
+    actorKind: "user",
+    log,
+  });
 
-  if (tokenError || !accessToken) {
-    log("No access token", { adAccountId, error: tokenError });
+  if (!accessToken) {
+    log("No access token", { adAccountId });
     throw new Error("Meta account not configured or access token missing");
   }
 
@@ -321,7 +324,10 @@ async function generateFresh(args: {
   const periodComparison = computePeriodComparison(breakdowns, previousBreakdowns);
 
   // Step 6: Build response with campaign metadata
-  const allInsights = [...computed, ...llmInsights];
+  const allInsights = [...computed, ...llmInsights].map((insight) => ({
+    ...insight,
+    campaign_id: campaignId,
+  }));
   const ttl = hasLlmInsights ? INSIGHT_TTL_MS : PARTIAL_TTL_MS;
   const nowTime = new Date();
   const expiresAt = new Date(nowTime.getTime() + ttl);

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -281,11 +282,8 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
+    if (authError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -362,13 +360,16 @@ serve(async (req: Request) => {
       }
     }
 
-    const { data: accessToken, error: tokenError } = await supabase.rpc(
-      "get_meta_access_token",
-      { p_ad_account_id: adAccountId }
-    );
+    const accessToken = await resolveMetaAccessToken({
+      brandId,
+      adAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
+    });
 
-    if (tokenError || !accessToken) {
-      log("No access token for ad account", { adAccountId, error: tokenError });
+    if (!accessToken) {
+      log("No access token for ad account", { adAccountId });
       return new Response(
         JSON.stringify({
           error: "Meta account not configured or access token missing",

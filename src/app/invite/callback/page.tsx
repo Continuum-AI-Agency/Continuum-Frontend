@@ -129,7 +129,7 @@ export default function InviteCallbackPage() {
               return;
             }
 
-            router.replace("/dashboard?invite=accepted");
+            router.replace(`/dashboard?invite=accepted&welcome=brand:${brandId}`);
             return;
           }
         }
@@ -156,7 +156,7 @@ export default function InviteCallbackPage() {
         posthog.identify(userId);
       }
       posthog.capture("invite_accepted", { brand_id: brandId });
-      router.replace("/dashboard?invite=accepted");
+      router.replace(`/dashboard?invite=accepted&welcome=brand:${brandId}`);
     };
 
     void finalizeInvite();

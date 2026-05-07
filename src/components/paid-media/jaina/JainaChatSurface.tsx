@@ -59,7 +59,10 @@ import {
   isStreamingPlaceholderMessage,
   resolveReportSignal,
 } from "./jainaUtils";
-import { parsePersistedReportValue } from "./persistedReport";
+import {
+  parsePersistedReportV2Value,
+  parsePersistedReportValue,
+} from "./persistedReport";
 import {
   isPersistedResultStub,
   parsePersistedResultWrapper,
@@ -71,11 +74,14 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   createConversationSessionResponseSchema,
   jainaConversationListResponseSchema,
+  jainaConversationRunsHydrationResponseSchema,
+  type JainaConversationRun,
   mapConversationCreateResponse,
   type JainaConversationMessage,
   type JainaConversationSession,
 } from "@/lib/jaina/conversations";
-import { frontendCheckpointReportSchema, reportAssemblySchema, checkpointReportV2Schema, type JainaPlanAction } from "@/lib/jaina/schemas";
+import { frontendCheckpointReportSchema, reportAssemblySchema, type JainaPlanAction } from "@/lib/jaina/schemas";
+import { useJainaConversationSidebarStore } from "@/lib/jaina/conversation-sidebar-store";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export { parsePersistedResultWrapper } from "@/lib/jaina/unwrapping";
@@ -237,11 +243,187 @@ function parsePersistedReport(
   });
 }
 
+function parsePersistedReportV2(
+  message: JainaConversationMessage
+): JainaChatMessage["reportV2"] | undefined {
+  return parsePersistedReportV2Value({
+    report: message.report,
+    content: message.content,
+    reasoning: message.reasoning,
+  });
+}
+
 function parsePersistedReportAssembly(
   message: JainaConversationMessage
 ): JainaChatMessage["reportAssembly"] | undefined {
   const parsed = reportAssemblySchema.safeParse(message.reportAssembly);
   return parsed.success ? parsed.data : undefined;
+}
+
+function parseReportAssemblyFromUnknown(
+  value: unknown,
+  depth = 0
+): JainaChatMessage["reportAssembly"] | undefined {
+  if (depth > 5 || value == null) return undefined;
+
+  const direct = reportAssemblySchema.safeParse(value);
+  if (direct.success) return direct.data;
+
+  if (typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+
+  const candidates = [
+    record.report_assembly,
+    record.reportAssembly,
+    record.result_payload,
+    record.report,
+    record.payload,
+    record.data,
+    record.content,
+    record.detail,
+    record.message,
+    record.response,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseReportAssemblyFromUnknown(candidate, depth + 1);
+    if (parsed) return parsed;
+  }
+
+  return undefined;
+}
+
+function deriveObjectivesFromReport(
+  report: JainaChatMessage["report"] | undefined
+): JainaChatMessage["objectives"] | undefined {
+  if (!report || ("type" in report && report.type === "direct_answer")) {
+    return undefined;
+  }
+
+  const parsedReport = frontendCheckpointReportSchema.safeParse(report);
+  if (!parsedReport.success) {
+    return undefined;
+  }
+
+  if (
+    !Array.isArray(parsedReport.data.execution_objectives) ||
+    parsedReport.data.execution_objectives.length === 0
+  ) {
+    return undefined;
+  }
+
+  const objectives = parsedReport.data.execution_objectives
+    .filter((objective) => typeof objective?.id === "string" && objective.id.trim().length > 0)
+    .map((objective) => ({
+      id: objective.id,
+      title: objective.title || objective.id,
+      status: normalizePersistedObjectiveStatus(objective.status),
+      description: objective.details ?? objective.scope ?? undefined,
+    }));
+
+  return objectives.length > 0 ? objectives : undefined;
+}
+
+function hydrateMessagesWithConversationRuns(
+  messages: JainaChatMessage[],
+  runs: JainaConversationRun[]
+): { messages: JainaChatMessage[]; changed: boolean } {
+  type HydratedRunPayload = {
+    report: JainaChatMessage["report"] | undefined;
+    reportV2: JainaChatMessage["reportV2"] | undefined;
+    reportAssembly: JainaChatMessage["reportAssembly"] | undefined;
+    objectives: JainaChatMessage["objectives"] | undefined;
+  };
+
+  const hydrateableAssistantCount = messages.reduce((count, message) => {
+    if (
+      message.role !== "assistant" ||
+      message.report ||
+      message.reportV2 ||
+      message.reportAssembly
+    ) {
+      return count;
+    }
+    return count + 1;
+  }, 0);
+  if (hydrateableAssistantCount === 0) {
+    return { messages, changed: false };
+  }
+
+  const hydratedPayloads = runs
+    .map((run) => {
+      const reportV2 = parsePersistedReportV2Value({
+        report: run.resultPayload,
+        content: typeof run.resultPayload === "string" ? run.resultPayload : "",
+      });
+      const report = parsePersistedReportValue({
+        report: run.resultPayload,
+        content: typeof run.resultPayload === "string" ? run.resultPayload : "",
+      });
+      if (!report && !reportV2) return null;
+
+      const reportAssembly = parseReportAssemblyFromUnknown(run.resultPayload);
+      const objectives = deriveObjectivesFromReport(report);
+
+      return {
+        report,
+        reportV2,
+        reportAssembly,
+        objectives,
+      };
+    })
+    .filter(
+      (value): value is HydratedRunPayload => value !== null
+    );
+
+  if (hydratedPayloads.length === 0) {
+    return { messages, changed: false };
+  }
+
+  let changed = false;
+  let payloadIndex = 0;
+  const nextMessages = [...messages];
+
+  for (let index = nextMessages.length - 1; index >= 0; index -= 1) {
+    const message = nextMessages[index];
+    if (
+      !message ||
+      message.role !== "assistant" ||
+      message.report ||
+      message.reportV2 ||
+      message.reportAssembly
+    ) {
+      continue;
+    }
+
+    const payload = hydratedPayloads[payloadIndex];
+    if (!payload) break;
+    payloadIndex += 1;
+
+    nextMessages[index] = {
+      ...message,
+      ...(payload.report ? { report: payload.report } : {}),
+      ...(payload.reportV2 ? { reportV2: payload.reportV2 } : {}),
+      ...(payload.reportAssembly ? { reportAssembly: payload.reportAssembly } : {}),
+      ...(payload.objectives && !message.objectives
+        ? { objectives: payload.objectives }
+        : {}),
+      ...(typeof message.renderAsReport === "boolean"
+        ? {}
+        : {
+            renderAsReport:
+              Boolean(payload.reportV2) ||
+              Boolean(
+                payload.report &&
+                  !("type" in payload.report && payload.report.type === "direct_answer") &&
+                  hasReportContent(payload.report)
+              ),
+          }),
+    };
+    changed = true;
+  }
+
+  return { messages: nextMessages, changed };
 }
 
 function normalizePersistedObjectiveStatus(
@@ -277,6 +459,66 @@ function normalizePersistedObjectiveStatus(
     return "failed";
   }
   return "pending";
+}
+
+const messageObjectiveStatusRank: Record<"pending" | "in_progress" | "completed" | "failed", number> = {
+  pending: 0,
+  in_progress: 1,
+  failed: 2,
+  completed: 3,
+};
+
+function mergeMessageObjectives(
+  persistedObjectives: JainaChatMessage["objectives"],
+  localObjectives: JainaChatMessage["objectives"]
+): JainaChatMessage["objectives"] | undefined {
+  if (!localObjectives || localObjectives.length === 0) return persistedObjectives;
+  if (!persistedObjectives || persistedObjectives.length === 0) return localObjectives;
+
+  const byId = new Map<string, NonNullable<JainaChatMessage["objectives"]>[number]>();
+  const titleToId = new Map<string, string>();
+
+  for (const objective of persistedObjectives) {
+    byId.set(objective.id, objective);
+    titleToId.set(objective.title.trim().toLowerCase(), objective.id);
+  }
+
+  for (const localObjective of localObjectives) {
+    const titleKey = localObjective.title.trim().toLowerCase();
+    const targetId = byId.has(localObjective.id)
+      ? localObjective.id
+      : titleToId.get(titleKey) ?? localObjective.id;
+    const persistedObjective = byId.get(targetId);
+
+    if (!persistedObjective) {
+      byId.set(targetId, localObjective);
+      titleToId.set(titleKey, targetId);
+      continue;
+    }
+
+    const localRank = messageObjectiveStatusRank[localObjective.status];
+    const persistedRank = messageObjectiveStatusRank[persistedObjective.status];
+    const status =
+      localRank >= persistedRank ? localObjective.status : persistedObjective.status;
+
+    byId.set(targetId, {
+      ...persistedObjective,
+      ...localObjective,
+      id: targetId,
+      title: localObjective.title || persistedObjective.title,
+      description: localObjective.description ?? persistedObjective.description,
+      status,
+    });
+  }
+
+  return Array.from(byId.values());
+}
+
+function objectivesChanged(
+  previous: JainaChatMessage["objectives"],
+  next: JainaChatMessage["objectives"]
+): boolean {
+  return JSON.stringify(previous ?? []) !== JSON.stringify(next ?? []);
 }
 
 function deriveObjectivesFromPersistedSources(input: {
@@ -321,15 +563,7 @@ function mapConversationMessageToChatMessage(
   sessionTitle?: string
 ): JainaChatMessage {
   const persistedReport = parsePersistedReport(message);
-  const persistedReportV2 = (() => {
-    if (!persistedReport || typeof persistedReport !== "object") return undefined;
-    const meta = (persistedReport as Record<string, unknown>)._meta;
-    if (meta && typeof meta === "object" && (meta as Record<string, unknown>).schema_version === "2") {
-      const parsed = checkpointReportV2Schema.safeParse(persistedReport);
-      return parsed.success ? parsed.data : undefined;
-    }
-    return undefined;
-  })();
+  const persistedReportV2 = parsePersistedReportV2(message);
   const persistedReportAssembly = parsePersistedReportAssembly(message);
   const persistedObjectives = deriveObjectivesFromPersistedSources({
     message,
@@ -558,6 +792,9 @@ export function mergePersistedMessagesWithLocal(
   const localHasReport = Boolean(
     localAssistant.report || localAssistant.reportV2 || localAssistant.reportAssembly
   );
+  const localHasRicherReportV2 = Boolean(
+    localAssistant.reportV2 && !persistedAssistant.reportV2
+  );
   const persistedPlanOnly =
     Boolean(persistedAssistant.plan) &&
     !persistedAssistant.report &&
@@ -575,14 +812,31 @@ export function mergePersistedMessagesWithLocal(
     (localAssistant.toolResults?.length ?? 0) +
     (localAssistant.objectives?.length ?? 0);
   const shouldPreserveLocalTrace = persistedTraceCount === 0 && localTraceCount > 0;
+  const mergedObjectives = mergeMessageObjectives(
+    persistedAssistant.objectives,
+    localAssistant.objectives
+  );
+  const hasObjectiveUpgrade = objectivesChanged(
+    persistedAssistant.objectives,
+    mergedObjectives
+  );
   if (
     !isFallbackCheckpointMessage(persistedAssistant.content) &&
     !isPersistedErrorMessage(persistedAssistant.content) &&
     !isPersistedResultStub(persistedAssistant.content) &&
     !(persistedLacksReport && localHasReport) &&
+    !localHasRicherReportV2 &&
     !persistedPlanOnly &&
     !shouldPreserveLocalTrace
   ) {
+    if (hasObjectiveUpgrade) {
+      const mergedMessages = [...persistedMessages];
+      mergedMessages[persistedAssistantIndex] = {
+        ...persistedAssistant,
+        objectives: mergedObjectives,
+      };
+      return mergedMessages;
+    }
     return persistedMessages;
   }
 
@@ -604,7 +858,7 @@ export function mergePersistedMessagesWithLocal(
     artifacts: localAssistant.artifacts ?? persistedAssistant.artifacts,
     pendingClarification:
       localAssistant.pendingClarification ?? persistedAssistant.pendingClarification,
-    objectives: localAssistant.objectives ?? persistedAssistant.objectives,
+    objectives: mergedObjectives,
   };
   return mergedMessages;
 }
@@ -688,6 +942,37 @@ export function JainaChatSurface({
   const queueDispatchInFlightRef = React.useRef(false);
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
 
+  const setConversationSessionsWithCache = React.useCallback(
+    (next: React.SetStateAction<JainaConversationSession[]>) => {
+      setConversationSessions((previous) => {
+        const resolved =
+          typeof next === "function"
+            ? (next as (sessions: JainaConversationSession[]) => JainaConversationSession[])(
+                previous
+              )
+            : next;
+        if (adAccountId) {
+          useJainaConversationSidebarStore.getState().setSessions(
+            { brandProfileId, adAccountId },
+            resolved
+          );
+        }
+        return resolved;
+      });
+    },
+    [adAccountId, brandProfileId]
+  );
+
+  const getFreshConversationSessionsFromCache = React.useCallback(() => {
+    if (!adAccountId) return null;
+    return useJainaConversationSidebarStore.getState().getFreshSessions({
+      brandProfileId,
+      adAccountId,
+    });
+  }, [adAccountId, brandProfileId]);
+
+  const currentSessionTitle = sessionTitleById[sessionId];
+
   React.useEffect(() => {
     activeSessionIdRef.current = sessionId;
   }, [sessionId]);
@@ -767,6 +1052,64 @@ export function JainaChatSurface({
     [adAccountId, brandProfileId]
   );
 
+  const hydrateConversationMessagesFromRuns = React.useCallback(
+    async (input: {
+      targetSessionId: string;
+      baseMessages: JainaChatMessage[];
+    }) => {
+      if (!adAccountId) return;
+      if (!input.baseMessages.some(
+        (message) =>
+          message.role === "assistant" &&
+          !message.report &&
+          !message.reportV2 &&
+          !message.reportAssembly
+      )) {
+        return;
+      }
+
+      try {
+        const searchParams = new URLSearchParams({
+          brandId: brandProfileId,
+          limit: "300",
+        });
+        if (adAccountId) {
+          searchParams.set("adAccountId", adAccountId);
+        }
+
+        const response = await fetch(
+          `/api/agents/jaina/chat/conversations/${encodeURIComponent(
+            input.targetSessionId
+          )}/runs?${searchParams.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+        if (!response.ok) return;
+
+        const payload = await response.json().catch(() => null);
+        const parsed =
+          jainaConversationRunsHydrationResponseSchema.safeParse(payload);
+        if (!parsed.success) return;
+
+        const hydrated = hydrateMessagesWithConversationRuns(
+          input.baseMessages,
+          parsed.data.runs
+        );
+        if (!hydrated.changed) return;
+        if (activeSessionIdRef.current !== input.targetSessionId) return;
+
+        setMessages((previous) =>
+          mergePersistedMessagesWithLocal(hydrated.messages, previous)
+        );
+      } catch {
+        // Best-effort lazy hydration; ignore failures to avoid interrupting chat load.
+      }
+    },
+    [adAccountId, brandProfileId]
+  );
+
   const ensureConversationSession = React.useCallback(
     async (preferredSessionId?: string) => {
       if (!adAccountId) return null;
@@ -801,7 +1144,7 @@ export function JainaChatSurface({
       const now = new Date().toISOString();
       const normalizedSessionTitle = normalizeSessionTitle(mapped.title);
 
-      setConversationSessions((previous) =>
+      setConversationSessionsWithCache((previous) =>
         upsertConversationSession(previous, {
           sessionId: mapped.sessionId,
           brandId: mapped.brandId,
@@ -824,7 +1167,7 @@ export function JainaChatSurface({
 
       return mapped;
     },
-    [adAccountId, brandProfileId]
+    [adAccountId, brandProfileId, setConversationSessionsWithCache]
   );
 
   const loadConversationSession = React.useCallback(
@@ -846,7 +1189,7 @@ export function JainaChatSurface({
         setQueueEditDraft("");
         queueDispatchInFlightRef.current = false;
         setSessionId(targetSessionId);
-        setConversationSessions(sortConversationSessions(payload.sessions));
+        setConversationSessionsWithCache(sortConversationSessions(payload.sessions));
         setSessionTitleById((previous) => {
           const next = { ...previous };
           for (const session of payload.sessions) {
@@ -865,6 +1208,10 @@ export function JainaChatSurface({
         );
         setMessages(mappedMessages);
         setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
+        void hydrateConversationMessagesFromRuns({
+          targetSessionId,
+          baseMessages: mappedMessages,
+        });
       } catch (error) {
         if (!options?.silent) {
           const message =
@@ -881,7 +1228,14 @@ export function JainaChatSurface({
         setIsConversationSwitching(false);
       }
     },
-    [adAccountId, fetchConversationHistory, reset, show]
+    [
+      adAccountId,
+      fetchConversationHistory,
+      hydrateConversationMessagesFromRuns,
+      reset,
+      setConversationSessionsWithCache,
+      show,
+    ]
   );
 
   const refreshConversationSnapshot = React.useCallback(
@@ -890,7 +1244,7 @@ export function JainaChatSurface({
       try {
         const payload = await fetchConversationHistory(targetSessionId);
         if (!payload) return;
-        setConversationSessions(sortConversationSessions(payload.sessions));
+        setConversationSessionsWithCache(sortConversationSessions(payload.sessions));
         setSessionTitleById((previous) => {
           const next = { ...previous };
           for (const session of payload.sessions) {
@@ -912,12 +1266,21 @@ export function JainaChatSurface({
             mergePersistedMessagesWithLocal(mappedMessages, previous)
           );
           setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
+          void hydrateConversationMessagesFromRuns({
+            targetSessionId,
+            baseMessages: mappedMessages,
+          });
         }
       } catch {
         // Silent polling refresh; keep existing UI state when sync fails.
       }
     },
-    [adAccountId, fetchConversationHistory]
+    [
+      adAccountId,
+      fetchConversationHistory,
+      hydrateConversationMessagesFromRuns,
+      setConversationSessionsWithCache,
+    ]
   );
 
   React.useEffect(() => {
@@ -947,7 +1310,7 @@ export function JainaChatSurface({
         state.pendingClarification)
     ) {
       const streamingContent = pickRenderableContent({
-        sessionTitle: sessionTitleById[sessionId],
+        sessionTitle: currentSessionTitle,
         pendingClarification: state.pendingClarification,
         responseText: state.responseText,
         report: state.report,
@@ -971,7 +1334,7 @@ export function JainaChatSurface({
       const completedResponseId = activeResponseId;
       const finalThought = getFinalThought(state.progress);
       const content = pickRenderableContent({
-        sessionTitle: sessionTitleById[sessionId],
+        sessionTitle: currentSessionTitle,
         pendingClarification: state.pendingClarification,
         responseText: state.responseText,
         report: state.report,
@@ -1071,6 +1434,7 @@ export function JainaChatSurface({
     }
   }, [
     activeResponseId,
+    currentSessionTitle,
     refreshConversationSnapshot,
     sessionId,
     show,
@@ -1202,11 +1566,13 @@ export function JainaChatSurface({
       setIsHistoryLoading(true);
 
       try {
-        const sessionsPayload = await fetchConversationHistory();
-        if (!sessionsPayload || cancelled) return;
+        const cachedSessions = getFreshConversationSessionsFromCache();
+        const sessions =
+          cachedSessions ??
+          sortConversationSessions((await fetchConversationHistory())?.sessions ?? []);
+        if (cancelled) return;
 
-        const sessions = sortConversationSessions(sessionsPayload.sessions);
-        setConversationSessions(sessions);
+        setConversationSessionsWithCache(sessions);
         setSessionTitleById((previous) => {
           const next = { ...previous };
           for (const session of sessions) {
@@ -1230,7 +1596,9 @@ export function JainaChatSurface({
         setSessionId(mostRecentSessionId);
         const conversationPayload = await fetchConversationHistory(mostRecentSessionId);
         if (!conversationPayload || cancelled) return;
-        setConversationSessions(sortConversationSessions(conversationPayload.sessions));
+        setConversationSessionsWithCache(
+          sortConversationSessions(conversationPayload.sessions)
+        );
         setSessionTitleById((previous) => {
           const next = { ...previous };
           for (const session of conversationPayload.sessions) {
@@ -1249,6 +1617,10 @@ export function JainaChatSurface({
         );
         setMessages(mappedMessages);
         setShaderState(mappedMessages.length > 0 ? "hidden" : "visible");
+        void hydrateConversationMessagesFromRuns({
+          targetSessionId: mostRecentSessionId,
+          baseMessages: mappedMessages,
+        });
       } catch (error) {
         if (cancelled) return;
         const message =
@@ -1275,7 +1647,15 @@ export function JainaChatSurface({
     return () => {
       cancelled = true;
     };
-  }, [adAccountId, fetchConversationHistory, reset, show]);
+  }, [
+    adAccountId,
+    fetchConversationHistory,
+    getFreshConversationSessionsFromCache,
+    hydrateConversationMessagesFromRuns,
+    reset,
+    setConversationSessionsWithCache,
+    show,
+  ]);
 
   React.useEffect(() => {
     if (!adAccountId) return;
@@ -1302,7 +1682,9 @@ export function JainaChatSurface({
             void fetchConversationHistory()
               .then((history) => {
                 if (!history) return;
-                setConversationSessions(sortConversationSessions(history.sessions));
+                setConversationSessionsWithCache(
+                  sortConversationSessions(history.sessions)
+                );
               })
               .catch(() => {});
             return;
@@ -1326,6 +1708,7 @@ export function JainaChatSurface({
     brandProfileId,
     fetchConversationHistory,
     refreshConversationSnapshot,
+    setConversationSessionsWithCache,
     supabase,
   ]);
 
@@ -1401,7 +1784,7 @@ export function JainaChatSurface({
           ? [...prev, assistantMessage]
           : [...prev, userMessage, assistantMessage]
       );
-      setConversationSessions((previous) =>
+      setConversationSessionsWithCache((previous) =>
         upsertConversationSession(previous, {
           sessionId: activeSessionId,
           brandId: brandProfileId,
@@ -1450,6 +1833,7 @@ export function JainaChatSurface({
       shaderState,
       show,
       start,
+      setConversationSessionsWithCache,
       userId,
     ]
   );
@@ -1663,7 +2047,7 @@ export function JainaChatSurface({
             (conversationSession) => conversationSession.sessionId !== targetSessionId
           )
         );
-        setConversationSessions(remainingSessions);
+        setConversationSessionsWithCache(remainingSessions);
         setSessionTitleById((previous) => {
           const next = { ...previous };
           delete next[targetSessionId];
@@ -1716,6 +2100,7 @@ export function JainaChatSurface({
       loadConversationSession,
       reset,
       sessionId,
+      setConversationSessionsWithCache,
       show,
     ]
   );

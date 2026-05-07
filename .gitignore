@@ -75,5 +75,5 @@ calendar/
 /.vercel/
 /.windsurf/
 /.worktrees/
-/.omc/
+.omc/
 .env.local

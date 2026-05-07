@@ -35,7 +35,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const brandIdParam =
     typeof resolvedSearchParams?.brand === "string" ? resolvedSearchParams.brand : undefined;
   
-  const { brandSummaries } = await getActiveBrandContext();
+  const { brandSummaries, permissions } = await getActiveBrandContext();
   const { brandId, state } = await ensureOnboardingState(brandIdParam);
 
   if (isOnboardingComplete(state)) {
@@ -44,7 +44,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
 
   return (
     <OnboardingGate>
-      <ActiveBrandProvider activeBrandId={brandId} brandSummaries={brandSummaries} user={user}>
+      <ActiveBrandProvider activeBrandId={brandId} brandSummaries={brandSummaries} user={user} permissions={permissions}>
         <SidebarProvider defaultOpen={false}>
           <Container size="3" className="py-10">
             <Flex direction="column" gap="5">

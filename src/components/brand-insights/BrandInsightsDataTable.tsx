@@ -160,31 +160,32 @@ export function BrandInsightsDataTable({
   const rowPaddingClass = compact ? "py-2" : "py-3";
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="flex items-center gap-2">
+    <div className={cn("flex h-full min-h-0 flex-col", compact ? "gap-1" : "gap-2")}>
+      <div className="flex items-center gap-1.5">
         <div className="relative flex-1">
-          <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-2.5 h-4 w-4" />
+          <Search className={cn("text-muted-foreground pointer-events-none absolute left-2.5 h-4 w-4", compact ? "top-1.5" : "top-2.5")} />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={searchPlaceholder}
-            className="pl-8"
+            inputSize={compact ? "sm" : "md"}
+            className={cn("pl-8", compact && "h-7 text-xs")}
             aria-label={searchPlaceholder}
           />
         </div>
-        <Badge variant="outline" className="h-9 px-3 text-xs font-semibold">
+        <Badge variant="outline" className={cn("px-3 text-xs font-semibold", compact ? "h-7" : "h-9")}>
           {filteredRows.length} {countLabel}
         </Badge>
       </div>
 
-      <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
+      <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border">
         <div className={cn("min-h-0 flex-1 overflow-y-auto", scrollWithinSection && "max-h-[70vh]")}>
           {isLoading ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">Content</TableHead>
-                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">{secondaryHeaderLabel}</TableHead>
+                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>Content</TableHead>
+                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>{secondaryHeaderLabel}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -202,7 +203,7 @@ export function BrandInsightsDataTable({
             <Table>
               <TableHeader className="bg-card sticky top-0 z-10">
                 <TableRow>
-                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">
+                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>
                     <button
                       type="button"
                       className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
@@ -216,7 +217,7 @@ export function BrandInsightsDataTable({
                       )}
                     </button>
                   </TableHead>
-                  <TableHead className="px-4 py-2 text-xs font-semibold tracking-wide">
+                  <TableHead className={cn("px-4 text-xs font-semibold tracking-wide", compact ? "py-1.5" : "py-2")}>
                     <button
                       type="button"
                       className="text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"

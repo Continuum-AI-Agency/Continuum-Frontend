@@ -1,50 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { cleanup, fireEvent, render } from "@testing-library/react";
-import React from "react";
 
 let searchParamState = "tab=metrics";
-const pushMock = mock(() => {});
+const replaceStateMock = mock(() => {});
 
 mock.module("next/navigation", () => ({
-  useRouter: () => ({
-    push: pushMock,
-  }),
   useSearchParams: () => new URLSearchParams(searchParamState),
 }));
-
-mock.module("@radix-ui/themes", () => {
-  const TabsContext = React.createContext<{
-    value: string;
-    onValueChange?: (value: string) => void;
-  }>({ value: "" });
-
-  return {
-    Tabs: {
-      Root: ({
-        value,
-        onValueChange,
-        children,
-      }: {
-        value: string;
-        onValueChange?: (value: string) => void;
-        children: React.ReactNode;
-      }) => (
-        <TabsContext.Provider value={{ value, onValueChange }}>
-          <div>{children}</div>
-        </TabsContext.Provider>
-      ),
-      List: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-      Trigger: ({ value, children }: { value: string; children: React.ReactNode }) => {
-        const context = React.useContext(TabsContext);
-        return (
-          <button type="button" onClick={() => context.onValueChange?.(value)}>
-            {children}
-          </button>
-        );
-      },
-    },
-  };
-});
 
 import { OrganicWorkspaceTabs } from "./OrganicWorkspaceTabs";
 
@@ -69,12 +31,16 @@ function findElementByExactText(root: HTMLElement, text: string): HTMLElement {
 }
 
 describe("OrganicWorkspaceTabs", () => {
+  const originalReplaceState = window.history.replaceState;
+
   beforeEach(() => {
-    pushMock.mockReset();
+    replaceStateMock.mockReset();
+    window.history.replaceState = replaceStateMock as unknown as typeof window.history.replaceState;
     searchParamState = "tab=metrics";
   });
 
   afterEach(() => {
+    window.history.replaceState = originalReplaceState;
     cleanup();
   });
 
@@ -102,6 +68,6 @@ describe("OrganicWorkspaceTabs", () => {
 
     fireEvent.click(findElementByExactText(container, "Planner"));
 
-    expect(pushMock).toHaveBeenCalledWith("?tab=planner");
+    expect(replaceStateMock).toHaveBeenCalledWith(null, "", "?tab=planner");
   });
 });

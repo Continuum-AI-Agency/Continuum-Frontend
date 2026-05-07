@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState, useTransition } from "react";
 import {
-  Badge,
   Box,
   Button,
   Callout,
@@ -21,18 +20,19 @@ import type { BrandInvite, BrandRole } from "@/lib/onboarding/state";
 import {
   createMagicLinkAction,
   deleteBrandProfileAction,
-  removeMemberAction,
   renameBrandProfileAction,
   revokeInviteAction,
 } from "@/app/(post-auth)/settings/actions";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { SettingsLogoUploader } from "./SettingsLogoUploader";
+import { BrandMembersSection } from "./BrandMembersSection";
 
 type BrandMember = {
   id: string;
   email: string;
   role: string;
+  isRecentlyAccepted?: boolean;
 };
 
 type BrandSettingsPanelProps = {
@@ -64,11 +64,6 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
-
-  const ownerEmails = useMemo(
-    () => data.members.filter(member => member.role === "owner").map(member => member.email),
-    [data.members]
-  );
 
   const [mounted, setMounted] = useState(false);
 
@@ -189,22 +184,6 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
         show({
           title: "Invite failed",
           description: error instanceof Error ? error.message : "Unable to create invite.",
-          variant: "error",
-        });
-      }
-    });
-  }
-
-  function handleRemoveMember(memberId: string, email?: string) {
-    startTransition(async () => {
-      try {
-        await removeMemberAction(activeBrandId, memberId, email);
-        show({ title: "Member removed", description: `${email ?? "Member"} no longer has access.`, variant: "success" });
-        router.refresh();
-      } catch (error) {
-        show({
-          title: "Action failed",
-          description: error instanceof Error ? error.message : "Unable to remove member.",
           variant: "error",
         });
       }
@@ -406,43 +385,11 @@ export default function BrandSettingsPanel({ data }: BrandSettingsPanelProps) {
         title="Team members"
         description="Manage who can access this brand profile. Owners cannot be removed."
       >
-        <Table.Root>
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell />
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {data.members.map(member => (
-              <Table.Row key={member.id}>
-                <Table.Cell>{member.email}</Table.Cell>
-                <Table.Cell>
-                  <Badge>{member.role}</Badge>
-                </Table.Cell>
-                <Table.Cell className="text-right">
-                  {canEdit && (
-                    <Button
-                      size="1"
-                      variant="ghost"
-                      color="red"
-                      disabled={member.role === "owner" || isPending}
-                      onClick={() => handleRemoveMember(member.id, member.email)}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-        {ownerEmails.length === 0 && (
-          <Text size="1" color="amber">
-            Warning: no owners detected. Ensure at least one owner remains.
-          </Text>
-        )}
+        <BrandMembersSection
+          brandId={activeBrandId}
+          members={data.members}
+          canEdit={canEdit}
+        />
       </CardSection>
 
     </Flex>

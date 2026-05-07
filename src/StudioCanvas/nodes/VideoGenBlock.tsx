@@ -172,9 +172,11 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
 
   const fileBaseName = `video-${id}`;
 
+  const displayVideo = (data.generatedVideo as string | Blob | undefined) ?? data.generatedVideoUrl;
+
   const handleDownload = useCallback(() => {
     const success = downloadAsset({
-      data: data.generatedVideo as string | Blob | undefined,
+      data: displayVideo as string | Blob | undefined,
       baseName: fileBaseName,
       fallbackExtension: 'mp4',
     });
@@ -186,7 +188,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
         variant: 'warning',
       });
     }
-  }, [data.generatedVideo, fileBaseName, show]);
+  }, [displayVideo, fileBaseName, show]);
 
   return (
     <TooltipProvider>
@@ -230,10 +232,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                     <div className="w-full h-full flex items-center justify-center bg-muted p-4">
                       <GenerationPulseLoader />
                     </div>
-                  ) : data.generatedVideo ? (
+                  ) : displayVideo ? (
                     <div className="relative w-full h-full flex items-center justify-center bg-black/85">
                       <video
-                        src={data.generatedVideo as string}
+                        src={displayVideo as string}
                         controls
                         className="w-full h-full object-contain"
                       />
@@ -504,7 +506,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
             Duplicate
             <ContextMenuShortcut>⌘D</ContextMenuShortcut>
           </ContextMenuItem>
-          <ContextMenuItem onClick={handleDownload} disabled={!data.generatedVideo}>
+          <ContextMenuItem onClick={handleDownload} disabled={!displayVideo}>
             <DownloadIcon className="mr-2 h-4 w-4" />
             Download Output
           </ContextMenuItem>

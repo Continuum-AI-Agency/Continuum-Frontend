@@ -32,6 +32,9 @@ import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 type Props = {
   brandId: string;
   accountId?: string;
+  onAccountChange?: (id: string) => void;
+  selectedMetric?: PaidPerformanceMetricKey;
+  onSelectedMetricChange?: (metric: PaidPerformanceMetricKey) => void;
 };
 
 type ViewMode = "overview" | "trends";
@@ -71,7 +74,8 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "success"; data: PaidMetricsResponse };
 
-type MetricKey = keyof PaidMetricsResponse["metrics"];
+export type PaidPerformanceMetricKey = keyof PaidMetricsResponse["metrics"];
+type MetricKey = PaidPerformanceMetricKey;
 
 type MetricCard = {
   key: MetricKey;
@@ -245,11 +249,17 @@ function PaidReportingLoadingSkeleton({ viewMode, message }: { viewMode: ViewMod
   );
 }
 
-export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
+export function PaidMediaReportingWidget({
+  brandId,
+  accountId,
+  onAccountChange,
+  selectedMetric,
+  onSelectedMetricChange,
+}: Props) {
   const [platform, setPlatform] = useState<Platform>("meta");
   const [viewMode, setViewMode] = React.useState<ViewMode>("overview");
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
-  const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
+  const [internalExpandedMetric, setInternalExpandedMetric] = React.useState<MetricKey>("spend");
 
   // Ad account and campaign selection state
   const [selectedAdAccount, setSelectedAdAccount] = useState<string | null>(accountId || null);
@@ -283,8 +293,9 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
   React.useEffect(() => {
     if (!selectedAdAccount && adAccounts.length > 0) {
       setSelectedAdAccount(adAccounts[0].id);
+      onAccountChange?.(adAccounts[0].id);
     }
-  }, [selectedAdAccount, adAccounts]);
+  }, [selectedAdAccount, adAccounts, onAccountChange]);
 
   // Fetch campaigns for selected ad account
   const fetchCampaigns = useCallback(async (adAccountId: string) => {
@@ -412,6 +423,17 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
     }
   }, [selectedCampaign, selectedAdAccount, fetchMetrics, fetchCampaigns]);
 
+  const expandedMetric = selectedMetric ?? internalExpandedMetric;
+  const handleMetricSelect = React.useCallback(
+    (metric: MetricKey) => {
+      if (selectedMetric === undefined) {
+        setInternalExpandedMetric(metric);
+      }
+      onSelectedMetricChange?.(metric);
+    },
+    [onSelectedMetricChange, selectedMetric]
+  );
+
   return (
     <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
       <Box p="4" className="flex-1 flex flex-col min-h-0">
@@ -424,7 +446,7 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
               <Box>
                 <Text weight="medium">Paid Media Performance</Text>
                 <Text color="gray" size="2">
-                  {selectedCampaign ? "Campaign Analytics" : "Select a campaign to view metrics"} · {viewMode}
+                  {selectedCampaign ? "Campaign view" : "Select campaign"} · {viewMode}
                 </Text>
               </Box>
             </Flex>
@@ -473,7 +495,7 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
           <Flex align="center" gap="2" wrap="wrap">
             <Select.Root
               value={selectedAdAccount || ""}
-              onValueChange={setSelectedAdAccount}
+              onValueChange={(id) => { setSelectedAdAccount(id); onAccountChange?.(id); }}
               disabled={adAccounts.length === 0}
             >
               <Select.Trigger variant="surface" radius="large" style={{ minWidth: "200px" }}>
@@ -548,12 +570,12 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
               }
             />
           ) : adAccounts.length === 0 ? (
-             <Flex direction="column" align="center" justify="center" gap="3" className="h-full min-h-[200px]">
+           <Flex direction="column" align="center" justify="center" gap="3" className="h-full min-h-[200px]">
                <Text size="3" color="gray" align="center">
                  No Ad Accounts Available
                </Text>
                <Text size="2" color="gray" align="center">
-                 You have no DCO actions or paid media metrics data to analyze.
+                 Connect an ad account to load paid metrics.
                </Text>
              </Flex>
            ) : !selectedCampaign ? (
@@ -563,8 +585,8 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
                </Text>
                <Text size="2" color="gray" align="center">
                  {selectedAdAccount && campaigns.length === 0
-                   ? "This ad account has no active campaigns to analyze."
-                   : "Choose an ad account and campaign above to view performance metrics."
+                   ? "No active campaigns in this account."
+                   : "Pick a campaign to load metrics."
                  }
                </Text>
              </Flex>
@@ -573,7 +595,7 @@ export function PaidMediaReportingWidget({ brandId, accountId }: Props) {
                <MetricsPanel
                  data={state.data}
                  expandedMetric={expandedMetric}
-                 onMetricSelect={setExpandedMetric}
+                 onMetricSelect={handleMetricSelect}
                />
              ) : (
                <PaidTrendsPanel data={state.data} />
@@ -591,8 +613,8 @@ function MetricsPanel({
   onMetricSelect,
 }: {
   data: PaidMetricsResponse;
-  expandedMetric: MetricKey | null;
-  onMetricSelect: (key: MetricKey | null) => void;
+  expandedMetric: MetricKey;
+  onMetricSelect: (key: MetricKey) => void;
 }) {
   const { metrics, comparison, range, trends } = data;
 
@@ -605,7 +627,7 @@ function MetricsPanel({
     { key: "clicks", label: "Clicks", value: metrics.clicks, format: "number" },
   ];
 
-  const expandedKey = expandedMetric ?? metricCards[0]?.key;
+  const expandedKey = expandedMetric;
   const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
   
   // Calculate trend data for the selected metric

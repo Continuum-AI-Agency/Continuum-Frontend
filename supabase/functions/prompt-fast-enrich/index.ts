@@ -2,6 +2,8 @@
 // Streams enriched prompt via SSE.
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authorizeSupabaseEdgeRequest } from "../_shared/supabase-edge-auth.ts";
 import { extractGeminiChunkText } from "../brand-draft-voice/geminiStream.ts";
 
 type EnrichRequest = {
@@ -12,7 +14,7 @@ type EnrichRequest = {
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
 };
 
 const JSON_HEADERS: Record<string, string> = {
@@ -160,6 +162,30 @@ serve(async (req: Request) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed", requestId }), {
       status: 405,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")?.trim();
+  const supabaseKey =
+    Deno.env.get("SUPABASE_ANON_KEY")?.trim() ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  if (!supabaseUrl || !supabaseKey) {
+    logError("auth_config_error", { requestId });
+    return new Response(JSON.stringify({ error: "Missing Supabase auth config", requestId }), {
+      status: 500,
+      headers: JSON_HEADERS,
+    });
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const auth = await authorizeSupabaseEdgeRequest({
+    authHeader: req.headers.get("Authorization"),
+    getClaims: (accessToken) => supabase.auth.getClaims(accessToken),
+  });
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ error: "Unauthorized", requestId }), {
+      status: 401,
       headers: JSON_HEADERS,
     });
   }

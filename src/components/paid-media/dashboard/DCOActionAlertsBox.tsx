@@ -51,8 +51,10 @@ type QuickView = "all" | "attention" | "pending" | "successful" | "campaign" | "
 const STATUS_ORDER: Record<ActionStatus, number> = {
   FAILED: 0,
   PENDING: 1,
-  APPROVED: 2,
-  SUCCESS: 3,
+  REJECTED: 2,
+  APPROVED: 3,
+  SUCCESS: 4,
+  EXECUTED: 5,
 };
 
 const QUICK_VIEW_LABEL: Record<QuickView, string> = {
@@ -62,6 +64,34 @@ const QUICK_VIEW_LABEL: Record<QuickView, string> = {
   successful: "Successful",
   campaign: "Campaign scope",
   adset: "Ad set scope",
+};
+
+const CREATIVE_SWITCH_ACTION_TYPES = new Set<ActionLog["actionType"]>([
+  "SWITCH_CREATIVE",
+  "CREATIVE_SWITCH_EXTERNAL",
+]);
+
+const CREATIVE_SWAP_BEFORE_KEYS = [
+  "original_creative_url",
+  "before_creative_url",
+  "previous_creative_url",
+  "old_creative_url",
+  "originalCreativeUrl",
+  "beforeCreativeUrl",
+];
+
+const CREATIVE_SWAP_AFTER_KEYS = [
+  "new_creative_url",
+  "after_creative_url",
+  "replacement_creative_url",
+  "updated_creative_url",
+  "newCreativeUrl",
+  "afterCreativeUrl",
+];
+
+type CreativeSwapUrls = {
+  before: string;
+  after: string;
 };
 
 function formatRelativeTime(isoString: string): string {
@@ -106,16 +136,48 @@ function summarizeAction(log: ActionLog): string {
 }
 
 function badgeVariantForStatus(status: ActionStatus): "destructive" | "secondary" | "outline" {
-  if (status === "FAILED") return "destructive";
+  if (status === "FAILED" || status === "REJECTED") return "destructive";
   if (status === "PENDING") return "outline";
   return "secondary";
 }
 
+function readSwapUrlFromRecord(
+  record: Record<string, unknown> | null | undefined,
+  keys: string[]
+): string | null {
+  if (!record) return null;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+}
+
+function extractCreativeSwapUrls(log: ActionLog): CreativeSwapUrls | null {
+  if (!CREATIVE_SWITCH_ACTION_TYPES.has(log.actionType)) return null;
+
+  const payloads: Array<Record<string, unknown> | null | undefined> = [
+    log.actionPayload,
+    log.paramsChanged,
+    log.result,
+  ];
+
+  for (const payload of payloads) {
+    const before = readSwapUrlFromRecord(payload, CREATIVE_SWAP_BEFORE_KEYS);
+    const after = readSwapUrlFromRecord(payload, CREATIVE_SWAP_AFTER_KEYS);
+    if (before && after) {
+      return { before, after };
+    }
+  }
+
+  return null;
+}
+
 function matchesQuickView(log: ActionLog, view: QuickView): boolean {
   if (view === "all") return true;
-  if (view === "attention") return log.status === "FAILED" || log.status === "PENDING";
+  if (view === "attention") return log.status === "FAILED" || log.status === "PENDING" || log.status === "REJECTED";
   if (view === "pending") return log.status === "PENDING";
-  if (view === "successful") return log.status === "SUCCESS" || log.status === "APPROVED";
+  if (view === "successful") return log.status === "SUCCESS" || log.status === "APPROVED" || log.status === "EXECUTED";
   if (view === "campaign") return log.scopeType === "CAMPAIGN";
   if (view === "adset") return log.scopeType === "ADSET" || log.scopeType === "AD";
   return true;
@@ -213,21 +275,20 @@ export function DCOActionAlertsBox({
   }, [onRefresh, refresh]);
 
   return (
-    <div className={cn("grid h-[min(72vh,680px)] min-h-0 gap-3 lg:grid-cols-[220px_minmax(0,1fr)]", className)}>
-      <aside className="rounded-md border border-border/70 bg-muted/10 p-2">
-        <div className="px-1">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Menu</div>
-          <p className="mt-1 text-[11px] text-muted-foreground">{contextLabel}</p>
-        </div>
+    <div className={cn("grid h-[min(72vh,680px)] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2", className)}>
+      <aside className="flex flex-wrap items-center gap-2 rounded-md border border-border/70 bg-muted/10 p-2">
+        <span className="rounded border border-border/70 bg-background px-2 py-1 text-[11px] text-muted-foreground">
+          {contextLabel}
+        </span>
 
-        <div className="mt-2 space-y-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
           {(Object.keys(QUICK_VIEW_LABEL) as QuickView[]).map((view) => (
             <button
               key={`alerts-quick-view-${view}`}
               type="button"
               onClick={() => setQuickView(view)}
               className={cn(
-                "w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                "h-7 rounded-md px-2 text-left text-xs transition-colors",
                 quickView === view
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -238,22 +299,24 @@ export function DCOActionAlertsBox({
           ))}
         </div>
 
-        <div className="mt-3 space-y-2 border-t border-border/70 pt-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-8 w-[8.5rem] text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All status</SelectItem>
               <SelectItem value="FAILED">Failed</SelectItem>
               <SelectItem value="PENDING">Pending</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
               <SelectItem value="APPROVED">Approved</SelectItem>
               <SelectItem value="SUCCESS">Success</SelectItem>
+              <SelectItem value="EXECUTED">Executed</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as ScopeFilter)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-8 w-[8rem] text-xs">
               <SelectValue placeholder="Scope" />
             </SelectTrigger>
             <SelectContent>
@@ -267,7 +330,7 @@ export function DCOActionAlertsBox({
           </Select>
 
           <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger className="h-8 w-[8.5rem] text-xs">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
@@ -281,11 +344,11 @@ export function DCOActionAlertsBox({
       </aside>
 
       <section className="flex min-h-0 flex-col rounded-md border border-border/70 bg-background">
-        <div className="space-y-2 border-b border-border/70 p-2.5">
+        <div className="space-y-2 border-b border-border/70 p-2">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold">Automation Alerts Console</div>
-              <p className="text-xs text-muted-foreground">
+              <div className="text-sm font-semibold">DCO Actions</div>
+              <p className="text-[11px] text-muted-foreground">
                 {pagination.totalCount} total events · {filteredLogs.length} visible
               </p>
             </div>
@@ -367,26 +430,38 @@ export function DCOActionAlertsBox({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="text-[11px] text-muted-foreground">
-                        <div>{formatTimestamp(log.occurredAt)}</div>
-                        <div>{formatRelativeTime(log.occurredAt)}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={badgeVariantForStatus(log.status)}>{log.status}</Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{log.actionType}</TableCell>
-                      <TableCell>{log.scopeType}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        <div>Campaign: {log.metaCampaignId ?? "--"}</div>
-                        <div>Ad set: {log.metaAdsetId ?? "--"}</div>
-                      </TableCell>
-                      <TableCell className="max-w-[360px] whitespace-normal text-foreground">
-                        {summarizeAction(log)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredLogs.map((log) => {
+                    const creativeSwapUrls = extractCreativeSwapUrls(log);
+                    const hoverDetail = creativeSwapUrls
+                      ? `Before: ${creativeSwapUrls.before}\nAfter: ${creativeSwapUrls.after}`
+                      : undefined;
+
+                    return (
+                      <TableRow key={log.id}>
+                        <TableCell className="text-[11px] text-muted-foreground">
+                          <div>{formatTimestamp(log.occurredAt)}</div>
+                          <div>{formatRelativeTime(log.occurredAt)}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={badgeVariantForStatus(log.status)}>{log.status}</Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">{log.actionType}</TableCell>
+                        <TableCell>{log.scopeType}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <div>Campaign: {log.metaCampaignId ?? "--"}</div>
+                          <div>Ad set: {log.metaAdsetId ?? "--"}</div>
+                        </TableCell>
+                        <TableCell className="max-w-[360px] whitespace-normal text-foreground" title={hoverDetail}>
+                          <div>{summarizeAction(log)}</div>
+                          {creativeSwapUrls ? (
+                            <div className="mt-1 text-[10px] text-muted-foreground">
+                              Hover to view before/after creative URLs
+                            </div>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>

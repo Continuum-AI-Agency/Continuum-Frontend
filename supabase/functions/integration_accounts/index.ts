@@ -28,6 +28,7 @@
 
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 type PlatformKey =
   | "youtube"
@@ -146,7 +147,14 @@ async function handler(req: Request): Promise<Response> {
   }
 
   const supabase = createSupabaseForRequest(req);
-  const authProvided = Boolean(req.headers.get("Authorization"));
+  const authHeader = req.headers.get("Authorization");
+  const { data: claimsData, error: authError } = await supabase.auth.getClaims(
+    extractBearerToken(authHeader),
+  );
+  if (authError || !claimsData?.claims?.sub) {
+    return json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const authProvided = Boolean(authHeader);
 
   // Fetch user integrations by provider
   const { data: integrations, error: integrationsError } = await supabase

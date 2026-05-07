@@ -1,4 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveMetaAccessToken } from "../../_shared/meta-access-token.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -210,21 +211,33 @@ const fetchMetaInsights = async (args: {
     time_range: JSON.stringify({ since: args.since, until: args.until }),
     level: args.level,
     time_increment: "1",
+    limit: "100",
     access_token: args.accessToken,
   });
 
-  const insightsResponse = await fetch(`${insightsUrl}?${insightsParams.toString()}`);
-  if (!insightsResponse.ok) {
-    const errorData = await insightsResponse.json().catch(() => ({}));
-    args.log(`Meta insights API error (${args.label})`, {
-      status: insightsResponse.status,
-      error: errorData,
-    });
-    throw new Error(`Failed to fetch ${args.label} insights from Meta API`);
+  const allRows: MetaInsightRow[] = [];
+  let nextUrl: string | null = `${insightsUrl}?${insightsParams.toString()}`;
+
+  while (nextUrl) {
+    const response = await fetch(nextUrl);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      args.log(`Meta insights API error (${args.label})`, {
+        status: response.status,
+        error: errorData,
+      });
+      throw new Error(`Failed to fetch ${args.label} insights from Meta API`);
+    }
+
+    const page = await response.json().catch(() => ({}));
+    if (Array.isArray(page?.data)) {
+      allRows.push(...page.data);
+    }
+
+    nextUrl = typeof page?.paging?.next === "string" ? page.paging.next : null;
   }
 
-  const insightsData = await insightsResponse.json().catch(() => ({}));
-  return Array.isArray(insightsData?.data) ? insightsData.data : [];
+  return allRows;
 };
 
 export async function handleMetaMetrics(params: any, req: Request) {
@@ -264,11 +277,8 @@ export async function handleMetaMetrics(params: any, req: Request) {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // Authenticate user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(supabaseToken);
-    if (authError || !user) {
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(supabaseToken);
+    if (authError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -342,12 +352,16 @@ export async function handleMetaMetrics(params: any, req: Request) {
       }
     }
 
-    const { data: accessToken, error: tokenError } = await supabase.rpc("get_meta_access_token", {
-      p_ad_account_id: adAccountId,
+    const accessToken = await resolveMetaAccessToken({
+      brandId,
+      adAccountId,
+      userToken: supabaseToken,
+      actorKind: "user",
+      log,
     });
 
-    if (tokenError || !accessToken) {
-      log("No access token found for ad account", { adAccountId, error: tokenError });
+    if (!accessToken) {
+      log("No access token found for ad account", { adAccountId });
       return new Response(JSON.stringify({ error: "Meta account not configured or access token missing" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

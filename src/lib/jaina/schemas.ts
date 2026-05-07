@@ -371,9 +371,9 @@ const checkpointBlockBaseV2Schema = z.object({
 });
 
 export const highlightItemSchema = z.object({
-  category: z.string().optional(),
+  category: z.string().nullish(),
   text: z.string(),
-  severity: severitySchema.optional(),
+  severity: severitySchema.nullish(),
 });
 export type HighlightItem = z.infer<typeof highlightItemSchema>;
 
@@ -387,11 +387,11 @@ export type NarrativeBlockV2 = z.infer<typeof narrativeBlockV2Schema>;
 export const metricItemV2Schema = z.object({
   label: z.string(),
   value: z.union([z.number(), z.string()]),
-  unit: z.string().optional(),
-  format: valueFormatSchema.optional(),
-  change: z.number().optional(),
-  change_direction: changeDirectionSchema.optional(),
-  severity: severitySchema.optional(),
+  unit: z.string().nullish(),
+  format: valueFormatSchema.nullish(),
+  change: z.number().nullish(),
+  change_direction: changeDirectionSchema.nullish(),
+  severity: severitySchema.nullish(),
 });
 export type MetricItemV2 = z.infer<typeof metricItemV2Schema>;
 
@@ -408,7 +408,7 @@ export const chartConfigEntrySchema = z.object({
 
 export const chartBlockV2Schema = checkpointBlockBaseV2Schema.extend({
   category: z.literal("chart"),
-  chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar"]),
+  chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar", "radar"]),
   category_key: z.string(),
   value_key: z.string().nullish(),
   value_format: valueFormatSchema.optional(),
@@ -420,8 +420,8 @@ export type ChartBlockV2 = z.infer<typeof chartBlockV2Schema>;
 export const tableColumnV2Schema = z.object({
   key: z.string(),
   label: z.string(),
-  format: valueFormatSchema.optional(),
-  align: z.enum(["left", "center", "right"]).optional(),
+  format: valueFormatSchema.nullish(),
+  align: z.enum(["left", "center", "right"]).nullish(),
 });
 export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
 
@@ -429,6 +429,7 @@ export const dataTableBlockV2Schema = checkpointBlockBaseV2Schema.extend({
   category: z.literal("data_table"),
   columns: z.array(tableColumnV2Schema).min(1),
   rows: z.array(z.record(z.string(), z.unknown())),
+  notes: z.string().nullish(),
 });
 export type DataTableBlockV2 = z.infer<typeof dataTableBlockV2Schema>;
 
@@ -436,10 +437,10 @@ export const insightItemV2Schema = z.object({
   item_type: z.enum(["recommendation", "insight", "action", "question"]),
   title: z.string(),
   summary: z.string(),
-  rationale: z.string().optional(),
-  impact: z.string().optional(),
-  severity: severitySchema.optional(),
-  priority: z.enum(["now", "next", "soon", "later"]).optional(),
+  rationale: z.string().nullish(),
+  impact: z.string().nullish(),
+  severity: severitySchema.nullish(),
+  priority: z.enum(["now", "next", "soon", "later"]).nullish(),
 });
 export type InsightItemV2 = z.infer<typeof insightItemV2Schema>;
 
@@ -454,10 +455,10 @@ export const comparisonPairSchema = z.object({
   before: z.union([z.number(), z.string()]),
   after: z.union([z.number(), z.string()]),
   unit: z.string().nullish(),
-  format: valueFormatSchema.optional(),
-  change: z.number().optional(),
-  change_direction: changeDirectionSchema.optional(),
-  severity: severitySchema.optional(),
+  format: valueFormatSchema.nullish(),
+  change: z.number().nullish(),
+  change_direction: changeDirectionSchema.nullish(),
+  severity: severitySchema.nullish(),
 });
 export type ComparisonPair = z.infer<typeof comparisonPairSchema>;
 
@@ -669,26 +670,8 @@ export type CanvasActionsProposedEventData = Exclude<
 export const toolBatchSchema = streamEventSchema(
   "tool.batch",
   z.object({
-    calls: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      args: z.record(z.string(), z.unknown()),
-      metadata: z.record(z.string(), z.unknown()),
-      correlation_id: z.string().optional().nullable(),
-      parent_correlation_id: z.string().nullable().optional(),
-    })),
-    results: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      ok: z.boolean(),
-      cached: z.boolean(),
-      shared: z.boolean().optional(),
-      duration_ms: z.number().optional(),
-      output: z.unknown().optional(),
-      error: z.string().optional(),
-      correlation_id: z.string().optional().nullable(),
-      parent_correlation_id: z.string().nullable().optional(),
-    })),
+    calls: z.array(z.lazy(() => toolCallSchema)),
+    results: z.array(z.lazy(() => toolResultSchema)),
   })
 );
 
@@ -700,7 +683,9 @@ export const handoffStartSchema = streamEventSchema(
     to_scope: z.string(),
     objective: z.string().nullable(),
     entity_id: z.string().nullable(),
-  })
+    display_name: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
+  }).passthrough()
 );
 
 export const handoffCompleteSchema = streamEventSchema(
@@ -714,8 +699,34 @@ export const handoffCompleteSchema = streamEventSchema(
     to_scope: z.string(),
     objective: z.string().nullable(),
     entity_id: z.string().nullable(),
-  })
+    display_name: z.string().nullable().optional(),
+    name: z.string().nullable().optional(),
+  }).passthrough()
 );
+
+export const agentSpawnEventSchema = z.object({
+  agent_id: z.string(),
+  task_id: z.string().optional(),
+  task_description: z.string().optional(),
+  parent_agent_id: z.string().nullable().optional(),
+  started_at: z.string().optional(),
+  display_name: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
+});
+export type AgentSpawnEventData = z.infer<typeof agentSpawnEventSchema>;
+
+export const agentCompleteEventSchema = z.object({
+  agent_id: z.string(),
+  task_id: z.string().optional(),
+  status: z.enum(["completed", "failed", "cancelled", "partial"]).optional(),
+  duration_ms: z.number().optional(),
+  error: z.string().optional(),
+  display_name: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
+});
+export type AgentCompleteEventData = z.infer<typeof agentCompleteEventSchema>;
+
+export const canvasContextLoadedEventSchema = z.object({}).passthrough();
 
 export const agentEnvelopeSchema = streamEventSchema(
   "agent.envelope",
@@ -729,8 +740,13 @@ export const agentEnvelopeSchema = streamEventSchema(
       session_id: z.string().nullable(),
       scope: z.string().nullable(),
       timestamp: z.string(),
+      display_name: z.string().nullable().optional(),
+      name: z.string().nullable().optional(),
+      agent_id: z.string().nullable().optional(),
+      parent_agent_id: z.string().nullable().optional(),
+      agent_name: z.string().nullable().optional(),
       payload: z.record(z.string(), z.unknown()),
-    }),
+    }).passthrough(),
   })
 );
 
@@ -749,6 +765,8 @@ export const responseBlockDeltaSchema = streamEventSchema(
     sequence: z.number().int().nonnegative(),
     source: z.string(),
     agent: z.string().optional(),
+    block_category: z.string().optional(),
+    chart_type: z.string().optional(),
     block: checkpointReportBlockSchema,
   })
 );
@@ -759,6 +777,8 @@ export const responseBlockDeltaV2Schema = streamEventSchema(
     sequence: z.number().int().nonnegative(),
     source: z.string(),
     agent: z.string().optional(),
+    block_category: z.string().optional(),
+    chart_type: z.string().optional(),
     block: checkpointBlockV2Schema,
   })
 );
@@ -902,6 +922,9 @@ export type JainaStreamEvent =
   | z.infer<typeof handoffStartSchema>
   | z.infer<typeof handoffCompleteSchema>
   | z.infer<typeof agentEnvelopeSchema>
+  | { type: "agent.spawn"; data: AgentSpawnEventData }
+  | { type: "agent.complete"; data: AgentCompleteEventData }
+  | { type: "canvas.context.loaded"; data: Record<string, unknown> }
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaSchema>
   | z.infer<typeof responseReportAssemblySchema>
@@ -930,6 +953,9 @@ export const jainaStreamEventSchema = z.union([
   handoffStartSchema,
   handoffCompleteSchema,
   agentEnvelopeSchema,
+  z.object({ type: z.literal("agent.spawn"), data: agentSpawnEventSchema }),
+  z.object({ type: z.literal("agent.complete"), data: agentCompleteEventSchema }),
+  z.object({ type: z.literal("canvas.context.loaded"), data: z.record(z.string(), z.unknown()) }),
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
   responseReportAssemblySchema,
@@ -947,8 +973,14 @@ export const jainaStreamEventSchema = z.union([
 export const toolCallSchema = z.object({
   id: z.string(),
   name: z.string(),
-  args: z.record(z.string(), z.unknown()),
-  metadata: z.record(z.string(), z.unknown()),
+  args: z.record(z.string(), z.unknown()).default({}),
+  metadata: z.record(z.string(), z.unknown()).default({}),
+  display_name: z.string().nullable().optional(),
+  agent_name: z.string().nullable().optional(),
+  parent_agent_id: z.string().nullable().optional(),
+  agent_id: z.string().nullable().optional(),
+  correlation_id: z.string().nullable().optional(),
+  parent_correlation_id: z.string().nullable().optional(),
 });
 
 export type ToolCallEventData = z.infer<typeof toolCallSchema>;
@@ -962,6 +994,26 @@ export const toolResultSchema = z.object({
   duration_ms: z.number().optional(),
   output: z.unknown().optional(),
   error: z.string().optional(),
+  output_omitted: z.literal(true).optional(),
+  output_summary: z
+    .object({
+      omitted: z.literal(true),
+      type: z.string(),
+      keys: z.array(z.string()).optional(),
+      item_count: z.number().optional(),
+      approx_bytes: z.number().optional(),
+      char_count: z.number().optional(),
+    })
+    .passthrough()
+    .optional(),
+  display_name: z.string().nullable().optional(),
+  agent_name: z.string().nullable().optional(),
+  agent_id: z.string().nullable().optional(),
+  parent_agent_id: z.string().nullable().optional(),
+  output_bytes: z.number().optional(),
+  output_tokens_est: z.number().optional(),
+  correlation_id: z.string().nullable().optional(),
+  parent_correlation_id: z.string().nullable().optional(),
 });
 
 export type ToolResultEventData = z.infer<typeof toolResultSchema>;
@@ -1213,6 +1265,18 @@ export type ThoughtEventData = z.infer<typeof thoughtEventSchema>;
 
 export const adkEventSchema = z.object({
   author: z.string().optional(),
+  // Top-level flat format (backend may omit content wrapper)
+  functionResponse: z.object({
+    name: z.string(),
+    id: z.string(),
+    response: z.record(z.string(), z.unknown()),
+  }).optional(),
+  functionCall: z.object({
+    name: z.string(),
+    id: z.string(),
+    args: z.record(z.string(), z.unknown()),
+  }).optional(),
+  // Structured format with parts array
   content: z.object({
     role: z.string().optional(),
     parts: z.array(
@@ -1234,7 +1298,7 @@ export const adkEventSchema = z.object({
         }),
       ])
     ),
-  }),
+  }).optional(),
 }).passthrough();
 
 export type AdkEventData = z.infer<typeof adkEventSchema>;

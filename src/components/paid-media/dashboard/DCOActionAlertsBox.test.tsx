@@ -29,6 +29,27 @@ const logs: ActionLog[] = [
     decisionNote: null,
     error: null,
   },
+  {
+    id: "log_2",
+    brandId: "brand_1",
+    metaAccountId: "act_1",
+    metaCampaignId: "cmp_1",
+    metaAdsetId: "adset_2",
+    metaAdId: "ad_2",
+    actionType: "CREATIVE_SWITCH_EXTERNAL",
+    status: "EXECUTED",
+    scopeType: "AD",
+    scopeId: "ad_2",
+    occurredAt: "2026-03-01T12:00:00.000Z",
+    actionPayload: {
+      original_creative_url: "https://cdn.example.com/original.mp4",
+      new_creative_url: "https://cdn.example.com/new.mp4",
+    },
+    paramsChanged: {},
+    result: {},
+    decisionNote: "Creative swap applied",
+    error: null,
+  },
 ];
 
 mock.module("@/hooks/useDCOActionLogs", () => ({
@@ -113,5 +134,24 @@ describe("DCOActionAlertsBox", () => {
 
     expect(mockRefresh).toHaveBeenCalledTimes(1);
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows before/after creative URLs in detail hover metadata for creative switch rows", () => {
+    const { container } = render(
+      <DCOActionAlertsBox
+        brandId="brand_1"
+        metaAccountId="act_1"
+        campaignId="cmp_1"
+      />
+    );
+
+    const detailCell = Array.from(container.getElementsByTagName("td")).find((cell) =>
+      cell.getAttribute("title")?.includes("Before: https://cdn.example.com/original.mp4")
+    );
+
+    expect(detailCell).toBeTruthy();
+    expect(detailCell?.textContent).toContain("Hover to view before/after creative URLs");
+    expect(detailCell?.getAttribute("title")).toContain("Before: https://cdn.example.com/original.mp4");
+    expect(detailCell?.getAttribute("title")).toContain("After: https://cdn.example.com/new.mp4");
   });
 });

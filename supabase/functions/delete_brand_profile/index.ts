@@ -4,6 +4,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const InputSchema = z.object({
   brandId: z.string().min(1, "brandId is required"),
@@ -76,18 +77,18 @@ function createServiceClient() {
 async function assertUserAccess(
   authClient: ReturnType<typeof createAuthClient>,
   serviceClient: ReturnType<typeof createServiceClient>,
-  brandId: string
+  brandId: string,
+  accessToken: string
 ): Promise<AuthzResult & { userId?: string }> {
   const {
-    data: userResult,
+    data: claimsResult,
     error: userError,
-  } = await authClient.auth.getUser();
+  } = await authClient.auth.getClaims(accessToken);
 
-  if (userError || !userResult?.user) {
+  const userId = claimsResult?.claims?.sub;
+  if (userError || !userId) {
     return { status: 401, message: "Unauthorized" };
   }
-
-  const userId = userResult.user.id;
 
   const { data: brand, error: brandError } = await serviceClient
     .schema("brand_profiles")
@@ -125,7 +126,7 @@ async function assertUserAccess(
     return { status: 403, message: "Forbidden" };
   }
 
-  const email = userResult.user.email?.toLowerCase() ?? "";
+  const email = (claimsResult?.claims?.email as string | undefined)?.toLowerCase() ?? "";
   const members = Array.isArray(onboardingRow.state.members)
     ? (onboardingRow.state.members as Array<{ email?: string; role?: string }>)
     : [];
@@ -191,7 +192,12 @@ serve(async req => {
     return jsonResponse({ error: message }, 500);
   }
 
-  const authz = await assertUserAccess(authClient, serviceClient, input.brandId);
+  const authz = await assertUserAccess(
+    authClient,
+    serviceClient,
+    input.brandId,
+    extractBearerToken(authHeader),
+  );
   if (authz.status !== 200) {
     logEvent("info", "delete_brand_profile.unauthorized", {
       requestId,

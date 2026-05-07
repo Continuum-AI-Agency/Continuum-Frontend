@@ -19,6 +19,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchBytes } from "../_shared/source_adapters.ts";
 import { extractText } from "../_shared/extract.ts";
 import { chunkText } from "../_shared/chunk.ts";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 type JsonValue =
   | string
@@ -282,6 +283,13 @@ Deno.serve(async (req) => {
     req.headers.get("Authorization") ??
     req.headers.get("authorization") ??
     req.headers.get("sb-function-request-authorization");
+  const authClient = createSupabase(authHeader);
+  const { data: claimsData, error: authError } = await authClient.auth.getClaims(
+    extractBearerToken(authHeader),
+  );
+  if (authError || !claimsData?.claims?.sub) {
+    return jsonResponse({ error: "Unauthorized" }, { status: 401 });
+  }
 
   Promise.resolve()
     .then(() => processDocument(payload, authHeader))

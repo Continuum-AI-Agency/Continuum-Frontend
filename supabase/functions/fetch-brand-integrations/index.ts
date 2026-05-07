@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -112,23 +112,22 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // 1. Verify user has access to this brand
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser(accessToken);
-    if (authError || !user) {
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(accessToken);
+    if (authError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const userId = claimsData.claims.sub;
+
     const { data: permission, error: permError } = await supabase
       .schema("brand_profiles")
       .from("permissions")
       .select("role")
       .eq("brand_profile_id", brandId)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (permError || !permission) {
@@ -140,7 +139,7 @@ serve(async (req: Request) => {
         .eq("id", brandId)
         .maybeSingle();
 
-      if (brandError || !brand || brand.created_by !== user.id) {
+      if (brandError || !brand || brand.created_by !== userId) {
         return new Response(
           JSON.stringify({ error: "Forbidden: No access to this brand" }),
           {

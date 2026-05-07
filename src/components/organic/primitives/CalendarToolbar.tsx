@@ -10,6 +10,7 @@ import {
   RocketIcon,
   TrashIcon,
 } from "@radix-ui/react-icons"
+import { RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +41,9 @@ type CalendarToolbarProps = {
   gridStatus: string
   gridError: string | null
   onRetryGeneration?: () => void
+  postedContentCount?: number
+  isFetchingPostedContent?: boolean
+  onFetchPostedContent?: () => void
 }
 
 export function CalendarToolbar({
@@ -59,6 +63,9 @@ export function CalendarToolbar({
   gridStatus,
   gridError,
   onRetryGeneration,
+  postedContentCount = 0,
+  isFetchingPostedContent = false,
+  onFetchPostedContent,
 }: CalendarToolbarProps) {
   const router = useRouter()
 
@@ -101,8 +108,27 @@ export function CalendarToolbar({
               <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                 {seededDraftCount} placeholders
               </Badge>
+              {postedContentCount > 0 ? (
+                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                  {postedContentCount} posted
+                </Badge>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
+              {onFetchPostedContent ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  aria-label="Fetch third-party posted content"
+                  disabled={isFetchingPostedContent}
+                  onClick={onFetchPostedContent}
+                  title="Fetch third-party posted content"
+                >
+                  <RefreshCw className={isFetchingPostedContent ? "mr-1 h-3.5 w-3.5 animate-spin" : "mr-1 h-3.5 w-3.5"} />
+                  Posts
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 size="sm"

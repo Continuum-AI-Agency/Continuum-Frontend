@@ -13,6 +13,7 @@
 
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const InputSchema = z.object({
   assetIds: z.array(z.string().uuid()).min(1),
@@ -103,10 +104,14 @@ async function handler(req: Request): Promise<Response> {
   }
 
   const supabaseAuth = createSupabaseForRequest(req);
-  const { data: authData, error: authError } = await supabaseAuth.auth.getUser();
-  if (authError || !authData?.user) {
+  const { data: authData, error: authError } = await supabaseAuth.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
+  if (authError || !authData?.claims?.sub) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const userId = authData.claims.sub;
 
   const { assetIds, selectedAssetIds } = input;
   const service = createServiceClient();
@@ -157,7 +162,7 @@ async function handler(req: Request): Promise<Response> {
 
   const integrationRowsTyped = (integrationRows ?? []) as UserIntegrationRow[];
   const ownedIntegrationIds = new Set(
-    integrationRowsTyped.filter(row => row.user_id === authData.user.id).map(row => row.id)
+    integrationRowsTyped.filter(row => row.user_id === userId).map(row => row.id)
   );
   const unauthorized = integrationIds.filter(id => !ownedIntegrationIds.has(id));
   if (unauthorized.length > 0) {

@@ -1,20 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
-import { CheckCircle2Icon, CircleIcon, Loader2Icon } from "lucide-react";
+import * as React from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/button";
-import {
-  Plan,
-  PlanContent,
-  PlanDescription,
-  PlanHeader,
-  PlanTitle,
-  PlanTrigger,
-} from "@/components/ai-elements/plan";
-import { stagger, listItem } from "@/components/ui/Motion";
 import type { JainaPlan } from "../types";
-
-const EASE_OUT_EXPO = [0.16, 1, 0.3, 1] as const;
 
 export type PlanFeedbackPayload =
   | { type: "approve"; planId: string }
@@ -28,61 +17,85 @@ type PlanSectionProps = {
 };
 
 export function PlanSection({ plan, isStreaming, onPlanFeedback }: PlanSectionProps) {
+  const [refineOpen, setRefineOpen] = React.useState(false);
+  const [edits, setEdits] = React.useState("");
+
+  if (plan.status !== "awaiting_approval") return null;
+
+  const handleRefineSubmit = () => {
+    if (!edits.trim()) return;
+    onPlanFeedback?.({ type: "refine", planId: plan.id, edits: edits.trim() });
+    setEdits("");
+    setRefineOpen(false);
+  };
+
   return (
-    <Plan status={plan.status} isStreaming={isStreaming}>
-      <PlanHeader>
-        <PlanTitle>{plan.title}</PlanTitle>
-        <PlanDescription>{plan.description}</PlanDescription>
-        <PlanTrigger />
-      </PlanHeader>
-      <PlanContent>
-        <motion.div className="space-y-4" initial="hidden" animate="visible" variants={stagger}>
-          {plan.steps.map((step, index) => (
-            <motion.div key={index} variants={listItem} className="flex items-start gap-3 text-sm">
-              <div className="mt-0.5">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={step.status}
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.5, opacity: 0 }}
-                    transition={{ duration: 0.15, ease: EASE_OUT_EXPO }}
-                  >
-                    {step.status === "completed" && <CheckCircle2Icon className="size-4 text-emerald-500" />}
-                    {step.status === "in_progress" && <Loader2Icon className="size-4 animate-spin text-indigo-500" />}
-                    {step.status === "pending" && <CircleIcon className="size-4 text-muted-foreground/30" />}
-                  </motion.div>
-                </AnimatePresence>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">
+          Approve the plan above to proceed, or refine it.
+        </span>
+        <div className="flex shrink-0 gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={isStreaming}
+            onClick={() => setRefineOpen((o) => !o)}
+          >
+            Refine
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={isStreaming}
+            onClick={() => onPlanFeedback?.({ type: "abandon", planId: plan.id })}
+          >
+            Abandon
+          </Button>
+          <Button
+            size="sm"
+            disabled={isStreaming}
+            onClick={() => onPlanFeedback?.({ type: "approve", planId: plan.id })}
+          >
+            Approve
+          </Button>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {refineOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-2 pt-1">
+              <textarea
+                className="w-full resize-none rounded-md border bg-background px-3 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={3}
+                placeholder="Describe what to change about this plan..."
+                value={edits}
+                onChange={(e) => setEdits(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleRefineSubmit();
+                }}
+              />
+              <div className="flex justify-end">
+                <Button size="sm" disabled={!edits.trim()} onClick={handleRefineSubmit}>
+                  Submit Refinement
+                </Button>
               </div>
-              <div>
-                <div className="font-medium text-foreground">{step.title}</div>
-                {step.description ? (
-                  <div className="text-xs text-muted-foreground">
-                    {step.description}
-                  </div>
-                ) : null}
-              </div>
-            </motion.div>
-          ))}
-          {plan.status === "awaiting_approval" ? (
-            <div className="flex justify-end gap-2 pt-2">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => onPlanFeedback?.({ type: "abandon", planId: plan.id })}
-              >
-                Abandon
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => onPlanFeedback?.({ type: "approve", planId: plan.id })}
-              >
-                Approve Plan
-              </Button>
             </div>
-          ) : null}
-        </motion.div>
-      </PlanContent>
-    </Plan>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.48.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveAuthUserName } from "./user-name.ts";
 
 const corsHeaders = {
@@ -137,15 +137,16 @@ serve(async (req) => {
     const normalizedQuery = rawQuery.trim().toLowerCase();
     const hasQuery = normalizedQuery.length > 0;
 
-    const { data: userData, error: userError } = await adminClient.auth.getUser(accessToken);
-    if (userError || !userData?.user) {
+    const { data: claimsData, error: userError } = await adminClient.auth.getClaims(accessToken);
+    const userId = claimsData?.claims?.sub;
+    if (userError || !userId) {
       log("getUser failed", { userError });
       return jsonResponse({ error: "Invalid or expired token" }, 401);
     }
 
-    const isAdmin = Boolean((userData.user.app_metadata as Record<string, unknown> | undefined)?.is_admin);
+    const isAdmin = Boolean((claimsData.claims?.app_metadata as Record<string, unknown> | undefined)?.is_admin);
     if (!isAdmin) {
-      log("forbidden (not admin)", { userId: userData.user.id });
+      log("forbidden (not admin)", { userId });
       return jsonResponse({ error: "Forbidden" }, 403);
     }
 

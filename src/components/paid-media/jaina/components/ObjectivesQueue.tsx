@@ -1,41 +1,9 @@
 "use client";
 
-import {
-  ListChecksIcon,
-} from "lucide-react";
+import { motion } from "motion/react";
+import { Task, TaskContent, TaskItem, TaskTrigger, type TaskStatus } from "@/components/ai-elements/task";
+import { cn } from "@/lib/utils";
 import type { JainaObjective } from "@/lib/jaina/schemas";
-import {
-  Queue,
-  QueueItem,
-  QueueItemContent,
-  QueueItemDescription,
-  QueueItemIndicator,
-  QueueList,
-  QueueSection,
-  QueueSectionContent,
-  QueueSectionLabel,
-  QueueSectionTrigger,
-} from "@/components/ai-elements/queue";
-
-function getObjectiveStatusLabel(status: JainaObjective["status"]): string {
-  if (status === "in_progress") return "In progress";
-  if (status === "completed") return "Completed";
-  if (status === "failed") return "Failed";
-  return "Pending";
-}
-
-function getObjectiveStatusClasses(status: JainaObjective["status"]): string {
-  if (status === "completed") {
-    return "border-emerald-400/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  }
-  if (status === "in_progress") {
-    return "border-blue-400/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
-  }
-  if (status === "failed") {
-    return "border-red-400/40 bg-red-500/10 text-red-700 dark:text-red-300";
-  }
-  return "border-border/80 bg-muted/40 text-muted-foreground";
-}
 
 type ObjectivesQueueProps = {
   objectives: JainaObjective[];
@@ -43,65 +11,58 @@ type ObjectivesQueueProps = {
 };
 
 export function ObjectivesQueue({ objectives, isStreaming }: ObjectivesQueueProps) {
-  if (!objectives.length) return null;
+  if (objectives.length === 0) return null;
 
-  const completedCount = objectives.filter(
-    (objective) => objective.status === "completed"
-  ).length;
+  const completedCount = objectives.filter((o) => o.status === "completed").length;
+  const total = objectives.length;
+  const hasFailed = objectives.some((o) => o.status === "failed");
+  const hasInProgress = objectives.some((o) => o.status === "in_progress");
+  const taskStatus: TaskStatus =
+    completedCount === total
+      ? "completed"
+      : hasFailed && !hasInProgress
+        ? "error"
+        : isStreaming || hasInProgress
+          ? "in_progress"
+          : "pending";
 
   return (
-    <Queue className="border-border/70 bg-card/80 shadow-none">
-      <QueueSection defaultOpen={false}>
-        <QueueSectionTrigger>
-          <QueueSectionLabel
-            count={objectives.length}
-            label="objectives"
-            icon={<ListChecksIcon className="size-3.5" />}
-          />
-          <span className="text-xs text-muted-foreground">
-            {completedCount}/{objectives.length} done
-            {isStreaming ? " • live" : ""}
-          </span>
-        </QueueSectionTrigger>
-        <QueueSectionContent className="pt-2">
-          <QueueList className="h-[170px]">
-            {objectives.map((objective) => {
-              const completed = objective.status === "completed";
-              return (
-                <QueueItem key={objective.id}>
-                  <div className="flex items-start gap-2">
-                    <QueueItemIndicator
-                      completed={completed}
-                      className={
-                        objective.status === "in_progress"
-                          ? "border-blue-400/60 bg-blue-500/30"
-                          : objective.status === "failed"
-                            ? "border-red-400/60 bg-red-500/30"
-                            : undefined
-                      }
-                    />
-                    <QueueItemContent completed={completed}>
-                      {objective.title}
-                    </QueueItemContent>
-                    <span
-                      className={`ml-auto inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${getObjectiveStatusClasses(
-                        objective.status
-                      )}`}
-                    >
-                      {getObjectiveStatusLabel(objective.status)}
-                    </span>
-                  </div>
-                  {objective.description ? (
-                    <QueueItemDescription completed={completed}>
-                      {objective.description}
-                    </QueueItemDescription>
-                  ) : null}
-                </QueueItem>
-              );
-            })}
-          </QueueList>
-        </QueueSectionContent>
-      </QueueSection>
-    </Queue>
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5"
+    >
+      <Task status={taskStatus}>
+        <TaskTrigger
+          title={`${total} objective${total !== 1 ? "s" : ""}`}
+          status={taskStatus}
+          progress={{ current: completedCount, total }}
+        />
+        <TaskContent className="text-xs">
+          {objectives.map((objective) => (
+            <TaskItem key={objective.id} className="text-xs">
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "leading-snug",
+                    objective.status === "completed" &&
+                      "line-through text-muted-foreground opacity-65",
+                    objective.status === "failed" && "text-destructive"
+                  )}
+                >
+                  {objective.title}
+                </p>
+                {objective.description ? (
+                  <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground/60">
+                    {objective.description}
+                  </p>
+                ) : null}
+              </div>
+            </TaskItem>
+          ))}
+        </TaskContent>
+      </Task>
+    </motion.div>
   );
 }

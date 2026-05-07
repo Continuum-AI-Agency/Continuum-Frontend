@@ -13,6 +13,14 @@ import { AnimatePresence, motion } from "motion/react";
 import { PanelRightOpen, PanelRightClose } from "lucide-react";
 import { prefetchPaidMediaDashboard } from "@/lib/prefetch/paid-media-cache";
 
+const PAID_MEDIA_TABS = ["dashboard", "performance", "jaina"] as const;
+type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
+
+function normalizePaidMediaTab(value: string | null): PaidMediaTab | null {
+  if (value === "budget") return "performance";
+  return PAID_MEDIA_TABS.some((tab) => tab === value) ? (value as PaidMediaTab) : null;
+}
+
 const CampaignCanvas = dynamic(
   () => import("@/CampaignCanvas/components/CampaignCanvas").then((mod) => mod.CampaignCanvas),
   { ssr: false },
@@ -20,11 +28,15 @@ const CampaignCanvas = dynamic(
 
 function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-4 p-6 h-full">
-      <Skeleton className="h-8 w-48" />
-      <div className="flex gap-4 flex-1">
-        <Skeleton className="flex-1 rounded-xl" />
-        <Skeleton className="w-72 rounded-xl" />
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 p-2">
+      <div className="flex items-center justify-end gap-2">
+        <Skeleton className="h-8 w-28 rounded-md" />
+        <Skeleton className="h-8 w-32 rounded-md" />
+        <Skeleton className="h-8 w-20 rounded-md" />
+      </div>
+      <div className="grid min-h-0 gap-2 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Skeleton className="min-h-0 rounded-xl" />
+        <Skeleton className="min-h-0 rounded-xl" />
       </div>
     </div>
   );
@@ -63,6 +75,14 @@ const ReportJobsBell = dynamic(
   { ssr: false }
 );
 
+const CampaignPerformanceTab = dynamic(
+  () =>
+    import("@/components/paid-media/performance/CampaignPerformanceTab").then(
+      (mod) => mod.CampaignPerformanceTab
+    ),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> }
+);
+
 type PaidMediaClientPageProps = {
   brandProfileId: string;
   brandName: string;
@@ -79,13 +99,17 @@ export default function PaidMediaClientPage({
   const searchParams = useSearchParams();
   const router = useRouter();
   const tabParam = searchParams.get("tab");
+  const normalizedTabParam = normalizePaidMediaTab(tabParam);
   const { user } = useSession();
+  const [, startTabTransition] = React.useTransition();
   
   const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(
     initialAdAccountId ?? null
   );
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState(tabParam || "dashboard");
+  const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
+    normalizedTabParam ?? "dashboard"
+  );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
   const [isResizingCanvas, setIsResizingCanvas] = React.useState(false);
@@ -103,16 +127,20 @@ export default function PaidMediaClientPage({
   }, [brandProfileId, initialAdAccountId]);
 
   React.useEffect(() => {
-    if (tabParam && tabParam !== activeTab) {
-      setActiveTab(tabParam);
+    if (normalizedTabParam) {
+      setActiveTab((current) => (current === normalizedTabParam ? current : normalizedTabParam));
     }
-  }, [tabParam, activeTab]);
+  }, [normalizedTabParam]);
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value);
+    const normalizedTab = normalizePaidMediaTab(value);
+    if (!normalizedTab) return;
+    setActiveTab(normalizedTab);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", value);
-    router.push(`?${params.toString()}`);
+    params.set("tab", normalizedTab);
+    startTabTransition(() => {
+      router.replace(`?${params.toString()}`, { scroll: false });
+    });
   };
 
   // Prefetch dashboard data while user is on Jaina tab so data is warm on switch-back
@@ -204,79 +232,90 @@ export default function PaidMediaClientPage({
 
   if (!mounted) {
     return (
-      <div className="box-border flex h-full min-h-0 w-full max-w-none flex-col gap-2 px-0 py-2">
+      <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
         <div className="rounded-lg border bg-card px-3 py-2">
           <div className="flex items-center justify-between gap-2">
-            <Skeleton className="h-8 w-60 rounded-md" />
-            <Skeleton className="h-8 w-52 rounded-md" />
+            <Skeleton className="h-8 w-[min(18rem,45vw)] rounded-md" />
+            <Skeleton className="h-8 w-[min(22rem,48vw)] rounded-md" />
           </div>
         </div>
-        <div className="flex-1 min-h-0 rounded-xl border bg-card p-4 space-y-3">
-          <Skeleton className="h-[38%] w-full rounded-lg" />
-          <Skeleton className="h-1 w-full rounded" />
-          <Skeleton className="h-[58%] w-full rounded-lg" />
+        <div className="min-h-0 rounded-xl border bg-card p-3">
+          <Skeleton className="h-full min-h-0 w-full rounded-lg" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="box-border flex h-full min-h-0 w-full max-w-none flex-col gap-2 overflow-hidden px-0 py-2">
+    <div className="box-border h-full min-h-0 w-full max-w-none overflow-hidden px-0 py-1">
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+        className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1 overflow-hidden"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/10 px-3 py-2">
+        <div className="flex min-h-9 flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/10 px-2 py-1 sm:px-3">
           <AdAccountSelector
             brandId={brandProfileId}
             selectedAccountId={selectedAdAccount}
             onSelect={setSelectedAdAccount}
             initialTimelineAccounts={initialAccounts}
           />
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <ReportJobsBell brandProfileId={brandProfileId} />
-            <TabsList className="h-9">
+            {activeTab === "jaina" ? (
+              <Button
+                type="button"
+                variant={isCanvasOpen ? "outline" : "secondary"}
+                size="sm"
+                onClick={handleToggleCanvas}
+                className="h-8 gap-1.5 px-2 text-xs"
+                aria-pressed={isCanvasOpen}
+              >
+                {isCanvasOpen ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5" />}
+                {isCanvasOpen ? "Hide canvas" : "Canvas"}
+              </Button>
+            ) : null}
+            <TabsList className="h-8">
               <TabsTrigger
                 value="dashboard"
+                className="px-3 text-xs"
                 onMouseEnter={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
                 onFocus={() => { void import("@/components/paid-media/dashboard/PaidMediaDashboard"); }}
               >
                 Dashboard
               </TabsTrigger>
               <TabsTrigger
+                value="performance"
+                className="px-3 text-xs"
+                onMouseEnter={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
+                onFocus={() => { void import("@/components/paid-media/performance/CampaignPerformanceTab"); }}
+              >
+                Performance
+              </TabsTrigger>
+              <TabsTrigger
                 value="jaina"
+                className="px-3 text-xs"
                 onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
                 onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
               >
-                Jaina Analyst
+                Jaina
               </TabsTrigger>
             </TabsList>
           </div>
         </div>
 
-        <TabsContent value="dashboard" className="box-border flex-1 min-h-0 pt-2 overflow-auto">
+        <TabsContent value="dashboard" className="box-border min-h-0 overflow-hidden">
           <PaidMediaDashboard
             brandId={brandProfileId}
             adAccountId={selectedAdAccount}
           />
         </TabsContent>
 
-        <TabsContent value="jaina" className="box-border flex-1 min-h-0 pt-2 flex flex-col overflow-hidden">
-          <div className="mb-2 flex items-center justify-end">
-            <Button
-              type="button"
-              variant={isCanvasOpen ? "outline" : "secondary"}
-              size="sm"
-              onClick={handleToggleCanvas}
-              className="gap-2"
-              aria-pressed={isCanvasOpen}
-            >
-              {isCanvasOpen ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-              {isCanvasOpen ? "Hide Canvas" : "Open Canvas"}
-            </Button>
-          </div>
+        <TabsContent value="performance" className="box-border min-h-0 overflow-hidden">
+          <CampaignPerformanceTab brandId={brandProfileId} adAccountId={selectedAdAccount} />
+        </TabsContent>
 
+        <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">
           <div
             ref={canvasShellRef}
             className="relative flex flex-1 min-h-0 overflow-hidden rounded-xl border bg-background/70 shadow-2xl"

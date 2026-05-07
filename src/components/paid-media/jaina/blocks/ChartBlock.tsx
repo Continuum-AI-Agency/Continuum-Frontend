@@ -9,6 +9,10 @@ import {
   Area,
   PieChart,
   Pie,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -89,6 +93,23 @@ export function ChartBlock({ block }: ChartBlockProps) {
           />
         ))}
       </AreaChart>
+    );
+  } else if (block.chart_type === "radar") {
+    chart = (
+      <RadarChart data={block.data}>
+        <PolarGrid />
+        <PolarAngleAxis dataKey={block.category_key} />
+        <ChartTooltip content={<ChartTooltipContent />} />
+        {configKeys.map((key) => (
+          <Radar
+            key={key}
+            dataKey={key}
+            stroke={`var(--color-${key})`}
+            fill={`var(--color-${key})`}
+            fillOpacity={0.2}
+          />
+        ))}
+      </RadarChart>
     );
   } else {
     chart = (

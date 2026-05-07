@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 export default function PaidMediaError({
   error,
@@ -21,12 +22,12 @@ export default function PaidMediaError({
       <p className="max-w-md text-center text-sm text-zinc-500 dark:text-zinc-400">
         The paid media dashboard encountered an error. Your campaigns are unaffected.
       </p>
-      <button
+      <Button
+        type="button"
         onClick={reset}
-        className="inline-flex h-9 items-center rounded-lg bg-[#5A48F9] px-4 text-sm font-medium text-white transition-colors hover:bg-[#4a3ad4]"
       >
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

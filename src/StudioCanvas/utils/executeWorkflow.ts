@@ -119,12 +119,14 @@ const resolveVideoInput = (
 
   if (allowUri && (isVideoGeneratorNodeType(sourceNode?.type) || sourceNode?.type === 'extendVideo')) {
     const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
+    const generatedVideoUrl = (sourceNode.data as any).generatedVideoUrl as string | undefined;
     const parsed = parseDataUrl(generatedVideo);
     if (parsed?.base64) {
       return { base64: parsed.base64, mimeType: parsed.mimeType };
     }
-    if (typeof generatedVideo === 'string' && generatedVideo.trim()) {
-      return { uri: generatedVideo.trim() };
+    const fallbackUri = (typeof generatedVideo === 'string' && generatedVideo.trim()) || (typeof generatedVideoUrl === 'string' && generatedVideoUrl.trim());
+    if (fallbackUri) {
+      return { uri: fallbackUri };
     }
   }
 
@@ -369,7 +371,9 @@ export async function executeWorkflow(
       isComplete: false,
       error: undefined,
       generatedImage: undefined,
+      generatedImageUrl: undefined,
       generatedVideo: undefined,
+      generatedVideoUrl: undefined,
     });
   }
 
@@ -424,15 +428,16 @@ export async function executeWorkflow(
     // Pre-populate completed generator outputs if they were not reset
     if (!resetNodeIds.includes(node.id) && (node.data as any).isComplete && !(node.data as any).error) {
       if (node.type === 'nanoGen') {
-         const genImage = (node.data as any).generatedImage as string;
+         const genImage = (node.data as any).generatedImage as string | undefined;
+         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
          if (genImage) {
             const parsed = parseDataUrl(genImage);
             if (parsed?.base64) {
-                resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+                resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType, url: genImageUrl });
             }
          }
       } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo') {
-         const genVideo = (node.data as any).generatedVideo as string;
+         const genVideo = ((node.data as any).generatedVideo as string | undefined) ?? ((node.data as any).generatedVideoUrl as string | undefined);
          if (genVideo) {
              resolvedOutputs.set(node.id, { type: 'video', url: genVideo });
          }
@@ -468,13 +473,16 @@ export async function executeWorkflow(
       const mimeType = parsed?.mimeType ?? output.mimeType;
       const base64 = (parsed?.base64 ?? output.base64).replace(/\s+/g, "");
       const dataUrl = buildDataUrl(mimeType, base64);
+      const persistentUrl = output.url && !output.url.startsWith("data:") ? output.url : undefined;
       console.info("[studio] setting generatedImage", {
         nodeId,
         mimeType,
         base64Length: base64.length,
+        hasUrl: Boolean(persistentUrl),
       });
-      useStudioStore.getState().updateNodeData(nodeId, { 
+      useStudioStore.getState().updateNodeData(nodeId, {
         generatedImage: dataUrl,
+        generatedImageUrl: persistentUrl,
         isComplete: true,
         isExecuting: false
       });
@@ -483,13 +491,16 @@ export async function executeWorkflow(
       console.info("[studio] generatedImage set", {
         nodeId,
         hasGeneratedImage: Boolean((updatedNode?.data as any)?.generatedImage),
+        hasGeneratedImageUrl: Boolean((updatedNode?.data as any)?.generatedImageUrl),
         previewPrefix: typeof (updatedNode?.data as any)?.generatedImage === "string"
           ? (updatedNode?.data as any).generatedImage.slice(0, 48)
           : undefined,
       });
     } else if (output.type === 'video') {
+      const persistentUrl = output.url && !output.url.startsWith("data:") ? output.url : undefined;
       useStudioStore.getState().updateNodeData(nodeId, {
         generatedVideo: output.url,
+        generatedVideoUrl: persistentUrl,
         isComplete: true,
         isExecuting: false
       });
@@ -542,15 +553,19 @@ export async function executeWorkflow(
             const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
             const supabase = createSupabaseBrowserClient();
             const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+            const token = session?.access_token;
 
             console.info("[studio] using token for fast enrichment", token ? "present" : "missing");
+            if (!token) {
+                throw new Error("Authentication session required for prompt enrichment");
+            }
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`,
+                    'apikey': process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
                     'Accept': 'text/event-stream',
                 },
                 body: JSON.stringify({ prompt: payload.prompt }),

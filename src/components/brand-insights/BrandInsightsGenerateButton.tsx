@@ -15,6 +15,7 @@ import { ProgressSteps } from "@/components/brand-insights/ProgressSteps";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/ToastProvider";
+import { cn } from "@/lib/utils";
 
 type Props = {
   brandId: string;
@@ -43,7 +44,7 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
   const buttonLabel = useMemo(() => {
     if (generationId) return "Generating…";
     if (isPending) return "Starting…";
-    return "Regenerate insights";
+    return "Regenerate";
   }, [generationId, isPending]);
 
   const progressSteps = useMemo(() => {
@@ -160,14 +161,14 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
   };
 
   return (
-    <div className="flex w-full flex-col items-end gap-3">
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button onClick={handleRefresh} disabled={isWorking} variant="outline" size="sm">
-          {isRefreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-          Refresh data
+    <div className={cn("flex flex-col items-end gap-1.5", showStatusAlert || isWorkflowRunning ? "w-full" : "w-auto")}>
+      <div className="flex flex-wrap justify-end gap-1.5">
+        <Button onClick={handleRefresh} disabled={isWorking} variant="outline" size="sm" className="h-7 px-2 text-xs">
+          {isRefreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+          Refresh
         </Button>
-        <Button onClick={handleRun} disabled={isWorking} size="sm">
-          {isWorking ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+        <Button onClick={handleRun} disabled={isWorking} size="sm" className="h-7 px-2 text-xs">
+          {isWorking ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
           {buttonLabel}
         </Button>
       </div>

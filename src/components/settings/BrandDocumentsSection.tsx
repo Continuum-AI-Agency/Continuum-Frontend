@@ -20,6 +20,7 @@ export function BrandDocumentsSection({ brandId, documents: initialDocuments }: 
   const { show } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<OnboardingDocument[]>(initialDocuments);
 
   useEffect(() => {
@@ -146,25 +147,45 @@ export function BrandDocumentsSection({ brandId, documents: initialDocuments }: 
   };
 
   const handleDownload = async (doc: OnboardingDocument) => {
-    if (!doc.storagePath) {
+    const hasStoragePath = typeof doc.storagePath === "string" && doc.storagePath.trim().length > 0;
+    const hasExternalUrl = typeof doc.externalUrl === "string" && doc.externalUrl.trim().length > 0;
+
+    if (!hasStoragePath && !hasExternalUrl) {
       show({
         title: "Error",
-        description: "Storage path not found for this document.",
+        description: "No downloadable source found for this document.",
         variant: "error",
       });
       return;
     }
 
+    const popupWindow = window.open("", "_blank", "noopener,noreferrer");
+    setDownloadingDocumentId(doc.id);
     try {
-      const signedUrl = await createSignedDocumentUrlAction(doc.storagePath);
-      window.open(signedUrl, "_blank");
+      let downloadUrl = "";
+      if (hasStoragePath) {
+        downloadUrl = await createSignedDocumentUrlAction(doc.storagePath!);
+      } else if (hasExternalUrl) {
+        downloadUrl = doc.externalUrl!;
+      }
+
+      if (popupWindow) {
+        popupWindow.location.href = downloadUrl;
+      } else {
+        window.location.assign(downloadUrl);
+      }
     } catch (error) {
+      if (popupWindow) {
+        popupWindow.close();
+      }
       console.error("Download error:", error);
       show({
         title: "Error",
         description: "Failed to generate download link.",
         variant: "error",
       });
+    } finally {
+      setDownloadingDocumentId(null);
     }
   };
 
@@ -210,79 +231,84 @@ export function BrandDocumentsSection({ brandId, documents: initialDocuments }: 
         </Flex>
       ) : (
         <Grid columns={{ initial: "1", md: "2" }} gap="3">
-          {documents.map((doc) => (
-            <Flex 
-              key={doc.id} 
-              p="3" 
-              align="center" 
-              justify="between"
-              className="bg-white/5 border border-white/10 rounded-lg hover:border-white/20 transition-colors"
-            >
-              <Flex align="center" gap="3" className="overflow-hidden">
-                <Flex 
-                  align="center" 
-                  justify="center" 
-                  className="w-10 h-10 rounded bg-blue-500/10 text-blue-500 shrink-0"
-                >
-                  <FileIcon width="20" height="20" />
-                </Flex>
-                <Flex direction="column" className="overflow-hidden">
-                  <Text size="2" weight="bold" className="truncate">
-                    {doc.name}
-                  </Text>
-                  <Flex align="center" gap="2">
-                    <Text size="1" color="gray">
-                      {new Date(doc.createdAt).toLocaleDateString()}
+          {documents.map((doc) => {
+            const canDownload =
+              doc.status === "ready" &&
+              ((typeof doc.storagePath === "string" && doc.storagePath.trim().length > 0) ||
+                (typeof doc.externalUrl === "string" && doc.externalUrl.trim().length > 0));
+            const isDownloading = downloadingDocumentId === doc.id;
+
+            return (
+              <Flex
+                key={doc.id}
+                p="3"
+                align="center"
+                justify="between"
+                className="bg-white/5 border border-white/10 rounded-lg hover:border-white/20 transition-colors"
+              >
+                <Flex align="center" gap="3" className="overflow-hidden">
+                  <Flex
+                    align="center"
+                    justify="center"
+                    className="w-10 h-10 rounded bg-blue-500/10 text-blue-500 shrink-0"
+                  >
+                    <FileIcon width="20" height="20" />
+                  </Flex>
+                  <Flex direction="column" className="overflow-hidden">
+                    <Text size="2" weight="bold" className="truncate">
+                      {doc.name}
                     </Text>
-                    {doc.size && (
+                    <Flex align="center" gap="2">
                       <Text size="1" color="gray">
-                        • {(doc.size / 1024).toFixed(1)} KB
+                        {new Date(doc.createdAt).toLocaleDateString()}
                       </Text>
-                    )}
+                      {doc.size && (
+                        <Text size="1" color="gray">
+                          • {(doc.size / 1024).toFixed(1)} KB
+                        </Text>
+                      )}
+                    </Flex>
+                  </Flex>
+                </Flex>
+
+                <Flex align="center" gap="3">
+                  {doc.status === "processing" && (
+                    <Badge color="blue" variant="soft">
+                      <Flex align="center" gap="1">
+                        <UpdateIcon className="animate-spin" />
+                        Processing
+                      </Flex>
+                    </Badge>
+                  )}
+                  {doc.status === "ready" && <Badge color="green" variant="soft">Ready</Badge>}
+                  {doc.status === "error" && <Badge color="red" variant="soft">Error</Badge>}
+
+                  <Flex gap="1">
+                    <IconButton
+                      variant="ghost"
+                      color="gray"
+                      onClick={() => handleDownload(doc)}
+                      size="1"
+                      title={canDownload ? "Download" : "Download unavailable"}
+                      disabled={!canDownload || isDownloading}
+                    >
+                      {isDownloading ? <UpdateIcon className="animate-spin" /> : <DownloadIcon />}
+                    </IconButton>
+
+                    <IconButton
+                      variant="ghost"
+                      color="gray"
+                      onClick={() => handleRemove(doc.id)}
+                      size="1"
+                      title="Remove"
+                    >
+                      <Cross2Icon />
+                    </IconButton>
                   </Flex>
                 </Flex>
               </Flex>
-
-              <Flex align="center" gap="3">
-                {doc.status === "processing" && (
-                  <Badge color="blue" variant="soft">
-                    <Flex align="center" gap="1">
-                      <UpdateIcon className="animate-spin" />
-                      Processing
-                    </Flex>
-                  </Badge>
-                )}
-                {doc.status === "ready" && (
-                  <Badge color="green" variant="soft">Ready</Badge>
-                )}
-                {doc.status === "error" && (
-                  <Badge color="red" variant="soft">Error</Badge>
-                )}
-                
-                <Flex gap="1">
-                  <IconButton 
-                    variant="ghost" 
-                    color="gray" 
-                    onClick={() => handleDownload(doc)}
-                    size="1"
-                    title="Download"
-                  >
-                    <DownloadIcon />
-                  </IconButton>
-
-                  <IconButton 
-                    variant="ghost" 
-                    color="gray" 
-                    onClick={() => handleRemove(doc.id)}
-                    size="1"
-                    title="Remove"
-                  >
-                    <Cross2Icon />
-                  </IconButton>
-                </Flex>
-              </Flex>
-            </Flex>
-          ))}
+            );
+          })}
         </Grid>
       )}
     </Flex>

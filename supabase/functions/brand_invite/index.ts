@@ -13,6 +13,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
+import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +40,12 @@ const InputSchema = z.discriminatedUnion("action", [
     brandId: z.string().uuid(),
     userId: z.string().uuid().optional(),
     email: z.string().email().optional(),
+  }),
+  z.object({
+    action: z.literal("change_role"),
+    brandId: z.string().uuid(),
+    userId: z.string().uuid(),
+    role: z.enum(["admin", "operator", "viewer"]),
   }),
 ]);
 
@@ -265,12 +272,14 @@ async function handleCreate(req: Request, input: z.infer<typeof InputSchema>, lo
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData, error: userError } = await authed.auth.getUser();
+  const { data: userData, error: userError } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (userError) {
     logger.error("Auth user lookup failed", { error: userError });
     return json({ error: "Not authenticated" }, 401);
   }
-  const inviterId = userData?.user?.id ?? "";
+  const inviterId = userData?.claims?.sub ?? "";
   if (!inviterId) return json({ error: "Not authenticated" }, 401);
 
   logger.info("Invite create requested", {
@@ -430,9 +439,15 @@ async function handleAccept(req: Request, input: z.infer<typeof InputSchema>, lo
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData } = await authed.auth.getUser();
-  const user = userData?.user;
-  if (!user) return json({ error: "Not authenticated" }, 401);
+  const { data: userData } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
+  const user = {
+    id: userData?.claims?.sub ?? "",
+    email: typeof userData?.claims?.email === "string" ? userData.claims.email : undefined,
+    user_metadata: (userData?.claims?.user_metadata ?? {}) as Record<string, unknown>,
+  };
+  if (!user.id) return json({ error: "Not authenticated" }, 401);
 
   logger.info("Invite accept requested", {
     brandId: input.brandId,
@@ -518,13 +533,15 @@ async function handleRemoveMember(req: Request, input: z.infer<typeof InputSchem
   const authed = createSupabaseForRequest(req);
   const service = createServiceClient();
 
-  const { data: userData, error: userError } = await authed.auth.getUser();
+  const { data: userData, error: userError } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
   if (userError) {
     logger.error("Auth user lookup failed", { error: userError });
     return json({ error: "Not authenticated" }, 401);
   }
 
-  const actorId = userData?.user?.id ?? "";
+  const actorId = userData?.claims?.sub ?? "";
   if (!actorId) return json({ error: "Not authenticated" }, 401);
 
   const permissionError = await assertOwnerOrAdmin(authed, input.brandId, actorId, logger);
@@ -544,6 +561,21 @@ async function handleRemoveMember(req: Request, input: z.infer<typeof InputSchem
     if (deleteError) {
       logger.error("Permission delete failed", { error: deleteError });
       return json({ error: deleteError.message }, 500);
+    }
+
+    // Cascade: soft-revoke any active brand_integration_grants where the
+    // removed user was the granter. Other granters' grants survive.
+    const { error: cascadeError } = await service
+      .schema("brand_profiles")
+      .from("brand_integration_grants")
+      .update({ revoked_at: nowIso, revoked_by: actorId })
+      .eq("brand_profile_id", input.brandId)
+      .eq("granted_by", input.userId)
+      .is("revoked_at", null);
+
+    if (cascadeError) {
+      logger.error("Brand integration grant cascade revoke failed", { error: cascadeError });
+      // Non-fatal: member is removed, grants will surface in audit.
     }
   }
 
@@ -585,6 +617,79 @@ async function handleRemoveMember(req: Request, input: z.infer<typeof InputSchem
   return json({ ok: true });
 }
 
+async function handleChangeRole(req: Request, input: z.infer<typeof InputSchema>, logger: Logger) {
+  if (input.action !== "change_role") return json({ error: "Invalid action" }, 400);
+
+  const authed = createSupabaseForRequest(req);
+  const service = createServiceClient();
+
+  const { data: userData, error: userError } = await authed.auth.getClaims(
+    extractBearerToken(req.headers.get("Authorization")),
+  );
+  if (userError) {
+    logger.error("Auth user lookup failed", { error: userError });
+    return json({ error: "Not authenticated" }, 401);
+  }
+  const actorId = userData?.claims?.sub ?? "";
+  if (!actorId) return json({ error: "Not authenticated" }, 401);
+
+  const permissionError = await assertOwnerOrAdmin(authed, input.brandId, actorId, logger);
+  if (permissionError) return permissionError;
+
+  // Guard: cannot demote the last owner. We only allow change_role to non-owner
+  // roles (admin|operator|viewer), but the target may currently be `owner`.
+  const { data: currentRow, error: currentRowError } = await service
+    .schema("brand_profiles")
+    .from("permissions")
+    .select("role")
+    .eq("brand_profile_id", input.brandId)
+    .eq("user_id", input.userId)
+    .single();
+
+  if (currentRowError || !currentRow) {
+    logger.error("Target permission row not found", { error: currentRowError });
+    return json({ error: "Member not found" }, 404);
+  }
+
+  if (currentRow.role === "owner") {
+    const { count, error: countError } = await service
+      .schema("brand_profiles")
+      .from("permissions")
+      .select("user_id", { count: "exact", head: true })
+      .eq("brand_profile_id", input.brandId)
+      .eq("role", "owner");
+
+    if (countError) {
+      logger.error("Owner count failed", { error: countError });
+      return json({ error: countError.message }, 500);
+    }
+    if ((count ?? 0) <= 1) {
+      return json({ error: "Cannot demote the last owner of this brand" }, 400);
+    }
+  }
+
+  const { error: updateError } = await service
+    .schema("brand_profiles")
+    .from("permissions")
+    .update({ role: input.role })
+    .eq("brand_profile_id", input.brandId)
+    .eq("user_id", input.userId);
+
+  if (updateError) {
+    logger.error("Role update failed", { error: updateError });
+    return json({ error: updateError.message }, 500);
+  }
+
+  logger.info("Role changed", {
+    brandId: input.brandId,
+    targetUserId: input.userId,
+    newRole: input.role,
+    actorId,
+  });
+
+  return json({ ok: true });
+}
+
 async function handler(req: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   const logger = createLogger(requestId);
@@ -604,6 +709,9 @@ async function handler(req: Request): Promise<Response> {
     }
     if (parsed.action === "accept") {
       return await handleAccept(req, parsed, logger);
+    }
+    if (parsed.action === "change_role") {
+      return await handleChangeRole(req, parsed, logger);
     }
     return await handleRemoveMember(req, parsed, logger);
   } catch (err) {

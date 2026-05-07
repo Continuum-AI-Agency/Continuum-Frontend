@@ -18,37 +18,59 @@ import {
   extractRenderableFallbackFromReport,
   extractRenderableFallbackFromStructuredContent,
   isStreamingPlaceholderMessage,
+  normalizeJainaMarkdownTables,
 } from "../jainaUtils";
 import type { JainaChatMessage } from "../types";
 import { ObjectivesQueue } from "./ObjectivesQueue";
-import { ThinkingWindow } from "./ThinkingWindow";
+import { LatestJainaThought, ThinkingWindow } from "./ThinkingWindow";
 import { PlanSection, type PlanFeedbackPayload } from "./PlanSection";
 import { ClarificationBanner } from "./ClarificationBanner";
 import { MessageActionBar } from "./MessageActionBar";
 import { CreativesSection } from "./CreativesSection";
 import { JainaInlineReport } from "./JainaInlineReport";
 import { JainaReportV2 } from "./JainaReportV2";
+import { WorkerInsightsPanel } from "./WorkerInsightsPanel";
 
-function extractCreativeFromToolResult(toolResult: ToolResultEventData): CreativeArtifact | null {
-  if (!toolResult.ok || !toolResult.output) return null;
+function makeCreativeArtifact(details: Record<string, unknown>): CreativeArtifact | null {
+  const imageUrl = details.image_url ? String(details.image_url) : null;
+  const thumbUrl = details.thumbnail_url ? String(details.thumbnail_url) : null;
+  const url = imageUrl || thumbUrl;
+  if (!url) return null;
+  const objectType = typeof details.object_type === "string" ? details.object_type.toUpperCase() : null;
+  return {
+    id: String(details.id || `creative-${Date.now()}`),
+    type: "creative",
+    url,
+    thumbnail_url: thumbUrl ?? undefined,
+    post_copy: details.body ? String(details.body) : undefined,
+    headline: details.title ? String(details.title) : undefined,
+    description: details.name ? String(details.name) : undefined,
+    call_to_action: details.call_to_action_type ? String(details.call_to_action_type) : undefined,
+    format: objectType === "VIDEO" ? "video" : objectType === "PHOTO" ? "image" : undefined,
+  };
+}
+
+function extractCreativesFromToolResult(toolResult: ToolResultEventData): CreativeArtifact[] {
+  if (!toolResult.ok || !toolResult.output) return [];
   const output = toolResult.output as Record<string, unknown>;
+
+  // Batch format: { results: [{ ok, creative_details, ... }] }
+  const results = output.results;
+  if (Array.isArray(results)) {
+    return results
+      .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && r.ok !== false && !!r.creative_details)
+      .map((r) => makeCreativeArtifact(r.creative_details as Record<string, unknown>))
+      .filter((c): c is CreativeArtifact => c !== null);
+  }
+
+  // Single creative format: { creative_details: { ... } }
   const creativeDetails = output.creative_details as Record<string, unknown> | undefined;
   if (creativeDetails) {
-    return {
-      id: String(creativeDetails.id || `creative-${Date.now()}`),
-      type: "creative",
-      url: String(creativeDetails.image_url || ""),
-      thumbnail_url: creativeDetails.thumbnail_url ? String(creativeDetails.thumbnail_url) : undefined,
-      post_copy: creativeDetails.body ? String(creativeDetails.body) : undefined,
-      headline: creativeDetails.title ? String(creativeDetails.title) : undefined,
-      description: creativeDetails.name ? String(creativeDetails.name) : undefined,
-      call_to_action: creativeDetails.call_to_action_type ? String(creativeDetails.call_to_action_type) : undefined,
-    };
+    const c = makeCreativeArtifact(creativeDetails);
+    return c ? [c] : [];
   }
-  if (typeof output.preview_iframe === "string") {
-    return { id: `preview-${Date.now()}`, type: "creative", url: "", format: "video" };
-  }
-  return null;
+
+  return [];
 }
 
 function isLikelyStructuredJsonMessage(content: string): boolean {
@@ -110,6 +132,7 @@ function RotatingMessage() {
   );
 }
 
+
 export function JainaMessageItem({
   message,
   activeResponseId,
@@ -142,7 +165,14 @@ export function JainaMessageItem({
   );
   const shouldHideMarkdownContent = isStructuredJsonContent && hasStructuredChild;
   const trimmedContent = message.content.trim();
-  const hasRenderableContent = trimmedContent.length > 0 && !shouldHideMarkdownContent;
+
+  // Suppress SafeMarkdown when it would just repeat the report's executive summary
+  const isRedundantReportContent = Boolean(
+    trimmedContent &&
+    reportV2?.executive_summary?.trim() === trimmedContent
+  );
+
+  const hasRenderableContent = trimmedContent.length > 0 && !shouldHideMarkdownContent && !isRedundantReportContent;
 
   const structuredFallbackContent = React.useMemo(() => {
     if (shouldRenderInlineReport || reportV2) return null;
@@ -152,12 +182,16 @@ export function JainaMessageItem({
     );
   }, [isStructuredJsonContent, message.content, report, reportV2, shouldRenderInlineReport]);
 
+  const hasThinkingContent =
+    (reasoning?.length ?? 0) > 0 || (toolCalls?.length ?? 0) > 0;
+
   const showStreamingPlaceholder =
     isStreaming &&
     message.role === "assistant" &&
     !hasRenderableContent &&
     !structuredFallbackContent &&
-    !hasStructuredChild;
+    !hasStructuredChild &&
+    !hasThinkingContent;
 
   const showStaticFallback =
     !isStreaming &&
@@ -169,11 +203,17 @@ export function JainaMessageItem({
   const artifacts = isStreaming ? state.artifacts : message.artifacts;
   const toolCreatives = React.useMemo(() => {
     if (!toolResults) return [];
-    return toolResults
-      .map(extractCreativeFromToolResult)
-      .filter((c): c is CreativeArtifact => c !== null);
+    return toolResults.flatMap(extractCreativesFromToolResult);
   }, [toolResults]);
   const allCreatives = [...toolCreatives, ...(artifacts?.creatives ?? [])];
+
+  const spawnWorkerResults = React.useMemo(() => {
+    if (!toolResults) return [];
+    return toolResults.filter(
+      (r): r is ToolResultEventData & { output: Record<string, unknown> } =>
+        r.name === "spawn_worker" && r.ok && !!r.output
+    );
+  }, [toolResults]);
 
   return (
     <Message role={message.role}>
@@ -190,7 +230,7 @@ export function JainaMessageItem({
             {hasRenderableContent ? (
               <div className="relative">
                 <SafeMarkdown
-                  content={message.content}
+                  content={normalizeJainaMarkdownTables(message.content)}
                   className="text-[15px] leading-7 text-foreground"
                   mode={isStreaming ? "streaming" : "static"}
                   isAnimating={isStreaming}
@@ -216,7 +256,7 @@ export function JainaMessageItem({
 
             {structuredFallbackContent ? (
               <SafeMarkdown
-                content={structuredFallbackContent}
+                content={normalizeJainaMarkdownTables(structuredFallbackContent)}
                 className="text-[15px] leading-7 text-foreground"
                 mode="static"
                 isAnimating={false}
@@ -244,6 +284,16 @@ export function JainaMessageItem({
               toolResults={toolResults ?? []}
               isStreaming={isStreaming}
             />
+
+            <AnimatePresence mode="wait">
+              {isStreaming ? (
+                <LatestJainaThought
+                  key="latest-jaina-thought"
+                  reasoning={reasoning ?? []}
+                  isStreaming={isStreaming}
+                />
+              ) : null}
+            </AnimatePresence>
 
             {plan ? (
               <motion.div
@@ -297,6 +347,10 @@ export function JainaMessageItem({
               <CreativesSection creatives={allCreatives} />
             )}
 
+            {spawnWorkerResults.length > 0 ? (
+              <WorkerInsightsPanel results={spawnWorkerResults} />
+            ) : null}
+
             {!isStreaming && message.status === "done" && (reportV2 || shouldRenderInlineReport) ? (
               <Checkpoint className="pt-1">
                 <CheckpointIcon>
@@ -317,10 +371,6 @@ export function JainaMessageItem({
                   Analysis complete
                 </motion.span>
               </Checkpoint>
-            ) : null}
-
-            {isStreaming && !message.content ? (
-              <RotatingMessage />
             ) : null}
 
             {!isStreaming && message.status === "done" ? (
