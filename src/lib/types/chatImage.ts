@@ -123,6 +123,7 @@ export type BackendChatImageRequestPayload = {
   first_frame?: { data: string; mime_type: string; filename?: string };
   last_frame?: { data: string; mime_type: string; filename?: string };
   reference_video?: { data: string; mime_type: string; filename?: string };
+  image_references?: { data: string; mime_type: string; filename?: string }[];
   negative_prompt?: string;
   seed?: number;
   cfg_scale?: number;
