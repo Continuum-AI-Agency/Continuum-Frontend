@@ -8,6 +8,8 @@ import { compositeImages } from './compositeImages';
 import {
   getVideoGeneratorBackendModel,
   getVideoGeneratorReferenceMode,
+  supportsVideoGeneratorFrameInputs,
+  supportsVideoGeneratorReferenceVideo,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
 } from './videoModel';
@@ -378,7 +380,13 @@ export function buildNanoGenPayload(
       ? 'gemini-3-pro-image-preview'
       : data.model === 'nano-banana-2'
         ? 'gemini-3.1-flash-image-preview'
-      : data.model;
+        : data.model === 'gpt-image-2'
+          ? 'openai/gpt-image-2/edit'
+          : data.model === 'flux-2-pro'
+            ? 'fal-ai/flux-2-pro/edit'
+            : data.model === 'flux-2-max'
+              ? 'fal-ai/flux-2-max/edit'
+              : data.model;
   const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
   const imageSize = data.model === 'nano-banana-pro'
     ? (data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K' ? data.imageSize : '1K')
@@ -440,8 +448,9 @@ export function buildVeoPayload(
   let firstFrame: GenerationPayload['firstFrame'] = undefined;
   let lastFrame: GenerationPayload['lastFrame'] = undefined;
   let referenceVideo: GenerationPayload['referenceVideo'] = undefined;
+  let imageReferences: GenerationPayload['imageReferences'] = undefined;
 
-  if (referenceMode === 'frames') {
+  if (supportsVideoGeneratorFrameInputs(model)) {
     const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
     firstFrame = frame0Input?.image
       ? { data: frame0Input.image, mimeType: 'image/png', filename: frame0Input.fileName || 'frame-0.png' }
@@ -477,7 +486,7 @@ export function buildVeoPayload(
     }
   }
 
-  if (model === 'kling-omni') {
+  if (supportsVideoGeneratorReferenceVideo(model)) {
     const refVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
     if (refVideoInput?.data) {
       referenceVideo = {
@@ -527,6 +536,18 @@ export function buildVeoPayload(
     })()
     : undefined;
 
+  if (model === 'seedance-2.0') {
+    const mappedImageReferences = referenceImages?.map((image, index) => ({
+      data: image.data,
+      mimeType: image.mimeType,
+      filename: image.filename ?? `seedance-ref-${index + 1}.png`,
+    }));
+
+    imageReferences = mappedImageReferences && mappedImageReferences.length > 0
+      ? mappedImageReferences
+      : undefined;
+  }
+
   const backendModel = getVideoGeneratorBackendModel(model);
 
   return {
@@ -541,7 +562,9 @@ export function buildVeoPayload(
     firstFrame,
     lastFrame,
     referenceVideo,
-    referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    imageReferences,
+    // seedance-2.0 uses imageReferences (data/mimeType/filename); original referenceImages intentionally omitted to avoid duplicate payload
+    referenceImages: model !== 'seedance-2.0' && referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
 }
 
@@ -593,6 +616,11 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     reference_video: payload.referenceVideo
       ? { data: payload.referenceVideo.data, mime_type: payload.referenceVideo.mimeType, filename: payload.referenceVideo.filename }
       : undefined,
+    image_references: payload.imageReferences?.map((image) => ({
+      data: image.data,
+      mime_type: image.mimeType,
+      filename: image.filename,
+    })),
     reference_images: payload.referenceImages?.map((img) => ({
       data: img.data,
       mime_type: img.mimeType,

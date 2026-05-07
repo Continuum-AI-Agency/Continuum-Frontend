@@ -92,6 +92,38 @@ Target handles:
 Source handles:
 - `video`
 
+### `videoGen` (model: `pixverse-v6`)
+Purpose: Fal-backed image-to-video generation with a single reference image.
+
+Target handles:
+- `prompt-in`
+- `prompt`
+- `negative`
+- `ref-image`
+
+Source handles:
+- `video`
+
+Notes:
+- Pixverse v6 is limited to one reference image.
+- The implementation and `isValidConnection` surface only `ref-image` for this model.
+
+### `videoGen` (model: `seedance-2.0`)
+Purpose: Fal-backed image-to-video generation with image lists and optional first/last frame support.
+
+Target handles:
+- `prompt-in`
+- `prompt`
+- `negative`
+- `ref-image`
+- `ref-images`
+- `first-frame`
+- `last-frame`
+- `ref-video`
+
+Source handles:
+- `video`
+
 ### `extendVideo`
 Purpose: extend an existing video with prompt guidance.
 
@@ -111,6 +143,8 @@ Rules preserved in V1.2:
 - Single-connection constraints for text-like handles.
 - Reference limits (for example `nanoGen` ref image capacity).
 - Frame-only constraints for Veo Fast (`first-frame`, `last-frame`).
+- Pixverse v6 is constrained to one reference image.
+- Seedance 2.0 can accept a larger image list and supports optional first/last framing.
 
 ## Edge Model
 Edge rendering in V1.2:

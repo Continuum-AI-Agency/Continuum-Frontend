@@ -3,6 +3,7 @@ import { buildExtendVideoPayload, buildNanoGenPayload, buildVeoPayload, buildEnr
 import { StudioNode } from '../types';
 import { Edge } from '@xyflow/react';
 import { NodeOutput } from '../types/execution';
+import { getVideoGeneratorTargetHandles } from './videoModel';
 
 describe('buildNodePayload', () => {
   describe('buildNanoGenPayload', () => {
@@ -228,6 +229,62 @@ describe('buildNodePayload', () => {
       expect(payload?.referenceVideo?.data).toBe('video_ref_data');
       expect(payload?.referenceImages?.[0]?.data).toBe('img_ref_data');
     });
+
+    it('should expose Pixverse v6 as a Fal-backed model with a single reference image handle set', () => {
+      const node: StudioNode = {
+        id: 'pixverse',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'pixverse-v6',
+          prompt: 'A polished product reveal',
+          enhancePrompt: false,
+        } as any,
+      };
+
+      const edges: Edge[] = [
+        { id: 'i1', source: 'img-ref', target: 'pixverse', sourceHandle: 'image', targetHandle: 'ref-image' },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('img-ref', { type: 'image', base64: 'pixverse_image', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.model).toBe('pixverse-v6');
+      expect(payload?.referenceImages?.[0]?.data).toBe('pixverse_image');
+    });
+
+    it('should expose a single Pixverse ref-image target handle', () => {
+      expect(getVideoGeneratorTargetHandles('pixverse-v6')).toEqual([
+        'prompt-in',
+        'prompt',
+        'negative',
+        'ref-image',
+      ]);
+    });
+
+    it('should include Seedance image references when present', () => {
+      const node: StudioNode = {
+        id: 'seedance',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'seedance-2.0',
+          prompt: 'Motion prompt',
+          enhancePrompt: false,
+        } as any,
+      };
+
+      const edges: Edge[] = [
+        { id: 'i1', source: 'img1', target: 'seedance', sourceHandle: 'image', targetHandle: 'ref-images' },
+      ];
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('img1', { type: 'image', base64: 'seedance_image', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload?.imageReferences?.[0].data).toBe('seedance_image');
+      expect(payload?.referenceImages).toBeUndefined();
+    });
   });
 
   describe('buildExtendVideoPayload', () => {
@@ -309,7 +366,7 @@ describe('buildNodePayload', () => {
   });
 
   describe('buildEnrichPayload', () => {
-    it('should build payload with text, image, audio, and document inputs', () => {
+    it('should build payload with text, image, audio, and document inputs', async () => {
       const node: StudioNode = {
         id: 'string',
         type: 'string',
@@ -341,7 +398,7 @@ describe('buildNodePayload', () => {
         { id: 'doc1', type: 'document', position: { x: 0, y: 0 }, data: { documents: [{ content: 'doc content', name: 'doc.txt', type: 'txt' }] } },
       ];
 
-      const payload = buildEnrichPayload(node, resolvedData, allNodes, edges);
+      const payload = await buildEnrichPayload(node, resolvedData, allNodes, edges, 'brand-1');
       
       expect(payload).not.toBeNull();
       expect(payload?.prompt).toBe('Enrich this');
@@ -352,7 +409,7 @@ describe('buildNodePayload', () => {
       expect(payload?.context?.documents?.[0].content).toBe('doc content');
     });
 
-    it('should include source metadata for connected video inputs', () => {
+    it('should include source metadata for connected video inputs', async () => {
       const node: StudioNode = {
         id: 'string',
         type: 'string',
@@ -378,20 +435,20 @@ describe('buildNodePayload', () => {
         },
       ];
 
-      const payload = buildEnrichPayload(node, new Map(), allNodes, edges);
+      const payload = await buildEnrichPayload(node, new Map(), allNodes, edges, 'brand-1');
       expect(payload?.context?.video?.data).toBe('vid_base64');
       expect(payload?.context?.video?.sourcePath).toBe('brand-assets/sample-video.mp4');
       expect(payload?.context?.video?.sourceUrl).toBe('https://cdn.continuum.test/sample-video.mp4');
     });
 
-    it('should return an empty payload if no prompt and no inputs', () => {
+    it('should return an empty payload if no prompt and no inputs', async () => {
         const node: StudioNode = {
             id: 'string',
             type: 'string',
             position: { x: 0, y: 0 },
             data: { value: '' },
         };
-        const payload = buildEnrichPayload(node, new Map(), [], []);
+        const payload = await buildEnrichPayload(node, new Map(), [], [], 'brand-1');
         expect(payload).not.toBeNull();
         expect(payload?.prompt).toBe('');
     });

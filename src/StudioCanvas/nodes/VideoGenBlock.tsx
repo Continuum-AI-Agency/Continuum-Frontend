@@ -40,6 +40,9 @@ import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import {
   getVideoGeneratorImageLimit,
   getVideoGeneratorReferenceMode,
+  supportsVideoGeneratorFrameInputs,
+  supportsVideoGeneratorReferenceImages,
+  supportsVideoGeneratorReferenceVideo,
   resolveVideoGeneratorModel,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
@@ -81,9 +84,9 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
 
   const model = resolveVideoGeneratorModel({ type: 'videoGen', data: data as unknown as Record<string, unknown> });
   const modelLabel = VIDEO_GENERATOR_MODEL_LABELS[model];
-  const supportsFrameInputs = model === 'veo-3.1-fast';
-  const supportsReferenceVideo = model === 'kling-omni';
-  const supportsReferenceImages = model !== 'veo-3.1-fast';
+  const supportsFrameInputs = supportsVideoGeneratorFrameInputs(model);
+  const supportsReferenceVideo = supportsVideoGeneratorReferenceVideo(model);
+  const supportsReferenceImages = supportsVideoGeneratorReferenceImages(model);
 
   const [isHovered, setIsHovered] = useState(false);
   const isToolbarVisible = selected || isHovered || !!data.isToolbarVisible;
@@ -394,7 +397,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
                       <LimitedHandle
                         type="target"
                         position={Position.Left}
-                        id="ref-images"
+                        id={model === 'pixverse-v6' ? 'ref-image' : 'ref-images'}
                         maxConnections={imageLimit}
                         className="studio-handle !w-4 !h-4 !border-2 shadow-sm transition-transform hover:scale-125"
                       />

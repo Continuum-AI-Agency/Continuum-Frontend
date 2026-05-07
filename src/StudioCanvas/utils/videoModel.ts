@@ -1,6 +1,6 @@
 import type { StudioNode } from "../types";
 
-export const VIDEO_GENERATOR_MODELS = ["kling-omni", "veo-3.1-fast", "veo-3.1"] as const;
+export const VIDEO_GENERATOR_MODELS = ["kling-omni", "pixverse-v6", "seedance-2.0", "veo-3.1-fast", "veo-3.1"] as const;
 export type VideoGeneratorModel = (typeof VIDEO_GENERATOR_MODELS)[number];
 
 export const DEFAULT_VIDEO_GENERATOR_MODEL: VideoGeneratorModel = "veo-3.1-fast";
@@ -9,6 +9,8 @@ export const VIDEO_GENERATOR_MODEL_LABELS: Record<VideoGeneratorModel, string> =
   "veo-3.1": "Veo 3.1",
   "veo-3.1-fast": "Veo 3.1 Fast",
   "kling-omni": "Kling Omni",
+  "pixverse-v6": "Pixverse V6",
+  "seedance-2.0": "Seedance 2.0",
 };
 
 const VIDEO_GENERATOR_NODE_TYPES = new Set(["videoGen", "veoDirector", "veoFast"] as const);
@@ -55,6 +57,18 @@ export function getVideoGeneratorReferenceMode(
   return "images";
 }
 
+export function supportsVideoGeneratorFrameInputs(model: VideoGeneratorModel): boolean {
+  return model === "veo-3.1-fast" || model === "seedance-2.0";
+}
+
+export function supportsVideoGeneratorReferenceVideo(model: VideoGeneratorModel): boolean {
+  return model === "kling-omni" || model === "seedance-2.0";
+}
+
+export function supportsVideoGeneratorReferenceImages(model: VideoGeneratorModel): boolean {
+  return model !== "veo-3.1-fast";
+}
+
 export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): string[] {
   if (model === "veo-3.1-fast") {
     return ["prompt-in", "prompt", "negative", ...VIDEO_FRAME_HANDLES];
@@ -68,6 +82,12 @@ export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): stri
       VIDEO_REFERENCE_VIDEO_HANDLE,
     ];
   }
+  if (model === "pixverse-v6") {
+    return ["prompt-in", "prompt", "negative", VIDEO_IMAGE_REFERENCE_HANDLES[0]];
+  }
+  if (model === "seedance-2.0") {
+    return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES, ...VIDEO_FRAME_HANDLES, VIDEO_REFERENCE_VIDEO_HANDLE];
+  }
   return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES];
 }
 
@@ -77,11 +97,15 @@ export function getVideoGeneratorImageLimit(
 ): number | undefined {
   if (model === "veo-3.1") return 3;
   if (model === "kling-omni") return hasReferenceVideo ? 4 : 7;
+  if (model === "pixverse-v6") return 1;
+  if (model === "seedance-2.0") return 9;
   return undefined;
 }
 
 export function getVideoGeneratorBackendModel(model: VideoGeneratorModel): string {
   if (model === "veo-3.1-fast") return "veo-3.1-fast-generate-preview";
   if (model === "kling-omni") return "kling-omni";
+  if (model === "pixverse-v6") return "pixverse-v6";
+  if (model === "seedance-2.0") return "seedance-2.0";
   return "veo-3.1-generate-preview";
 }

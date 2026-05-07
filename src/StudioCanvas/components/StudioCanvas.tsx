@@ -74,6 +74,7 @@ import {
   DEFAULT_VIDEO_GENERATOR_MODEL,
   VIDEO_GENERATOR_MODEL_LABELS,
   VIDEO_GENERATOR_MODELS,
+  getVideoGeneratorReferenceMode,
   type VideoGeneratorModel,
 } from '../utils/videoModel';
 import {
@@ -216,7 +217,7 @@ const createNodeConfig = (
     const model =
       options?.model ??
       (type === 'veoDirector' ? 'veo-3.1' : type === 'veoFast' ? 'veo-3.1-fast' : DEFAULT_VIDEO_GENERATOR_MODEL);
-    const referenceMode = model === 'veo-3.1-fast' ? 'frames' : model === 'kling-omni' ? 'omni' : 'images';
+    const referenceMode = getVideoGeneratorReferenceMode(model);
     return {
       data: { model, prompt: '', negativePrompt: '', enhancePrompt: false, referenceMode },
       style: { width: 512, height: 288 },
@@ -640,8 +641,8 @@ function Flow({
       takeSnapshot();
       const anchorPosition = contextMenuAnchorRef.current ?? lastMousePositionRef.current;
       const position = screenToFlowPosition(anchorPosition);
-      const canonicalType: StudioCanvasNodeType =
-        type === 'veoDirector' || type === 'veoFast' ? 'videoGen' : type;
+        const canonicalType: StudioCanvasNodeType =
+          type === 'veoDirector' || type === 'veoFast' ? 'videoGen' : type;
       const { data, style } = createNodeConfig(canonicalType, options);
 
       const newNode: StudioNode = {

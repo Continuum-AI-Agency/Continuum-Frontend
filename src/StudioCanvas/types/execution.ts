@@ -89,6 +89,11 @@ export interface GenerationPayload {
     mimeType: string;
     filename?: string;
   };
+  imageReferences?: Array<{
+    data: string;
+    mimeType: string;
+    filename?: string;
+  }>;
   seed?: number;
   cfgScale?: number;
   steps?: number;

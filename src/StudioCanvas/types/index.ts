@@ -29,7 +29,7 @@ export interface FrameSlot {
 export type ImageStylePreset = 'photorealistic' | 'anime' | '3d-render' | 'cyberpunk' | 'studio-ghibli' | 'clay' | 'none';
 
 export interface NanoGenNodeData extends BaseNodeData {
-  model: 'nano-banana' | 'nano-banana-pro' | 'nano-banana-2';
+  model: 'nano-banana' | 'nano-banana-pro' | 'nano-banana-2' | 'gpt-image-2' | 'flux-2-pro' | 'flux-2-max';
   positivePrompt: string;
   aspectRatio: string;
   imageSize?: '512px' | '1K' | '2K' | '4K';
@@ -86,7 +86,7 @@ export interface DocumentNodeData extends BaseNodeData {
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
-  model: 'veo-3.1' | 'veo-3.1-fast' | 'kling-omni';
+  model: 'veo-3.1' | 'veo-3.1-fast' | 'kling-omni' | 'pixverse-v6' | 'seedance-2.0';
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;
