@@ -425,81 +425,87 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
   }, [brandId, selectedAccountId, viewMode, platform]);
 
   return (
-    <Card variant="surface" className={cn("border border-subtle bg-surface flex flex-col", className)}>
-      <Box p="4" className="min-h-0 flex flex-col">
-        <Flex align="center" justify="between" gap="3" wrap="wrap">
-          <Flex align="center" gap="2">
-            <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
-              <Select.Trigger variant="ghost" className="p-0 h-auto">
-                <Badge color="gray" variant="soft" radius="full">
-                  <PlatformIcon platform={platform === "x" ? "threads" : platform} />
-                </Badge>
-              </Select.Trigger>
-              <Select.Content position="popper">
-                <Select.Item value="instagram">
-                  <Flex align="center" gap="2">
-                    <PlatformIcon platform="instagram" />
-                    <Text>Instagram</Text>
-                  </Flex>
-                </Select.Item>
-                <Select.Item value="youtube" disabled>
-                  <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
-                    <PlatformIcon platform="youtube" />
-                    <Text>YouTube</Text>
-                  </Flex>
-                </Select.Item>
-                <Select.Item value="x" disabled>
-                  <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
-                    <PlatformIcon platform="threads" />
-                    <Text>X</Text>
-                  </Flex>
-                </Select.Item>
-                <Select.Item value="tiktok" disabled>
-                  <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
-                    <PlatformIcon platform="tiktok" />
-                    <Text>TikTok</Text>
-                  </Flex>
-                </Select.Item>
-              </Select.Content>
-            </Select.Root>
-            <Box>
-              <Text weight="medium" style={{ textTransform: "capitalize" }}>{platform} organic reporting</Text>
-              <Text color="gray" size="2">
-                {rangeLabel(DEFAULT_RANGE_PRESET)} {viewMode}
-              </Text>
-            </Box>
-          </Flex>
+    <Card variant="surface" className={cn("border border-subtle bg-surface flex flex-col gap-0 overflow-hidden py-0", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
+            <Select.Trigger variant="ghost" className="p-0 h-auto">
+              <Badge color="gray" variant="soft" radius="full">
+                <PlatformIcon platform={platform === "x" ? "threads" : platform} />
+              </Badge>
+            </Select.Trigger>
+            <Select.Content position="popper">
+              <Select.Item value="instagram">
+                <Flex align="center" gap="2">
+                  <PlatformIcon platform="instagram" />
+                  <Text>Instagram</Text>
+                </Flex>
+              </Select.Item>
+              <Select.Item value="youtube" disabled>
+                <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                  <PlatformIcon platform="youtube" />
+                  <Text>YouTube</Text>
+                </Flex>
+              </Select.Item>
+              <Select.Item value="x" disabled>
+                <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                  <PlatformIcon platform="threads" />
+                  <Text>X</Text>
+                </Flex>
+              </Select.Item>
+              <Select.Item value="tiktok" disabled>
+                <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+                  <PlatformIcon platform="tiktok" />
+                  <Text>TikTok</Text>
+                </Flex>
+              </Select.Item>
+            </Select.Content>
+          </Select.Root>
+          <h3 className="truncate text-xs font-semibold capitalize sm:text-sm">{platform} reporting</h3>
+          <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline-block">
+            {rangeLabel(DEFAULT_RANGE_PRESET)} · {viewMode}
+          </span>
+        </div>
 
-          <Flex align="center" gap="2">
-            <Select.Root value={viewMode} onValueChange={(value: ViewMode) => setViewMode(value)}>
-              <Select.Trigger variant="surface" radius="large" style={{ width: "120px" }}>
-                {viewMode === "overview" ? "Overview" : "Trends"}
-              </Select.Trigger>
-              <Select.Content>
-                <Select.Item value="overview">Overview</Select.Item>
-                <Select.Item value="trends">Trends</Select.Item>
-              </Select.Content>
-            </Select.Root>
+        <div className="flex items-center gap-1">
+          <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
+            {(["overview", "trends"] as ViewMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={cn(
+                  "h-6 rounded px-2 text-[11px] font-medium capitalize transition-colors active:scale-[0.96]",
+                  viewMode === mode ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+                style={{ transitionProperty: "background-color, color, scale" }}
+                aria-pressed={viewMode === mode}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
 
-            <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
-              <Select.Trigger variant="surface" radius="large">
-                {selectedAccount?.name ?? `Select a ${platform} account`}
-              </Select.Trigger>
-              <Select.Content position="popper" variant="solid" highContrast>
-                <Select.Group>
-                  <Select.Label>{platform} accounts</Select.Label>
-                  {accounts.map((account) => (
-                    <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
-                      {account.name}
-                    </Select.Item>
-                  ))}
-                </Select.Group>
-              </Select.Content>
-            </Select.Root>
-          </Flex>
-        </Flex>
+          <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
+            <Select.Trigger variant="surface" radius="medium" className="h-7 text-[11px]">
+              {selectedAccount?.name ?? `Select ${platform} account`}
+            </Select.Trigger>
+            <Select.Content position="popper" variant="solid" highContrast>
+              <Select.Group>
+                <Select.Label>{platform} accounts</Select.Label>
+                {accounts.map((account) => (
+                  <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
+                    {account.name}
+                  </Select.Item>
+                ))}
+              </Select.Group>
+            </Select.Content>
+          </Select.Root>
+        </div>
+      </div>
 
-        <Box pt="3" className="min-h-0">
+      <Box p="2" className="min-h-0 flex flex-col">
+        <Box pt="0" className="min-h-0">
           {platform !== "instagram" ? (
              <Box py="8">
                 <Flex direction="column" align="center" justify="center" gap="3">
@@ -578,10 +584,10 @@ function MetricsPanel({
   } satisfies ChartConfig;
 
   return (
-    <Flex direction="column" gap="3" className="min-h-0">
-      <Grid columns={{ initial: "1", lg: "1" }} gap="3" className="min-h-0">
+    <Flex direction="column" gap="2" className="min-h-0">
+      <Grid columns={{ initial: "1", lg: "1" }} gap="2" className="min-h-0">
         <Box className="w-full">
-          <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="2">
+          <Grid columns={{ initial: "2", sm: "3", lg: "6" }} gap="1.5">
             {metricCards.map((item) => {
               const delta = comparison?.[item.key]?.percentageChange;
               const formattedDelta = formatPercent(delta ?? undefined);
@@ -593,28 +599,28 @@ function MetricsPanel({
                   key={item.key}
                   type="button"
                   onClick={() => onMetricSelect(item.key)}
-                  className="text-left w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="text-left w-full h-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                   aria-pressed={isActive}
                 >
                   <Card
                     variant="surface"
                     className={cn(
-                      "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden",
+                      "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[48px] overflow-hidden",
                       isActive && "ring-1 ring-primary bg-accent/10"
                     )}
                   >
-                    <Box p="2" className="w-full">
+                    <Box px="2" py="1" className="w-full">
                       <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                        <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
+                        <Text color="gray" weight="medium" className="truncate w-full leading-tight text-[10px]">
                           {item.label}
                         </Text>
-                        <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "clamp(10px, 1vw, 12px)" }}>{formatNumber(item.value)}</Heading>
+                        <Heading weight="bold" className="truncate w-full leading-tight text-sm tabular-nums">{formatNumber(item.value)}</Heading>
                         {formattedDelta ? (
-                          <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
+                          <Text color={deltaTone} weight="bold" className="leading-none text-[10px] tabular-nums">
                             {formattedDelta}
                           </Text>
                         ) : (
-                          <Box className="h-2" />
+                          <Box className="h-1.5" />
                         )}
                       </Flex>
                     </Box>

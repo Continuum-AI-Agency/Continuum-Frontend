@@ -15,6 +15,27 @@ function asStructuredReport(state: JainaStreamState): FrontendCheckpointReport {
   return report as FrontendCheckpointReport;
 }
 
+describe("reduceJainaStreamEvent report artifact jobs", () => {
+  it("tracks the forced report artifact job from the structured stream event", () => {
+    const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+      type: "response.report_artifact_job.started",
+      data: {
+        item_id: "item_123",
+        part_id: "part_123",
+        job_id: "rjob_12345",
+        status: "pending",
+        report_model: "gemini-3.1-pro-preview",
+        status_endpoint: "/api/agents/jaina/report-artifacts/jobs/rjob_12345",
+        file_url_endpoint:
+          "/api/agents/jaina/report-artifacts/jobs/rjob_12345/file-url",
+      },
+    });
+
+    expect(state.reportArtifactJob?.job_id).toBe("rjob_12345");
+    expect(state.reportArtifactJob?.status_endpoint).toContain("rjob_12345");
+  });
+});
+
 describe("reduceJainaStreamEvent text deltas", () => {
   it("hydrates report incrementally from output_text deltas before stream completion", () => {
     let state = createInitialJainaStreamState();

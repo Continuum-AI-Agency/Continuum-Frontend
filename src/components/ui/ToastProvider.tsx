@@ -9,11 +9,18 @@ export const TOAST_VARIANTS = ["success", "info", "warning", "error"] as const;
 
 type ToastVariant = (typeof TOAST_VARIANTS)[number];
 
+export type ToastAction = {
+  label: string;
+  onClick: () => void;
+};
+
 export type ToastOptions = {
   title: string;
   description?: string;
   variant?: ToastVariant;
   durationMs?: number;
+  action?: ToastAction;
+  dedupeKey?: string;
 };
 
 type ToastItem = ToastOptions & { id: string };
@@ -106,7 +113,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const show = useCallback((options: ToastOptions) => {
     const id = Math.random().toString(36).slice(2);
     const item: ToastItem = { id, durationMs: 5000, variant: "success", ...options };
-    setToasts((prev) => [...prev, item]);
+    setToasts((prev) => {
+      if (options.dedupeKey && prev.some((t) => t.dedupeKey === options.dedupeKey)) {
+        return prev;
+      }
+      return [...prev, item];
+    });
   }, []);
 
   const remove = useCallback((id: string) => {
@@ -126,12 +138,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               const paletteItem = TOAST_PALETTE[variant];
               const durationSeconds = (toast.durationMs ?? 5000) / 1000;
 
+              const isPersistent = toast.durationMs === Infinity;
               return (
                 <Toast.Root
                   key={toast.id}
                   defaultOpen
                   forceMount
-                  duration={toast.durationMs}
+                  duration={isPersistent ? Number.MAX_SAFE_INTEGER : toast.durationMs}
                   onOpenChange={(open) => !open && remove(toast.id)}
                 >
                   <motion.div
@@ -150,6 +163,21 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                         {toast.description ? (
                           <Toast.Description className={`text-xs leading-relaxed ${paletteItem.subtext}`}>{toast.description}</Toast.Description>
                         ) : null}
+                        {toast.action ? (
+                          <Toast.Action altText={toast.action.label} asChild>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                toast.action?.onClick();
+                                remove(toast.id);
+                              }}
+                              className={`mt-1 inline-flex h-7 items-center rounded-md border px-2.5 text-xs font-semibold transition hover:bg-black/5 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 ${paletteItem.ring} ${paletteItem.text}`}
+                            >
+                              {toast.action.label}
+                            </button>
+                          </Toast.Action>
+                        ) : null}
                       </div>
                       <Toast.Close asChild>
                         <button
@@ -162,14 +190,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       </Toast.Close>
                     </div>
 
-                    <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-black/5 dark:bg-white/5">
-                      <motion.div
-                        initial={{ width: "100%" }}
-                        animate={{ width: 0 }}
-                        transition={{ duration: durationSeconds, ease: "linear" }}
-                        className={`${paletteItem.accent} h-full`}
-                      />
-                    </div>
+                    {isPersistent ? null : (
+                      <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-black/5 dark:bg-white/5">
+                        <motion.div
+                          initial={{ width: "100%" }}
+                          animate={{ width: 0 }}
+                          transition={{ duration: durationSeconds, ease: "linear" }}
+                          className={`${paletteItem.accent} h-full`}
+                        />
+                      </div>
+                    )}
                   </motion.div>
                 </Toast.Root>
               );

@@ -26,6 +26,7 @@ type JainaChatInput = {
   userId?: string;
   images?: Array<{ url: string; name?: string }>;
   planAction?: JainaPlanAction;
+  forceReportArtifact?: boolean;
 };
 
 type StartResult = { error?: string };
@@ -92,6 +93,7 @@ export function useJainaChatStream() {
         payload = jainaChatRequestSchema.parse({
           query: input.query,
           include_thoughts: true,
+          force_report_artifact: input.forceReportArtifact,
           userId: input.userId,
           canvas: input.canvas,
           clarification: input.clarificationId

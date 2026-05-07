@@ -14,6 +14,7 @@ import {
   responseRunCreatedSchema,
   responseOutputItemSchema,
   responseOutputItemDoneSchema,
+  responseReportArtifactJobStartedSchema,
   responseReportAssemblySchema,
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
@@ -51,6 +52,7 @@ import {
   type ToolCallEventData,
   type ToolResultEventData,
   type ResponsePlanDecisionEventData,
+  type ResponseReportArtifactJobStartedEventData,
   type FrontendCheckpointReport,
   type HandoffTraceEntry,
   type JainaObjective,
@@ -162,6 +164,7 @@ export type JainaStreamState = {
     agent?: string;
     block: CheckpointBlockV2;
   }>;
+  reportArtifactJob: ResponseReportArtifactJobStartedEventData | null;
 };
 
 export function createInitialJainaStreamState(): JainaStreamState {
@@ -192,6 +195,7 @@ export function createInitialJainaStreamState(): JainaStreamState {
     reportSourceEventId: undefined,
     reportV2: null,
     blockDeltasV2: [],
+    reportArtifactJob: null,
   };
 }
 
@@ -1961,6 +1965,21 @@ export function reduceJainaStreamEvent(
         finalContentKind: "report",
       };
     }
+    case "response.report_artifact_job.started": {
+      const parsed = responseReportArtifactJobStartedSchema.safeParse(event);
+      if (!parsed.success || !parsed.data.data) {
+        return {
+          ...nextBase,
+          status: "error",
+          error: "Malformed response.report_artifact_job.started event",
+        };
+      }
+
+      return {
+        ...nextBase,
+        reportArtifactJob: parsed.data.data,
+      };
+    }
     case "response.created": {
       const parsed = responseCreatedSchema.safeParse(event);
       if (!parsed.success || !parsed.data.data) {
@@ -2027,6 +2046,9 @@ export function reduceJainaStreamEvent(
         artifacts: {},
         canvasActions: [],
         reportSourceEventId: undefined,
+        reportV2: null,
+        blockDeltasV2: [],
+        reportArtifactJob: null,
       };
     }
     case "response.run.created": {

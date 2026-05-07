@@ -1,10 +1,9 @@
 import { Suspense } from "react";
-import { Callout } from "@radix-ui/themes";
-import { LightningBoltIcon } from "@radix-ui/react-icons";
 import { OrganicAgentPanelLazy } from "@/components/organic/agent/OrganicAgentPanelLazy";
 
 import { OrganicMetricsDashboardLazy } from "@/components/organic/OrganicMetricsDashboardLazy";
 import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
+import { OrganicNoticeBridge } from "@/components/organic/OrganicNoticeBridge";
 import { OrganicCalendarWorkspace } from "@/components/organic/primitives/OrganicCalendarWorkspace";
 import {
   ORGANIC_PLATFORMS,
@@ -224,38 +223,15 @@ async function OrganicContent({
     metricAccountsByPlatform.instagram.length > 0 ? "instagram"
     : metricAccountsByPlatform.tiktok.length > 0 ? "tiktok"
     : "facebook";
-  const noticeSlot = insightsError || showNoTrendsMessage
-    ? (
-      <>
-        {insightsError ? (
-          <Callout.Root color="red" variant="surface">
-            <Callout.Icon>
-              <LightningBoltIcon />
-            </Callout.Icon>
-            <Callout.Text className="text-pretty">
-              We could not load trend intelligence right now. You can keep planning posts while we retry.
-              {insightsError ? ` (${insightsError})` : ""}
-            </Callout.Text>
-          </Callout.Root>
-        ) : null}
-        {showNoTrendsMessage ? (
-          <Callout.Root color="amber" variant="surface">
-            <Callout.Icon>
-              <LightningBoltIcon />
-            </Callout.Icon>
-            <Callout.Text className="text-pretty">
-              Trend coverage is still warming up for this brand. You can publish normally now and add trend-driven posts as signals arrive.
-            </Callout.Text>
-          </Callout.Root>
-        ) : null}
-      </>
-    )
-    : null;
 
   return (
     <div className="h-full min-h-0">
+      <OrganicNoticeBridge
+        brandId={brandProfileId}
+        insightsError={insightsError}
+        showNoTrendsMessage={showNoTrendsMessage}
+      />
       <OrganicWorkspaceTabs
-        noticeSlot={noticeSlot}
         plannerSlot={(
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}

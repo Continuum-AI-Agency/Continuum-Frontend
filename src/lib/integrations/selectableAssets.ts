@@ -138,6 +138,150 @@ export function mergeSelectableAssetsWithBrandSummary(
   };
 }
 
+function isAllowedSelectableAsset(asset: SelectableAsset, allowedAccountIds: Set<string>): boolean {
+  const id = asset.integration_account_id || asset.asset_pk;
+  return allowedAccountIds.has(id);
+}
+
+function filterSelectableAssetArray(
+  assets: SelectableAsset[] | undefined,
+  allowedAccountIds: Set<string>
+): SelectableAsset[] {
+  return (assets ?? []).filter((asset) => isAllowedSelectableAsset(asset, allowedAccountIds));
+}
+
+function filterMetaIntegrationBusinesses(integrations: any[], allowedAccountIds: Set<string>): any[] {
+  return integrations
+    .map((integration: any) => ({
+      ...integration,
+      businesses: (integration.businesses ?? [])
+        .map((business: any) => ({
+          ...business,
+          ad_accounts: (business.ad_accounts ?? [])
+            .map((adAccount: any) => ({
+              ...adAccount,
+              ad_account: adAccount.ad_account && isAllowedSelectableAsset(adAccount.ad_account, allowedAccountIds)
+                ? adAccount.ad_account
+                : null,
+              pages: filterSelectableAssetArray(adAccount.pages, allowedAccountIds),
+              instagram_accounts: filterSelectableAssetArray(adAccount.instagram_accounts, allowedAccountIds),
+              threads_accounts: filterSelectableAssetArray(adAccount.threads_accounts, allowedAccountIds),
+            }))
+            .filter((adAccount: any) =>
+              Boolean(adAccount.ad_account) ||
+              adAccount.pages.length > 0 ||
+              adAccount.instagram_accounts.length > 0 ||
+              adAccount.threads_accounts.length > 0
+            ),
+          pages_without_ad_account: filterSelectableAssetArray(business.pages_without_ad_account, allowedAccountIds),
+          instagram_accounts_without_ad_account: filterSelectableAssetArray(
+            business.instagram_accounts_without_ad_account,
+            allowedAccountIds
+          ),
+          threads_accounts_without_ad_account: filterSelectableAssetArray(
+            business.threads_accounts_without_ad_account,
+            allowedAccountIds
+          ),
+        }))
+        .filter((business: any) =>
+          business.ad_accounts.length > 0 ||
+          business.pages_without_ad_account.length > 0 ||
+          business.instagram_accounts_without_ad_account.length > 0 ||
+          business.threads_accounts_without_ad_account.length > 0
+        ),
+    }))
+    .filter((integration: any) => integration.businesses.length > 0);
+}
+
+function filterProviderHierarchy(
+  hierarchy: SelectableAssetsResponse["providers"][string]["hierarchy"],
+  allowedAccountIds: Set<string>
+): SelectableAssetsResponse["providers"][string]["hierarchy"] {
+  if (!hierarchy) return hierarchy;
+
+  const metaIntegrations = hierarchy.meta?.integrations;
+  if (Array.isArray(metaIntegrations)) {
+    return {
+      ...hierarchy,
+      meta: {
+        ...hierarchy.meta,
+        integrations: filterMetaIntegrationBusinesses(metaIntegrations, allowedAccountIds),
+      },
+    };
+  }
+
+  const integrations = hierarchy.integrations;
+  if (Array.isArray(integrations)) {
+    if (integrations.some((integration: any) => Array.isArray(integration.businesses))) {
+      return {
+        ...hierarchy,
+        integrations: filterMetaIntegrationBusinesses(integrations, allowedAccountIds),
+      };
+    }
+
+    return {
+      ...hierarchy,
+      integrations: integrations
+        .map((integration: any) => ({
+          ...integration,
+          ad_accounts: filterSelectableAssetArray(integration.ad_accounts, allowedAccountIds),
+          youtube_channels: filterSelectableAssetArray(integration.youtube_channels, allowedAccountIds),
+          dv360_advertisers: filterSelectableAssetArray(integration.dv360_advertisers, allowedAccountIds),
+        }))
+        .filter((integration: any) =>
+          integration.ad_accounts.length > 0 ||
+          integration.youtube_channels.length > 0 ||
+          integration.dv360_advertisers.length > 0
+        ),
+    };
+  }
+
+  return hierarchy;
+}
+
+export function filterSelectableAssetsByAccountIds(
+  response: SelectableAssetsResponse,
+  allowedAccountIds: Set<string>
+): SelectableAssetsResponse {
+  if (allowedAccountIds.size === 0) {
+    return {
+      ...response,
+      assets: [],
+      providers: {},
+    };
+  }
+
+  const providers = Object.entries(response.providers ?? {}).reduce(
+    (acc, [providerKey, provider]) => {
+      const assets = filterSelectableAssetArray(provider.assets, allowedAccountIds);
+      const hierarchy = filterProviderHierarchy(provider.hierarchy, allowedAccountIds);
+      const hasHierarchy = getSelectableAssetsFlatList({
+        synced_at: response.synced_at,
+        stale: response.stale,
+        assets: [],
+        providers: { [providerKey]: { ...provider, assets: [], hierarchy } },
+      }).length > 0;
+
+      if (assets.length > 0 || hasHierarchy) {
+        acc[providerKey] = {
+          ...provider,
+          assets,
+          hierarchy,
+          asset_count: assets.length || provider.asset_count,
+        };
+      }
+      return acc;
+    },
+    {} as SelectableAssetsResponse["providers"]
+  );
+
+  return {
+    ...response,
+    assets: filterSelectableAssetArray(response.assets, allowedAccountIds),
+    providers,
+  };
+}
+
 export function getSelectableAssetLabel(asset: Pick<SelectableAsset, "name" | "external_id">): string {
   return asset.name?.trim() || asset.external_id;
 }

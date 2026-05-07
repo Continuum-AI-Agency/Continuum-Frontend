@@ -71,18 +71,23 @@ mock.module("@/components/ai-elements/prompt-input", () => ({
   PromptInput: ({
     onSubmit,
     disabled,
+    actions,
   }: {
     onSubmit?: (value: string, attachments?: unknown[]) => void;
     disabled?: boolean;
+    actions?: ReactNode;
   }) => (
-    <button
-      type="button"
-      data-testid="prompt-submit"
-      disabled={disabled}
-      onClick={() => onSubmit?.("Recommend budget reallocations for this week by campaign")}
-    >
-      submit
-    </button>
+    <div>
+      <div data-testid="prompt-actions">{actions}</div>
+      <button
+        type="button"
+        data-testid="prompt-submit"
+        disabled={disabled}
+        onClick={() => onSubmit?.("Recommend budget reallocations for this week by campaign")}
+      >
+        submit
+      </button>
+    </div>
   ),
 }));
 
@@ -278,6 +283,71 @@ describe("JainaChatSurface integration", () => {
     expect(assistant?.id).toBe("persisted-2");
     expect(assistant?.reportV2?.blocks).toHaveLength(2);
     expect(assistant?.reportV2?.blocks[1]?.category).toBe("metric_grid");
+  });
+
+  it("sends forceReportArtifact when Jaina Pro is selected", async () => {
+    global.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+
+      if (method === "GET" && url.includes("/api/agents/jaina/chat/conversations?")) {
+        return Promise.resolve(
+          jsonResponse({
+            sessions: [],
+            messages: [],
+          })
+        );
+      }
+
+      if (method === "POST" && url.endsWith("/api/agents/jaina/chat/conversations")) {
+        return Promise.resolve(
+          jsonResponse({
+            session_id: "session-1",
+            brand_id: "brand-1",
+            ad_account_id: "act-1",
+            conversation_title: null,
+          })
+        );
+      }
+
+      return Promise.resolve({
+        ok: false,
+        text: () => Promise.resolve("Unhandled fetch route"),
+      } as MockFetchResponse);
+    }) as typeof fetch;
+
+    render(
+      <JainaChatSurface
+        brandProfileId="brand-1"
+        brandName="Test Brand"
+        adAccountId="act-1"
+        campaignId={null}
+        userId="user-1"
+      />
+    );
+
+    await waitFor(() => {
+      expect((screen.getByTestId("prompt-submit") as HTMLButtonElement).disabled).toBe(
+        false
+      );
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /create a jaina pro report from this analysis/i,
+      })
+    );
+    fireEvent.click(screen.getByTestId("prompt-submit"));
+
+    await waitFor(() => {
+      expect(startMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(startMock.mock.calls[0]?.[0]).toMatchObject({
+      query: "Recommend budget reallocations for this week by campaign",
+      forceReportArtifact: true,
+      canvas: false,
+    });
   });
 
   it("keeps plan + reasoning visible after response.done snapshot refresh", async () => {

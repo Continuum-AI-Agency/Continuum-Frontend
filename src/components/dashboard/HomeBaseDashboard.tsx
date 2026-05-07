@@ -38,15 +38,15 @@ export function HomeBaseDashboard({
   const activeConfig = DASHBOARD_VIEWS[activeView];
 
   return (
-    <div className="h-full min-h-0 w-full p-2 sm:p-3">
-      <section className="grid h-[calc(100dvh-5.5rem)] min-h-[680px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
-        <div className="flex min-h-10 items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">{activeConfig.title}</h1>
-          </div>
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1">
+          <h1 className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {activeConfig.title}
+          </h1>
 
           <nav
-            className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5"
+            className="inline-flex shrink-0 rounded-md border border-border/70 bg-background p-0.5"
             aria-label="Dashboard workspace"
           >
             {(Object.keys(DASHBOARD_VIEWS) as DashboardView[]).map((view) => {
@@ -59,9 +59,10 @@ export function HomeBaseDashboard({
                   type="button"
                   onClick={() => setActiveView(view)}
                   className={cn(
-                    "h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm",
-                    isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                    "h-6 rounded px-2.5 text-[11px] font-medium transition-colors active:scale-[0.96]",
+                    isActive ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
+                  style={{ transitionProperty: "background-color, color, scale" }}
                   aria-pressed={isActive}
                 >
                   {config.label}
@@ -71,10 +72,10 @@ export function HomeBaseDashboard({
           </nav>
         </div>
 
-        <div className="min-h-0 overflow-y-auto p-2 sm:p-3">
+        <div className="min-h-0 overflow-hidden p-1">
           <motion.div
             data-dashboard-panel="paid"
-            className="h-full"
+            className="h-full min-h-0"
             animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 1 : 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ display: isPaidView ? "block" : "none" }}
@@ -84,7 +85,7 @@ export function HomeBaseDashboard({
 
           <motion.div
             data-dashboard-panel="organic"
-            className="h-full"
+            className="h-full min-h-0"
             animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 0.98 : 1 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ display: isPaidView ? "none" : "block" }}

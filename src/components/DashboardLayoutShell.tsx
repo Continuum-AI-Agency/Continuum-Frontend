@@ -59,14 +59,14 @@ export default function DashboardLayoutShell({
             style={
               {
                 "--sidebar-width": "16rem",
-                "--sidebar-width-icon": "5.5rem",
+                "--sidebar-width-icon": "3.5rem",
               } as React.CSSProperties
             }
           >
             <AppSidebar />
             <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
               <DashboardHeader />
-              <main className="flex-1 min-h-0 overflow-y-auto px-2 sm:px-3 lg:px-4 pb-8">
+              <main className="flex-1 min-h-0 overflow-y-auto px-1 sm:px-2 pb-2">
                 <BrandWelcomeBanner />
                 <div className="w-full h-full min-h-0">{children}</div>
               </main>

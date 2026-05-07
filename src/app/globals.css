@@ -121,19 +121,20 @@
   /* Layout and viewport density tokens */
   --font-size-root: 14px;
   --layout-density: 1;
-  --app-shell-gap: 1rem;
-  --app-shell-gap-compact: 0.75rem;
-  --app-shell-pad-inline: 1.5rem;
-  --app-shell-pad-block: 1rem;
-  --app-shell-pad-inline-compact: 0.75rem;
-  --app-shell-pad-block-compact: 0.75rem;
+  --app-shell-gap: 0.375rem;
+  --app-shell-gap-compact: 0.25rem;
+  --app-shell-pad-inline: 0.5rem;
+  --app-shell-pad-block: 0.25rem;
+  --app-shell-pad-inline-tight: 0.25rem;
+  --app-shell-pad-inline-compact: 0.5rem;
+  --app-shell-pad-block-compact: 0.5rem;
   --ai-chat-shell-offset: 1.5rem;
   --ai-chat-shell-min-height: 40rem;
   --ai-chat-row-min-height: 30rem;
   --ai-chat-panel-min-width: 24rem;
   --ai-chat-preview-min-width: 28rem;
-  --workspace-min-height: 36rem;
-  --dashboard-min-panel-height: 32rem;
+  --workspace-min-height: 32rem;
+  --dashboard-min-panel-height: 24rem;
 }
 
 html {
@@ -145,14 +146,14 @@ html {
 @media (max-width: 1536px) {
   :root {
     --font-size-root: 12px;
-    --app-shell-pad-inline: 1.25rem;
+    --app-shell-pad-inline: 0.5rem;
     --ai-chat-shell-offset: 1rem;
     --ai-chat-shell-min-height: 36rem;
     --ai-chat-row-min-height: 26rem;
     --ai-chat-panel-min-width: 22rem;
     --ai-chat-preview-min-width: 24rem;
-    --workspace-min-height: 32rem;
-    --dashboard-min-panel-height: 28rem;
+    --workspace-min-height: 28rem;
+    --dashboard-min-panel-height: 22rem;
   }
 }
 
@@ -160,16 +161,16 @@ html {
   :root {
     --font-size-root: 10px;
     --layout-density: 0.92;
-    --app-shell-gap: 0.75rem;
-    --app-shell-pad-inline: 1rem;
-    --app-shell-pad-block: 0.75rem;
+    --app-shell-gap: 0.25rem;
+    --app-shell-pad-inline: 0.375rem;
+    --app-shell-pad-block: 0.25rem;
     --ai-chat-shell-offset: 0.5rem;
     --ai-chat-shell-min-height: 30rem;
     --ai-chat-row-min-height: 22rem;
     --ai-chat-panel-min-width: 18rem;
     --ai-chat-preview-min-width: 20rem;
-    --workspace-min-height: 28rem;
-    --dashboard-min-panel-height: 24rem;
+    --workspace-min-height: 24rem;
+    --dashboard-min-panel-height: 20rem;
   }
 }
 
@@ -177,14 +178,14 @@ html {
   :root {
     --font-size-root: 9px;
     --layout-density: 0.88;
-    --app-shell-pad-inline: 0.75rem;
-    --app-shell-pad-block: 0.625rem;
-    --app-shell-pad-inline-compact: 0.5rem;
-    --app-shell-pad-block-compact: 0.5rem;
+    --app-shell-pad-inline: 0.25rem;
+    --app-shell-pad-block: 0.25rem;
+    --app-shell-pad-inline-compact: 0.25rem;
+    --app-shell-pad-block-compact: 0.25rem;
     --ai-chat-shell-min-height: 26rem;
     --ai-chat-row-min-height: 18rem;
-    --workspace-min-height: 24rem;
-    --dashboard-min-panel-height: 20rem;
+    --workspace-min-height: 22rem;
+    --dashboard-min-panel-height: 18rem;
   }
 }
 

@@ -150,70 +150,140 @@ serve(async (req: Request) => {
       }
     }
 
-    // 2. Fetch assignments with integration account details
-    const { data, error } = await supabase
+    const { data: grants, error: grantsError } = await supabase
       .schema("brand_profiles")
-      .from("brand_profile_integration_accounts")
-      .select(
-        `
-        id,
-        alias,
-        created_at,
-        settings,
-        integration_accounts_assets:integration_account_id (
-          id,
-          integration_id,
-          type,
-          name,
-          status,
-          external_account_id
-        )
-      `,
-      )
-      .eq("brand_profile_id", brandId);
+      .from("brand_integration_grants")
+      .select("id, integration_id, granted_at")
+      .eq("brand_profile_id", brandId)
+      .is("revoked_at", null);
 
-    if (error) {
-      console.error("[fetch-brand-integrations] query failed", error);
-      return new Response(JSON.stringify({ error: error.message }), {
+    if (grantsError) {
+      console.error("[fetch-brand-integrations] grants query failed", grantsError);
+      return new Response(JSON.stringify({ error: grantsError.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const grantRows = grants ?? [];
+    const integrationIds = Array.from(
+      new Set(
+        grantRows
+          .map((grant: any) => grant.integration_id)
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0),
+      ),
+    );
+
     const summary = createEmptySummary();
 
-    (data || []).forEach((assignment: any) => {
-      const account = assignment.integration_accounts_assets;
-      if (!account) return;
+    if (integrationIds.length === 0) {
+      return new Response(JSON.stringify({ summary }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
+    const { data: accounts, error: accountsError } = await supabase
+      .schema("brand_profiles")
+      .from("integration_accounts_assets")
+      .select(
+        `
+        id,
+        integration_id,
+        type,
+        name,
+        status,
+        external_account_id
+      `,
+      )
+      .in("integration_id", integrationIds);
+
+    if (accountsError) {
+      console.error("[fetch-brand-integrations] accounts query failed", accountsError);
+      return new Response(JSON.stringify({ error: accountsError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const accountIds = Array.from(
+      new Set(
+        (accounts ?? [])
+          .map((account: any) => account.id)
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0),
+      ),
+    );
+
+    const { data: assignments, error: assignmentsError } = accountIds.length > 0
+      ? await supabase
+        .schema("brand_profiles")
+        .from("brand_profile_integration_accounts")
+        .select(
+          `
+        id,
+        alias,
+        created_at,
+        settings,
+        integration_account_id
+      `,
+        )
+        .eq("brand_profile_id", brandId)
+        .in("integration_account_id", accountIds)
+      : { data: [], error: null };
+
+    if (assignmentsError) {
+      console.error("[fetch-brand-integrations] assignments query failed", assignmentsError);
+      return new Response(JSON.stringify({ error: assignmentsError.message }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const grantsByIntegrationId = new Map<string, any>();
+    grantRows.forEach((grant: any) => {
+      if (grant.integration_id) {
+        grantsByIntegrationId.set(grant.integration_id, grant);
+      }
+    });
+
+    const assignmentsByAccountId = new Map<string, any>();
+    (assignments ?? []).forEach((assignment: any) => {
+      if (assignment.integration_account_id) {
+        assignmentsByAccountId.set(assignment.integration_account_id, assignment);
+      }
+    });
+
+    (accounts || []).forEach((account: any) => {
+      const grant = grantsByIntegrationId.get(account.integration_id);
+      if (!grant) return;
+      const assignment = assignmentsByAccountId.get(account.id);
       const platformKey = mapIntegrationTypeToPlatformKey(account.type);
       if (!platformKey) return;
 
       const accountName = resolveAccountName({
-        alias: assignment.alias ?? null,
+        alias: assignment?.alias ?? null,
         accountName: account.name ?? null,
         externalAccountId: account.external_account_id ?? null,
       });
 
       summary[platformKey].accounts.push({
-        assignmentId: assignment.id,
+        assignmentId: assignment?.id ?? grant.id,
         integrationAccountId: account.id,
-        alias: assignment.alias ?? null,
+        alias: assignment?.alias ?? null,
         name: accountName,
         externalAccountId: account.external_account_id ?? null,
         status: account.status ?? null,
-        linkedAt: assignment.created_at ?? null,
+        linkedAt: assignment?.created_at ?? grant.granted_at ?? null,
         providerIntegrationId: account.integration_id,
         type: account.type ?? null,
-        settings: assignment.settings ?? null,
+        settings: assignment?.settings ?? null,
       });
     });
 
     // Fallback substring check for youtube etc
-    (data || []).forEach((assignment: any) => {
-      const account = assignment.integration_accounts_assets;
-      if (!account) return;
-
+    (accounts || []).forEach((account: any) => {
+      const grant = grantsByIntegrationId.get(account.integration_id);
+      if (!grant) return;
+      const assignment = assignmentsByAccountId.get(account.id);
       const alreadyIncluded = summary.youtube.accounts.some(
         (a: any) => a.integrationAccountId === account.id,
       );
@@ -225,20 +295,20 @@ serve(async (req: Request) => {
         typeGuess.includes("youtube")
       ) {
         summary.youtube.accounts.push({
-          assignmentId: assignment.id,
+          assignmentId: assignment?.id ?? grant.id,
           integrationAccountId: account.id,
-          alias: assignment.alias ?? null,
+          alias: assignment?.alias ?? null,
           name: resolveAccountName({
-            alias: assignment.alias ?? null,
+            alias: assignment?.alias ?? null,
             accountName: account.name ?? null,
             externalAccountId: account.external_account_id ?? null,
           }),
           externalAccountId: account.external_account_id ?? null,
           status: account.status ?? null,
-          linkedAt: assignment.created_at ?? null,
+          linkedAt: assignment?.created_at ?? grant.granted_at ?? null,
           providerIntegrationId: account.integration_id,
           type: account.type ?? null,
-          settings: assignment.settings ?? null,
+          settings: assignment?.settings ?? null,
         });
       }
     });

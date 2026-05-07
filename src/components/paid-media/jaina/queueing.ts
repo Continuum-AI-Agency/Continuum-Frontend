@@ -3,6 +3,7 @@ export type QueuedJainaMessage = {
   content: string;
   createdAt: string;
   canvas: boolean;
+  forceReportArtifact?: boolean;
   clarificationId?: string;
 };
 

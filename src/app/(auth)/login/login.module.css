@@ -2,18 +2,15 @@
   position: relative;
   background: linear-gradient(
     315deg,
-    #4f46e5 0%,
-    #6d5dfc 18%,
-    #a855f7 32%,
-    #f472b6 46%,
-    #6d5dfc 58%,
-    #0ea5e9 70%,
-    #7dd3fc 82%,
-    #6d5dfc 100%
+    #0f172a 0%,
+    #243c5a 22%,
+    #4f46e5 42%,
+    #b45f82 62%,
+    #2f7f91 78%,
+    #dbeafe 100%
   );
   background-size: 400% 400%;
-  background-attachment: fixed;
-  animation: loginGradient 18s ease infinite;
+  animation: loginGradient 24s ease infinite;
 }
 
 @keyframes loginGradient {
@@ -36,30 +33,30 @@
   height: 14rem;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.28),
-    rgba(79, 70, 229, 0.24),
-    rgba(168, 85, 247, 0.20),
-    rgba(14, 165, 233, 0.18),
-    rgba(125, 211, 252, 0.16)
+    rgba(255, 255, 255, 0.22),
+    rgba(79, 70, 229, 0.18),
+    rgba(180, 95, 130, 0.16),
+    rgba(47, 127, 145, 0.16),
+    rgba(219, 234, 254, 0.2)
   );
   border-radius: 1000% 1000% 0 0;
-  animation: loginWave 16s -3s linear infinite;
+  animation: loginWave 22s -3s linear infinite;
   transform: translate3d(0, 0, 0);
-  opacity: 0.8;
+  opacity: 0.74;
   pointer-events: none;
   z-index: 0;
 }
 
 .waveSecond {
   bottom: -2.8rem;
-  animation: loginWave 22s linear reverse infinite;
-  opacity: 0.65;
+  animation: loginWave 28s linear reverse infinite;
+  opacity: 0.58;
 }
 
 .waveThird {
   bottom: -5.4rem;
-  animation: loginWave 26s -1s linear infinite;
-  opacity: 0.5;
+  animation: loginWave 34s -1s linear infinite;
+  opacity: 0.42;
 }
 
 @keyframes loginWave {
@@ -77,5 +74,14 @@
   }
   100% {
     transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loginBackground,
+  .wave,
+  .waveSecond,
+  .waveThird {
+    animation: none;
   }
 }

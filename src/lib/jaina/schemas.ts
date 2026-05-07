@@ -36,6 +36,7 @@ export type JainaPlanAction = z.infer<typeof jainaPlanActionSchema>;
 export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
+  force_report_artifact: z.boolean().optional(),
   userId: z.string().optional(),
   canvas: z.boolean().optional(),
   clarification: z
@@ -440,7 +441,7 @@ export const insightItemV2Schema = z.object({
   rationale: z.string().nullish(),
   impact: z.string().nullish(),
   severity: severitySchema.nullish(),
-  priority: z.enum(["now", "next", "soon", "later"]).nullish(),
+  priority: z.string().nullish(),
 });
 export type InsightItemV2 = z.infer<typeof insightItemV2Schema>;
 
@@ -492,7 +493,7 @@ export const mediaMapSchema = z.record(z.string(), mediaMapEntrySchema);
 export type MediaMap = z.infer<typeof mediaMapSchema>;
 
 export const checkpointReportV2MetaSchema = z.object({
-  schema_version: z.literal("2"),
+  schema_version: z.union([z.literal("2"), z.literal(2)]).transform(() => "2" as const),
   block_count: z.number().int().nonnegative(),
   has_charts: z.boolean(),
   has_media: z.boolean().default(false),
@@ -793,6 +794,26 @@ export const responseReportAssemblySchema = streamEventSchema(
   })
 );
 
+export const responseReportArtifactJobStartedSchema = streamEventSchema(
+  "response.report_artifact_job.started",
+  z
+    .object({
+      item_id: z.string(),
+      part_id: z.string(),
+      job_id: z.string().min(1),
+      status: z.string().min(1),
+      report_model: z.string().optional(),
+      status_endpoint: z.string().min(1),
+      file_url_endpoint: z.string().min(1),
+    })
+    .passthrough()
+);
+
+export type ResponseReportArtifactJobStartedEventData = Exclude<
+  z.infer<typeof responseReportArtifactJobStartedSchema>["data"],
+  undefined
+>;
+
 export const outputTextDeltaSchema = streamEventSchema(
   "response.output_text.delta",
   z.object({
@@ -928,6 +949,7 @@ export type JainaStreamEvent =
   | z.infer<typeof responseCheckpointReportSchema>
   | z.infer<typeof responseBlockDeltaSchema>
   | z.infer<typeof responseReportAssemblySchema>
+  | z.infer<typeof responseReportArtifactJobStartedSchema>
   | z.infer<typeof responseOutputJsonDeltaSchema>
   | z.infer<typeof outputTextDeltaSchema>
   | z.infer<typeof responseObjectivesSchema>
@@ -959,6 +981,7 @@ export const jainaStreamEventSchema = z.union([
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
   responseReportAssemblySchema,
+  responseReportArtifactJobStartedSchema,
   responseOutputJsonDeltaSchema,
   outputTextDeltaSchema,
   responseObjectivesSchema,
@@ -1529,6 +1552,12 @@ const legacyBlockCategoryAliasMap: Record<string, CheckpointBlockCategory> = {
   chart: "graph",
   charts: "graph",
   visualization: "graph",
+  // V2 category fallbacks — maps to nearest V1 equivalent
+  narrative: "summary_breakdown",
+  metric_grid: "data",
+  insight_list: "insight_recommendation",
+  comparison: "summary_breakdown",
+  data_table: "data",
 };
 
 type LegacyFieldsFromBlocks = Pick<
@@ -1750,6 +1779,7 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
       title: toNonEmptyString(rawBlock.title) || `Block ${index + 1}`,
       summary:
         toNonEmptyString(rawBlock.summary) ||
+        toNonEmptyString(rawBlock.body) ||
         toNonEmptyString(rawBlock.content) ||
         toNonEmptyString(rawBlock.description) ||
         "No summary provided.",

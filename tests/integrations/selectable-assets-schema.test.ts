@@ -5,6 +5,7 @@ import {
   type SelectableAssetsResponse,
 } from "@/lib/schemas/integrations";
 import {
+  filterSelectableAssetsByAccountIds,
   getMetaSelectableAdAccountBundles,
   getSelectableAssetsFlatList,
   mergeSelectableAssetsWithBrandSummary,
@@ -305,6 +306,54 @@ describe("selectable assets schemas", () => {
       (asset) => asset.integration_account_id === "bbbb2222-2222-4222-8222-222222222222"
     );
     expect(flat).toHaveLength(1);
+  });
+
+  test("filterSelectableAssetsByAccountIds removes accounts outside brand grants", () => {
+    const response: SelectableAssetsResponse = selectableAssetsResponseSchema.parse({
+      synced_at: null,
+      stale: false,
+      assets: [SAMPLE_GOOGLE_ASSET],
+      providers: {
+        meta: {
+          assets: [],
+          hierarchy: {
+            integrations: [
+              {
+                integration_id: "33333333-3333-4333-8333-333333333333",
+                businesses: [
+                  {
+                    business_id: null,
+                    business_name: null,
+                    ad_accounts: [
+                      {
+                        ad_account_id: "act_1",
+                        ad_account: SAMPLE_ASSET,
+                        pages: [SAMPLE_PAGE_ASSET],
+                        instagram_accounts: [],
+                        threads_accounts: [],
+                      },
+                    ],
+                    pages_without_ad_account: [],
+                    instagram_accounts_without_ad_account: [],
+                    threads_accounts_without_ad_account: [],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const filtered = filterSelectableAssetsByAccountIds(
+      response,
+      new Set([SAMPLE_PAGE_ASSET.integration_account_id])
+    );
+    const flat = getSelectableAssetsFlatList(filtered);
+
+    expect(flat).toEqual([SAMPLE_PAGE_ASSET]);
+    expect(filtered.assets).toEqual([]);
+    expect(filtered.providers.meta?.hierarchy?.integrations?.[0]?.businesses?.[0]?.ad_accounts?.[0]?.ad_account).toBeNull();
   });
 
   test("getMetaSelectableAdAccountBundles groups by ad account and ignores businesses", () => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ReloadIcon } from "@radix-ui/react-icons";
-import { Callout, Flex, IconButton, Text } from "@radix-ui/themes";
+import { Callout, IconButton, Text } from "@radix-ui/themes";
 import { useShallow } from "zustand/react/shallow";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
@@ -56,7 +56,7 @@ function BudgetPacingLoadingSkeleton() {
 
 export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric }: Props) {
   const [focusKey, setFocusKey] = useState<string | null>(null);
-  const [selectedRange, setSelectedRange] = useState<RangeOption>("14d");
+  const [selectedRange, setSelectedRange] = useState<RangeOption>("7d");
   const summaryCard = mapMetricToSummaryCard(selectedMetric);
   const trendMode = mapMetricToTrendMode(selectedMetric);
   const cacheKey = useMemo(() => {
@@ -94,23 +94,25 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
 
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
-      <Flex align="center" justify="between" className="min-h-10 border-b border-border/70 px-2 py-1.5 sm:px-3">
-        <div>
-          <h3 className="text-sm font-semibold">Budget Pace</h3>
-          <p className="text-[11px] text-muted-foreground">Spend vs target</p>
+      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1 sm:px-3">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="truncate text-xs font-semibold sm:text-sm">Budget Pace</h3>
+          <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+            Spend vs target · {selectedRange}
+          </span>
         </div>
-
         <IconButton
           variant="ghost"
           size="1"
           disabled={state.status === "loading" || !selectedAccountId}
           onClick={() => { if (selectedAccountId) fetchPacing(selectedAccountId, true); }}
+          aria-label="Refresh pacing"
         >
           <ReloadIcon className={state.status === "loading" ? "animate-spin" : undefined} />
         </IconButton>
-      </Flex>
+      </div>
 
-      <div className="min-h-0 overflow-y-auto p-2 sm:p-3">
+      <div className="min-h-0 overflow-y-auto p-1.5">
         {state.status === "loading" && <BudgetPacingLoadingSkeleton />}
 
         {state.status === "error" && (
@@ -120,7 +122,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
         )}
 
         {state.status === "success" && (
-          <div className="grid min-h-full gap-3 xl:grid-rows-[auto_minmax(260px,0.9fr)_minmax(280px,1fr)]">
+          <div className="grid min-h-full min-w-0 gap-1.5 xl:grid-rows-[auto_minmax(220px,0.9fr)_minmax(220px,1fr)]">
             <BudgetPacingSummaryStrip data={state.data} activeKey={summaryCard} />
             <BudgetPacingChart
               campaigns={state.data.campaigns}

@@ -27,6 +27,7 @@ import {
   getMetaSelectableAdAccountBundles,
   getSelectableAssetsFlatList,
   getSelectableAssetLabel,
+  filterSelectableAssetsByAccountIds,
   mergeSelectableAssetsWithBrandSummary,
 } from "@/lib/integrations/selectableAssets";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -166,17 +167,37 @@ function AssignmentsDialog({
   const { show } = useToast();
   const userAssetsQuery = useUserIntegrationAssets();
   const [isSaving, setIsSaving] = useState(false);
+  const grantedIntegrationIds = useMemo(() => {
+    const ids = new Set<string>();
+    PLATFORMS.forEach(({ key }) => {
+      summary[key]?.accounts.forEach(account => {
+        if (account.providerIntegrationId) ids.add(account.providerIntegrationId);
+      });
+    });
+    return ids;
+  }, [summary]);
+  const brandAccountIds = useMemo(() => {
+    const ids = new Set<string>();
+    PLATFORMS.forEach(({ key }) => {
+      summary[key]?.accounts.forEach(account => {
+        if (account.integrationAccountId) ids.add(account.integrationAccountId);
+      });
+    });
+    return ids;
+  }, [summary]);
   const selectableAssetsData = useMemo(() => {
     if (!userAssetsQuery.data) return null;
-    const userAssets: SelectableAsset[] = userAssetsQuery.data.map((row: UserIntegrationAssetRow) => ({
-      asset_pk: row.id,
-      integration_account_id: row.id,
-      external_id: row.external_account_id ?? row.id,
-      type: row.type ?? "unknown",
-      name: row.name,
-      business_id: null,
-      ad_account_id: row.ad_account_id ?? null,
-    }));
+    const userAssets: SelectableAsset[] = userAssetsQuery.data
+      .filter((row: UserIntegrationAssetRow) => grantedIntegrationIds.has(row.integration_id))
+      .map((row: UserIntegrationAssetRow) => ({
+        asset_pk: row.id,
+        integration_account_id: row.id,
+        external_id: row.external_account_id ?? row.id,
+        type: row.type ?? "unknown",
+        name: row.name,
+        business_id: null,
+        ad_account_id: row.ad_account_id ?? null,
+      }));
 
     // Build a minimal SelectableAssetsResponse so mergeSelectableAssetsWithBrandSummary still works
     const response = {
@@ -185,8 +206,11 @@ function AssignmentsDialog({
       assets: userAssets,
       providers: {},
     };
-    return mergeSelectableAssetsWithBrandSummary(response, summary);
-  }, [userAssetsQuery.data, summary]);
+    return filterSelectableAssetsByAccountIds(
+      mergeSelectableAssetsWithBrandSummary(response, summary),
+      brandAccountIds
+    );
+  }, [brandAccountIds, grantedIntegrationIds, userAssetsQuery.data, summary]);
 
   const selectableAssets = useMemo(
     () => (selectableAssetsData ? getSelectableAssetsFlatList(selectableAssetsData) : []),

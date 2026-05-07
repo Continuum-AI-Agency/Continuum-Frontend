@@ -632,62 +632,61 @@ export function DCOActionsWidget({
 
     return (
       <TooltipProvider>
-        <section className={cn("flex h-full min-h-0 flex-col rounded-xl border bg-card", className)}>
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 border-b px-3 py-2.5">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <ActivityLogIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                <h3 className="truncate text-sm font-semibold">DCO actions</h3>
+        <section className={cn("flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-card", className)}>
+          <div className="border-b border-border/70 bg-muted/20 px-2 py-1">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <ActivityLogIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <h3 className="truncate text-xs font-semibold sm:text-sm">DCO actions</h3>
+                <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+                  {pagination.totalCount} · {dateRangeDays}d
+                </span>
               </div>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {pagination.totalCount} actions · last {dateRangeDays}d
-              </p>
+              <div className="flex items-center gap-1">
+                <Select
+                  value={filterState.status ?? "all"}
+                  onValueChange={(value) => handleFilterChange("status", value === "all" ? undefined : value)}
+                >
+                  <SelectTrigger className="h-7 min-w-0 rounded-md px-2 text-[11px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All status</SelectItem>
+                    <SelectItem value="APPROVED">Approved</SelectItem>
+                    <SelectItem value="SUCCESS">Success</SelectItem>
+                    <SelectItem value="EXECUTED">Executed</SelectItem>
+                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                    <SelectItem value="FAILED">Failed</SelectItem>
+                    <SelectItem value="PENDING">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={dateRangeDays.toString()}
+                  onValueChange={(value) => handleDateRangeChange(Number(value) as DateRangeDays)}
+                >
+                  <SelectTrigger className="h-7 w-[60px] rounded-md px-2 text-[11px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">7d</SelectItem>
+                    <SelectItem value="30">30d</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <IconButton variant="ghost" color="gray" size="1" onClick={refresh} disabled={isLoading} aria-label="Refresh actions">
+                      <ReloadIcon className={isLoading ? "animate-spin" : undefined} />
+                    </IconButton>
+                  </TooltipTrigger>
+                  <TooltipContent>Refresh actions</TooltipContent>
+                </Tooltip>
+              </div>
             </div>
-
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <IconButton variant="ghost" color="gray" size="1" onClick={refresh} disabled={isLoading}>
-                  <ReloadIcon className={isLoading ? "animate-spin" : undefined} />
-                </IconButton>
-              </TooltipTrigger>
-              <TooltipContent>Refresh actions</TooltipContent>
-            </Tooltip>
           </div>
 
-          <div className="flex items-center gap-2 border-b px-3 py-2">
-            <Select
-              value={filterState.status ?? ""}
-              onValueChange={(value) => handleFilterChange("status", value === "all" ? undefined : value)}
-            >
-              <SelectTrigger className="h-7 min-w-0 flex-1 rounded-md px-2 text-[11px]">
-                <SelectValue placeholder="All status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All status</SelectItem>
-                <SelectItem value="APPROVED">Approved</SelectItem>
-                <SelectItem value="SUCCESS">Success</SelectItem>
-                <SelectItem value="EXECUTED">Executed</SelectItem>
-                <SelectItem value="REJECTED">Rejected</SelectItem>
-                <SelectItem value="FAILED">Failed</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={dateRangeDays.toString()}
-              onValueChange={(value) => handleDateRangeChange(Number(value) as DateRangeDays)}
-            >
-              <SelectTrigger className="h-7 w-[84px] rounded-md px-2 text-[11px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">7d</SelectItem>
-                <SelectItem value="30">30d</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
             {error ? (
               <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3">
                 <p className="text-xs text-destructive">{error}</p>

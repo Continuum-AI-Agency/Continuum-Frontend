@@ -1,70 +1,322 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import {
+  ActivityLogIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "@radix-ui/react-icons";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
 import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { PaidPerformanceMetricKey } from "@/components/paid-media/PaidMediaReportingWidget";
+
+const HOVER_CHARGE_MS = 800;
 
 const PaidMediaReportingWidget = dynamic(
   () =>
     import("@/components/paid-media/PaidMediaReportingWidget").then((m) => ({
       default: m.PaidMediaReportingWidget,
     })),
-  { ssr: false, loading: () => <Skeleton className="h-96 w-full rounded-lg" /> },
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-96 w-full rounded-lg" />,
+  },
 );
 
 const BudgetPacingWidget = dynamic(
   () =>
-    import("@/components/paid-media/budget-pacing/BudgetPacingWidget").then((m) => ({
-      default: m.BudgetPacingWidget,
-    })),
-  { ssr: false, loading: () => <Skeleton className="h-64 w-full rounded-lg" /> },
+    import("@/components/paid-media/budget-pacing/BudgetPacingWidget").then(
+      (m) => ({
+        default: m.BudgetPacingWidget,
+      }),
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-64 w-full rounded-lg" />,
+  },
 );
 
 type PaidDashboardViewProps = {
   brandId: string;
 };
 
-export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [selectedMetric, setSelectedMetric] = useState<PaidPerformanceMetricKey>("spend");
+const RAIL_COLLAPSE_STORAGE_KEY = "dashboard.paid.rail.collapsed";
+const RAIL_WIDTH_PX = 360;
+const STRIP_WIDTH_PX = 36;
+
+const JELLY_SPRING = {
+  type: "spring" as const,
+  stiffness: 380,
+  damping: 22,
+  mass: 0.85,
+};
+const STRIP_SPRING = {
+  type: "spring" as const,
+  stiffness: 320,
+  damping: 26,
+  mass: 0.7,
+};
+
+function readCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(RAIL_COLLAPSE_STORAGE_KEY) === "1";
+}
+
+function writeCollapsed(value: boolean): void {
+  if (typeof window === "undefined") return;
+  if (value) window.localStorage.setItem(RAIL_COLLAPSE_STORAGE_KEY, "1");
+  else window.localStorage.removeItem(RAIL_COLLAPSE_STORAGE_KEY);
+}
+
+function DCORailStrip({ onExpand }: { onExpand: () => void }) {
+  const reduceMotion = useReducedMotion();
+  const [charging, setCharging] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  const clearCharge = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setCharging(false);
+  }, []);
+
+  useEffect(() => () => clearCharge(), [clearCharge]);
+
+  const handlePointerEnter = useCallback(() => {
+    if (reduceMotion) return;
+    setCharging(true);
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      setCharging(false);
+      onExpand();
+    }, HOVER_CHARGE_MS);
+  }, [onExpand, reduceMotion]);
+
+  const handlePointerLeave = useCallback(() => {
+    clearCharge();
+  }, [clearCharge]);
 
   return (
-    <div className="h-full min-h-[680px]">
-      <ResizablePanelGroup orientation="horizontal">
-        <ResizablePanel defaultSize={72} minSize={50}>
-          <ResizablePanelGroup orientation="vertical">
-            <ResizablePanel defaultSize={65} minSize={35} className="min-h-[420px] xl:min-h-0">
-              <PaidMediaReportingWidget
+    <TooltipProvider>
+      <div
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+        onFocusCapture={handlePointerEnter}
+        onBlurCapture={handlePointerLeave}
+        className="relative flex h-full w-9 flex-col items-center gap-1 overflow-hidden rounded-lg border border-border/70 bg-card py-1.5"
+      >
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 origin-bottom bg-gradient-to-t from-primary/45 via-primary/25 to-primary/5"
+          initial={false}
+          animate={{ scaleY: charging ? 1 : 0 }}
+          transition={{
+            duration: charging ? HOVER_CHARGE_MS / 1000 : 0.18,
+            ease: charging ? "linear" : [0.4, 0, 1, 1],
+          }}
+          style={{ height: "100%" }}
+        />
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-lg ring-1 ring-inset ring-primary/0"
+          initial={false}
+          animate={{
+            boxShadow: charging
+              ? "inset 0 0 0 1px var(--color-primary)"
+              : "inset 0 0 0 0 transparent",
+          }}
+          transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                clearCharge();
+                onExpand();
+              }}
+              aria-label="Open DCO actions"
+              className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
+              style={{ transitionProperty: "background-color, color, scale" }}
+            >
+              <ChevronLeftIcon className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            Open DCO actions (or hover)
+          </TooltipContent>
+        </Tooltip>
+        <div className="z-10 my-1 h-px w-5 bg-border/70" aria-hidden="true" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                clearCharge();
+                onExpand();
+              }}
+              aria-label="Show DCO actions"
+              className="relative z-10 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground active:scale-[0.96] after:absolute after:inset-0 after:-m-2 after:content-['']"
+              style={{ transitionProperty: "background-color, color, scale" }}
+            >
+              <ActivityLogIcon className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left">DCO actions</TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
+  );
+}
+
+function DCORailCollapseButton({ onCollapse }: { onCollapse: () => void }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Hide DCO actions"
+            className="absolute right-1.5 top-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]"
+            style={{ transitionProperty: "background-color, color, scale" }}
+          >
+            <ChevronRightIcon className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Hide DCO actions</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
+    null,
+  );
+  const [selectedMetric, setSelectedMetric] =
+    useState<PaidPerformanceMetricKey>("spend");
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    setCollapsed(readCollapsed());
+  }, []);
+
+  const handleCollapse = useCallback(() => {
+    setCollapsed(true);
+    writeCollapsed(true);
+  }, []);
+
+  const handleExpand = useCallback(() => {
+    setCollapsed(false);
+    writeCollapsed(false);
+  }, []);
+
+  const reportingArea = (
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
+      <div className="min-w-0">
+        <PaidMediaReportingWidget
+          brandId={brandId}
+          onAccountChange={setSelectedAccountId}
+          selectedMetric={selectedMetric}
+          onSelectedMetricChange={setSelectedMetric}
+        />
+      </div>
+      <div className="min-w-0 min-h-0 overflow-hidden rounded-lg border bg-card">
+        <BudgetPacingWidget
+          brandId={brandId}
+          selectedAccountId={selectedAccountId}
+          selectedMetric={selectedMetric}
+        />
+      </div>
+    </div>
+  );
+
+  const dispatchResize = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event("resize"));
+  }, []);
+
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] gap-1.5">
+      <div className="min-w-0">{reportingArea}</div>
+
+      <AnimatePresence
+        initial={false}
+        mode="wait"
+        onExitComplete={dispatchResize}
+      >
+        {collapsed ? (
+          <motion.div
+            key="dco-strip"
+            initial={
+              reduceMotion ? false : { width: 0, opacity: 0, scale: 0.92 }
+            }
+            animate={{ width: STRIP_WIDTH_PX, opacity: 1, scale: 1 }}
+            exit={
+              reduceMotion
+                ? { opacity: 0 }
+                : {
+                    width: 0,
+                    opacity: 0,
+                    scale: 0.92,
+                    transition: { duration: 0.16, ease: [0.4, 0, 1, 1] },
+                  }
+            }
+            transition={STRIP_SPRING}
+            style={{ transformOrigin: "right center", overflow: "hidden" }}
+            onUpdate={dispatchResize}
+            onAnimationComplete={dispatchResize}
+          >
+            <div style={{ width: STRIP_WIDTH_PX }} className="h-full">
+              <DCORailStrip onExpand={handleExpand} />
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="dco-rail"
+            initial={
+              reduceMotion
+                ? false
+                : { width: STRIP_WIDTH_PX, opacity: 0, scale: 0.94 }
+            }
+            animate={{ width: RAIL_WIDTH_PX, opacity: 1, scale: 1 }}
+            exit={
+              reduceMotion
+                ? { opacity: 0 }
+                : {
+                    width: STRIP_WIDTH_PX,
+                    opacity: 0,
+                    scale: 0.94,
+                    transition: { duration: 0.18, ease: [0.4, 0, 1, 1] },
+                  }
+            }
+            transition={JELLY_SPRING}
+            style={{ transformOrigin: "right center", overflow: "hidden" }}
+            onUpdate={dispatchResize}
+            onAnimationComplete={dispatchResize}
+          >
+            <div style={{ width: RAIL_WIDTH_PX }} className="relative h-full">
+              <DCOActionsWidget
                 brandId={brandId}
-                onAccountChange={setSelectedAccountId}
-                selectedMetric={selectedMetric}
-                onSelectedMetricChange={setSelectedMetric}
+                variant="rail"
+                className="h-full"
               />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={35} minSize={20} className="min-h-[280px] xl:min-h-0">
-              <div className="h-full overflow-hidden rounded-xl border bg-card">
-                <BudgetPacingWidget
-                  brandId={brandId}
-                  selectedAccountId={selectedAccountId}
-                  selectedMetric={selectedMetric}
-                />
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={28} minSize={15} maxSize={45} className="min-h-[360px] xl:min-h-0">
-          <DCOActionsWidget brandId={brandId} variant="rail" className="h-full" />
-        </ResizablePanel>
-      </ResizablePanelGroup>
+              <DCORailCollapseButton onCollapse={handleCollapse} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

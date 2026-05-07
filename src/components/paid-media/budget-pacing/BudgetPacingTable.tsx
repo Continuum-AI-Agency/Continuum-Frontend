@@ -274,8 +274,8 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
         className="w-full rounded border border-border/60 bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
       />
 
-      <div className="rounded-lg border border-border/60 overflow-hidden">
-        <div className={`grid ${GRID} gap-x-3 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground`}>
+      <div className="min-w-0 rounded-lg border border-border/60 overflow-x-auto overflow-y-hidden">
+        <div className={`grid ${GRID} min-w-[640px] gap-x-3 border-b border-border/60 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground`}>
           <span>Campaign</span>
           <span>Type</span>
           <span className="text-right">Budget</span>
@@ -285,7 +285,7 @@ export function BudgetPacingTable({ campaigns, focusKey, onFocusKey, selectedRan
           <span>Status</span>
         </div>
 
-        <div className="max-h-[360px] overflow-y-auto">
+        <div className="min-w-[640px] max-h-[360px] overflow-y-auto">
           {visible.map((campaign) => {
             const isExpanded = expandedIds.has(campaign.campaignId);
             const isCampaignFocused = focusKey === `campaign:${campaign.campaignId}`;

@@ -14,9 +14,12 @@ export async function GET(request: Request) {
     // Get the Authorization header from the incoming request
     const authHeader = request.headers.get("Authorization");
 
+    const functionName =
+      platform === "google-ads" ? "fetch-google-ads-campaigns" : "fetch-meta-campaigns";
+
     // Call the Supabase edge function
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-meta-campaigns?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}`,
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}`,
       {
         headers: {
           'Content-Type': 'application/json',
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       console.error("Edge function error:", response.status, response.statusText);
-      console.error("Request URL:", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/fetch-meta-campaigns?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}`);
+      console.error("Request URL:", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}`);
       console.error("Auth header present:", !!authHeader);
       const errorText = await response.text();
       console.error("Edge function error response:", errorText);

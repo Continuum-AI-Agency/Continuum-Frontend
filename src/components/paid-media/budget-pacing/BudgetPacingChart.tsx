@@ -151,7 +151,7 @@ export function BudgetPacingChart({
   const activeWindowSeconds = RANGE_OPTIONS.find((r) => r.value === selectedRange)?.seconds ?? null;
 
   return (
-    <div className="bg-background/80 border border-border/60 rounded-lg p-3">
+    <div className="min-w-0 w-full overflow-hidden bg-background/80 border border-border/60 rounded-lg p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           {title && <p className="text-sm font-medium shrink-0">{title}</p>}

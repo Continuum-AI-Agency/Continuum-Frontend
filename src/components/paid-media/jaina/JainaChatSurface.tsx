@@ -4,7 +4,10 @@ import React from "react";
 import { Box, Button, TextArea } from "@radix-ui/themes";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
+  DownloadIcon,
   Edit2Icon,
+  FileTextIcon,
+  Loader2Icon,
   PlayIcon,
   SaveIcon,
   Trash2Icon,
@@ -22,6 +25,12 @@ import { useJainaChatStream } from "@/hooks/useJainaChatStream";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import type { Attachment } from "@/components/ai-elements/attachments";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Queue,
   QueueItem,
@@ -67,6 +76,7 @@ import {
   isPersistedResultStub,
   parsePersistedResultWrapper,
 } from "@/lib/jaina/unwrapping";
+import type { JainaStreamState } from "@/lib/jaina/stream";
 import type { CampaignCanvasPayload } from "@/lib/campaign-canvas/payload";
 import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
 import { extractCampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
@@ -82,6 +92,7 @@ import {
 } from "@/lib/jaina/conversations";
 import { frontendCheckpointReportSchema, reportAssemblySchema, type JainaPlanAction } from "@/lib/jaina/schemas";
 import { useJainaConversationSidebarStore } from "@/lib/jaina/conversation-sidebar-store";
+import { http } from "@/lib/api/http";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export { parsePersistedResultWrapper } from "@/lib/jaina/unwrapping";
@@ -120,6 +131,20 @@ type JainaChatSurfaceProps = {
   onCanvasActionApplied?: () => void;
   className?: string;
 };
+
+type ReportArtifactJobStatus = "pending" | "running" | "done" | "failed";
+
+type ReportArtifactJobTracker = {
+  jobId: string;
+  status: ReportArtifactJobStatus;
+  reportModel?: string;
+  statusEndpoint: string;
+  fileUrlEndpoint: string;
+  fileUrl?: string;
+  error?: string;
+};
+
+const REPORT_ARTIFACT_POLL_INTERVAL_MS = 3500;
 
 function normalizeIdentity(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -231,6 +256,121 @@ async function readErrorMessage(
     // plain text
   }
   return detail;
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function getNestedRecord(
+  record: Record<string, unknown>,
+  key: "data" | "job"
+): Record<string, unknown> | null {
+  return asPlainRecord(record[key]);
+}
+
+function getStringFromRecords(
+  records: Array<Record<string, unknown> | null>,
+  keys: string[]
+): string | undefined {
+  for (const record of records) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+function normalizeReportArtifactJobStatus(
+  value: unknown
+): ReportArtifactJobStatus {
+  const status = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (["done", "completed", "complete", "ready", "success", "succeeded"].includes(status)) {
+    return "done";
+  }
+  if (["failed", "failure", "error", "errored"].includes(status)) return "failed";
+  if (["running", "processing", "in_progress", "generating"].includes(status)) {
+    return "running";
+  }
+  return "pending";
+}
+
+function resolveReportArtifactEndpoint(
+  endpoint: string | undefined,
+  fallback: string
+): string {
+  const candidate = endpoint?.trim();
+  if (candidate?.startsWith("/api/agents/jaina/")) return candidate;
+  return fallback;
+}
+
+function buildReportArtifactJobTracker(
+  job: NonNullable<ReturnType<typeof createReportArtifactJobFromEvent>>
+): ReportArtifactJobTracker {
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    reportModel: job.reportModel,
+    statusEndpoint: resolveReportArtifactEndpoint(
+      job.statusEndpoint,
+      `/api/agents/jaina/report-artifacts/jobs/${job.jobId}`
+    ),
+    fileUrlEndpoint: resolveReportArtifactEndpoint(
+      job.fileUrlEndpoint,
+      `/api/agents/jaina/report-artifacts/jobs/${job.jobId}/file-url`
+    ),
+  };
+}
+
+function createReportArtifactJobFromEvent(
+  job: JainaStreamState["reportArtifactJob"]
+): {
+  jobId: string;
+  status: ReportArtifactJobStatus;
+  reportModel?: string;
+  statusEndpoint?: string;
+  fileUrlEndpoint?: string;
+} | null {
+  if (!job?.job_id) return null;
+  return {
+    jobId: job.job_id,
+    status: normalizeReportArtifactJobStatus(job.status),
+    reportModel: job.report_model,
+    statusEndpoint: job.status_endpoint,
+    fileUrlEndpoint: job.file_url_endpoint,
+  };
+}
+
+function extractReportArtifactJobStatus(
+  payload: unknown
+): { status: ReportArtifactJobStatus; error?: string } {
+  const root = asPlainRecord(payload) ?? {};
+  const data = getNestedRecord(root, "data");
+  const job = getNestedRecord(root, "job");
+  const status = getStringFromRecords([root, data, job], ["status", "state"]);
+  const error = getStringFromRecords(
+    [root, data, job],
+    ["error", "error_message", "message"]
+  );
+  return {
+    status: normalizeReportArtifactJobStatus(status),
+    error,
+  };
+}
+
+function extractReportArtifactFileUrl(payload: unknown): string | undefined {
+  const root = asPlainRecord(payload) ?? {};
+  const data = getNestedRecord(root, "data");
+  const job = getNestedRecord(root, "job");
+  return getStringFromRecords(
+    [root, data, job],
+    ["url", "file_url", "signed_url", "download_url"]
+  );
 }
 
 function parsePersistedReport(
@@ -910,7 +1050,13 @@ export function JainaChatSurface({
   const { state, start, cancel, reset, clearMemory } = useJainaChatStream();
   const isStreaming = state.status === "streaming" || state.status === "starting";
 
-  const [isPlanMode, setIsPlanMode] = React.useState(false);
+  const [isJainaProMode, setIsJainaProMode] = React.useState(false);
+  const [reportArtifactJob, setReportArtifactJob] =
+    React.useState<ReportArtifactJobTracker | null>(null);
+  const [isReportArtifactDownloading, setIsReportArtifactDownloading] =
+    React.useState(false);
+  const [pendingReportArtifactResponseId, setPendingReportArtifactResponseId] =
+    React.useState<string | null>(null);
   const [sessionId, setSessionId] = React.useState<string>(() => createJainaSessionId());
   const pendingClarificationId = state.pendingClarification?.id;
 
@@ -935,6 +1081,7 @@ export function JainaChatSurface({
   const [queueEditDraft, setQueueEditDraft] = React.useState("");
   const processedToolResultIdsRef = React.useRef<Set<string>>(new Set());
   const processedCanvasEnvelopeKeysRef = React.useRef<Set<string>>(new Set());
+  const processedReportArtifactJobIdsRef = React.useRef<Set<string>>(new Set());
   const persistedAssistantResponseIdsRef = React.useRef<Set<string>>(new Set());
   const conversationChannelRef = React.useRef<RealtimeChannel | null>(null);
   const activeSessionIdRef = React.useRef(sessionId);
@@ -982,6 +1129,87 @@ export function JainaChatSurface({
   }, [activeResponseId, isStreaming]);
 
   React.useEffect(() => {
+    const eventJob = createReportArtifactJobFromEvent(state.reportArtifactJob);
+    if (!eventJob) return;
+    if (processedReportArtifactJobIdsRef.current.has(eventJob.jobId)) return;
+
+    processedReportArtifactJobIdsRef.current.add(eventJob.jobId);
+    setPendingReportArtifactResponseId(null);
+    setReportArtifactJob(buildReportArtifactJobTracker(eventJob));
+  }, [state.reportArtifactJob]);
+
+  React.useEffect(() => {
+    if (!reportArtifactJob) return;
+    if (reportArtifactJob.status === "done" || reportArtifactJob.status === "failed") {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | undefined;
+
+    const pollJob = async () => {
+      try {
+        const payload = await http.request<Record<string, unknown>>({
+          path: reportArtifactJob.statusEndpoint,
+          cache: "no-store",
+        });
+        if (cancelled) return;
+
+        const next = extractReportArtifactJobStatus(payload);
+
+        if (next.status === "done") {
+          const filePayload = await http.request<Record<string, unknown>>({
+            path: reportArtifactJob.fileUrlEndpoint,
+            cache: "no-store",
+          });
+          if (cancelled) return;
+          const fileUrl = extractReportArtifactFileUrl(filePayload);
+          setReportArtifactJob((previous) =>
+            previous?.jobId === reportArtifactJob.jobId
+              ? {
+                  ...previous,
+                  fileUrl,
+                  status: "done",
+                  error: next.error ?? previous.error,
+                }
+              : previous
+          );
+          return;
+        }
+
+        setReportArtifactJob((previous) =>
+          previous?.jobId === reportArtifactJob.jobId
+            ? {
+                ...previous,
+                status: next.status,
+                error: next.error ?? previous.error,
+              }
+            : previous
+        );
+
+        if (next.status === "failed") return;
+        timer = window.setTimeout(pollJob, REPORT_ARTIFACT_POLL_INTERVAL_MS);
+      } catch (error) {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Unable to refresh report job.";
+        setReportArtifactJob((previous) =>
+          previous?.jobId === reportArtifactJob.jobId
+            ? { ...previous, error: message }
+            : previous
+        );
+        timer = window.setTimeout(pollJob, REPORT_ARTIFACT_POLL_INTERVAL_MS);
+      }
+    };
+
+    timer = window.setTimeout(pollJob, 800);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [reportArtifactJob]);
+
+  React.useEffect(() => {
     if (shaderState !== "sweeping") return;
     const timeoutMs = prefersReducedMotion ? 80 : 820;
     const timer = window.setTimeout(() => {
@@ -1010,6 +1238,53 @@ export function JainaChatSurface({
     },
     []
   );
+
+  const handleReportArtifactAction = React.useCallback(async () => {
+    if (reportArtifactJob?.status === "failed") {
+      setReportArtifactJob(null);
+      setIsJainaProMode(true);
+      return;
+    }
+
+    if (!reportArtifactJob || reportArtifactJob.status !== "done") {
+      setIsJainaProMode((previous) => !previous);
+      return;
+    }
+
+    setIsReportArtifactDownloading(true);
+    try {
+      const fileUrl =
+        reportArtifactJob.fileUrl ??
+        extractReportArtifactFileUrl(
+          await http.request<Record<string, unknown>>({
+            path: reportArtifactJob.fileUrlEndpoint,
+            cache: "no-store",
+          })
+        );
+
+      if (!fileUrl) {
+        throw new Error("Report file URL is not available yet.");
+      }
+
+      setReportArtifactJob((previous) =>
+        previous?.jobId === reportArtifactJob.jobId
+          ? { ...previous, fileUrl }
+          : previous
+      );
+      window.open(fileUrl, "_blank");
+    } catch (error) {
+      show({
+        title: "Report unavailable",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Unable to open the generated report.",
+        variant: "error",
+      });
+    } finally {
+      setIsReportArtifactDownloading(false);
+    }
+  }, [reportArtifactJob, show]);
 
   const fetchConversationHistory = React.useCallback(
     async (targetSessionId?: string) => {
@@ -1383,6 +1658,9 @@ export function JainaChatSurface({
 
       void refreshConversationSnapshot(sessionId);
 
+      setPendingReportArtifactResponseId((current) =>
+        current === completedResponseId ? null : current
+      );
       setActiveResponseId(null);
     }
     if (state.status === "error" && state.error) {
@@ -1430,6 +1708,9 @@ export function JainaChatSurface({
       persistedAssistantResponseIdsRef.current.add(failedResponseId);
       void refreshConversationSnapshot(sessionId);
 
+      setPendingReportArtifactResponseId((current) =>
+        current === failedResponseId ? null : current
+      );
       setActiveResponseId(null);
     }
   }, [
@@ -1559,9 +1840,13 @@ export function JainaChatSurface({
       setQueuedMessages([]);
       setEditingQueueMessageId(null);
       setQueueEditDraft("");
+      setIsJainaProMode(false);
+      setPendingReportArtifactResponseId(null);
+      setReportArtifactJob(null);
       queueDispatchInFlightRef.current = false;
       processedToolResultIdsRef.current.clear();
       processedCanvasEnvelopeKeysRef.current.clear();
+      processedReportArtifactJobIdsRef.current.clear();
       persistedAssistantResponseIdsRef.current.clear();
       setIsHistoryLoading(true);
 
@@ -1719,6 +2004,7 @@ export function JainaChatSurface({
       clarificationId?: string;
       images?: Array<{ url: string; name?: string }>;
       planAction?: JainaPlanAction;
+      forceReportArtifact?: boolean;
       silentUserMessage?: boolean;
     }) => {
       const query = input.query.trim();
@@ -1798,6 +2084,10 @@ export function JainaChatSurface({
         })
       );
       setActiveResponseId(assistantMessage.id);
+      if (input.forceReportArtifact) {
+        setPendingReportArtifactResponseId(assistantMessage.id);
+        setReportArtifactJob(null);
+      }
       processedToolResultIdsRef.current.clear();
       processedCanvasEnvelopeKeysRef.current.clear();
 
@@ -1811,8 +2101,12 @@ export function JainaChatSurface({
         userId: userId ?? undefined,
         images: input.images,
         planAction: input.planAction,
+        forceReportArtifact: input.forceReportArtifact,
       }).then((result) => {
         if (result.error) {
+          if (input.forceReportArtifact) {
+            setPendingReportArtifactResponseId(null);
+          }
           show({
             title: "Request failed",
             description: result.error,
@@ -1839,7 +2133,12 @@ export function JainaChatSurface({
   );
 
   const queueMessageForLater = React.useCallback(
-    (input: { query: string; canvas: boolean; clarificationId?: string }) => {
+    (input: {
+      query: string;
+      canvas: boolean;
+      clarificationId?: string;
+      forceReportArtifact?: boolean;
+    }) => {
       const content = input.query.trim();
       if (!content) return;
       const queuedMessage: QueuedJainaMessage = {
@@ -1847,6 +2146,9 @@ export function JainaChatSurface({
         content,
         createdAt: new Date().toISOString(),
         canvas: input.canvas,
+        ...(input.forceReportArtifact
+          ? { forceReportArtifact: input.forceReportArtifact }
+          : {}),
         ...(input.clarificationId ? { clarificationId: input.clarificationId } : {}),
       };
       setQueuedMessages((previous) => enqueueMessage(previous, queuedMessage));
@@ -1867,8 +2169,9 @@ export function JainaChatSurface({
 
       const input = {
         query: normalizedQuery,
-        canvas: isPlanMode,
+        canvas: false,
         clarificationId: pendingClarificationId,
+        forceReportArtifact: isJainaProMode,
         ...(images && images.length > 0 ? { images } : {}),
         ...(pendingPlanId
           ? {
@@ -1887,16 +2190,22 @@ export function JainaChatSurface({
       });
       if (shouldQueue) {
         queueMessageForLater(input);
+        if (isJainaProMode) {
+          setIsJainaProMode(false);
+        }
         return;
       }
 
-      await dispatchMessage(input);
+      const started = await dispatchMessage(input);
+      if (started && isJainaProMode) {
+        setIsJainaProMode(false);
+      }
     },
     [
       activeResponseId,
       dispatchMessage,
       queueMessageForLater,
-      isPlanMode,
+      isJainaProMode,
       isStreaming,
       messages,
       pendingClarificationId,
@@ -1954,6 +2263,7 @@ export function JainaChatSurface({
         query: nextQueuedMessage.content,
         canvas: nextQueuedMessage.canvas,
         clarificationId: nextQueuedMessage.clarificationId,
+        forceReportArtifact: nextQueuedMessage.forceReportArtifact,
       });
 
       if (started) {
@@ -1988,11 +2298,15 @@ export function JainaChatSurface({
     setQueuedMessages([]);
     setEditingQueueMessageId(null);
     setQueueEditDraft("");
+    setIsJainaProMode(false);
+    setPendingReportArtifactResponseId(null);
+    setReportArtifactJob(null);
     queueDispatchInFlightRef.current = false;
     setSessionId(createJainaSessionId());
     setShaderState("visible");
     processedToolResultIdsRef.current.clear();
     processedCanvasEnvelopeKeysRef.current.clear();
+    processedReportArtifactJobIdsRef.current.clear();
     persistedAssistantResponseIdsRef.current.clear();
   }, [cancel, isStreaming, reset]);
 
@@ -2065,11 +2379,15 @@ export function JainaChatSurface({
             setQueuedMessages([]);
             setEditingQueueMessageId(null);
             setQueueEditDraft("");
+            setIsJainaProMode(false);
+            setPendingReportArtifactResponseId(null);
+            setReportArtifactJob(null);
             queueDispatchInFlightRef.current = false;
             setSessionId(createJainaSessionId());
             setShaderState("visible");
             processedToolResultIdsRef.current.clear();
             processedCanvasEnvelopeKeysRef.current.clear();
+            processedReportArtifactJobIdsRef.current.clear();
             persistedAssistantResponseIdsRef.current.clear();
           }
         }
@@ -2130,7 +2448,7 @@ export function JainaChatSurface({
 
       await dispatchMessage({
         query: queryByType[payload.type],
-        canvas: isPlanMode,
+        canvas: false,
         planAction: {
           type: payload.type,
           plan_id: payload.planId,
@@ -2139,7 +2457,7 @@ export function JainaChatSurface({
         silentUserMessage: payload.type !== "refine",
       });
     },
-    [dispatchMessage, isPlanMode]
+    [dispatchMessage]
   );
 
   const handleClearMemory = React.useCallback(async () => {
@@ -2175,6 +2493,49 @@ export function JainaChatSurface({
   const isQueueStreaming = isStreaming || Boolean(activeResponseId);
   const canStartQueuedNow =
     !isQueueStreaming && !isHistoryLoading && !isConversationSwitching;
+  const hasPendingReportArtifactRequest =
+    Boolean(pendingReportArtifactResponseId) &&
+    Boolean(activeResponseId) &&
+    pendingReportArtifactResponseId === activeResponseId &&
+    isStreaming &&
+    !reportArtifactJob;
+  const reportArtifactStatusLabel =
+    reportArtifactJob?.status === "done"
+      ? "Ready"
+      : reportArtifactJob?.status === "failed"
+        ? "Failed"
+        : reportArtifactJob?.status === "running"
+          ? "Generating"
+          : reportArtifactJob?.status === "pending"
+            ? "Queued"
+            : hasPendingReportArtifactRequest
+              ? "Starting"
+              : isJainaProMode
+                ? "Pro on"
+                : "Pro";
+  const reportArtifactTooltip =
+    reportArtifactJob?.status === "done"
+      ? "Open generated Jaina Pro report"
+      : reportArtifactJob?.status === "failed"
+        ? reportArtifactJob.error ?? "Jaina Pro report failed"
+        : reportArtifactJob
+          ? `Jaina Pro report ${reportArtifactJob.status}`
+          : "Create a Jaina Pro report from this analysis";
+  const reportArtifactButtonDisabled =
+    isInputDisabled ||
+    hasPendingReportArtifactRequest ||
+    reportArtifactJob?.status === "pending" ||
+    reportArtifactJob?.status === "running" ||
+    isReportArtifactDownloading;
+  const ReportArtifactButtonIcon =
+    hasPendingReportArtifactRequest ||
+    reportArtifactJob?.status === "pending" ||
+    reportArtifactJob?.status === "running" ||
+    isReportArtifactDownloading
+      ? Loader2Icon
+      : reportArtifactJob?.status === "done"
+        ? DownloadIcon
+        : FileTextIcon;
 
   if (!adAccountId) {
     return <JainaEmptyState adAccountId={null} />;
@@ -2183,7 +2544,7 @@ export function JainaChatSurface({
   return (
     <div
       className={cn(
-        "relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/70 backdrop-blur-xl",
+        "relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-border/60 bg-background/70 backdrop-blur-xl",
         className
       )}
     >
@@ -2239,180 +2600,214 @@ export function JainaChatSurface({
           onDeleteConversation={handleDeleteConversation}
         />
 
-        <div className="min-h-0 min-w-0 flex-1">
-          <Conversation>
-            <ConversationContent>
-              {isConversationSwitching ? (
-                <ConversationSkeleton />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <Conversation>
+              <ConversationContent>
+                {isConversationSwitching ? (
+                  <ConversationSkeleton />
+                ) : null}
+
+                {!isConversationSwitching && messages.length === 0 && (
+                  <JainaEmptyState
+                    adAccountId={adAccountId}
+                    onExampleClick={(q) => handleSubmit(q)}
+                  />
+                )}
+
+                <AnimatePresence mode="popLayout">
+                  {messages.map((message, index) => {
+                    const precedingUserMessage =
+                      message.role === "assistant"
+                        ? [...messages].slice(0, index).reverse().find((m) => m.role === "user")
+                        : undefined;
+                    return (
+                      <JainaMessageItem
+                        key={message.id}
+                        message={message}
+                        activeResponseId={activeResponseId}
+                        state={state}
+                        onSuggestionClick={handleSubmit}
+                        onPlanFeedback={handlePlanFeedback}
+                        onFocusInput={handleFocusInput}
+                        onRegenerate={
+                          precedingUserMessage
+                            ? () => handleSubmit(precedingUserMessage.content)
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                </AnimatePresence>
+              </ConversationContent>
+            </Conversation>
+          </div>
+
+          <div ref={promptInputWrapperRef} className="shrink-0">
+            <Box px="2" py="2" className="sm:px-3">
+              {queuedMessages.length > 0 ? (
+                <div className="mx-auto mb-2 w-full max-w-[1600px] px-1 sm:px-2">
+                  <Queue className="border-border/70 bg-card/80 shadow-none">
+                    <QueueSection defaultOpen>
+                      <QueueSectionTrigger>
+                        <QueueSectionLabel
+                          count={queuedMessages.length}
+                          label="queued messages"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {isQueueStreaming ? "waiting for current response" : "next will send now"}
+                        </span>
+                      </QueueSectionTrigger>
+                      <QueueSectionContent className="pt-2">
+                        <QueueList className="h-[120px]">
+                          {queuedMessages.map((queuedMessage, index) => {
+                            const isEditing = editingQueueMessageId === queuedMessage.id;
+                            return (
+                              <QueueItem key={queuedMessage.id}>
+                                <div className="flex items-start gap-2">
+                                  <QueueItemIndicator completed={false} />
+                                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                    {isEditing ? (
+                                      <TextArea
+                                        size="2"
+                                        value={queueEditDraft}
+                                        onChange={(event) => setQueueEditDraft(event.target.value)}
+                                        className="min-h-[74px] resize-none"
+                                        aria-label="Edit queued message"
+                                      />
+                                    ) : (
+                                      <QueueItemContent>{queuedMessage.content}</QueueItemContent>
+                                    )}
+                                    <div className="text-[11px] text-muted-foreground/90">
+                                      #{index + 1} in queue
+                                      {queuedMessage.canvas ? " • plan mode" : ""}
+                                      {queuedMessage.forceReportArtifact ? " • Jaina Pro" : ""}
+                                      {queuedMessage.clarificationId ? " • clarification" : ""}
+                                    </div>
+                                  </div>
+                                  <QueueItemActions>
+                                    {isEditing ? (
+                                      <>
+                                        <QueueItemAction
+                                          aria-label="Save queued message"
+                                          onClick={handleQueueEditSave}
+                                        >
+                                          <SaveIcon className="size-3.5" />
+                                        </QueueItemAction>
+                                        <QueueItemAction
+                                          aria-label="Cancel queued message edit"
+                                          onClick={handleQueueEditCancel}
+                                        >
+                                          <XIcon className="size-3.5" />
+                                        </QueueItemAction>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {index === 0 && canStartQueuedNow ? (
+                                          <QueueItemAction
+                                            aria-label="Send queued message now"
+                                            onClick={() => {
+                                              if (queueDispatchInFlightRef.current) return;
+                                              queueDispatchInFlightRef.current = true;
+                                              void (async () => {
+                                                const started = await dispatchMessage({
+                                                  query: queuedMessage.content,
+                                                  canvas: queuedMessage.canvas,
+                                                  clarificationId: queuedMessage.clarificationId,
+                                                  forceReportArtifact:
+                                                    queuedMessage.forceReportArtifact,
+                                                });
+                                                if (started) {
+                                                  setQueuedMessages((previous) =>
+                                                    removeQueuedMessage(
+                                                      previous,
+                                                      queuedMessage.id
+                                                    )
+                                                  );
+                                                }
+                                                queueDispatchInFlightRef.current = false;
+                                              })();
+                                            }}
+                                          >
+                                            <PlayIcon className="size-3.5" />
+                                          </QueueItemAction>
+                                        ) : null}
+                                        <QueueItemAction
+                                          aria-label="Edit queued message"
+                                          onClick={() => handleQueueEditStart(queuedMessage)}
+                                        >
+                                          <Edit2Icon className="size-3.5" />
+                                        </QueueItemAction>
+                                        <QueueItemAction
+                                          aria-label="Remove queued message"
+                                          onClick={() => handleQueueRemove(queuedMessage.id)}
+                                        >
+                                          <Trash2Icon className="size-3.5" />
+                                        </QueueItemAction>
+                                      </>
+                                    )}
+                                  </QueueItemActions>
+                                </div>
+                              </QueueItem>
+                            );
+                          })}
+                        </QueueList>
+                      </QueueSectionContent>
+                    </QueueSection>
+                  </Queue>
+                </div>
               ) : null}
 
-              {!isConversationSwitching && messages.length === 0 && (
-                <JainaEmptyState
-                  adAccountId={adAccountId}
-                  onExampleClick={(q) => handleSubmit(q)}
-                />
-              )}
-
-              <AnimatePresence mode="popLayout">
-                {messages.map((message, index) => {
-                  const precedingUserMessage =
-                    message.role === "assistant"
-                      ? [...messages].slice(0, index).reverse().find((m) => m.role === "user")
-                      : undefined;
-                  return (
-                    <JainaMessageItem
-                      key={message.id}
-                      message={message}
-                      activeResponseId={activeResponseId}
-                      state={state}
-                      onSuggestionClick={handleSubmit}
-                      onPlanFeedback={handlePlanFeedback}
-                      onFocusInput={handleFocusInput}
-                      onRegenerate={
-                        precedingUserMessage
-                          ? () => handleSubmit(precedingUserMessage.content)
-                          : undefined
-                      }
-                    />
-                  );
-                })}
-              </AnimatePresence>
-            </ConversationContent>
-          </Conversation>
-        </div>
-      </div>
-
-      <div ref={promptInputWrapperRef}>
-      <Box p="4" className="relative z-10">
-        {queuedMessages.length > 0 ? (
-          <div className="mx-auto mb-3 w-full max-w-[1600px] px-4 md:px-6 lg:px-8">
-            <Queue className="border-border/70 bg-card/80 shadow-none">
-              <QueueSection defaultOpen>
-                <QueueSectionTrigger>
-                  <QueueSectionLabel
-                    count={queuedMessages.length}
-                    label="queued messages"
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {isQueueStreaming ? "waiting for current response" : "next will send now"}
-                  </span>
-                </QueueSectionTrigger>
-                <QueueSectionContent className="pt-2">
-                  <QueueList className="h-[180px]">
-                    {queuedMessages.map((queuedMessage, index) => {
-                      const isEditing = editingQueueMessageId === queuedMessage.id;
-                      return (
-                        <QueueItem key={queuedMessage.id}>
-                          <div className="flex items-start gap-2">
-                            <QueueItemIndicator completed={false} />
-                            <div className="flex min-w-0 flex-1 flex-col gap-2">
-                              {isEditing ? (
-                                <TextArea
-                                  size="2"
-                                  value={queueEditDraft}
-                                  onChange={(event) => setQueueEditDraft(event.target.value)}
-                                  className="min-h-[74px] resize-none"
-                                  aria-label="Edit queued message"
-                                />
-                              ) : (
-                                <QueueItemContent>{queuedMessage.content}</QueueItemContent>
-                              )}
-                              <div className="text-[11px] text-muted-foreground/90">
-                                #{index + 1} in queue
-                                {queuedMessage.canvas ? " • plan mode" : ""}
-                                {queuedMessage.clarificationId ? " • clarification" : ""}
-                              </div>
-                            </div>
-                            <QueueItemActions>
-                              {isEditing ? (
-                                <>
-                                  <QueueItemAction
-                                    aria-label="Save queued message"
-                                    onClick={handleQueueEditSave}
-                                  >
-                                    <SaveIcon className="size-3.5" />
-                                  </QueueItemAction>
-                                  <QueueItemAction
-                                    aria-label="Cancel queued message edit"
-                                    onClick={handleQueueEditCancel}
-                                  >
-                                    <XIcon className="size-3.5" />
-                                  </QueueItemAction>
-                                </>
-                              ) : (
-                                <>
-                                  {index === 0 && canStartQueuedNow ? (
-                                    <QueueItemAction
-                                      aria-label="Send queued message now"
-                                      onClick={() => {
-                                        if (queueDispatchInFlightRef.current) return;
-                                        queueDispatchInFlightRef.current = true;
-                                        void (async () => {
-                                          const started = await dispatchMessage({
-                                            query: queuedMessage.content,
-                                            canvas: queuedMessage.canvas,
-                                            clarificationId: queuedMessage.clarificationId,
-                                          });
-                                          if (started) {
-                                            setQueuedMessages((previous) =>
-                                              removeQueuedMessage(
-                                                previous,
-                                                queuedMessage.id
-                                              )
-                                            );
-                                          }
-                                          queueDispatchInFlightRef.current = false;
-                                        })();
-                                      }}
-                                    >
-                                      <PlayIcon className="size-3.5" />
-                                    </QueueItemAction>
-                                  ) : null}
-                                  <QueueItemAction
-                                    aria-label="Edit queued message"
-                                    onClick={() => handleQueueEditStart(queuedMessage)}
-                                  >
-                                    <Edit2Icon className="size-3.5" />
-                                  </QueueItemAction>
-                                  <QueueItemAction
-                                    aria-label="Remove queued message"
-                                    onClick={() => handleQueueRemove(queuedMessage.id)}
-                                  >
-                                    <Trash2Icon className="size-3.5" />
-                                  </QueueItemAction>
-                                </>
-                              )}
-                            </QueueItemActions>
-                          </div>
-                        </QueueItem>
-                      );
-                    })}
-                  </QueueList>
-                </QueueSectionContent>
-              </QueueSection>
-            </Queue>
+              <PromptInput
+                onSubmit={(value, attachments) => handleSubmit(value, attachments)}
+                disabled={isInputDisabled}
+                placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}
+                actions={
+                  <TooltipProvider delayDuration={180}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="1"
+                          variant={
+                            isJainaProMode || reportArtifactJob ? "solid" : "soft"
+                          }
+                          color={
+                            reportArtifactJob?.status === "failed"
+                              ? "red"
+                              : isJainaProMode || reportArtifactJob
+                                ? "violet"
+                                : "gray"
+                          }
+                          disabled={reportArtifactButtonDisabled}
+                          aria-pressed={isJainaProMode}
+                          aria-label={reportArtifactTooltip}
+                          onClick={handleReportArtifactAction}
+                          className="gap-1.5"
+                        >
+                          <ReportArtifactButtonIcon
+                            className={cn(
+                              "size-3.5",
+                              (hasPendingReportArtifactRequest ||
+                                reportArtifactJob?.status === "pending" ||
+                                reportArtifactJob?.status === "running" ||
+                                isReportArtifactDownloading) &&
+                                "animate-spin"
+                            )}
+                          />
+                          {reportArtifactStatusLabel}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {reportArtifactTooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                }
+              />
+            </Box>
           </div>
-        ) : null}
-
-        <PromptInput
-          onSubmit={(value, attachments) => handleSubmit(value, attachments)}
-          disabled={isInputDisabled}
-          placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}
-          actions={
-            <Button
-              type="button"
-              size="1"
-              variant={isPlanMode ? "solid" : "soft"}
-              color={isPlanMode ? "amber" : "gray"}
-              disabled={isInputDisabled}
-              aria-pressed={isPlanMode}
-              onClick={() => setIsPlanMode((prev) => !prev)}
-            >
-              Plan
-            </Button>
-          }
-        />
-      </Box>
+        </div>
       </div>
     </div>
   );

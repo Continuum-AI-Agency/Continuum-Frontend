@@ -136,11 +136,30 @@ export async function handleGoogleMetrics(params: any, req: Request) {
       }
     }
 
-    const { data: accessToken, error: tokenError } = await supabase
-      .rpc("get_google_access_token", { p_customer_id: customerId });
+    let accessToken: string | null = null;
 
-    if (tokenError || !accessToken) {
-      log("No access token found for customer", { customerId, error: tokenError });
+    log("Resolving Google access token", { brandId, customerId });
+
+    if (brandId) {
+      const { data, error } = await supabase.rpc("get_brand_integration_token", {
+        p_brand_profile_id: brandId,
+        p_provider: "google",
+      });
+      log("get_brand_integration_token result", { found: !!data, error: error?.message ?? null });
+      accessToken = data ?? null;
+    }
+
+    if (!accessToken) {
+      log("Falling back to get_google_access_token", { customerId });
+      const { data, error } = await supabase.rpc("get_google_access_token", {
+        p_customer_id: customerId,
+      });
+      log("get_google_access_token result", { found: !!data, error: error?.message ?? null });
+      accessToken = data ?? null;
+    }
+
+    if (!accessToken) {
+      log("No access token found — Google Ads not configured for this brand", { brandId, customerId });
       return new Response(JSON.stringify({ error: "Google Ads account not configured or access token missing" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

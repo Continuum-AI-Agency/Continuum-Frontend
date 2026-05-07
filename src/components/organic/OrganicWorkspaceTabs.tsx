@@ -24,7 +24,6 @@ type Props = {
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
   agentSlot?: React.ReactNode;
-  noticeSlot?: React.ReactNode;
 };
 
 const WORKSPACE_LABELS: Record<"planner" | "metrics" | "agent", string> = {
@@ -38,7 +37,6 @@ export function OrganicWorkspaceTabs({
   metricsSlot,
   metricsPrefetchParams,
   agentSlot,
-  noticeSlot,
 }: Props) {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -127,12 +125,7 @@ export function OrganicWorkspaceTabs({
       </div>
 
       <ViewTransition>
-        <div className="min-h-0 overflow-hidden p-2 sm:p-3">
-          {noticeSlot ? (
-            <div className="mb-2 grid gap-2">
-              {noticeSlot}
-            </div>
-          ) : null}
+        <div className="min-h-0 overflow-hidden p-1">
           {/* Always render planner — it's the default tab */}
           <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "planner"}>{plannerSlot}</div>
           {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}

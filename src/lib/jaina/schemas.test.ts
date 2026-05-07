@@ -15,6 +15,7 @@ import {
   handoffTraceEntrySchema,
   responseObjectiveUpdatedSchema,
   responseObjectivesSchema,
+  responseReportArtifactJobStartedSchema,
 } from "./schemas";
 
 
@@ -72,6 +73,44 @@ describe("jainaChatRequestSchema", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("accepts force_report_artifact as private request metadata", () => {
+    const result = jainaChatRequestSchema.safeParse({
+      query: "Analyze last week's campaign performance",
+      include_thoughts: true,
+      force_report_artifact: true,
+      context: {
+        adAccountId: "act_123",
+        brandId: "brand_456",
+        sessionId: "session_abc",
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("responseReportArtifactJobStartedSchema", () => {
+  it("accepts the forced report artifact job event", () => {
+    const result = responseReportArtifactJobStartedSchema.safeParse({
+      type: "response.report_artifact_job.started",
+      data: {
+        item_id: "item_123",
+        part_id: "part_123",
+        job_id: "rjob_12345",
+        status: "pending",
+        report_model: "gemini-3.1-pro-preview",
+        status_endpoint: "/api/agents/jaina/report-artifacts/jobs/rjob_12345",
+        file_url_endpoint:
+          "/api/agents/jaina/report-artifacts/jobs/rjob_12345/file-url",
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.data?.job_id).toBe("rjob_12345");
+    }
   });
 });
 
