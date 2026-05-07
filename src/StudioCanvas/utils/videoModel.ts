@@ -65,6 +65,10 @@ export function supportsVideoGeneratorReferenceVideo(model: VideoGeneratorModel)
   return model === "kling-omni" || model === "seedance-2.0";
 }
 
+export function supportsVideoGeneratorReferenceImages(model: VideoGeneratorModel): boolean {
+  return model !== "veo-3.1-fast";
+}
+
 export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): string[] {
   if (model === "veo-3.1-fast") {
     return ["prompt-in", "prompt", "negative", ...VIDEO_FRAME_HANDLES];
@@ -79,7 +83,7 @@ export function getVideoGeneratorTargetHandles(model: VideoGeneratorModel): stri
     ];
   }
   if (model === "pixverse-v6") {
-    return ["prompt-in", "prompt", "negative", "ref-image"];
+    return ["prompt-in", "prompt", "negative", VIDEO_IMAGE_REFERENCE_HANDLES[0]];
   }
   if (model === "seedance-2.0") {
     return ["prompt-in", "prompt", "negative", ...VIDEO_IMAGE_REFERENCE_HANDLES, ...VIDEO_FRAME_HANDLES, VIDEO_REFERENCE_VIDEO_HANDLE];

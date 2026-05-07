@@ -283,7 +283,7 @@ describe('buildNodePayload', () => {
 
       const payload = buildVeoPayload(node, resolvedData, [], edges);
       expect(payload?.imageReferences?.[0].data).toBe('seedance_image');
-      expect(payload?.referenceImages?.[0]?.data).toBe('seedance_image');
+      expect(payload?.referenceImages).toBeUndefined();
     });
   });
 

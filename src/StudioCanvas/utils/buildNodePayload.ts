@@ -9,6 +9,7 @@ import {
   getVideoGeneratorBackendModel,
   getVideoGeneratorReferenceMode,
   supportsVideoGeneratorFrameInputs,
+  supportsVideoGeneratorReferenceVideo,
   isVideoGeneratorNodeType,
   resolveVideoGeneratorModel,
 } from './videoModel';
@@ -483,7 +484,7 @@ export function buildVeoPayload(
     }
   }
 
-  if (model === 'kling-omni' || model === 'seedance-2.0') {
+  if (supportsVideoGeneratorReferenceVideo(model)) {
     const refVideoInput = resolveVideoInput(node.id, 'ref-video', resolvedData, allNodes, allEdges);
     if (refVideoInput?.data) {
       referenceVideo = {
@@ -560,7 +561,8 @@ export function buildVeoPayload(
     lastFrame,
     referenceVideo,
     imageReferences,
-    referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    // seedance-2.0 uses imageReferences (data/mimeType/filename); original referenceImages intentionally omitted to avoid duplicate payload
+    referenceImages: model !== 'seedance-2.0' && referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
   };
 }
 
