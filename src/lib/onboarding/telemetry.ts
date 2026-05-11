@@ -19,6 +19,7 @@ export type OnboardingEventName =
   | "onboarding_oauth_failed"
   | "onboarding_asset_assigned"
   | "onboarding_asset_unassigned"
+  | "onboarding_assets_cleared"
   | "onboarding_member_invited"
   | "onboarding_launch_clicked"
   | "onboarding_launch_succeeded"

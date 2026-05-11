@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { motion } from "motion/react";
 import { Plug } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   type IntegrationSwitcherTab,
 } from "@/components/shadcn-studio/card/integration-switcher";
 import {
+  applyBrandAssignmentsDirect,
   assignBrandIntegrationAccount,
   startGoogleSync,
   startMetaSync,
@@ -184,6 +185,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
   const { assignedIds, refresh: refreshAssigned } = useBrandAssignedAccountIds(brandId);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [syncingTabIds, setSyncingTabIds] = useState<Set<string>>(new Set());
+  const [clearing, startClearing] = useTransition();
 
   const { tabs, data, childrenByParent } = useMemo(() => {
     const assignedSet = new Set(assignedIds);
@@ -327,6 +329,22 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
     [brandId, markSyncing, refetchUserAssets, refreshAssigned, show]
   );
 
+  const handleClearAll = useCallback(() => {
+    startClearing(async () => {
+      try {
+        await applyBrandAssignmentsDirect(brandId, []);
+        await refreshAssigned();
+        trackOnboardingEvent("onboarding_assets_cleared", {});
+      } catch (error) {
+        show({
+          title: "Couldn't clear accounts",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "error",
+        });
+      }
+    });
+  }, [brandId, refreshAssigned, show]);
+
   const syncLabel = useCallback((tabId: string, hasItems: boolean) => {
     const group = META_GOOGLE_TIKTOK[tabId];
     const providerLabel = group ? SYNC_LABEL_BY_GROUP[group] : (PLATFORM_LABELS[tabId as PlatformKey] ?? tabId);
@@ -351,6 +369,16 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
             Pick the specific accounts this brand should use. You can change this any time in
             Settings.
           </p>
+          {assignedIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={clearing}
+              className="mt-2 text-[12px] text-[#94a3b8] underline-offset-2 hover:text-[#64748b] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {clearing ? "Clearing…" : "Clear all"}
+            </button>
+          )}
         </motion.header>
 
         <motion.div variants={item} className="mx-auto w-full max-w-[880px]">

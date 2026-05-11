@@ -709,6 +709,13 @@ export async function removeDocument(
 
 export async function resetOnboardingState(brandId: string): Promise<OnboardingState> {
   const context = await loadOnboardingContext(brandId);
+
+  await (context.supabase as SupabaseClient)
+    .schema("brand_profiles")
+    .from("brand_profile_integration_accounts")
+    .delete()
+    .eq("brand_profile_id", context.brandId);
+
   const resetState = createDefaultOnboardingState(context.owner);
   resetState.brand.name = "";
   resetState.members = [];
