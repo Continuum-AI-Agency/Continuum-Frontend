@@ -94,7 +94,9 @@ export const PlannerCell = React.memo(function PlannerCell({
       ref={setNodeRef}
       className={cn(
         "group relative align-top",
-        compact ? "min-h-[50px] p-1" : "min-h-[102px] p-1.5",
+        compact
+          ? "min-h-[clamp(40px,5dvh,80px)] px-[var(--app-shell-pad-inline-tight)] py-[var(--app-shell-pad-block)]"
+          : "min-h-[clamp(80px,11dvh,140px)] px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]",
         "border-r border-b border-border/50",
         !isLastColumn && "border-r",
         isLastColumn && "border-r-0",

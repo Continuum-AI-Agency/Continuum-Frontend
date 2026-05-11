@@ -587,7 +587,7 @@ function TikTokEmbed({ videoId, permalink }: { videoId: string; permalink: strin
   return (
     <div
       ref={containerRef}
-      className="flex min-h-[300px] max-h-[500px] w-full items-center justify-center overflow-hidden [&_iframe]:!max-h-[500px]"
+      className="flex min-h-[clamp(240px,60dvh,600px)] max-h-[clamp(360px,75dvh,800px)] w-full items-center justify-center overflow-hidden [&_iframe]:!max-h-[clamp(360px,75dvh,800px)]"
     />
   );
 }

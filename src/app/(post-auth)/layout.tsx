@@ -21,6 +21,11 @@ async function DashboardLayoutContent({
     redirect("/onboarding");
   }
 
+  const activeIsCompleted = brandSummaries.some((b) => b.id === activeBrandId);
+  if (!activeIsCompleted) {
+    redirect(`/onboarding?brand=${activeBrandId}`);
+  }
+
   return (
     <DashboardLayoutShell
       activeBrandId={activeBrandId}

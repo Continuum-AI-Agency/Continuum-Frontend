@@ -38,7 +38,7 @@ function formatDate(value?: string) {
 function BrandTrendsPanelSkeleton() {
   return (
     <Card className="flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none">
-      <CardHeader className="gap-1 border-b px-2 py-1.5">
+      <CardHeader className="gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Skeleton className="h-3 w-28" />
@@ -97,8 +97,8 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <Card className={cn("flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none", className)}>
-      <CardHeader className="gap-0 border-b px-2 py-1.5">
+    <Card data-tour-id="brand-trends" className={cn("flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none", className)}>
+      <CardHeader className="gap-0 border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-2">
             <p className="text-muted-foreground flex shrink-0 items-center gap-1 text-[11px] font-semibold tracking-wide uppercase">

@@ -37,7 +37,7 @@ export function OrganicTrendsDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-[420px] flex-col gap-0 p-0 sm:max-w-[420px]"
+        className="flex w-[clamp(320px,80vw,480px)] flex-col gap-0 p-0 sm:max-w-[clamp(320px,80vw,480px)]"
       >
         <SheetHeader className="shrink-0 border-b border-border/50 px-4 py-3">
           <SheetTitle className="text-sm font-semibold">Trends &amp; Signals</SheetTitle>

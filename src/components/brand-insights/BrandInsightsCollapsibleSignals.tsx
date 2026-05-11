@@ -86,7 +86,7 @@ export function BrandInsightsCollapsibleSignals({
             </div>
           </AccordionTrigger>
           <AccordionContent className="p-0">
-            <div className="max-h-[350px] overflow-y-auto custom-scrollbar p-2">
+            <div className="max-h-[clamp(240px,50dvh,500px)] overflow-y-auto custom-scrollbar p-2">
               <TrendsDataTable
                 data={section.data as any}
                 selectedTrendIds={selectedTrendIds}

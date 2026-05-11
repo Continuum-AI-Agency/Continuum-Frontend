@@ -693,16 +693,16 @@ function MetricsPanel({
                 <Card
                   variant="surface"
                   className={cn(
-                    "border border-subtle bg-surface transition-all hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden",
+                    "border border-subtle bg-surface transition-[background-color,box-shadow] hover:bg-accent/5 cursor-pointer flex flex-col items-center justify-center min-h-[64px] overflow-hidden",
                     isActive && "ring-1 ring-primary bg-accent/10"
                   )}
                 >
                   <Box p="2" className="w-full">
                     <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
                       <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>{item.label}</Text>
-                      <Heading weight="bold" className="truncate w-full leading-tight" style={{ fontSize: "clamp(10px, 1vw, 12px)" }}>{formatValue(item.value, item.format)}</Heading>
+                      <Heading weight="bold" className="truncate w-full leading-tight tabular-nums" style={{ fontSize: "clamp(10px, 1vw, 12px)" }}>{formatValue(item.value, item.format)}</Heading>
                       {formattedDelta ? (
-                        <Text color={deltaTone} weight="bold" className="leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
+                        <Text color={deltaTone} weight="bold" className="leading-none tabular-nums" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
                           {formattedDelta}
                         </Text>
                       ) : (

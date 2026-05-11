@@ -436,7 +436,7 @@ export function TrendWorkbench({
               className="text-xs"
             />
             {shouldShowCommandList ? (
-              <CommandList className="max-h-[160px]">
+              <CommandList className="max-h-[clamp(120px,40dvh,280px)]">
                 <CommandEmpty>No matching commands or trends.</CommandEmpty>
                 {isCommandMode ? (
                   <CommandGroup heading="Presets">

@@ -99,7 +99,7 @@ export function OrganicWorkspaceTabs({
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
-      <div className="flex min-h-10 items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-3">
+      <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
         <nav className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5" aria-label="Organic workspace">
@@ -125,7 +125,7 @@ export function OrganicWorkspaceTabs({
       </div>
 
       <ViewTransition>
-        <div className="min-h-0 overflow-hidden p-1">
+        <div className="min-h-0 overflow-hidden px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           {/* Always render planner — it's the default tab */}
           <div className="h-full w-full min-h-0 overflow-hidden" hidden={activeView !== "planner"}>{plannerSlot}</div>
           {/* Defer metrics mount until first viewed, then keep alive to avoid re-fetch */}

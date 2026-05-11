@@ -33,7 +33,7 @@ export function OrganicDashboardView({
   insightsStatus,
 }: OrganicDashboardViewProps) {
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col gap-1.5 overflow-y-auto">
+    <div className="flex h-full min-h-0 min-w-0 flex-col gap-[var(--app-shell-gap)] overflow-y-auto">
       <section className="shrink-0">
         <InstagramOrganicReportingWidget
           brandId={brandId}

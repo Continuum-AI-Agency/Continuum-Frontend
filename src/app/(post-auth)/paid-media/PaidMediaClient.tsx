@@ -251,9 +251,9 @@ export default function PaidMediaClientPage({
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
-        className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1 overflow-hidden"
+        className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--app-shell-gap)] overflow-hidden"
       >
-        <div className="flex min-h-9 flex-wrap items-center justify-between gap-2 rounded-lg border border-border/70 bg-muted/10 px-2 py-1 sm:px-3">
+        <div className="flex min-h-9 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] rounded-lg border border-border/70 bg-muted/10 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <AdAccountSelector
             brandId={brandProfileId}
             selectedAccountId={selectedAdAccount}

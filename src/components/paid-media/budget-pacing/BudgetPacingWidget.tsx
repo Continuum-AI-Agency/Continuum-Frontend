@@ -94,7 +94,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
 
   return (
     <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1 sm:px-3">
+      <div className="flex flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex min-w-0 items-center gap-1.5">
           <h3 className="truncate text-xs font-semibold sm:text-sm">Budget Pace</h3>
           <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
@@ -112,7 +112,7 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
         </IconButton>
       </div>
 
-      <div className="min-h-0 overflow-y-auto p-1.5">
+      <div className="min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         {state.status === "loading" && <BudgetPacingLoadingSkeleton />}
 
         {state.status === "error" && (

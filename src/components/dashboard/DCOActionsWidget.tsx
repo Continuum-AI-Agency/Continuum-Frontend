@@ -686,7 +686,7 @@ export function DCOActionsWidget({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
             {error ? (
               <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3">
                 <p className="text-xs text-destructive">{error}</p>

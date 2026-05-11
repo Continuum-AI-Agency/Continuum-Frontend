@@ -160,7 +160,7 @@ export function BrandInsightsDataTable({
   const rowPaddingClass = compact ? "py-2" : "py-3";
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col", compact ? "gap-1" : "gap-2")}>
+    <div className={cn("flex h-full min-h-0 flex-col gap-[var(--app-shell-gap)]")}>
       <div className="flex items-center gap-1.5">
         <div className="relative flex-1">
           <Search className={cn("text-muted-foreground pointer-events-none absolute left-2.5 h-4 w-4", compact ? "top-1.5" : "top-2.5")} />

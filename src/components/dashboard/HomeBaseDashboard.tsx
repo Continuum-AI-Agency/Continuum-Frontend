@@ -39,8 +39,8 @@ export function HomeBaseDashboard({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-border/70 bg-background">
-        <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1">
+      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <h1 className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {activeConfig.title}
           </h1>
@@ -72,10 +72,10 @@ export function HomeBaseDashboard({
           </nav>
         </div>
 
-        <div className="min-h-0 overflow-hidden p-1">
+        <div className="min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <motion.div
             data-dashboard-panel="paid"
-            className="h-full min-h-0"
+            className="h-full min-h-[clamp(500px,80dvh,1400px)]"
             animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 1 : 0.98 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ display: isPaidView ? "block" : "none" }}
@@ -85,7 +85,7 @@ export function HomeBaseDashboard({
 
           <motion.div
             data-dashboard-panel="organic"
-            className="h-full min-h-0"
+            className="h-full min-h-[clamp(400px,75dvh,1200px)]"
             animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 0.98 : 1 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             style={{ display: isPaidView ? "none" : "block" }}

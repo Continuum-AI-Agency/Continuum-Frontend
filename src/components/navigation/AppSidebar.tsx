@@ -102,7 +102,7 @@ function AppSidebarInner() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={() => openPalette(true)}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
+                    className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
                     aria-label="Search (⌘K)"
                   >
                     <Search className="h-[14px] w-[14px]" />
@@ -118,7 +118,7 @@ function AppSidebarInner() {
           )}
           <button
             onClick={toggleSidebar}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
+            className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
             aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
           >
             <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />

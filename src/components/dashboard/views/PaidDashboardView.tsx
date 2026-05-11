@@ -223,7 +223,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   }, []);
 
   const reportingArea = (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-1.5">
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--app-shell-gap)]">
       <div className="min-w-0">
         <PaidMediaReportingWidget
           brandId={brandId}
@@ -248,7 +248,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   }, []);
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] gap-1.5">
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
       <div className="min-w-0">{reportingArea}</div>
 
       <AnimatePresence
