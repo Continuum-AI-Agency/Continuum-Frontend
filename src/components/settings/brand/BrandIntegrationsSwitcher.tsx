@@ -9,16 +9,10 @@ import {
   type IntegrationSwitcherItemStatus,
   type IntegrationSwitcherTab,
 } from "@/components/shadcn-studio/card/integration-switcher";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { ManageBrandIntegrationsPopover } from "./ManageBrandIntegrationsPopover";
-import { BrandIntegrationsSection } from "../BrandIntegrationsSection";
+import { AssignmentsDialog } from "@/components/integrations/AssignmentsDialog";
+import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 import { PLATFORM_ICONS, PLATFORM_LABELS } from "../shell/platformIcons";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import type { PlatformKey } from "@/components/onboarding/platforms";
@@ -31,11 +25,27 @@ function statusFor(status: string | null): IntegrationSwitcherItemStatus {
   return status && status.toLowerCase() === "active" ? "checked" : "copy";
 }
 
+function extractAssignedIntegrationAccountIds(summary?: BrandIntegrationSummary): string[] {
+  if (!summary) return [];
+
+  const ids = new Set<string>();
+  (Object.keys(summary) as PlatformKey[]).forEach((platformKey) => {
+    summary[platformKey]?.accounts.forEach((account) => {
+      ids.add(account.integrationAccountId);
+    });
+  });
+
+  return Array.from(ids);
+}
+
 export function BrandIntegrationsSwitcher({ initialSummary }: BrandIntegrationsSwitcherProps) {
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const { activeBrandId } = useActiveBrandContext();
+  const { integrations, isLoading, refresh } = useBrandIntegrations(activeBrandId, initialSummary);
+  const [assignmentsOpen, setAssignmentsOpen] = useState(false);
+  const resolvedSummary = integrations ?? initialSummary;
 
   const { tabs, data, hasAny } = useMemo(() => {
-    const summary = initialSummary ?? null;
+    const summary = resolvedSummary ?? null;
     if (!summary) return { tabs: [] as IntegrationSwitcherTab[], data: {} as IntegrationSwitcherData, hasAny: false };
 
     const tabs: IntegrationSwitcherTab[] = [];
@@ -60,24 +70,39 @@ export function BrandIntegrationsSwitcher({ initialSummary }: BrandIntegrationsS
     });
 
     return { tabs, data, hasAny: tabs.length > 0 };
-  }, [initialSummary]);
+  }, [resolvedSummary]);
 
-  const openManage = () => setSheetOpen(true);
+  const assignedIds = useMemo(
+    () => extractAssignedIntegrationAccountIds(resolvedSummary),
+    [resolvedSummary]
+  );
+
+  const openAssignments = () => setAssignmentsOpen(true);
+
+  const assignButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="gap-2"
+      onClick={openAssignments}
+      disabled={!activeBrandId || isLoading}
+    >
+      <Plus className="h-3.5 w-3.5" />
+      Assign accounts
+    </Button>
+  );
 
   return (
     <>
       {hasAny ? (
-        <IntegrationSwitcher
-          integrations={tabs}
-          data={data}
-          className="max-w-none"
-          tabBarTrailing={
-            <ManageBrandIntegrationsPopover
-              summary={initialSummary}
-              onManage={openManage}
-            />
-          }
-        />
+        <div className="space-y-3">
+          <IntegrationSwitcher
+            integrations={tabs}
+            data={data}
+            className="max-w-none"
+            tabBarTrailing={assignButton}
+          />
+        </div>
       ) : (
         <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-5 py-10 text-center">
           <Plug className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden />
@@ -86,32 +111,23 @@ export function BrandIntegrationsSwitcher({ initialSummary }: BrandIntegrationsS
             Assign provider accounts to this brand to surface them across the app.
           </p>
           <div className="mt-4 inline-block">
-            <ManageBrandIntegrationsPopover
-              summary={initialSummary}
-              onManage={openManage}
-            >
-              <Button variant="outline" size="sm" className="gap-2">
-                <Plus className="h-3.5 w-3.5" />
-                Assign accounts
-              </Button>
-            </ManageBrandIntegrationsPopover>
+            {assignButton}
           </div>
         </div>
       )}
 
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-2xl">
-          <SheetHeader className="border-b border-border/60 px-6 py-4">
-            <SheetTitle>Manage brand integrations</SheetTitle>
-            <SheetDescription>
-              Re-sync providers and assign individual accounts to this brand.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="px-6 py-5">
-            <BrandIntegrationsSection initialSummary={initialSummary} />
-          </div>
-        </SheetContent>
-      </Sheet>
+      {activeBrandId ? (
+        <AssignmentsDialog
+          open={assignmentsOpen}
+          onOpenChange={setAssignmentsOpen}
+          brandProfileId={activeBrandId}
+          summary={resolvedSummary ?? ({} as BrandIntegrationSummary)}
+          assignedIds={assignedIds}
+          onSaved={async () => {
+            await refresh();
+          }}
+        />
+      ) : null}
     </>
   );
 }

@@ -459,20 +459,57 @@ type ConsumerResult = {
   complete?: OnboardingPreviewWorkflowResult;
 };
 
-export async function runOnboardingPreview(options: PreviewOptions): Promise<RunOnboardingPreviewResult> {
-  const previewHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "text/event-stream",
-    "X-Onboarding-UX": "rich",
-  };
+async function readRunHandshake(
+  body: ReadableStream<Uint8Array>
+): Promise<{ runId: string | null; stream: ReadableStream<Uint8Array> }> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
 
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const match = buffer.match(/event:\s*run\r?\ndata:\s*(\{[^\n]+\})\r?\n/);
+    if (match) {
+      let runId: string | null = null;
+      try {
+        runId = (JSON.parse(match[1]) as { run_id?: string }).run_id ?? null;
+      } catch {
+        // malformed handshake — proceed without runId
+      }
+      const remainder = buffer.slice((match.index ?? 0) + match[0].length);
+      const remainderBytes = new TextEncoder().encode(remainder);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          if (remainderBytes.length > 0) controller.enqueue(remainderBytes);
+        },
+        pull(controller) {
+          return reader.read().then(({ value: chunk, done: d }) => {
+            if (d) controller.close();
+            else controller.enqueue(chunk);
+          });
+        },
+        cancel() {
+          reader.cancel();
+        },
+      });
+      return { runId, stream };
+    }
+  }
+
+  return { runId: null, stream: new ReadableStream({ start: (c) => c.close() }) };
+}
+
+export async function runOnboardingPreview(options: PreviewOptions): Promise<RunOnboardingPreviewResult> {
   const response = await fetch(buildUrl("/onboarding/brand-profiles/preview"), {
     method: "POST",
-    headers: previewHeaders,
+    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,
       scrape: options.payload.scrape ?? null,
+      richMode: true,
     }),
     cache: "no-store",
     signal: options?.signal,
@@ -488,10 +525,10 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
     throw new Error("Preview stream was not available.");
   }
 
-  const runId = response.headers.get("X-Preview-Run-Id");
+  const { runId, stream } = await readRunHandshake(response.body);
   options.onRunId?.(runId);
 
-  const result = await consumePreviewStream(response.body, {
+  const result = await consumePreviewStream(stream, {
     onEvent: options.onEvent,
     onSequence: options.onSequence,
   });
@@ -509,7 +546,6 @@ export async function resumeOnboardingPreview(
   } = {}
 ): Promise<ConsumerResult> {
   const headers: Record<string, string> = { Accept: "text/event-stream" };
-  if (options.rich !== false) headers["X-Onboarding-UX"] = "rich";
   if (typeof options.lastEventId === "number" && options.lastEventId > 0) {
     headers["Last-Event-ID"] = String(options.lastEventId);
   }
