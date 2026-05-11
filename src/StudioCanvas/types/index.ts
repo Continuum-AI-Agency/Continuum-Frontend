@@ -86,7 +86,7 @@ export interface DocumentNodeData extends BaseNodeData {
 }
 
 export interface VideoGenNodeData extends BaseNodeData {
-  model: 'veo-3.1' | 'veo-3.1-fast' | 'kling-omni' | 'pixverse-v6' | 'seedance-2.0';
+  model: 'veo-3.1' | 'veo-3.1-fast' | 'veo-3.1-lite' | 'kling-omni' | 'pixverse-v6' | 'seedance-2.0';
   prompt: string;
   negativePrompt?: string;
   enhancePrompt: boolean;

@@ -120,7 +120,7 @@ export function getTargetHandleConnectionLimit(
   }
 
   const model = resolveVideoGeneratorModel(node);
-  if (model === 'veo-3.1-fast') {
+  if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
     if (targetHandle === 'first-frame' || targetHandle === 'last-frame') {
       return 1;
     }
@@ -207,7 +207,7 @@ export function isValidConnection(
     if (sourceNode.type === 'string') {
       if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
     } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
-      if (model === 'veo-3.1-fast') {
+      if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
         if (!isFrameHandle(targetHandle)) return false;
       } else if (!isImageReferenceHandle(targetHandle)) {
         return false;

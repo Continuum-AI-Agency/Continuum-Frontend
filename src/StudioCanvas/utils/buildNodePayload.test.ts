@@ -159,6 +159,41 @@ describe('buildNodePayload', () => {
       expect(payload?.model).toBe('veo-3.1-generate-preview');
     });
 
+    it('should map Veo 3.1 Lite to the Gemini API model code', () => {
+      const node: StudioNode = {
+        id: 'veo-lite',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'veo-3.1-lite',
+          prompt: 'A fast concept video',
+          enhancePrompt: false,
+          resolution: '1080p',
+        },
+      };
+
+      const edges: Edge[] = [
+        { id: 'e1', source: 'f1', target: 'veo-lite', sourceHandle: 'image', targetHandle: 'first-frame' },
+        { id: 'e2', source: 'f2', target: 'veo-lite', sourceHandle: 'image', targetHandle: 'last-frame' },
+        { id: 'e3', source: 'ref', target: 'veo-lite', sourceHandle: 'image', targetHandle: 'ref-images' },
+      ];
+
+      const resolvedData = new Map<string, NodeOutput>();
+      resolvedData.set('f1', { type: 'image', base64: 'first_base64', mimeType: 'image/png' });
+      resolvedData.set('f2', { type: 'image', base64: 'last_base64', mimeType: 'image/png' });
+      resolvedData.set('ref', { type: 'image', base64: 'ignored_ref_base64', mimeType: 'image/png' });
+
+      const payload = buildVeoPayload(node, resolvedData, [], edges);
+      expect(payload).not.toBeNull();
+      expect(payload?.model).toBe('veo-3.1-lite-generate-preview');
+      expect(payload?.resolution).toBe('1080p');
+      expect(payload?.firstFrame?.data).toBe('first_base64');
+      expect(payload?.lastFrame?.data).toBe('last_base64');
+      expect(payload?.referenceImages).toBeUndefined();
+      expect(getVideoGeneratorTargetHandles('veo-3.1-lite')).toContain('first-frame');
+      expect(getVideoGeneratorTargetHandles('veo-3.1-lite')).not.toContain('ref-images');
+    });
+
     it('should prioritize negative prompt from edge input', () => {
       const node: StudioNode = {
         id: 'veo',

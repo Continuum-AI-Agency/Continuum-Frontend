@@ -31,6 +31,7 @@ function toBackendPayload(payload: AiStudioGenerationRequest) {
     negative_prompt: payload.negativePrompt ?? null,
     template_id: payload.templateId ?? null,
     aspect_ratio: payload.aspectRatio ?? null,
+    resolution: payload.resolution ?? null,
     duration_seconds: payload.durationSeconds ?? null,
     guidance_scale: payload.guidanceScale ?? null,
     seed: payload.seed ?? null,

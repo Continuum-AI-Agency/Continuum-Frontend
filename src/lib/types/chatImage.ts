@@ -13,6 +13,7 @@ export type SupportedBackendModel =
   | SupportedModel
   | "veo-3.1-generate-preview"
   | "veo-3.1-fast-generate-preview"
+  | "veo-3.1-lite-generate-preview"
   | "kling-omni"
   | "gemini-2.5-flash-image";
 

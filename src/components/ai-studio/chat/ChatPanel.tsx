@@ -205,7 +205,7 @@ export function ChatPanel({
               onChange={(e) => form.setValue("prompt", e.target.value)}
               placeholder="Describe what you want to see"
               rows={6}
-              className="min-h-[300px] pr-10"
+              className="min-h-[clamp(240px,60dvh,500px)] pr-10"
               disabled={disabled || isStreaming || isEnriching}
             />
             <div className="absolute right-2 top-2 flex flex-col gap-2">

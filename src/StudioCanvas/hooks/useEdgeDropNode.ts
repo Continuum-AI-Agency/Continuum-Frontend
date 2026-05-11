@@ -405,7 +405,9 @@ export function useProximityConnect() {
                  if (targetNode.type === 'nanoGen') {
                    targetHandle = 'ref-image';
                  } else {
-                   targetHandle = targetVideoModel === 'veo-3.1-fast' ? 'first-frame' : 'ref-images';
+                   const usesFrameInput =
+                     targetVideoModel === 'veo-3.1-fast' || targetVideoModel === 'veo-3.1-lite';
+                   targetHandle = usesFrameInput ? 'first-frame' : 'ref-images';
                  }
              }
         }

@@ -229,4 +229,32 @@ describe('isValidConnection', () => {
 
     expect(valid).toBe(false);
   });
+
+  it('should allow Veo 3.1 Lite frame inputs but reject reference images', () => {
+    const liteNodes = [
+      ...nodes,
+      {
+        id: 'veoLite',
+        type: 'videoGen',
+        position: { x: 0, y: 0 },
+        data: { model: 'veo-3.1-lite', prompt: '' },
+      } as StudioNode,
+    ];
+
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoLite', targetHandle: 'first-frame' },
+        [],
+        liteNodes
+      )
+    ).toBe(true);
+
+    expect(
+      isValidConnection(
+        { source: 'image1', sourceHandle: 'image', target: 'veoLite', targetHandle: 'ref-images' },
+        [],
+        liteNodes
+      )
+    ).toBe(false);
+  });
 });

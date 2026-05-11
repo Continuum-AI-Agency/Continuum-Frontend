@@ -131,6 +131,8 @@ export function useWorkflowExecution() {
                 mime_type?: string;
                 signed_url?: string;
                 download_url?: string;
+                url?: string;
+                video_url?: string;
                 poster_base64?: string;
                 storage?: { signed_url?: string };
                 message?: string;
@@ -169,7 +171,9 @@ export function useWorkflowExecution() {
                     ? parsed.storage?.signed_url
                     : typeof parsed.download_url === "string"
                       ? parsed.download_url
-                      : undefined;
+                      : typeof parsed.url === "string"
+                        ? parsed.url
+                        : undefined;
               const persistentImageUrl = imageUrl && !imageUrl.startsWith("data:") ? imageUrl : undefined;
 
               if (eventName === "image" && normalizedImageBase64) {
@@ -209,13 +213,17 @@ export function useWorkflowExecution() {
                     ? parsed.storage?.signed_url
                     : typeof parsed.download_url === "string"
                       ? parsed.download_url
-                      : typeof parsed.data_url === "string"
-                        ? parsed.data_url
-                        : typeof parsed.bytes === "string"
-                          ? `data:${videoMime};base64,${parsed.bytes}`
-                          : typeof parsed.base64 === "string"
-                            ? `data:${videoMime};base64,${parsed.base64}`
-                            : undefined;
+                      : typeof parsed.url === "string"
+                        ? parsed.url
+                        : typeof parsed.video_url === "string"
+                          ? parsed.video_url
+                          : typeof parsed.data_url === "string"
+                            ? parsed.data_url
+                            : typeof parsed.bytes === "string"
+                              ? `data:${videoMime};base64,${parsed.bytes}`
+                              : typeof parsed.base64 === "string"
+                                ? `data:${videoMime};base64,${parsed.base64}`
+                                : undefined;
               const videoUrl = rawVideoString;
 
               if ((eventName === "video" || eventName === "stored") && videoUrl) {

@@ -104,6 +104,9 @@ function normalizeProvider(provider: string): z.infer<typeof aiStudioProviderSch
   if (provider === "veo-3-1-fast") {
     return "veo-3-1";
   }
+  if (provider === "veo-3.1-lite-generate-preview") {
+    return "veo-3-1-lite";
+  }
   return aiStudioProviderSchema.parse(provider);
 }
 

@@ -229,7 +229,7 @@ export function LoadWorkflowDialog({
   if (!showTrigger) {
     if (!isOpen) return null;
     return (
-      <div className="fixed right-4 top-20 z-[120] w-[460px] rounded-md border bg-popover text-popover-foreground shadow-lg">
+      <div className="fixed right-4 top-20 z-[120] w-[clamp(340px,85vw,500px)] rounded-md border bg-popover text-popover-foreground shadow-lg">
         <WorkflowPanel {...panelProps} />
       </div>
     );
@@ -242,7 +242,7 @@ export function LoadWorkflowDialog({
           <DownloadIcon className="mr-2 h-4 w-4" /> Load
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[460px] p-0">
+      <PopoverContent align="end" className="w-[clamp(340px,85vw,500px)] p-0">
         <WorkflowPanel {...panelProps} />
       </PopoverContent>
     </Popover>

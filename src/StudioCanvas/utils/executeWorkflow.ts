@@ -219,7 +219,8 @@ const findMissingOptionalInput = (
           return handle;
         }
       } else if (handle === 'ref-image' || handle === 'ref-images') {
-        if (videoModel !== 'veo-3.1-fast' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+        const supportsImageReferences = videoModel !== 'veo-3.1-fast' && videoModel !== 'veo-3.1-lite';
+        if (supportsImageReferences && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
       } else if (handle === 'ref-video') {
@@ -227,7 +228,8 @@ const findMissingOptionalInput = (
           return handle;
         }
       } else if (handle === 'first-frame' || handle === 'last-frame' || handle.startsWith('frame-')) {
-        if (videoModel === 'veo-3.1-fast' && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
+        const supportsFrames = videoModel === 'veo-3.1-fast' || videoModel === 'veo-3.1-lite';
+        if (supportsFrames && !resolveImageInput(edge, resolvedOutputs, nodeById)) {
           return handle;
         }
       }
