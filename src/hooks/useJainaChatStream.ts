@@ -8,6 +8,7 @@ import {
   type JainaChatStreamRequest,
   type JainaPlanAction,
 } from "@/lib/jaina/schemas";
+import type { AgentMentionReference } from "@/lib/agent-references";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import {
   createInitialJainaStreamState,
@@ -25,6 +26,7 @@ type JainaChatInput = {
   clarificationId?: string;
   userId?: string;
   images?: Array<{ url: string; name?: string }>;
+  references?: AgentMentionReference[];
   planAction?: JainaPlanAction;
   forceReportArtifact?: boolean;
 };
@@ -94,6 +96,10 @@ export function useJainaChatStream() {
           query: input.query,
           include_thoughts: true,
           force_report_artifact: input.forceReportArtifact,
+          message_metadata:
+            input.references && input.references.length > 0
+              ? { references: input.references }
+              : undefined,
           userId: input.userId,
           canvas: input.canvas,
           clarification: input.clarificationId
@@ -105,6 +111,9 @@ export function useJainaChatStream() {
             brandId: input.brandId,
             sessionId: input.sessionId,
             canvas: input.canvas,
+            ...(input.references && input.references.length > 0
+              ? { references: input.references }
+              : {}),
             ...(input.images && input.images.length > 0 ? { images: input.images } : {}),
           },
         });

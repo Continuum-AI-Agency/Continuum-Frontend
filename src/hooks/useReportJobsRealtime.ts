@@ -5,11 +5,14 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export const reportJobSchema = z.object({
-  id: z.string(),
+  job_id: z.string(),
   brand_id: z.string(),
   status: z.enum(["pending", "running", "done", "failed"]),
   file_path: z.string().nullable(),
   error_message: z.string().nullable(),
+  step_index: z.number().int().optional().default(0),
+  step_name: z.string().nullable().optional(),
+  steps_json: z.unknown().optional(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
   ad_account_id: z.string().nullable(),
@@ -49,14 +52,14 @@ export function useReportJobsRealtime(brandProfileId: string) {
           if (!result.success) return;
 
           const job = result.data;
-          const prevStatus = prevStatusRef.current.get(job.id);
+          const prevStatus = prevStatusRef.current.get(job.job_id);
 
           setJobs((prev) => {
-            const map = new Map(prev.map((j) => [j.id, j]));
+            const map = new Map(prev.map((j) => [j.job_id, j]));
             if (payload.eventType === "DELETE") {
-              map.delete(job.id);
+              map.delete(job.job_id);
             } else {
-              map.set(job.id, job);
+              map.set(job.job_id, job);
             }
             return [...map.values()].sort(
               (a, b) =>
@@ -80,7 +83,7 @@ export function useReportJobsRealtime(brandProfileId: string) {
             }
           }
 
-          prevStatusRef.current.set(job.id, job.status);
+          prevStatusRef.current.set(job.job_id, job.status);
         }
       )
       .subscribe((status) => {

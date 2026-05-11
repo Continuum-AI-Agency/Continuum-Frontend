@@ -89,6 +89,36 @@ describe("jainaChatRequestSchema", () => {
 
     expect(result.success).toBe(true);
   });
+
+  it("accepts typed app references in context and message metadata", () => {
+    const reference = {
+      id: "120000222",
+      type: "adset",
+      label: "Prospecting Women",
+      source: "jaina",
+      metadata: {
+        adsetId: "120000222",
+        campaignId: "238000111",
+        campaignName: "Spring Sale",
+        adAccountId: "act_123",
+      },
+    };
+
+    const result = jainaChatRequestSchema.safeParse({
+      query: "Compare @Prospecting Women against the account average",
+      message_metadata: {
+        references: [reference],
+      },
+      context: {
+        adAccountId: "act_123",
+        brandId: "brand_456",
+        sessionId: "session_abc",
+        references: [reference],
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("responseReportArtifactJobStartedSchema", () => {

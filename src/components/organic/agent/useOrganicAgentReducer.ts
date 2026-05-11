@@ -1,4 +1,5 @@
 import type { AgentJobState, ConversationMessage, ToolCallEvent, UiCard } from "./types"
+import type { AgentMentionMetadata } from "@/lib/agent-references"
 
 export type PanelState = {
   sessionId: string | null
@@ -13,7 +14,7 @@ export type PanelAction =
   | { type: "SESSION_INIT"; sessionId: string }
   | { type: "HYDRATE_JOBS"; jobs: AgentJobState[] }
   | { type: "SET_INPUT"; value: string }
-  | { type: "SUBMIT_USER_MESSAGE"; content: string; messageId: string }
+  | { type: "SUBMIT_USER_MESSAGE"; content: string; messageId: string; metadata?: AgentMentionMetadata }
   | { type: "STREAM_DELTA"; delta: string }
   | { type: "STREAM_TOOL_CALL"; event: ToolCallEvent }
   | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown }
@@ -59,7 +60,7 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         ...state,
         messages: [
           ...state.messages,
-          { id: action.messageId, role: "user", content: action.content },
+          { id: action.messageId, role: "user", content: action.content, metadata: action.metadata },
           { id: streamingId, role: "assistant", content: "" },
         ],
         streamingMessageId: streamingId,

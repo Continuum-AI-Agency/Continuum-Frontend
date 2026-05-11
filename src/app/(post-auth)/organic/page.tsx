@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { OrganicAgentPanelLazy } from "@/components/organic/agent/OrganicAgentPanelLazy";
+import type { OrganicAgentMentionContext } from "@/components/organic/agent/OrganicAgentPanel";
 
 import { OrganicMetricsDashboardLazy } from "@/components/organic/OrganicMetricsDashboardLazy";
 import { OrganicWorkspaceTabs } from "@/components/organic/OrganicWorkspaceTabs";
@@ -112,6 +113,7 @@ async function OrganicContent({
   let selectorTrends: Trend[] = [];
   let trendTypes: OrganicTrendType[] = [];
   let insightsError: string | null = null;
+  let organicAgentMentionContext: OrganicAgentMentionContext | undefined;
   const insights =
     insightsResult.status === "fulfilled"
       ? insightsResult.value
@@ -119,6 +121,20 @@ async function OrganicContent({
 
   if (insightsResult.status === "fulfilled" && insights) {
     const brandTrends = insights.data.trendsAndEvents.trends;
+    const nicheMap = insights.data.questionsByNiche.questionsByNiche || {};
+    const allQuestions = Object.entries(nicheMap).flatMap(([niche, data]) => {
+      const nicheData = data as { questions: Array<{ id: string; question: string; socialPlatform?: string; contentTypeSuggestion?: string; whyRelevant?: string; isSelected?: boolean }> };
+      return nicheData.questions.map((q) => ({ ...q, niche }));
+    });
+
+    organicAgentMentionContext = {
+      generationId: insights.data.generationId,
+      weekStartDate: insights.data.weekStartDate,
+      trends: brandTrends,
+      events: insights.data.trendsAndEvents.events,
+      questions: allQuestions,
+    };
+
     selectorTrends = brandTrends.map((trend) => ({
       id: trend.id,
       title: trend.title,
@@ -127,13 +143,6 @@ async function OrganicContent({
       platforms: fallbackPlatforms,
       tags: trend.source ? [trend.source] : [],
     }));
-
-    const nicheMap = insights.data.questionsByNiche.questionsByNiche || {};
-    
-    const allQuestions = Object.entries(nicheMap).flatMap(([niche, data]) => {
-      const nicheData = data as { questions: Array<{ id: string; question: string; socialPlatform?: string; contentTypeSuggestion?: string; whyRelevant?: string }> };
-      return nicheData.questions.map((q) => ({ ...q, niche }));
-    });
 
     const mappedQuestions = allQuestions.map((q) => {
       const platformKey = q.socialPlatform?.toLowerCase().includes("linkedin") ? "linkedin" : "instagram";
@@ -263,6 +272,7 @@ async function OrganicContent({
           <OrganicAgentPanelLazy
             brandId={brandProfileId}
             platformAccountIds={platformAccountIds}
+            mentionContext={organicAgentMentionContext}
           />
         }
       />

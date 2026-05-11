@@ -17,16 +17,83 @@ import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useOrganicSessions } from "./useOrganicSessions";
 import { OrganicSessionSidebar } from "./OrganicSessionSidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import type {
+  AgentMentionProvider,
+  AgentMentionReference,
+  AgentMentionSuggestion,
+} from "@/lib/agent-references";
 
 type OrganicAgentPanelProps = {
   brandId: string;
   platformAccountIds: Record<string, string>;
+  mentionContext?: OrganicAgentMentionContext;
 };
 
-export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentPanelProps) {
+export type OrganicAgentMentionContext = {
+  generationId?: string;
+  weekStartDate?: string;
+  trends: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    relevanceToBrand?: string;
+    source?: string;
+    isSelected?: boolean;
+  }>;
+  events: Array<{
+    id: string;
+    title: string;
+    date?: string;
+    description?: string;
+    opportunity?: string;
+    isSelected?: boolean;
+  }>;
+  questions: Array<{
+    id: string;
+    question: string;
+    niche?: string;
+    socialPlatform?: string;
+    contentTypeSuggestion?: string;
+    whyRelevant?: string;
+    isSelected?: boolean;
+  }>;
+};
+
+function matchesMentionQuery(query: string, values: Array<string | null | undefined>) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return values.some((value) => value?.toLowerCase().includes(normalized));
+}
+
+function createOrganicSuggestion(
+  reference: AgentMentionReference,
+  options: {
+    key: string;
+    group: string;
+    description?: string;
+    badge?: string;
+  }
+): AgentMentionSuggestion {
+  return {
+    key: options.key,
+    label: reference.label,
+    type: reference.type,
+    source: reference.source,
+    group: options.group,
+    description: options.description,
+    badge: options.badge,
+    reference,
+  };
+}
+
+export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { start, isStreaming } = useOrganicAgentStream(dispatch);
   const addDraft = useCalendarStore((s) => s.addDraft);
+  const calendarDays = useCalendarStore((s) => s.days);
+  const backlogDrafts = useCalendarStore((s) => s.backlogDrafts);
+  const selectedDraftId = useCalendarStore((s) => s.selectedDraftId);
+  const selectedTrendIds = useCalendarStore((s) => s.selectedTrendIds);
   const syncedJobsRef = useRef(new Set<string>());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +114,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
       dispatch({
         type: "SESSION_SWITCH",
         sessionId: activeSessionId,
-        messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+        messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content, metadata: m.metadata })),
       });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +168,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
       dispatch({
         type: "SESSION_SWITCH",
         sessionId,
-        messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content })),
+        messages: msgs.map((m) => ({ id: m.id, role: m.role, content: m.content, metadata: m.metadata })),
       });
     },
     [isStreaming, selectSession]
@@ -114,13 +181,14 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
   }, [isStreaming, startNewSession]);
 
   const handleSubmit = useCallback(
-    (value: string) => {
+    (value: string, references: AgentMentionReference[] = []) => {
       const currentSessionId = state.sessionId ?? activeSessionId;
       if (!value.trim() || !currentSessionId || isStreaming) return;
 
       const content = value.trim();
       const messageId = crypto.randomUUID();
-      dispatch({ type: "SUBMIT_USER_MESSAGE", content, messageId });
+      const metadata = references.length > 0 ? { references } : undefined;
+      dispatch({ type: "SUBMIT_USER_MESSAGE", content, messageId, metadata });
 
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const now = new Date();
@@ -133,12 +201,14 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
         id: m.id,
         role: m.role,
         content: m.content,
+        metadata: m.metadata,
       }));
 
       start({
         brandId,
         sessionId: currentSessionId,
-        messages: [...existingMessages, { id: messageId, role: "user" as const, content }],
+        messages: [...existingMessages, { id: messageId, role: "user" as const, content, metadata }],
+        references,
         weekStart,
         timezone,
         platformAccountIds,
@@ -169,6 +239,166 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
 
   const jobs = Object.values(state.jobs);
   const inputDisabled = isStreaming || (!state.sessionId && !activeSessionId);
+  const mentionProvider = useCallback<AgentMentionProvider["getSuggestions"]>(
+    ({ query }) => {
+      const scheduledDraftSuggestions = calendarDays.flatMap((day) =>
+        day.slots.map((draft) => {
+          const description = [
+            draft.platforms.join(", "),
+            draft.timeLabel,
+            day.dateLabel,
+            draft.status,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return createOrganicSuggestion(
+            {
+              id: draft.id,
+              type: "draft",
+              label: draft.title || draft.summary || draft.id,
+              source: "organic",
+              metadata: {
+                draftId: draft.id,
+                backendDraftId: draft.backendDraftId,
+                status: draft.status,
+                dayId: day.id,
+                dateLabel: day.dateLabel,
+                timeLabel: draft.timeLabel,
+                platforms: draft.platforms,
+                seedTrendId: draft.seedTrendId,
+                isSelected: draft.id === selectedDraftId,
+              },
+            },
+            {
+              key: `draft:${draft.id}`,
+              group: "Drafts",
+              description,
+              badge: draft.id === selectedDraftId ? "selected" : "draft",
+            }
+          );
+        })
+      );
+
+      const backlogDraftSuggestions = backlogDrafts.map((draft) =>
+        createOrganicSuggestion(
+          {
+            id: draft.id,
+            type: "draft",
+            label: draft.title || draft.summary || draft.id,
+            source: "organic",
+            metadata: {
+              draftId: draft.id,
+              backendDraftId: draft.backendDraftId,
+              status: draft.status,
+              location: "backlog",
+              platforms: draft.platforms,
+              seedTrendId: draft.seedTrendId,
+              isSelected: draft.id === selectedDraftId,
+            },
+          },
+          {
+            key: `draft:${draft.id}`,
+            group: "Drafts",
+            description: ["Backlog", draft.platforms.join(", "), draft.status].filter(Boolean).join(" · "),
+            badge: "draft",
+          }
+        )
+      );
+
+      const trendSuggestions = (mentionContext?.trends ?? []).map((trend) =>
+        createOrganicSuggestion(
+          {
+            id: trend.id,
+            type: "trend",
+            label: trend.title,
+            source: "organic",
+            metadata: {
+              generationId: mentionContext?.generationId,
+              weekStart: mentionContext?.weekStartDate,
+              source: trend.source,
+              isSelected: trend.isSelected || selectedTrendIds.includes(trend.id),
+            },
+          },
+          {
+            key: `trend:${trend.id}`,
+            group: "Trends",
+            description: trend.description ?? trend.relevanceToBrand,
+            badge: selectedTrendIds.includes(trend.id) ? "selected" : "trend",
+          }
+        )
+      );
+
+      const eventSuggestions = (mentionContext?.events ?? []).map((event) =>
+        createOrganicSuggestion(
+          {
+            id: event.id,
+            type: "event",
+            label: event.title,
+            source: "organic",
+            metadata: {
+              generationId: mentionContext?.generationId,
+              weekStart: mentionContext?.weekStartDate,
+              date: event.date,
+              isSelected: event.isSelected,
+            },
+          },
+          {
+            key: `event:${event.id}`,
+            group: "Events",
+            description: [event.date, event.description ?? event.opportunity].filter(Boolean).join(" · "),
+            badge: "event",
+          }
+        )
+      );
+
+      const questionSuggestions = (mentionContext?.questions ?? []).map((question) =>
+        createOrganicSuggestion(
+          {
+            id: question.id,
+            type: "question",
+            label: question.question,
+            source: "organic",
+            metadata: {
+              generationId: mentionContext?.generationId,
+              weekStart: mentionContext?.weekStartDate,
+              niche: question.niche,
+              socialPlatform: question.socialPlatform,
+              contentTypeSuggestion: question.contentTypeSuggestion,
+              isSelected: question.isSelected,
+            },
+          },
+          {
+            key: `question:${question.id}`,
+            group: "Questions",
+            description: [question.niche, question.socialPlatform, question.whyRelevant].filter(Boolean).join(" · "),
+            badge: "question",
+          }
+        )
+      );
+
+      return [
+        ...scheduledDraftSuggestions,
+        ...backlogDraftSuggestions,
+        ...trendSuggestions,
+        ...eventSuggestions,
+        ...questionSuggestions,
+      ].filter((suggestion) =>
+        matchesMentionQuery(query, [
+          suggestion.label,
+          suggestion.description,
+          suggestion.group,
+          suggestion.badge,
+        ])
+      );
+    },
+    [
+      backlogDrafts,
+      calendarDays,
+      mentionContext,
+      selectedDraftId,
+      selectedTrendIds,
+    ]
+  );
 
   return (
     <div className="flex h-full min-h-0">
@@ -237,8 +467,9 @@ export function OrganicAgentPanel({ brandId, platformAccountIds }: OrganicAgentP
 
       <div className="shrink-0">
         <PromptInput
-          onSubmit={(value) => handleSubmit(value)}
+          onSubmit={(value, _attachments, references) => handleSubmit(value, references)}
           disabled={inputDisabled}
+          mentionProvider={{ getSuggestions: mentionProvider }}
           placeholder="Plan me 3 posts this week on the beauty trend…"
         />
       </div>

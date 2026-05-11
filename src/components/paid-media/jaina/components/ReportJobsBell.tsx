@@ -49,11 +49,21 @@ const statusConfig = {
   },
 };
 
+const STEP_LABELS: Record<string, string> = {
+  validating: "Validating…",
+  "writing:executive": "Writing executive summary…",
+  "writing:kpis": "Writing KPIs…",
+  "writing:campaigns": "Writing campaign breakdown…",
+  "writing:competitive": "Writing competitive context…",
+  "writing:recommendations": "Writing recommendations…",
+  assembling: "Assembling report…",
+};
+
 async function fetchSignedUrl(jobId: string): Promise<string> {
-  const data = await http.request<{ url: string }>({
-    path: `/api/agents/jaina/reports/jobs/${jobId}/file-url`,
+  const data = await http.request<{ signed_url: string }>({
+    path: `/api/agents/jaina/report-artifacts/jobs/${jobId}/file-url`,
   });
-  return data.url;
+  return data.signed_url;
 }
 
 function JobRow({ job }: { job: ReportJob }) {
@@ -63,12 +73,17 @@ function JobRow({ job }: { job: ReportJob }) {
   const handleDownload = async () => {
     setIsDownloading(true);
     try {
-      const url = await fetchSignedUrl(job.id);
+      const url = await fetchSignedUrl(job.job_id);
       window.open(url, "_blank");
     } finally {
       setIsDownloading(false);
     }
   };
+
+  const stepLabel =
+    job.status === "running" && job.step_name
+      ? (STEP_LABELS[job.step_name] ?? job.step_name)
+      : null;
 
   return (
     <div className="flex items-start gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-muted/50">
@@ -81,8 +96,11 @@ function JobRow({ job }: { job: ReportJob }) {
           </span>
         </div>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-          {job.ad_account_id ?? job.id}
+          {job.ad_account_id ?? job.job_id}
         </p>
+        {stepLabel && (
+          <p className="mt-0.5 truncate text-xs text-blue-500">{stepLabel}</p>
+        )}
         {job.status === "failed" && job.error_message && (
           <p className="mt-0.5 line-clamp-2 text-xs text-red-500">
             {job.error_message}
@@ -139,7 +157,7 @@ export function ReportJobsBell({ brandProfileId }: Props) {
         ) : (
           <div className="max-h-72 space-y-0.5 overflow-y-auto">
             {jobs.map((job) => (
-              <JobRow key={job.id} job={job} />
+              <JobRow key={job.job_id} job={job} />
             ))}
           </div>
         )}

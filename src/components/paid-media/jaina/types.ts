@@ -10,6 +10,7 @@ import type {
   CheckpointReportV2,
 } from "@/lib/jaina/schemas";
 import type { PlanStatus } from "@/components/ai-elements/plan";
+import type { AgentMentionMetadata } from "@/lib/agent-references";
 
 export type JainaProgressEntry = {
   stage: string;
@@ -49,4 +50,5 @@ export type JainaChatMessage = {
     question: string;
   };
   objectives?: JainaObjective[];
+  metadata?: AgentMentionMetadata;
 };

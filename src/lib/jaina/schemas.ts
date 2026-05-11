@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
+import {
+  agentMentionMetadataSchema,
+  agentMentionReferenceSchema,
+} from "@/lib/agent-references";
 
 // ============================================================================
 // Handoff Schemas
@@ -37,6 +41,7 @@ export const jainaChatRequestSchema = z.object({
   query: z.string().min(1),
   include_thoughts: z.boolean().optional(),
   force_report_artifact: z.boolean().optional(),
+  message_metadata: agentMentionMetadataSchema.optional(),
   userId: z.string().optional(),
   canvas: z.boolean().optional(),
   clarification: z
@@ -50,6 +55,7 @@ export const jainaChatRequestSchema = z.object({
     brandId: z.string().min(1),
     sessionId: z.string().min(1).optional(),
     canvas: z.boolean().optional(),
+    references: z.array(agentMentionReferenceSchema).optional(),
     images: z
       .array(z.object({ url: z.string().url(), name: z.string().optional() }))
       .optional(),

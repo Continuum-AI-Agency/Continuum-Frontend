@@ -1,4 +1,5 @@
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation"
+import type { AgentMentionMetadata, AgentMentionReference } from "@/lib/agent-references"
 
 export type AgentJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
 
@@ -64,6 +65,7 @@ export type ConversationMessage = {
   id: string
   role: "user" | "assistant"
   content: string
+  metadata?: AgentMentionMetadata
   toolCalls?: ToolCallEvent[]
   uiCards?: UiCard[]
 }
@@ -71,7 +73,13 @@ export type ConversationMessage = {
 export type AgentChatInput = {
   brandId: string
   sessionId: string
-  messages: Array<{ id: string; role: "user" | "assistant"; content: string }>
+  messages: Array<{
+    id: string
+    role: "user" | "assistant"
+    content: string
+    metadata?: AgentMentionMetadata
+  }>
+  references?: AgentMentionReference[]
   weekStart?: string
   timezone?: string
   platformAccountIds?: Record<string, string>

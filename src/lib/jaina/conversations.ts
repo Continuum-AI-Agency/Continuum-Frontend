@@ -4,6 +4,7 @@ import {
   type FrontendCheckpointReport,
   type ReportAssembly,
 } from "./schemas";
+import { agentMentionMetadataSchema } from "@/lib/agent-references";
 
 export const jainaConversationRoleSchema = z.enum(["user", "assistant"]);
 export type JainaConversationRole = z.infer<typeof jainaConversationRoleSchema>;
@@ -44,6 +45,7 @@ export const jainaConversationMessageSchema = z.object({
     })
     .optional(),
   objectives: z.array(z.unknown()).optional(),
+  metadata: agentMentionMetadataSchema.optional(),
   createdAt: z.string(),
 });
 export type JainaConversationMessage = z.infer<typeof jainaConversationMessageSchema>;
@@ -131,6 +133,7 @@ export const backendConversationMessageSchema = z.object({
     })
     .optional(),
   objectives: z.array(z.unknown()).optional(),
+  metadata: agentMentionMetadataSchema.optional(),
   created_at: z.string(),
 });
 export type BackendConversationMessage = z.infer<
@@ -315,6 +318,7 @@ export function mapConversationMessageRow(
       ? { pendingClarification: row.pending_clarification }
       : {}),
     ...(Array.isArray(row.objectives) ? { objectives: row.objectives } : {}),
+    ...(row.metadata !== undefined ? { metadata: row.metadata } : {}),
     createdAt: row.created_at,
   };
 }

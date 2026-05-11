@@ -82,6 +82,15 @@ import { useCampaignAI } from "@/CampaignCanvas/hooks/useCampaignAI";
 import { extractCampaignCanvasActionsEnvelope } from "@/lib/campaign-canvas/agent-actions";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
+  usePaidMediaPerformanceStore,
+} from "@/lib/paid-media/performance-store";
+import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
+import type {
+  AgentMentionProvider,
+  AgentMentionReference,
+  AgentMentionSuggestion,
+} from "@/lib/agent-references";
+import {
   createConversationSessionResponseSchema,
   jainaConversationListResponseSchema,
   jainaConversationRunsHydrationResponseSchema,
@@ -145,6 +154,72 @@ type ReportArtifactJobTracker = {
 };
 
 const REPORT_ARTIFACT_POLL_INTERVAL_MS = 3500;
+
+type JainaMentionAdSet = {
+  id: string;
+  name: string;
+  status?: string;
+};
+
+function matchesJainaMentionQuery(
+  query: string,
+  values: Array<string | null | undefined>
+): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return values.some((value) => value?.toLowerCase().includes(normalized));
+}
+
+function formatMetricHint(campaign: CampaignPerformanceRow): string | undefined {
+  const spend = campaign.metrics?.spend;
+  const roas = campaign.metrics?.roas;
+  if (typeof spend !== "number" && typeof roas !== "number") return undefined;
+  const parts: string[] = [];
+  if (typeof spend === "number") {
+    parts.push(`$${Math.round(spend).toLocaleString()} spend`);
+  }
+  if (typeof roas === "number") {
+    parts.push(`${roas.toFixed(2)} ROAS`);
+  }
+  return parts.join(" · ");
+}
+
+function createCampaignReference(
+  campaign: CampaignPerformanceRow,
+  adAccountId: string
+): AgentMentionReference {
+  return {
+    id: campaign.id,
+    type: "campaign",
+    label: campaign.name,
+    source: "jaina",
+    metadata: {
+      campaignId: campaign.id,
+      adAccountId,
+      status: campaign.status,
+      objective: campaign.objective,
+    },
+  };
+}
+
+function createCampaignSuggestion(
+  campaign: CampaignPerformanceRow,
+  adAccountId: string,
+  options?: { children?: boolean }
+): AgentMentionSuggestion {
+  const metricHint = formatMetricHint(campaign);
+  return {
+    key: `${options?.children ? "campaign-adsets" : "campaign"}:${campaign.id}`,
+    label: options?.children ? `Ad sets in ${campaign.name}` : campaign.name,
+    type: "campaign",
+    source: "jaina",
+    group: options?.children ? "Ad Sets" : "Campaigns",
+    description: [campaign.status, campaign.objective, metricHint].filter(Boolean).join(" · "),
+    badge: options?.children ? "choose" : "campaign",
+    reference: createCampaignReference(campaign, adAccountId),
+    ...(options?.children ? { childrenLabel: "Choose an ad set" } : {}),
+  };
+}
 
 function normalizeIdentity(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -764,6 +839,7 @@ function mapConversationMessageToChatMessage(
         }
       : {}),
     ...(persistedObjectives ? { objectives: persistedObjectives } : {}),
+    ...(message.metadata ? { metadata: message.metadata } : {}),
     ...(message.role === "assistant"
       ? {
           status: "done",
@@ -1044,6 +1120,9 @@ export function JainaChatSurface({
 }: JainaChatSurfaceProps) {
   const { show } = useToast();
   const { processAIAction } = useCampaignAI();
+  const loadCampaignPerformance = usePaidMediaPerformanceStore(
+    (store) => store.loadCampaignPerformance
+  );
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), []);
   const prefersReducedMotion = useReducedMotion();
 
@@ -1088,6 +1167,115 @@ export function JainaChatSurface({
   const streamBusyRef = React.useRef(false);
   const queueDispatchInFlightRef = React.useRef(false);
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
+  const mentionAdSetsCacheRef = React.useRef<Map<string, JainaMentionAdSet[]>>(new Map());
+
+  const jainaMentionProvider = React.useMemo<AgentMentionProvider>(
+    () => ({
+      getSuggestions: async ({ query }) => {
+        if (!adAccountId) return [];
+        const campaigns = await loadCampaignPerformance(
+          {
+            brandId: brandProfileId,
+            adAccountId,
+            platform: "meta",
+            range: { preset: "last_7d" },
+          },
+          { force: false }
+        ).catch(() => [] as CampaignPerformanceRow[]);
+
+        const filteredCampaigns = campaigns
+          .filter((campaign) =>
+            matchesJainaMentionQuery(query, [
+              campaign.name,
+              campaign.status,
+              campaign.objective,
+            ])
+          )
+          .slice(0, 8);
+
+        return [
+          ...filteredCampaigns.map((campaign) =>
+            createCampaignSuggestion(campaign, adAccountId)
+          ),
+          ...filteredCampaigns.map((campaign) =>
+            createCampaignSuggestion(campaign, adAccountId, { children: true })
+          ),
+        ];
+      },
+      getChildSuggestions: async (parent) => {
+        if (!adAccountId || !parent.reference) return [];
+        const campaignId =
+          typeof parent.reference.metadata?.campaignId === "string"
+            ? parent.reference.metadata.campaignId
+            : parent.reference.id;
+        const campaignName = parent.reference.label;
+        const cached = mentionAdSetsCacheRef.current.get(campaignId);
+        const adSets =
+          cached ??
+          (await supabase.functions
+            .invoke(
+              `fetch-meta-adsets?brandId=${brandProfileId}&adAccountId=${adAccountId}&campaignId=${campaignId}`,
+              {
+                method: "POST",
+                body: {
+                  brandId: brandProfileId,
+                  adAccountId,
+                  campaignId,
+                },
+              }
+            )
+            .then(({ data, error }) => {
+              if (error) throw new Error(error.message);
+              const rows = Array.isArray((data as { adsets?: unknown[] } | null)?.adsets)
+                ? ((data as { adsets: unknown[] }).adsets)
+                : [];
+              return rows
+                .map((row): JainaMentionAdSet | null => {
+                  if (!row || typeof row !== "object") return null;
+                  const record = row as Record<string, unknown>;
+                  const id = typeof record.id === "string" ? record.id : null;
+                  const name = typeof record.name === "string" ? record.name : null;
+                  if (!id || !name) return null;
+                  return {
+                    id,
+                    name,
+                    status: typeof record.status === "string" ? record.status : undefined,
+                  };
+                })
+                .filter((row): row is JainaMentionAdSet => row !== null);
+            })
+            .catch(() => []));
+
+        if (!cached) {
+          mentionAdSetsCacheRef.current.set(campaignId, adSets);
+        }
+
+        return adSets.slice(0, 20).map((adSet) => ({
+          key: `adset:${campaignId}:${adSet.id}`,
+          label: adSet.name,
+          type: "adset" as const,
+          source: "jaina" as const,
+          group: "Ad Sets",
+          description: [campaignName, adSet.status].filter(Boolean).join(" · "),
+          badge: "adset",
+          reference: {
+            id: adSet.id,
+            type: "adset" as const,
+            label: adSet.name,
+            source: "jaina" as const,
+            metadata: {
+              adsetId: adSet.id,
+              campaignId,
+              campaignName,
+              adAccountId,
+              status: adSet.status,
+            },
+          },
+        }));
+      },
+    }),
+    [adAccountId, brandProfileId, loadCampaignPerformance, supabase]
+  );
 
   const setConversationSessionsWithCache = React.useCallback(
     (next: React.SetStateAction<JainaConversationSession[]>) => {
@@ -2003,6 +2191,7 @@ export function JainaChatSurface({
       canvas: boolean;
       clarificationId?: string;
       images?: Array<{ url: string; name?: string }>;
+      references?: AgentMentionReference[];
       planAction?: JainaPlanAction;
       forceReportArtifact?: boolean;
       silentUserMessage?: boolean;
@@ -2048,6 +2237,9 @@ export function JainaChatSurface({
         role: "user",
         content: query,
         createdAt: now,
+        ...(input.references && input.references.length > 0
+          ? { metadata: { references: input.references } }
+          : {}),
       };
 
       const assistantMessage: JainaChatMessage = {
@@ -2100,6 +2292,7 @@ export function JainaChatSurface({
         clarificationId: input.clarificationId,
         userId: userId ?? undefined,
         images: input.images,
+        references: input.references,
         planAction: input.planAction,
         forceReportArtifact: input.forceReportArtifact,
       }).then((result) => {
@@ -2137,6 +2330,7 @@ export function JainaChatSurface({
       query: string;
       canvas: boolean;
       clarificationId?: string;
+      references?: AgentMentionReference[];
       forceReportArtifact?: boolean;
     }) => {
       const content = input.query.trim();
@@ -2146,6 +2340,9 @@ export function JainaChatSurface({
         content,
         createdAt: new Date().toISOString(),
         canvas: input.canvas,
+        ...(input.references && input.references.length > 0
+          ? { references: input.references }
+          : {}),
         ...(input.forceReportArtifact
           ? { forceReportArtifact: input.forceReportArtifact }
           : {}),
@@ -2157,7 +2354,11 @@ export function JainaChatSurface({
   );
 
   const handleSubmit = React.useCallback(
-    async (query: string, attachments?: Attachment[]) => {
+    async (
+      query: string,
+      attachments?: Attachment[],
+      references: AgentMentionReference[] = []
+    ) => {
       const normalizedQuery = query.trim();
       if (!normalizedQuery) return;
 
@@ -2171,6 +2372,7 @@ export function JainaChatSurface({
         query: normalizedQuery,
         canvas: false,
         clarificationId: pendingClarificationId,
+        ...(references.length > 0 ? { references } : {}),
         forceReportArtifact: isJainaProMode,
         ...(images && images.length > 0 ? { images } : {}),
         ...(pendingPlanId
@@ -2263,6 +2465,7 @@ export function JainaChatSurface({
         query: nextQueuedMessage.content,
         canvas: nextQueuedMessage.canvas,
         clarificationId: nextQueuedMessage.clarificationId,
+        references: nextQueuedMessage.references,
         forceReportArtifact: nextQueuedMessage.forceReportArtifact,
       });
 
@@ -2714,6 +2917,7 @@ export function JainaChatSurface({
                                                   query: queuedMessage.content,
                                                   canvas: queuedMessage.canvas,
                                                   clarificationId: queuedMessage.clarificationId,
+                                                  references: queuedMessage.references,
                                                   forceReportArtifact:
                                                     queuedMessage.forceReportArtifact,
                                                 });
@@ -2759,8 +2963,11 @@ export function JainaChatSurface({
               ) : null}
 
               <PromptInput
-                onSubmit={(value, attachments) => handleSubmit(value, attachments)}
+                onSubmit={(value, attachments, references) =>
+                  handleSubmit(value, attachments, references)
+                }
                 disabled={isInputDisabled}
+                mentionProvider={jainaMentionProvider}
                 placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}
                 actions={
                   <TooltipProvider delayDuration={180}>

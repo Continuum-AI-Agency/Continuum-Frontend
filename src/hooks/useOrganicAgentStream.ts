@@ -47,9 +47,18 @@ export function useOrganicAgentStream(dispatch: React.Dispatch<PanelAction>) {
             brandId: input.brandId,
             sessionId: input.sessionId,
             messages: input.messages,
+            references: input.references,
+            message_metadata:
+              input.references && input.references.length > 0
+                ? { references: input.references }
+                : undefined,
             weekStart: input.weekStart,
             timezone: input.timezone,
             platformAccountIds: input.platformAccountIds,
+            context:
+              input.references && input.references.length > 0
+                ? { references: input.references }
+                : undefined,
           }),
           signal: controller.signal,
         });

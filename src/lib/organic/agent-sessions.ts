@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { request } from "@/lib/api/http";
+import { agentMentionMetadataSchema, type AgentMentionMetadata } from "@/lib/agent-references";
 
 export type OrganicSession = {
   sessionId: string;
@@ -17,6 +18,7 @@ export type OrganicSessionMessage = {
   sessionId: string;
   role: "user" | "assistant";
   content: string;
+  metadata?: AgentMentionMetadata;
   createdAt: string;
 };
 
@@ -36,6 +38,7 @@ const backendMessageSchema = z.object({
   session_id: z.string(),
   role: z.enum(["user", "assistant"]),
   content: z.string(),
+  metadata: agentMentionMetadataSchema.optional(),
   created_at: z.string(),
 });
 
@@ -80,6 +83,7 @@ function mapMessage(
     sessionId: row.session_id,
     role: row.role,
     content: row.content,
+    metadata: row.metadata,
     createdAt: row.created_at,
   };
 }

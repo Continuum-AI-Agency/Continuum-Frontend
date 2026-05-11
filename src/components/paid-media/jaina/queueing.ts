@@ -1,8 +1,11 @@
+import type { AgentMentionReference } from "@/lib/agent-references";
+
 export type QueuedJainaMessage = {
   id: string;
   content: string;
   createdAt: string;
   canvas: boolean;
+  references?: AgentMentionReference[];
   forceReportArtifact?: boolean;
   clarificationId?: string;
 };

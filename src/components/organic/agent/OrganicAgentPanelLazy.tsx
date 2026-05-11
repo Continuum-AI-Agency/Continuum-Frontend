@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { OrganicAgentMentionContext } from "./OrganicAgentPanel";
 
 const OrganicAgentPanelDynamic = dynamic(
   () =>
@@ -13,6 +14,7 @@ const OrganicAgentPanelDynamic = dynamic(
 type OrganicAgentPanelLazyProps = {
   brandId: string;
   platformAccountIds: Record<string, string>;
+  mentionContext?: OrganicAgentMentionContext;
 };
 
 export function OrganicAgentPanelLazy(props: OrganicAgentPanelLazyProps) {

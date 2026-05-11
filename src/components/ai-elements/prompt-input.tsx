@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Paperclip } from "lucide-react";
@@ -17,12 +17,33 @@ import {
 } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 import { streamJainaSpeechToText } from "@/lib/jaina/speech";
+import {
+  createMentionToken,
+  type AgentMentionProvider,
+  type AgentMentionReference,
+  type AgentMentionSuggestion,
+} from "@/lib/agent-references";
 
 type PromptInputProps = {
-  onSubmit: (value: string, attachments: Attachment[]) => void;
+  onSubmit: (
+    value: string,
+    attachments: Attachment[],
+    references: AgentMentionReference[]
+  ) => void;
   disabled?: boolean;
   placeholder?: string;
   actions?: React.ReactNode;
+  mentionProvider?: AgentMentionProvider;
+};
+
+type ActiveMention = {
+  start: number;
+  end: number;
+  query: string;
+};
+
+type TrackedReference = AgentMentionReference & {
+  token: string;
 };
 
 function appendTranscript(base: string, incoming: string): string {
@@ -32,18 +53,58 @@ function appendTranscript(base: string, incoming: string): string {
   return `${base.trimEnd()} ${normalizedIncoming}`.replace(/\s+/g, " ");
 }
 
+function findActiveMention(value: string, caret: number): ActiveMention | null {
+  const beforeCaret = value.slice(0, caret);
+  const atIndex = beforeCaret.lastIndexOf("@");
+  if (atIndex < 0) return null;
+  const previous = atIndex > 0 ? beforeCaret[atIndex - 1] : "";
+  if (previous && !/[\s([{,;:]/.test(previous)) return null;
+  const query = beforeCaret.slice(atIndex + 1);
+  if (query.includes("\n")) return null;
+  if (query.length > 80) return null;
+  return { start: atIndex, end: caret, query };
+}
+
+function pruneReferencesForValue(
+  references: TrackedReference[],
+  value: string
+): TrackedReference[] {
+  const counts = new Map<string, number>();
+  for (const reference of references) {
+    const escaped = reference.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matches = value.match(new RegExp(escaped, "g"));
+    counts.set(reference.token, matches?.length ?? 0);
+  }
+
+  const used = new Map<string, number>();
+  return references.filter((reference) => {
+    const current = used.get(reference.token) ?? 0;
+    const available = counts.get(reference.token) ?? 0;
+    if (current >= available) return false;
+    used.set(reference.token, current + 1);
+    return true;
+  });
+}
+
 export function PromptInput({
   onSubmit,
   disabled,
   placeholder,
   actions,
+  mentionProvider,
 }: PromptInputProps) {
   const [value, setValue] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const [references, setReferences] = React.useState<TrackedReference[]>([]);
+  const [activeMention, setActiveMention] = React.useState<ActiveMention | null>(null);
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<AgentMentionSuggestion[]>([]);
+  const [mentionParent, setMentionParent] = React.useState<AgentMentionSuggestion | null>(null);
+  const [highlightedMentionIndex, setHighlightedMentionIndex] = React.useState(0);
   const [isListening, setIsListening] = React.useState(false);
   const [isSpeechProcessing, setIsSpeechProcessing] = React.useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
   const canSubmit = useMemo(
@@ -55,21 +116,144 @@ export function PromptInput({
     (event?: React.FormEvent) => {
       event?.preventDefault();
       if (!canSubmit || disabled) return;
-      onSubmit(value, attachments);
+      const trimmedValue = value.trim();
+      const validReferences = pruneReferencesForValue(references, trimmedValue);
+      onSubmit(trimmedValue, attachments, validReferences.map(({ token, ...reference }) => reference));
       setValue("");
       setAttachments([]);
+      setReferences([]);
+      setActiveMention(null);
+      setMentionParent(null);
+      setMentionSuggestions([]);
     },
-    [attachments, canSubmit, disabled, onSubmit, value]
+    [attachments, canSubmit, disabled, onSubmit, references, value]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!mentionProvider || !activeMention) {
+      setMentionSuggestions([]);
+      return;
+    }
+
+    const load = async () => {
+      const nextSuggestions = mentionParent
+        ? mentionProvider.getChildSuggestions
+          ? await mentionProvider.getChildSuggestions(mentionParent)
+          : []
+        : await mentionProvider.getSuggestions({ query: activeMention.query });
+
+      if (cancelled) return;
+      setMentionSuggestions(nextSuggestions.slice(0, 12));
+      setHighlightedMentionIndex(0);
+    };
+
+    void load().catch(() => {
+      if (!cancelled) setMentionSuggestions([]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMention, mentionParent, mentionProvider]);
+
+  const updateValue = useCallback((nextValue: string, caret?: number) => {
+    setValue(nextValue);
+    setReferences((previous) => pruneReferencesForValue(previous, nextValue));
+    const nextCaret = caret ?? textareaRef.current?.selectionStart ?? nextValue.length;
+    const nextMention = findActiveMention(nextValue, nextCaret);
+    setActiveMention(nextMention);
+    if (!nextMention) {
+      setMentionParent(null);
+    }
+  }, []);
+
+  const insertMention = useCallback(
+    (suggestion: AgentMentionSuggestion) => {
+      if (!activeMention || !suggestion.reference) return;
+      const reference = suggestion.reference;
+      const token = createMentionToken(reference.label);
+      const afterMention = value.slice(activeMention.end);
+      const insertedToken = `${token}${afterMention.length === 0 || !/^[\s.,;:!?)]/.test(afterMention) ? " " : ""}`;
+      const nextValue = `${value.slice(0, activeMention.start)}${insertedToken}${afterMention}`;
+      const nextCaret = activeMention.start + insertedToken.length;
+      setValue(nextValue);
+      setReferences((previous) =>
+        pruneReferencesForValue(
+          [...previous, { ...reference, token }],
+          nextValue
+        )
+      );
+      setActiveMention(null);
+      setMentionParent(null);
+      setMentionSuggestions([]);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.setSelectionRange(nextCaret, nextCaret);
+      });
+    },
+    [activeMention, value]
+  );
+
+  const selectMentionSuggestion = useCallback(
+    (suggestion: AgentMentionSuggestion) => {
+      if (suggestion.childrenLabel && mentionProvider?.getChildSuggestions) {
+        setMentionParent(suggestion);
+        setMentionSuggestions([]);
+        setHighlightedMentionIndex(0);
+        requestAnimationFrame(() => textareaRef.current?.focus());
+        return;
+      }
+      insertMention(suggestion);
+    },
+    [insertMention, mentionProvider]
   );
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (activeMention && mentionSuggestions.length > 0) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          setHighlightedMentionIndex((current) => (current + 1) % mentionSuggestions.length);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          setHighlightedMentionIndex((current) =>
+            current === 0 ? mentionSuggestions.length - 1 : current - 1
+          );
+          return;
+        }
+        if (event.key === "Tab" || event.key === "Enter") {
+          event.preventDefault();
+          selectMentionSuggestion(mentionSuggestions[highlightedMentionIndex] ?? mentionSuggestions[0]);
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          if (mentionParent) {
+            setMentionParent(null);
+            return;
+          }
+          setActiveMention(null);
+          setMentionSuggestions([]);
+          return;
+        }
+      }
+
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit]
+    [
+      activeMention,
+      handleSubmit,
+      highlightedMentionIndex,
+      mentionParent,
+      mentionSuggestions,
+      selectMentionSuggestion,
+    ]
   );
 
   const handleFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,7 +275,13 @@ export function PromptInput({
   }, []);
 
   const handleSpeechResult = useCallback((transcript: string) => {
-    setValue((previous) => appendTranscript(previous, transcript));
+    setValue((previous) => {
+      const nextValue = appendTranscript(previous, transcript);
+      setReferences((current) => pruneReferencesForValue(current, nextValue));
+      return nextValue;
+    });
+    setActiveMention(null);
+    setMentionParent(null);
   }, []);
 
   const handleAudioRecorded = useCallback(async (audioBlob: Blob) => {
@@ -139,11 +329,67 @@ export function PromptInput({
               "placeholder:text-muted-foreground/85"
             )}
             disabled={disabled}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => updateValue(event.target.value, event.target.selectionStart)}
             onKeyDown={handleKeyDown}
+            onSelect={(event) => {
+              const target = event.currentTarget;
+              setActiveMention(findActiveMention(target.value, target.selectionStart));
+            }}
             placeholder={placeholder ?? "Ask Jaina..."}
+            ref={textareaRef}
             value={value}
           />
+          {activeMention && mentionProvider && (
+            <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-full max-w-[42rem] overflow-hidden rounded-md border border-border/70 bg-popover text-popover-foreground shadow-xl">
+              {mentionParent ? (
+                <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-medium">{mentionParent.label}</div>
+                    <div className="text-[11px] text-muted-foreground">{mentionParent.childrenLabel}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    onClick={() => setMentionParent(null)}
+                  >
+                    Back
+                  </button>
+                </div>
+              ) : null}
+              <div className="max-h-72 overflow-y-auto p-1">
+                {mentionSuggestions.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    No references found.
+                  </div>
+                ) : (
+                  mentionSuggestions.map((suggestion, index) => (
+                    <button
+                      key={suggestion.key}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-start justify-between gap-3 rounded px-2.5 py-2 text-left text-sm",
+                        index === highlightedMentionIndex
+                          ? "bg-accent text-accent-foreground"
+                          : "hover:bg-accent/70"
+                      )}
+                      onMouseEnter={() => setHighlightedMentionIndex(index)}
+                      onClick={() => selectMentionSuggestion(suggestion)}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{suggestion.label}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {suggestion.description ?? suggestion.group ?? suggestion.type}
+                        </span>
+                      </span>
+                      <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                        {suggestion.badge ?? suggestion.childrenLabel ?? suggestion.type}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
           <InputGroupAddon
             align="block-end"
             className="w-full border-t border-border/60 py-2.5"
