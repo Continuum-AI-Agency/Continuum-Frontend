@@ -82,16 +82,29 @@ export function waitForPopupMessage<T = unknown>(
 
 export function waitForPopupClosed(
   popup: Window | null,
-  options?: { intervalMs?: number; signal?: AbortSignal }
+  options?: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal }
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const intervalMs = options?.intervalMs ?? 500;
+    const timeoutMs = options?.timeoutMs;
     const check = setInterval(() => {
       if (!popup || popup.closed) {
         cleanup();
         resolve();
       }
     }, intervalMs);
+
+    const timer = timeoutMs
+      ? setTimeout(() => {
+          cleanup();
+          try {
+            popup?.close();
+          } catch {
+            // ignore — popup may already be closed by the user or browser
+          }
+          reject(new Error("Popup timed out"));
+        }, timeoutMs)
+      : null;
 
     const onAbort = () => {
       cleanup();
@@ -100,6 +113,7 @@ export function waitForPopupClosed(
     if (options?.signal) {
       if (options.signal.aborted) {
         clearInterval(check);
+        if (timer) clearTimeout(timer);
         return reject(new Error("Popup close wait aborted"));
       }
       options.signal.addEventListener("abort", onAbort, { once: true });
@@ -107,6 +121,7 @@ export function waitForPopupClosed(
 
     function cleanup() {
       clearInterval(check);
+      if (timer) clearTimeout(timer);
       if (options?.signal) {
         options.signal.removeEventListener("abort", onAbort);
       }

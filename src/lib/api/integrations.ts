@@ -310,6 +310,52 @@ export function useUserIntegrationAssets() {
   });
 }
 
+export async function assignBrandIntegrationAccount(
+  brandId: string,
+  integrationAccountId: string
+): Promise<string> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+
+  const { data: existing, error: lookupError } = await supabase
+    .schema("brand_profiles")
+    .from("brand_profile_integration_accounts")
+    .select("id")
+    .eq("brand_profile_id", brandId)
+    .eq("integration_account_id", integrationAccountId)
+    .maybeSingle();
+
+  if (lookupError) throw new Error(lookupError.message);
+  if (existing?.id) return existing.id as string;
+
+  const { data, error } = await supabase
+    .schema("brand_profiles")
+    .from("brand_profile_integration_accounts")
+    .insert({ brand_profile_id: brandId, integration_account_id: integrationAccountId })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return (data as { id: string }).id;
+}
+
+export async function unassignBrandIntegrationAccount(
+  brandId: string,
+  integrationAccountId: string
+): Promise<void> {
+  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
+  const supabase = createSupabaseBrowserClient();
+
+  const { error } = await supabase
+    .schema("brand_profiles")
+    .from("brand_profile_integration_accounts")
+    .delete()
+    .eq("brand_profile_id", brandId)
+    .eq("integration_account_id", integrationAccountId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function applyBrandAssignmentsDirect(
   brandId: string,
   desiredAccountIds: string[]
