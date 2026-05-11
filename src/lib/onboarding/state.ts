@@ -4,7 +4,12 @@ import {
   decompressFromEncodedURIComponent,
 } from "lz-string";
 import { PLATFORM_KEYS, type PlatformKey } from "@/components/onboarding/platforms";
-import { previewWorkflowResultSchema } from "@/lib/onboarding/agentClient";
+import {
+  auditsSchema,
+  previewWorkflowResultSchema,
+  readinessAnalysisSchema,
+  understandingSchema,
+} from "@/lib/onboarding/agentClient";
 
 export const BRAND_VOICE_TAGS = [
   "Playful",
@@ -65,6 +70,11 @@ const connectionPatchShape = PLATFORM_KEYS.reduce(
   {} as Record<PlatformKey, typeof connectionPatchSchema>
 );
 
+const typographySchema = z.object({
+  primary: z.union([z.string(), z.null()]).default(null),
+  secondary: z.union([z.string(), z.null()]).default(null),
+});
+
 export const brandSchema = z.object({
   name: z.string(),
   industry: z.string(),
@@ -74,6 +84,14 @@ export const brandSchema = z.object({
   timezone: z.string(),
   website: z.union([z.string().min(1), z.null()]).default(null),
   logoPath: z.union([z.string(), z.null()]).default(null),
+  colors: z.array(z.string().regex(/^#[0-9A-Fa-f]{6}$/)).max(8).default([]),
+  typography: typographySchema.default({ primary: null, secondary: null }),
+  values: z.array(z.string()).max(8).default([]),
+  tagline: z.union([z.string(), z.null()]).default(null),
+  overview: z.union([z.string(), z.null()]).default(null),
+  readiness: readinessAnalysisSchema.nullable().default(null),
+  understanding: understandingSchema.nullable().default(null),
+  audits: auditsSchema.nullable().default(null),
 });
 
 const documentSourceSchema = z.enum([
@@ -195,6 +213,14 @@ export function createDefaultOnboardingState(owner?: BrandMember): OnboardingSta
       timezone: "UTC",
       website: null,
       logoPath: null,
+      colors: [],
+      typography: { primary: null, secondary: null },
+      values: [],
+      tagline: null,
+      overview: null,
+      readiness: null,
+      understanding: null,
+      audits: null,
     },
     documents: [],
     connections: makeDefaultConnections(),
@@ -296,6 +322,17 @@ export function mergeOnboardingState(
         patch.brand.website === undefined ? (next.brand.website ?? null) : (patch.brand.website ?? null),
       logoPath:
         patch.brand.logoPath === undefined ? (next.brand.logoPath ?? null) : (patch.brand.logoPath ?? null),
+      colors: patch.brand.colors ?? next.brand.colors,
+      typography: patch.brand.typography
+        ? { primary: patch.brand.typography.primary ?? null, secondary: patch.brand.typography.secondary ?? null }
+        : next.brand.typography,
+      values: patch.brand.values ?? next.brand.values,
+      tagline: patch.brand.tagline === undefined ? next.brand.tagline : patch.brand.tagline,
+      overview: patch.brand.overview === undefined ? next.brand.overview : patch.brand.overview,
+      readiness: patch.brand.readiness === undefined ? next.brand.readiness : patch.brand.readiness,
+      understanding:
+        patch.brand.understanding === undefined ? next.brand.understanding : patch.brand.understanding,
+      audits: patch.brand.audits === undefined ? next.brand.audits : patch.brand.audits,
     };
   }
 

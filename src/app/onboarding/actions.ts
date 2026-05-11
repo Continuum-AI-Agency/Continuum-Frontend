@@ -8,7 +8,6 @@ import {
   fetchOnboardingState,
   removeDocument,
   resetOnboardingState,
-  updateConnectionAccounts,
 } from "@/lib/onboarding/storage";
 import type {
   OnboardingDocument,
@@ -18,10 +17,11 @@ import type {
 } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getApiBaseUrl } from "@/lib/api/config";
 import { mapOnboardingStateToAgentPayload } from "@/lib/onboarding/mapping";
-import { approveOnboardingBrandProfile } from "@/lib/onboarding/agentClient";
+import { approveOnboardingBrandProfile, type IntegrationProvider } from "@/lib/onboarding/agentClient";
+import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getPostHogClient } from "@/lib/posthog-server";
 
 
@@ -29,22 +29,54 @@ const getIntegrationServer = async () => {
   return import("@/lib/api/integrations/server");
 };
 
-const MOCK_ACCOUNT_NAMES = [
-  "Primary Brand Account",
-  "Performance Ads Account",
-  "Global Presence",
-  "Creative Studio",
-];
+const PLATFORM_KEY_TO_PROVIDER: Record<string, IntegrationProvider> = {
+  youtube: "youtube",
+  googleAds: "google-ads",
+  dv360: "google-ads",
+  instagram: "meta",
+  facebook: "meta",
+  threads: "meta",
+  tiktok: "tiktok",
+  linkedin: "linkedin",
+};
 
-function createMockAccounts(accountId?: string | null): OnboardingConnectionAccount[] {
-  const sourceId = accountId ?? randomUUID();
-  return [
-    {
-      id: sourceId,
-      name: MOCK_ACCOUNT_NAMES[Math.floor(Math.random() * MOCK_ACCOUNT_NAMES.length)],
-      status: "active",
-    },
-  ];
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
+
+async function fetchAssignedIntegrationContext(
+  supabase: SupabaseServerClient,
+  brandId: string
+): Promise<{ accountIds: string[]; providers: IntegrationProvider[] }> {
+  const { data, error } = await supabase
+    .schema("brand_profiles")
+    .from("brand_profile_integration_accounts")
+    .select("integration_account_id, integration_accounts_assets:integration_account_id(type)")
+    .eq("brand_profile_id", brandId);
+
+  if (error) {
+    console.warn("[approveAndLaunchOnboardingAction] BPIA fetch failed", error);
+    return { accountIds: [], providers: [] };
+  }
+
+  type BpiaRow = {
+    integration_account_id: string;
+    integration_accounts_assets?: { type: string | null } | { type: string | null }[] | null;
+  };
+  const rows = (data ?? []) as BpiaRow[];
+  const accountIds: string[] = [];
+  const providerSet = new Set<IntegrationProvider>();
+
+  for (const row of rows) {
+    if (!row.integration_account_id) continue;
+    accountIds.push(row.integration_account_id);
+    const asset = Array.isArray(row.integration_accounts_assets)
+      ? row.integration_accounts_assets[0]
+      : row.integration_accounts_assets;
+    const platformKey = mapIntegrationTypeToPlatformKey(asset?.type ?? null);
+    const provider = platformKey ? PLATFORM_KEY_TO_PROVIDER[platformKey] : null;
+    if (provider) providerSet.add(provider);
+  }
+
+  return { accountIds, providers: Array.from(providerSet) };
 }
 
 export async function fetchOnboardingStateAction(brandId: string): Promise<OnboardingState> {
@@ -62,46 +94,6 @@ export async function resetOnboardingStateAction(brandId: string): Promise<Onboa
   return resetOnboardingState(brandId);
 }
 
-export async function markPlatformConnectionAction(props: {
-  brandId: string;
-  key: PlatformKey;
-  accountId?: string | null;
-}): Promise<OnboardingState> {
-  const accounts = createMockAccounts(props.accountId);
-  return updateConnectionAccounts(props.brandId, props.key, {
-    connected: true,
-    accountId: accounts[0]?.id ?? props.accountId ?? null,
-    accounts,
-    lastSyncedAt: new Date().toISOString(),
-  });
-}
-
-export async function refreshPlatformConnectionAction(
-  brandId: string,
-  provider: PlatformKey
-): Promise<OnboardingState> {
-  const accounts = createMockAccounts();
-  return updateConnectionAccounts(brandId, provider, {
-    connected: true,
-    accountId: accounts[0]?.id ?? null,
-    accounts,
-    lastSyncedAt: new Date().toISOString(),
-  });
-}
-
-export async function clearPlatformConnectionAction(
-  brandId: string,
-  key: PlatformKey
-): Promise<OnboardingState> {
-  return updateConnectionAccounts(brandId, key, {
-    connected: false,
-    accountId: null,
-    accounts: [],
-    lastSyncedAt: null,
-  });
-}
-
-
 export async function completeOnboardingAction(brandId: string): Promise<OnboardingState> {
   const state = await applyOnboardingPatch(brandId, {
     completedAt: new Date().toISOString(),
@@ -112,7 +104,10 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
   return state;
 }
 
-export async function approveAndLaunchOnboardingAction(brandId: string): Promise<OnboardingState> {
+export async function approveAndLaunchOnboardingAction(
+  brandId: string,
+  options?: { idempotencyKey?: string }
+): Promise<OnboardingState> {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id;
@@ -124,21 +119,45 @@ export async function approveAndLaunchOnboardingAction(brandId: string): Promise
   const state = await fetchOnboardingState(brandId);
   const payload = mapOnboardingStateToAgentPayload(brandId, userId, state);
 
-  await approveOnboardingBrandProfile({ payload });
-
-  if (payload.runContext.integration_account_ids.length > 0) {
-    const { applyBrandProfileIntegrationAccountsServer } = await getIntegrationServer();
-    await applyBrandProfileIntegrationAccountsServer({
-      brandId,
-      integrationAccountIds: payload.runContext.integration_account_ids,
-    });
+  const assignedFromBpia = await fetchAssignedIntegrationContext(supabase, brandId);
+  if (assignedFromBpia.accountIds.length > 0) {
+    payload.runContext.integration_account_ids = assignedFromBpia.accountIds;
+    payload.runContext.integrated_platforms = Array.from(
+      new Set([...payload.runContext.integrated_platforms, ...assignedFromBpia.providers])
+    );
   }
 
-  getIntegrationServer().then(async () => {
-    const { runStrategicAnalysisServer } = await import("@/lib/api/strategicAnalyses.server");
-    runStrategicAnalysisServer(brandId).catch(err => {
-      console.error("[approveAndLaunchOnboardingAction] Background analysis trigger failed", err);
-    });
+  const approved = await approveOnboardingBrandProfile({
+    payload,
+    idempotencyKey: options?.idempotencyKey,
+  });
+  console.info("[approveAndLaunchOnboardingAction] Brand profile approved", {
+    brandId,
+    agentBrandProfileId: approved.brand_profile.id,
+  });
+
+  const readinessScore = state.brand.readiness?.overall_score ?? null;
+  const readinessFindings = state.brand.readiness?.findings ?? null;
+  after(async () => {
+    try {
+      const { runStrategicAnalysisServer } = await import("@/lib/api/strategicAnalyses.server");
+      const analysisAck = await runStrategicAnalysisServer({
+        brandId,
+        readinessScore,
+        readinessFindings,
+      });
+      console.info("[approveAndLaunchOnboardingAction] Strategic analysis triggered", {
+        brandId,
+        runId: analysisAck.runId,
+        taskId: analysisAck.taskId,
+        status: analysisAck.status,
+      });
+    } catch (error) {
+      console.warn("[approveAndLaunchOnboardingAction] Strategic analysis kickoff failed", {
+        brandId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
   });
 
   const posthog = getPostHogClient();

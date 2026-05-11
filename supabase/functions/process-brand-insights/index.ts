@@ -97,20 +97,32 @@ function validatePayload(body: unknown): { ok: true; data: InsightsData } | { ok
   return { ok: true, data };
 }
 
+const EMBED_TIMEOUT_MS = 30_000;
+
+async function embedOne(text: string, openai: OpenAI): Promise<number[] | null> {
+  const cleaned = text.trim();
+  if (!cleaned) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error("Embedding request timed out after 30s")), EMBED_TIMEOUT_MS);
+  try {
+    const r = await openai.embeddings.create(
+      { model: "text-embedding-3-small", input: cleaned },
+      { signal: ctrl.signal }
+    );
+    return r.data[0]?.embedding ?? null;
+  } catch (error) {
+    console.warn("[process-brand-insights] embed failed", error instanceof Error ? error.message : error);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function embedBatch(texts: string[], openai: OpenAI, concurrency = 10): Promise<(number[] | null)[]> {
   const results: (number[] | null)[] = new Array(texts.length).fill(null);
   for (let i = 0; i < texts.length; i += concurrency) {
     const slice = texts.slice(i, i + concurrency);
-    const batch = await Promise.all(
-      slice.map((text) => {
-        const cleaned = (text || "").trim();
-        if (!cleaned) return Promise.resolve(null);
-        return openai.embeddings
-          .create({ model: "text-embedding-3-small", input: cleaned })
-          .then((r) => r.data[0]?.embedding ?? null)
-          .catch(() => null);
-      })
-    );
+    const batch = await Promise.all(slice.map((text) => embedOne(text || "", openai)));
     batch.forEach((v, j) => { results[i + j] = v; });
   }
   return results;

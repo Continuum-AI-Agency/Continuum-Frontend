@@ -1,23 +1,18 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Container, Flex, Heading, Text, Box } from "@radix-ui/themes";
-import OnboardingContainer from "@/components/onboarding/OnboardingContainer";
+import { OnboardingExperience } from "@/components/onboarding/v2/OnboardingExperience";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { isOnboardingComplete } from "@/lib/onboarding/state";
-import OnboardingGate from "@/components/onboarding/OnboardingGate";
 import { ActiveBrandProvider } from "@/components/providers/ActiveBrandProvider";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { BrandSwitcher } from "@/components/navigation/BrandSwitcher";
-import { SidebarProvider } from "@/components/ui/sidebar";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Onboarding | Continuum AI",
 };
 
 type OnboardingPageProps = {
-  searchParams?: Promise<{
-    brand?: string;
-  }>;
+  searchParams?: Promise<{ brand?: string }>;
 };
 
 export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
@@ -31,10 +26,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
     redirect("/login");
   }
 
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const brandIdParam =
-    typeof resolvedSearchParams?.brand === "string" ? resolvedSearchParams.brand : undefined;
-  
+  const { brand: brandIdParam } = (searchParams ? await searchParams : {}) as { brand?: string };
   const { brandSummaries, permissions } = await getActiveBrandContext();
   const { brandId, state } = await ensureOnboardingState(brandIdParam);
 
@@ -42,26 +34,39 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
     redirect("/dashboard");
   }
 
+  const defaultUrl = inferDomainFromEmail(user.email);
+
   return (
-    <OnboardingGate>
-      <ActiveBrandProvider activeBrandId={brandId} brandSummaries={brandSummaries} user={user} permissions={permissions}>
-        <SidebarProvider defaultOpen={false}>
-          <Container size="3" className="py-10">
-            <Flex direction="column" gap="5">
-              <Flex align="center" justify="between">
-                <Box>
-                  <Heading size="7">Get started</Heading>
-                  <Text color="gray">Connect your accounts and create your first Brand Profile.</Text>
-                </Box>
-                <Box className="w-64">
-                  <BrandSwitcher />
-                </Box>
-              </Flex>
-              <OnboardingContainer brandId={brandId} initialState={state} />
-            </Flex>
-          </Container>
-        </SidebarProvider>
-      </ActiveBrandProvider>
-    </OnboardingGate>
+    <ActiveBrandProvider
+      activeBrandId={brandId}
+      brandSummaries={brandSummaries}
+      user={user}
+      permissions={permissions}
+    >
+      <OnboardingExperience brandId={brandId} initialState={state} defaultUrl={defaultUrl} />
+    </ActiveBrandProvider>
   );
+}
+
+const GENERIC_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "icloud.com",
+  "proton.me",
+  "protonmail.com",
+  "aol.com",
+  "live.com",
+  "me.com",
+]);
+
+function inferDomainFromEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const at = email.lastIndexOf("@");
+  if (at < 0) return null;
+  const domain = email.slice(at + 1).toLowerCase();
+  if (!domain || GENERIC_EMAIL_DOMAINS.has(domain)) return null;
+  return domain;
 }

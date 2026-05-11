@@ -3,6 +3,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { authorizeSupabaseEdgeRequest } from "../_shared/supabase-edge-auth.ts";
+import { encodeStructuredSseError } from "../_shared/sseError.ts";
 import { streamGeminiTextDeltas, prefetchBrandContext } from "./geminiClient.ts";
 import type { BrandContextSources } from "./geminiClient.ts";
 
@@ -172,8 +173,8 @@ serve(async (req: Request) => {
           }
 
         } catch (error) {
-          console.error(error);
-          controller.enqueue(encoder.encode(sseEncode("error", String(error))));
+          console.error("[brand-draft-audience]", { brandId, error: error instanceof Error ? error.message : String(error) });
+          controller.enqueue(encoder.encode(sseEncode("error", encodeStructuredSseError(error))));
         } finally {
           controller.enqueue(encoder.encode(sseEncode("targetAudienceDone", "1")));
           controller.enqueue(encoder.encode(sseEncode("done", "1")));

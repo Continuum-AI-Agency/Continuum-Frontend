@@ -3,9 +3,12 @@
 import "server-only";
 import { z } from "zod";
 import { httpServer } from "@/lib/api/http.server";
+import { readinessFindingSchema } from "@/lib/onboarding/agentClient";
 
 const runRequestSchema = z.object({
   brandId: z.string().min(1, "brandId is required"),
+  readinessScore: z.number().min(0).max(100).nullable().optional(),
+  readinessFindings: z.array(readinessFindingSchema).nullable().optional(),
 });
 
 const runResponseSchema = z
@@ -22,13 +25,21 @@ export type StrategicAnalysisRunResponse = {
   status?: string;
 };
 
-export async function runStrategicAnalysisServer(brandId: string): Promise<StrategicAnalysisRunResponse> {
-  const { brandId: parsedBrandId } = runRequestSchema.parse({ brandId });
+export type StrategicAnalysisRunInput = z.input<typeof runRequestSchema>;
+
+export async function runStrategicAnalysisServer(
+  input: StrategicAnalysisRunInput
+): Promise<StrategicAnalysisRunResponse> {
+  const parsedInput = runRequestSchema.parse(input);
 
   const response = await httpServer.request({
     path: "/onboarding/strategic-analyses/run",
     method: "POST",
-    body: { brand_id: parsedBrandId },
+    body: {
+      brand_id: parsedInput.brandId,
+      readiness_score: parsedInput.readinessScore ?? null,
+      readiness_findings: parsedInput.readinessFindings ?? null,
+    },
     cache: "no-store",
   });
 

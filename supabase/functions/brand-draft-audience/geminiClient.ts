@@ -279,6 +279,21 @@ export async function streamGeminiTextDeltas({
   }
 }
 
+function makeCombinedSignal(externalSignal: AbortSignal, timeoutMs: number): { signal: AbortSignal; cleanup: () => void } {
+  const combined = new AbortController();
+  const timer = setTimeout(() => combined.abort(new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
+
+  const onExternalAbort = () => combined.abort(externalSignal.reason);
+  externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+
+  const cleanup = () => {
+    clearTimeout(timer);
+    externalSignal.removeEventListener("abort", onExternalAbort);
+  };
+
+  return { signal: combined.signal, cleanup };
+}
+
 async function postGenerateContent({
   apiKey,
   baseUrl,
@@ -293,29 +308,34 @@ async function postGenerateContent({
   signal: AbortSignal;
 }): Promise<any> {
   const url = new URL(`/v1beta/models/${model}:generateContent`, baseUrl);
+  const { signal: combinedSignal, cleanup } = makeCombinedSignal(signal, 30_000);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(requestBody),
-    signal,
-  });
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(requestBody),
+      signal: combinedSignal,
+    });
 
-  if (!response.ok) {
-    let details = `${response.status}`;
-    try {
-      const errorText = await response.text();
-      if (errorText) details += ` ${errorText}`;
-    } catch {
-      // ignore
+    if (!response.ok) {
+      let details = `${response.status}`;
+      try {
+        const errorText = await response.text();
+        if (errorText) details += ` ${errorText}`;
+      } catch {
+        // ignore
+      }
+      throw new Error(`Gemini API error: ${details}`.trim());
     }
-    throw new Error(`Gemini API error: ${details}`.trim());
-  }
 
-  return await response.json();
+    return await response.json();
+  } finally {
+    cleanup();
+  }
 }
 
 async function postStreamGenerateContent({
@@ -333,27 +353,32 @@ async function postStreamGenerateContent({
 }): Promise<Response> {
   const url = new URL(`/v1beta/models/${model}:streamGenerateContent`, baseUrl);
   url.searchParams.set("alt", "sse");
+  const { signal: combinedSignal, cleanup } = makeCombinedSignal(signal, 30_000);
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(requestBody),
-    signal,
-  });
-
-  if (response.ok) return response;
-
-  let details = `${response.status}`;
   try {
-    const errorText = await response.text();
-    if (errorText) details += ` ${errorText}`;
-  } catch {
-    // ignore
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(requestBody),
+      signal: combinedSignal,
+    });
+
+    if (response.ok) return response;
+
+    let details = `${response.status}`;
+    try {
+      const errorText = await response.text();
+      if (errorText) details += ` ${errorText}`;
+    } catch {
+      // ignore
+    }
+    throw new Error(`Gemini API error: ${details}`.trim());
+  } finally {
+    cleanup();
   }
-  throw new Error(`Gemini API error: ${details}`.trim());
 }
 
 export function buildGeminiStreamGenerateContentRequestBody({

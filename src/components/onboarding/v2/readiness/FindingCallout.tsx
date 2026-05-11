@@ -1,0 +1,38 @@
+import { Sparkles } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { bandFor, type ScoreBand } from "./ScoreBadge";
+import type { ReadinessFinding } from "@/lib/onboarding/agentClient";
+
+const TINT: Record<ScoreBand, string> = {
+  strong: "bg-[color-mix(in_srgb,#0daea2_4%,white)] border-[color-mix(in_srgb,#0daea2_18%,transparent)]",
+  watch: "bg-[color-mix(in_srgb,#f59e0b_5%,white)] border-[color-mix(in_srgb,#f59e0b_22%,transparent)]",
+  weak: "bg-[color-mix(in_srgb,#e11d48_4%,white)] border-[color-mix(in_srgb,#e11d48_22%,transparent)]",
+};
+
+const ICON_TONE: Record<ScoreBand, string> = {
+  strong: "text-[#0a8a80]",
+  watch: "text-[#b45309]",
+  weak: "text-[#be123c]",
+};
+
+export function FindingCallout({ finding }: { finding: ReadinessFinding }) {
+  const band = bandFor(finding.score);
+  return (
+    <div className="space-y-2.5">
+      <Separator className="opacity-60" />
+      <div className={`rounded-md border p-3 ${TINT[band]}`}>
+        <div className="flex items-start gap-2">
+          <Sparkles className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${ICON_TONE[band]}`} />
+          <div className="space-y-1">
+            <p className="text-[12px] font-semibold text-[#0b1220]">{finding.headline}</p>
+            <p className="text-[12px] leading-snug text-[#374151]">{finding.detail}</p>
+            <p className="pt-1 text-[12px] leading-snug text-[#0b1220]">
+              <span className="font-semibold">Try this · </span>
+              {finding.recommendation}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

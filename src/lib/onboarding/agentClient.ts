@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getApiBaseUrl } from "@/lib/api/config";
+import type { ScrapeResult } from "@/lib/onboarding/scrape";
 
 const CLIENT_BASE_URL_KEYS = [
   "NEXT_PUBLIC_ONBOARDING_AGENT_BASE_URL",
@@ -168,15 +169,100 @@ export type InitialPhaseResult = z.infer<typeof initialPhaseResultSchema>;
 export type AgentRequestPayload = {
   brandProfile: AgentBrandProfile;
   runContext: AgentRunContext;
+  scrape?: ScrapeResult | null;
 };
 
-const previewSectionSchema = z.enum(["brand_profile", "voice", "audience", "website", "business"]);
+export const readinessDimensionSchema = z.enum([
+  "value_proposition",
+  "icp_clarity",
+  "customer_pains",
+  "success_metrics",
+  "positioning",
+  "messaging_coherence",
+  "brand_identity",
+]);
+
+export type ReadinessDimension = z.infer<typeof readinessDimensionSchema>;
+
+export const readinessFindingSchema = z.object({
+  dimension: readinessDimensionSchema,
+  score: z.number().min(0).max(100),
+  severity: z.enum(["low", "medium", "high"]),
+  headline: z.string().min(1),
+  detail: z.string().min(1),
+  recommendation: z.string().min(1),
+});
+
+export type ReadinessFinding = z.infer<typeof readinessFindingSchema>;
+
+export const readinessAnalysisSchema = z.object({
+  overall_score: z.number().min(0).max(100),
+  dimensions: z.record(
+    readinessDimensionSchema,
+    z.object({ score: z.number().min(0).max(100), rationale: z.string() })
+  ),
+  findings: z.array(readinessFindingSchema).default([]),
+  generated_at: z.string(),
+});
+
+export type ReadinessAnalysis = z.infer<typeof readinessAnalysisSchema>;
+
+const previewSectionSchema = z.enum([
+  "brand_profile",
+  "voice",
+  "audience",
+  "website",
+  "business",
+  "readiness",
+  "first_impression",
+]);
 type PreviewSection = z.infer<typeof previewSectionSchema>;
+
+export const firstImpressionSchema = z.object({
+  headline: z.string().min(1),
+});
+export type FirstImpression = z.infer<typeof firstImpressionSchema>;
+
+export const understandingSchema = z
+  .object({
+    positioning_thesis: z.string().optional(),
+    hypothesis_icp: z.string().optional(),
+    brand_pillars: z.array(z.string()).optional(),
+    tonal_signal: z.string().optional(),
+    notable_evidence: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+const sectionAuditSchema = z
+  .object({
+    score: z.number().min(0).max(100).optional(),
+    severity: z.enum(["low", "medium", "high"]).optional(),
+    findings: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+export const auditsSchema = z
+  .object({
+    voice: sectionAuditSchema.optional(),
+    audience: sectionAuditSchema.optional(),
+    website: sectionAuditSchema.optional(),
+    business: sectionAuditSchema.optional(),
+  })
+  .passthrough();
+
+export type SectionAudit = z.infer<typeof sectionAuditSchema>;
+export type SectionAudits = z.infer<typeof auditsSchema>;
+export type UnderstandingBrief = z.infer<typeof understandingSchema>;
 
 export const previewWorkflowResultSchema = z
   .object({
     brand_profile: agentBrandProfileSchema.optional(),
     structured: onboardingReportStructuredSchema.optional(),
+    readiness: readinessAnalysisSchema.nullable().optional(),
+    understanding: understandingSchema.optional(),
+    audits: auditsSchema.optional(),
+    first_impression: firstImpressionSchema.nullable().optional(),
+    prompt_version: z.number().int().nonnegative().optional(),
   })
   .partial()
   .passthrough();
@@ -223,6 +309,14 @@ const previewPingEventSchema = z
   })
   .passthrough();
 
+const previewSparkEventSchema = z
+  .object({
+    kind: z.literal("spark"),
+    section: z.string(),
+    label: z.string(),
+  })
+  .passthrough();
+
 const previewErrorSchema = z
   .object({
     kind: z.literal("error"),
@@ -253,6 +347,9 @@ export type OnboardingPreviewEvent =
   | { type: "brand_profile"; payload: AgentBrandProfile }
   | { type: "website"; payload: WebsiteSummary | null }
   | { type: "business"; payload: BusinessSummary | null }
+  | { type: "readiness"; payload: ReadinessAnalysis }
+  | { type: "first_impression"; payload: FirstImpression }
+  | { type: "spark"; section: string; label: string }
   | { type: "structured"; payload: OnboardingReportStructured }
   | { type: "embedding"; target: string; status: string; error?: string }
   | { type: "complete"; phase?: string; status: string; result?: OnboardingPreviewWorkflowResult }
@@ -294,40 +391,226 @@ export async function checkOnboardingAgentHealth(options?: { signal?: AbortSigna
   }
 }
 
+const TERMINAL_OK_STATUSES = new Set(["ok", "success", "done", "completed", "complete"]);
+
+export const PREVIEW_PROMPT_VERSION = 1;
+
+export class PreviewRateLimitedError extends Error {
+  retryAfterSeconds: number;
+  constructor(retryAfterSeconds: number) {
+    super(`Preview rate limited; retry after ${retryAfterSeconds}s`);
+    this.name = "PreviewRateLimitedError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+const previewRunStatusSchema = z.enum(["running", "completed", "partial", "failed"]);
+export type PreviewRunStatus = z.infer<typeof previewRunStatusSchema>;
+
+export const previewLatestSchema = z
+  .object({
+    run_id: z.string(),
+    brand_id: z.string(),
+    status: previewRunStatusSchema,
+    prompt_version: z.number().int().nonnegative(),
+    started_at: z.string(),
+    completed_at: z.union([z.string(), z.null()]).optional(),
+    input_hash: z.string(),
+  })
+  .passthrough();
+export type PreviewLatest = z.infer<typeof previewLatestSchema>;
+
+export const previewSnapshotSchema = z
+  .object({
+    run_id: z.string(),
+    brand_id: z.string(),
+    status: previewRunStatusSchema,
+    prompt_version: z.number().int().nonnegative(),
+    started_at: z.string(),
+    completed_at: z.union([z.string(), z.null()]).optional(),
+    result: previewWorkflowResultSchema.nullable().optional(),
+    error: z
+      .object({ message: z.string() })
+      .passthrough()
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+export type PreviewSnapshot = z.infer<typeof previewSnapshotSchema>;
+
 type PreviewOptions = {
   payload: AgentRequestPayload;
   signal?: AbortSignal;
   onEvent?: (event: OnboardingPreviewEvent) => void;
+  onRunId?: (runId: string | null) => void;
+  onSequence?: (sequence: number) => void;
 };
 
 export type RunOnboardingPreviewResult = {
+  runId: string | null;
+  brandProfile?: AgentBrandProfile;
+  structured?: OnboardingReportStructured;
+  complete?: OnboardingPreviewWorkflowResult;
+};
+
+type ConsumerResult = {
   brandProfile?: AgentBrandProfile;
   structured?: OnboardingReportStructured;
   complete?: OnboardingPreviewWorkflowResult;
 };
 
 export async function runOnboardingPreview(options: PreviewOptions): Promise<RunOnboardingPreviewResult> {
+  const previewHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+    "X-Onboarding-UX": "rich",
+  };
+
   const response = await fetch(buildUrl("/onboarding/brand-profiles/preview"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    },
+    headers: previewHeaders,
     body: JSON.stringify({
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,
+      scrape: options.payload.scrape ?? null,
     }),
     cache: "no-store",
     signal: options?.signal,
   });
 
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get("Retry-After") ?? "10");
+    throw new PreviewRateLimitedError(Number.isFinite(retryAfter) ? retryAfter : 10);
+  }
   await assertOk(response);
 
   if (!response.body) {
     throw new Error("Preview stream was not available.");
   }
 
-  const reader = response.body.getReader();
+  const runId = response.headers.get("X-Preview-Run-Id");
+  options.onRunId?.(runId);
+
+  const result = await consumePreviewStream(response.body, {
+    onEvent: options.onEvent,
+    onSequence: options.onSequence,
+  });
+  return { runId, ...result };
+}
+
+export async function resumeOnboardingPreview(
+  runId: string,
+  options: {
+    onEvent?: (event: OnboardingPreviewEvent) => void;
+    onSequence?: (sequence: number) => void;
+    signal?: AbortSignal;
+    lastEventId?: number;
+    rich?: boolean;
+  } = {}
+): Promise<ConsumerResult> {
+  const headers: Record<string, string> = { Accept: "text/event-stream" };
+  if (options.rich !== false) headers["X-Onboarding-UX"] = "rich";
+  if (typeof options.lastEventId === "number" && options.lastEventId > 0) {
+    headers["Last-Event-ID"] = String(options.lastEventId);
+  }
+
+  const response = await fetch(
+    buildUrl(`/onboarding/brand-profiles/preview/${encodeURIComponent(runId)}/events`),
+    { method: "GET", headers, cache: "no-store", signal: options.signal }
+  );
+  if (response.status === 404) throw new Error(`Preview run ${runId} not found`);
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get("Retry-After") ?? "10");
+    throw new PreviewRateLimitedError(Number.isFinite(retryAfter) ? retryAfter : 10);
+  }
+  await assertOk(response);
+  if (!response.body) throw new Error("Preview resume stream was not available.");
+  return await consumePreviewStream(response.body, options);
+}
+
+export async function fetchPreviewLatest(
+  brandId: string,
+  options?: { signal?: AbortSignal }
+): Promise<PreviewLatest | null> {
+  const response = await fetch(
+    buildUrl(`/onboarding/brand-profiles/${encodeURIComponent(brandId)}/preview/latest`),
+    { method: "GET", cache: "no-store", signal: options?.signal }
+  );
+  if (response.status === 404) return null;
+  await assertOk(response);
+  return previewLatestSchema.parse(await response.json());
+}
+
+export async function fetchPreviewSnapshot(
+  runId: string,
+  options?: { signal?: AbortSignal; events?: boolean }
+): Promise<PreviewSnapshot | null> {
+  const path = `/onboarding/brand-profiles/preview/${encodeURIComponent(runId)}${
+    options?.events ? "?events=true" : ""
+  }`;
+  const response = await fetch(buildUrl(path), {
+    method: "GET",
+    cache: "no-store",
+    signal: options?.signal,
+  });
+  if (response.status === 404) return null;
+  await assertOk(response);
+  return previewSnapshotSchema.parse(await response.json());
+}
+
+function canonicalStringify(value: unknown): string {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalStringify).join(",")}]`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries
+      .map(([k, v]) => `${JSON.stringify(k)}:${canonicalStringify(v)}`)
+      .join(",")}}`;
+  }
+  return "null";
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    out += bytes[i].toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+export async function computePreviewInputHash(input: {
+  payload: AgentRequestPayload;
+  rich?: boolean;
+  promptVersion?: number;
+}): Promise<string> {
+  const canonical = canonicalStringify({
+    brandProfile: input.payload.brandProfile,
+    runContext: input.payload.runContext,
+    scrape: input.payload.scrape ?? null,
+    rich: input.rich ?? true,
+    promptVersion: input.promptVersion ?? PREVIEW_PROMPT_VERSION,
+  });
+  if (typeof crypto === "undefined" || !crypto.subtle) {
+    throw new Error("SubtleCrypto is required to compute preview input hash");
+  }
+  const bytes = new TextEncoder().encode(canonical);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return bytesToHex(new Uint8Array(digest));
+}
+
+async function consumePreviewStream(
+  body: ReadableStream<Uint8Array>,
+  options: {
+    onEvent?: (event: OnboardingPreviewEvent) => void;
+    onSequence?: (sequence: number) => void;
+  }
+): Promise<ConsumerResult> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let latestProfile: AgentBrandProfile | undefined;
@@ -366,6 +649,16 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
         dispatch({ type: "business", payload: parsed });
         break;
       }
+      case "readiness": {
+        const parsed = readinessAnalysisSchema.parse(payload.data);
+        dispatch({ type: "readiness", payload: parsed });
+        break;
+      }
+      case "first_impression": {
+        const parsed = firstImpressionSchema.parse(payload.data);
+        dispatch({ type: "first_impression", payload: parsed });
+        break;
+      }
       default:
         break;
     }
@@ -378,10 +671,14 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
 
     let parsedPayload: unknown = payload;
     if (typeof parsedPayload === "string") {
+      const original = parsedPayload;
       try {
-        parsedPayload = JSON.parse(parsedPayload);
-      } catch {
-        // leave as string
+        parsedPayload = JSON.parse(original);
+      } catch (parseError) {
+        console.warn(
+          "[agentClient] SSE payload was not valid JSON; treating as string.",
+          { preview: original.slice(0, 200), eventName, error: parseError instanceof Error ? parseError.message : parseError }
+        );
       }
     }
 
@@ -395,6 +692,11 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
         case "ping": {
           previewPingEventSchema.parse(parsedPayload);
           dispatch({ type: "ping" });
+          return;
+        }
+        case "spark": {
+          const parsed = previewSparkEventSchema.parse(parsedPayload);
+          dispatch({ type: "spark", section: parsed.section, label: parsed.label });
           return;
         }
         case "status": {
@@ -445,6 +747,10 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
             status: parsed.status,
             result: parsed.result,
           });
+          const status = parsed.status?.toLowerCase() ?? "";
+          if (status && !TERMINAL_OK_STATUSES.has(status)) {
+            throw new Error(`Onboarding preview did not finish cleanly (status: ${parsed.status}).`);
+          }
           return;
         }
         case "error": {
@@ -453,6 +759,7 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
           throw new Error(parsed.message);
         }
         default:
+          console.warn("[agentClient] Unknown SSE event kind ignored", { kind, eventName });
           return;
       }
     }
@@ -552,15 +859,20 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
         const lines = rawEvent.split(/\r?\n/);
         let eventName: string | null = null;
         const dataLines: string[] = [];
+        let sequence: number | null = null;
         for (const line of lines) {
           if (line.startsWith("event:")) {
             eventName = line.slice(6).trim();
           } else if (line.startsWith("data:")) {
             dataLines.push(line.slice(5));
+          } else if (line.startsWith("id:")) {
+            const raw = Number(line.slice(3).trim());
+            if (Number.isFinite(raw) && raw > 0) sequence = raw;
           } else if (line.startsWith(":")) {
             // comment/heartbeat line; ignore
           }
         }
+        if (sequence !== null) options.onSequence?.(sequence);
         if (dataLines.length === 0) {
           continue;
         }
@@ -578,14 +890,18 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
 type ApproveOptions = {
   payload: AgentRequestPayload;
   signal?: AbortSignal;
+  idempotencyKey?: string;
 };
 
 export async function approveOnboardingBrandProfile(options: ApproveOptions): Promise<InitialPhaseResult> {
+  const approveHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (options.idempotencyKey) approveHeaders["X-Idempotency-Key"] = options.idempotencyKey;
+
   const response = await fetch(buildUrl("/onboarding/brand-profiles/approve"), {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: approveHeaders,
     body: JSON.stringify({
       brandProfile: options.payload.brandProfile,
       runContext: options.payload.runContext,
@@ -595,5 +911,14 @@ export async function approveOnboardingBrandProfile(options: ApproveOptions): Pr
   });
   await assertOk(response);
   const json = await response.json();
-  return initialPhaseResultSchema.parse(json);
+  const parsed = initialPhaseResultSchema.parse(json);
+  if (!parsed.brand_profile?.id || !parsed.brand_profile.brand_name) {
+    throw new Error("Brand profile approve returned an empty result.");
+  }
+  if (parsed.brand_profile.id !== options.payload.brandProfile.id) {
+    throw new Error(
+      `Brand profile id mismatch (expected ${options.payload.brandProfile.id}, got ${parsed.brand_profile.id}).`
+    );
+  }
+  return parsed;
 }
