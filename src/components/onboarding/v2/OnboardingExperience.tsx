@@ -154,7 +154,6 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     if (!userId) return;
 
     const scrape = await scrapePromise;
-    if (!scrape) return; // scrape failed; user can retry from URL screen via the surfaced error
     const brandName =
       scrape?.title ??
       initialState.brand.name ??

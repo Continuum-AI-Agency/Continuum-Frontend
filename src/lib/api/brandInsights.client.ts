@@ -9,7 +9,6 @@ import { getApiBaseUrl } from "@/lib/api/config";
 import { assertOk } from "@/lib/api/errors";
 import type { RequestOptions } from "@/lib/api/http.types";
 import {
-  BRAND_TRENDS_SCHEMA,
   brandInsightsGenerateInputSchema,
   type BrandInsightsStatusMessage,
   type BrandInsightsStatusResponse,
@@ -96,7 +95,6 @@ async function request<TResponse = unknown>(options: RequestOptions<TResponse>):
   const finalHeaders: Record<string, string> = {
     ...(body ? { "Content-Type": "application/json" } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    "X-Supabase-Schema": BRAND_TRENDS_SCHEMA,
     ...headers,
   };
 

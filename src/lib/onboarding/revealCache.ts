@@ -11,7 +11,7 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 export type RevealCacheEntry = {
   buckets: AgentPreviewBuckets;
-  scrape: ScrapeResult;
+  scrape: ScrapeResult | null;
   runId: string | null;
   inputHash: string | null;
   cachedAt: number;
@@ -27,7 +27,7 @@ type RevealCacheActions = {
   write: (
     brandId: string,
     websiteUrl: string,
-    entry: { buckets: AgentPreviewBuckets; scrape: ScrapeResult; runId?: string | null; inputHash?: string | null }
+    entry: { buckets: AgentPreviewBuckets; scrape: ScrapeResult | null; runId?: string | null; inputHash?: string | null }
   ) => void;
   invalidateBrand: (brandId: string) => void;
   invalidateUrl: (brandId: string, websiteUrl: string) => void;

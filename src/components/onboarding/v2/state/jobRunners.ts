@@ -1,4 +1,5 @@
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
+import { getOnboardingAgentBaseUrl } from "@/lib/onboarding/agentClient";
 import { generateBrandInsights } from "@/lib/api/brandInsights.client";
 import { timing, trackOnboardingEvent } from "@/lib/onboarding/telemetry";
 
@@ -6,7 +7,8 @@ export async function runScrape(url: string, signal: AbortSignal): Promise<Scrap
   const t = timing();
   trackOnboardingEvent("onboarding_scrape_started", { url });
   try {
-    const response = await fetch("/api/onboarding/scrape", {
+    const base = getOnboardingAgentBaseUrl();
+    const response = await fetch(`${base}/onboarding/brand-profiles/scrape`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
@@ -23,7 +25,8 @@ export async function runScrape(url: string, signal: AbortSignal): Promise<Scrap
       });
       throw new Error(message);
     }
-    const result = (await response.json()) as ScrapeResult;
+    const body = (await response.json()) as { scrape: ScrapeResult };
+    const result = body.scrape;
     trackOnboardingEvent("onboarding_scrape_completed", {
       url,
       duration_ms: t.sinceStart(),
