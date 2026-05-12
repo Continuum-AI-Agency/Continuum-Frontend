@@ -24,6 +24,27 @@ export type ActionType =
 
 export type ScopeType = "GLOBAL" | "ACCOUNT" | "CAMPAIGN" | "ADSET" | "AD";
 
+export interface ProductSwapProduct {
+  name: string;
+  brand: string;
+  external_id: string;
+  reason?: string;
+  sizes?: string;
+  discount?: number;
+  quality_score?: number;
+  similarity_score?: number;
+}
+
+export interface CreativeSwitchExternalPayload {
+  operation: string;
+  original_creative_url: string;
+  new_creative_url: string;
+  outgoing_product?: ProductSwapProduct;
+  replacement_product?: ProductSwapProduct;
+  plan_timestamp?: string;
+  maintenance_file?: string;
+}
+
 export interface ActionLog {
   id: string;
   brandId: string;

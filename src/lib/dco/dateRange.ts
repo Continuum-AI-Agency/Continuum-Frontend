@@ -1,4 +1,4 @@
-export const DEFAULT_DATE_RANGE_DAYS = 7 as const;
+export const DEFAULT_DATE_RANGE_DAYS = 30 as const;
 
 export type DateRangeDays = 7 | 30;
 

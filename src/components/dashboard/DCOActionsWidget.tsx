@@ -47,7 +47,7 @@ import {
 
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
 import { DEFAULT_DATE_RANGE_DAYS, type DateRangeDays, getDateRangeFromDays } from "@/lib/dco/dateRange";
-import type { ActionLog, ActionType, ActionStatus } from "@/lib/types/dco";
+import type { ActionLog, ActionType, ActionStatus, ProductSwapProduct, CreativeSwitchExternalPayload } from "@/lib/types/dco";
 import { cn } from "@/lib/utils";
 
 function formatTimestamp(isoString: string): string {
@@ -128,7 +128,7 @@ function formatDetailValue(key: string, value: unknown): string {
     // "Account ROAS below 1.0 with spend > 2000"
     const currencyContextRegex = /\b(spend|budget|cost|price|bid|revenue|cpc|cpm|cpa)\s*([<>=]+|is|:|under|over|above|below)?\s*(\d+(?:\.\d{1,2})?)\b/gi;
     
-    return value.replace(currencyContextRegex, (match, keyword, operator, number) => {
+    return value.replace(currencyContextRegex, (_match, keyword, operator, number) => {
       // Reconstruct the string with the formatted currency
       const prefix = operator ? `${operator} ` : "";
       // Clean up whitespace in reconstruction
@@ -239,53 +239,130 @@ function DetailSection({ data, label }: { data: Record<string, unknown> | null; 
   );
 }
 
-function ActionItemContent({ log }: { log: ActionLog }) {
-    const hasOriginalCreativeUrl = typeof log.actionPayload?.original_creative_url === "string";
-    const hasNewCreativeUrl = typeof log.actionPayload?.new_creative_url === "string";
-    const isCreativeSwap =
-      (log.actionType === "SWITCH_CREATIVE" || log.actionType === "CREATIVE_SWITCH_EXTERNAL") &&
-      hasOriginalCreativeUrl &&
-      hasNewCreativeUrl;
-
-    return (
-        <Flex direction="column" gap="4" pt="2">
-          {log.decisionNote && (
-            <Box>
-              <Text size="1" color="gray" weight="medium" className="uppercase tracking-wider mb-2 block">
-                Decision Note
-              </Text>
-              <div className="rounded-md border bg-blue-50/50 p-3 text-sm text-gray-900">
-                {log.decisionNote}
-              </div>
-            </Box>
-          )}
-
-          {isCreativeSwap && (
-            <CreativeSwapComparison
-              originalUrl={log.actionPayload.original_creative_url as string}
-              newUrl={log.actionPayload.new_creative_url as string}
-            />
-          )}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <DetailSection data={log.paramsChanged} label="Parameters Changed" />
-            <DetailSection data={log.actionPayload} label="Action Payload" />
+function ProductSwapSection({
+  outgoing,
+  replacement,
+}: {
+  outgoing: ProductSwapProduct;
+  replacement: ProductSwapProduct;
+}) {
+  return (
+    <Box>
+      <Text size="1" color="gray" weight="medium" className="uppercase tracking-wider mb-2 block">
+        Product Swap
+      </Text>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-md border bg-red-50/40 p-3 text-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <ShadcnBadge variant="destructive" className="text-[10px]">Outgoing</ShadcnBadge>
+            {outgoing.reason && (
+              <span className="text-[10px] text-muted-foreground capitalize">{outgoing.reason.replace(/_/g, " ")}</span>
+            )}
           </div>
-          
-          <DetailSection data={log.result} label="Result" />
-          
-          {log.error && (
-            <Box>
-              <Text size="1" color="red" weight="medium" className="uppercase tracking-wider mb-2 block">
-                Error
-              </Text>
-              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                {log.error}
-              </div>
-            </Box>
+          <p className="font-medium leading-snug">{outgoing.name}</p>
+          <p className="text-xs text-muted-foreground">{outgoing.brand} · #{outgoing.external_id}</p>
+        </div>
+        <div className="rounded-md border bg-green-50/40 p-3 text-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <ShadcnBadge variant="default" className="text-[10px]">Replacement</ShadcnBadge>
+            {replacement.discount != null && (
+              <span className="text-[10px] font-semibold text-green-700">{replacement.discount}% off</span>
+            )}
+          </div>
+          <p className="font-medium leading-snug">{replacement.name}</p>
+          <p className="text-xs text-muted-foreground">{replacement.brand} · #{replacement.external_id}</p>
+          {replacement.sizes && (
+            <p className="mt-1 text-[11px] text-muted-foreground">Sizes: {replacement.sizes}</p>
           )}
-        </Flex>
-    )
+          {(replacement.similarity_score != null || replacement.quality_score != null) && (
+            <div className="mt-1.5 flex gap-3 text-[11px] text-muted-foreground">
+              {replacement.similarity_score != null && <span>Similarity: {replacement.similarity_score.toFixed(1)}</span>}
+              {replacement.quality_score != null && <span>Quality: {replacement.quality_score.toFixed(2)}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    </Box>
+  );
+}
+
+function ActionItemContent({ log }: { log: ActionLog }) {
+  const payload = log.actionPayload as Partial<CreativeSwitchExternalPayload>;
+
+  const hasOriginalCreativeUrl = typeof payload?.original_creative_url === "string";
+  const hasNewCreativeUrl = typeof payload?.new_creative_url === "string";
+  const isCreativeSwap =
+    (log.actionType === "SWITCH_CREATIVE" || log.actionType === "CREATIVE_SWITCH_EXTERNAL") &&
+    hasOriginalCreativeUrl &&
+    hasNewCreativeUrl;
+
+  const hasProductSwap =
+    log.actionType === "CREATIVE_SWITCH_EXTERNAL" &&
+    payload?.outgoing_product != null &&
+    payload?.replacement_product != null;
+
+  const paramsChangedIsRedundant =
+    JSON.stringify(log.paramsChanged) === JSON.stringify(log.actionPayload);
+
+  const cleanedPayload = isCreativeSwap
+    ? Object.fromEntries(
+        Object.entries(log.actionPayload ?? {}).filter(
+          ([k]) =>
+            k !== "original_creative_url" &&
+            k !== "new_creative_url" &&
+            k !== "outgoing_product" &&
+            k !== "replacement_product"
+        )
+      )
+    : log.actionPayload;
+
+  return (
+    <Flex direction="column" gap="4" pt="2">
+      {log.decisionNote && (
+        <Box>
+          <Text size="1" color="gray" weight="medium" className="uppercase tracking-wider mb-2 block">
+            Decision Note
+          </Text>
+          <div className="rounded-md border bg-blue-50/50 p-3 text-sm text-gray-900">
+            {log.decisionNote}
+          </div>
+        </Box>
+      )}
+
+      {isCreativeSwap && (
+        <CreativeSwapComparison
+          originalUrl={payload.original_creative_url!}
+          newUrl={payload.new_creative_url!}
+        />
+      )}
+
+      {hasProductSwap && (
+        <ProductSwapSection
+          outgoing={payload.outgoing_product!}
+          replacement={payload.replacement_product!}
+        />
+      )}
+
+      {!isCreativeSwap && !paramsChangedIsRedundant && (
+        <DetailSection data={log.paramsChanged} label="Parameters Changed" />
+      )}
+
+      <DetailSection data={cleanedPayload as Record<string, unknown>} label="Action Payload" />
+
+      <DetailSection data={log.result} label="Result" />
+
+      {log.error && (
+        <Box>
+          <Text size="1" color="red" weight="medium" className="uppercase tracking-wider mb-2 block">
+            Error
+          </Text>
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            {log.error}
+          </div>
+        </Box>
+      )}
+    </Flex>
+  );
 }
 
 function LoadingSkeleton() {
@@ -583,14 +660,6 @@ export function DCOActionsWidget({
     metaAccountId,
   });
 
-  const [filterState, setFilterState] = React.useState({
-    status: filters.status,
-    actionType: filters.actionType,
-    scopeType: filters.scopeType,
-    campaignId: campaignId ?? filters.campaignId,
-    metaAccountId: filters.metaAccountId,
-  });
-
   const [dateRangeDays, setDateRangeDays] = React.useState<DateRangeDays>(DEFAULT_DATE_RANGE_DAYS);
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
 
@@ -605,7 +674,6 @@ export function DCOActionsWidget({
   };
 
   const handleFilterChange = (key: string, value: string | undefined) => {
-    setFilterState(prev => ({ ...prev, [key]: value }));
     setFilters({ [key]: value });
   };
 
@@ -620,10 +688,6 @@ export function DCOActionsWidget({
   }, [setFilters]);
 
   React.useEffect(() => {
-    setFilterState((prev) => ({
-      ...prev,
-      campaignId,
-    }));
     setFilters({ campaignId });
   }, [campaignId, setFilters]);
 
@@ -644,7 +708,7 @@ export function DCOActionsWidget({
               </div>
               <div className="flex items-center gap-1">
                 <Select
-                  value={filterState.status ?? "all"}
+                  value={filters.status ?? "all"}
                   onValueChange={(value) => handleFilterChange("status", value === "all" ? undefined : value)}
                 >
                   <SelectTrigger className="h-7 min-w-0 rounded-md px-2 text-[11px]">
@@ -710,8 +774,18 @@ export function DCOActionsWidget({
 
             {!isLoading && !error && visibleLogs.length === 0 ? (
               <div className="flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed px-4 text-center">
-                <p className="text-sm font-medium">No recent actions</p>
-                <p className="mt-1 text-xs text-muted-foreground">Automation activity will appear here.</p>
+                <p className="text-sm font-medium">No actions in the last {dateRangeDays}d</p>
+                {dateRangeDays < 30 ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDateRangeChange(30)}
+                    className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Try last 30 days
+                  </button>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">Automation activity will appear here.</p>
+                )}
               </div>
             ) : null}
 
@@ -824,8 +898,8 @@ export function DCOActionsWidget({
         <Separator mb="3" />
 
         <Flex justify="between" align="center" mb="3" wrap="wrap" gap="2">
-          <FilterControls 
-            filters={filterState}
+          <FilterControls
+            filters={filters}
             campaigns={campaigns}
             adAccounts={adAccounts}
             isLoadingCampaigns={isLoadingCampaigns}
