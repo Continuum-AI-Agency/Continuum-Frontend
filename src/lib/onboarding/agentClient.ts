@@ -74,12 +74,31 @@ export const brandVoiceSchema = z.object({
   mission: z.string().optional(),
   vision: z.string().optional(),
   core_values: z.array(z.string()).optional(),
+  banned_words: z.array(z.string()).optional(),
+  power_verbs: z.array(z.string()).optional(),
 });
 
 export type BrandVoice = z.infer<typeof brandVoiceSchema>;
 
+export const audiencePersonaSchema = z.object({
+  name: z.string().min(2).max(60),
+  headline: z.string().max(220).nullable().optional(),
+  jtbd: z.string().max(280).nullable().optional(),
+  pains_verbatim: z.array(z.string().max(280)).max(5).nullable().optional(),
+  buying_criteria: z.array(z.string().max(220)).max(5).nullable().optional(),
+  objections: z.array(z.string().max(280)).max(5).nullable().optional(),
+  journey_stage: z
+    .enum(["awareness", "consideration", "decision", "implementation"])
+    .nullable()
+    .optional(),
+  status_quo_loss: z.string().max(280).nullable().optional(),
+});
+
+export type AudiencePersona = z.infer<typeof audiencePersonaSchema>;
+
 export const targetAudienceSchema = z.object({
   summary: z.string().optional(),
+  segments: z.array(audiencePersonaSchema).min(1).max(3).nullable().optional(),
   demographics: z.array(z.string()).optional(),
   psychographics: z.array(z.string()).optional(),
   behaviors: z.array(z.string()).optional(),
@@ -98,10 +117,26 @@ export type TargetAudience = z.infer<typeof targetAudienceSchema>;
 
 const platformAgentResultSchema = z.object({ provider: z.string().optional() }).passthrough();
 
+const websitePaletteSchema = z.object({
+  primary: z.union([z.string(), z.null()]).optional(),
+  secondary: z.union([z.string(), z.null()]).optional(),
+  accent: z.union([z.string(), z.null()]).optional(),
+  background: z.union([z.string(), z.null()]).optional(),
+  text: z.union([z.string(), z.null()]).optional(),
+});
+
+const websiteTypographySchema = z.object({
+  primary: z.union([z.string(), z.null()]).optional(),
+  secondary: z.union([z.string(), z.null()]).optional(),
+});
+
 const websiteSummarySchema = z
   .object({
     website_url: z.union([z.string().min(1), z.null()]).optional(),
     hero_statement: z.union([z.string(), z.null()]).optional(),
+    hero_subhead: z.union([z.string(), z.null()]).optional(),
+    palette: websitePaletteSchema.nullable().optional(),
+    typography: websiteTypographySchema.nullable().optional(),
   })
   .passthrough();
 
@@ -120,6 +155,8 @@ const businessSummarySchema = z
     business_features: z.array(z.string()).optional(),
     business_benefits: z.array(z.string()).optional(),
     business_cta: z.union([z.string(), z.null()]).optional(),
+    differentiators: z.array(z.string()).nullable().optional(),
+    alt_ctas: z.array(z.string()).nullable().optional(),
   })
   .passthrough();
 
@@ -230,6 +267,7 @@ export const understandingSchema = z
     brand_pillars: z.array(z.string()).optional(),
     tonal_signal: z.string().optional(),
     notable_evidence: z.array(z.string()).optional(),
+    content_pillars: z.array(z.string()).nullable().optional(),
   })
   .passthrough();
 
@@ -332,6 +370,8 @@ const previewCompleteSchema = z.object({
 }).passthrough();
 
 export type PlatformAgentResult = z.infer<typeof platformAgentResultSchema>;
+export type WebsitePalette = z.infer<typeof websitePaletteSchema>;
+export type WebsiteTypography = z.infer<typeof websiteTypographySchema>;
 export type WebsiteSummary = z.infer<typeof websiteSummarySchema>;
 export type DocumentsSummary = z.infer<typeof documentsSummarySchema>;
 export type BusinessSummary = z.infer<typeof businessSummarySchema>;
