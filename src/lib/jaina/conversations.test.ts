@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  backendConversationMessagesResponseSchema,
   mapConversationMessageRow,
   mapConversationSessionRow,
   normalizeTimestamp,
@@ -68,6 +69,37 @@ describe("conversation row mapping", () => {
       role: "user",
       content: "How are campaigns doing?",
       createdAt: "2026-03-06T10:10:00.000Z",
+    });
+  });
+
+  it("accepts backend null metadata and omits it from UI messages", () => {
+    const parsed = backendConversationMessagesResponseSchema.parse({
+      session_id: "session-1",
+      messages: [
+        {
+          id: 12,
+          session_id: "session-1",
+          user_email: "analyst@example.com",
+          brand_id: "brand-1",
+          ad_account_id: "act-1",
+          role: "assistant",
+          content: "No references on this stored message.",
+          metadata: null,
+          created_at: "2026-03-06T10:16:00.000Z",
+        },
+      ],
+    });
+
+    const mapped = mapConversationMessageRow(parsed.messages[0]);
+
+    expect(mapped).toEqual({
+      id: 12,
+      sessionId: "session-1",
+      brandId: "brand-1",
+      adAccountId: "act-1",
+      role: "assistant",
+      content: "No references on this stored message.",
+      createdAt: "2026-03-06T10:16:00.000Z",
     });
   });
 

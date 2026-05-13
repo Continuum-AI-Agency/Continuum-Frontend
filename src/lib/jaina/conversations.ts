@@ -133,7 +133,7 @@ export const backendConversationMessageSchema = z.object({
     })
     .optional(),
   objectives: z.array(z.unknown()).optional(),
-  metadata: agentMentionMetadataSchema.optional(),
+  metadata: agentMentionMetadataSchema.nullable().optional(),
   created_at: z.string(),
 });
 export type BackendConversationMessage = z.infer<
@@ -318,7 +318,7 @@ export function mapConversationMessageRow(
       ? { pendingClarification: row.pending_clarification }
       : {}),
     ...(Array.isArray(row.objectives) ? { objectives: row.objectives } : {}),
-    ...(row.metadata !== undefined ? { metadata: row.metadata } : {}),
+    ...(row.metadata != null ? { metadata: row.metadata } : {}),
     createdAt: row.created_at,
   };
 }
