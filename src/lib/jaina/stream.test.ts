@@ -2254,6 +2254,57 @@ describe("normalizeCheckpointReportPayload strictness", () => {
     expect(report.sections[0]?.highlights[0]?.text).toBe("Nested highlight");
   });
 
+  it("keeps V2 checkpoint reports nested inside checkpoint_report envelopes", () => {
+    let state = createInitialJainaStreamState();
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.checkpoint_report",
+      data: {
+        item_id: "item_v2_nested",
+        part_id: "part_v2_nested",
+        report: {
+          type: "checkpoint_report",
+          report: {
+            language: "en",
+            executive_summary: "V2 report summary",
+            blocks: [
+              {
+                block_id: "audit_insights",
+                category: "insight_list",
+                scope: "account",
+                title: "Account Audit & Growth Opportunities",
+                priority: "primary",
+                items: [
+                  {
+                    item_type: "insight",
+                    title: "Extreme Conversion Tracking Gap",
+                    summary: "Only one campaign is effectively reporting messaging results.",
+                    severity: "risk",
+                    priority: "now",
+                  },
+                ],
+              },
+            ],
+            follow_up_questions: [],
+            media_map: {},
+            _meta: {
+              schema_version: "2",
+              block_count: 1,
+              has_charts: false,
+              has_media: false,
+              primary_scope: "account",
+            },
+          },
+        },
+      },
+    } as any);
+
+    expect(state.status).not.toBe("error");
+    expect(state.report).toBeNull();
+    expect(state.reportV2?.blocks[0]?.category).toBe("insight_list");
+    expect(state.finalContentKind).toBe("report");
+  });
+
   it("keeps object-based summary fields for executive and section summaries", () => {
     let state = createInitialJainaStreamState();
 

@@ -128,9 +128,19 @@ export function ChartBlock({ block }: ChartBlockProps) {
   return (
     <div>
       <h4 className="mb-2 text-sm font-semibold text-foreground">{block.title}</h4>
+      {block.description ? (
+        <p className="mb-2 text-xs leading-5 text-muted-foreground">
+          {block.description}
+        </p>
+      ) : null}
       <ChartContainer config={chartConfig} className="h-[280px] w-full">
         {chart}
       </ChartContainer>
+      {block.annotation ? (
+        <p className="mt-1.5 text-xs italic text-muted-foreground/70">
+          {block.annotation}
+        </p>
+      ) : null}
     </div>
   );
 }

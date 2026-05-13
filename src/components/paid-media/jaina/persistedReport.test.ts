@@ -111,7 +111,61 @@ describe("parsePersistedReportValue", () => {
 
     expect(parsed?.executive_summary).toBe("Stable week with improving efficiency");
     expect(parsed?.sections[0]?.heading).toBe("Executive Narrative");
+    expect(parsed?.blocks[0]?.summary).toBe("Account performance remained stable this week.");
     expect(parsed?.blocks.length).toBeGreaterThan(0);
+  });
+
+  it("derives legacy block summaries from V2 block content when needed", () => {
+    const parsed = parsePersistedReportValue({
+      report: {
+        type: "checkpoint_report",
+        report: {
+          executive_summary: "Audit summary",
+          blocks: [
+            {
+              block_id: "audit_insights",
+              category: "insight_list",
+              scope: "account",
+              title: "Account Audit & Growth Opportunities",
+              priority: "primary",
+              items: [
+                {
+                  item_type: "insight",
+                  title: "Extreme Conversion Tracking Gap",
+                  summary: "Only one campaign is effectively reporting messaging results.",
+                  severity: "risk",
+                },
+              ],
+            },
+            {
+              block_id: "campaign_efficiency_table",
+              category: "data_table",
+              scope: "campaign",
+              title: "Campaign Efficiency Breakdown",
+              priority: "secondary",
+              notes: "The CPA gap between the top campaign and the rest of the account is over 350x.",
+              columns: [{ key: "name", label: "Campaign Name", format: "text" }],
+              rows: [{ name: "Nivel avanzado 3 idiomas" }],
+            },
+          ],
+          follow_up_questions: [],
+          media_map: {},
+          _meta: {
+            schema_version: "2",
+            block_count: 2,
+            has_charts: false,
+            has_media: false,
+            primary_scope: "account",
+          },
+        },
+      },
+      content: "",
+    });
+
+    expect(parsed?.blocks[0]?.summary).toBe(
+      "Only one campaign is effectively reporting messaging results."
+    );
+    expect(parsed?.blocks[1]?.summary).toContain("CPA gap");
   });
 
   it("preserves settled V2 checkpoint report blocks without legacy stripping", () => {

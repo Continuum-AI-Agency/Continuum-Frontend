@@ -67,6 +67,7 @@ describe("Jaina conversations proxy route", () => {
                   ad_account_id: "act-1",
                   role: "user",
                   content: "Show me top campaigns",
+                  metadata: null,
                   created_at: "2026-03-07T05:40:10.000Z",
                 },
               ],
@@ -143,6 +144,7 @@ describe("Jaina conversations proxy route", () => {
       sessionId: "chat_abc123",
       role: "user",
     });
+    expect(payload.messages[0]).not.toHaveProperty("metadata");
   });
 
   it("proxies conversation session creation payload to backend", async () => {

@@ -551,12 +551,7 @@ function hydrateMessagesWithConversationRuns(
   };
 
   const hydrateableAssistantCount = messages.reduce((count, message) => {
-    if (
-      message.role !== "assistant" ||
-      message.report ||
-      message.reportV2 ||
-      message.reportAssembly
-    ) {
+    if (message.role !== "assistant" || message.reportV2) {
       return count;
     }
     return count + 1;
@@ -604,9 +599,7 @@ function hydrateMessagesWithConversationRuns(
     if (
       !message ||
       message.role !== "assistant" ||
-      message.report ||
-      message.reportV2 ||
-      message.reportAssembly
+      message.reportV2
     ) {
       continue;
     }
@@ -617,9 +610,11 @@ function hydrateMessagesWithConversationRuns(
 
     nextMessages[index] = {
       ...message,
-      ...(payload.report ? { report: payload.report } : {}),
+      ...(payload.report && !message.report ? { report: payload.report } : {}),
       ...(payload.reportV2 ? { reportV2: payload.reportV2 } : {}),
-      ...(payload.reportAssembly ? { reportAssembly: payload.reportAssembly } : {}),
+      ...(payload.reportAssembly && !message.reportAssembly
+        ? { reportAssembly: payload.reportAssembly }
+        : {}),
       ...(payload.objectives && !message.objectives
         ? { objectives: payload.objectives }
         : {}),

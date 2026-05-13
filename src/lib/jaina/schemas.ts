@@ -419,6 +419,10 @@ export const chartBlockV2Schema = checkpointBlockBaseV2Schema.extend({
   category_key: z.string(),
   value_key: z.string().nullish(),
   value_format: valueFormatSchema.optional(),
+  description: z.string().nullish(),
+  annotation: z.string().nullish(),
+  x_axis_label: z.string().nullish(),
+  y_axis_label: z.string().nullish(),
   data: z.array(z.record(z.string(), z.unknown())),
   chart_config: z.record(z.string(), chartConfigEntrySchema),
 });
@@ -1763,6 +1767,41 @@ function normalizeBlockTables(rawBlock: Record<string, unknown>) {
   return [];
 }
 
+function summarizeIncomingBlock(rawBlock: Record<string, unknown>): string {
+  const directSummary =
+    toNonEmptyString(rawBlock.summary) ||
+    toNonEmptyString(rawBlock.body) ||
+    toNonEmptyString(rawBlock.content) ||
+    toNonEmptyString(rawBlock.description) ||
+    toNonEmptyString(rawBlock.notes);
+  if (directSummary) return directSummary;
+
+  const firstItem = toRecordArray(rawBlock.items)[0];
+  const itemSummary =
+    firstItem &&
+    (toNonEmptyString(firstItem.summary) ||
+      toNonEmptyString(firstItem.rationale) ||
+      toNonEmptyString(firstItem.impact) ||
+      toNonEmptyString(firstItem.title));
+  if (itemSummary) return itemSummary;
+
+  const firstMetric = toRecordArray(rawBlock.metrics)[0];
+  const metricLabel = firstMetric && toNonEmptyString(firstMetric.label);
+  if (metricLabel) return `Includes ${metricLabel} and related account metrics.`;
+
+  const pairs = toRecordArray(rawBlock.pairs);
+  if (pairs.length > 0) {
+    const beforeLabel = toNonEmptyString(rawBlock.before_label) || "Before";
+    const afterLabel = toNonEmptyString(rawBlock.after_label) || "After";
+    return `${beforeLabel} compared with ${afterLabel}.`;
+  }
+
+  const rowCount = toRecordArray(rawBlock.rows).length;
+  if (rowCount > 0) return `${rowCount} rows available.`;
+
+  return "No summary provided.";
+}
+
 function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["blocks"] {
   if (!Array.isArray(rawBlocks)) return [];
 
@@ -1783,12 +1822,7 @@ function normalizeIncomingBlocks(rawBlocks: unknown): FrontendCheckpointReport["
       category,
       scope: toNonEmptyString(rawBlock.scope) || "account",
       title: toNonEmptyString(rawBlock.title) || `Block ${index + 1}`,
-      summary:
-        toNonEmptyString(rawBlock.summary) ||
-        toNonEmptyString(rawBlock.body) ||
-        toNonEmptyString(rawBlock.content) ||
-        toNonEmptyString(rawBlock.description) ||
-        "No summary provided.",
+      summary: summarizeIncomingBlock(rawBlock),
       cached_sources: Array.isArray(rawBlock.cached_sources)
         ? rawBlock.cached_sources.map((item) => toDisplayString(item))
         : [],

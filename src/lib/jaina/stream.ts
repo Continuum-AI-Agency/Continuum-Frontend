@@ -1822,29 +1822,22 @@ export function reduceJainaStreamEvent(
       }
 
       const rawReport = parsed.data.data.report;
-      const maybeV2 =
-        rawReport &&
-        typeof rawReport === "object" &&
-        "_meta" in (rawReport as Record<string, unknown>) &&
-        (rawReport as Record<string, unknown>)._meta &&
-        typeof (rawReport as Record<string, unknown>)._meta === "object" &&
-        ((rawReport as Record<string, unknown>)._meta as Record<string, unknown>).schema_version === "2";
+      const v2Parsed = checkpointReportV2Schema.safeParse(
+        unwrapReportEnvelope(rawReport)
+      );
 
-      if (maybeV2) {
-        const v2Parsed = checkpointReportV2Schema.safeParse(rawReport);
-        if (v2Parsed.success) {
-          return {
-            ...nextBase,
-            itemId: parsed.data.data.item_id,
-            partId: parsed.data.data.part_id,
-            reportV2: v2Parsed.data,
-            reportSourceEventId: undefined,
-            hasCanonicalCheckpointReport: true,
-            blockDeltas: [],
-            blockDeltasV2: [],
-            finalContentKind: "report",
-          };
-        }
+      if (v2Parsed.success) {
+        return {
+          ...nextBase,
+          itemId: parsed.data.data.item_id,
+          partId: parsed.data.data.part_id,
+          reportV2: v2Parsed.data,
+          reportSourceEventId: undefined,
+          hasCanonicalCheckpointReport: true,
+          blockDeltas: [],
+          blockDeltasV2: [],
+          finalContentKind: "report",
+        };
       }
 
       const normalizedReport = normalizeCheckpointReportPayload(rawReport);

@@ -48,16 +48,20 @@ export default function InsightListBlock({ block }: InsightListBlockProps) {
                 borderClass
               )}
             >
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-start gap-1.5">
                 <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">{item.title}</span>
+                <span className="min-w-0 flex-1 text-sm font-medium leading-5 text-foreground">
+                  {item.title}
+                </span>
                 {item.priority && (
-                  <span className="ml-auto text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-muted">
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
                     {item.priority}
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-xs text-muted-foreground"><MediaText>{item.summary}</MediaText></p>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                <MediaText>{item.summary}</MediaText>
+              </div>
               {item.rationale && (
                 <p className="mt-1 text-xs italic text-muted-foreground/70">
                   {item.rationale}
