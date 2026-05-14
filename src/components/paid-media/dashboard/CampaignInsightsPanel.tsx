@@ -163,7 +163,10 @@ export function CampaignInsightsPanel({
           ) : !hasAnyInsights ? (
             <p className="py-4 text-center text-xs text-muted-foreground">No insights for this range yet.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <div
+              data-tour-id="paid-insights-panel"
+              className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4"
+            >
               {CATEGORY_CONFIG.map((cat) => (
                 <InsightCategoryCard
                   key={cat.key}

@@ -93,7 +93,10 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
   }, [selectedAccountId, fetchPacing]);
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+    <section
+      data-tour-id="dashboard-budget-pacing"
+      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
+    >
       <div className="flex flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex min-w-0 items-center gap-1.5">
           <h3 className="truncate text-xs font-semibold sm:text-sm">Budget Pace</h3>

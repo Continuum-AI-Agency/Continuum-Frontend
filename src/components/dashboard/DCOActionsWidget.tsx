@@ -16,7 +16,6 @@ import {
   OpenInNewWindowIcon,
   PinTopIcon,
   ReloadIcon,
-  ChevronDownIcon,
 } from "@radix-ui/react-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge as ShadcnBadge } from "@/components/ui/badge";
@@ -45,6 +44,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { AnimatePresence, motion } from "motion/react";
+
+import { CreativeSwapComparison } from "@/components/dco/CreativeSwapComparison";
 import { useDCOActionLogs } from "@/hooks/useDCOActionLogs";
 import { DEFAULT_DATE_RANGE_DAYS, type DateRangeDays, getDateRangeFromDays } from "@/lib/dco/dateRange";
 import type { ActionLog, ActionType, ActionStatus, ProductSwapProduct, CreativeSwitchExternalPayload } from "@/lib/types/dco";
@@ -142,76 +144,6 @@ function formatDetailValue(key: string, value: unknown): string {
   return String(value);
 }
 
-function isVideoUrl(url: string): boolean {
-  try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith(".mp4") || pathname.endsWith(".mov") || pathname.endsWith(".webm");
-  } catch {
-    return false;
-  }
-}
-
-function CreativeSwapComparison({ originalUrl, newUrl }: { originalUrl: string; newUrl: string }) {
-  return (
-    <Box>
-      <Text size="1" color="gray" weight="medium" className="uppercase tracking-wider mb-2 block">
-        Creative Comparison
-      </Text>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <div className="mb-1.5 flex items-center gap-2">
-            <ShadcnBadge variant="outline">Original</ShadcnBadge>
-          </div>
-          <div className="overflow-hidden rounded-md border bg-[var(--gray-2)]">
-            <div className="relative aspect-[16/9]">
-              {isVideoUrl(originalUrl) ? (
-                <video
-                  src={originalUrl}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <img
-                  src={originalUrl}
-                  alt="Original creative"
-                  className="h-full w-full object-contain"
-                  loading="lazy"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-        <div>
-          <div className="mb-1.5 flex items-center gap-2">
-            <ShadcnBadge variant="default">New</ShadcnBadge>
-          </div>
-          <div className="overflow-hidden rounded-md border bg-[var(--gray-2)]">
-            <div className="relative aspect-[16/9]">
-              {isVideoUrl(newUrl) ? (
-                <video
-                  src={newUrl}
-                  controls
-                  playsInline
-                  preload="metadata"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <img
-                  src={newUrl}
-                  alt="New creative"
-                  className="h-full w-full object-contain"
-                  loading="lazy"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </Box>
-  );
-}
 
 function DetailSection({ data, label }: { data: Record<string, unknown> | null; label: string }) {
   if (!data || Object.keys(data).length === 0) return null;
@@ -661,17 +593,7 @@ export function DCOActionsWidget({
   });
 
   const [dateRangeDays, setDateRangeDays] = React.useState<DateRangeDays>(DEFAULT_DATE_RANGE_DAYS);
-  const [expandedRows, setExpandedRows] = React.useState<Set<string>>(new Set());
-
-  const toggleRow = (id: string) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedRows(newExpanded);
-  };
+  const [hoveredRowId, setHoveredRowId] = React.useState<string | null>(null);
 
   const handleFilterChange = (key: string, value: string | undefined) => {
     setFilters({ [key]: value });
@@ -792,15 +714,16 @@ export function DCOActionsWidget({
             {!isLoading && !error && visibleLogs.length > 0 ? (
               <div className="space-y-1.5">
                 {visibleLogs.map((log) => {
-                  const isExpanded = expandedRows.has(log.id);
+                  const isHovered = hoveredRowId === log.id;
 
                   return (
-                    <div key={log.id} className="rounded-lg border bg-background/40">
-                      <button
-                        type="button"
-                        onClick={() => toggleRow(log.id)}
-                        className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-2.5 py-2 text-left"
-                      >
+                    <div
+                      key={log.id}
+                      className="rounded-lg border bg-background/40"
+                      onMouseEnter={() => setHoveredRowId(log.id)}
+                      onMouseLeave={() => setHoveredRowId(null)}
+                    >
+                      <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 px-2.5 py-2">
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
                             <ShadcnBadge variant={getStatusVariant(log.status)} className="h-5 px-1.5 text-[10px]">
@@ -820,13 +743,24 @@ export function DCOActionsWidget({
                         <span className="whitespace-nowrap text-[11px] text-muted-foreground">
                           {formatTimestamp(log.occurredAt)}
                         </span>
-                      </button>
+                      </div>
 
-                      {isExpanded ? (
-                        <div className="border-t p-2">
-                          <ActionItemContent log={log} />
-                        </div>
-                      ) : null}
+                      <AnimatePresence initial={false}>
+                        {isHovered ? (
+                          <motion.div
+                            key="detail"
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="overflow-hidden border-t"
+                          >
+                            <div className="p-2">
+                              <ActionItemContent log={log} />
+                            </div>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
                     </div>
                   );
                 })}
@@ -950,7 +884,6 @@ export function DCOActionsWidget({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[50px]"></TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Action</TableHead>
                     <TableHead>Scope</TableHead>
@@ -959,20 +892,14 @@ export function DCOActionsWidget({
                 </TableHeader>
                 <TableBody>
                   {logs.map((log) => {
-                    const isExpanded = expandedRows.has(log.id);
+                    const isHovered = hoveredRowId === log.id;
                     return (
                       <React.Fragment key={log.id}>
-                        <TableRow 
-                          className="group cursor-pointer hover:bg-muted/50"
-                          onClick={() => toggleRow(log.id)}
+                        <TableRow
+                          className="group hover:bg-muted/50"
+                          onMouseEnter={() => setHoveredRowId(log.id)}
+                          onMouseLeave={() => setHoveredRowId(null)}
                         >
-                          <TableCell>
-                            <Button variant="ghost" size="1" className="p-0 h-6 w-6">
-                              <ChevronDownIcon 
-                                className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} 
-                              />
-                            </Button>
-                          </TableCell>
                           <TableCell>
                             <ShadcnBadge variant={getStatusVariant(log.status)}>
                               {log.status}
@@ -994,15 +921,30 @@ export function DCOActionsWidget({
                             </Text>
                           </TableCell>
                         </TableRow>
-                        {isExpanded && (
-                          <TableRow className="bg-[var(--gray-2)] hover:bg-[var(--gray-2)]">
-                            <TableCell colSpan={5} className="p-0 border-b">
-                              <Box p="4">
-                                <ActionItemContent log={log} />
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        )}
+                        <AnimatePresence initial={false}>
+                          {isHovered ? (
+                            <TableRow
+                              key="detail"
+                              className="bg-[var(--gray-2)] hover:bg-[var(--gray-2)]"
+                              onMouseEnter={() => setHoveredRowId(log.id)}
+                              onMouseLeave={() => setHoveredRowId(null)}
+                            >
+                              <TableCell colSpan={4} className="p-0 border-b">
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                                  className="overflow-hidden"
+                                >
+                                  <Box p="4">
+                                    <ActionItemContent log={log} />
+                                  </Box>
+                                </motion.div>
+                              </TableCell>
+                            </TableRow>
+                          ) : null}
+                        </AnimatePresence>
                       </React.Fragment>
                     );
                   })}

@@ -1673,7 +1673,10 @@ export function CampaignAdSetWorkspace({
 
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {toolbarSlot}
-            <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
+            <div
+              data-tour-id="paid-adset-toggle"
+              className="inline-flex rounded-md border border-border/70 bg-background p-0.5"
+            >
               <Button
                 variant={viewMode === "campaigns" ? "secondary" : "ghost"}
                 size="sm"
@@ -1753,7 +1756,7 @@ export function CampaignAdSetWorkspace({
               </div>
 
               <ScrollArea className="mt-1.5 w-full">
-                <div className="flex min-w-max gap-1.5 pb-1">
+                <div data-tour-id="paid-metric-cards" className="flex min-w-max gap-1.5 pb-1">
                   {campaignMetricCards.map((card) => (
                     <button
                       key={`campaign-metric-card-${card.metric}`}
@@ -1820,7 +1823,7 @@ export function CampaignAdSetWorkspace({
 
               <ContextMenu>
                 <ContextMenuTrigger>
-                  <div className={cn("mt-1.5", CHART_HEIGHT_CLASS)}>
+                  <div data-tour-id="paid-performance-chart" className={cn("mt-1.5", CHART_HEIGHT_CLASS)}>
                     {compareChartSeries.length > 0 ? (
                       <ObservabilityLightweightChart
                         series={compareChartSeries}

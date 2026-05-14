@@ -435,7 +435,7 @@ export function PaidMediaReportingWidget({
   );
 
   return (
-    <Card variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
+    <Card data-tour-id="dashboard-paid-metrics" variant="surface" className="border border-subtle bg-surface h-full flex flex-col">
       <Box p="4" className="flex-1 flex flex-col min-h-0">
         <Flex direction="column" gap="3" className="shrink-0">
           <Flex align="center" justify="between" gap="3" wrap="wrap">

@@ -260,22 +260,25 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
           <motion.div
             key="dco-strip"
             initial={
-              reduceMotion ? false : { width: 0, opacity: 0, scale: 0.92 }
+              reduceMotion ? false : { opacity: 0, scale: 0.96, x: 8 }
             }
-            animate={{ width: STRIP_WIDTH_PX, opacity: 1, scale: 1 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={
               reduceMotion
                 ? { opacity: 0 }
                 : {
-                    width: 0,
                     opacity: 0,
-                    scale: 0.92,
+                    scale: 0.96,
+                    x: 8,
                     transition: { duration: 0.16, ease: [0.4, 0, 1, 1] },
                   }
             }
             transition={STRIP_SPRING}
-            style={{ transformOrigin: "right center", overflow: "hidden" }}
-            onUpdate={dispatchResize}
+            style={{
+              transformOrigin: "right center",
+              overflow: "hidden",
+              width: STRIP_WIDTH_PX,
+            }}
             onAnimationComplete={dispatchResize}
           >
             <div style={{ width: STRIP_WIDTH_PX }} className="h-full">
@@ -288,22 +291,25 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
             initial={
               reduceMotion
                 ? false
-                : { width: STRIP_WIDTH_PX, opacity: 0, scale: 0.94 }
+                : { opacity: 0, scale: 0.98, x: 12 }
             }
-            animate={{ width: RAIL_WIDTH_PX, opacity: 1, scale: 1 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
             exit={
               reduceMotion
                 ? { opacity: 0 }
                 : {
-                    width: STRIP_WIDTH_PX,
                     opacity: 0,
-                    scale: 0.94,
+                    scale: 0.98,
+                    x: 12,
                     transition: { duration: 0.18, ease: [0.4, 0, 1, 1] },
                   }
             }
             transition={JELLY_SPRING}
-            style={{ transformOrigin: "right center", overflow: "hidden" }}
-            onUpdate={dispatchResize}
+            style={{
+              transformOrigin: "right center",
+              overflow: "hidden",
+              width: RAIL_WIDTH_PX,
+            }}
             onAnimationComplete={dispatchResize}
           >
             <div style={{ width: RAIL_WIDTH_PX }} className="relative h-full">

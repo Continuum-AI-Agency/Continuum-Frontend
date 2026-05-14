@@ -1144,6 +1144,7 @@ export function JainaChatSurface({
   const [shaderState, setShaderState] = React.useState<"visible" | "sweeping" | "hidden">(
     "visible"
   );
+  const [shaderReady, setShaderReady] = React.useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = React.useState(false);
   const [isConversationSwitching, setIsConversationSwitching] = React.useState(false);
   const [deletingSessionId, setDeletingSessionId] = React.useState<string | null>(null);
@@ -2621,6 +2622,26 @@ export function JainaChatSurface({
     ]
   );
 
+  React.useEffect(() => {
+    if (prefersReducedMotion || shaderState === "hidden") {
+      setShaderReady(false);
+      return;
+    }
+
+    const idleHandle =
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback(() => setShaderReady(true), { timeout: 1200 })
+        : setTimeout(() => setShaderReady(true), 800);
+
+    return () => {
+      if (typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(idleHandle as number);
+      } else {
+        clearTimeout(idleHandle as ReturnType<typeof setTimeout>);
+      }
+    };
+  }, [prefersReducedMotion, shaderState]);
+
   const handlePlanFeedback = React.useCallback(
     async (payload: PlanFeedbackPayload) => {
       const nextStatus =
@@ -2767,7 +2788,7 @@ export function JainaChatSurface({
                 : { duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }
             }
           >
-            <AnimatedShaderBackground intensity={1} />
+            {shaderReady ? <AnimatedShaderBackground intensity={1} /> : null}
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(88,80,236,0.08),transparent_55%),radial-gradient(circle_at_20%_80%,rgba(14,116,144,0.12),transparent_50%)]" />
           </motion.div>
         ) : null}
@@ -2957,6 +2978,7 @@ export function JainaChatSurface({
                 </div>
               ) : null}
 
+              <div data-tour-id="paid-jaina-chat">
               <PromptInput
                 onSubmit={(value, attachments, references) =>
                   handleSubmit(value, attachments, references)
@@ -3007,6 +3029,7 @@ export function JainaChatSurface({
                   </TooltipProvider>
                 }
               />
+              </div>
             </Box>
           </div>
         </div>

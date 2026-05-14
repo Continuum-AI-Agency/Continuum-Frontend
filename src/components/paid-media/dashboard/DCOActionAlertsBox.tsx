@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import { MagnifyingGlassIcon, ReloadIcon } from "@radix-ui/react-icons";
+import { AnimatePresence, motion } from "motion/react";
 
 import { Badge } from "@/components/ui/badge";
+import { CreativeSwapComparison } from "@/components/dco/CreativeSwapComparison";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -196,6 +198,7 @@ export function DCOActionAlertsBox({
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>("all");
   const [scopeFilter, setScopeFilter] = React.useState<ScopeFilter>("all");
   const [quickView, setQuickView] = React.useState<QuickView>("all");
+  const [hoveredRowId, setHoveredRowId] = React.useState<string | null>(null);
 
   const {
     logs,
@@ -432,34 +435,63 @@ export function DCOActionAlertsBox({
                 <TableBody>
                   {filteredLogs.map((log) => {
                     const creativeSwapUrls = extractCreativeSwapUrls(log);
-                    const hoverDetail = creativeSwapUrls
-                      ? `Before: ${creativeSwapUrls.before}\nAfter: ${creativeSwapUrls.after}`
-                      : undefined;
+                    const isExpanded = hoveredRowId === log.id;
 
                     return (
-                      <TableRow key={log.id}>
-                        <TableCell className="text-[11px] text-muted-foreground">
-                          <div>{formatTimestamp(log.occurredAt)}</div>
-                          <div>{formatRelativeTime(log.occurredAt)}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={badgeVariantForStatus(log.status)}>{log.status}</Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{log.actionType}</TableCell>
-                        <TableCell>{log.scopeType}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          <div>Campaign: {log.metaCampaignId ?? "--"}</div>
-                          <div>Ad set: {log.metaAdsetId ?? "--"}</div>
-                        </TableCell>
-                        <TableCell className="max-w-[360px] whitespace-normal text-foreground" title={hoverDetail}>
-                          <div>{summarizeAction(log)}</div>
-                          {creativeSwapUrls ? (
-                            <div className="mt-1 text-[10px] text-muted-foreground">
-                              Hover to view before/after creative URLs
-                            </div>
+                      <React.Fragment key={log.id}>
+                        <TableRow
+                          onMouseEnter={() => setHoveredRowId(log.id)}
+                          onMouseLeave={() => setHoveredRowId(null)}
+                        >
+                          <TableCell className="text-[11px] text-muted-foreground">
+                            <div>{formatTimestamp(log.occurredAt)}</div>
+                            <div>{formatRelativeTime(log.occurredAt)}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={badgeVariantForStatus(log.status)}>{log.status}</Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{log.actionType}</TableCell>
+                          <TableCell>{log.scopeType}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            <div>Campaign: {log.metaCampaignId ?? "--"}</div>
+                            <div>Ad set: {log.metaAdsetId ?? "--"}</div>
+                          </TableCell>
+                          <TableCell className="max-w-[360px] whitespace-normal text-foreground">
+                            <div>{summarizeAction(log)}</div>
+                            {creativeSwapUrls ? (
+                              <div className="mt-1 text-[10px] text-muted-foreground">
+                                Hover to view creative comparison
+                              </div>
+                            ) : null}
+                          </TableCell>
+                        </TableRow>
+                        <AnimatePresence initial={false}>
+                          {isExpanded && creativeSwapUrls ? (
+                            <TableRow
+                              key={`${log.id}-detail`}
+                              onMouseEnter={() => setHoveredRowId(log.id)}
+                              onMouseLeave={() => setHoveredRowId(null)}
+                            >
+                              <TableCell colSpan={6} className="p-0">
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="px-4 py-3">
+                                    <CreativeSwapComparison
+                                      originalUrl={creativeSwapUrls.before}
+                                      newUrl={creativeSwapUrls.after}
+                                    />
+                                  </div>
+                                </motion.div>
+                              </TableCell>
+                            </TableRow>
                           ) : null}
-                        </TableCell>
-                      </TableRow>
+                        </AnimatePresence>
+                      </React.Fragment>
                     );
                   })}
                 </TableBody>

@@ -20,6 +20,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { consumePrefetchedIndexes } from "@/lib/prefetch/paid-media-cache";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
 import { usePaidMediaPerformanceStore } from "@/lib/paid-media/performance-store";
 import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
@@ -167,12 +168,17 @@ export function PaidMediaDashboard({
         metaAccountId: adAccountId,
       });
 
-      const response = await fetch(`/api/paid-media/campaign-indexes?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error("Failed to load campaign indexes");
-      }
-
-      const payload = (await response.json()) as { indexes?: CampaignIndexRecord[] };
+      const prefetched = consumePrefetchedIndexes(brandId, adAccountId);
+      const payload = prefetched
+        ? ((await prefetched) as { indexes?: CampaignIndexRecord[] })
+        : await fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then(
+            async (response) => {
+              if (!response.ok) {
+                throw new Error("Failed to load campaign indexes");
+              }
+              return (await response.json()) as { indexes?: CampaignIndexRecord[] };
+            }
+          );
       const indexes = Array.isArray(payload.indexes) ? payload.indexes : [];
       setCampaignIndexes(indexes);
 
@@ -405,7 +411,7 @@ export function PaidMediaDashboard({
 
       <DropdownMenu open={alertsPanelOpen} onOpenChange={setAlertsPanelOpen} modal={false}>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button data-tour-id="paid-dco-alerts" variant="outline" size="sm" className="h-8 text-xs">
             <BellIcon className="mr-1.5 h-3.5 w-3.5" />
             Alerts
           </Button>

@@ -1,4 +1,8 @@
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  fetchCampaignPerformanceRows,
+  type CampaignPerformanceParams,
+} from "@/lib/paid-media/campaign-performance-loader";
+import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
 
 type CacheEntry = {
   promise: Promise<unknown>;
@@ -24,26 +28,29 @@ export function prefetchPaidMediaDashboard(params: {
   adAccountId: string;
 }): void {
   const { brandId, adAccountId } = params;
+  const campaignParams: CampaignPerformanceParams = {
+    brandId,
+    adAccountId,
+    platform: "meta",
+    range: { preset: "last_7d" },
+  };
 
-  // Prefetch campaign list via Supabase Edge Function
-  const campaignsKey = `${brandId}:${adAccountId}:campaigns`;
+  const campaignsKey = buildCampaignsKey(campaignParams);
   if (!campaignsCache.has(campaignsKey) || isStale(campaignsCache.get(campaignsKey)!)) {
-    const supabase = createSupabaseBrowserClient();
     campaignsCache.set(campaignsKey, {
-      promise: supabase.functions
-        .invoke(`fetch-meta-campaigns?brandId=${brandId}&adAccountId=${adAccountId}`)
-        .then((r) => r.data),
+      promise: fetchCampaignPerformanceRows(campaignParams),
       timestamp: Date.now(),
     });
   }
 
-  // Prefetch campaign indexes
-  const indexesKey = `${brandId}:indexes`;
+  const indexesKey = buildIndexesKey(brandId, adAccountId);
   if (!indexesCache.has(indexesKey) || isStale(indexesCache.get(indexesKey)!)) {
+    const params = new URLSearchParams({
+      brandId,
+      metaAccountId: adAccountId,
+    });
     indexesCache.set(indexesKey, {
-      promise: fetch(`/api/paid-media/campaign-indexes?brandId=${brandId}`).then((r) =>
-        r.json()
-      ),
+      promise: fetch(`/api/paid-media/campaign-indexes?${params.toString()}`).then((r) => r.json()),
       timestamp: Date.now(),
     });
   }
@@ -54,23 +61,25 @@ export function prefetchPaidMediaDashboard(params: {
  * The entry stays warm for the TTL duration after consumption.
  */
 export function consumePrefetchedCampaigns(
-  brandId: string,
-  adAccountId: string,
-): Promise<unknown> | null {
-  const key = `${brandId}:${adAccountId}:campaigns`;
+  params: CampaignPerformanceParams
+): Promise<CampaignPerformanceRow[]> | null {
+  const key = buildCampaignsKey(params);
   const entry = campaignsCache.get(key);
   if (!entry || isStale(entry)) {
     if (entry) campaignsCache.delete(key);
     return null;
   }
-  return entry.promise;
+  return entry.promise as Promise<CampaignPerformanceRow[]>;
 }
 
 /**
  * Consume a prefetched campaign indexes promise if fresh, otherwise returns null.
  */
-export function consumePrefetchedIndexes(brandId: string): Promise<unknown> | null {
-  const key = `${brandId}:indexes`;
+export function consumePrefetchedIndexes(
+  brandId: string,
+  adAccountId: string
+): Promise<unknown> | null {
+  const key = buildIndexesKey(brandId, adAccountId);
   const entry = indexesCache.get(key);
   if (!entry || isStale(entry)) {
     if (entry) indexesCache.delete(key);
@@ -82,4 +91,16 @@ export function consumePrefetchedIndexes(brandId: string): Promise<unknown> | nu
 export function clearPaidMediaPrefetchCache(): void {
   campaignsCache.clear();
   indexesCache.clear();
+}
+
+function buildCampaignsKey(params: CampaignPerformanceParams): string {
+  const rangeKey =
+    params.range.preset === "custom"
+      ? `custom:${params.range.since}:${params.range.until}`
+      : params.range.preset;
+  return `${params.brandId}:${params.adAccountId}:${params.platform}:${rangeKey}:campaigns`;
+}
+
+function buildIndexesKey(brandId: string, adAccountId: string): string {
+  return `${brandId}:${adAccountId}:indexes`;
 }

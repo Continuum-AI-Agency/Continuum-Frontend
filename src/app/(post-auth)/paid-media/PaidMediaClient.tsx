@@ -10,8 +10,15 @@ import { useSession } from "@/hooks/useSession";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AnimatePresence, motion } from "motion/react";
-import { PanelRightOpen, PanelRightClose } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { PanelRightOpen, PanelRightClose, Maximize2, Minimize2 } from "lucide-react";
 import { prefetchPaidMediaDashboard } from "@/lib/prefetch/paid-media-cache";
+import {
+  SurfaceTourTrigger,
+  useReadyAfterPaint,
+} from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
+import { TOUR_PAID_MEDIA } from "@/components/onboarding/v2/tour/config";
+import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore";
 
 const PAID_MEDIA_TABS = ["dashboard", "performance", "jaina"] as const;
 type PaidMediaTab = (typeof PAID_MEDIA_TABS)[number];
@@ -111,6 +118,7 @@ export default function PaidMediaClientPage({
     normalizedTabParam ?? "dashboard"
   );
   const [isCanvasOpen, setIsCanvasOpen] = React.useState(false);
+  const [isJainaFullscreen, setIsJainaFullscreen] = React.useState(false);
   const [canvasWidthPx, setCanvasWidthPx] = React.useState(540);
   const [isResizingCanvas, setIsResizingCanvas] = React.useState(false);
   const canvasShellRef = React.useRef<HTMLDivElement | null>(null);
@@ -142,6 +150,15 @@ export default function PaidMediaClientPage({
       router.replace(`?${params.toString()}`, { scroll: false });
     });
   };
+
+  const requestedTourTab = useTourTabStore((state) => state.paidMediaTab);
+  const tourTabRequestId = useTourTabStore((state) => state.requestId);
+
+  React.useEffect(() => {
+    if (!requestedTourTab || requestedTourTab === activeTab) return;
+    handleTabChange(requestedTourTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTourTab, tourTabRequestId]);
 
   // Prefetch dashboard data while user is on Jaina tab so data is warm on switch-back
   React.useEffect(() => {
@@ -175,6 +192,10 @@ export default function PaidMediaClientPage({
   const handleToggleCanvas = React.useCallback(() => {
     setIsCanvasOpen((previous) => !previous);
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab !== "jaina") setIsJainaFullscreen(false);
+  }, [activeTab]);
 
   const handleCanvasActionApplied = React.useCallback(() => {
     setIsCanvasOpen(true);
@@ -230,6 +251,8 @@ export default function PaidMediaClientPage({
     return () => window.removeEventListener("resize", updateWidth);
   }, [clampCanvasWidth]);
 
+  const tourReady = useReadyAfterPaint(mounted && activeTab === "dashboard");
+
   if (!mounted) {
     return (
       <div className="box-border grid h-full min-h-0 w-full max-w-none grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
@@ -248,6 +271,7 @@ export default function PaidMediaClientPage({
 
   return (
     <div className="box-border h-full min-h-0 w-full max-w-none overflow-hidden px-0 py-1">
+      <SurfaceTourTrigger tourName={TOUR_PAID_MEDIA} ready={tourReady} />
       <Tabs
         value={activeTab}
         onValueChange={handleTabChange}
@@ -263,17 +287,30 @@ export default function PaidMediaClientPage({
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <ReportJobsBell brandProfileId={brandProfileId} />
             {activeTab === "jaina" ? (
-              <Button
-                type="button"
-                variant={isCanvasOpen ? "outline" : "secondary"}
-                size="sm"
-                onClick={handleToggleCanvas}
-                className="h-8 gap-1.5 px-2 text-xs"
-                aria-pressed={isCanvasOpen}
-              >
-                {isCanvasOpen ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5" />}
-                {isCanvasOpen ? "Hide canvas" : "Canvas"}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant={isCanvasOpen ? "outline" : "secondary"}
+                  size="sm"
+                  onClick={handleToggleCanvas}
+                  className="h-8 gap-1.5 px-2 text-xs"
+                  aria-pressed={isCanvasOpen}
+                >
+                  {isCanvasOpen ? <PanelRightClose className="size-3.5" /> : <PanelRightOpen className="size-3.5" />}
+                  {isCanvasOpen ? "Hide canvas" : "Canvas"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsJainaFullscreen((v) => !v)}
+                  className="h-8 w-8 p-0"
+                  aria-label={isJainaFullscreen ? "Exit full screen" : "Full screen"}
+                  aria-pressed={isJainaFullscreen}
+                >
+                  {isJainaFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                </Button>
+              </>
             ) : null}
             <TabsList className="h-8">
               <TabsTrigger
@@ -318,7 +355,10 @@ export default function PaidMediaClientPage({
         <TabsContent value="jaina" className="box-border flex min-h-0 flex-col overflow-hidden">
           <div
             ref={canvasShellRef}
-            className="relative flex flex-1 min-h-0 overflow-hidden rounded-xl border bg-background/70 shadow-2xl"
+            className={cn(
+              "relative flex flex-1 min-h-0 overflow-hidden rounded-xl border bg-background/70 shadow-2xl",
+              isJainaFullscreen && "fixed inset-0 z-50 rounded-none border-none"
+            )}
           >
             <div className="min-w-0 flex-1">
               <JainaChatSurface
@@ -350,9 +390,9 @@ export default function PaidMediaClientPage({
                   <motion.aside
                     key="canvas-panel"
                     className="relative min-h-0 shrink-0 overflow-hidden border-l border-border/70 bg-background/80"
-                    initial={{ width: 0, opacity: 0, x: 24 }}
-                    animate={{ width: canvasWidthPx, opacity: 1, x: 0 }}
-                    exit={{ width: 0, opacity: 0, x: 24 }}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 24 }}
                     transition={{ type: "spring", stiffness: 240, damping: 26, mass: 0.85 }}
                     style={{
                       width: canvasWidthPx,

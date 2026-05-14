@@ -80,7 +80,7 @@ export function JainaConversationSidebar({
         </Button>
       </div>
 
-      <ScrollArea className="max-h-44 md:max-h-none md:flex-1">
+      <ScrollArea className="max-h-44 md:max-h-none md:flex-1 md:min-h-0">
         <div className="flex gap-2 p-2 md:flex-col">
           {isLoading && sessions.length === 0 ? (
             <Text size="1" className="px-2 py-3 text-muted-foreground">

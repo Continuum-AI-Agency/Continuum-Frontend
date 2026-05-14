@@ -3,12 +3,14 @@
 import { create } from "zustand";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import {
+  fetchCampaignPerformanceRows,
+  type CampaignPerformanceParams,
+} from "@/lib/paid-media/campaign-performance-loader";
+import { consumePrefetchedCampaigns } from "@/lib/prefetch/paid-media-cache";
 import type { BudgetPacingResponse } from "@/lib/schemas/budgetPacing";
 import type { PaidMetricsRange } from "@/lib/schemas/paidMetrics";
-import type {
-  CampaignPerformanceRow,
-  PaidMediaPlatform,
-} from "@/lib/paid-media/performance-types";
+import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
 
 type CacheStatus = "idle" | "loading" | "success" | "error";
 
@@ -28,13 +30,6 @@ type BudgetPacingEntry = {
 
 type LoadOptions = {
   force?: boolean;
-};
-
-type CampaignPerformanceParams = {
-  brandId: string;
-  adAccountId: string;
-  platform: PaidMediaPlatform;
-  range: PaidMetricsRange;
 };
 
 type BudgetPacingParams = {
@@ -82,28 +77,6 @@ export function makeBudgetPacingKey(params: BudgetPacingParams): string {
   return [params.brandId, params.adAccountId, "budget-pacing"].join(":");
 }
 
-async function mapWithConcurrency<T, U>(
-  items: T[],
-  limit: number,
-  mapper: (item: T) => Promise<U>
-): Promise<U[]> {
-  const safeLimit = Math.max(1, Math.min(limit, items.length || 1));
-  const results = new Array<U>(items.length);
-  let cursor = 0;
-
-  await Promise.all(
-    Array.from({ length: safeLimit }, async () => {
-      while (cursor < items.length) {
-        const index = cursor;
-        cursor += 1;
-        results[index] = await mapper(items[index]);
-      }
-    })
-  );
-
-  return results;
-}
-
 export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((set, get) => ({
   campaigns: {},
   budgetPacing: {},
@@ -131,66 +104,22 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
     }));
 
     try {
-      const supabase = createSupabaseBrowserClient();
-      const { data, error } = await supabase.functions.invoke(
-        `fetch-meta-campaigns?brandId=${params.brandId}&adAccountId=${params.adAccountId}`,
-        {
-          method: "POST",
-          body: {
-            brandId: params.brandId,
-            adAccountId: params.adAccountId,
-          },
-        }
-      );
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const rawCampaigns = Array.isArray(data?.campaigns)
-        ? (data.campaigns as CampaignPerformanceRow[])
-        : [];
-
-      const campaigns = await mapWithConcurrency(rawCampaigns, 6, async (campaign) => {
-        try {
-          const response = await fetch("/api/paid-metrics", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              platform: params.platform,
-              brandId: params.brandId,
-              accountId: params.adAccountId,
-              campaignId: campaign.id,
-              range: params.range,
-            }),
-          });
-
-          if (!response.ok) return campaign;
-
-          const metrics = await response.json();
-          return {
-            ...campaign,
-            metrics: metrics.metrics,
-            comparison: metrics.comparison,
-            trends: metrics.trends,
-          };
-        } catch {
-          return campaign;
-        }
-      });
+      const prefetched = !options?.force ? consumePrefetchedCampaigns(params) : null;
+      const campaigns = prefetched ?? fetchCampaignPerformanceRows(params);
+      const resolvedCampaigns = await campaigns;
 
       set((state) => ({
         campaigns: {
           ...state.campaigns,
           [key]: {
             status: "success",
-            data: campaigns,
+            data: resolvedCampaigns,
             updatedAt: Date.now(),
           },
         },
       }));
 
-      return campaigns;
+      return resolvedCampaigns;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load campaign performance";
       set((state) => ({
@@ -290,4 +219,3 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
 
   reset: () => set({ campaigns: {}, budgetPacing: {} }),
 }));
-
