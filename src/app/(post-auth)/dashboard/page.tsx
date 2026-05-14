@@ -9,24 +9,37 @@ import { PaidWidgetSkeleton, WidgetSkeleton } from "@/components/dashboard/skele
 // force-dynamic: reads user session cookies via getActiveBrandContext()
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams?: Promise<{ view?: string | string[] }>;
+};
+
+function resolveDashboardView(value: string | string[] | undefined) {
+  return value === "paid" ? "paid" : "organic";
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const activeView = resolveDashboardView(params?.view);
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");
   }
 
+  const activeViewSlot =
+    activeView === "paid" ? (
+      <Suspense fallback={<PaidWidgetSkeleton />}>
+        <PaidDashboardView brandId={activeBrandId} />
+      </Suspense>
+    ) : (
+      <Suspense fallback={<WidgetSkeleton />}>
+        <OrganicDashboardDataWrapper brandId={activeBrandId} />
+      </Suspense>
+    );
+
   return (
     <HomeBaseDashboard
-      paidViewSlot={
-        <Suspense fallback={<PaidWidgetSkeleton />}>
-          <PaidDashboardView brandId={activeBrandId} />
-        </Suspense>
-      }
-      organicViewSlot={
-        <Suspense fallback={<WidgetSkeleton />}>
-          <OrganicDashboardDataWrapper brandId={activeBrandId} />
-        </Suspense>
-      }
+      activeView={activeView}
+      activeViewSlot={activeViewSlot}
     />
   );
 }

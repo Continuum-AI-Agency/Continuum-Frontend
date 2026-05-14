@@ -187,6 +187,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          data-tour-id={data.isTourSeed ? "studio-node-image-gen" : undefined}
           className={cn(
             "relative group h-full w-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
             isSelectedByOther && "selected-by-other"

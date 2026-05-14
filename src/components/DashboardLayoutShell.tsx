@@ -18,7 +18,6 @@ const CommandPalette = dynamic(
 
 const TourProvider = dynamic(
   () => import("./onboarding/v2/tour/TourProvider").then((m) => ({ default: m.TourProvider })),
-  { ssr: false },
 );
 
 import { User } from "@supabase/supabase-js";
@@ -72,13 +71,13 @@ export default function DashboardLayoutShell({
           >
             <AppSidebar />
             <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
-              <DashboardHeader />
-              <main className="flex-1 min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] pb-[var(--app-shell-gap)]">
-                <BrandWelcomeBanner />
-                <TourProvider>
+              <TourProvider>
+                <DashboardHeader />
+                <main className="flex-1 min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] pb-[var(--app-shell-gap)]">
+                  <BrandWelcomeBanner />
                   <div className="w-full h-full min-h-0">{children}</div>
-                </TourProvider>
-              </main>
+                </main>
+              </TourProvider>
             </SidebarInset>
           </SidebarProvider>
         </div>

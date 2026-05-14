@@ -80,6 +80,7 @@ export function StringNode({ id, data, selected }: NodeProps<ReactFlowNode<Strin
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div
+          data-tour-id={data.isTourSeed ? "studio-node-prompt" : undefined}
           className={cn(
             "relative min-w-[280px] min-h-[180px] w-full h-full max-w-[400px] rounded-lg transition-shadow",
             isSelectedByOther && "selected-by-other"

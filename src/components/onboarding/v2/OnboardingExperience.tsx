@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,12 @@ import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
 
 type ScreenIndex = 0 | 1 | 2;
 
+const swipeVariants = {
+  enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir: number) => ({ x: dir * -56, opacity: 0 }),
+};
+
 type OnboardingExperienceProps = {
   brandId: string;
   initialState: OnboardingState;
@@ -52,6 +58,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const router = useRouter();
   const { show } = useToast();
   const [screen, setScreen] = useState<ScreenIndex>(resumeScreenFor(initialState));
+  const directionRef = useRef<1 | -1>(1);
+  const navigate = useCallback((next: ScreenIndex) => {
+    directionRef.current = next > screen ? 1 : -1;
+    setScreen(next);
+  }, [screen]);
   const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? "");
   const { start, patch, jobs, reset } = useBackgroundJobs();
   const { brandId, resetState, state } = useOnboarding();
@@ -80,7 +91,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         return;
       }
       setDomain(defaultUrl ?? "");
-      setScreen(0);
+      navigate(0);
     });
   };
 
@@ -122,7 +133,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           duration_ms: launchTimer.sinceStart(),
           integration_count: integrationCount,
         });
-        router.push("/dashboard?tour=1");
+        router.push("/dashboard");
       } catch (error) {
         launchInFlightRef.current = false;
         trackOnboardingEvent("onboarding_launch_failed", {
@@ -143,7 +154,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
     }
     setDomain(url);
-    setScreen(1);
+    navigate(1);
     patch("agentPreview", emptyBuckets());
 
     const scrapePromise = start("scrape", (signal) => runScrape(url, signal));
@@ -251,15 +262,15 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   );
 
   const onStepClick = (id: ShellPillId) => {
-    if (id === "website") setScreen(0);
-    if (id === "integrations" && screen >= 1) setScreen(1);
-    if (id === "dna" && screen >= 2) setScreen(2);
+    if (id === "website") navigate(0);
+    if (id === "integrations" && screen >= 1) navigate(1);
+    if (id === "dna" && screen >= 2) navigate(2);
   };
 
   const { hint, actions } = useBottomBar({
     screen,
-    onChangeUrl: () => setScreen(0),
-    onAdvanceToDna: () => setScreen(2),
+    onChangeUrl: () => navigate(0),
+    onAdvanceToDna: () => navigate(2),
     onLaunch: handleLaunch,
     launching,
   });
@@ -367,13 +378,15 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       onStartOver={handleStartOver}
       startOverDisabled={resetting || launching}
     >
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" custom={directionRef.current}>
         <motion.div
           key={screen}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
-          transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+          custom={directionRef.current}
+          variants={swipeVariants}
+          initial="enter"
+          animate="center"
+          exit="exit"
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-1 flex-col"
         >
           {screen === 0 ? (
@@ -385,7 +398,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               retrying={jobs.scrape.status === "running"}
             />
           ) : screen === 1 ? (
-            <IntegrationsScreen onAdvance={() => setScreen(2)} />
+            <IntegrationsScreen onAdvance={() => navigate(2)} />
           ) : (
             <BrandDnaScreen agentBuckets={agentBuckets} readinessLoading={readinessLoading} />
           )}

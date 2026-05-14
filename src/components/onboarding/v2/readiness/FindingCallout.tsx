@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { bandFor, type ScoreBand } from "./ScoreBadge";
 import type { ReadinessFinding } from "@/lib/onboarding/agentClient";
 
@@ -22,7 +23,14 @@ export function FindingCallout({ finding }: { finding: ReadinessFinding }) {
       <Separator className="opacity-60" />
       <div className={`rounded-md border p-3 ${TINT[band]}`}>
         <div className="flex items-start gap-2">
-          <Sparkles className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${ICON_TONE[band]}`} />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Sparkles className={`mt-0.5 h-3.5 w-3.5 shrink-0 cursor-default ${ICON_TONE[band]}`} />
+              </TooltipTrigger>
+              <TooltipContent side="left">AI insight</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <div className="space-y-1">
             <p className="text-[12px] font-semibold text-[#0b1220]">{finding.headline}</p>
             <p className="text-[12px] leading-snug text-[#374151]">{finding.detail}</p>

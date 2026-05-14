@@ -11,6 +11,12 @@ import {
   plannerAiStudioHandoffSchema,
   type PlannerAiStudioHandoff,
 } from "@/lib/organic/ai-studio-bridge";
+import {
+  SurfaceTourTrigger,
+  useReadyAfterPaint,
+} from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
+import { TOUR_AI_CANVAS } from "@/components/onboarding/v2/tour/config";
+import { useSeedTourNodes } from "./useSeedTourNodes";
 
 const StudioCanvas = dynamic(
   () => import("@/StudioCanvas/components/StudioCanvas").then((mod) => mod.StudioCanvas),
@@ -45,6 +51,9 @@ export default function AIStudioClient({
   const draftId = searchParams.get("draftId");
   const [organicPlannerSeed, setOrganicPlannerSeed] = React.useState<PlannerAiStudioHandoff | null>(null);
 
+  const seedingSettled = useSeedTourNodes();
+  const tourReady = useReadyAfterPaint(seedingSettled);
+
   React.useEffect(() => {
     if (source !== "organic-planner" || !draftId) {
       setOrganicPlannerSeed(null);
@@ -65,7 +74,7 @@ export default function AIStudioClient({
           padding: "var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)",
         }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div data-tour-id="studio-canvas" className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-baseline gap-3">
             <Heading size="7" className="text-white">AI Studio</Heading>
             <Text color="gray">Build flows for {brandName}</Text>
@@ -86,6 +95,7 @@ export default function AIStudioClient({
       </main>
 
       <CreativeLibrarySidebar brandProfileId={brandProfileId} />
+      <SurfaceTourTrigger tourName={TOUR_AI_CANVAS} ready={tourReady} />
     </div>
   );
 }

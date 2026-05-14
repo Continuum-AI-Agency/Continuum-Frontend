@@ -307,13 +307,14 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     <TooltipProvider>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-      <div 
+      <div
+        data-tour-id={data.isTourSeed ? "studio-node-reference-image" : undefined}
         className={cn(
           "relative group w-full h-full min-w-[200px] min-h-[200px] rounded-xl transition-shadow",
           isSelectedByOther && "selected-by-other"
         )}
         style={{ '--other-user-color': selectingUser?.color } as React.CSSProperties}
-        onDragOver={handleDragOver} 
+        onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
       <NodeResizer

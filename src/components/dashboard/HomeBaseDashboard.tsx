@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  SurfaceTourTrigger,
+  useReadyAfterPaint,
+} from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
+import { TOUR_DASHBOARD } from "@/components/onboarding/v2/tour/config";
+import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore";
 
 type Props = {
-  paidViewSlot: React.ReactNode;
-  organicViewSlot: React.ReactNode;
+  activeView: DashboardView;
+  activeViewSlot: React.ReactNode;
 };
 
 type DashboardView = "paid" | "organic";
@@ -29,17 +36,59 @@ const DASHBOARD_VIEWS: Record<
 };
 
 export function HomeBaseDashboard({
-  paidViewSlot,
-  organicViewSlot,
+  activeView,
+  activeViewSlot,
 }: Props) {
-  const [activeView, setActiveView] = useState<DashboardView>("organic");
+  const router = useRouter();
+  const [, startTransition] = React.useTransition();
   const shouldReduceMotion = useReducedMotion();
   const isPaidView = activeView === "paid";
   const activeConfig = DASHBOARD_VIEWS[activeView];
 
+  const handleViewChange = React.useCallback(
+    (nextView: DashboardView) => {
+      if (nextView === activeView) return;
+      const params = new URLSearchParams(window.location.search);
+      if (nextView === "organic") {
+        params.delete("view");
+      } else {
+        params.set("view", nextView);
+      }
+      const query = params.toString();
+      startTransition(() => {
+        router.replace(query ? `/dashboard?${query}` : "/dashboard", { scroll: false });
+      });
+    },
+    [activeView, router]
+  );
+
+  React.useEffect(() => {
+    router.prefetch(activeView === "paid" ? "/dashboard" : "/dashboard?view=paid");
+  }, [activeView, router]);
+
+  // The dashboard tour switches between the Organic and Paid views by
+  // requesting a view through the shared tour store. Depend on requestId so a
+  // repeated request for the same view still re-runs.
+  const requestedTourView = useTourTabStore((state) => state.dashboardView);
+  const tourRequestId = useTourTabStore((state) => state.requestId);
+  React.useEffect(() => {
+    if (requestedTourView && requestedTourView !== activeView) {
+      handleViewChange(requestedTourView);
+    }
+  }, [requestedTourView, tourRequestId, activeView, handleViewChange]);
+
+  // Step 1 targets the always-present dashboard shell; the tour itself walks
+  // the user onto the Paid view, so gating first-run on the organic view keeps
+  // the opening steps anchored.
+  const tourReady = useReadyAfterPaint(activeView === "organic");
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
-      <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background">
+      <SurfaceTourTrigger tourName={TOUR_DASHBOARD} ready={tourReady} />
+      <section
+        data-tour-id="dashboard-overview"
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border/70 bg-background"
+      >
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <h1 className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {activeConfig.title}
@@ -57,7 +106,8 @@ export function HomeBaseDashboard({
                 <button
                   key={view}
                   type="button"
-                  onClick={() => setActiveView(view)}
+                  data-tour-id={view === "paid" ? "dashboard-paid-toggle" : undefined}
+                  onClick={() => handleViewChange(view)}
                   className={cn(
                     "h-6 rounded px-2.5 text-[11px] font-medium transition-colors active:scale-[0.96]",
                     isActive ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground"
@@ -74,23 +124,19 @@ export function HomeBaseDashboard({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
           <motion.div
-            data-dashboard-panel="paid"
-            className="h-full min-h-[clamp(500px,80dvh,1400px)]"
-            animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 1 : 0.98 }}
+            key={activeView}
+            data-dashboard-panel={activeView}
+            className={cn(
+              "h-full",
+              isPaidView
+                ? "min-h-[clamp(500px,80dvh,1400px)]"
+                : "min-h-[clamp(400px,75dvh,1200px)]"
+            )}
+            initial={shouldReduceMotion ? false : { opacity: 0.96 }}
+            animate={shouldReduceMotion ? undefined : { opacity: 1 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            style={{ display: isPaidView ? "block" : "none" }}
           >
-            {paidViewSlot}
-          </motion.div>
-
-          <motion.div
-            data-dashboard-panel="organic"
-            className="h-full min-h-[clamp(400px,75dvh,1200px)]"
-            animate={shouldReduceMotion ? undefined : { opacity: isPaidView ? 0.98 : 1 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            style={{ display: isPaidView ? "none" : "block" }}
-          >
-            {organicViewSlot}
+            {activeViewSlot}
           </motion.div>
         </div>
       </section>
