@@ -1797,7 +1797,10 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const demographicsLoading = demographicsState.status === "loading";
 
   return (
-    <section className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-subtle bg-surface">
+    <section
+      data-tour-id="organic-metrics-dashboard"
+      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-subtle bg-surface"
+    >
       <div className="flex min-h-10 flex-wrap items-center gap-2 border-b px-2 py-1.5 sm:px-3">
         <Badge color="gray" variant="soft" radius="full" className="hidden sm:inline-flex">
           <PlatformIcon platform={platform} />

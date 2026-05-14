@@ -4,6 +4,9 @@ import React, { startTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { prefetchMetricsDashboard } from "@/lib/prefetch/organic-metrics-cache";
 import { cn } from "@/lib/utils";
+import { SurfaceTourTrigger, useReadyAfterPaint } from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
+import { TOUR_ORGANIC } from "@/components/onboarding/v2/tour/config";
+import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore";
 
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
 // Stable @types/react doesn't include it yet, so we pull it at runtime via cast.
@@ -97,9 +100,25 @@ export function OrganicWorkspaceTabs({
     [searchParams]
   );
 
+  // The tour provider requests a tab via the shared store on step change.
+  // Depend on requestId so a repeated request for the same tab still fires.
+  const organicTab = useTourTabStore((state) => state.organicTab);
+  const tourRequestId = useTourTabStore((state) => state.requestId);
+  React.useEffect(() => {
+    if (organicTab && organicTab !== activeView) {
+      handleValueChange(organicTab);
+    }
+  }, [organicTab, tourRequestId, activeView, handleValueChange]);
+
+  const tourReady = useReadyAfterPaint(true);
+
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
-      <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+      <div
+        data-tour-id="organic-tabs"
+        className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]"
+      >
+        <SurfaceTourTrigger tourName={TOUR_ORGANIC} ready={tourReady} />
         <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
         <nav className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5" aria-label="Organic workspace">

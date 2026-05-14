@@ -647,7 +647,7 @@ export function OrganicCalendarWorkspaceClient({
                   >
                     <ResizablePanelGroup orientation="vertical" className="gap-0">
                       <ResizablePanel defaultSize={74} minSize={48}>
-                        <div className="h-full overflow-hidden">
+                        <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
                           <TimeGridCanvas
                             days={calendarDays}
                             platforms={plannerPlatforms}
@@ -817,7 +817,10 @@ export function OrganicCalendarWorkspaceClient({
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
+                <div
+                  data-tour-id="organic-draft-preview"
+                  className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80"
+                >
                   <OrganicDraftPreview
                     draft={selectedDraft}
                     brandName={brandName}

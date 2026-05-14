@@ -425,7 +425,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
   }, [brandId, selectedAccountId, viewMode, platform]);
 
   return (
-    <Card variant="surface" className={cn("border border-subtle bg-surface flex flex-col gap-0 overflow-hidden py-0", className)}>
+    <Card data-tour-id="dashboard-organic-metrics" variant="surface" className={cn("border border-subtle bg-surface flex flex-col gap-0 overflow-hidden py-0", className)}>
       <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-border/70 bg-muted/20 px-2 py-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <Select.Root value={platform} onValueChange={(val) => setPlatform(val as OrganicPlatform)}>
@@ -486,21 +486,23 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
             ))}
           </div>
 
-          <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
-            <Select.Trigger variant="surface" radius="medium" className="h-7 text-[11px]">
-              {selectedAccount?.name ?? `Select ${platform} account`}
-            </Select.Trigger>
-            <Select.Content position="popper" variant="solid" highContrast>
-              <Select.Group>
-                <Select.Label>{platform} accounts</Select.Label>
-                {accounts.map((account) => (
-                  <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
-                    {account.name}
-                  </Select.Item>
-                ))}
-              </Select.Group>
-            </Select.Content>
-          </Select.Root>
+          <div data-tour-id="dashboard-account-selector" className="inline-flex">
+            <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
+              <Select.Trigger variant="surface" radius="medium" className="h-7 text-[11px]">
+                {selectedAccount?.name ?? `Select ${platform} account`}
+              </Select.Trigger>
+              <Select.Content position="popper" variant="solid" highContrast>
+                <Select.Group>
+                  <Select.Label>{platform} accounts</Select.Label>
+                  {accounts.map((account) => (
+                    <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
+                      {account.name}
+                    </Select.Item>
+                  ))}
+                </Select.Group>
+              </Select.Content>
+            </Select.Root>
+          </div>
         </div>
       </div>
 

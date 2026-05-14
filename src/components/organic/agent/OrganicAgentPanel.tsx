@@ -401,7 +401,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   );
 
   return (
-    <div className="flex h-full min-h-0">
+    <div data-tour-id="organic-agent-panel" className="flex h-full min-h-0">
       <OrganicSessionSidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
