@@ -1,3 +1,5 @@
+import { cacheGet, cacheSet, TTL_12H } from "./upstash-cache.ts";
+
 const META_EDGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 type SupabaseLike = {
@@ -58,6 +60,12 @@ export async function readMetaEdgeCache({
   cacheKey,
   log,
 }: ReadMetaEdgeCacheParams): Promise<CacheHitResult | null> {
+  const upstashHit = await cacheGet<{ payload: unknown; expiresAt: string }>(cacheKey);
+  if (upstashHit?.payload) {
+    log?.("cache HIT (upstash)");
+    return upstashHit;
+  }
+
   const nowIso = new Date().toISOString();
 
   const { data, error } = await supabase
@@ -83,10 +91,9 @@ export async function readMetaEdgeCache({
     return null;
   }
 
-  return {
-    payload: data.payload,
-    expiresAt: data.expires_at,
-  };
+  const result = { payload: data.payload, expiresAt: data.expires_at };
+  await cacheSet(cacheKey, result, TTL_12H);
+  return result;
 }
 
 export async function writeMetaEdgeCache({
@@ -123,5 +130,7 @@ export async function writeMetaEdgeCache({
 
   if (error) {
     log?.("cache write failed", error);
+  } else {
+    await cacheSet(cacheKey, { payload, expiresAt: expiresAt.toISOString() }, TTL_12H);
   }
 }

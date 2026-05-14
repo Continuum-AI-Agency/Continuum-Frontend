@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -148,6 +149,14 @@ serve(async (req: Request) => {
           },
         );
       }
+    }
+
+    const cacheKey = `brand-integrations:${brandId}`;
+    const upstashHit = await cacheGet<unknown>(cacheKey);
+    if (upstashHit) {
+      return new Response(JSON.stringify(upstashHit), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
     }
 
     const { data: grants, error: grantsError } = await supabase
@@ -320,7 +329,9 @@ serve(async (req: Request) => {
       );
     }
 
-    return new Response(JSON.stringify({ summary }), {
+    const responsePayload = { summary };
+    await cacheSet(cacheKey, responsePayload, TTL_12H);
+    return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

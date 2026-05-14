@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,7 +58,16 @@ serve(async (req: Request) => {
       });
     }
 
-    const cacheKey = `google-ads:campaigns:${customerId}`;
+    const cacheKey = `google-ads:campaigns:${brandId}:${customerId}`;
+
+    const upstashHit = await cacheGet<unknown>(cacheKey);
+    if (upstashHit) {
+      log("Cache hit (Upstash)", { customerId });
+      return new Response(JSON.stringify(upstashHit), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+
     const nowIso = new Date().toISOString();
     const { data: cached } = await supabase
       .schema("brand_profiles")
@@ -70,7 +80,8 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (cached?.payload) {
-      log("Cache hit", { customerId });
+      log("Cache hit (Postgres)", { customerId });
+      await cacheSet(cacheKey, cached.payload, TTL_12H);
       return new Response(JSON.stringify(cached.payload), {
         headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
       });
@@ -161,6 +172,7 @@ serve(async (req: Request) => {
           expires_at: expiresAt.toISOString(),
           updated_at: nowTime.toISOString(),
         });
+      await cacheSet(cacheKey, responsePayload, TTL_12H);
     } catch (cacheError) {
       log("Cache write failed (non-fatal)", cacheError);
     }

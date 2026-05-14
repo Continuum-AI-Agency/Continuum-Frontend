@@ -11,6 +11,7 @@ import { computeHeuristicInsights } from "./compute.ts";
 import { generateParallelInsights } from "./gemini.ts";
 import { detectAllAnomalies } from "./anomalies.ts";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -189,6 +190,14 @@ serve(async (req: Request) => {
     });
 
     if (!forceRefresh) {
+      const upstashHit = await cacheGet<unknown>(cacheKey);
+      if (upstashHit) {
+        log("Cache HIT (upstash)");
+        return new Response(JSON.stringify(upstashHit), {
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+        });
+      }
+
       const { data, error } = await supabase
         .schema("brand_profiles")
         .from("reporting_cache")
@@ -211,6 +220,7 @@ serve(async (req: Request) => {
 
         if (expiresAt.getTime() > Date.now() && rangeMatches) {
           log("Cache HIT (3-day insights)");
+          await cacheSet(cacheKey, data.payload, TTL_12H);
 
           // Background refresh when <6h remaining
           const timeRemaining = expiresAt.getTime() - Date.now();
@@ -457,6 +467,8 @@ async function generateFreshInsights(args: {
         expires_at: expiresAt.toISOString(),
         updated_at: nowTime.toISOString(),
       });
+
+    await cacheSet(cacheKey, response, TTL_12H);
 
     log(
       `Cached insights with ${hasLlmInsights ? "3-day" : "1h (partial)"} TTL`

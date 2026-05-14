@@ -4,6 +4,7 @@ import { corsHeaders } from "./lib/cors.ts";
 import { lookupIntegrationAccount, resolveTikTokAccessToken } from "./lib/token.ts";
 import { fetchUserInfo, fetchVideoList, fetchVideosByIds } from "./lib/tiktok-api.ts";
 import type { RequestBody, TikTokResponse, TikTokScope } from "./lib/types.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -138,6 +139,11 @@ serve(async (req) => {
     });
 
     if (!body.forceRefresh) {
+      const upstashHit = await cacheGet<TikTokResponse>(cacheKey);
+      if (upstashHit) {
+        return jsonResponse(upstashHit, 200, { "X-Cache": "HIT" });
+      }
+
       const nowIso = new Date().toISOString();
       const { data: cached } = await supabase
         .schema("brand_profiles")
@@ -152,6 +158,7 @@ serve(async (req) => {
       if (cached?.payload && cached.expires_at) {
         const expiresAt = new Date(cached.expires_at).getTime();
         if (expiresAt > Date.now()) {
+          await cacheSet(cacheKey, cached.payload, TTL_12H);
           return jsonResponse(cached.payload, 200, { "X-Cache": "HIT" });
         }
       }
@@ -306,6 +313,7 @@ serve(async (req) => {
           expires_at: expiresAt.toISOString(),
           updated_at: now.toISOString(),
         });
+      await cacheSet(cacheKey, response, TTL_12H);
     } catch (cacheWriteError) {
       console.error(
         "[fetch-tiktok-data] cache write failed",

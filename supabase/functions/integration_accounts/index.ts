@@ -29,6 +29,7 @@
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 type PlatformKey =
   | "youtube"
@@ -155,6 +156,16 @@ async function handler(req: Request): Promise<Response> {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
   const authProvided = Boolean(authHeader);
+  const userId = claimsData.claims.sub;
+
+  const sortedGroups = [...groups].sort();
+  const cacheKey = `integration-accounts:${userId}:${sortedGroups.join(",")}`;
+  const upstashHit = await cacheGet<unknown>(cacheKey);
+  if (upstashHit) {
+    return new Response(JSON.stringify(upstashHit), {
+      headers: { ...{ "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }, "X-Cache": "HIT" },
+    });
+  }
 
   // Fetch user integrations by provider
   const { data: integrations, error: integrationsError } = await supabase
@@ -225,10 +236,12 @@ async function handler(req: Request): Promise<Response> {
     out[key].push(item);
   }
 
-  return json({
+  const responsePayload = {
     syncedAt: new Date().toISOString(),
     accountsByPlatform: out,
-  });
+  };
+  await cacheSet(cacheKey, responsePayload, TTL_12H);
+  return json(responsePayload);
 }
 
 // Deno entrypoint

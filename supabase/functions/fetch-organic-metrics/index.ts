@@ -9,6 +9,7 @@ import { fetchFacebookMetrics } from "./facebook-metrics.ts";
 import { fetchInstagramMetrics } from "./instagram-metrics.ts";
 import { PlatformType, RequestParams } from "./types.ts";
 import { extractBearerToken } from "../_shared/supabase-edge-auth.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -98,6 +99,13 @@ serve(async (req) => {
     });
 
     if (!forceRefresh) {
+      const upstashHit = await cacheGet<CachePayload>(cacheKey);
+      if (upstashHit) {
+        return new Response(JSON.stringify(upstashHit), {
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+        });
+      }
+
       try {
         const supabase = createSupabaseAdminClient();
         const nowIso = new Date().toISOString();
@@ -116,6 +124,7 @@ serve(async (req) => {
         } else if (data?.payload && data.expires_at) {
           const expiresAt = new Date(data.expires_at);
           if (expiresAt.getTime() > Date.now()) {
+            await cacheSet(cacheKey, data.payload, TTL_12H);
             return new Response(
               JSON.stringify(data.payload as CachePayload),
               {
@@ -165,6 +174,7 @@ serve(async (req) => {
           expires_at: expiresAt.toISOString(),
           updated_at: now.toISOString(),
         });
+        await cacheSet(cacheKey, payload, TTL_12H);
       } catch (cacheError) {
         console.error("Cache write failed:", cacheError);
       }
@@ -204,6 +214,7 @@ serve(async (req) => {
           expires_at: expiresAt.toISOString(),
           updated_at: now.toISOString(),
         });
+        await cacheSet(cacheKey, payload, TTL_12H);
       } catch (cacheError) {
         console.error("Cache write failed:", cacheError);
       }

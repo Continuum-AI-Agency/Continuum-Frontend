@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -332,6 +333,14 @@ serve(async (req: Request) => {
     });
 
     if (!forceRefresh) {
+      const upstashHit = await cacheGet<unknown>(cacheKey);
+      if (upstashHit) {
+        log("Cache HIT (Upstash)");
+        return new Response(JSON.stringify(upstashHit), {
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+        });
+      }
+
       const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .schema("brand_profiles")
@@ -349,6 +358,7 @@ serve(async (req: Request) => {
         const expiresAt = new Date(data.expires_at);
         if (expiresAt.getTime() > Date.now()) {
           log("Cache HIT");
+          await cacheSet(cacheKey, data.payload, TTL_12H);
           return new Response(JSON.stringify(data.payload), {
             headers: {
               ...corsHeaders,
@@ -454,6 +464,7 @@ serve(async (req: Request) => {
           expires_at: expiresAt.toISOString(),
           updated_at: nowTime.toISOString(),
         });
+      await cacheSet(cacheKey, response, TTL_12H);
     } catch (cacheError) {
       log("Cache write failed", cacheError);
     }

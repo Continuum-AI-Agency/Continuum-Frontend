@@ -15,6 +15,7 @@ import type {
 } from "./lib/types.ts";
 import { CACHE_TTL_MS } from "./lib/types.ts";
 import { resolveMetaAccessToken as resolveBrandScopedMetaToken } from "../_shared/meta-access-token.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -230,6 +231,13 @@ serve(async (req) => {
     });
 
     if (!body.forceRefresh) {
+      const upstashHit = await cacheGet<unknown>(cacheKey);
+      if (upstashHit) {
+        return new Response(JSON.stringify(upstashHit), {
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+        });
+      }
+
       const nowIso = new Date().toISOString();
       const { data: cached, error: cacheReadError } = await supabase
         .schema("brand_profiles")
@@ -244,6 +252,7 @@ serve(async (req) => {
       if (!cacheReadError && cached?.payload && cached.expires_at) {
         const expiresAt = new Date(cached.expires_at).getTime();
         if (expiresAt > Date.now()) {
+          await cacheSet(cacheKey, cached.payload, TTL_12H);
           return new Response(JSON.stringify(cached.payload), {
             headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
           });
@@ -347,6 +356,7 @@ serve(async (req) => {
             expires_at: expiresAt.toISOString(),
             updated_at: now.toISOString(),
           });
+        await cacheSet(cacheKey, response, TTL_12H);
       } catch (cacheWriteError) {
         console.error("[fetch-organic-analytics] tiktok cache write failed", cacheWriteError);
       }
@@ -429,6 +439,7 @@ serve(async (req) => {
           expires_at: expiresAt.toISOString(),
           updated_at: now.toISOString(),
         });
+      await cacheSet(cacheKey, response, TTL_12H);
     } catch (cacheWriteError) {
       console.error("[fetch-organic-analytics] cache write failed", cacheWriteError);
     }

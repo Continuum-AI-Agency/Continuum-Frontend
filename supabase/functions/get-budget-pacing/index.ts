@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -285,8 +286,18 @@ serve(async (req: Request) => {
     const userId = claimsData.claims.sub;
     log("Auth OK, user:", userId);
 
+    const budgetCacheKey = `budget-pacing:${brandId}:${adAccountId}`;
+
     // Cache read from dedicated budget_pacing_cache table
     if (!forceRefresh) {
+      const upstashHit = await cacheGet<unknown>(budgetCacheKey);
+      if (upstashHit) {
+        log("Cache HIT (upstash)");
+        return new Response(JSON.stringify(upstashHit), {
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+        });
+      }
+
       const { data: cacheRow } = await supabase
         .schema("brand_profiles")
         .from("budget_pacing_cache")
@@ -298,6 +309,7 @@ serve(async (req: Request) => {
 
       if (cacheRow?.payload) {
         log("Cache HIT");
+        await cacheSet(budgetCacheKey, cacheRow.payload, TTL_12H);
         return new Response(JSON.stringify(cacheRow.payload), {
           headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
         });
@@ -569,6 +581,8 @@ serve(async (req: Request) => {
       );
 
     log("Wrote to budget_pacing_cache, expires at", expiresAt.toISOString());
+
+    await cacheSet(budgetCacheKey, responsePayload, TTL_12H);
 
     return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "MISS" },

@@ -8,6 +8,7 @@ import { computeHeuristicInsights } from "../get-account-insights/compute.ts";
 import { detectAllAnomalies } from "../get-account-insights/anomalies.ts";
 import { generateCampaignInsights } from "./gemini.ts";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
+import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -172,6 +173,14 @@ serve(async (req: Request) => {
     const cacheKey = buildCacheKey(adAccountId, campaignId, range?.preset || "last_7d");
 
     if (!forceRefresh) {
+      const upstashHit = await cacheGet<Record<string, unknown>>(cacheKey);
+      if (upstashHit) {
+        log("Upstash cache HIT");
+        return new Response(JSON.stringify(upstashHit), {
+          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+        });
+      }
+
       const { data, error } = await supabase
         .schema("brand_profiles")
         .from("reporting_cache")
@@ -191,7 +200,9 @@ serve(async (req: Request) => {
           cachedPayload?.range?.until === untilStr;
 
         if (expiresAt.getTime() > Date.now() && rangeMatches) {
-          log("Cache HIT");
+          log("Postgres cache HIT");
+
+          await cacheSet(cacheKey, data.payload, TTL_12H);
 
           const timeRemaining = expiresAt.getTime() - Date.now();
           if (timeRemaining < REFRESH_AHEAD_MS) {
@@ -369,6 +380,8 @@ async function generateFresh(args: {
         expires_at: expiresAt.toISOString(),
         updated_at: nowTime.toISOString(),
       });
+
+    await cacheSet(cacheKey, response, TTL_12H);
 
     log(`Cached campaign insights with ${hasLlmInsights ? "3-day" : "1h (partial)"} TTL`);
   } catch (cacheError) {
