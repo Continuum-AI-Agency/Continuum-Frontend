@@ -56,6 +56,22 @@ export function useWorkflowExecution() {
     setStreamState({ status: "idle" });
   }, []);
 
+  const registerController = useCallback((nodeId: string): AbortController => {
+    const existing = activeControllersRef.current.get(nodeId);
+    if (existing) {
+      existing.abort();
+    }
+    const controller = new AbortController();
+    activeControllersRef.current.set(nodeId, controller);
+    return controller;
+  }, []);
+
+  const releaseController = useCallback((nodeId: string, controller: AbortController) => {
+    if (activeControllersRef.current.get(nodeId) === controller) {
+      activeControllersRef.current.delete(nodeId);
+    }
+  }, []);
+
   const executeStreamRequest = useCallback(
     async (
       nodeId: string,
@@ -376,5 +392,14 @@ export function useWorkflowExecution() {
     [resolveInitUrl, executeStreamRequest]
   );
 
-  return { streamState, executeGeneration, executeVideoExtension, executeEnrichment, cancel, reset };
+  return {
+    streamState,
+    executeGeneration,
+    executeVideoExtension,
+    executeEnrichment,
+    cancel,
+    reset,
+    registerController,
+    releaseController,
+  };
 }

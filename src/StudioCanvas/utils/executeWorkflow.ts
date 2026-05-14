@@ -10,11 +10,15 @@ import { compositeImages } from "./compositeImages";
 import { useWorkflowExecution } from "../hooks/useWorkflowExecution";
 import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
 import { resolveVideoGeneratorModel, isVideoGeneratorNodeType } from "./videoModel";
+import { resolveClipSources } from "./splice/resolveClipSources";
+import { checkSpliceSupport } from "./splice/webcodecsSupport";
+import { runSpliceInWorker } from "../workers/spliceWorkerClient";
+import type { ClipSlot, VideoEditorNodeData } from "../types";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
 const MAX_CONCURRENT_EXECUTIONS = 3;
-const MEDIA_NODE_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo']);
+const MEDIA_NODE_TYPES = new Set(['nanoGen', 'videoGen', 'veoDirector', 'veoFast', 'extendVideo', 'videoEditor']);
 
 const isMediaNodeType = (nodeType: string | undefined): nodeType is string =>
   typeof nodeType === 'string' && MEDIA_NODE_TYPES.has(nodeType);
@@ -117,7 +121,7 @@ const resolveVideoInput = (
     }
   }
 
-  if (allowUri && (isVideoGeneratorNodeType(sourceNode?.type) || sourceNode?.type === 'extendVideo')) {
+  if (allowUri && (isVideoGeneratorNodeType(sourceNode?.type) || sourceNode?.type === 'extendVideo' || sourceNode?.type === 'videoEditor')) {
     const generatedVideo = (sourceNode.data as any).generatedVideo as string | undefined;
     const generatedVideoUrl = (sourceNode.data as any).generatedVideoUrl as string | undefined;
     const parsed = parseDataUrl(generatedVideo);
@@ -308,6 +312,24 @@ const getNodeReadiness = (
     return { ready: true };
   }
 
+  if (node.type === 'videoEditor') {
+    const slots = ((node.data as VideoEditorNodeData).clipSlots ?? []) as ClipSlot[];
+    if (slots.length < 2) {
+      return { ready: false, reason: 'Need at least 2 clip slots' };
+    }
+    for (const slot of slots) {
+      const handleId = `clip-${slot.id}`;
+      const edge = incomingEdges.find((candidate) => candidate.targetHandle === handleId);
+      if (!edge) {
+        return { ready: false, reason: `Clip slot ${slot.order + 1} is not connected` };
+      }
+      if (!resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true })) {
+        return { ready: false, reason: `Clip slot ${slot.order + 1} has no resolvable video` };
+      }
+    }
+    return { ready: true };
+  }
+
   const prompt = getPromptValue(node, incomingEdges, resolvedOutputs, nodeById, edges);
   if (!prompt.value) {
     return {
@@ -368,6 +390,11 @@ export async function executeWorkflow(
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
+    const existingNode = nodeById.get(nodeId);
+    const existingVideo = (existingNode?.data as { generatedVideo?: unknown } | undefined)?.generatedVideo;
+    if (typeof existingVideo === 'string' && existingVideo.startsWith('blob:')) {
+      try { URL.revokeObjectURL(existingVideo); } catch { /* noop */ }
+    }
     useStudioStore.getState().updateNodeData(nodeId, {
       isExecuting: false,
       isComplete: false,
@@ -376,6 +403,7 @@ export async function executeWorkflow(
       generatedImageUrl: undefined,
       generatedVideo: undefined,
       generatedVideoUrl: undefined,
+      progress: undefined,
     });
   }
 
@@ -438,7 +466,7 @@ export async function executeWorkflow(
                 resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType, url: genImageUrl });
             }
          }
-      } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo') {
+      } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo' || node.type === 'videoEditor') {
          const genVideo = ((node.data as any).generatedVideo as string | undefined) ?? ((node.data as any).generatedVideoUrl as string | undefined);
          if (genVideo) {
              resolvedOutputs.set(node.id, { type: 'video', url: genVideo });
@@ -699,6 +727,39 @@ export async function executeWorkflow(
 
         updateNodeStatus(nodeId, 'failed', 'No output received');
         return false;
+      }
+
+      if (node.type === 'videoEditor') {
+        const support = await checkSpliceSupport();
+        if (!support.ok) {
+          updateNodeStatus(nodeId, 'failed', support.reason);
+          return false;
+        }
+
+        const slots = ((node.data as VideoEditorNodeData).clipSlots ?? []) as ClipSlot[];
+        const registerController = (controls as { registerController?: (id: string) => AbortController }).registerController;
+        const releaseController = (controls as { releaseController?: (id: string, ctrl: AbortController) => void }).releaseController;
+        const controller = registerController?.(nodeId) ?? new AbortController();
+        try {
+          const clips = await resolveClipSources(slots, edges, nodes, resolvedOutputs, nodeId);
+          const result = await runSpliceInWorker({
+            clips,
+            signal: controller.signal,
+            onProgress: ({ progress }) => {
+              useStudioStore.getState().updateNodeData(nodeId, { progress });
+            },
+          });
+          setNodeOutput(nodeId, { type: 'video', url: result.objectUrl });
+          useStudioStore.getState().updateNodeData(nodeId, { progress: 1 });
+          updateNodeStatus(nodeId, 'completed');
+          return true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Splice failed';
+          updateNodeStatus(nodeId, 'failed', message);
+          return false;
+        } finally {
+          releaseController?.(nodeId, controller);
+        }
       }
 
       let payload = null;

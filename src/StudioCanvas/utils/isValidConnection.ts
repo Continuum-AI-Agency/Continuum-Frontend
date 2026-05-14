@@ -16,6 +16,15 @@ const FRAME_HANDLE_SET = new Set<string>(VIDEO_FRAME_HANDLES);
 
 const isVideoGeneratorNode = (node: StudioNode): boolean => isVideoGeneratorNodeType(node.type);
 
+const isVideoProducingSource = (node: StudioNode): boolean =>
+  node.type === 'video' ||
+  node.type === 'extendVideo' ||
+  node.type === 'videoEditor' ||
+  isVideoGeneratorNodeType(node.type);
+
+export const isClipSlotHandle = (handleId?: string | null): boolean =>
+  typeof handleId === 'string' && handleId.startsWith('clip-');
+
 const isImageReferenceHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && IMAGE_REFERENCE_HANDLE_SET.has(handleId);
 
@@ -54,6 +63,12 @@ export const getAllowedTargetHandles = (node: StudioNode): string[] => {
       return ['prompt', ...VIDEO_IMAGE_REFERENCE_HANDLES, 'trigger'];
     case 'extendVideo':
       return ['prompt', 'video'];
+    case 'videoEditor': {
+      const slots = (node.data as { clipSlots?: Array<{ id?: string }> } | undefined)?.clipSlots ?? [];
+      return slots
+        .map((slot) => (typeof slot?.id === 'string' ? `clip-${slot.id}` : null))
+        .filter((handle): handle is string => Boolean(handle));
+    }
     case 'string':
       return ['image', 'audio', 'document', 'video'];
     case 'image':
@@ -85,6 +100,8 @@ export const getAllowedSourceHandles = (node: StudioNode): string[] => {
       return ['image'];
     case 'extendVideo':
       return ['video'];
+    case 'videoEditor':
+      return ['video'];
     default:
       if (isVideoGeneratorNode(node)) {
         return ['video'];
@@ -112,6 +129,10 @@ export function getTargetHandleConnectionLimit(
   }
 
   if (node.type === 'extendVideo' && targetHandle === 'video') {
+    return 1;
+  }
+
+  if (node.type === 'videoEditor' && isClipSlotHandle(targetHandle)) {
     return 1;
   }
 
@@ -193,7 +214,7 @@ export function isValidConnection(
     }
   } else if (targetNode.type === 'extendVideo') {
     if (targetHandle === 'video') {
-      if (!(sourceNode.type === 'video' || isVideoGeneratorNode(sourceNode) || sourceNode.type === 'extendVideo')) {
+      if (!isVideoProducingSource(sourceNode)) {
         return false;
       }
     } else if (targetHandle === 'prompt') {
@@ -201,6 +222,9 @@ export function isValidConnection(
     } else {
       return false;
     }
+  } else if (targetNode.type === 'videoEditor') {
+    if (!isClipSlotHandle(targetHandle)) return false;
+    if (!isVideoProducingSource(sourceNode)) return false;
   } else if (isVideoGeneratorNode(targetNode)) {
     const model = resolveVideoGeneratorModel(targetNode);
 

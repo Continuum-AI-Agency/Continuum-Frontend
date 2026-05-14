@@ -40,6 +40,7 @@ import { ImageNode } from '../nodes/ImageNode';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
+import { VideoEditorBlock } from '../nodes/VideoEditorBlock';
 import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
@@ -95,6 +96,7 @@ type StudioCanvasNodeType =
   | 'veoDirector'
   | 'veoFast'
   | 'extendVideo'
+  | 'videoEditor'
   | 'string'
   | 'image'
   | 'audio'
@@ -153,6 +155,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         tag: 'Creative',
       },
       {
+        type: 'videoEditor',
+        label: 'Video Splicer',
+        desc: 'Concatenate clips in-browser',
+        tag: 'Editing',
+      },
+      {
         type: 'video',
         label: 'Video Reference',
         desc: 'Video file input',
@@ -192,6 +200,7 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'veoDirector',
   'veoFast',
   'extendVideo',
+  'videoEditor',
   'string',
   'image',
   'audio',
@@ -228,6 +237,21 @@ const createNodeConfig = (
     return {
       data: { prompt: '' },
       style: { width: 360, height: 200 },
+    };
+  }
+
+  if (type === 'videoEditor') {
+    return {
+      data: {
+        clipSlots: [
+          { id: crypto.randomUUID?.() ?? `slot-${Date.now()}-1`, order: 0 },
+          { id: crypto.randomUUID?.() ?? `slot-${Date.now()}-2`, order: 1 },
+        ],
+        outputFormat: 'mp4',
+        videoCodec: 'avc',
+        audioCodec: 'aac',
+      },
+      style: { width: 380, height: 460 },
     };
   }
 
@@ -268,6 +292,7 @@ const nodeTypes = {
   veoDirector: VideoGenBlock,
   veoFast: VideoGenBlock,
   extendVideo: ExtendVideoBlock,
+  videoEditor: VideoEditorBlock,
   string: StringNode,
   image: ImageNode,
   audio: AudioNode,
@@ -961,7 +986,11 @@ function Flow({
   }
 
   return (
-    <div className="h-full min-h-0 w-full" ref={reactFlowWrapper} onMouseMove={handleMouseMove}>
+    <div
+      className="h-full min-h-0 w-full"
+      ref={reactFlowWrapper}
+      onMouseMove={handleMouseMove}
+    >
       <ContextMenu onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger className="block h-full w-full">
           <Canvas

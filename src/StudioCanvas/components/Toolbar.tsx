@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { PlayIcon, MinusIcon, ArrowRightIcon, CornersIcon, StopIcon } from '@radix-ui/react-icons';
+import { PlayIcon, StopIcon } from '@radix-ui/react-icons';
 import { executeWorkflow } from '../utils/executeWorkflow';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { useStudioStore, type EdgeType } from '../stores/useStudioStore';
@@ -12,13 +12,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-
-const EDGE_TYPE_OPTIONS: { value: EdgeType; label: string; icon: React.ReactNode }[] = [
-  { value: 'bezier', label: 'Curve', icon: <CornersIcon className="w-3 h-3" /> },
-  { value: 'straight', label: 'Straight', icon: <MinusIcon className="w-3 h-3" /> },
-  { value: 'step', label: 'Step', icon: <ArrowRightIcon className="w-3 h-3 rotate-90" /> },
-  { value: 'smoothstep', label: 'Square', icon: <ArrowRightIcon className="w-3 h-3" /> },
-];
 
 export function Toolbar() {
   const [isRunning, setIsRunning] = useState(false);
@@ -57,7 +50,7 @@ export function Toolbar() {
       <div className="w-px h-6 bg-border mx-1" />
 
       {!isRunning ? (
-        <Button variant="default" size="sm" onClick={handleRun}>
+        <Button data-tour-id="studio-run-flow" variant="default" size="sm" onClick={handleRun}>
           <PlayIcon className="w-4 h-4 mr-2" />
           Run Flow
         </Button>

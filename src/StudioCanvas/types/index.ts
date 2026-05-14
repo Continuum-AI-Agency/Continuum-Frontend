@@ -16,6 +16,7 @@ export interface BaseNodeData extends Record<string, unknown> {
   error?: string;
   executionTime?: number;
   isToolbarVisible?: boolean;
+  isTourSeed?: boolean;
 }
 
 export type LLMModel = 'claude-3-5-sonnet' | 'gpt-4o' | 'gemini-1.5-pro';
@@ -105,7 +106,26 @@ export interface ExtendVideoNodeData extends BaseNodeData {
   generatedVideoUrl?: string;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData;
+export interface ClipSlot {
+  id: string;
+  order: number;
+  trimStartSec?: number;
+  trimEndSec?: number;
+  muteAudio?: boolean;
+}
+
+export interface VideoEditorNodeData extends BaseNodeData {
+  clipSlots: ClipSlot[];
+  outputFormat?: 'mp4';
+  videoCodec?: 'avc';
+  audioCodec?: 'aac';
+  progress?: number;
+  generatedVideo?: string;
+  generatedVideoUrl?: string;
+  unsupportedReason?: string;
+}
+
+export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | VideoEditorNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed';
