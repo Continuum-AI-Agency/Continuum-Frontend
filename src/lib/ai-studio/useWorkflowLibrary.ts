@@ -8,10 +8,23 @@ import {
   type WorkflowLibraryItem,
 } from "@/lib/schemas/workflowLibrary";
 
-async function fetchWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
+type WorkflowLibraryQueryResult = {
+  data: unknown[] | null;
+  error: { message?: string } | null;
+};
+
+type WorkflowLibraryQuery = PromiseLike<WorkflowLibraryQueryResult> & {
+  order: (column: string, options?: { ascending?: boolean }) => WorkflowLibraryQuery;
+};
+
+async function fetchGlobalWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
   const supabase = createSupabaseBrowserClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const brandSchema = supabase.schema("brand_profiles") as unknown as {
+    from: (table: "workflow_library") => {
+      select: (columns: string) => WorkflowLibraryQuery;
+    };
+  };
+  const { data, error } = await brandSchema
     .from("workflow_library")
     .select("id, name, description, content, tags, created_at, updated_at")
     .order("name", { ascending: true });
@@ -22,9 +35,13 @@ async function fetchWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
   );
 }
 
+async function fetchWorkflowLibrary(): Promise<WorkflowLibraryItem[]> {
+  return fetchGlobalWorkflowLibrary();
+}
+
 export function useWorkflowLibrary(options?: { enabled?: boolean }) {
   const query = useQuery({
-    queryKey: ["workflow-library"],
+    queryKey: ["workflow-library", "global"],
     queryFn: fetchWorkflowLibrary,
     enabled: options?.enabled ?? true,
     staleTime: 30 * 60 * 1000,

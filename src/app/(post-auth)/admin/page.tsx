@@ -120,7 +120,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold text-primary">Admin</h1>
           <p className="text-sm text-muted-foreground">
-            Manage users, impersonate, and adjust brand tiers.
+            Manage users, brand access, global workflow library promotion, and brand canvas workflow transfers.
           </p>
         </div>
         <Card className="glass-panel border-subtle shadow-brand-glow py-0">

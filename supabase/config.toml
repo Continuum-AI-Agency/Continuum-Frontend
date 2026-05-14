@@ -3,6 +3,16 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-list-users/index.ts"
 
+[functions.admin-access-actions]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-access-actions/index.ts"
+
+[functions.admin-audit-log]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-audit-log/index.ts"
+
 [functions.admin-set-admin]
 enabled = true
 verify_jwt = false
@@ -12,6 +22,11 @@ entrypoint = "./functions/admin-set-admin/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/admin-update-tier/index.ts"
+
+[functions.admin-workflow-library]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/admin-workflow-library/index.ts"
 
 [functions.ai_studio_workflows]
 enabled = true

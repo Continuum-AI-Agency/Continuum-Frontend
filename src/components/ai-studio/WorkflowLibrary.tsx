@@ -6,14 +6,6 @@ import { useReactFlow } from "@xyflow/react";
 import type { Edge } from "@xyflow/react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useWorkflowLibrary } from "@/lib/ai-studio/useWorkflowLibrary";
@@ -76,7 +68,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
 
   if (rawNodes.length === 0) {
     return (
-      <div className="flex h-[152px] items-center justify-center text-[11px] text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
         No nodes
       </div>
     );
@@ -93,7 +85,7 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
 
   if (!isFinite(minX)) {
     return (
-      <div className="flex h-[152px] items-center justify-center text-[11px] text-muted-foreground">
+      <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
         No layout data
       </div>
     );
@@ -117,7 +109,13 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
   const nodeMap = new Map(rawNodes.map((n) => [n.id, n]));
 
   return (
-    <svg width={SVG_W} height={SVG_H} viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="block">
+    <svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+      preserveAspectRatio="xMidYMid meet"
+      className="block"
+    >
       {rawEdges.map((e) => {
         const src = nodeMap.get(e.source);
         const tgt = nodeMap.get(e.target);
@@ -179,21 +177,33 @@ function WorkflowMiniCanvas({ nodes, edges }: { nodes: unknown[]; edges: unknown
   );
 }
 
-// ─── WorkflowPreviewPanel ─────────────────────────────────────────────────────
+// ─── WorkflowCard ─────────────────────────────────────────────────────────────
 
-function WorkflowPreviewPanel({ item }: { item: WorkflowLibraryItem }) {
+function WorkflowCard({
+  item,
+  onUse,
+}: {
+  item: WorkflowLibraryItem;
+  onUse: (item: WorkflowLibraryItem) => void;
+}) {
+  const nodeCount = item.content.nodes.length;
+
   return (
-    <div className="absolute right-full top-0 z-10 mr-3 w-[288px] overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
-      <div className="border-b border-border bg-muted/40 p-2">
-        <WorkflowMiniCanvas
-          nodes={item.content.nodes}
-          edges={item.content.edges}
-        />
+    <div className="overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-border/80">
+      <div className="h-32 border-b border-border bg-muted/40">
+        <WorkflowMiniCanvas nodes={item.content.nodes} edges={item.content.edges} />
       </div>
       <div className="p-3">
-        <p className="truncate text-sm font-semibold">{item.name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="truncate text-sm font-medium">{item.name}</p>
+          <span className="shrink-0 text-[11px] text-muted-foreground">
+            {nodeCount} {nodeCount === 1 ? "node" : "nodes"}
+          </span>
+        </div>
         {item.description && (
-          <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{item.description}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+            {item.description}
+          </p>
         )}
         {item.tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
@@ -207,6 +217,9 @@ function WorkflowPreviewPanel({ item }: { item: WorkflowLibraryItem }) {
             ))}
           </div>
         )}
+        <Button size="sm" className="mt-3 w-full" onClick={() => onUse(item)}>
+          Use Workflow
+        </Button>
       </div>
     </div>
   );
@@ -217,18 +230,25 @@ function WorkflowPreviewPanel({ item }: { item: WorkflowLibraryItem }) {
 export function WorkflowLibrary() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [hoveredItem, setHoveredItem] = React.useState<WorkflowLibraryItem | null>(null);
+  const [activeTag, setActiveTag] = React.useState<string | null>(null);
 
   const { items, isLoading, isError } = useWorkflowLibrary({ enabled: isOpen });
   const { setNodes, setEdges, takeSnapshot, defaultEdgeType } = useStudioStore();
   const { fitView } = useReactFlow();
   const { show } = useToast();
 
-  const filtered = items.filter(
-    (item) =>
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      (item.description?.toLowerCase().includes(query.toLowerCase()) ?? false)
+  const allTags = React.useMemo(
+    () => [...new Set(items.flatMap((item) => item.tags))].sort(),
+    [items]
   );
+
+  const filtered = items.filter((item) => {
+    const matchesQuery =
+      item.name.toLowerCase().includes(query.toLowerCase()) ||
+      (item.description?.toLowerCase().includes(query.toLowerCase()) ?? false);
+    const matchesTag = !activeTag || item.tags.includes(activeTag);
+    return matchesQuery && matchesTag;
+  });
 
   async function handleLoad(item: WorkflowLibraryItem) {
     const snapshot = normalizeWorkflowSnapshot(
@@ -256,7 +276,10 @@ export function WorkflowLibrary() {
       open={isOpen}
       onOpenChange={(open) => {
         setIsOpen(open);
-        if (!open) setHoveredItem(null);
+        if (!open) {
+          setQuery("");
+          setActiveTag(null);
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -265,48 +288,76 @@ export function WorkflowLibrary() {
           Library
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[380px] overflow-visible p-0" align="end">
-        {hoveredItem && <WorkflowPreviewPanel item={hoveredItem} />}
-        <Command shouldFilter={false}>
-          <CommandInput
+      <PopoverContent className="w-[440px] p-0" align="end">
+        <div className="border-b border-border p-3">
+          <p className="text-sm font-semibold">Workflow Library</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Browse, preview and launch pre-built workflows.
+          </p>
+          <input
+            type="text"
             placeholder="Search starter workflows…"
             value={query}
-            onValueChange={setQuery}
+            onChange={(e) => setQuery(e.target.value)}
             autoFocus
+            className="mt-2.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <CommandList className="max-h-[320px]">
-            {isLoading && <CommandEmpty>Loading…</CommandEmpty>}
-            {isError && <CommandEmpty>Could not load library.</CommandEmpty>}
-            {!isLoading && !isError && filtered.length === 0 && (
-              <CommandEmpty>No workflows found.</CommandEmpty>
-            )}
-            <CommandGroup>
-              {filtered.map((item) => (
-                <CommandItem
-                  key={item.id}
-                  value={item.id}
-                  onSelect={() => { void handleLoad(item); }}
-                  onMouseEnter={() => setHoveredItem(item)}
-                  onMouseLeave={() => setHoveredItem(null)}
-                >
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium">{item.name}</span>
-                    {item.description && (
-                      <span className="truncate text-xs text-muted-foreground">
-                        {item.description}
-                      </span>
-                    )}
-                  </div>
-                  {item.tags.length > 0 && (
-                    <span className="ml-auto shrink-0 rounded border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      {item.tags[0]}
-                    </span>
-                  )}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+        </div>
+
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 border-b border-border px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setActiveTag(null)}
+              className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+                activeTag === null
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              All
+            </button>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setActiveTag(tag)}
+                className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+                  activeTag === tag
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="max-h-[420px] space-y-3 overflow-y-auto p-3">
+          {isLoading && (
+            <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p>
+          )}
+          {isError && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Could not load library.
+            </p>
+          )}
+          {!isLoading && !isError && filtered.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No workflows found.
+            </p>
+          )}
+          {!isLoading &&
+            !isError &&
+            filtered.map((item) => (
+              <WorkflowCard
+                key={item.id}
+                item={item}
+                onUse={(workflow) => { void handleLoad(workflow); }}
+              />
+            ))}
+        </div>
       </PopoverContent>
     </Popover>
   );

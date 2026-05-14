@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveAuthUserName } from "./user-name.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,24 +60,6 @@ function parseTierValue(value: unknown): number {
   if (value === null || value === undefined || value === "") return 0;
   const numeric = typeof value === "string" ? Number(value) : value;
   return Number.isFinite(numeric) ? (numeric as number) : 0;
-}
-
-type AuthUser = {
-  id: string;
-  email?: string | null;
-  user_metadata?: Record<string, unknown> | null;
-  app_metadata?: Record<string, unknown> | null;
-  created_at?: string | null;
-};
-
-function mapAuthUser(user: AuthUser): AdminUser {
-  return {
-    id: user.id,
-    email: user.email ?? "unknown",
-    name: resolveAuthUserName(user.user_metadata),
-    isAdmin: Boolean((user.app_metadata as Record<string, unknown> | undefined)?.is_admin),
-    createdAt: user.created_at ?? null,
-  };
 }
 
 serve(async (req) => {
@@ -150,78 +131,51 @@ serve(async (req) => {
       return jsonResponse({ error: "Forbidden" }, 403);
     }
 
-    let users: AdminUser[] = [];
-    let pagination: AdminPagination;
-
-    if (!hasQuery) {
-      const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({
-        page,
-        perPage: pageSize,
-      });
-      if (usersError) {
-        log("listUsers failed", { usersError });
-        return jsonResponse({ error: usersError.message }, 500);
-      }
-
-      users = usersData?.users?.map((user) => mapAuthUser(user)) ?? [];
-
-      const totalCount = usersData?.total ?? 0;
-      const lastPage = usersData?.lastPage ?? 0;
-      const totalPages = lastPage > 0 ? lastPage : totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
-      pagination = {
-        page,
-        pageSize,
-        totalCount,
-        totalPages,
-        nextPage: usersData?.nextPage ?? null,
-        lastPage,
-        hasNextPage: totalPages > 0 ? page < totalPages : (usersData?.nextPage ?? null) !== null,
-        hasPrevPage: page > 1,
-      };
-    } else {
-      const allUsers: AdminUser[] = [];
-      let currentPage = 1;
-
-      while (true) {
-        const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({
-          page: currentPage,
-          perPage: MAX_PAGE_SIZE,
-        });
-        if (usersError) {
-          log("listUsers failed", { usersError });
-          return jsonResponse({ error: usersError.message }, 500);
-        }
-
-        const batch = usersData?.users?.map((user) => mapAuthUser(user)) ?? [];
-        allUsers.push(...batch);
-
-        if (!usersData?.nextPage) break;
-        currentPage = usersData.nextPage;
-      }
-
-      const filteredUsers = allUsers.filter((user) => {
-        const name = user.name?.toLowerCase() ?? "";
-        const email = user.email.toLowerCase();
-        return name.includes(normalizedQuery) || email.includes(normalizedQuery);
+    const offset = (page - 1) * pageSize;
+    const { data: directoryRows, error: directoryError } = await adminClient
+      .schema("brand_profiles")
+      .rpc("search_admin_user_directory", {
+        p_query: hasQuery ? normalizedQuery : "",
+        p_limit: pageSize,
+        p_offset: offset,
       });
 
-      const totalCount = filteredUsers.length;
-      const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
-      const effectivePage = totalPages > 0 ? Math.min(page, totalPages) : 1;
-      const start = (effectivePage - 1) * pageSize;
-
-      users = filteredUsers.slice(start, start + pageSize);
-      pagination = {
-        page: effectivePage,
-        pageSize,
-        totalCount,
-        totalPages,
-        nextPage: totalPages > 0 && effectivePage < totalPages ? effectivePage + 1 : null,
-        lastPage: totalPages,
-        hasNextPage: totalPages > 0 && effectivePage < totalPages,
-        hasPrevPage: effectivePage > 1,
-      };
+    if (directoryError) {
+      log("directory search failed", { directoryError });
+      return jsonResponse({ error: directoryError.message }, 500);
     }
+
+    const typedDirectoryRows = (directoryRows ?? []) as Array<{
+      user_id: string;
+      email: string;
+      name: string | null;
+      is_admin: boolean;
+      auth_created_at: string | null;
+      total_count: number | string | null;
+    }>;
+
+    const totalCount = Number(typedDirectoryRows[0]?.total_count ?? 0);
+    const totalPages = totalCount > 0 ? Math.ceil(totalCount / pageSize) : 0;
+    const effectivePage = totalPages > 0 ? Math.min(page, totalPages) : 1;
+
+    const users = typedDirectoryRows.map((row) => ({
+      id: row.user_id,
+      email: row.email,
+      name: row.name,
+      isAdmin: row.is_admin,
+      createdAt: row.auth_created_at,
+    }));
+
+    const pagination: AdminPagination = {
+      page: effectivePage,
+      pageSize,
+      totalCount,
+      totalPages,
+      nextPage: totalPages > 0 && effectivePage < totalPages ? effectivePage + 1 : null,
+      lastPage: totalPages,
+      hasNextPage: totalPages > 0 && effectivePage < totalPages,
+      hasPrevPage: effectivePage > 1,
+    };
 
     const userIds = users.map((u) => u.id);
 
@@ -343,8 +297,7 @@ serve(async (req) => {
       }
     }
 
-    const totalCount = pagination.totalCount;
-    log("success", { users: users.length, permissions: permissions.length, page, pageSize, totalCount });
+    log("success", { users: users.length, permissions: permissions.length, page, pageSize, totalCount: pagination.totalCount });
     return jsonResponse({ users, permissions, pagination });
   } catch (error) {
     console.error("[admin-list-users] unhandled", error);

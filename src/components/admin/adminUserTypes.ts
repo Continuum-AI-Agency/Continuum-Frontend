@@ -14,6 +14,47 @@ export type PermissionRow = {
   brand_name: string | null;
 };
 
+export type AdminBrandOption = {
+  id: string;
+  brand_name: string;
+  tier: number;
+  active: boolean;
+};
+
+export type AdminWorkflowLibraryRow = {
+  id: string;
+  brand_profile_id: string | null;
+  name: string;
+  description: string | null;
+  content?: unknown;
+  tags: string[];
+  visibility: "brand" | "global";
+  source_scope: string | null;
+  source_workflow_id: string | null;
+  source_brand_profile_id: string | null;
+  promoted_from_workflow_id: string | null;
+  copied_by: string | null;
+  copied_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminAuditLogEntry = {
+  id: string;
+  actor_user_id: string | null;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  brand_profile_id: string | null;
+  before: unknown;
+  after: unknown;
+  metadata: Record<string, unknown>;
+  request_id: string | null;
+  status: "success" | "failed";
+  created_at: string;
+};
+
 export type AdminPagination = {
   page: number;
   pageSize: number;

@@ -19,6 +19,36 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function writeAudit(args: {
+  adminClient: ReturnType<typeof createClient>;
+  actorUserId: string;
+  targetUserId: string;
+  before: unknown;
+  after: unknown;
+  requestId: string;
+  status?: "success" | "failed";
+  metadata?: Record<string, unknown>;
+}) {
+  const { error } = await args.adminClient
+    .schema("brand_profiles")
+    .from("admin_audit_log")
+    .insert({
+      actor_user_id: args.actorUserId,
+      action: "admin.user.set_admin",
+      target_type: "auth_user",
+      target_id: args.targetUserId,
+      before: args.before,
+      after: args.after,
+      metadata: args.metadata ?? {},
+      request_id: args.requestId,
+      status: args.status ?? "success",
+    });
+
+  if (error) {
+    console.error("[admin-set-admin] audit write failed", error);
+  }
+}
+
 serve(async (req) => {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) => console.log(`[admin-set-admin] ${requestId} ${msg}`, extra ?? "");
@@ -48,14 +78,38 @@ serve(async (req) => {
     return json({ error: "You cannot revoke your own admin status" }, 400);
   }
 
+  const { data: beforeUserData } = await adminClient.auth.admin.getUserById(userId);
+  const beforeUser = beforeUserData?.user ?? null;
+
   const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
     app_metadata: { is_admin: isAdmin },
   });
 
   if (updateError) {
     log("updateUserById failed", { updateError });
+    await writeAudit({
+      adminClient,
+      actorUserId: callerUserId,
+      targetUserId: userId,
+      before: beforeUser,
+      after: beforeUser,
+      requestId,
+      status: "failed",
+      metadata: { error: updateError.message, isAdmin },
+    });
     return json({ error: updateError.message }, 500);
   }
+
+  const { data: afterUserData } = await adminClient.auth.admin.getUserById(userId);
+  await writeAudit({
+    adminClient,
+    actorUserId: callerUserId,
+    targetUserId: userId,
+    before: beforeUser,
+    after: afterUserData?.user ?? { id: userId, is_admin: isAdmin },
+    requestId,
+    metadata: { isAdmin },
+  });
 
   log("success", { targetUser: userId, isAdmin });
   return json({ ok: true });

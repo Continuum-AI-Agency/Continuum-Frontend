@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import type { AdminPagination, AdminUser, PermissionRow } from "@/components/admin/adminUserTypes";
 
-let routerPushSpy = vi.fn<(path: string) => void>();
+const routerPushSpy = vi.fn<(path: string) => void>();
 let searchParams = new URLSearchParams();
 
 vi.mock("next/navigation", () => ({
@@ -16,13 +16,27 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("lucide-react", () => {
-  const icon = (name: string) => (props: Record<string, unknown>) =>
-    React.createElement("span", { "data-icon": name, ...props });
+  const icon = (name: string) => {
+    const MockIcon = (props: Record<string, unknown>) =>
+      React.createElement("span", { "data-icon": name, ...props });
+    MockIcon.displayName = `${name}Icon`;
+    return MockIcon;
+  };
 
   return {
     Search: icon("search"),
     ChevronDown: icon("chevron-down"),
     ShieldAlert: icon("shield-alert"),
+    UserCog: icon("user-cog"),
+    Building2: icon("building"),
+    Library: icon("library"),
+    History: icon("history"),
+    Copy: icon("copy"),
+    Globe2: icon("globe"),
+    Trash2: icon("trash"),
+    Lock: icon("lock"),
+    RefreshCw: icon("refresh"),
+    CheckCircle2: icon("check-circle"),
     Loader2: icon("loader"),
     ChevronLeft: icon("chevron-left"),
     ChevronRight: icon("chevron-right"),
@@ -114,7 +128,7 @@ test("renders brand tier values from permissions", async () => {
 
   const html = await renderAdminUserList({ users, permissions, pagination, searchQuery: "" });
 
-  expect(html).toContain(">2<");
+  expect(html).toContain("Tier 2");
 });
 
 test("renders an accessible search label", async () => {

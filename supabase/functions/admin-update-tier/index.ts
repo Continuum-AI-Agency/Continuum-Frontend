@@ -19,6 +19,37 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function writeAudit(args: {
+  adminClient: ReturnType<typeof createClient>;
+  actorUserId: string;
+  brandProfileId: string;
+  before: unknown;
+  after: unknown;
+  requestId: string;
+  status?: "success" | "failed";
+  metadata?: Record<string, unknown>;
+}) {
+  const { error } = await args.adminClient
+    .schema("brand_profiles")
+    .from("admin_audit_log")
+    .insert({
+      actor_user_id: args.actorUserId,
+      action: "admin.brand.update_tier",
+      target_type: "brand_profile",
+      target_id: args.brandProfileId,
+      brand_profile_id: args.brandProfileId,
+      before: args.before,
+      after: args.after,
+      metadata: args.metadata ?? {},
+      request_id: args.requestId,
+      status: args.status ?? "success",
+    });
+
+  if (error) {
+    console.error("[admin-update-tier] audit write failed", error);
+  }
+}
+
 serve(async (req) => {
   const requestId = crypto.randomUUID();
   const log = (msg: string, extra?: unknown) => console.log(`[admin-update-tier] ${requestId} ${msg}`, extra ?? "");
@@ -35,7 +66,8 @@ serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   const { data: userData, error: userError } = await adminClient.auth.getClaims(token);
-  if (userError || !userData?.claims?.sub) return json({ error: "Invalid token" }, 401);
+  const actorUserId = userData?.claims?.sub;
+  if (userError || !actorUserId) return json({ error: "Invalid token" }, 401);
   const isAdmin = Boolean((userData.claims?.app_metadata as Record<string, unknown> | undefined)?.is_admin);
   if (!isAdmin) return json({ error: "Forbidden" }, 403);
 
@@ -54,6 +86,14 @@ serve(async (req) => {
     tierValue = numeric;
   }
 
+  const { data: beforeRows } = await adminClient
+    .schema("brand_profiles")
+    .from("brand_profiles")
+    .select("id, brand_name, tier, updated_at")
+    .eq("id", brandProfileId)
+    .limit(1);
+  const before = beforeRows?.[0] ?? null;
+
   const { error: updateError } = await adminClient
     .schema("brand_profiles")
     .from("brand_profiles")
@@ -65,8 +105,35 @@ serve(async (req) => {
 
   if (updateError) {
     log("brand_profiles update failed", { updateError, brandProfileId, tier: tierValue });
+    await writeAudit({
+      adminClient,
+      actorUserId,
+      brandProfileId,
+      before,
+      after: before,
+      requestId,
+      status: "failed",
+      metadata: { error: updateError.message, tier: tierValue },
+    });
     return json({ error: updateError.message }, 500);
   }
+
+  const { data: afterRows } = await adminClient
+    .schema("brand_profiles")
+    .from("brand_profiles")
+    .select("id, brand_name, tier, updated_at")
+    .eq("id", brandProfileId)
+    .limit(1);
+
+  await writeAudit({
+    adminClient,
+    actorUserId,
+    brandProfileId,
+    before,
+    after: afterRows?.[0] ?? { id: brandProfileId, tier: tierValue },
+    requestId,
+    metadata: { tier: tierValue },
+  });
 
   log("success", { brandProfileId, tier: tierValue });
   return json({ ok: true });
