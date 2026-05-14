@@ -54,47 +54,37 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
     );
   }
 
-  const repo = createBrandProfileRepository();
-  const [
-    integrationSummary,
-    brandProfile,
-    documents,
-    members,
-    invites,
-    userIntegrationSummary,
-  ] = await Promise.all([
-    fetchBrandIntegrationSummary(activeBrandId),
-    fetchBrandProfileDetails(activeBrandId),
-    fetchBrandDocuments(activeBrandId),
-    repo.fetchMembers(activeBrandId),
-    repo.fetchInvites(activeBrandId),
-    user
-      ? fetchUserIntegrationSummary(user.id)
-      : Promise.resolve(createEmptyUserIntegrationSummary()),
-  ]);
-
-  const currentUserRole =
-    members.find((m) => m.id === user?.id || m.email === user?.email)?.role ?? null;
-  const canEdit = currentUserRole === "owner" || currentUserRole === "admin";
-  const canDelete = canEdit;
-
   const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
-  const brandName = brandProfile?.name ?? activeBrand?.name ?? "Untitled Brand";
+  const defaultBrandName = activeBrand?.name ?? "Untitled Brand";
   const brandLogoUrl = activeBrand?.logoUrl ?? null;
   const userEmail = user?.email ?? "Unknown";
 
-  const brandHeader = (
+  const createBrandHeader = (name: string) => (
     <BrandIdentityHeader
       brandId={activeBrandId}
-      name={brandName}
+      name={name}
       logoUrl={brandLogoUrl}
     />
   );
 
-  const sections: Record<SectionKey, React.ReactNode> = {
-    general: (
+  let activeSectionSlot: React.ReactNode;
+
+  if (initialSection === "general") {
+    const repo = createBrandProfileRepository();
+    const [brandProfile, members, invites] = await Promise.all([
+      fetchBrandProfileDetails(activeBrandId),
+      repo.fetchMembers(activeBrandId),
+      repo.fetchInvites(activeBrandId),
+    ]);
+    const brandName = brandProfile?.name ?? defaultBrandName;
+    const currentUserRole =
+      members.find((m) => m.id === user?.id || m.email === user?.email)?.role ?? null;
+    const canEdit = currentUserRole === "owner" || currentUserRole === "admin";
+    const canDelete = canEdit;
+
+    activeSectionSlot = (
       <>
-        {brandHeader}
+        {createBrandHeader(brandName)}
         <SettingsSection
           title="Brand identity"
           description="Logo, name, and workspace metadata."
@@ -128,18 +118,20 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             title="Danger zone"
             description="Irreversible actions for this brand profile."
           >
-            <BrandDangerZone
-              brandName={brandName}
-              hasProfile={Boolean(brandProfile)}
-              canDelete={canDelete}
-            />
-          </SettingsSection>
-        ) : null}
-      </>
-    ),
-    integrations: (
+          <BrandDangerZone
+            brandName={brandName}
+            hasProfile={Boolean(brandProfile)}
+            canDelete={canDelete}
+          />
+        </SettingsSection>
+      ) : null}
+      </>);
+  } else if (initialSection === "integrations") {
+    const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
+
+    activeSectionSlot = (
       <>
-        {brandHeader}
+        {createBrandHeader(defaultBrandName)}
         <SettingsSection
           title="Brand integrations"
           description="Provider accounts assigned to this brand. Tap a provider to inspect its accounts."
@@ -147,10 +139,13 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <BrandIntegrationsSwitcher initialSummary={integrationSummary} />
         </SettingsSection>
       </>
-    ),
-    knowledge: (
+    );
+  } else if (initialSection === "knowledge") {
+    const documents = await fetchBrandDocuments(activeBrandId);
+
+    activeSectionSlot = (
       <>
-        {brandHeader}
+        {createBrandHeader(defaultBrandName)}
         <SettingsSection
           title="Knowledge"
           description="Documents Jaina uses for app-wide brand intelligence."
@@ -159,10 +154,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <BrandDocumentsSection brandId={activeBrandId} documents={documents} />
         </SettingsSection>
       </>
-    ),
-    billing: (
+    );
+  } else if (initialSection === "billing") {
+    activeSectionSlot = (
       <>
-        {brandHeader}
+        {createBrandHeader(defaultBrandName)}
         <SettingsSection
           title="Billing & credits"
           description="AI Studio tier, credits, and plan management."
@@ -170,8 +166,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           <BrandBillingPanel tier={activeBrandTier} />
         </SettingsSection>
       </>
-    ),
-    profile: (
+    );
+  } else if (initialSection === "profile") {
+    activeSectionSlot = (
       <SettingsSection
         title="Your profile"
         description="Identity tied to your login across every brand you join."
@@ -182,24 +179,30 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           lastSignIn={user?.last_sign_in_at ?? null}
         />
       </SettingsSection>
-    ),
-    connections: (
+    );
+  } else if (initialSection === "connections") {
+    const userIntegrationSummary = user
+      ? await fetchUserIntegrationSummary(user.id)
+      : createEmptyUserIntegrationSummary();
+
+    activeSectionSlot = (
       <SettingsSection
         title="Personal connections"
         description="OAuth providers tied to your account. Assign these to brands from the brand integrations panel."
       >
-        <UserConnectionsSwitcher integrations={userIntegrationSummary} />
+          <UserConnectionsSwitcher integrations={userIntegrationSummary} />
       </SettingsSection>
-    ),
-    brands: (
+    );
+  } else {
+    activeSectionSlot = (
       <SettingsSection
         title="Your brands"
         description="Brands you have joined. Switching here updates the entire app."
       >
-        <UserBrandsPanel permissions={permissions} />
+          <UserBrandsPanel permissions={permissions} />
       </SettingsSection>
-    ),
-  };
+    );
+  }
 
   return (
     <div className="w-full max-w-none px-3 py-10 sm:px-4 lg:px-6">
@@ -214,10 +217,10 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
 
       <Suspense fallback={null}>
         <SettingsShell
-          initialSection={initialSection}
-          brandPill={<BrandNavPill name={brandName} logoUrl={brandLogoUrl} />}
+          activeSection={initialSection}
+          brandPill={<BrandNavPill name={defaultBrandName} logoUrl={brandLogoUrl} />}
           accountPill={<AccountNavPill email={userEmail} />}
-          sections={sections}
+          activeSectionSlot={activeSectionSlot}
         />
       </Suspense>
     </div>

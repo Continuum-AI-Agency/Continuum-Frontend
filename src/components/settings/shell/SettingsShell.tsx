@@ -1,36 +1,42 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { resolveSection, type SectionKey } from "./sections";
 import { SettingsNav } from "./SettingsNav";
 import { SwitchingIndicator } from "./SwitchingIndicator";
 
 type SettingsShellProps = {
-  initialSection: SectionKey;
+  activeSection: SectionKey;
   brandPill: ReactNode;
   accountPill: ReactNode;
-  sections: Record<SectionKey, ReactNode>;
+  activeSectionSlot: ReactNode;
 };
 
 export function SettingsShell({
-  initialSection,
+  activeSection,
   brandPill,
   accountPill,
-  sections,
+  activeSectionSlot,
 }: SettingsShellProps) {
   const router = useRouter();
   const params = useSearchParams();
-  const [section, setSection] = useState<SectionKey>(initialSection);
+  const [section, setSection] = useState<SectionKey>(activeSection);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setSection(activeSection);
+  }, [activeSection]);
 
   const handleChange = useCallback(
     (value: string) => {
       const next = resolveSection(value);
+      if (next === section) return;
       setSection(next);
       setMobileOpen(false);
       const search = new URLSearchParams(params?.toString() ?? "");
@@ -42,7 +48,7 @@ export function SettingsShell({
       const qs = search.toString();
       router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false });
     },
-    [params, router]
+    [params, router, section]
   );
 
   return (
@@ -75,18 +81,30 @@ export function SettingsShell({
       </aside>
 
       <div className="min-w-0 max-w-4xl">
-        {(Object.entries(sections) as Array<[SectionKey, ReactNode]>).map(
-          ([key, node]) => (
-            <Tabs.Content
-              key={key}
-              value={key}
-              className="space-y-6 outline-none data-[state=inactive]:hidden data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
-            >
-              {node}
-            </Tabs.Content>
-          )
-        )}
+        <Tabs.Content
+          key={activeSection}
+          value={section}
+          className="space-y-6 outline-none data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
+        >
+          {section === activeSection ? activeSectionSlot : <SettingsSectionSkeleton />}
+        </Tabs.Content>
       </div>
     </Tabs.Root>
+  );
+}
+
+function SettingsSectionSkeleton() {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/30 p-6">
+      <div className="mb-5 space-y-2">
+        <Skeleton className="h-5 w-48 bg-muted/70" />
+        <Skeleton className="h-4 w-72 bg-muted/70" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-16 w-full bg-muted/70" />
+        <Skeleton className="h-16 w-full bg-muted/70" />
+        <Skeleton className="h-16 w-4/5 bg-muted/70" />
+      </div>
+    </div>
   );
 }

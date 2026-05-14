@@ -1,8 +1,7 @@
 import { Container, Flex, Heading, Text } from "@radix-ui/themes";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
-import { BrandIntegrationsSection } from "@/components/settings/BrandIntegrationsSection";
+import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection";
 import { MyConnectionsSharingSection } from "@/components/integrations/MyConnectionsSharingSection";
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export const revalidate = 0;
@@ -20,7 +19,6 @@ export default async function IntegrationsSettingsPage() {
   }
 
   await ensureOnboardingState(activeBrandId);
-  const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
 
   return (
     <Container size="3" className="py-10">
@@ -31,7 +29,7 @@ export default async function IntegrationsSettingsPage() {
             Manage connections shared with the active brand and add personal accounts for future assignments.
           </Text>
         </div>
-        <BrandIntegrationsSection key={activeBrandId} initialSummary={integrationSummary} />
+        <BrandGrantsSection brandProfileId={activeBrandId} />
         {user?.id ? <MyConnectionsSharingSection userId={user.id} /> : null}
       </Flex>
     </Container>

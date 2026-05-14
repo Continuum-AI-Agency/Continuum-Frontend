@@ -47,7 +47,16 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
   ]);
 
   if (grants.length === 0) {
-    return null;
+    return (
+      <GlassPanel className="p-6">
+        <div className="mb-2">
+          <h3 className="text-base font-semibold text-foreground">Granted integrations</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          No integrations have been granted to this brand yet. Share a personal connection below to get started.
+        </p>
+      </GlassPanel>
+    );
   }
 
   const callerId = user?.id ?? null;
