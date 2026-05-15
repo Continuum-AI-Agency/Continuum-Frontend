@@ -6,6 +6,7 @@ import { allTours, TOUR_DASHBOARD, TOUR_ORGANIC, TOUR_PAID_MEDIA } from "./confi
 import {
   useTourTabStore,
   type DashboardTourView,
+  type OrganicTourCalendarView,
   type OrganicTourTab,
   type PaidMediaTourTab,
 } from "./tourTabStore";
@@ -13,14 +14,22 @@ import {
 import "./seenFlags";
 
 // Step index -> tab. Keep in sync with the step order in config.tsx.
+// Organic: 0 calendar, 1 list-view toggle, 2 list, 3 metrics tab, 4 metrics, 5 agent.
 function organicTabForStep(step: number): OrganicTourTab {
-  if (step === 1) return "metrics";
-  if (step === 4) return "agent";
+  if (step === 4) return "metrics";
+  if (step === 5) return "agent";
   return "planner";
 }
 
+function organicCalendarViewForStep(step: number): OrganicTourCalendarView | null {
+  if (step === 0 || step === 1) return "week";
+  if (step === 2) return "list";
+  return null;
+}
+
+// Paid Media: 0 account selector, 1 campaign selector, 2-6 dashboard widgets, 7 jaina.
 function paidMediaTabForStep(step: number): PaidMediaTourTab {
-  if (step === 5) return "jaina";
+  if (step === 7) return "jaina";
   return "dashboard";
 }
 
@@ -32,6 +41,9 @@ function dashboardViewForStep(step: number): DashboardTourView {
 
 export function TourProvider({ children }: { children: React.ReactNode }) {
   const requestOrganicTab = useTourTabStore((s) => s.requestOrganicTab);
+  const requestOrganicCalendarView = useTourTabStore(
+    (s) => s.requestOrganicCalendarView
+  );
   const requestPaidMediaTab = useTourTabStore((s) => s.requestPaidMediaTab);
   const requestDashboardView = useTourTabStore((s) => s.requestDashboardView);
   const clearRequests = useTourTabStore((s) => s.clearRequests);
@@ -40,13 +52,20 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     (step: number, tourName: string | null) => {
       if (tourName === TOUR_ORGANIC) {
         requestOrganicTab(organicTabForStep(step));
+        const view = organicCalendarViewForStep(step);
+        if (view) requestOrganicCalendarView(view);
       } else if (tourName === TOUR_PAID_MEDIA) {
         requestPaidMediaTab(paidMediaTabForStep(step));
       } else if (tourName === TOUR_DASHBOARD) {
         requestDashboardView(dashboardViewForStep(step));
       }
     },
-    [requestOrganicTab, requestPaidMediaTab, requestDashboardView]
+    [
+      requestOrganicTab,
+      requestOrganicCalendarView,
+      requestPaidMediaTab,
+      requestDashboardView,
+    ]
   );
 
   return (

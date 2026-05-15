@@ -16,6 +16,7 @@ import {
   useReadyAfterPaint,
 } from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
 import { TOUR_AI_CANVAS } from "@/components/onboarding/v2/tour/config";
+import { ReplayWalkthroughButton } from "@/components/onboarding/v2/tour/ReplayWalkthroughButton";
 import { useSeedTourNodes } from "./useSeedTourNodes";
 
 const StudioCanvas = dynamic(
@@ -80,6 +81,10 @@ export default function AIStudioClient({
             <Text color="gray">Build flows for {brandName}</Text>
           </div>
           <div className="flex items-center gap-3">
+            <ReplayWalkthroughButton
+              tourName={TOUR_AI_CANVAS}
+              className="text-white/60 hover:bg-white/10 hover:text-white"
+            />
             <BrandSwitcherMenu />
           </div>
         </div>

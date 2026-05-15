@@ -278,12 +278,14 @@ export default function PaidMediaClientPage({
         className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--app-shell-gap)] overflow-hidden"
       >
         <div className="flex min-h-9 flex-wrap items-center justify-between gap-[var(--app-shell-gap)] rounded-lg border border-border/70 bg-muted/10 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-          <AdAccountSelector
-            brandId={brandProfileId}
-            selectedAccountId={selectedAdAccount}
-            onSelect={setSelectedAdAccount}
-            initialTimelineAccounts={initialAccounts}
-          />
+          <div data-tour-id="paid-account-selector" className="inline-flex">
+            <AdAccountSelector
+              brandId={brandProfileId}
+              selectedAccountId={selectedAdAccount}
+              onSelect={setSelectedAdAccount}
+              initialTimelineAccounts={initialAccounts}
+            />
+          </div>
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             <ReportJobsBell brandProfileId={brandProfileId} />
             {activeTab === "jaina" ? (
@@ -360,7 +362,7 @@ export default function PaidMediaClientPage({
               isJainaFullscreen && "fixed inset-0 z-50 rounded-none border-none"
             )}
           >
-            <div className="min-w-0 flex-1">
+            <div className="min-h-0 min-w-0 flex-1">
               <JainaChatSurface
                 brandProfileId={brandProfileId}
                 brandName={brandName}

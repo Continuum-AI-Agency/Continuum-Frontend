@@ -51,6 +51,7 @@ import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge
 import { getLocalStorageJSON } from "@/lib/storage"
 import { CalendarToolbar } from "./CalendarToolbar"
 import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
+import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore"
 import {
   Tooltip,
   TooltipContent,
@@ -164,6 +165,17 @@ export function OrganicCalendarWorkspaceClient({
       setWeekCache: state.setWeekCache,
     }))
   )
+
+  // The tour provider requests a calendar viewMode via the shared store on
+  // step change (e.g. step 2 needs the list view). Depend on requestId so a
+  // repeated request for the same view still fires.
+  const requestedTourCalendarView = useTourTabStore((state) => state.organicCalendarView)
+  const tourRequestId = useTourTabStore((state) => state.requestId)
+  React.useEffect(() => {
+    if (!requestedTourCalendarView || requestedTourCalendarView === viewMode) return
+    setViewMode(requestedTourCalendarView)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTourCalendarView, tourRequestId])
 
   React.useEffect(() => {
     const igAccountId = instagramAccountId ?? platformAccountIds.instagram ?? null
@@ -721,6 +733,7 @@ export function OrganicCalendarWorkspaceClient({
                 {viewMode === "list" && (
                   <motion.div
                     key="view-list"
+                    data-tour-id="organic-list"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -817,10 +830,7 @@ export function OrganicCalendarWorkspaceClient({
                   </div>
                 </div>
 
-                <div
-                  data-tour-id="organic-draft-preview"
-                  className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80"
-                >
+                <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-border/45 bg-background/80">
                   <OrganicDraftPreview
                     draft={selectedDraft}
                     brandName={brandName}

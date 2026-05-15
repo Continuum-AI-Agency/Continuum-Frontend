@@ -1915,7 +1915,7 @@ export function CampaignAdSetWorkspace({
                   className="h-8 border-sidebar-border/70 bg-sidebar-accent/30 text-xs"
                   aria-label="Search campaigns and indexes"
                 />
-                <div className="flex items-center gap-1">
+                <div data-tour-id="paid-campaign-selector" className="flex items-center gap-1">
                   <Button
                     size="xs"
                     variant={railEntityFilter === "all" ? "secondary" : "ghost"}

@@ -82,6 +82,7 @@ export function CalendarToolbar({
                     type="button"
                     size="sm"
                     variant={viewMode === mode ? "secondary" : "ghost"}
+                    data-tour-id={mode === "list" ? "organic-list-view" : undefined}
                     className={viewMode === mode
                       ? "h-7 rounded px-2.5 text-xs"
                       : "h-7 rounded px-2.5 text-xs text-muted-foreground hover:text-foreground"

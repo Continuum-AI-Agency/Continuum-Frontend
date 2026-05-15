@@ -646,6 +646,19 @@ function Flow({
     }
   }, [brandProfileId, setBrandId]);
 
+  // When the walkthrough seeds starter nodes, frame them so the tour's node
+  // steps always have an on-screen target. Runs once per Flow instance.
+  const hasFitTourSeedRef = useRef(false);
+  useEffect(() => {
+    if (hasFitTourSeedRef.current) return;
+    if (!nodes.some((node) => node.data?.isTourSeed === true)) return;
+    hasFitTourSeedRef.current = true;
+    const handle = requestAnimationFrame(() => {
+      fitView({ padding: 0.2, duration: 0 });
+    });
+    return () => cancelAnimationFrame(handle);
+  }, [nodes, fitView]);
+
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
@@ -1467,17 +1480,19 @@ export function StudioCanvas({
                 <span className="font-normal text-muted-foreground">Studio</span>
               </div>
               <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
-              <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
-                <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} />
-                <div className="mx-1 h-4 w-px bg-primary/20" />
-                <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as never} />
+              <div data-tour-id="studio-multiplayer" className="flex items-center gap-4">
+                <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
+                  <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} />
+                  <div className="mx-1 h-4 w-px bg-primary/20" />
+                  <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as never} />
+                </div>
+                <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
+                <CanvasRoomsTabs
+                  brandProfileId={brandProfileId || ''}
+                  activeRoomId={activeRoomId}
+                  onRoomChange={setActiveRoomId}
+                />
               </div>
-              <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
-              <CanvasRoomsTabs
-                brandProfileId={brandProfileId || ''}
-                activeRoomId={activeRoomId}
-                onRoomChange={setActiveRoomId}
-              />
             </div>
 
             <div className="flex items-center gap-2">

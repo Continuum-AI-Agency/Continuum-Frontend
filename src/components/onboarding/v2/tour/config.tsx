@@ -80,7 +80,7 @@ export const dashboardTour: Tour = {
         "Flip to the Paid view to see ad performance and automated optimizations alongside your organic numbers."
       ),
       selector: "[data-tour-id='dashboard-paid-toggle']",
-      side: "bottom",
+      side: "bottom-right",
       showControls: true,
       showSkip: true,
     },
@@ -116,7 +116,7 @@ export const aiCanvasTour: Tour = {
       icon: "🎨",
       title: "This is your canvas",
       content: paragraph(
-        "Compose images, video, and copy as connected blocks. We dropped in a starter flow so you can see how it fits together."
+        "Compose images, video, and copy as connected blocks. We dropped in a starter flow below so you can see how it fits together."
       ),
       selector: "[data-tour-id='studio-canvas']",
       side: "bottom",
@@ -125,9 +125,9 @@ export const aiCanvasTour: Tour = {
     },
     {
       icon: "🖼️",
-      title: "Start with a reference",
+      title: "Start with a reference image",
       content: paragraph(
-        "Drop in a reference image to anchor the look. Anything generated downstream stays on-brand against it."
+        "Drop an image here to anchor the look. Right-click anywhere on the canvas to add more nodes like this one whenever you need them."
       ),
       selector: "[data-tour-id='studio-node-reference-image']",
       side: "right",
@@ -163,6 +163,17 @@ export const aiCanvasTour: Tour = {
         "Hit Run Flow to execute every connected block. Your first on-brand image lands right in the generator."
       ),
       selector: "[data-tour-id='studio-run-flow']",
+      side: "bottom-right",
+      showControls: true,
+      showSkip: true,
+    },
+    {
+      icon: "🤝",
+      title: "And all of this is Multiplayer!",
+      content: paragraph(
+        "See teammates online here and switch between shared workspaces. Cursors and edits sync live — collaborate on the same flow at the same time."
+      ),
+      selector: "[data-tour-id='studio-multiplayer']",
       side: "bottom",
       showControls: true,
       showSkip: true,
@@ -173,28 +184,6 @@ export const aiCanvasTour: Tour = {
 export const organicTour: Tour = {
   tour: TOUR_ORGANIC,
   steps: [
-    {
-      icon: "🗂️",
-      title: "Your organic workspace",
-      content: paragraph(
-        "Everything for social lives behind these three tabs — Planner, Metrics, and Agent. We'll walk each one."
-      ),
-      selector: "[data-tour-id='organic-tabs']",
-      side: "bottom",
-      showControls: true,
-      showSkip: true,
-    },
-    {
-      icon: "📊",
-      title: "Track what's working",
-      content: paragraph(
-        "Metrics shows reach, engagement, and your top posts across every connected platform — no spreadsheets."
-      ),
-      selector: "[data-tour-id='organic-metrics-dashboard']",
-      side: "top",
-      showControls: true,
-      showSkip: true,
-    },
     {
       icon: "🗓️",
       title: "Plan on one calendar",
@@ -207,13 +196,46 @@ export const organicTour: Tour = {
       showSkip: true,
     },
     {
-      icon: "📝",
-      title: "Drafts land here",
+      icon: "📋",
+      title: "Or switch to the list view",
       content: paragraph(
-        "New and AI-generated drafts collect in this panel. Edit, approve, and schedule them straight onto the calendar."
+        "Click List to see every post as a flat, sortable list instead of a calendar grid."
       ),
-      selector: "[data-tour-id='organic-draft-preview']",
-      side: "right",
+      selector: "[data-tour-id='organic-list-view']",
+      side: "bottom",
+      showControls: true,
+      showSkip: true,
+    },
+    {
+      icon: "📝",
+      title: "Drafts, scheduled, and posted",
+      content: paragraph(
+        "The list groups everything by status — backlog, drafts, scheduled, and published — so you can sweep through each pile in order."
+      ),
+      selector: "[data-tour-id='organic-list']",
+      side: "top",
+      showControls: true,
+      showSkip: true,
+    },
+    {
+      icon: "📊",
+      title: "Jump to Metrics",
+      content: paragraph(
+        "Click Metrics to see reach, engagement, and top posts across every connected platform."
+      ),
+      selector: "[data-tour-id='organic-metrics-tab']",
+      side: "bottom",
+      showControls: true,
+      showSkip: true,
+    },
+    {
+      icon: "📈",
+      title: "Track what's working",
+      content: paragraph(
+        "Metrics shows performance side-by-side across platforms — no spreadsheets, updated automatically."
+      ),
+      selector: "[data-tour-id='organic-metrics-dashboard']",
+      side: "top",
       showControls: true,
       showSkip: true,
     },
@@ -221,10 +243,10 @@ export const organicTour: Tour = {
       icon: "🤖",
       title: "Let the agent help",
       content: paragraph(
-        "Ask the Organic agent to draft posts from trends, your brand DNA, and what's performing — then send them to Planner."
+        "Ask the Organic agent to draft posts from trends, your brand DNA, and what's performing — then send them straight to the Planner."
       ),
       selector: "[data-tour-id='organic-agent-panel']",
-      side: "left",
+      side: "top",
       showControls: true,
       showSkip: true,
     },
@@ -234,6 +256,28 @@ export const organicTour: Tour = {
 export const paidMediaTour: Tour = {
   tour: TOUR_PAID_MEDIA,
   steps: [
+    {
+      icon: "🏦",
+      title: "Pick an ad account",
+      content: paragraph(
+        "Switch ad accounts here. Everything below — metrics, insights, alerts — refocuses on whichever account you select."
+      ),
+      selector: "[data-tour-id='paid-account-selector']",
+      side: "bottom",
+      showControls: true,
+      showSkip: true,
+    },
+    {
+      icon: "🎯",
+      title: "Filter and pick campaigns",
+      content: paragraph(
+        "Narrow the rail to All, Indexes, or Campaigns, then select the ones you want to compare and chart."
+      ),
+      selector: "[data-tour-id='paid-campaign-selector']",
+      side: "right",
+      showControls: true,
+      showSkip: true,
+    },
     {
       icon: "📈",
       title: "Performance at a glance",

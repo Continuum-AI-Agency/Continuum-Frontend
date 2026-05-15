@@ -114,10 +114,7 @@ export function OrganicWorkspaceTabs({
 
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border bg-background">
-      <div
-        data-tour-id="organic-tabs"
-        className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]"
-      >
+      <div className="flex min-h-10 items-center justify-between gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <SurfaceTourTrigger tourName={TOUR_ORGANIC} ready={tourReady} />
         <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
@@ -129,6 +126,7 @@ export function OrganicWorkspaceTabs({
               <button
                 key={view}
                 type="button"
+                data-tour-id={view === "metrics" ? "organic-metrics-tab" : undefined}
                 onClick={() => handleValueChange(view)}
                 className={cn(
                   "h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm",

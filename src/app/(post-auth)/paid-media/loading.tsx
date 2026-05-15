@@ -1,6 +1,6 @@
 export default function PaidMediaShellSkeleton() {
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
+    <div className="grid h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden px-0 py-2">
       <div className="flex min-h-10 items-center justify-between rounded-lg border border-border/70 bg-muted/10 px-3 py-1.5">
         <div className="h-8 w-[min(18rem,45vw)] animate-pulse rounded-md bg-muted" />
         <div className="h-8 w-[min(22rem,48vw)] animate-pulse rounded-md bg-muted" />
