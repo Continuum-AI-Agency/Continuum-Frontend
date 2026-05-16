@@ -46,6 +46,20 @@ export type AssignmentsDialogProps = {
   onSaved?: () => Promise<void> | void;
 };
 
+function getAssetSelectionId(asset: SelectableAsset): string | null {
+  return asset.integration_account_id || asset.asset_pk || null;
+}
+
+function countSelectedAssets(
+  assets: SelectableAsset[],
+  selectedById: Record<string, boolean>
+): number {
+  return assets.reduce((count: number, asset: SelectableAsset) => {
+    const id = getAssetSelectionId(asset);
+    return id && selectedById[id] ? count + 1 : count;
+  }, 0);
+}
+
 export function AssignmentsDialog({
   open,
   onOpenChange,
@@ -98,8 +112,10 @@ export function AssignmentsDialog({
     const assignedSet = new Set(assignedIds);
     const defaults: Record<string, boolean> = {};
     selectableAssets.forEach((asset: SelectableAsset) => {
-      const id = asset.integration_account_id || asset.asset_pk;
-      defaults[id] = assignedSet.has(id);
+      const id = getAssetSelectionId(asset);
+      if (id) {
+        defaults[id] = assignedSet.has(id);
+      }
     });
     setSelectedById(defaults);
   }, [open, assignedIds, selectableAssets]);
@@ -137,8 +153,10 @@ export function AssignmentsDialog({
     setSelectedById((prev) => {
       const next = { ...prev };
       assets.forEach((asset: SelectableAsset) => {
-        const id = asset.integration_account_id || asset.asset_pk;
-        next[id] = checked;
+        const id = getAssetSelectionId(asset);
+        if (id) {
+          next[id] = checked;
+        }
       });
       return next;
     });
@@ -278,13 +296,9 @@ export function AssignmentsDialog({
                                 Boolean(asset.integration_account_id)
                               );
 
-                              const selectedCount = selectionAssets.reduce(
-                                (count: number, asset: SelectableAsset) =>
-                                  asset.integration_account_id &&
-                                  selectedById[asset.integration_account_id]
-                                    ? count + 1
-                                    : count,
-                                0
+                              const selectedCount = countSelectedAssets(
+                                selectionAssets,
+                                selectedById
                               );
                               const totalSelectable = selectionAssets.length;
                               const allSelected =
@@ -353,8 +367,7 @@ export function AssignmentsDialog({
                                       <ShadcnTable>
                                         <ShadcnTableBody>
                                           {bundle.assets.map((asset: SelectableAsset) => {
-                                            const id =
-                                              asset.integration_account_id || asset.asset_pk;
+                                            const id = getAssetSelectionId(asset);
                                             const icon = PlatformIcon({ platform: asset.type });
                                             const isSubItem = Boolean(asset.ad_account_id);
 
@@ -429,6 +442,140 @@ export function AssignmentsDialog({
                                 </Accordion.Item>
                               );
                             })}
+                            {metaBundles.assets_without_ad_account.length > 0 ? (
+                              <Accordion.Item
+                                value="meta-standalone-assets"
+                                className="border rounded-lg overflow-hidden border-white/10 bg-muted/20"
+                              >
+                                <Accordion.Header>
+                                  <Flex justify="between" align="center" p="3">
+                                    <Flex align="center" gap="3" className="min-w-0">
+                                      <Checkbox
+                                        checked={
+                                          countSelectedAssets(
+                                            metaBundles.assets_without_ad_account,
+                                            selectedById
+                                          ) === metaBundles.assets_without_ad_account.length
+                                        }
+                                        disabled={isSaving}
+                                        onCheckedChange={(value) => {
+                                          handleToggleSelectableAssets(
+                                            metaBundles.assets_without_ad_account,
+                                            value === true
+                                          );
+                                        }}
+                                      />
+                                      <Box className="min-w-0">
+                                        <Text
+                                          size="2"
+                                          weight="bold"
+                                          className="text-black truncate block"
+                                        >
+                                          Standalone Meta accounts
+                                        </Text>
+                                        <Text
+                                          size="1"
+                                          color="gray"
+                                          className="truncate block opacity-60"
+                                        >
+                                          Accounts not attached to a Meta ad account
+                                        </Text>
+                                      </Box>
+                                    </Flex>
+                                    <Flex align="center" gap="3">
+                                      <Badge
+                                        color={
+                                          countSelectedAssets(
+                                            metaBundles.assets_without_ad_account,
+                                            selectedById
+                                          ) > 0
+                                            ? "indigo"
+                                            : "gray"
+                                        }
+                                        variant="soft"
+                                      >
+                                        {countSelectedAssets(
+                                          metaBundles.assets_without_ad_account,
+                                          selectedById
+                                        )}
+                                        /{metaBundles.assets_without_ad_account.length}
+                                      </Badge>
+                                      <Accordion.Trigger asChild>
+                                        <IconButton
+                                          variant="ghost"
+                                          color="gray"
+                                          size="1"
+                                          className="group"
+                                        >
+                                          <ChevronDownIcon className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                                        </IconButton>
+                                      </Accordion.Trigger>
+                                    </Flex>
+                                  </Flex>
+                                </Accordion.Header>
+                                <Accordion.Content>
+                                  <div className="px-3 pb-3 pt-1 border-t border-white/5">
+                                    <ShadcnTable>
+                                      <ShadcnTableBody>
+                                        {metaBundles.assets_without_ad_account.map(
+                                          (asset: SelectableAsset) => {
+                                            const id = getAssetSelectionId(asset);
+                                            const icon = PlatformIcon({ platform: asset.type });
+
+                                            return (
+                                              <ShadcnTableRow
+                                                key={asset.asset_pk}
+                                                className="border-none hover:bg-muted/50"
+                                              >
+                                                <ShadcnTableCell className="py-2 pl-8">
+                                                  <Flex align="center" gap="3">
+                                                    <Checkbox
+                                                      checked={!!id && selectedById[id]}
+                                                      disabled={isSaving || !id}
+                                                      onCheckedChange={(v) =>
+                                                        id && handleToggle(id, v === true)
+                                                      }
+                                                    />
+                                                    <Box className="min-w-0">
+                                                      <Text
+                                                        size="2"
+                                                        className="text-black font-bold"
+                                                      >
+                                                        {getSelectableAssetLabel(asset)}
+                                                      </Text>
+                                                      <Text
+                                                        size="1"
+                                                        color="gray"
+                                                        className="block opacity-50 font-mono"
+                                                        style={{ fontSize: "10px" }}
+                                                      >
+                                                        ID: {asset.external_id || asset.asset_pk}
+                                                      </Text>
+                                                    </Box>
+                                                  </Flex>
+                                                </ShadcnTableCell>
+                                                <ShadcnTableCell className="py-2 text-right">
+                                                  {icon || (
+                                                    <Badge
+                                                      color="gray"
+                                                      variant="outline"
+                                                      size="1"
+                                                      className="text-[10px] uppercase opacity-70 text-slate-300 border-slate-700"
+                                                    >
+                                                      {asset.type.replace("meta_", "")}
+                                                    </Badge>
+                                                  )}
+                                                </ShadcnTableCell>
+                                              </ShadcnTableRow>
+                                            );
+                                          }
+                                        )}
+                                      </ShadcnTableBody>
+                                    </ShadcnTable>
+                                  </div>
+                                </Accordion.Content>
+                              </Accordion.Item>
+                            ) : null}
                           </Accordion.Root>
                         </div>
                       </Accordion.Content>
@@ -465,10 +612,7 @@ export function AssignmentsDialog({
                             .filter(({ key }) => ["googleAds", "youtube", "dv360"].includes(key))
                             .map(({ key, label }) => {
                               const assets = groupedAssets[key] ?? [];
-                              const selectedCount = assets.reduce((count: number, asset: SelectableAsset) => {
-                                const id = asset.integration_account_id || asset.asset_pk;
-                                return id && selectedById[id] ? count + 1 : count;
-                              }, 0);
+                              const selectedCount = countSelectedAssets(assets, selectedById);
                               const totalSelectable = assets.length;
                               const allSelected =
                                 totalSelectable > 0 && selectedCount === totalSelectable;
@@ -526,8 +670,7 @@ export function AssignmentsDialog({
                                       <ShadcnTable>
                                         <ShadcnTableBody>
                                           {assets.map((asset: SelectableAsset) => {
-                                            const id =
-                                              asset.integration_account_id || asset.asset_pk;
+                                            const id = getAssetSelectionId(asset);
                                             return (
                                               <ShadcnTableRow
                                                 key={asset.asset_pk}
@@ -642,10 +785,7 @@ export function AssignmentsDialog({
                             )
                             .map(({ key, label }) => {
                               const assets = groupedAssets[key] ?? [];
-                              const selectedCount = assets.reduce((count: number, asset: SelectableAsset) => {
-                                const id = asset.integration_account_id || asset.asset_pk;
-                                return id && selectedById[id] ? count + 1 : count;
-                              }, 0);
+                              const selectedCount = countSelectedAssets(assets, selectedById);
                               const totalSelectable = assets.length;
                               const allSelected =
                                 totalSelectable > 0 && selectedCount === totalSelectable;
@@ -703,8 +843,7 @@ export function AssignmentsDialog({
                                       <ShadcnTable>
                                         <ShadcnTableBody>
                                           {assets.map((asset: SelectableAsset) => {
-                                            const id =
-                                              asset.integration_account_id || asset.asset_pk;
+                                            const id = getAssetSelectionId(asset);
                                             return (
                                               <ShadcnTableRow
                                                 key={asset.asset_pk}
