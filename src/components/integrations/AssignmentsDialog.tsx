@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Badge,
   Box,
@@ -16,10 +17,10 @@ import * as Accordion from "@radix-ui/react-accordion";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import {
-  applyBrandAssignmentsDirect,
   useUserIntegrationAssets,
   type UserIntegrationAssetRow,
 } from "@/lib/api/integrations";
+import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import {
@@ -69,6 +70,7 @@ export function AssignmentsDialog({
   onSaved,
 }: AssignmentsDialogProps) {
   const { show } = useToast();
+  const router = useRouter();
   const userAssetsQuery = useUserIntegrationAssets();
   const [isSaving, setIsSaving] = useState(false);
 
@@ -165,8 +167,12 @@ export function AssignmentsDialog({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const result = await applyBrandAssignmentsDirect(brandProfileId, desiredAssetIds);
+      const result = await applyBrandIntegrationAssignmentsAction(
+        brandProfileId,
+        desiredAssetIds,
+      );
       onOpenChange(false);
+      router.refresh();
       await onSaved?.();
       show({
         title: "Assignments updated",

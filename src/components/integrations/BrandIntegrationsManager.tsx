@@ -16,12 +16,12 @@ import { RefreshCw } from "lucide-react";
 import { PLATFORMS, type PlatformKey } from "@/components/onboarding/platforms";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import {
-  applyBrandAssignmentsDirect,
   fetchUserTikTokAccountIds,
   useStartGoogleSync,
   useStartMetaSync,
   useStartTikTokSync,
 } from "@/lib/api/integrations";
+import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
 import { useToast } from "@/components/ui/ToastProvider";
 import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
 import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
@@ -140,7 +140,7 @@ export function BrandIntegrationsManager({
             try {
               const tiktokIds = await fetchUserTikTokAccountIds();
               if (tiktokIds.length > 0) {
-                await applyBrandAssignmentsDirect(brandProfileId, tiktokIds);
+                await applyBrandIntegrationAssignmentsAction(brandProfileId, tiktokIds);
                 show({
                   title: "TikTok connected",
                   description: "Account assigned to this brand.",

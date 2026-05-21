@@ -37,53 +37,35 @@ export const fetchBrandIntegrationSummary = cache(
   async (brandProfileId: string): Promise<BrandIntegrationSummary> => {
     const supabase = await createSupabaseServerClient();
 
-    // Primary path: RPC (single DB round-trip, no Edge Function HTTP overhead)
     const { data: rows, error: rpcError } = await supabase
       .schema("brand_profiles")
       .rpc("get_brand_integration_summary", {
         p_brand_profile_id: brandProfileId,
       });
 
-    if (!rpcError && rows) {
-      const summary = createEmptySummary();
-      for (const row of rows as Record<string, unknown>[]) {
-        const platformKey = row.platform_key as PlatformKey | null;
-        if (!platformKey || !PLATFORM_KEYS.includes(platformKey)) continue;
-
-        summary[platformKey].accounts.push({
-          assignmentId: row.assignment_id as string,
-          integrationAccountId: row.integration_account_id as string,
-          alias: (row.alias as string | null) ?? null,
-          name: (row.account_name as string) ?? "Account",
-          externalAccountId: (row.external_account_id as string | null) ?? null,
-          status: (row.account_status as string | null) ?? null,
-          linkedAt: (row.linked_at as string | null) ?? null,
-          providerIntegrationId: row.provider_integration_id as string,
-          type: (row.account_type as string | null) ?? null,
-          settings: (row.settings as Record<string, unknown> | null) ?? null,
-        });
-      }
-      return summary;
+    if (rpcError || !rows) {
+      console.error("[fetchBrandIntegrationSummary] RPC failed", rpcError);
+      return createEmptySummary();
     }
 
-    // Fallback: Edge Function (existing behavior, demoted from primary)
-    console.warn(
-      "[fetchBrandIntegrationSummary] RPC failed, falling back to edge function",
-      rpcError,
-    );
+    const summary = createEmptySummary();
+    for (const row of rows as Record<string, unknown>[]) {
+      const platformKey = row.platform_key as PlatformKey | null;
+      if (!platformKey || !PLATFORM_KEYS.includes(platformKey)) continue;
 
-    const { data, error } = await supabase.functions.invoke("fetch-brand-integrations", {
-      body: { brandId: brandProfileId },
-    });
-
-    if (!error && data?.summary) {
-      return data.summary as BrandIntegrationSummary;
+      summary[platformKey].accounts.push({
+        assignmentId: row.assignment_id as string,
+        integrationAccountId: row.integration_account_id as string,
+        alias: (row.alias as string | null) ?? null,
+        name: (row.account_name as string) ?? "Account",
+        externalAccountId: (row.external_account_id as string | null) ?? null,
+        status: (row.account_status as string | null) ?? null,
+        linkedAt: (row.linked_at as string | null) ?? null,
+        providerIntegrationId: row.provider_integration_id as string,
+        type: (row.account_type as string | null) ?? null,
+        settings: (row.settings as Record<string, unknown> | null) ?? null,
+      });
     }
-
-    console.error("[fetchBrandIntegrationSummary] All paths failed", {
-      rpcError,
-      edgeFunctionError: error,
-    });
-    return createEmptySummary();
+    return summary;
   },
 );

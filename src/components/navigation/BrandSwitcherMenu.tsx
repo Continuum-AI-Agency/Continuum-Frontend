@@ -1,12 +1,20 @@
 "use client";
 
 import React from "react";
-import { Avatar, Button, DropdownMenu, Switch, Text, TextField, Box, ScrollArea } from "@radix-ui/themes";
+import {
+  Button,
+  DropdownMenu,
+  Switch,
+  Text,
+  TextField,
+  Box,
+  ScrollArea,
+} from "@radix-ui/themes";
 import {
   CircleCheck,
+  Loader2,
   LogOut,
   Settings,
-  Layers,
   Plug,
   Moon,
   PlusCircle,
@@ -18,6 +26,7 @@ import { useTheme } from "@/components/theme-provider";
 import { createBrandProfileAction } from "@/app/(post-auth)/settings/actions";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { useSwitchBrand } from "@/hooks/useSwitchBrand";
+import { BrandAvatar } from "@/components/brand/BrandAvatar";
 import {
   getActiveBrandLabel,
   getBrandMenuItemLabel,
@@ -31,7 +40,13 @@ type BrandSwitcherMenuProps = {
 export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   const router = useRouter();
   const { logout, isPending } = useAuth();
-  const { activeBrandId, brandSummaries, isSwitching, user } = useActiveBrandContext();
+  const {
+    activeBrandId,
+    brandSummaries,
+    isSwitching,
+    switchingToBrandId,
+    user,
+  } = useActiveBrandContext();
   const switchBrand = useSwitchBrand();
   const { appearance, toggle } = useTheme();
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -40,7 +55,6 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
 
   const isAdmin = isAdminUser(user);
 
-  // Reset search query when menu closes
   React.useEffect(() => {
     if (!menuOpen) {
       setSearchQuery("");
@@ -48,27 +62,36 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
   }, [menuOpen]);
 
   const filteredBrands = brandSummaries.filter((brand) =>
-    getBrandMenuItemLabel(brand).toLowerCase().includes(searchQuery.toLowerCase())
+    getBrandMenuItemLabel(brand)
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase())
   );
 
+  const activeBrand = brandSummaries.find((b) => b.id === activeBrandId);
+  const activeBrandLabel = getActiveBrandLabel(brandSummaries, activeBrandId);
+  const activeBrandLogo = activeBrand?.logoUrl ?? null;
+
   return (
-    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+    <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
       <DropdownMenu.Trigger>
         <Button
           id={triggerId}
           variant="outline"
           size="2"
-          onMouseEnter={() => setMenuOpen(true)}
+          disabled={isSwitching}
           className="rounded-full border-[var(--border)] text-[var(--sidebar-foreground)] shadow-sm hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)]"
         >
-          <Avatar
-            size="2"
-            src={brandSummaries.find(b => b.id === activeBrandId)?.logoUrl ?? undefined}
-            fallback={<Layers className="h-4 w-4 stroke-[1.8]" />}
-            radius="full"
-            className="mr-2"
-          />
-          {getActiveBrandLabel(brandSummaries, activeBrandId)}
+          {isSwitching ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin stroke-[1.8]" aria-hidden />
+          ) : (
+            <BrandAvatar
+              name={activeBrandLabel}
+              logoUrl={activeBrandLogo}
+              size="sm"
+              className="mr-2"
+            />
+          )}
+          {activeBrandLabel}
         </Button>
       </DropdownMenu.Trigger>
 
@@ -80,7 +103,6 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
           color: "var(--popover-foreground)",
           borderColor: "var(--border)",
         }}
-        onMouseLeave={() => setMenuOpen(false)}
       >
         <Box p="2" pb="2">
           <TextField.Root
@@ -100,38 +122,47 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: "200px" }}>
           {filteredBrands.length === 0 ? (
             <Box p="2">
-              <Text size="2" className="pl-2 text-[color-mix(in_srgb,var(--popover-foreground)_64%,transparent)]">
+              <Text
+                size="2"
+                className="pl-2 text-[color-mix(in_srgb,var(--popover-foreground)_64%,transparent)]"
+              >
                 No brands found
               </Text>
             </Box>
           ) : (
-            filteredBrands.map((brand) => (
-              <DropdownMenu.Item
-                key={brand.id}
-                disabled={isSwitching}
-                onSelect={async (event) => {
-                  event.preventDefault();
-                  if (brand.id === activeBrandId) {
-                    return;
-                  }
-                  await switchBrand(brand.id);
-                }}
-                className="flex items-center justify-between gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
-              >
-                <div className="flex items-center gap-2">
-                  <Avatar
-                    size="1"
-                    src={brand.logoUrl ?? undefined}
-                    fallback={<Layers className="h-3.5 w-3.5 stroke-[1.8]" />}
-                    radius="full"
-                  />
-                  <Text weight={brand.id === activeBrandId ? "bold" : "regular"}>
-                    {getBrandMenuItemLabel(brand)}
-                  </Text>
-                </div>
-                {brand.id === activeBrandId ? <BadgeIndicator /> : null}
-              </DropdownMenu.Item>
-            ))
+            filteredBrands.map((brand) => {
+              const isActiveRow = brand.id === activeBrandId;
+              const isRowSwitching = switchingToBrandId === brand.id;
+              const label = getBrandMenuItemLabel(brand);
+              return (
+                <DropdownMenu.Item
+                  key={brand.id}
+                  disabled={isSwitching}
+                  onSelect={(event) => {
+                    if (isActiveRow) {
+                      event.preventDefault();
+                      return;
+                    }
+                    setMenuOpen(false);
+                    void switchBrand(brand.id);
+                  }}
+                  className="flex items-center justify-between gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
+                >
+                  <div className="flex items-center gap-2">
+                    <BrandAvatar name={label} logoUrl={brand.logoUrl ?? null} size="sm" />
+                    <Text weight={isActiveRow ? "bold" : "regular"}>{label}</Text>
+                  </div>
+                  {isRowSwitching ? (
+                    <Loader2
+                      className="h-3.5 w-3.5 animate-spin stroke-[1.8] text-[var(--popover-foreground)]"
+                      aria-hidden
+                    />
+                  ) : isActiveRow ? (
+                    <BadgeIndicator />
+                  ) : null}
+                </DropdownMenu.Item>
+              );
+            })
           )}
         </ScrollArea>
 
@@ -169,8 +200,8 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
 
         <DropdownMenu.Item
           className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
-          onSelect={(event) => {
-            event.preventDefault();
+          onSelect={() => {
+            setMenuOpen(false);
             router.push("/settings");
           }}
         >
@@ -180,8 +211,8 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
 
         <DropdownMenu.Item
           className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
-          onSelect={(event) => {
-            event.preventDefault();
+          onSelect={() => {
+            setMenuOpen(false);
             router.push("/settings/integrations");
           }}
         >
@@ -192,8 +223,8 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
         {isAdmin ? (
           <DropdownMenu.Item
             className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
-            onSelect={(event) => {
-              event.preventDefault();
+            onSelect={() => {
+              setMenuOpen(false);
               router.push("/admin");
             }}
           >
@@ -222,5 +253,10 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
 }
 
 function BadgeIndicator() {
-  return <span className="inline-flex h-2 w-2 rounded-full bg-violet-500" aria-hidden="true" />;
+  return (
+    <span
+      className="inline-flex h-2 w-2 rounded-full bg-violet-500"
+      aria-hidden="true"
+    />
+  );
 }

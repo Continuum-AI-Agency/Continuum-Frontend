@@ -1,4 +1,3 @@
-import * as React from "react";
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
@@ -16,7 +15,7 @@ global.cancelAnimationFrame = (id: number) => window.clearTimeout(id);
 global.MutationObserver = window.MutationObserver;
 global.NodeFilter = window.NodeFilter;
 
-const applyBrandAssignmentsDirectMock = mock(
+const applyBrandIntegrationAssignmentsActionMock = mock(
   async (_brandProfileId: string, desiredAccountIds: string[]) => ({
     linked: desiredAccountIds.length,
   })
@@ -29,7 +28,18 @@ mock.module("@/lib/api/integrations", () => ({
     data: userAssets,
     isLoading: false,
   }),
-  applyBrandAssignmentsDirect: applyBrandAssignmentsDirectMock,
+}));
+
+mock.module("@/app/(post-auth)/settings/integrations/actions", () => ({
+  applyBrandIntegrationAssignmentsAction: applyBrandIntegrationAssignmentsActionMock,
+}));
+
+mock.module("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: mock(() => undefined),
+    push: mock(() => undefined),
+    replace: mock(() => undefined),
+  }),
 }));
 
 mock.module("@/components/ui/ToastProvider", () => ({
@@ -45,7 +55,7 @@ const emptySummary = {} as BrandIntegrationSummary;
 describe("AssignmentsDialog", () => {
   beforeEach(() => {
     cleanup();
-    applyBrandAssignmentsDirectMock.mockClear();
+    applyBrandIntegrationAssignmentsActionMock.mockClear();
     userAssets = [
       {
         id: "ig-account-1",
@@ -79,7 +89,7 @@ describe("AssignmentsDialog", () => {
 
     expect(screen.getByText("Continuum Instagram")).toBeTruthy();
     expect(screen.getByText("Accounts not attached to a Meta ad account")).toBeTruthy();
-    expect(applyBrandAssignmentsDirectMock).toHaveBeenCalledWith("brand-1", [
+    expect(applyBrandIntegrationAssignmentsActionMock).toHaveBeenCalledWith("brand-1", [
       "ig-account-1",
     ]);
   });

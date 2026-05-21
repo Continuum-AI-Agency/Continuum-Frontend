@@ -4,29 +4,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 
 async function fetchIntegrations(brandId: string): Promise<BrandIntegrationSummary> {
-  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
-  const supabase = createSupabaseBrowserClient();
-  
-  const { data, error } = await supabase.functions.invoke("fetch-brand-integrations", {
-    body: { brandId },
-  });
+  const response = await fetch(
+    `/api/brand-integrations?brand=${encodeURIComponent(brandId)}`,
+    { method: "GET", cache: "no-store" }
+  );
 
-  if (error || !data?.summary) {
-    console.error("[useBrandIntegrations] Edge function failed", error);
-    // Fallback to internal API route if edge function is not deployed or fails
-    const response = await fetch(`/api/brand-integrations?brand=${encodeURIComponent(brandId)}`, {
-      method: "GET",
-    });
-
-    if (!response.ok) {
-      throw new Error("Unable to load integrations");
-    }
-
-    const json = await response.json();
-    return json.summary as BrandIntegrationSummary;
+  if (!response.ok) {
+    throw new Error("Unable to load integrations");
   }
 
-  return data.summary as BrandIntegrationSummary;
+  const json = (await response.json()) as { summary?: BrandIntegrationSummary };
+  if (!json.summary) {
+    throw new Error("Malformed integrations response");
+  }
+  return json.summary;
 }
 
 export function useBrandIntegrations(brandId?: string, initialData?: BrandIntegrationSummary) {
@@ -34,15 +25,21 @@ export function useBrandIntegrations(brandId?: string, initialData?: BrandIntegr
 
   const query = useQuery({
     queryKey: ["brand-integrations", brandId],
-    queryFn: () => (brandId ? fetchIntegrations(brandId) : Promise.resolve(initialData ?? ({} as BrandIntegrationSummary))),
+    queryFn: () =>
+      brandId
+        ? fetchIntegrations(brandId)
+        : Promise.resolve(initialData ?? ({} as BrandIntegrationSummary)),
     enabled: Boolean(brandId),
-    initialData: initialData,
+    initialData,
   });
 
   return {
     integrations: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
-    refresh: () => (brandId ? queryClient.invalidateQueries({ queryKey: ["brand-integrations", brandId] }) : Promise.resolve()),
+    refresh: () =>
+      brandId
+        ? queryClient.invalidateQueries({ queryKey: ["brand-integrations", brandId] })
+        : Promise.resolve(),
   };
 }

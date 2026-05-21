@@ -356,56 +356,6 @@ export async function unassignBrandIntegrationAccount(
   if (error) throw new Error(error.message);
 }
 
-export async function applyBrandAssignmentsDirect(
-  brandId: string,
-  desiredAccountIds: string[]
-): Promise<{ linked: number }> {
-  const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
-  const supabase = createSupabaseBrowserClient();
-
-  // Fetch current assignments for this brand
-  const { data: existing, error: fetchError } = await supabase
-    .schema("brand_profiles")
-    .from("brand_profile_integration_accounts")
-    .select("id, integration_account_id")
-    .eq("brand_profile_id", brandId);
-
-  if (fetchError) throw new Error(fetchError.message);
-
-  const existingIds = new Set((existing ?? []).map((r: { integration_account_id: string }) => r.integration_account_id));
-  const desiredSet = new Set(desiredAccountIds);
-
-  // Delete removed assignments
-  const toRemove = (existing ?? []).filter(
-    (r: { integration_account_id: string }) => !desiredSet.has(r.integration_account_id)
-  );
-  if (toRemove.length > 0) {
-    const { error: deleteError } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profile_integration_accounts")
-      .delete()
-      .in("id", toRemove.map((r: { id: string }) => r.id));
-    if (deleteError) throw new Error(deleteError.message);
-  }
-
-  // Insert new assignments
-  const toAdd = desiredAccountIds.filter((id) => !existingIds.has(id));
-  if (toAdd.length > 0) {
-    const { error: insertError } = await supabase
-      .schema("brand_profiles")
-      .from("brand_profile_integration_accounts")
-      .insert(
-        toAdd.map((accountId) => ({
-          brand_profile_id: brandId,
-          integration_account_id: accountId,
-        }))
-      );
-    if (insertError) throw new Error(insertError.message);
-  }
-
-  return { linked: desiredAccountIds.length };
-}
-
 export async function fetchUserTikTokAccountIds(): Promise<string[]> {
   const { createSupabaseBrowserClient } = await import("@/lib/supabase/client");
   const supabase = createSupabaseBrowserClient();

@@ -52,44 +52,46 @@ export function SettingsShell({
   );
 
   return (
-    <Tabs.Root
-      orientation="vertical"
-      value={section}
-      onValueChange={handleChange}
-      className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10"
-    >
-      <SwitchingIndicator />
-      <div className="flex items-center justify-between lg:hidden">
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Menu className="h-4 w-4" />
-              Sections
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-72 px-3 py-6">
-            <SheetTitle className="sr-only">Settings sections</SheetTitle>
-            <SettingsNav brandPill={brandPill} accountPill={accountPill} />
-          </SheetContent>
-        </Sheet>
-      </div>
-
-      <aside className="hidden lg:block">
-        <div className="sticky top-24">
-          <SettingsNav brandPill={brandPill} accountPill={accountPill} />
+    <div className="@container/settings">
+      <Tabs.Root
+        orientation="vertical"
+        value={section}
+        onValueChange={handleChange}
+        className="grid grid-cols-1 gap-[var(--shell-stack-gap)] @[56rem]/settings:grid-cols-[minmax(var(--shell-secondary-w-min),18%)_minmax(0,1fr)] @[56rem]/settings:gap-[clamp(1.5rem,2.5vw,2.5rem)]"
+      >
+        <SwitchingIndicator />
+        <div className="flex items-center justify-between @[56rem]/settings:hidden">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Menu className="h-4 w-4" />
+                Sections
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[var(--shell-secondary-w)] px-3 py-6">
+              <SheetTitle className="sr-only">Settings sections</SheetTitle>
+              <SettingsNav brandPill={brandPill} accountPill={accountPill} />
+            </SheetContent>
+          </Sheet>
         </div>
-      </aside>
 
-      <div className="min-w-0 max-w-4xl">
-        <Tabs.Content
-          key={activeSection}
-          value={section}
-          className="space-y-6 outline-none data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
-        >
-          {section === activeSection ? activeSectionSlot : <SettingsSectionSkeleton />}
-        </Tabs.Content>
-      </div>
-    </Tabs.Root>
+        <aside className="hidden @[56rem]/settings:block">
+          <div className="sticky top-24">
+            <SettingsNav brandPill={brandPill} accountPill={accountPill} />
+          </div>
+        </aside>
+
+        <div className="min-w-0 max-w-[var(--shell-content-max)]">
+          <Tabs.Content
+            key={activeSection}
+            value={section}
+            className="space-y-6 outline-none data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
+          >
+            {section === activeSection ? activeSectionSlot : <SettingsSectionSkeleton />}
+          </Tabs.Content>
+        </div>
+      </Tabs.Root>
+    </div>
   );
 }
 

@@ -10,7 +10,6 @@ import {
   type IntegrationSwitcherTab,
 } from "@/components/shadcn-studio/card/integration-switcher";
 import {
-  applyBrandAssignmentsDirect,
   assignBrandIntegrationAccount,
   startGoogleSync,
   startMetaSync,
@@ -19,6 +18,7 @@ import {
   useUserIntegrationAssets,
   type UserIntegrationAssetRow,
 } from "@/lib/api/integrations";
+import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
 import { openCenteredPopup, waitForPopupClosed } from "@/lib/popup";
 import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -332,7 +332,7 @@ export function IntegrationsScreen({ onAdvance }: IntegrationsScreenProps) {
   const handleClearAll = useCallback(() => {
     startClearing(async () => {
       try {
-        await applyBrandAssignmentsDirect(brandId, []);
+        await applyBrandIntegrationAssignmentsAction(brandId, []);
         await refreshAssigned();
         trackOnboardingEvent("onboarding_assets_cleared", {});
       } catch (error) {

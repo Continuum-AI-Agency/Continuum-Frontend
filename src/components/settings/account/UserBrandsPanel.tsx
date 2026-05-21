@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import { Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BrandAvatar } from "@/components/brand/BrandAvatar";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 import { useSwitchBrand } from "@/hooks/useSwitchBrand";
 import type { BrandPermission, BrandSummary } from "@/components/DashboardLayoutShell";
@@ -79,24 +79,9 @@ function BrandRow({
   disabled,
   onSwitch,
 }: BrandRowProps) {
-  const initial = brand.name.trim().charAt(0).toUpperCase() || "?";
-
   return (
     <li className="flex items-center gap-3 px-4 py-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-sm font-semibold uppercase text-muted-foreground">
-        {brand.logoUrl ? (
-          <Image
-            src={brand.logoUrl}
-            alt=""
-            width={36}
-            height={36}
-            className="h-full w-full object-cover"
-            unoptimized
-          />
-        ) : (
-          initial
-        )}
-      </span>
+      <BrandAvatar name={brand.name} logoUrl={brand.logoUrl ?? null} size="lg" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium text-foreground">{brand.name}</p>
@@ -122,8 +107,16 @@ function BrandRow({
           size="sm"
           onClick={onSwitch}
           disabled={disabled || isPending}
+          className="gap-1.5"
         >
-          {isSwitching ? "Switching…" : "Switch"}
+          {isSwitching ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              Switching…
+            </>
+          ) : (
+            "Switch"
+          )}
         </Button>
       )}
     </li>
