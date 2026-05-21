@@ -30,6 +30,20 @@ global.DOMRect = (window as any).DOMRect;
 global.sessionStorage = window.sessionStorage as any;
 global.localStorage = window.localStorage as any;
 
+if (typeof globalThis.requestAnimationFrame !== "function") {
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback): number =>
+    setTimeout(() => cb(performance.now()), 16) as unknown as number;
+  globalThis.cancelAnimationFrame = (handle: number): void => {
+    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+  };
+}
+
+if (typeof globalThis.getComputedStyle !== "function") {
+  globalThis.getComputedStyle = ((): CSSStyleDeclaration => {
+    return { getPropertyValue: () => "" } as unknown as CSSStyleDeclaration;
+  }) as typeof globalThis.getComputedStyle;
+}
+
 mock.module("next/navigation", () => {
   return {
     useRouter: () => ({

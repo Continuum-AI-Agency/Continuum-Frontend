@@ -97,10 +97,10 @@ export function BudgetPacingWidget({ brandId, selectedAccountId, selectedMetric 
       data-tour-id="dashboard-budget-pacing"
       className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
     >
-      <div className="flex flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/20 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <h3 className="truncate text-xs font-semibold sm:text-sm">Budget Pace</h3>
-          <span className="whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+      <div className="flex flex-wrap items-center justify-between gap-[var(--app-shell-gap)] border-b border-border/70 bg-muted/15 px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-sm font-semibold tracking-tight">Budget Pace</h3>
+          <span className="whitespace-nowrap rounded-md border border-border/60 bg-background px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground tabular-nums">
             Spend vs target · {selectedRange}
           </span>
         </div>

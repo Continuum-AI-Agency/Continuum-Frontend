@@ -66,6 +66,9 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AdSet } from "./AdSetTable";
 import { mapActionLogsToTimelineMarkers } from "./actionMarkers";
+import { CreativeHoverCard } from "./creatives/CreativeHoverCard";
+import { CreativeRotationSheet } from "./creatives/CreativeRotationSheet";
+import { CREATIVE_SWAP_ACTION_TYPES, type OpenCreativeDetail } from "./creatives/types";
 import dynamic from "next/dynamic";
 import type {
   ObservabilityChartMarkerSelection,
@@ -206,8 +209,8 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
 };
 
 const CHART_HEIGHT_CLASS = "h-[clamp(260px,42svh,460px)]";
-const RAIL_HEIGHT_CLASS = "h-[clamp(340px,60svh,560px)]";
-const RAIL_SCROLL_HEIGHT_CLASS = "h-[clamp(300px,56svh,520px)]";
+const RAIL_HEIGHT_CLASS = "h-full";
+const RAIL_SCROLL_HEIGHT_CLASS = "h-full";
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
 
 function formatCurrency(value: number): string {
@@ -398,6 +401,8 @@ type MarkerTarget = {
   campaignId?: string | null;
   adSetId?: string | null;
   adId?: string | null;
+  actionType?: string;
+  sourceLogId?: string;
 };
 
 type PendingMarkerSelection = {
@@ -405,6 +410,8 @@ type PendingMarkerSelection = {
   adSetId?: string | null;
   adId?: string | null;
   time: UTCTimestamp;
+  actionType?: string;
+  sourceLogId?: string;
 };
 
 function markerScopeRank(scopeType: string | undefined): number {
@@ -426,12 +433,20 @@ function resolveMarkerTarget(selection: ObservabilityChartMarkerSelection): Mark
   const primary = sorted[0] ?? selection.marker;
   if (!primary) return null;
 
+  const creativeSwapMarker = sorted.find(
+    (marker) =>
+      typeof marker.actionType === "string" &&
+      (CREATIVE_SWAP_ACTION_TYPES as ReadonlyArray<string>).includes(marker.actionType)
+  );
+
   return {
     time: selection.time,
     scopeType: primary.scopeType,
     campaignId: primary.campaignId ?? null,
     adSetId: primary.adSetId ?? null,
     adId: primary.adId ?? null,
+    actionType: creativeSwapMarker?.actionType ?? primary.actionType,
+    sourceLogId: creativeSwapMarker?.sourceLogId ?? primary.sourceLogId,
   };
 }
 
@@ -611,6 +626,7 @@ export function CampaignAdSetWorkspace({
   const [selectedAdIds, setSelectedAdIds] = React.useState<string[]>([]);
   const [campaignChartFocusTime, setCampaignChartFocusTime] = React.useState<UTCTimestamp | null>(null);
   const [adSetChartFocusTime, setAdSetChartFocusTime] = React.useState<UTCTimestamp | null>(null);
+  const [openCreativeDetail, setOpenCreativeDetail] = React.useState<OpenCreativeDetail | null>(null);
   const hasSeededCompareSelectionRef = React.useRef(false);
   const inFlightAdLoadsRef = React.useRef(new Set<string>());
   const pendingMarkerSelectionRef = React.useRef<PendingMarkerSelection | null>(null);
@@ -1590,6 +1606,8 @@ export function CampaignAdSetWorkspace({
           adSetId: target.adSetId,
           adId: target.adId,
           time: selection.time,
+          actionType: target.actionType,
+          sourceLogId: target.sourceLogId,
         };
       }
     },
@@ -1618,7 +1636,17 @@ export function CampaignAdSetWorkspace({
           adSetId: target.adSetId,
           adId: target.adId,
           time: selection.time,
+          actionType: target.actionType,
+          sourceLogId: target.sourceLogId,
         };
+      }
+
+      if (
+        target.adId &&
+        target.actionType &&
+        (CREATIVE_SWAP_ACTION_TYPES as ReadonlyArray<string>).includes(target.actionType)
+      ) {
+        setOpenCreativeDetail({ adId: target.adId, focusLogId: target.sourceLogId });
       }
     },
     [applyAdSetSelectionById, onSelectedCampaignChange, scope?.id, scope?.type]
@@ -1658,12 +1686,36 @@ export function CampaignAdSetWorkspace({
       const exists = adState.ads.some((ad) => ad.id === pending.adId);
       if (exists) {
         setSelectedAdIds([pending.adId]);
+        if (
+          pending.actionType &&
+          (CREATIVE_SWAP_ACTION_TYPES as ReadonlyArray<string>).includes(pending.actionType)
+        ) {
+          setOpenCreativeDetail({ adId: pending.adId, focusLogId: pending.sourceLogId });
+        }
       }
     }
     pendingMarkerSelectionRef.current = null;
   }, [adsByAdSet, applyAdSetSelectionById, loadAdsForAdSet, scope?.id, scope?.type]);
 
+  const creativeDetailContext = React.useMemo(() => {
+    if (!openCreativeDetail) return null;
+    for (const state of Object.values(adsByAdSet)) {
+      const match = state.ads.find((entry) => entry.id === openCreativeDetail.adId);
+      if (!match) continue;
+      const adSetName = match.adsetId
+        ? scopedAdSetById.get(match.adsetId)?.name ?? null
+        : null;
+      return { ad: match, adSetName };
+    }
+    return { ad: null, adSetName: null };
+  }, [adsByAdSet, openCreativeDetail, scopedAdSetById]);
+
+  const handleCreativeSheetOpenChange = React.useCallback((next: boolean) => {
+    if (!next) setOpenCreativeDetail(null);
+  }, []);
+
   return (
+    <>
     <Card className="h-full min-h-[var(--dashboard-min-panel-height)] gap-0 overflow-hidden border-border/70 py-0">
       <div className="border-b border-border/70 bg-muted/20 px-2 py-1">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1745,9 +1797,9 @@ export function CampaignAdSetWorkspace({
         </div>
       </div>
 
-      <CardContent className="min-h-0 p-0">
+      <CardContent className="flex-1 min-h-0 p-0">
         {viewMode === "campaigns" ? (
-          <section className="grid min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="grid h-full min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="rounded-md border border-border/70 bg-card p-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
@@ -1906,7 +1958,7 @@ export function CampaignAdSetWorkspace({
               </ContextMenu>
             </div>
 
-            <aside className="rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <aside className="flex flex-col overflow-hidden rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="space-y-2 p-2">
                 <Input
                   value={campaignQuery}
@@ -1980,10 +2032,10 @@ export function CampaignAdSetWorkspace({
 
               <SidebarSeparator />
 
-              <SidebarContent className="gap-0 pb-2">
+              <SidebarContent className="gap-0 overflow-hidden pb-2">
                 {railEntityFilter === "all" ? (
                   <Command shouldFilter={false} className="h-full bg-transparent">
-                    <CommandList className={cn(RAIL_SCROLL_HEIGHT_CLASS, "px-1 pb-1")}>
+                    <CommandList className={cn(RAIL_SCROLL_HEIGHT_CLASS, "max-h-none px-1 pb-1")}>
                       {filteredIndexCards.length === 0 && filteredCampaigns.length === 0 ? (
                         <CommandEmpty>No campaigns or indexes match.</CommandEmpty>
                       ) : null}
@@ -2265,11 +2317,11 @@ export function CampaignAdSetWorkspace({
                     </ResizablePanel>
                   </ResizablePanelGroup>
                 ) : hasIndexRail ? (
-                  <SidebarGroup className="pt-1">
+                  <SidebarGroup className="flex-1 min-h-0 pt-1">
                     <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
                       Indexes
                     </SidebarGroupLabel>
-                    <SidebarGroupContent>
+                    <SidebarGroupContent className="flex flex-1 flex-col min-h-0">
                       <ScrollArea className={cn(RAIL_SCROLL_HEIGHT_CLASS, "px-1 pb-1")}>
                         {filteredIndexCards.map((entry) => {
                           const indexKey = `index:${entry.index.id}`;
@@ -2300,11 +2352,11 @@ export function CampaignAdSetWorkspace({
                     </SidebarGroupContent>
                   </SidebarGroup>
                 ) : (
-                  <SidebarGroup className="pt-1">
+                  <SidebarGroup className="flex-1 min-h-0 pt-1">
                     <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
                       Campaigns
                     </SidebarGroupLabel>
-                    <SidebarGroupContent>
+                    <SidebarGroupContent className="flex flex-1 flex-col min-h-0">
                       <ScrollArea className={cn(RAIL_SCROLL_HEIGHT_CLASS, "px-1 pb-1")}>
                         {filteredCampaigns.map((campaign) => {
                           const key = `campaign:${campaign.id}`;
@@ -2362,7 +2414,7 @@ export function CampaignAdSetWorkspace({
             </aside>
           </section>
         ) : (
-          <section className="grid min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="grid h-full min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-1.5">
               {adSetErrors.length > 0 ? (
                 <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -2604,8 +2656,21 @@ export function CampaignAdSetWorkspace({
                           const body = ad.creative?.body || "No copy available.";
 
                           return (
-                            <button
+                            <CreativeHoverCard
                               key={`creative-gallery-${ad.id}`}
+                              ad={{
+                                id: ad.id,
+                                name: ad.name,
+                                adSetName: focusedScopedAdSet?.name ?? null,
+                                status: ad.effectiveStatus ?? ad.status ?? null,
+                                creative: ad.creative ?? null,
+                              }}
+                              logs={actionLogs}
+                              onOpenDetail={(focusLogId) =>
+                                setOpenCreativeDetail({ adId: ad.id, focusLogId })
+                              }
+                            >
+                            <button
                               type="button"
                               onClick={() => toggleAdSelection(ad.id)}
                               disabled={atSelectionLimit}
@@ -2642,6 +2707,7 @@ export function CampaignAdSetWorkspace({
                                 </span>
                               </div>
                             </button>
+                            </CreativeHoverCard>
                           );
                         })}
                       </div>
@@ -2651,7 +2717,7 @@ export function CampaignAdSetWorkspace({
               </div>
             </div>
 
-            <aside className="rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <aside className="flex flex-col overflow-hidden rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="space-y-2 p-2">
                 <Button
                   variant="outline"
@@ -2690,7 +2756,7 @@ export function CampaignAdSetWorkspace({
 
               <SidebarSeparator />
 
-              <SidebarContent className="gap-0 pb-2">
+              <SidebarContent className="gap-0 overflow-hidden pb-2">
                 <SidebarGroup className="pt-1">
                   <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
                     Scope
@@ -2907,5 +2973,34 @@ export function CampaignAdSetWorkspace({
         )}
       </CardContent>
     </Card>
+    <CreativeRotationSheet
+      open={!!openCreativeDetail}
+      onOpenChange={handleCreativeSheetOpenChange}
+      ad={
+        creativeDetailContext?.ad
+          ? {
+              id: creativeDetailContext.ad.id,
+              name: creativeDetailContext.ad.name,
+              adSetName: creativeDetailContext.adSetName ?? null,
+              status:
+                creativeDetailContext.ad.effectiveStatus ??
+                creativeDetailContext.ad.status ??
+                null,
+              creative: creativeDetailContext.ad.creative ?? null,
+            }
+          : openCreativeDetail
+            ? {
+                id: openCreativeDetail.adId,
+                name: openCreativeDetail.adId,
+                adSetName: null,
+                status: null,
+                creative: null,
+              }
+            : null
+      }
+      logs={actionLogs}
+      focusLogId={openCreativeDetail?.focusLogId}
+    />
+    </>
   );
 }

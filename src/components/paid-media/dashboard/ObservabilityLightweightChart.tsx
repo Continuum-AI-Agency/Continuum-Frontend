@@ -51,6 +51,8 @@ export type ObservabilityChartMarker = {
   adId?: string | null;
   actionCount?: number;
   status?: ActionStatus;
+  actionType?: string;
+  sourceLogId?: string;
 };
 
 export type ObservabilityChartMarkerSelection = {

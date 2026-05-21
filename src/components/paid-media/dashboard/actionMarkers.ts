@@ -1,8 +1,21 @@
 import type { ActionLog, ActionStatus } from "@/lib/types/dco";
+import { CREATIVE_SWAP_ACTION_TYPES } from "./creatives/types";
 import type {
   ObservabilityChartMarker,
   ObservabilityChartPoint,
 } from "./ObservabilityLightweightChart";
+
+export function isCreativeSwapAction(log: ActionLog): boolean {
+  return CREATIVE_SWAP_ACTION_TYPES.includes(log.actionType);
+}
+
+function pickCreativeSwapLog(logs: ActionLog[]): ActionLog | null {
+  for (let index = logs.length - 1; index >= 0; index -= 1) {
+    const candidate = logs[index];
+    if (candidate && isCreativeSwapAction(candidate)) return candidate;
+  }
+  return null;
+}
 
 export type MarkerResolution = "daily" | "hourly";
 export type MarkerViewLayer = "campaign" | "adset" | "ad";
@@ -158,6 +171,7 @@ export function mapActionLogsToTimelineMarkers(
       const count = group.logs.length;
       const latest = group.logs[group.logs.length - 1];
       const uniqueActions = Array.from(new Set(group.logs.map((item) => item.actionType)));
+      const creativeSwapLog = pickCreativeSwapLog(group.logs);
       const scopeRef =
         latest.scopeType === "CAMPAIGN"
           ? latest.metaCampaignId ?? latest.scopeId
@@ -193,6 +207,8 @@ export function mapActionLogsToTimelineMarkers(
         adId,
         actionCount: count,
         status,
+        actionType: creativeSwapLog?.actionType ?? latest.actionType,
+        sourceLogId: creativeSwapLog?.id ?? latest.id,
       };
     });
 }
