@@ -1051,7 +1051,7 @@ function Flow({
           </Canvas>
         </ContextMenuTrigger>
 
-        <ContextMenuContent className="w-72">
+        <ContextMenuContent className="w-[clamp(14rem,18vw,18rem)]">
           <ContextMenuLabel>Canvas Actions</ContextMenuLabel>
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>

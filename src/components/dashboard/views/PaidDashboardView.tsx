@@ -223,7 +223,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   }, []);
 
   const reportingArea = (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--app-shell-gap)]">
+    <div className="flex flex-col gap-[var(--app-shell-gap)]">
       <div className="min-w-0">
         <PaidMediaReportingWidget
           brandId={brandId}
@@ -232,7 +232,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
           onSelectedMetricChange={setSelectedMetric}
         />
       </div>
-      <div className="min-w-0 min-h-0 overflow-hidden rounded-lg border bg-card">
+      <div className="min-w-0 min-h-[clamp(200px,28dvh,400px)] overflow-hidden rounded-lg border bg-card">
         <BudgetPacingWidget
           brandId={brandId}
           selectedAccountId={selectedAccountId}
@@ -248,7 +248,7 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
   }, []);
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
+    <div className="grid min-h-[clamp(500px,80dvh,1400px)] grid-cols-[minmax(0,1fr)_auto] gap-[var(--app-shell-gap)]">
       <div className="min-w-0">{reportingArea}</div>
 
       <AnimatePresence

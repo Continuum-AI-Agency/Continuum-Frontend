@@ -42,6 +42,7 @@ type DashboardLayoutShellProps = {
   brandSummaries: BrandSummary[];
   user: User | null;
   permissions: BrandPermission[];
+  sidebarDefaultOpen?: boolean;
 };
 
 export default function DashboardLayoutShell({
@@ -50,6 +51,7 @@ export default function DashboardLayoutShell({
   brandSummaries,
   user,
   permissions,
+  sidebarDefaultOpen = true,
 }: DashboardLayoutShellProps) {
   return (
     <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries} user={user} permissions={permissions}>
@@ -61,11 +63,11 @@ export default function DashboardLayoutShell({
           <div className="particle-layer bottom" aria-hidden="true" />
 
           <SidebarProvider
-            defaultOpen={false}
+            defaultOpen={sidebarDefaultOpen}
             style={
               {
-                "--sidebar-width": "16rem",
-                "--sidebar-width-icon": "3.5rem",
+                "--sidebar-width": "var(--shell-sidebar-w)",
+                "--sidebar-width-icon": "var(--shell-sidebar-w-icon)",
               } as React.CSSProperties
             }
           >
@@ -73,9 +75,9 @@ export default function DashboardLayoutShell({
             <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
               <TourProvider>
                 <DashboardHeader />
-                <main className="flex-1 min-h-0 overflow-y-auto px-[var(--app-shell-pad-inline)] pb-[var(--app-shell-gap)]">
+                <main className="@container/app-main flex-1 min-h-0 overflow-y-auto px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">
                   <BrandWelcomeBanner />
-                  <div className="w-full h-full min-h-0">{children}</div>
+                  <div className="w-full min-h-full">{children}</div>
                 </main>
               </TourProvider>
             </SidebarInset>

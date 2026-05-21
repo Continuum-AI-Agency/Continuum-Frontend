@@ -346,7 +346,7 @@ export const CampaignCanvas = () => {
           </Canvas>
         </ContextMenuTrigger>
         
-        <ContextMenuContent className="w-64">
+        <ContextMenuContent className="w-[clamp(13rem,17vw,17rem)]">
           <ContextMenuLabel>Workspace Actions</ContextMenuLabel>
           <ContextMenuItem inset onClick={() => toast({ title: "Paste", description: "Functionality coming soon" })}>
             Paste

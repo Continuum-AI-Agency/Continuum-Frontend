@@ -41,9 +41,11 @@ function DashboardSkeleton() {
         <Skeleton className="h-8 w-32 rounded-md" />
         <Skeleton className="h-8 w-20 rounded-md" />
       </div>
-      <div className="grid min-h-0 gap-2 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Skeleton className="min-h-0 rounded-xl" />
-        <Skeleton className="min-h-0 rounded-xl" />
+      <div className="@container/paid-skeleton min-h-0">
+        <div className="grid h-full min-h-0 gap-2 @[60rem]/paid-skeleton:grid-cols-[minmax(0,1fr)_clamp(16rem,22cqi,22rem)]">
+          <Skeleton className="min-h-0 rounded-xl" />
+          <Skeleton className="min-h-0 rounded-xl" />
+        </div>
       </div>
     </div>
   );
@@ -251,6 +253,27 @@ export default function PaidMediaClientPage({
     return () => window.removeEventListener("resize", updateWidth);
   }, [clampCanvasWidth]);
 
+  const hasSeededCanvasWidth = React.useRef(false);
+  React.useEffect(() => {
+    const shell = canvasShellRef.current;
+    if (!shell || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const parentWidth = entry.contentRect.width;
+      if (parentWidth <= 0) return;
+      if (!hasSeededCanvasWidth.current) {
+        hasSeededCanvasWidth.current = true;
+        const seeded = Math.min(Math.max(parentWidth * 0.4, 320), 560);
+        setCanvasWidthPx(clampCanvasWidth(seeded));
+      } else {
+        setCanvasWidthPx((current) => clampCanvasWidth(current));
+      }
+    });
+    observer.observe(shell);
+    return () => observer.disconnect();
+  }, [clampCanvasWidth, activeTab]);
+
   const tourReady = useReadyAfterPaint(mounted && activeTab === "dashboard");
 
   if (!mounted) {
@@ -270,7 +293,7 @@ export default function PaidMediaClientPage({
   }
 
   return (
-    <div className="box-border h-full min-h-0 w-full max-w-none overflow-hidden px-0 py-1">
+    <div className="@container/paid box-border h-full min-h-0 w-full max-w-none overflow-hidden px-0 py-1">
       <SurfaceTourTrigger tourName={TOUR_PAID_MEDIA} ready={tourReady} />
       <Tabs
         value={activeTab}
