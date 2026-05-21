@@ -4,6 +4,78 @@ import { isOrganicPlatformKey } from "@/lib/organic/platforms"
 
 type PersistedDraftStatus = "draft" | "scheduled" | "published" | "failed" | "placeholder"
 
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
+}
+
+function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSuggestion"] {
+  const obj = asRecord(value)
+  if (Object.keys(obj).length === 0) return undefined
+  return {
+    provider: readString(obj.provider) ?? null,
+    model: readString(obj.model) ?? null,
+    kind: readString(obj.kind) ?? null,
+    prompt: readString(obj.prompt) ?? null,
+    width: readNumber(obj.width) ?? null,
+    height: readNumber(obj.height) ?? null,
+    assetUrl: readString(obj.assetUrl) ?? null,
+    alt: readString(obj.alt) ?? null,
+    // assetBase64 intentionally excluded — too large for Supabase round-trips
+    assets: asArray(obj.assets)
+      .filter((a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a)))
+      .map((item) => ({
+        role: readString(item.role) ?? null,
+        order: readNumber(item.order) ?? null,
+        provider: readString(item.provider) ?? null,
+        model: readString(item.model) ?? null,
+        prompt: readString(item.prompt) ?? null,
+        width: readNumber(item.width) ?? null,
+        height: readNumber(item.height) ?? null,
+        // assetBase64 intentionally excluded
+        mimeType: readString(item.mimeType) ?? null,
+        error: readString(item.error) ?? null,
+      })),
+  }
+}
+
+function restorePublishingAssets(value: unknown): OrganicCalendarDraft["publishingAssets"] {
+  const arr = asArray(value).filter(
+    (a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a))
+  )
+  if (arr.length === 0) return undefined
+  return arr.map((item) => ({
+    role: readString(item.role) ?? "primary",
+    kind: readString(item.kind) === "video" ? ("video" as const) : ("image" as const),
+    slideIndex: readNumber(item.slideIndex) ?? undefined,
+    storagePath: readString(item.storagePath) ?? "",
+    storageUrl: readString(item.storageUrl) ?? "",
+    mimeType: readString(item.mimeType) ?? undefined,
+    width: readNumber(item.width) ?? undefined,
+    height: readNumber(item.height) ?? undefined,
+  }))
+}
+
+function restoreHashtags(value: unknown): OrganicCalendarDraft["hashtags"] {
+  const obj = asRecord(value)
+  if (Object.keys(obj).length === 0) return undefined
+  const high = readStringArray(obj.high)
+  const medium = readStringArray(obj.medium)
+  const low = readStringArray(obj.low)
+  if (high.length === 0 && medium.length === 0 && low.length === 0) return undefined
+  return { high, medium, low }
+}
+
+function restoreAssetHints(value: unknown): OrganicCalendarDraft["assetHints"] {
+  const arr = asArray(value).filter(
+    (a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a))
+  )
+  if (arr.length === 0) return undefined
+  return arr.map((item) => ({
+    role: readString(item.role) ?? "",
+    suggestion: readString(item.suggestion) ?? "",
+  }))
+}
+
 export type PersistedOrganicDraftRow = {
   id: string
   status: string | null
@@ -191,6 +263,16 @@ export function mapPersistedRowToCalendarEntry(
     cta: readString(snapshot.cta) ?? undefined,
     generationError: readString(snapshot.generationError) ?? undefined,
     instagram_post_id: readString(snapshot.instagram_post_id) ?? readString(row.instagram_post_id) ?? null,
+    creativeDirectionPrompt: readString(snapshot.creativeDirectionPrompt) ?? undefined,
+    thumbnailPrompt: readString(snapshot.thumbnailPrompt) ?? undefined,
+    location: readString(snapshot.location) ?? undefined,
+    slideCount: readNumber(snapshot.slideCount) ?? undefined,
+    adjusted: typeof snapshot.adjusted === "boolean" ? snapshot.adjusted : undefined,
+    generationAttempts: readNumber(snapshot.generationAttempts) ?? undefined,
+    mediaSuggestion: restoreMediaSuggestion(snapshot.mediaSuggestion),
+    publishingAssets: restorePublishingAssets(snapshot.publishingAssets),
+    hashtags: restoreHashtags(snapshot.hashtags),
+    assetHints: restoreAssetHints(snapshot.assetHints),
   }
 
   return { dayId, draft }

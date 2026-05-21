@@ -15,6 +15,7 @@ import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
 import { TrendChartCard } from "./TrendChartCard";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useOrganicSessions } from "./useOrganicSessions";
+import { useSession } from "@/hooks/useSession";
 import { OrganicSessionSidebar } from "./OrganicSessionSidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
@@ -89,6 +90,7 @@ function createOrganicSuggestion(
 export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
   const { start, isStreaming } = useOrganicAgentStream(dispatch);
+  const { user } = useSession();
   const addDraft = useCalendarStore((s) => s.addDraft);
   const calendarDays = useCalendarStore((s) => s.days);
   const backlogDrafts = useCalendarStore((s) => s.backlogDrafts);
@@ -105,7 +107,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     startNewSession,
     selectSession,
     refreshSessions,
-  } = useOrganicSessions(brandId);
+  } = useOrganicSessions(brandId, user?.id ?? null);
 
   // Load messages when activeSessionId is set by the hook on initial fetch
   useEffect(() => {

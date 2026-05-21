@@ -125,6 +125,56 @@ describe("TrendWorkbench", () => {
     expect(rows[3].textContent ?? "").toContain("AI Video Breakthroughs")
   })
 
+  it("does not toggle selection when the row's expand chevron is clicked", () => {
+    const onToggleTrend = mock()
+    render(
+      <TrendWorkbench
+        trends={trends}
+        selectedTrendIds={[]}
+        activePlatforms={["instagram", "linkedin"]}
+        maxSelections={5}
+        onToggleTrend={onToggleTrend}
+      />
+    )
+
+    const expand = screen.getAllByLabelText("Expand trend detail")[0]
+    fireEvent.click(expand)
+    expect(onToggleTrend).not.toHaveBeenCalled()
+  })
+
+  it("renders inline confidence and signal count from meta", () => {
+    const trendWithMeta: Trend = {
+      id: "trend-meta",
+      title: "Omni-Assistant Pivot",
+      summary: "Real-time AI partners are replacing chatbots.",
+      momentum: "rising",
+      platforms: ["instagram"],
+      tags: ["ai"],
+      meta: {
+        kind: "trend",
+        confidence: 0.93,
+        relevanceToBrand: "Aligns with assistant-led marketing motions.",
+        sourceSignalCount: 12,
+        recommendedPlatforms: ["linkedin", "youtube"],
+        platformRecommendations: [
+          { platform: "linkedin", reason: "Reaches LatAm business leaders." },
+        ],
+      },
+    }
+    render(
+      <TrendWorkbench
+        trends={[trendWithMeta]}
+        selectedTrendIds={[]}
+        activePlatforms={["instagram"]}
+        maxSelections={5}
+        onToggleTrend={mock()}
+      />
+    )
+
+    expect(screen.getByText("93%")).toBeTruthy()
+    expect(screen.getByText("12")).toBeTruthy()
+  })
+
   it("applies premade filters via slash command presets", () => {
     render(
       <TrendWorkbench

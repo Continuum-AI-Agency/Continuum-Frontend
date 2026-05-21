@@ -8,7 +8,10 @@ import {
   OrganicSessionMessage,
 } from "@/lib/organic/agent-sessions";
 
-export function useOrganicSessions(brandId: string): {
+export function useOrganicSessions(
+  brandId: string,
+  userId: string | null
+): {
   sessions: OrganicSession[];
   isLoadingSessions: boolean;
   isLoadingMessages: boolean;
@@ -23,6 +26,7 @@ export function useOrganicSessions(brandId: string): {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userId) return;
     let cancelled = false;
     setIsLoadingSessions(true);
     fetchOrganicSessions(brandId).then((fetched) => {
@@ -31,20 +35,20 @@ export function useOrganicSessions(brandId: string): {
       if (fetched.length > 0) {
         setActiveSessionId(fetched[0].sessionId);
       } else {
-        setActiveSessionId(crypto.randomUUID());
+        setActiveSessionId(`${brandId}:${userId}:${crypto.randomUUID()}`);
       }
       setIsLoadingSessions(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, userId]);
 
   const startNewSession = useCallback((): string => {
-    const id = crypto.randomUUID();
+    const id = `${brandId}:${userId ?? "unknown"}:${crypto.randomUUID()}`;
     setActiveSessionId(id);
     return id;
-  }, []);
+  }, [brandId, userId]);
 
   const selectSession = useCallback(
     async (sessionId: string): Promise<OrganicSessionMessage[]> => {

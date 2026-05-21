@@ -15,6 +15,7 @@ import { type PlatformKey } from "@/components/onboarding/platforms";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
 import type { Trend } from "@/lib/organic/trends";
+import type { BrandInsightsQuestion } from "@/lib/schemas/brandInsights";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { deriveMetricAccountsByPlatform } from "@/lib/organic/metricAccounts";
@@ -123,7 +124,7 @@ async function OrganicContent({
     const brandTrends = insights.data.trendsAndEvents.trends;
     const nicheMap = insights.data.questionsByNiche.questionsByNiche || {};
     const allQuestions = Object.entries(nicheMap).flatMap(([niche, data]) => {
-      const nicheData = data as { questions: Array<{ id: string; question: string; socialPlatform?: string; contentTypeSuggestion?: string; whyRelevant?: string; isSelected?: boolean }> };
+      const nicheData = data as { questions: BrandInsightsQuestion[] };
       return nicheData.questions.map((q) => ({ ...q, niche }));
     });
 
@@ -142,6 +143,19 @@ async function OrganicContent({
       momentum: trend.isSelected ? "rising" : "stable",
       platforms: fallbackPlatforms,
       tags: trend.source ? [trend.source] : [],
+      meta: {
+        kind: "trend" as const,
+        confidence: trend.confidence,
+        source: trend.source,
+        sourceUrl: trend.sourceUrl,
+        relevanceToBrand: trend.relevanceToBrand,
+        analysisTags: trend.analysisTags,
+        signalWindowStart: trend.signalWindowStart,
+        signalWindowEnd: trend.signalWindowEnd,
+        sourceSignalCount: trend.sourceSignalCount,
+        recommendedPlatforms: trend.recommendedPlatforms,
+        platformRecommendations: trend.platformRecommendations,
+      },
     }));
 
     const mappedQuestions = allQuestions.map((q) => {
@@ -153,6 +167,18 @@ async function OrganicContent({
         momentum: "stable" as const,
         platforms: [platformKey] as OrganicPlatformKey[],
         tags: ["question", q.niche],
+        meta: {
+          kind: "question" as const,
+          confidence: q.confidence,
+          relevanceToBrand: q.whyRelevant,
+          analysisTags: q.analysisTags,
+          sourceSignalCount: q.sourceSignalCount,
+          recommendedPlatforms: q.recommendedPlatforms,
+          platformRecommendations: q.platformRecommendations,
+          niche: q.niche,
+          contentTypeSuggestion: q.contentTypeSuggestion,
+          whyRelevant: q.whyRelevant,
+        },
       };
     });
 
@@ -178,6 +204,21 @@ async function OrganicContent({
       momentum: "rising" as const,
       platforms: fallbackPlatforms,
       tags: ["event", e.date ?? ""],
+      meta: {
+        kind: "event" as const,
+        confidence: e.confidence,
+        source: e.source,
+        sourceUrl: e.sourceUrl,
+        relevanceToBrand: e.relevanceToBrand,
+        analysisTags: e.analysisTags,
+        signalWindowStart: e.signalWindowStart,
+        signalWindowEnd: e.signalWindowEnd,
+        sourceSignalCount: e.sourceSignalCount,
+        recommendedPlatforms: e.recommendedPlatforms,
+        platformRecommendations: e.platformRecommendations,
+        opportunity: e.opportunity,
+        eventDate: e.date,
+      },
     }));
 
     selectorTrends = [...selectorTrends, ...mappedEvents];

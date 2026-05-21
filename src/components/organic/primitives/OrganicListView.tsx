@@ -50,6 +50,20 @@ type OrganicListViewProps = {
   onPromoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void
 }
 
+function resolveDraftThumbnail(draft: OrganicCalendarDraft): string | null {
+  const persisted = draft.publishingAssets?.find((a) => a.kind === "image")
+  if (persisted?.storageUrl) return persisted.storageUrl
+  if (draft.mediaSuggestion?.assetUrl) return draft.mediaSuggestion.assetUrl
+  const primaryAsset = (draft.mediaSuggestion?.assets ?? [])
+    .filter((a) => a?.assetBase64)
+    .sort((a, b) => (a?.order ?? 999) - (b?.order ?? 999))[0]
+  if (primaryAsset?.assetBase64) {
+    const b64 = primaryAsset.assetBase64.trim()
+    return b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`
+  }
+  return null
+}
+
 function PlatformBadge({ platform }: { platform: string }) {
   const colorClass = PLATFORM_BADGE_COLORS[platform] ?? "bg-muted text-muted-foreground"
   return (
@@ -93,6 +107,8 @@ const DraftRow = React.memo(function DraftRow({
   onDelete: () => void
   onRegenerate?: () => void
 }) {
+  const thumbnail = resolveDraftThumbnail(draft)
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -111,6 +127,13 @@ const DraftRow = React.memo(function DraftRow({
               checked={isMultiSelected}
               className="opacity-0 transition-opacity group-hover:opacity-100 data-[state=checked]:opacity-100"
             />
+          </div>
+
+          <div className="relative shrink-0 h-8 w-8 overflow-hidden rounded bg-muted">
+            {thumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={thumbnail} alt="" className="h-full w-full object-cover" />
+            ) : null}
           </div>
 
           <div className="flex min-w-0 flex-1 items-center gap-2">

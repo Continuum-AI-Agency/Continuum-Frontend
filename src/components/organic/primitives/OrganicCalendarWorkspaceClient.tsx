@@ -592,7 +592,7 @@ export function OrganicCalendarWorkspaceClient({
   return (
     <AiStudioHandoffProvider onOpen={brandProfileId ? handleOpenDraftInStudio : null}>
     <div
-      className="h-full min-h-0 w-full overflow-hidden focus:outline-none"
+      className="@container/organic h-full min-h-0 w-full overflow-hidden focus:outline-none"
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
@@ -616,7 +616,7 @@ export function OrganicCalendarWorkspaceClient({
         <motion.div
           layout
           transition={layoutTransition}
-          className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row"
+          className="flex h-full min-h-0 w-full flex-col gap-[var(--shell-gutter-tight)] @[64rem]/organic:flex-row"
         >
           <motion.section
             layout
@@ -696,6 +696,7 @@ export function OrganicCalendarWorkspaceClient({
                             activePlatforms={activePlatforms}
                             maxSelections={maxTrendSelections}
                             onToggleTrend={(id) => toggleTrend(id, maxTrendSelections)}
+                            brandProfileId={brandProfileId}
                           />
                         </div>
                       </ResizablePanel>
@@ -790,7 +791,7 @@ export function OrganicCalendarWorkspaceClient({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 24, scale: 0.98 }}
                 transition={previewTransition}
-                className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 lg:h-full lg:w-[42rem] lg:shrink-0 xl:w-[46rem]"
+                className="flex h-[65dvh] min-h-[28rem] flex-col overflow-hidden rounded-lg bg-card/80 p-2 ring-1 ring-border/45 @[64rem]/organic:h-full @[64rem]/organic:w-[clamp(28rem,34cqi,46rem)] @[64rem]/organic:shrink-0"
               >
                 <div className="mb-2 flex shrink-0 items-center justify-between pb-1.5">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

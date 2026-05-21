@@ -1,5 +1,31 @@
 import { type OrganicPlatformKey } from "@/lib/organic/platforms";
 
+export type TrendInsightKind = "trend" | "event" | "question";
+
+export type TrendPlatformRecommendation = {
+  platform: string;
+  reason: string;
+};
+
+export type TrendMeta = {
+  kind: TrendInsightKind;
+  confidence?: number;
+  source?: string;
+  sourceUrl?: string;
+  relevanceToBrand?: string;
+  analysisTags?: string[];
+  signalWindowStart?: string;
+  signalWindowEnd?: string;
+  sourceSignalCount?: number;
+  recommendedPlatforms?: string[];
+  platformRecommendations?: TrendPlatformRecommendation[];
+  niche?: string;
+  contentTypeSuggestion?: string;
+  whyRelevant?: string;
+  opportunity?: string;
+  eventDate?: string;
+};
+
 export type Trend = {
   id: string;
   title: string;
@@ -7,6 +33,7 @@ export type Trend = {
   momentum: "rising" | "stable" | "cooling";
   platforms: OrganicPlatformKey[];
   tags: string[];
+  meta?: TrendMeta;
 };
 
 export const DEFAULT_TRENDS: Trend[] = [

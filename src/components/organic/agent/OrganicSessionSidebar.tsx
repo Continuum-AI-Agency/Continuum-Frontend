@@ -42,7 +42,7 @@ export function OrganicSessionSidebar({
   onSelectSession,
 }: OrganicSessionSidebarProps) {
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-72 md:border-b-0 md:border-r">
+    <aside className="@container/agent-sidebar flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-[var(--shell-secondary-w)] md:max-w-[22rem] md:min-w-[var(--shell-secondary-w-min)] md:border-b-0 md:border-r">
       <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
         <p className="text-sm font-medium tracking-tight">Conversations</p>
         <Button
@@ -79,7 +79,7 @@ export function OrganicSessionSidebar({
                 onClick={() => onSelectSession(session.sessionId)}
                 disabled={isInteractionDisabled || isActive}
                 className={cn(
-                  "flex min-w-[220px] flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors md:min-w-0",
+                  "flex min-w-[14rem] flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors md:min-w-0",
                   isActive
                     ? "border-primary/70 bg-primary/10"
                     : "border-border/60 bg-background/40 hover:border-border hover:bg-background/70",

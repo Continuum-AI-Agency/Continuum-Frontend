@@ -13,9 +13,19 @@ import {
   type SortingState,
 } from "@tanstack/react-table"
 import { DragHandleHorizontalIcon } from "@radix-ui/react-icons"
-import { ArrowUpDown, ChevronDown, Filter, MoreHorizontal } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import {
+  Activity,
+  ArrowUpDown,
+  ChevronDown,
+  ExternalLink,
+  Filter,
+  Heart,
+  Loader2,
+  MessageCircle,
+  MoreHorizontal,
+} from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -26,10 +36,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card"
 import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import type { Trend } from "@/lib/organic/trends"
+import { fetchInsightCitations } from "@/lib/brand-insights/citations"
+import type { Trend, TrendInsightKind, TrendPlatformRecommendation } from "@/lib/organic/trends"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
 
 interface TrendsDataTableProps {
@@ -41,12 +58,13 @@ interface TrendsDataTableProps {
   allowDrag?: boolean
   allowSelect?: boolean
   allowActions?: boolean
+  brandProfileId?: string
 }
 
-const momentumStyles: Record<Trend["momentum"], string> = {
-  rising: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-  stable: "bg-slate-500/10 text-slate-500 border-slate-500/20",
-  cooling: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+const MOMENTUM_DOT_TONE: Record<Trend["momentum"], string> = {
+  rising: "bg-emerald-500",
+  stable: "bg-sky-500",
+  cooling: "bg-amber-500",
 }
 
 const PLATFORM_SHORT: Record<string, string> = {
@@ -59,6 +77,164 @@ const PLATFORM_SHORT: Record<string, string> = {
   x: "X",
 }
 
+const FILTERED_TAG_NOISE = new Set(["evidence_scored", "canonicalized"])
+
+function formatConfidence(value: number | undefined): string | null {
+  if (typeof value !== "number" || Number.isNaN(value)) return null
+  const clamped = Math.max(0, Math.min(1, value))
+  return `${Math.round(clamped * 100)}%`
+}
+
+function shortHost(url?: string): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname.replace(/^www\./, "")
+  } catch {
+    return null
+  }
+}
+
+function formatRelativeDate(value?: string): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const diffMs = Date.now() - date.getTime()
+  const days = Math.round(diffMs / (1000 * 60 * 60 * 24))
+  if (days <= 0) return "today"
+  if (days === 1) return "1d ago"
+  if (days < 30) return `${days}d ago`
+  const months = Math.round(days / 30)
+  if (months < 12) return `${months}mo ago`
+  return date.toLocaleDateString(undefined, { month: "short", year: "numeric" })
+}
+
+function CitationsList({
+  brandProfileId,
+  kind,
+  insightId,
+  enabled,
+}: {
+  brandProfileId: string
+  kind: TrendInsightKind
+  insightId: string
+  enabled: boolean
+}) {
+  const query = useQuery({
+    queryKey: ["insight-citations", brandProfileId, kind, insightId],
+    queryFn: () =>
+      fetchInsightCitations({ brandId: brandProfileId, insightType: kind, insightId }),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  if (query.isLoading) {
+    return (
+      <div className="flex items-center gap-2 px-1 py-2 text-[11px] text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin" /> Loading source signals…
+      </div>
+    )
+  }
+
+  if (query.isError) {
+    return (
+      <p className="px-1 py-2 text-[11px] text-muted-foreground">
+        Could not load source signals.
+      </p>
+    )
+  }
+
+  const citations = query.data ?? []
+  if (citations.length === 0) {
+    return (
+      <p className="px-1 py-2 text-[11px] text-muted-foreground">
+        No source signals — likely a synthesis-only insight.
+      </p>
+    )
+  }
+
+  return (
+    <ul className="flex flex-col divide-y divide-border/40">
+      {citations.map((citation) => {
+        const host = shortHost(citation.sourceUrl)
+        const relative = formatRelativeDate(citation.publishedAt)
+        return (
+          <li key={citation.id} className="flex flex-col gap-1 px-1 py-1.5">
+            <div className="flex items-start justify-between gap-2">
+              <p className="line-clamp-2 text-[11px] text-foreground">
+                {citation.signalTitle ?? citation.rationale ?? host ?? "Untitled signal"}
+              </p>
+              {citation.sourceUrl ? (
+                <a
+                  href={citation.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+              {citation.platform ? <span className="uppercase tracking-wide">{citation.platform}</span> : null}
+              {host ? <span>{host}</span> : null}
+              {relative ? <span>{relative}</span> : null}
+              {typeof citation.likeCount === "number" ? (
+                <span className="inline-flex items-center gap-1">
+                  <Heart className="h-2.5 w-2.5" />
+                  <span className="tabular-nums">{citation.likeCount}</span>
+                </span>
+              ) : null}
+              {typeof citation.commentsCount === "number" ? (
+                <span className="inline-flex items-center gap-1">
+                  <MessageCircle className="h-2.5 w-2.5" />
+                  <span className="tabular-nums">{citation.commentsCount}</span>
+                </span>
+              ) : null}
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function RecommendationsList({
+  recommendations,
+  fallback,
+}: {
+  recommendations: TrendPlatformRecommendation[] | undefined
+  fallback?: string[]
+}) {
+  if (recommendations && recommendations.length > 0) {
+    return (
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11px] leading-relaxed">
+        {recommendations.map((rec) => (
+          <Fragment key={`${rec.platform}-${rec.reason}`}>
+            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {rec.platform}
+            </dt>
+            <dd className="text-foreground">{rec.reason}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    )
+  }
+
+  if (fallback && fallback.length > 0) {
+    return (
+      <p className="text-[11px] text-foreground">Recommended: {fallback.join(", ")}</p>
+    )
+  }
+
+  return (
+    <p className="px-1 py-2 text-[11px] text-muted-foreground">
+      No platform recommendations were captured.
+    </p>
+  )
+}
+
 export function TrendsDataTable({
   data,
   selectedTrendIds,
@@ -68,6 +244,7 @@ export function TrendsDataTable({
   allowDrag = false,
   allowSelect = false,
   allowActions = false,
+  brandProfileId,
 }: TrendsDataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -149,13 +326,88 @@ export function TrendsDataTable({
             <ArrowUpDown className="ml-1 h-3 w-3" />
           </Button>
         ),
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <div className="font-medium text-sm truncate" title={row.getValue("title")}>
-              {row.getValue("title")}
+        cell: ({ row }) => {
+          const trend = row.original
+          const meta = trend.meta
+          const confidenceLabel = formatConfidence(meta?.confidence)
+          const sourceHost = shortHost(meta?.sourceUrl)
+          const recommendations = meta?.platformRecommendations ?? []
+          const hoverHasContent = Boolean(
+            meta?.relevanceToBrand || recommendations.length > 0 || meta?.source || sourceHost
+          )
+          const titleNode = (
+            <div className="font-medium text-sm truncate" title={trend.title}>
+              {trend.title}
             </div>
-          </div>
-        ),
+          )
+          return (
+            <div className="min-w-0 space-y-0.5">
+              {hoverHasContent ? (
+                <HoverCard openDelay={150} closeDelay={80}>
+                  <HoverCardTrigger asChild>
+                    <span>{titleNode}</span>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    side="right"
+                    align="start"
+                    sideOffset={12}
+                    className="w-80 space-y-2 text-[11px] leading-relaxed"
+                  >
+                    {meta?.relevanceToBrand ? (
+                      <p className="text-foreground">{meta.relevanceToBrand}</p>
+                    ) : null}
+                    {recommendations.length > 0 ? (
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+                        {recommendations.slice(0, 3).map((rec) => (
+                          <Fragment key={`${trend.id}-${rec.platform}`}>
+                            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {rec.platform}
+                            </dt>
+                            <dd className="text-foreground">{rec.reason}</dd>
+                          </Fragment>
+                        ))}
+                      </dl>
+                    ) : null}
+                    {meta?.source || sourceHost ? (
+                      <div className="border-t border-border/40 pt-2 text-muted-foreground">
+                        {meta?.sourceUrl ? (
+                          <a
+                            href={meta.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex items-center gap-1 hover:text-foreground"
+                          >
+                            <span>{meta.source ?? sourceHost}</span>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        ) : (
+                          <span>{meta?.source}</span>
+                        )}
+                      </div>
+                    ) : null}
+                  </HoverCardContent>
+                </HoverCard>
+              ) : (
+                titleNode
+              )}
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                {confidenceLabel ? (
+                  <span className="tabular-nums text-muted-foreground">
+                    conf <span className="font-medium text-foreground">{confidenceLabel}</span>
+                  </span>
+                ) : null}
+                {typeof meta?.sourceSignalCount === "number" && meta.sourceSignalCount > 0 ? (
+                  <span className="inline-flex items-center gap-1">
+                    <Activity className="h-2.5 w-2.5" />
+                    <span className="tabular-nums">{meta.sourceSignalCount}</span>
+                  </span>
+                ) : null}
+                {meta?.niche ? <span className="uppercase tracking-wide">{meta.niche}</span> : null}
+              </div>
+            </div>
+          )
+        },
       },
       {
         accessorKey: "momentum",
@@ -163,12 +415,10 @@ export function TrendsDataTable({
         cell: ({ row }) => {
           const momentum = row.getValue("momentum") as Trend["momentum"]
           return (
-            <Badge
-              variant="outline"
-              className={cn("text-[9px] uppercase px-1.5 py-0", momentumStyles[momentum])}
-            >
+            <span className="inline-flex items-center gap-1.5 text-[11px] capitalize text-foreground">
+              <span className={cn("h-1.5 w-1.5 rounded-full", MOMENTUM_DOT_TONE[momentum])} />
               {momentum}
-            </Badge>
+            </span>
           )
         },
       },
@@ -176,20 +426,18 @@ export function TrendsDataTable({
         id: "platforms",
         header: "Platforms",
         cell: ({ row }) => (
-          <div className="flex flex-wrap gap-0.5">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium uppercase tracking-wide">
             {row.original.platforms.map((p) => (
-              <Badge
+              <span
                 key={p}
-                variant="secondary"
                 className={cn(
-                  "text-[8px] px-1 py-0 min-w-[18px] text-center",
                   activePlatforms.includes(p as OrganicPlatformKey)
-                    ? "bg-brand-primary/20 text-brand-primary border-brand-primary/20"
-                    : "opacity-40"
+                    ? "text-brand-primary"
+                    : "text-muted-foreground/60"
                 )}
               >
                 {PLATFORM_SHORT[p] ?? p.slice(0, 2).toUpperCase()}
-              </Badge>
+              </span>
             ))}
           </div>
         ),
@@ -345,34 +593,73 @@ export function TrendsDataTable({
                     {expandedId === row.id && (
                       <TableRow className="bg-muted/20 hover:bg-muted/20">
                         <TableCell colSpan={columns.length} className="px-4 pb-4 pt-2">
-                          <div className="space-y-3">
-                            <div className="space-y-1">
-                              <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                                Summary
-                              </span>
-                              <p className="text-xs leading-relaxed">
-                                {row.original.summary}
-                              </p>
-                            </div>
-                            {row.original.tags.length > 0 && (
-                              <div className="space-y-1">
-                                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                                  Tags
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {row.original.tags.map((tag) => (
-                                    <Badge
-                                      key={tag}
-                                      variant="secondary"
-                                      className="text-[9px] px-1.5 py-0"
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          {(() => {
+                            const trend = row.original
+                            const meta = trend.meta
+                            const visibleTags = (meta?.analysisTags ?? trend.tags).filter(
+                              (tag) => !FILTERED_TAG_NOISE.has(tag)
+                            )
+                            return (
+                              <Tabs defaultValue="why" className="w-full">
+                                <TabsList className="h-7 gap-1 bg-transparent p-0">
+                                  <TabsTrigger value="why" className="h-7 px-2 text-[10px]">
+                                    Why
+                                  </TabsTrigger>
+                                  <TabsTrigger value="signals" className="h-7 px-2 text-[10px]">
+                                    Signals
+                                  </TabsTrigger>
+                                  <TabsTrigger value="distribution" className="h-7 px-2 text-[10px]">
+                                    Distribution
+                                  </TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="why" className="mt-2 space-y-1.5 text-[11px] leading-relaxed">
+                                  <p className="text-foreground">{trend.summary}</p>
+                                  {meta?.relevanceToBrand && meta.relevanceToBrand !== trend.summary ? (
+                                    <p className="text-foreground">{meta.relevanceToBrand}</p>
+                                  ) : null}
+                                  {meta?.whyRelevant && meta.whyRelevant !== meta.relevanceToBrand ? (
+                                    <p className="text-foreground">{meta.whyRelevant}</p>
+                                  ) : null}
+                                  {meta?.opportunity ? (
+                                    <p className="text-foreground">{meta.opportunity}</p>
+                                  ) : null}
+                                  {meta?.contentTypeSuggestion ? (
+                                    <p className="italic text-muted-foreground">
+                                      Suggested format: {meta.contentTypeSuggestion}
+                                    </p>
+                                  ) : null}
+                                  {visibleTags.length > 0 ? (
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {visibleTags
+                                        .slice(0, 6)
+                                        .map((tag) => `#${tag}`)
+                                        .join("  ·  ")}
+                                    </p>
+                                  ) : null}
+                                </TabsContent>
+                                <TabsContent value="signals" className="mt-2">
+                                  {brandProfileId ? (
+                                    <CitationsList
+                                      brandProfileId={brandProfileId}
+                                      kind={meta?.kind ?? "trend"}
+                                      insightId={trend.id}
+                                      enabled={expandedId === row.id}
+                                    />
+                                  ) : (
+                                    <p className="px-1 py-2 text-[11px] text-muted-foreground">
+                                      Source signals are unavailable without an active brand.
+                                    </p>
+                                  )}
+                                </TabsContent>
+                                <TabsContent value="distribution" className="mt-2">
+                                  <RecommendationsList
+                                    recommendations={meta?.platformRecommendations}
+                                    fallback={meta?.recommendedPlatforms}
+                                  />
+                                </TabsContent>
+                              </Tabs>
+                            )
+                          })()}
                         </TableCell>
                       </TableRow>
                     )}
