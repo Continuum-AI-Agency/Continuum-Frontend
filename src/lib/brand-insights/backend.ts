@@ -33,53 +33,104 @@ const isoDateSchema = z
     return normalized;
   });
 
-const backendTrendSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  description: z.string().nullish(),
+const backendPlatformRecommendationSchema = z
+  .object({
+    platform: z.string(),
+    reason: z.string(),
+  })
+  .passthrough();
+
+const sharedInsightFields = {
+  source: z.string().nullish(),
+  source_url: z.string().nullish(),
+  sourceUrl: z.string().nullish(),
   relevance_to_brand: z.string().nullish(),
   relevanceToBrand: z.string().nullish(),
-  source: z.string().nullish(),
-  is_selected: z.boolean().nullish(),
-  isSelected: z.boolean().nullish(),
-  times_used: z.number().int().nonnegative().nullish(),
-  timesUsed: z.number().int().nonnegative().nullish(),
-});
+  confidence: z.number().nullish(),
+  analysis_tags: z.array(z.string()).nullish(),
+  analysisTags: z.array(z.string()).nullish(),
+  source_signal_count: z.number().int().nonnegative().nullish(),
+  sourceSignalCount: z.number().int().nonnegative().nullish(),
+  signal_window_start: z.string().nullish(),
+  signalWindowStart: z.string().nullish(),
+  signal_window_end: z.string().nullish(),
+  signalWindowEnd: z.string().nullish(),
+  recommended_platforms: z.array(z.string()).nullish(),
+  recommendedPlatforms: z.array(z.string()).nullish(),
+  platform_recommendations: z.array(backendPlatformRecommendationSchema).nullish(),
+  platformRecommendations: z.array(backendPlatformRecommendationSchema).nullish(),
+  primary_platform: z.string().nullish(),
+  primaryPlatform: z.string().nullish(),
+  platforms: z.array(z.string()).nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
+} as const;
 
-const backendEventSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  date: z.string().nullish(),
-  event_date: z.string().nullish(),
-  eventDate: z.string().nullish(),
-  description: z.string().nullish(),
-  opportunity: z.string().nullish(),
-  is_selected: z.boolean().nullish(),
-  isSelected: z.boolean().nullish(),
-  times_used: z.number().int().nonnegative().nullish(),
-  timesUsed: z.number().int().nonnegative().nullish(),
-});
+const backendTrendSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    description: z.string().nullish(),
+    is_selected: z.boolean().nullish(),
+    isSelected: z.boolean().nullish(),
+    times_used: z.number().int().nonnegative().nullish(),
+    timesUsed: z.number().int().nonnegative().nullish(),
+    ...sharedInsightFields,
+  })
+  .passthrough();
 
-const backendQuestionSchema = z.object({
-  id: z.string(),
-  question: z.string().nullish(),
-  question_text: z.string().nullish(),
-  questionText: z.string().nullish(),
-  social_platform: z.string().nullish(),
-  socialPlatform: z.string().nullish(),
-  platform: z.string().nullish(),
-  content_type_suggestion: z.string().nullish(),
-  contentTypeSuggestion: z.string().nullish(),
-  why_relevant: z.string().nullish(),
-  whyRelevant: z.string().nullish(),
-  is_selected: z.boolean().nullish(),
-  isSelected: z.boolean().nullish(),
-  times_used: z.number().int().nonnegative().nullish(),
-  timesUsed: z.number().int().nonnegative().nullish(),
-  niche: z.string().nullish(),
-  audience_niche: z.string().nullish(),
-  audienceNiche: z.string().nullish(),
-});
+const backendEventSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    date: z.string().nullish(),
+    event_date: z.string().nullish(),
+    eventDate: z.string().nullish(),
+    description: z.string().nullish(),
+    opportunity: z.string().nullish(),
+    is_selected: z.boolean().nullish(),
+    isSelected: z.boolean().nullish(),
+    times_used: z.number().int().nonnegative().nullish(),
+    timesUsed: z.number().int().nonnegative().nullish(),
+    ...sharedInsightFields,
+  })
+  .passthrough();
+
+const backendQuestionSchema = z
+  .object({
+    id: z.string(),
+    question: z.string().nullish(),
+    question_text: z.string().nullish(),
+    questionText: z.string().nullish(),
+    social_platform: z.string().nullish(),
+    socialPlatform: z.string().nullish(),
+    social_platforms: z.array(z.string()).nullish(),
+    socialPlatforms: z.array(z.string()).nullish(),
+    platform: z.string().nullish(),
+    content_type_suggestion: z.string().nullish(),
+    contentTypeSuggestion: z.string().nullish(),
+    why_relevant: z.string().nullish(),
+    whyRelevant: z.string().nullish(),
+    is_selected: z.boolean().nullish(),
+    isSelected: z.boolean().nullish(),
+    times_used: z.number().int().nonnegative().nullish(),
+    timesUsed: z.number().int().nonnegative().nullish(),
+    niche: z.string().nullish(),
+    audience_niche: z.string().nullish(),
+    audienceNiche: z.string().nullish(),
+    confidence: z.number().nullish(),
+    analysis_tags: z.array(z.string()).nullish(),
+    analysisTags: z.array(z.string()).nullish(),
+    source_signal_count: z.number().int().nonnegative().nullish(),
+    sourceSignalCount: z.number().int().nonnegative().nullish(),
+    recommended_platforms: z.array(z.string()).nullish(),
+    recommendedPlatforms: z.array(z.string()).nullish(),
+    platform_recommendations: z.array(backendPlatformRecommendationSchema).nullish(),
+    platformRecommendations: z.array(backendPlatformRecommendationSchema).nullish(),
+    platform_distribution: z.record(z.string(), z.number()).nullish(),
+    platformDistribution: z.record(z.string(), z.number()).nullish(),
+    metadata: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .passthrough();
 
 const backendNicheQuestionsSchema = z.union([
   z.object({
@@ -564,6 +615,61 @@ function normalizeJobStatus(value?: string | null) {
   return parsed.success ? parsed.data : "error";
 }
 
+type InsightCommon = {
+  metadata?: Record<string, unknown> | null;
+  source_url?: string | null;
+  sourceUrl?: string | null;
+  analysis_tags?: string[] | null;
+  analysisTags?: string[] | null;
+  source_signal_count?: number | null;
+  sourceSignalCount?: number | null;
+  signal_window_start?: string | null;
+  signalWindowStart?: string | null;
+  signal_window_end?: string | null;
+  signalWindowEnd?: string | null;
+  recommended_platforms?: string[] | null;
+  recommendedPlatforms?: string[] | null;
+  platform_recommendations?: Array<{ platform: string; reason: string }> | null;
+  platformRecommendations?: Array<{ platform: string; reason: string }> | null;
+  platforms?: string[] | null;
+  primary_platform?: string | null;
+  primaryPlatform?: string | null;
+};
+
+function pickRecommendedPlatforms(insight: InsightCommon): string[] | undefined {
+  const direct = insight.recommended_platforms ?? insight.recommendedPlatforms;
+  if (direct && direct.length > 0) return direct;
+  const meta = insight.metadata;
+  if (meta && Array.isArray(meta.recommended_platforms)) {
+    return (meta.recommended_platforms as unknown[]).filter((value): value is string => typeof value === "string");
+  }
+  return undefined;
+}
+
+function pickPlatformRecommendations(insight: InsightCommon) {
+  const direct = insight.platform_recommendations ?? insight.platformRecommendations;
+  if (direct && direct.length > 0) return direct;
+  const fromMeta = insight.metadata?.platform_recommendations;
+  if (!Array.isArray(fromMeta)) return undefined;
+  return fromMeta
+    .filter((value): value is { platform: unknown; reason: unknown } => typeof value === "object" && value !== null)
+    .map((entry) => ({
+      platform: typeof entry.platform === "string" ? entry.platform : "",
+      reason: typeof entry.reason === "string" ? entry.reason : "",
+    }))
+    .filter((entry) => entry.platform.length > 0);
+}
+
+function pickPlatformDistribution(metadata: Record<string, unknown> | null | undefined) {
+  const raw = metadata?.platform_distribution;
+  if (!raw || typeof raw !== "object") return undefined;
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "number") result[key] = value;
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function mapTrend(trend: z.infer<typeof backendTrendSchema>) {
   return brandInsightsTrendSchema.parse({
     id: trend.id,
@@ -571,6 +677,15 @@ function mapTrend(trend: z.infer<typeof backendTrendSchema>) {
     description: trend.description ?? undefined,
     relevanceToBrand: trend.relevance_to_brand ?? trend.relevanceToBrand ?? undefined,
     source: trend.source ?? undefined,
+    sourceUrl: trend.source_url ?? trend.sourceUrl ?? undefined,
+    confidence: typeof trend.confidence === "number" ? trend.confidence : undefined,
+    analysisTags: trend.analysis_tags ?? trend.analysisTags ?? undefined,
+    sourceSignalCount: trend.source_signal_count ?? trend.sourceSignalCount ?? undefined,
+    signalWindowStart: trend.signal_window_start ?? trend.signalWindowStart ?? undefined,
+    signalWindowEnd: trend.signal_window_end ?? trend.signalWindowEnd ?? undefined,
+    recommendedPlatforms: pickRecommendedPlatforms(trend),
+    platformRecommendations: pickPlatformRecommendations(trend),
+    platforms: trend.platforms ?? undefined,
     isSelected: trend.is_selected ?? trend.isSelected ?? false,
     timesUsed: trend.times_used ?? trend.timesUsed ?? 0,
   });
@@ -584,6 +699,17 @@ function mapEvent(event: z.infer<typeof backendEventSchema>) {
     date: date ?? undefined,
     description: event.description ?? undefined,
     opportunity: event.opportunity ?? undefined,
+    source: event.source ?? undefined,
+    sourceUrl: event.source_url ?? event.sourceUrl ?? undefined,
+    relevanceToBrand: event.relevance_to_brand ?? event.relevanceToBrand ?? undefined,
+    confidence: typeof event.confidence === "number" ? event.confidence : undefined,
+    analysisTags: event.analysis_tags ?? event.analysisTags ?? undefined,
+    sourceSignalCount: event.source_signal_count ?? event.sourceSignalCount ?? undefined,
+    signalWindowStart: event.signal_window_start ?? event.signalWindowStart ?? undefined,
+    signalWindowEnd: event.signal_window_end ?? event.signalWindowEnd ?? undefined,
+    recommendedPlatforms: pickRecommendedPlatforms(event),
+    platformRecommendations: pickPlatformRecommendations(event),
+    platforms: event.platforms ?? undefined,
     isSelected: event.is_selected ?? event.isSelected ?? false,
     timesUsed: event.times_used ?? event.timesUsed ?? 0,
   });
@@ -591,12 +717,27 @@ function mapEvent(event: z.infer<typeof backendEventSchema>) {
 
 function mapQuestion(question: z.infer<typeof backendQuestionSchema>) {
   const questionText = question.question ?? question.question_text ?? question.questionText;
+  const contentTypeSuggestion =
+    question.content_type_suggestion ??
+    question.contentTypeSuggestion ??
+    (typeof question.metadata?.content_type_suggestion === "string"
+      ? (question.metadata.content_type_suggestion as string)
+      : undefined);
   return brandInsightsQuestionSchema.parse({
     id: question.id,
     question: questionText ?? "",
     socialPlatform: question.social_platform ?? question.socialPlatform ?? question.platform ?? undefined,
-    contentTypeSuggestion: question.content_type_suggestion ?? question.contentTypeSuggestion ?? undefined,
+    socialPlatforms: question.social_platforms ?? question.socialPlatforms ?? undefined,
+    contentTypeSuggestion,
     whyRelevant: question.why_relevant ?? question.whyRelevant ?? undefined,
+    niche: question.niche ?? question.audience_niche ?? question.audienceNiche ?? undefined,
+    confidence: typeof question.confidence === "number" ? question.confidence : undefined,
+    analysisTags: question.analysis_tags ?? question.analysisTags ?? undefined,
+    sourceSignalCount: question.source_signal_count ?? question.sourceSignalCount ?? undefined,
+    recommendedPlatforms: pickRecommendedPlatforms(question as unknown as InsightCommon),
+    platformRecommendations: pickPlatformRecommendations(question as unknown as InsightCommon),
+    platformDistribution:
+      question.platform_distribution ?? question.platformDistribution ?? pickPlatformDistribution(question.metadata),
     isSelected: question.is_selected ?? question.isSelected ?? false,
     timesUsed: question.times_used ?? question.timesUsed ?? 0,
   });

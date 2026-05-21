@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -11,8 +11,7 @@ import {
 } from "@/lib/api/brandInsights.client";
 import { buildBrandInsightsProgressSteps } from "@/lib/brand-insights/progress";
 import { revalidateBrandInsights } from "@/lib/actions/brandInsights";
-import { ProgressSteps } from "@/components/brand-insights/ProgressSteps";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { TrendGenerationProgress } from "@/components/brand-insights/TrendGenerationProgress";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/ToastProvider";
 import { cn } from "@/lib/utils";
@@ -39,7 +38,7 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
   const isFailureStatus = status === "failed" || status === "error" || status === "not_found";
   const isWorkflowRunning =
     isPending || Boolean(generationId) || (status ? !isTerminalBrandInsightsStatus(status) : false);
-  const showStatusAlert = Boolean(error) || isWorkflowRunning || isFailureStatus;
+  const showProgress = isWorkflowRunning || isFailureStatus || Boolean(error);
 
   const buttonLabel = useMemo(() => {
     if (generationId) return "Generating…";
@@ -60,6 +59,11 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
       return true;
     });
   }, [stage, status, isFailureStatus]);
+
+  const currentLabel = useMemo(
+    () => progressSteps.find((s) => s.status === "current")?.label ?? "Queued",
+    [progressSteps]
+  );
 
   useEffect(
     () => () => {
@@ -161,7 +165,7 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
   };
 
   return (
-    <div className={cn("flex flex-col items-end gap-1.5", showStatusAlert || isWorkflowRunning ? "w-full" : "w-auto")}>
+    <div className={cn("flex flex-col items-end gap-1.5", showProgress ? "w-full" : "w-auto")}>
       <div className="flex flex-wrap justify-end gap-1.5">
         <Button onClick={handleRefresh} disabled={isWorking} variant="outline" size="sm" className="h-7 px-2 text-xs">
           {isRefreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
@@ -172,22 +176,14 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
           {buttonLabel}
         </Button>
       </div>
-      {showStatusAlert && (
-        <Alert variant={error ? "destructive" : "default"}>
-          {error || isFailureStatus ? <AlertTriangle /> : <Loader2 className="size-4 animate-spin" />}
-          <AlertTitle>{error || isFailureStatus ? "Generation failed" : "Generation in progress"}</AlertTitle>
-          <AlertDescription>
-            {error
-              ? error
-              : isFailureStatus
-                ? stageMessage ?? (status ? `Status: ${status}` : "Unable to complete generation")
-                : `${Math.round(progressPercent ?? 0)}%${stageMessage ? ` · ${stageMessage}` : status ? ` · Status: ${status}` : ""}`}
-          </AlertDescription>
-        </Alert>
+      {showProgress && (
+        <TrendGenerationProgress
+          progressPercent={progressPercent ?? 0}
+          currentLabel={currentLabel}
+          isError={isFailureStatus || Boolean(error)}
+          errorMessage={error ?? stageMessage ?? undefined}
+        />
       )}
-      {isWorkflowRunning && !error ? (
-        <ProgressSteps data={{ steps: progressSteps }} progressPercent={progressPercent ?? undefined} />
-      ) : null}
     </div>
   );
 }

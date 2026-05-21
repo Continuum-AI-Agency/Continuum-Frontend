@@ -37,7 +37,7 @@ function formatDate(value?: string) {
 
 function BrandTrendsPanelSkeleton() {
   return (
-    <Card className="flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none">
+    <Card className="flex flex-col gap-0 border py-0 shadow-none">
       <CardHeader className="gap-[var(--app-shell-gap)] border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export function BrandTrendsPanel({
   }
 
   return (
-    <Card data-tour-id="brand-trends" className={cn("flex h-full min-h-0 flex-col gap-0 border py-0 shadow-none", className)}>
+    <Card data-tour-id="brand-trends" className={cn("flex flex-col gap-0 border py-0 shadow-none", className)}>
       <CardHeader className="gap-0 border-b px-[var(--app-shell-pad-inline)] py-[var(--app-shell-pad-block)]">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-2">
@@ -134,8 +134,8 @@ export function BrandTrendsPanel({
         </div>
       </CardHeader>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-1.5 p-2">
-        <div className="min-h-0 flex-1">
+      <CardContent className="flex flex-col gap-1.5 p-2">
+        <div>
           <BrandTrendsTabs
             trends={trends}
             events={events}

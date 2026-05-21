@@ -31,6 +31,23 @@ export const brandInsightsPlatformSchema = z.enum([
   "reddit_basic",
 ]);
 
+export const brandInsightsPlatformRecommendationSchema = z.object({
+  platform: z.string(),
+  reason: z.string(),
+});
+
+export const brandInsightsCitationSchema = z.object({
+  id: z.string(),
+  platform: z.string().optional(),
+  signalTitle: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  authorHandle: z.string().optional(),
+  publishedAt: z.string().optional(),
+  likeCount: z.number().int().nonnegative().optional(),
+  commentsCount: z.number().int().nonnegative().optional(),
+  rationale: z.string().optional(),
+});
+
 export const brandInsightsTrendSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -38,6 +55,14 @@ export const brandInsightsTrendSchema = z.object({
   relevanceToBrand: z.string().optional(),
   platforms: z.array(z.string()).optional(),
   source: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  analysisTags: z.array(z.string()).optional(),
+  sourceSignalCount: z.number().int().nonnegative().optional(),
+  signalWindowStart: z.string().optional(),
+  signalWindowEnd: z.string().optional(),
+  recommendedPlatforms: z.array(z.string()).optional(),
+  platformRecommendations: z.array(brandInsightsPlatformRecommendationSchema).optional(),
   isSelected: z.boolean().default(false),
   timesUsed: z.number().int().nonnegative().default(0),
 });
@@ -48,6 +73,16 @@ export const brandInsightsEventSchema = z.object({
   date: z.string().optional(),
   description: z.string().optional(),
   opportunity: z.string().optional(),
+  source: z.string().optional(),
+  sourceUrl: z.string().optional(),
+  relevanceToBrand: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  analysisTags: z.array(z.string()).optional(),
+  sourceSignalCount: z.number().int().nonnegative().optional(),
+  signalWindowStart: z.string().optional(),
+  signalWindowEnd: z.string().optional(),
+  recommendedPlatforms: z.array(z.string()).optional(),
+  platformRecommendations: z.array(brandInsightsPlatformRecommendationSchema).optional(),
   platforms: z.array(z.string()).optional(),
   isSelected: z.boolean().default(false),
   timesUsed: z.number().int().nonnegative().default(0),
@@ -57,8 +92,16 @@ export const brandInsightsQuestionSchema = z.object({
   id: z.string(),
   question: z.string(),
   socialPlatform: z.string().optional(),
+  socialPlatforms: z.array(z.string()).optional(),
   contentTypeSuggestion: z.string().optional(),
   whyRelevant: z.string().optional(),
+  niche: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  analysisTags: z.array(z.string()).optional(),
+  sourceSignalCount: z.number().int().nonnegative().optional(),
+  recommendedPlatforms: z.array(z.string()).optional(),
+  platformRecommendations: z.array(brandInsightsPlatformRecommendationSchema).optional(),
+  platformDistribution: z.record(z.string(), z.number()).optional(),
   isSelected: z.boolean().default(false),
   timesUsed: z.number().int().nonnegative().default(0),
 });
@@ -271,6 +314,8 @@ export const brandInsightsGenerateInputSchema = z.object({
 export type BrandInsightsTrend = z.infer<typeof brandInsightsTrendSchema>;
 export type BrandInsightsEvent = z.infer<typeof brandInsightsEventSchema>;
 export type BrandInsightsQuestion = z.infer<typeof brandInsightsQuestionSchema>;
+export type BrandInsightsCitation = z.infer<typeof brandInsightsCitationSchema>;
+export type BrandInsightsPlatformRecommendation = z.infer<typeof brandInsightsPlatformRecommendationSchema>;
 export type BrandInsightsQuestionsByNiche = z.infer<typeof brandInsightsQuestionsByNicheSchema>;
 export type BrandInsightsTrendsAndEvents = z.infer<typeof brandInsightsTrendsAndEventsSchema>;
 export type BrandInsightsData = z.infer<typeof brandInsightsDataSchema>;

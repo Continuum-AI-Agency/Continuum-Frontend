@@ -46,7 +46,7 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, brandId
   }, [events, questionsByNiche, trends]);
 
   return (
-    <Tabs defaultValue="trends" className="flex h-full min-h-0 flex-col gap-1">
+    <Tabs defaultValue="trends" className="flex flex-col gap-1">
       <TabsList className="grid h-7 w-full grid-cols-2 gap-0.5 p-0.5 sm:w-fit sm:grid-cols-4">
         <TabsTrigger value="trends" className="h-6 px-2 text-[11px]">
           Trends <Badge variant="secondary">{trends.length}</Badge>
@@ -62,19 +62,19 @@ export function BrandTrendsTabs({ trends, events = [], questionsByNiche, brandId
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="trends" className="mt-0 min-h-0 flex-1">
+      <TabsContent value="trends" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto">
         <BrandTrendsGrid trends={trends} platforms={inferredPlatforms} generatedAt={generatedAt} />
       </TabsContent>
 
-      <TabsContent value="events" className="mt-0 min-h-0 flex-1">
+      <TabsContent value="events" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto">
         <BrandEventsList events={events} platforms={inferredPlatforms} density="compact" />
       </TabsContent>
 
-      <TabsContent value="questions" className="mt-0 min-h-0 flex-1">
+      <TabsContent value="questions" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto">
         <BrandQuestionsList questionsByNiche={questionsByNiche?.questionsByNiche ?? {}} density="compact" scrollWithinSection />
       </TabsContent>
 
-      <TabsContent value="competitors" className="mt-0 min-h-0 flex-1 overflow-y-auto pr-1">
+      <TabsContent value="competitors" className="mt-0 max-h-[clamp(160px,22dvh,400px)] overflow-y-auto pr-1">
         <CompetitorSearchPanel brandId={brandId} />
       </TabsContent>
     </Tabs>

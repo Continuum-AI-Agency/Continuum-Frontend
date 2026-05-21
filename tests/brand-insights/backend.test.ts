@@ -573,3 +573,101 @@ test("mapBackendInsightsResponse falls back to event_date and defaults selection
   assert.equal(result.data.questionsByNiche.questionsByNiche.Default.questions[0].socialPlatform, "tiktok");
   assert.equal(result.data.questionsByNiche.questionsByNiche.Default.questions[0].isSelected, false);
 });
+
+
+test("mapBackendInsightsResponse propagates curated metadata fields on trends, events, and questions", () => {
+  const payload = {
+    status: "success",
+    data: {
+      generation_id: "gen-meta",
+      trends_and_events: {
+        status: "success",
+        trends: [
+          {
+            id: "trend-meta-1",
+            title: "Omni-Assistant Pivot",
+            description: "Real-time AI partners replacing chatbots.",
+            relevance_to_brand: "Anchors the agency value prop.",
+            source: "OpenAI Spring Update",
+            source_url: "https://openai.com/spring-update",
+            confidence: 0.95,
+            analysis_tags: ["gpt-4o", "evidence_scored"],
+            source_signal_count: 12,
+            signal_window_start: "2026-05-01",
+            signal_window_end: "2026-05-08",
+            primary_platform: "linkedin",
+            platforms: ["linkedin", "youtube"],
+            metadata: {
+              recommended_platforms: ["linkedin", "youtube", "x"],
+              platform_recommendations: [
+                { platform: "linkedin", reason: "LatAm professional audience." },
+                { platform: "youtube", reason: "Deep-dive tutorials." },
+              ],
+            },
+          },
+        ],
+        events: [
+          {
+            id: "event-meta-1",
+            title: "Apple WWDC 2026",
+            event_date: "2026-06-08",
+            description: "Annual developer conference.",
+            opportunity: "Demystify Apple AI updates.",
+            source: "Apple Developer News",
+            source_url: "https://developer.apple.com/wwdc26",
+            confidence: 0.95,
+            analysis_tags: ["apple intelligence"],
+            source_signal_count: 4,
+          },
+        ],
+      },
+      questions_by_niche: {
+        status: "success",
+        questions_by_niche: {
+          Marketing: {
+            questions: [
+              {
+                id: "q-meta-1",
+                question: "Do I need to learn Python in 2026?",
+                niche: "Technical vs. Non-Technical",
+                social_platform: "instagram",
+                content_type_suggestion: "Talking head video",
+                why_relevant: "Targets imposter syndrome.",
+                confidence: 0.9,
+                analysis_tags: ["career anxiety"],
+                metadata: {
+                  platform_distribution: { instagram: 4, facebook: 1 },
+                },
+              },
+            ],
+          },
+        },
+      },
+      week_start_date: "2026-05-01",
+    },
+  };
+
+  const result = mapBackendInsightsResponse(payload);
+  const trend = result.data.trendsAndEvents.trends[0];
+  const event = result.data.trendsAndEvents.events[0];
+  const question = result.data.questionsByNiche.questionsByNiche.Marketing.questions[0];
+
+  assert.equal(trend.confidence, 0.95);
+  assert.equal(trend.sourceUrl, "https://openai.com/spring-update");
+  assert.equal(trend.sourceSignalCount, 12);
+  assert.deepEqual(trend.analysisTags, ["gpt-4o", "evidence_scored"]);
+  assert.equal(trend.signalWindowStart, "2026-05-01");
+  assert.deepEqual(trend.recommendedPlatforms, ["linkedin", "youtube", "x"]);
+  assert.equal(trend.platformRecommendations?.length, 2);
+  assert.equal(trend.platformRecommendations?.[0].platform, "linkedin");
+
+  assert.equal(event.confidence, 0.95);
+  assert.equal(event.opportunity, "Demystify Apple AI updates.");
+  assert.equal(event.sourceUrl, "https://developer.apple.com/wwdc26");
+  assert.equal(event.sourceSignalCount, 4);
+
+  assert.equal(question.niche, "Technical vs. Non-Technical");
+  assert.equal(question.confidence, 0.9);
+  assert.deepEqual(question.platformDistribution, { instagram: 4, facebook: 1 });
+  assert.equal(question.contentTypeSuggestion, "Talking head video");
+});
