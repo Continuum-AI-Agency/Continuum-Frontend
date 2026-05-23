@@ -83,12 +83,17 @@ import type {
 import { cn } from "@/lib/utils";
 import {
   buildPostMetricSeries,
+  calculateHookRate,
+  hookRateTier,
   post24hComparisons,
   postWindowRange,
   POST_GALLERY_WINDOW_DAYS,
+  sortPosts,
   summarizePost7dMetrics,
   type DrilldownWindow,
+  type HookRateTier,
   type PostMetricKey,
+  type PostSortKey,
 } from "@/components/organic/organic-metrics-utils";
 import {
   buildOrganicReportCsv,
@@ -547,6 +552,17 @@ function PostGalleryCard({
             Loading details...
           </Badge>
         ) : null}
+        {(() => {
+          const hookRate = video ? calculateHookRate(post) : undefined;
+          if (hookRate === undefined) return null;
+          const tier = hookRateTier(hookRate);
+          const color = tier === "elite" ? "green" : tier === "good" ? "blue" : tier === "average" ? "yellow" : "red";
+          return (
+            <Badge className="absolute bottom-2 left-2" color={color} variant="solid">
+              {hookRate.toFixed(1)}% hook
+            </Badge>
+          );
+        })()}
       </Box>
     </motion.button>
   );
@@ -710,6 +726,11 @@ function PostSnapshotPanel({
               comparison={metricComparisons.comments}
               compact
             />
+            {(() => {
+              const hookRate = calculateHookRate(post);
+              if (hookRate === undefined) return null;
+              return <HookRateCard hookRate={hookRate} tier={hookRateTier(hookRate)} />;
+            })()}
           </div>
 
           <Box className="mb-3">
@@ -791,6 +812,38 @@ function PostSnapshotPanel({
         </Box>
       </Card>
     </motion.aside>
+  );
+}
+
+const HOOK_RATE_TIER_CONFIG: Record<HookRateTier, { label: string; className: string }> = {
+  elite:   { label: "Elite",   className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
+  good:    { label: "Good",    className: "bg-blue-500/15 text-blue-700 dark:text-blue-300" },
+  average: { label: "Average", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  poor:    { label: "Poor",    className: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
+};
+
+function HookRateCard({ hookRate, tier }: { hookRate: number; tier: HookRateTier }) {
+  const { label, className } = HOOK_RATE_TIER_CONFIG[tier];
+  return (
+    <Card
+      variant="surface"
+      className="col-span-2 border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm"
+    >
+      <Box px="2" py="1">
+        <Flex align="center" justify="between" mb="1">
+          <Text size="1" color="gray" className="leading-none">Hook Rate</Text>
+          <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", className)}>
+            {label}
+          </span>
+        </Flex>
+        <Text size="4" weight="bold" className="leading-tight tabular-nums tracking-tight">
+          {hookRate.toFixed(1)}%
+        </Text>
+        <Text size="1" color="gray" className="mt-0.5 leading-none">
+          3-sec views / impressions
+        </Text>
+      </Box>
+    </Card>
   );
 }
 
@@ -964,6 +1017,7 @@ function Dashboard({
   const [selectedAccountMetric, setSelectedAccountMetric] = React.useState<keyof OrganicMetrics>("reach");
   const [selectedPostMetric, setSelectedPostMetric] = React.useState<PostMetricKey>("views");
   const [drilldownWindow, setDrilldownWindow] = React.useState<DrilldownWindow>("7d");
+  const [postSortKey, setPostSortKey] = React.useState<PostSortKey>("recent");
 
   // Fetch organic insights for KPI tooltips
   const { insights: organicInsights } = useOrganicInsights({
@@ -1333,6 +1387,23 @@ function Dashboard({
                     )}
                   >
                     <motion.div layout className="min-w-0">
+                      <Flex align="center" justify="end" mb="2" px="1" gap="2">
+                        <Text size="1" color="gray">Sort</Text>
+                        <Select.Root
+                          value={postSortKey}
+                          onValueChange={(v) => setPostSortKey(v as PostSortKey)}
+                          size="1"
+                        >
+                          <Select.Trigger variant="soft" />
+                          <Select.Content>
+                            <Select.Item value="recent">Recent</Select.Item>
+                            <Select.Item value="hookRate">Hook Rate</Select.Item>
+                            <Select.Item value="views">Views</Select.Item>
+                            <Select.Item value="reach">Reach</Select.Item>
+                            <Select.Item value="engagement">Engagement</Select.Item>
+                          </Select.Content>
+                        </Select.Root>
+                      </Flex>
                       <div ref={postsScrollerRef} className="mx-auto max-h-[calc(100dvh-11rem)] w-full overflow-y-auto px-1">
                         <div
                           className={cn(
@@ -1340,7 +1411,7 @@ function Dashboard({
                             "[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]"
                           )}
                         >
-                          {(data.posts ?? []).map((post) => (
+                          {sortPosts(data.posts ?? [], postSortKey).map((post) => (
                             <motion.div
                               layout
                               key={post.id}

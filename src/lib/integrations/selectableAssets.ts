@@ -344,24 +344,30 @@ export function getSelectableAssetsFlatListForProvider(response: SelectableAsset
 }
 
 export function getMetaSelectableAdAccountBundles(response: SelectableAssetsResponse): MetaSelectableAdAccountBundles | null {
-  const metaProvider = response.providers?.meta;
-  if (!metaProvider) {
-    const flatMeta = getSelectableAssetsFlatList(response).filter(a => a.type.startsWith("meta_"));
-    if (flatMeta.length === 0) return null;
-  }
-
   const bundles: MetaSelectableAdAccountBundle[] = [];
   const others: SelectableAsset[] = [];
   const adAccountMap = new Map<string, MetaSelectableAdAccountBundle>();
 
-  const assets = getSelectableAssetsFlatListForProvider(response, "meta");
-  if (assets.length === 0) {
-    getSelectableAssetsFlatList(response).forEach(asset => {
-      if (asset.type.startsWith("meta_")) {
-        assets.push(asset);
-      }
-    });
-  }
+  // Union of (provider-meta assets) ∪ (flat-list meta_* assets). Either source
+  // alone misses cases: provider-meta is empty for a user with only their own
+  // assets (which live in response.assets), and the flat list is incomplete
+  // when merges inject teammate-owned assets into response.providers.meta.
+  // A standalone IG account (no ad_account_id) MUST surface regardless of
+  // whether any other Meta-side assets are present.
+  const seen = new Set<string>();
+  const assets: SelectableAsset[] = [];
+  const pushUnique = (asset: SelectableAsset) => {
+    const id = asset.integration_account_id || asset.asset_pk;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    assets.push(asset);
+  };
+  getSelectableAssetsFlatListForProvider(response, "meta").forEach(pushUnique);
+  getSelectableAssetsFlatList(response).forEach((asset) => {
+    if (asset.type.startsWith("meta_")) pushUnique(asset);
+  });
+
+  if (assets.length === 0) return null;
 
   assets.forEach(asset => {
     if (asset.ad_account_id) {

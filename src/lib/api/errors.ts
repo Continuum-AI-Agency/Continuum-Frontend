@@ -26,6 +26,9 @@ export async function toApiError(response: Response): Promise<ApiError> {
     // ignore non-JSON errors
   }
   let message = payload?.message;
+  if (!message && typeof payload?.error === "string") {
+    message = payload.error;
+  }
   if (!message && payload?.error && typeof payload.error === "object") {
     const err = payload.error as Record<string, unknown>;
     const fieldErrors = err.fieldErrors as Record<string, string[]> | undefined;
@@ -40,7 +43,7 @@ export async function toApiError(response: Response): Promise<ApiError> {
     }
   }
   message = message || `${response.status} ${response.statusText}`;
-  const code = payload?.code;
+  const code = (payload?.code ?? payload?.errorCode) as string | undefined;
   return new ApiError(message, response.status, code, payload);
 }
 

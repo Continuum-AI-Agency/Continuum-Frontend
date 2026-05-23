@@ -244,7 +244,7 @@ export const readinessAnalysisSchema = z.object({
 
 export type ReadinessAnalysis = z.infer<typeof readinessAnalysisSchema>;
 
-const previewSectionSchema = z.enum([
+export const previewSectionSchema = z.enum([
   "brand_profile",
   "voice",
   "audience",
@@ -253,7 +253,16 @@ const previewSectionSchema = z.enum([
   "readiness",
   "first_impression",
 ]);
-type PreviewSection = z.infer<typeof previewSectionSchema>;
+export type PreviewSection = z.infer<typeof previewSectionSchema>;
+
+const auditEnrichSectionSchema = z.enum([
+  "audit.voice",
+  "audit.audience",
+  "audit.website",
+  "audit.business",
+]);
+const enrichSectionSchema = z.union([previewSectionSchema, auditEnrichSectionSchema]);
+export type EnrichSection = z.infer<typeof enrichSectionSchema>;
 
 export const firstImpressionSchema = z.object({
   headline: z.string().min(1),
@@ -305,12 +314,15 @@ export const previewWorkflowResultSchema = z
   .partial()
   .passthrough();
 
+const seqSchema = z.number().int().nonnegative().optional();
+
 const previewStatusEventSchema = z
   .object({
     kind: z.literal("status"),
     section: previewSectionSchema,
-    status: z.string(),
+    status: z.enum(["running", "done", "error"]),
     error: z.string().optional(),
+    seq: seqSchema,
   })
   .passthrough();
 
@@ -318,17 +330,20 @@ const previewStreamEventSchema = z.object({
   kind: z.literal("stream"),
   section: previewSectionSchema,
   delta: z.string(),
+  seq: seqSchema,
 });
 
 const previewDataEventSchema = z.object({
   kind: z.literal("data"),
   section: previewSectionSchema,
   data: z.unknown(),
+  seq: seqSchema,
 });
 
 const previewStructuredEventSchema = z.object({
   kind: z.literal("structured"),
   data: onboardingReportStructuredSchema,
+  seq: seqSchema,
 });
 
 const previewEmbeddingEventSchema = z
@@ -337,6 +352,7 @@ const previewEmbeddingEventSchema = z
     target: z.string(),
     status: z.string(),
     error: z.string().optional(),
+    seq: seqSchema,
   })
   .passthrough();
 
@@ -344,14 +360,16 @@ const previewPingEventSchema = z
   .object({
     kind: z.literal("ping"),
     ts: z.union([z.string(), z.number()]).optional(),
+    seq: seqSchema,
   })
   .passthrough();
 
 const previewSparkEventSchema = z
   .object({
     kind: z.literal("spark"),
-    section: z.string(),
+    section: previewSectionSchema,
     label: z.string(),
+    seq: seqSchema,
   })
   .passthrough();
 
@@ -359,15 +377,37 @@ const previewErrorSchema = z
   .object({
     kind: z.literal("error"),
     message: z.string(),
+    seq: seqSchema,
   })
   .passthrough();
 
-const previewCompleteSchema = z.object({
-  kind: z.literal("complete"),
-  phase: z.string().optional(),
-  status: z.string(),
-  result: previewWorkflowResultSchema.optional(),
-}).passthrough();
+const previewRunEventSchema = z
+  .object({
+    kind: z.literal("run"),
+    run_id: z.string(),
+    reused: z.boolean().optional().default(false),
+    seq: seqSchema,
+  })
+  .passthrough();
+
+const previewEnrichEventSchema = z
+  .object({
+    kind: z.literal("enrich"),
+    section: enrichSectionSchema,
+    data: z.unknown(),
+    seq: z.number().int().nonnegative(),
+  })
+  .passthrough();
+
+const previewCompleteSchema = z
+  .object({
+    kind: z.literal("complete"),
+    phase: z.string().optional(),
+    status: z.enum(["ok", "partial", "error"]).catch("error"),
+    result: previewWorkflowResultSchema.optional(),
+    seq: seqSchema,
+  })
+  .passthrough();
 
 export type PlatformAgentResult = z.infer<typeof platformAgentResultSchema>;
 export type WebsitePalette = z.infer<typeof websitePaletteSchema>;
@@ -379,22 +419,27 @@ export type OnboardingReportStructured = z.infer<typeof onboardingReportStructur
 export type OnboardingPreviewSection = PreviewSection;
 export type OnboardingPreviewWorkflowResult = z.infer<typeof previewWorkflowResultSchema>;
 
+export type SectionStatusValue = "running" | "done" | "error";
+export type CompleteStatusValue = "ok" | "partial" | "error";
+
 export type OnboardingPreviewEvent =
-  | { type: "status"; section: PreviewSection; status: string; error?: string }
-  | { type: "stream"; section: PreviewSection; delta: string }
-  | { type: "voice"; payload: BrandVoice }
-  | { type: "audience"; payload: TargetAudience }
-  | { type: "brand_profile"; payload: AgentBrandProfile }
-  | { type: "website"; payload: WebsiteSummary | null }
-  | { type: "business"; payload: BusinessSummary | null }
-  | { type: "readiness"; payload: ReadinessAnalysis }
-  | { type: "first_impression"; payload: FirstImpression }
-  | { type: "spark"; section: string; label: string }
-  | { type: "structured"; payload: OnboardingReportStructured }
-  | { type: "embedding"; target: string; status: string; error?: string }
-  | { type: "complete"; phase?: string; status: string; result?: OnboardingPreviewWorkflowResult }
-  | { type: "ping" }
-  | { type: "error"; message: string };
+  | { type: "run"; runId: string; reused: boolean; seq?: number }
+  | { type: "status"; section: PreviewSection; status: SectionStatusValue; error?: string; seq?: number }
+  | { type: "stream"; section: PreviewSection; delta: string; seq?: number }
+  | { type: "voice"; payload: BrandVoice; seq?: number }
+  | { type: "audience"; payload: TargetAudience; seq?: number }
+  | { type: "brand_profile"; payload: AgentBrandProfile; seq?: number }
+  | { type: "website"; payload: WebsiteSummary | null; seq?: number }
+  | { type: "business"; payload: BusinessSummary | null; seq?: number }
+  | { type: "readiness"; payload: ReadinessAnalysis; seq?: number }
+  | { type: "first_impression"; payload: FirstImpression; seq?: number }
+  | { type: "spark"; section: PreviewSection; label: string; seq?: number }
+  | { type: "structured"; payload: OnboardingReportStructured; seq?: number }
+  | { type: "embedding"; target: string; status: string; error?: string; seq?: number }
+  | { type: "enrich"; section: EnrichSection; data: unknown; seq: number }
+  | { type: "complete"; phase?: string; status: CompleteStatusValue; result?: OnboardingPreviewWorkflowResult; seq?: number }
+  | { type: "ping"; seq?: number }
+  | { type: "error"; message: string; seq?: number };
 
 async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
@@ -430,8 +475,6 @@ export async function checkOnboardingAgentHealth(options?: { signal?: AbortSigna
     throw new Error("Onboarding agent service is unhealthy.");
   }
 }
-
-const TERMINAL_OK_STATUSES = new Set(["ok", "success", "done", "completed", "complete"]);
 
 export const PREVIEW_PROMPT_VERSION = 1;
 
@@ -478,6 +521,23 @@ export const previewSnapshotSchema = z
   .passthrough();
 export type PreviewSnapshot = z.infer<typeof previewSnapshotSchema>;
 
+export const previewStatusSnapshotSchema = z
+  .object({
+    runId: z.string(),
+    status: previewRunStatusSchema,
+    lastSeq: z.number().int().nonnegative().nullable().optional(),
+    startedAt: z.string().optional(),
+    completedAt: z.union([z.string(), z.null()]).optional(),
+    result: previewWorkflowResultSchema.nullable().optional(),
+    error: z
+      .object({ message: z.string() })
+      .passthrough()
+      .nullable()
+      .optional(),
+  })
+  .passthrough();
+export type PreviewStatusSnapshot = z.infer<typeof previewStatusSnapshotSchema>;
+
 type PreviewOptions = {
   payload: AgentRequestPayload;
   signal?: AbortSignal;
@@ -501,7 +561,7 @@ type ConsumerResult = {
 
 async function readRunHandshake(
   body: ReadableStream<Uint8Array>
-): Promise<{ runId: string | null; stream: ReadableStream<Uint8Array> }> {
+): Promise<{ runId: string | null; reused: boolean; stream: ReadableStream<Uint8Array> }> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -513,8 +573,11 @@ async function readRunHandshake(
     const match = buffer.match(/event:\s*run\r?\ndata:\s*(\{[^\n]+\})\r?\n/);
     if (match) {
       let runId: string | null = null;
+      let reused = false;
       try {
-        runId = (JSON.parse(match[1]) as { run_id?: string }).run_id ?? null;
+        const parsed = JSON.parse(match[1]) as { run_id?: string; reused?: boolean };
+        runId = parsed.run_id ?? null;
+        reused = Boolean(parsed.reused);
       } catch {
         // malformed handshake — proceed without runId
       }
@@ -534,11 +597,11 @@ async function readRunHandshake(
           reader.cancel();
         },
       });
-      return { runId, stream };
+      return { runId, reused, stream };
     }
   }
 
-  return { runId: null, stream: new ReadableStream({ start: (c) => c.close() }) };
+  return { runId: null, reused: false, stream: new ReadableStream({ start: (c) => c.close() }) };
 }
 
 export async function runOnboardingPreview(options: PreviewOptions): Promise<RunOnboardingPreviewResult> {
@@ -565,8 +628,9 @@ export async function runOnboardingPreview(options: PreviewOptions): Promise<Run
     throw new Error("Preview stream was not available.");
   }
 
-  const { runId, stream } = await readRunHandshake(response.body);
+  const { runId, reused, stream } = await readRunHandshake(response.body);
   options.onRunId?.(runId);
+  if (runId) options.onEvent?.({ type: "run", runId, reused });
 
   const result = await consumePreviewStream(stream, {
     onEvent: options.onEvent,
@@ -615,6 +679,19 @@ export async function fetchPreviewLatest(
   if (response.status === 404) return null;
   await assertOk(response);
   return previewLatestSchema.parse(await response.json());
+}
+
+export async function fetchPreviewStatus(
+  runId: string,
+  options?: { signal?: AbortSignal }
+): Promise<PreviewStatusSnapshot | null> {
+  const response = await fetch(
+    buildUrl(`/onboarding/brand-profiles/preview/${encodeURIComponent(runId)}/status`),
+    { method: "GET", cache: "no-store", signal: options?.signal }
+  );
+  if (response.status === 404) return null;
+  await assertOk(response);
+  return previewStatusSnapshotSchema.parse(await response.json());
 }
 
 export async function fetchPreviewSnapshot(
@@ -692,6 +769,7 @@ async function consumePreviewStream(
   let latestProfile: AgentBrandProfile | undefined;
   let latestStructured: OnboardingReportStructured | undefined;
   let finalResult: OnboardingPreviewWorkflowResult | undefined;
+  let highWater = 0;
 
   const dispatch = (event: OnboardingPreviewEvent) => {
     options.onEvent?.(event);
@@ -770,9 +848,30 @@ async function consumePreviewStream(
           dispatch({ type: "ping" });
           return;
         }
+        case "run": {
+          try {
+            const parsed = previewRunEventSchema.parse(parsedPayload);
+            dispatch({ type: "run", runId: parsed.run_id, reused: parsed.reused, seq: parsed.seq });
+          } catch (error) {
+            if (error instanceof z.ZodError) {
+              console.warn("[agentClient] Malformed run event ignored", { eventName });
+              return;
+            }
+            throw error;
+          }
+          return;
+        }
         case "spark": {
-          const parsed = previewSparkEventSchema.parse(parsedPayload);
-          dispatch({ type: "spark", section: parsed.section, label: parsed.label });
+          try {
+            const parsed = previewSparkEventSchema.parse(parsedPayload);
+            dispatch({ type: "spark", section: parsed.section, label: parsed.label, seq: parsed.seq });
+          } catch (error) {
+            if (error instanceof z.ZodError) {
+              console.warn("[agentClient] Malformed spark event ignored", { eventName });
+              return;
+            }
+            throw error;
+          }
           return;
         }
         case "status": {
@@ -782,12 +881,13 @@ async function consumePreviewStream(
             section: parsed.section,
             status: parsed.status,
             error: parsed.error,
+            seq: parsed.seq,
           });
           return;
         }
         case "stream": {
           const parsed = previewStreamEventSchema.parse(parsedPayload);
-          dispatch({ type: "stream", section: parsed.section, delta: parsed.delta });
+          dispatch({ type: "stream", section: parsed.section, delta: parsed.delta, seq: parsed.seq });
           return;
         }
         case "data": {
@@ -798,12 +898,31 @@ async function consumePreviewStream(
         case "structured": {
           const parsed = previewStructuredEventSchema.parse(parsedPayload);
           latestStructured = parsed.data;
-          dispatch({ type: "structured", payload: parsed.data });
+          dispatch({ type: "structured", payload: parsed.data, seq: parsed.seq });
           return;
         }
         case "embedding": {
           const parsed = previewEmbeddingEventSchema.parse(parsedPayload);
-          dispatch({ type: "embedding", target: parsed.target, status: parsed.status, error: parsed.error });
+          dispatch({
+            type: "embedding",
+            target: parsed.target,
+            status: parsed.status,
+            error: parsed.error,
+            seq: parsed.seq,
+          });
+          return;
+        }
+        case "enrich": {
+          try {
+            const parsed = previewEnrichEventSchema.parse(parsedPayload);
+            dispatch({ type: "enrich", section: parsed.section, data: parsed.data, seq: parsed.seq });
+          } catch (error) {
+            if (error instanceof z.ZodError) {
+              console.warn("[agentClient] Malformed enrich event ignored", { eventName });
+              return;
+            }
+            throw error;
+          }
           return;
         }
         case "complete": {
@@ -822,16 +941,13 @@ async function consumePreviewStream(
             phase: parsed.phase,
             status: parsed.status,
             result: parsed.result,
+            seq: parsed.seq,
           });
-          const status = parsed.status?.toLowerCase() ?? "";
-          if (status && !TERMINAL_OK_STATUSES.has(status)) {
-            throw new Error(`Onboarding preview did not finish cleanly (status: ${parsed.status}).`);
-          }
           return;
         }
         case "error": {
           const parsed = previewErrorSchema.parse(parsedPayload);
-          dispatch({ type: "error", message: parsed.message });
+          dispatch({ type: "error", message: parsed.message, seq: parsed.seq });
           throw new Error(parsed.message);
         }
         default:
@@ -876,9 +992,10 @@ async function consumePreviewStream(
             section: parsed.section,
             status: parsed.status,
             error: parsed.error,
+            seq: parsed.seq,
           });
         } catch {
-          dispatch({ type: "status", section: "brand_profile", status: "pending" });
+          // legacy named-event status payload didn't match the contract — ignore
         }
         break;
       case "structured": {
@@ -948,7 +1065,13 @@ async function consumePreviewStream(
             // comment/heartbeat line; ignore
           }
         }
-        if (sequence !== null) options.onSequence?.(sequence);
+        if (sequence !== null) {
+          if (sequence <= highWater) {
+            continue;
+          }
+          highWater = sequence;
+          options.onSequence?.(sequence);
+        }
         if (dataLines.length === 0) {
           continue;
         }

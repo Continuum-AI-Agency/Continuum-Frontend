@@ -35,6 +35,7 @@ export type IntegrationSwitcherItem = {
   icon: IconComponent;
   status: IntegrationSwitcherItemStatus;
   code?: string;
+  subtitle?: string;
   children?: IntegrationSwitcherItem[];
 };
 
@@ -353,8 +354,15 @@ function IntegrationItemRow({
           <span className="shrink-0 font-mono text-sm text-muted-foreground">
             {item.code ?? item.id}
           </span>
-          <span className="min-w-0 truncate text-sm font-medium text-primary">
-            {item.title}
+          <span className="min-w-0 flex-1 truncate">
+            <span className="block truncate text-sm font-medium text-primary">
+              {item.title}
+            </span>
+            {item.subtitle ? (
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {item.subtitle}
+              </span>
+            ) : null}
           </span>
         </div>
         {onItemToggle ? (
@@ -483,7 +491,7 @@ function IntegrationItemList({
               {emptyState}
             </div>
           ) : (
-            <ScrollArea className="flex-1 pr-2">
+            <ScrollArea className="min-h-0 flex-1 pr-2">
               <div className="flex flex-col">
                 {items.map((item) => (
                   <IntegrationItemRow

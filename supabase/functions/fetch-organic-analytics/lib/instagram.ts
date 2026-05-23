@@ -321,6 +321,12 @@ async function fetchInstagramBoostedSignals(
   return { byPermalink, byPostId };
 }
 
+function isVideoOrReel(post: Record<string, unknown>): boolean {
+  const mediaType = String(post.media_type ?? "").toUpperCase();
+  const productType = String(post.media_product_type ?? "").toUpperCase();
+  return mediaType === "VIDEO" || productType === "REELS" || productType === "REEL";
+}
+
 async function fetchInstagramPostDetails(params: {
   accessToken: string;
   post: Record<string, unknown>;
@@ -341,9 +347,14 @@ async function fetchInstagramPostDetails(params: {
   const dailyUntilDate = addDays(dailyUntilExclusiveDate, -1);
   const dailyUntil = toYmd(dailyUntilDate);
 
+  const isVideoPost = isVideoOrReel(post);
+  const lifetimeMetricFields = isVideoPost
+    ? "reach,views,likes,comments,shares,saved,total_interactions,impressions,video_3_sec_video_view"
+    : "reach,views,likes,comments,shares,saved,total_interactions,impressions";
+
   const [insightsPayload, commentsPayload, dailyPayload] = await Promise.all([
     metaFetchJson(`https://graph.facebook.com/${META_API_VERSION}/${postId}/insights`, {
-      metric: "reach,views,likes,comments,shares,saved,total_interactions",
+      metric: lifetimeMetricFields,
       period: "lifetime",
       access_token: accessToken,
     }).catch(() => null),
@@ -361,6 +372,11 @@ async function fetchInstagramPostDetails(params: {
     }).catch(() => null),
   ]);
 
+  const impressions = metricTotal(extractMetricByName(insightsPayload ?? undefined, "impressions"));
+  const videoThreeSecViews = isVideoPost
+    ? metricTotal(extractMetricByName(insightsPayload ?? undefined, "video_3_sec_video_view"))
+    : undefined;
+
   const metrics = {
     reach: metricTotal(extractMetricByName(insightsPayload ?? undefined, "reach")),
     views: metricTotal(extractMetricByName(insightsPayload ?? undefined, "views")),
@@ -369,6 +385,11 @@ async function fetchInstagramPostDetails(params: {
     shares: metricTotal(extractMetricByName(insightsPayload ?? undefined, "shares")),
     saved: metricTotal(extractMetricByName(insightsPayload ?? undefined, "saved")),
     totalInteractions: metricTotal(extractMetricByName(insightsPayload ?? undefined, "total_interactions")),
+    impressions,
+    videoThreeSecViews,
+    hookRate: isVideoPost && impressions > 0 && videoThreeSecViews !== undefined
+      ? (videoThreeSecViews / impressions) * 100
+      : undefined,
   };
 
   const dailyViews = parseInsightsSeries(dailyPayload ?? undefined, "views");

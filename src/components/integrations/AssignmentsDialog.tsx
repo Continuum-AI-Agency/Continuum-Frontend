@@ -21,6 +21,8 @@ import {
   type UserIntegrationAssetRow,
 } from "@/lib/api/integrations";
 import { applyBrandIntegrationAssignmentsAction } from "@/app/(post-auth)/settings/integrations/actions";
+import type { BrandMember } from "@/lib/onboarding/state";
+import { getMemberDisplayName } from "@/lib/brands/memberDisplay";
 import type { SelectableAsset } from "@/lib/schemas/integrations";
 import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import {
@@ -44,6 +46,10 @@ export type AssignmentsDialogProps = {
   brandProfileId: string;
   summary: BrandIntegrationSummary;
   assignedIds: string[];
+  // Optional: when not provided (e.g. onboarding flow), every row is treated as
+  // owned by the caller and the "tagged by" UX is a no-op.
+  members?: BrandMember[];
+  currentUserId?: string;
   onSaved?: () => Promise<void> | void;
 };
 
@@ -67,6 +73,8 @@ export function AssignmentsDialog({
   brandProfileId,
   summary,
   assignedIds,
+  members = [],
+  currentUserId = "",
   onSaved,
 }: AssignmentsDialogProps) {
   const { show } = useToast();
@@ -102,6 +110,36 @@ export function AssignmentsDialog({
     [selectableAssetsData]
   );
 
+  // Map<integrationAccountId, ownerUserId> derived from the brand summary.
+  // Accounts whose owner is someone other than the caller are "locked" — the
+  // caller may see them but not toggle them.
+  const ownerByAccountId = useMemo(() => {
+    const map = new Map<string, string | null>();
+    (Object.keys(summary) as PlatformKey[]).forEach((platformKey) => {
+      summary[platformKey]?.accounts.forEach((account) => {
+        map.set(account.integrationAccountId, account.ownerUserId);
+      });
+    });
+    return map;
+  }, [summary]);
+
+  const isLockedForCaller = (id: string): boolean => {
+    const owner = ownerByAccountId.get(id);
+    return owner !== undefined && owner !== null && owner !== currentUserId;
+  };
+
+  const ownerCaption = (id: string): string | null => {
+    if (!isLockedForCaller(id)) return null;
+    return `Tagged by ${getMemberDisplayName(members, ownerByAccountId.get(id) ?? null)}`;
+  };
+
+  const teammateAssignedIds = useMemo(
+    () => assignedIds.filter((id) => isLockedForCaller(id)),
+    // isLockedForCaller depends on ownerByAccountId + currentUserId
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assignedIds, ownerByAccountId, currentUserId]
+  );
+
   const metaBundles = useMemo(
     () => (selectableAssetsData ? getMetaSelectableAdAccountBundles(selectableAssetsData) : null),
     [selectableAssetsData]
@@ -115,11 +153,15 @@ export function AssignmentsDialog({
     const defaults: Record<string, boolean> = {};
     selectableAssets.forEach((asset: SelectableAsset) => {
       const id = getAssetSelectionId(asset);
-      if (id) {
+      // Teammate-owned rows are kept out of selectedById entirely; they're
+      // preserved unchanged through teammateAssignedIds at save time.
+      if (id && !isLockedForCaller(id)) {
         defaults[id] = assignedSet.has(id);
       }
     });
     setSelectedById(defaults);
+    // isLockedForCaller is stable per dialog open thanks to its memo deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, assignedIds, selectableAssets]);
 
   const [mounted, setMounted] = useState(false);
@@ -133,13 +175,12 @@ export function AssignmentsDialog({
     return new Date(dateString).toLocaleString();
   };
 
-  const desiredAssetIds = useMemo(
-    () =>
-      Object.entries(selectedById)
-        .filter(([, selected]) => selected)
-        .map(([id]) => id),
-    [selectedById]
-  );
+  const desiredAssetIds = useMemo(() => {
+    const ownedSelected = Object.entries(selectedById)
+      .filter(([, selected]) => selected)
+      .map(([id]) => id);
+    return Array.from(new Set([...ownedSelected, ...teammateAssignedIds]));
+  }, [selectedById, teammateAssignedIds]);
 
   const hasChanges = useMemo(() => {
     const assignedSet = new Set(assignedIds);
@@ -148,6 +189,7 @@ export function AssignmentsDialog({
   }, [assignedIds, desiredAssetIds]);
 
   const handleToggle = (id: string, checked: boolean) => {
+    if (isLockedForCaller(id)) return;
     setSelectedById((prev) => ({ ...prev, [id]: checked }));
   };
 
@@ -156,7 +198,7 @@ export function AssignmentsDialog({
       const next = { ...prev };
       assets.forEach((asset: SelectableAsset) => {
         const id = getAssetSelectionId(asset);
-        if (id) {
+        if (id && !isLockedForCaller(id)) {
           next[id] = checked;
         }
       });
@@ -402,8 +444,16 @@ export function AssignmentsDialog({
                                                       )}
                                                     </div>
                                                     <Checkbox
-                                                      checked={!!id && selectedById[id]}
-                                                      disabled={isSaving || !id}
+                                                      checked={
+                                                        !!id &&
+                                                        (selectedById[id] === true ||
+                                                          isLockedForCaller(id))
+                                                      }
+                                                      disabled={
+                                                        isSaving ||
+                                                        !id ||
+                                                        (id ? isLockedForCaller(id) : false)
+                                                      }
                                                       onCheckedChange={(v) =>
                                                         id && handleToggle(id, v === true)
                                                       }
@@ -415,6 +465,14 @@ export function AssignmentsDialog({
                                                       >
                                                         {getSelectableAssetLabel(asset)}
                                                       </Text>
+                                                      {id && ownerCaption(id) ? (
+                                                        <Text
+                                                          size="1"
+                                                          className="block text-amber-500"
+                                                        >
+                                                          {ownerCaption(id)}
+                                                        </Text>
+                                                      ) : null}
                                                       <Text
                                                         size="1"
                                                         color="gray"
@@ -536,8 +594,16 @@ export function AssignmentsDialog({
                                                 <ShadcnTableCell className="py-2 pl-8">
                                                   <Flex align="center" gap="3">
                                                     <Checkbox
-                                                      checked={!!id && selectedById[id]}
-                                                      disabled={isSaving || !id}
+                                                      checked={
+                                                        !!id &&
+                                                        (selectedById[id] === true ||
+                                                          isLockedForCaller(id))
+                                                      }
+                                                      disabled={
+                                                        isSaving ||
+                                                        !id ||
+                                                        (id ? isLockedForCaller(id) : false)
+                                                      }
                                                       onCheckedChange={(v) =>
                                                         id && handleToggle(id, v === true)
                                                       }
@@ -549,6 +615,14 @@ export function AssignmentsDialog({
                                                       >
                                                         {getSelectableAssetLabel(asset)}
                                                       </Text>
+                                                      {id && ownerCaption(id) ? (
+                                                        <Text
+                                                          size="1"
+                                                          className="block text-amber-500"
+                                                        >
+                                                          {ownerCaption(id)}
+                                                        </Text>
+                                                      ) : null}
                                                       <Text
                                                         size="1"
                                                         color="gray"
@@ -685,8 +759,16 @@ export function AssignmentsDialog({
                                                 <ShadcnTableCell className="py-2 pl-8">
                                                   <Flex align="center" gap="3">
                                                     <Checkbox
-                                                      checked={!!id && selectedById[id]}
-                                                      disabled={isSaving || !id}
+                                                      checked={
+                                                        !!id &&
+                                                        (selectedById[id] === true ||
+                                                          isLockedForCaller(id))
+                                                      }
+                                                      disabled={
+                                                        isSaving ||
+                                                        !id ||
+                                                        (id ? isLockedForCaller(id) : false)
+                                                      }
                                                       onCheckedChange={(v) =>
                                                         id && handleToggle(id, v === true)
                                                       }
@@ -698,6 +780,14 @@ export function AssignmentsDialog({
                                                       >
                                                         {getSelectableAssetLabel(asset)}
                                                       </Text>
+                                                      {id && ownerCaption(id) ? (
+                                                        <Text
+                                                          size="1"
+                                                          className="block text-amber-500"
+                                                        >
+                                                          {ownerCaption(id)}
+                                                        </Text>
+                                                      ) : null}
                                                       <Flex direction="column" gap="0">
                                                         {asset.business_id && (
                                                           <Text
@@ -858,8 +948,16 @@ export function AssignmentsDialog({
                                                 <ShadcnTableCell className="py-2 pl-8">
                                                   <Flex align="center" gap="3">
                                                     <Checkbox
-                                                      checked={!!id && selectedById[id]}
-                                                      disabled={isSaving || !id}
+                                                      checked={
+                                                        !!id &&
+                                                        (selectedById[id] === true ||
+                                                          isLockedForCaller(id))
+                                                      }
+                                                      disabled={
+                                                        isSaving ||
+                                                        !id ||
+                                                        (id ? isLockedForCaller(id) : false)
+                                                      }
                                                       onCheckedChange={(v) =>
                                                         id && handleToggle(id, v === true)
                                                       }
@@ -871,6 +969,14 @@ export function AssignmentsDialog({
                                                       >
                                                         {getSelectableAssetLabel(asset)}
                                                       </Text>
+                                                      {id && ownerCaption(id) ? (
+                                                        <Text
+                                                          size="1"
+                                                          className="block text-amber-500"
+                                                        >
+                                                          {ownerCaption(id)}
+                                                        </Text>
+                                                      ) : null}
                                                       <Flex direction="column" gap="0">
                                                         {asset.business_id && (
                                                           <Text

@@ -1,5 +1,5 @@
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
-import type { AgentJobState, ToolCallEvent, UiCard, UiPostCard, UiTrendChart } from "./types";
+import type { AgentJobState, PlanEvidence, PlanItem, ToolCallEvent, UiCard, UiPlanCard, UiPostCard, UiTrendChart } from "./types";
 
 type ParsedOrganicStreamEvent =
   | { kind: "delta"; delta: string }
@@ -255,6 +255,73 @@ function parseUiPostCard(event: Record<string, unknown>): UiPostCard | null {
   };
 }
 
+function parsePlanItems(raw: unknown): PlanItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const itemId = readNonEmptyString(entry.itemId);
+    if (!itemId) return [];
+    return [
+      {
+        itemId,
+        kind: (readNonEmptyString(entry.kind) ?? "create_post") as PlanItem["kind"],
+        platform: (readNonEmptyString(entry.platform) ?? "instagram") as PlanItem["platform"],
+        scheduledAt: readNonEmptyString(entry.scheduledAt) ?? "",
+        format: (typeof entry.format === "string" ? entry.format : null) as PlanItem["format"],
+        trendId: typeof entry.trendId === "string" ? entry.trendId : null,
+        trendTitle: typeof entry.trendTitle === "string" ? entry.trendTitle : null,
+        angle: typeof entry.angle === "string" ? entry.angle : "",
+        objective: (readNonEmptyString(entry.objective) ?? "share") as PlanItem["objective"],
+        audienceSegment: typeof entry.audienceSegment === "string" ? entry.audienceSegment : "",
+        rationale: typeof entry.rationale === "string" ? entry.rationale : "",
+        guidancePrompt: typeof entry.guidancePrompt === "string" ? entry.guidancePrompt : null,
+        draftId: typeof entry.draftId === "string" ? entry.draftId : null,
+        jobId: typeof entry.jobId === "string" ? entry.jobId : null,
+        dependsOn: Array.isArray(entry.dependsOn)
+          ? entry.dependsOn.filter((d): d is string => typeof d === "string")
+          : [],
+        status: (readNonEmptyString(entry.status) ?? "pending") as PlanItem["status"],
+      },
+    ];
+  });
+}
+
+function parsePlanEvidence(raw: unknown): PlanEvidence[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry) => {
+    if (!isRecord(entry)) return [];
+    const summary = typeof entry.summary === "string" ? entry.summary : "";
+    return [
+      {
+        kind: (readNonEmptyString(entry.kind) ?? "trend") as PlanEvidence["kind"],
+        refId: typeof entry.refId === "string" ? entry.refId : null,
+        summary,
+      },
+    ];
+  });
+}
+
+function parseUiPlanCard(event: Record<string, unknown>): UiPlanCard | null {
+  const payload = getEventPayload(event);
+  const planId = readNonEmptyString(payload.planId);
+  if (!planId) return null;
+
+  return {
+    planId,
+    sessionId: readNonEmptyString(payload.sessionId) ?? "",
+    brandId: readNonEmptyString(payload.brandId) ?? "",
+    weekStart: readNonEmptyString(payload.weekStart) ?? "",
+    title: typeof payload.title === "string" ? payload.title : "",
+    summary: typeof payload.summary === "string" ? payload.summary : "",
+    items: parsePlanItems(payload.items),
+    evidence: parsePlanEvidence(payload.evidence),
+    estimatedDurationSeconds:
+      typeof payload.estimatedDurationSeconds === "number" ? payload.estimatedDurationSeconds : 0,
+    status: "proposed",
+    createdAt: readNonEmptyString(payload.createdAt) ?? "",
+  };
+}
+
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
   if (!isRecord(raw)) return { kind: "invalid" };
   const type = readNonEmptyString(raw.type);
@@ -288,6 +355,10 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       return { kind: "toolResult", ...normalizeToolResultEvent(raw) };
     case "ui.trend_chart":
       return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(raw) } };
+    case "ui.plan_card": {
+      const card = parseUiPlanCard(raw);
+      return card ? { kind: "uiCard", card: { type: "plan_card", data: card } } : { kind: "invalid", type };
+    }
     case "ui.post_card": {
       const card = parseUiPostCard(raw);
       return card ? { kind: "postCard", card } : { kind: "invalid", type };

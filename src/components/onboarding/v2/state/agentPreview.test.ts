@@ -26,7 +26,12 @@ mock.module("@/lib/onboarding/agentClient", () => ({
   resumeOnboardingPreview: resumeOnboardingPreviewMock,
 }));
 
-import { runAgentPreview, emptyBuckets } from "@/components/onboarding/v2/state/agentPreview";
+import {
+  runAgentPreview,
+  emptyBuckets,
+  makeEventHandler,
+  type AgentPreviewBuckets,
+} from "@/components/onboarding/v2/state/agentPreview";
 
 const makeInput = () => ({
   brandId: "brand-1",
@@ -104,11 +109,16 @@ describe("runAgentPreview", () => {
 
   it("emptyBuckets returns a fully-zeroed shape", () => {
     const b = emptyBuckets();
+    expect(b.runId).toBeNull();
     expect(b.voice).toBeNull();
     expect(b.firstImpression).toBeNull();
     expect(b.latestSpark).toBeNull();
     expect(b.voiceStream).toBe("");
     expect(b.result).toBeNull();
+    expect(b.audits).toEqual({});
+    expect(b.sectionStatus.voice).toBe("idle");
+    expect(b.sectionStatus.audience).toBe("idle");
+    expect(b.sectionStatus.first_impression).toBe("idle");
   });
 
   it("forwards scrape to runOnboardingPreview", async () => {
@@ -153,5 +163,68 @@ describe("runAgentPreview", () => {
       "run-existing",
       expect.objectContaining({ lastEventId: 5 })
     );
+  });
+});
+
+describe("makeEventHandler (reducer)", () => {
+  function setup(): { buckets: AgentPreviewBuckets; dispatch: ReturnType<typeof mock>; reduce: ReturnType<typeof makeEventHandler> } {
+    const buckets = emptyBuckets();
+    const dispatch = mock(() => {});
+    const reduce = makeEventHandler(buckets, dispatch);
+    return { buckets, dispatch, reduce };
+  }
+
+  it("status events drive sectionStatus", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "status", section: "voice", status: "running" });
+    expect(buckets.sectionStatus.voice).toBe("running");
+    reduce({ type: "status", section: "voice", status: "done" });
+    expect(buckets.sectionStatus.voice).toBe("done");
+  });
+
+  it("run handshake stores runId without resetting rendered state", () => {
+    const { buckets, reduce } = setup();
+    buckets.voice = { tone: "Bold" };
+    reduce({ type: "run", runId: "run-42", reused: true });
+    expect(buckets.runId).toBe("run-42");
+    expect(buckets.voice).toEqual({ tone: "Bold" });
+  });
+
+  it("enrich on audit.* writes into buckets.audits", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "enrich", section: "audit.voice", data: { score: 82 }, seq: 7 });
+    expect(buckets.audits.voice).toEqual({ score: 82 });
+    expect(buckets.audits.audience).toBeUndefined();
+  });
+
+  it("enrich on a prose section populates the matching bucket", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "enrich", section: "first_impression", data: { headline: "Late landing" }, seq: 8 });
+    expect(buckets.firstImpression?.headline).toBe("Late landing");
+  });
+
+  it("complete with status=error flips running sections to error", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "status", section: "audience", status: "running" });
+    reduce({ type: "status", section: "voice", status: "done" });
+    reduce({ type: "complete", phase: "preview", status: "error", result: undefined });
+    expect(buckets.sectionStatus.audience).toBe("error");
+    expect(buckets.sectionStatus.voice).toBe("done");
+  });
+
+  it("error event flips all running sections to error", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "status", section: "voice", status: "running" });
+    reduce({ type: "status", section: "audience", status: "running" });
+    reduce({ type: "error", message: "boom" });
+    expect(buckets.sectionStatus.voice).toBe("error");
+    expect(buckets.sectionStatus.audience).toBe("error");
+  });
+
+  it("dispatches on every state-touching event", () => {
+    const { dispatch, reduce } = setup();
+    reduce({ type: "status", section: "voice", status: "running" });
+    reduce({ type: "spark", section: "voice", label: "Listening to voice…" });
+    expect(dispatch).toHaveBeenCalledTimes(2);
   });
 });

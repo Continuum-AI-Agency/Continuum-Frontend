@@ -30,11 +30,15 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       console.error("Edge function error:", response.status, response.statusText);
-      console.error("Request URL:", `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${functionName}?brandId=${encodeURIComponent(brandId)}&adAccountId=${encodeURIComponent(adAccountId)}`);
-      console.error("Auth header present:", !!authHeader);
       const errorText = await response.text();
       console.error("Edge function error response:", errorText);
-      return NextResponse.json({ error: `Failed to fetch campaigns: ${response.status} ${response.statusText}` }, { status: 500 });
+      let errorBody: { error?: string; code?: string } = {};
+      try {
+        errorBody = JSON.parse(errorText);
+      } catch {
+        errorBody = { error: `Failed to fetch campaigns: ${response.status} ${response.statusText}` };
+      }
+      return NextResponse.json(errorBody, { status: response.status });
     }
 
     const data = await response.json();

@@ -230,8 +230,17 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error fetching organic metrics:', error);
+    if (error instanceof Error && error.message === "meta_login_required") {
+      return new Response(
+        JSON.stringify({
+          error: "Your Facebook account requires a security check. Log in to www.facebook.com, complete any verification steps, then reconnect your Instagram integration in Settings.",
+          errorCode: "meta_login_required",
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unexpected error" }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

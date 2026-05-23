@@ -84,7 +84,10 @@ export async function POST(request: Request) {
     return NextResponse.json(normalized);
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message, ...(error.code ? { errorCode: error.code } : {}) },
+        { status: error.status }
+      );
     }
     const message = error instanceof Error ? error.message : "Failed to load organic metrics";
     return NextResponse.json({ error: message }, { status: 500 });

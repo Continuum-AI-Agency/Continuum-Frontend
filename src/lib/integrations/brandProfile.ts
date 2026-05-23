@@ -1,3 +1,7 @@
+// INVARIANT: this module returns only accounts tied to the brand via
+// `brand_profile_integration_accounts` (BPIA) and joined to an active
+// `brand_integration_grants` row. It MUST NOT surface a user's full set of
+// connected assets. Personal-asset reads live in `userIntegrations.ts`.
 import "server-only";
 
 import { cache } from "react";
@@ -15,6 +19,7 @@ export type BrandIntegrationAccountSummary = {
   providerIntegrationId: string;
   type: string | null;
   settings: Record<string, unknown> | null;
+  ownerUserId: string | null;
 };
 
 export type BrandIntegrationSummary = Record<
@@ -64,6 +69,7 @@ export const fetchBrandIntegrationSummary = cache(
         providerIntegrationId: row.provider_integration_id as string,
         type: (row.account_type as string | null) ?? null,
         settings: (row.settings as Record<string, unknown> | null) ?? null,
+        ownerUserId: (row.owner_user_id as string | null) ?? null,
       });
     }
     return summary;

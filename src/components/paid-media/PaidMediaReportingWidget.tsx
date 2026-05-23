@@ -342,7 +342,7 @@ export function PaidMediaReportingWidget({
              throw new Error("Server error occurred while fetching campaigns. Please try again later.");
            }
          } else if (response.status === 401 || response.status === 403) {
-           throw new Error("Authentication failed. Please reconfigure your ad account connection.");
+           throw new Error(parsedError?.error ?? "Authentication failed. Please reconfigure your ad account connection.");
          } else {
            throw new Error(`Failed to fetch campaigns: ${response.status} ${response.statusText}`);
          }

@@ -1,12 +1,20 @@
 import { useMemo } from "react";
 import { useBackgroundJobs, type JobKey, type JobStatus } from "../state/BackgroundJobsProvider";
 import type { AgentPreviewBuckets } from "../state/agentPreview";
+import type { PreviewSection } from "@/lib/onboarding/agentClient";
 
-const STEP_ORDER: { id: string; label: string; icon: string; jobs: JobKey[]; field?: keyof AgentPreviewBuckets }[] = [
+const STEP_ORDER: {
+  id: string;
+  label: string;
+  icon: string;
+  jobs: JobKey[];
+  field?: keyof AgentPreviewBuckets;
+  section?: PreviewSection;
+}[] = [
   { id: "scrape-assets", label: "Scanning website & extracting assets", icon: "🌐", jobs: ["scrape"] },
   { id: "scrape-style", label: "Detecting colors & typography", icon: "🎨", jobs: ["scrape"] },
-  { id: "voice", label: "Analyzing brand voice & tone", icon: "✍️", jobs: ["agentPreview"], field: "voice" },
-  { id: "audience", label: "Building market & audience profile", icon: "📊", jobs: ["agentPreview"], field: "audience" },
+  { id: "voice", label: "Analyzing brand voice & tone", icon: "✍️", jobs: ["agentPreview"], field: "voice", section: "voice" },
+  { id: "audience", label: "Building market & audience profile", icon: "📊", jobs: ["agentPreview"], field: "audience", section: "audience" },
 ];
 
 type ProcessStepView = {
@@ -34,12 +42,20 @@ export function useProcessingChoreography(): Choreography {
       if (aggregate === "complete") {
         return { id: definition.id, label: definition.label, icon: definition.icon, status: "complete" };
       }
-      const subDone = definition.field && agentBuckets ? Boolean(agentBuckets[definition.field]) : false;
+      const sectionStatus = definition.section && agentBuckets
+        ? agentBuckets.sectionStatus[definition.section]
+        : undefined;
+      const statusComplete = sectionStatus === "done" || sectionStatus === "error";
+      const bucketFallback =
+        !statusComplete && definition.field && agentBuckets
+          ? Boolean(agentBuckets[definition.field])
+          : false;
+      const isComplete = statusComplete || bucketFallback;
       return {
         id: definition.id,
         label: definition.label,
         icon: definition.icon,
-        status: subDone ? "complete" : aggregate,
+        status: isComplete ? "complete" : aggregate,
       };
     });
     const completedShare = steps.reduce(

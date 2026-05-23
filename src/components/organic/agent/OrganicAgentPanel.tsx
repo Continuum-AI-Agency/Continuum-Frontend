@@ -13,6 +13,8 @@ import type { AgentJobState } from "./types";
 import { JobGrid } from "./JobGrid";
 import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
 import { TrendChartCard } from "./TrendChartCard";
+import { PlanCard } from "./PlanCard";
+import type { PlanApprovalDecision } from "./types";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useOrganicSessions } from "./useOrganicSessions";
 import { useSession } from "@/hooks/useSession";
@@ -215,6 +217,46 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         timezone,
         platformAccountIds,
       }).then(() => refreshSessions()).catch(() => {});
+    },
+    [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, refreshSessions]
+  );
+
+  const handlePlanDecision = useCallback(
+    (decision: PlanApprovalDecision) => {
+      const currentSessionId = state.sessionId ?? activeSessionId;
+      if (!currentSessionId || isStreaming) return;
+
+      const content = decision.decision === "approve" ? "Approve plan" : "Reject plan";
+      const messageId = crypto.randomUUID();
+      dispatch({ type: "SUBMIT_USER_MESSAGE", content, messageId });
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const now = new Date();
+      const daysToMonday = (now.getDay() + 6) % 7;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - daysToMonday);
+      const weekStart = monday.toISOString().slice(0, 10);
+
+      const existingMessages = state.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        metadata: m.metadata,
+      }));
+
+      start({
+        brandId,
+        sessionId: currentSessionId,
+        messages: [
+          ...existingMessages,
+          { id: messageId, role: "user" as const, content, metadata: { references: [], planApproval: decision } },
+        ],
+        weekStart,
+        timezone,
+        platformAccountIds,
+      })
+        .then(() => refreshSessions())
+        .catch(() => {});
     },
     [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, refreshSessions]
   );
@@ -453,11 +495,26 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                 />
                 {msg.uiCards && msg.uiCards.length > 0 && (
                   <div className="space-y-2">
-                    {msg.uiCards.map((card, i) =>
-                      card.type === "trend_chart" ? (
-                        <TrendChartCard key={i} chart={card.data} />
-                      ) : null
-                    )}
+                    {msg.uiCards.map((card, i) => {
+                      if (card.type === "trend_chart") {
+                        return <TrendChartCard key={i} chart={card.data} />;
+                      }
+                      if (card.type === "plan_card") {
+                        return (
+                          <PlanCard
+                            key={i}
+                            plan={card.data}
+                            onApprove={() =>
+                              handlePlanDecision({ decision: "approve", planId: card.data.planId })
+                            }
+                            onReject={() =>
+                              handlePlanDecision({ decision: "reject", planId: card.data.planId })
+                            }
+                          />
+                        );
+                      }
+                      return null;
+                    })}
                   </div>
                 )}
               </div>

@@ -41,6 +41,14 @@ export function classifyOrganicError(error: unknown, context: string): Classifie
   if (lower.includes("token") && (lower.includes("expired") || lower.includes("invalid"))) {
     return { userMessage: "Instagram connection expired. Reconnect in Settings.", severity: "error", action: "toast", retryable: false }
   }
+  if (lower.includes("meta_login_required") || lower.includes("www.facebook.com")) {
+    return {
+      userMessage: "Your Facebook account requires a security check. Log in to www.facebook.com, complete any verification steps, then reconnect your Instagram integration in Settings.",
+      severity: "error",
+      action: "banner",
+      retryable: false,
+    }
+  }
 
   // Generic fallback
   return {

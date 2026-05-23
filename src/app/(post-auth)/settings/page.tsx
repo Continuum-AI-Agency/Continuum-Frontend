@@ -127,7 +127,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       ) : null}
       </>);
   } else if (initialSection === "integrations") {
-    const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
+    const repo = createBrandProfileRepository();
+    const [integrationSummary, members] = await Promise.all([
+      fetchBrandIntegrationSummary(activeBrandId),
+      repo.fetchMembers(activeBrandId),
+    ]);
 
     activeSectionSlot = (
       <>
@@ -136,7 +140,11 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
           title="Brand integrations"
           description="Provider accounts assigned to this brand. Tap a provider to inspect its accounts."
         >
-          <BrandIntegrationsSwitcher initialSummary={integrationSummary} />
+          <BrandIntegrationsSwitcher
+            initialSummary={integrationSummary}
+            members={members}
+            currentUserId={user?.id ?? ""}
+          />
         </SettingsSection>
       </>
     );

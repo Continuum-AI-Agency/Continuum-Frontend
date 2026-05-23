@@ -332,7 +332,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         return;
       }
 
-      if (latest.status === "completed") {
+      if (latest.status === "completed" || latest.status === "partial") {
         try {
           const snapshot = await fetchPreviewSnapshot(latest.run_id);
           if (cancelled || !snapshot?.result) return;
@@ -346,6 +346,24 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         } catch (error) {
           console.warn("[onboarding] fetchPreviewSnapshot failed", error);
         }
+        return;
+      }
+
+      if (latest.status === "failed") {
+        let errorMessage: string | undefined;
+        try {
+          const snapshot = await fetchPreviewSnapshot(latest.run_id);
+          errorMessage = snapshot?.error?.message;
+        } catch (error) {
+          console.warn("[onboarding] fetchPreviewSnapshot failed", error);
+        }
+        if (cancelled) return;
+        trackOnboardingEvent("onboarding_agent_preview_failed", {
+          brand_id: brandId,
+          run_id: latest.run_id,
+          resumed: true,
+          message: errorMessage ?? "Preview run failed.",
+        });
       }
     })();
 

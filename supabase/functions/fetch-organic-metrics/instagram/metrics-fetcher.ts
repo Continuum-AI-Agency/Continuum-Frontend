@@ -20,9 +20,14 @@ export async function fetchMetricsForPeriod(instagramId: string, accessToken: st
     console.log('Full metrics URL:', metricsUrl.toString().replace(accessToken, '[REDACTED]'));
     
     const metricsResponse = await fetch(metricsUrl.toString());
-    
+
     if (!metricsResponse.ok) {
-      throw new Error(`Instagram API error: ${await metricsResponse.text()}`);
+      const errorBody = await metricsResponse.json().catch(() => null);
+      const metaCode = (errorBody as Record<string, { code?: number }> | null)?.error?.code;
+      if (metaCode === 190) {
+        throw new Error("meta_login_required");
+      }
+      throw new Error(`Instagram API error: ${JSON.stringify(errorBody)}`);
     }
     
     const metricsData = await metricsResponse.json();

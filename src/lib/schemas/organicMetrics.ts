@@ -95,6 +95,8 @@ export const organicMetricsSchema = z.object({
   following: z.number().optional(),
   videoCount: z.number().optional(),
   impressions: z.number().optional(),
+  videoThreeSecViews: z.number().optional(),
+  hookRate: z.number().optional(),
 });
 
 export type OrganicMetrics = z.infer<typeof organicMetricsSchema>;

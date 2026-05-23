@@ -66,6 +66,7 @@ export function DnaProgressPill() {
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
                 key={headlineLabel}
+                title={headlineLabel}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4 }}

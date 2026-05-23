@@ -1,3 +1,7 @@
+// INVARIANT: renders only accounts already tagged into the brand
+// (`brand_profile_integration_accounts`). To assign new ones, the user opens
+// `AssignmentsDialog`. Never reach for the caller's full user_integrations list
+// here — that's `UserConnectionsSwitcher`'s job.
 "use client";
 
 import { useMemo, useState } from "react";
@@ -16,9 +20,13 @@ import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
 import { PLATFORM_ICONS, PLATFORM_LABELS } from "../shell/platformIcons";
 import type { BrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import type { PlatformKey } from "@/components/onboarding/platforms";
+import type { BrandMember } from "@/lib/onboarding/state";
+import { getMemberDisplayName } from "@/lib/brands/memberDisplay";
 
 type BrandIntegrationsSwitcherProps = {
   initialSummary?: BrandIntegrationSummary;
+  members: BrandMember[];
+  currentUserId: string;
 };
 
 function statusFor(status: string | null): IntegrationSwitcherItemStatus {
@@ -38,7 +46,11 @@ function extractAssignedIntegrationAccountIds(summary?: BrandIntegrationSummary)
   return Array.from(ids);
 }
 
-export function BrandIntegrationsSwitcher({ initialSummary }: BrandIntegrationsSwitcherProps) {
+export function BrandIntegrationsSwitcher({
+  initialSummary,
+  members,
+  currentUserId,
+}: BrandIntegrationsSwitcherProps) {
   const { activeBrandId } = useActiveBrandContext();
   const { integrations, isLoading, refresh } = useBrandIntegrations(activeBrandId, initialSummary);
   const [assignmentsOpen, setAssignmentsOpen] = useState(false);
@@ -61,16 +73,23 @@ export function BrandIntegrationsSwitcher({ initialSummary }: BrandIntegrationsS
         icon: PLATFORM_ICONS[platformKey] ?? Plug,
       });
 
-      data[platformKey] = accounts.map<IntegrationSwitcherItem>((account) => ({
-        id: account.externalAccountId ?? account.alias ?? account.integrationAccountId.slice(0, 6),
-        title: account.name || account.alias || "Unnamed account",
-        icon: PLATFORM_ICONS[platformKey] ?? Plug,
-        status: statusFor(account.status),
-      }));
+      data[platformKey] = accounts.map<IntegrationSwitcherItem>((account) => {
+        const isTeammate =
+          account.ownerUserId !== null && account.ownerUserId !== currentUserId;
+        return {
+          id: account.externalAccountId ?? account.alias ?? account.integrationAccountId.slice(0, 6),
+          title: account.name || account.alias || "Unnamed account",
+          icon: PLATFORM_ICONS[platformKey] ?? Plug,
+          status: statusFor(account.status),
+          subtitle: isTeammate
+            ? `Tagged by ${getMemberDisplayName(members, account.ownerUserId)}`
+            : undefined,
+        };
+      });
     });
 
     return { tabs, data, hasAny: tabs.length > 0 };
-  }, [resolvedSummary]);
+  }, [resolvedSummary, members, currentUserId]);
 
   const assignedIds = useMemo(
     () => extractAssignedIntegrationAccountIds(resolvedSummary),
@@ -123,6 +142,8 @@ export function BrandIntegrationsSwitcher({ initialSummary }: BrandIntegrationsS
           brandProfileId={activeBrandId}
           summary={resolvedSummary ?? ({} as BrandIntegrationSummary)}
           assignedIds={assignedIds}
+          members={members}
+          currentUserId={currentUserId}
           onSaved={async () => {
             await refresh();
           }}

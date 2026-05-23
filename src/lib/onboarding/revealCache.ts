@@ -5,7 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { AgentPreviewBuckets } from "@/components/onboarding/v2/state/agentPreview";
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
 
-export const REVEAL_PROMPT_VERSION = 1;
+export const REVEAL_PROMPT_VERSION = 2;
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 

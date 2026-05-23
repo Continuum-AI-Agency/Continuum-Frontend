@@ -104,7 +104,8 @@ serve(async (req: Request) => {
     }
 
     // Fetch campaigns from Meta API
-    const metaApiUrl = `https://graph.facebook.com/v23.0/${adAccountId}/campaigns`;
+    const normalizedAccountId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+    const metaApiUrl = `https://graph.facebook.com/v23.0/${normalizedAccountId}/campaigns`;
     const params = new URLSearchParams({
       fields: "id,name,status,objective,daily_budget,lifetime_budget",
       filtering: JSON.stringify([{ field: "effective_status", operator: "IN", value: ["ACTIVE"] }]),
@@ -116,6 +117,19 @@ serve(async (req: Request) => {
     if (!response.ok) {
       const errorData = await response.json();
       log("Meta API error", { status: response.status, error: errorData });
+
+      const metaCode = errorData?.error?.code;
+      if (response.status === 403 && metaCode === 200) {
+        return new Response(
+          JSON.stringify({
+            error:
+              "Your connected Meta account hasn't granted the ads_management or ads_read permission. To fix this, reconnect your Meta account and make sure to approve the ads permissions when prompted.",
+            code: "META_PERMISSIONS_MISSING",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(JSON.stringify({ error: "Failed to fetch campaigns from Meta API" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

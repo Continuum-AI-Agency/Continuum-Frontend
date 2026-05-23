@@ -6,6 +6,52 @@ import type {
 
 export type DrilldownWindow = "7d" | "30d";
 export type PostMetricKey = "reach" | "views" | "engagement" | "comments";
+export type HookRateTier = "elite" | "good" | "average" | "poor";
+export type PostSortKey = "recent" | "hookRate" | "views" | "reach" | "engagement";
+
+const HOOK_RATE_THRESHOLDS = { elite: 40, good: 25, average: 15 } as const;
+
+export function calculateHookRate(post: OrganicPost): number | undefined {
+  if (post.metrics?.hookRate !== undefined) return post.metrics.hookRate;
+
+  const mediaType = (post.mediaType ?? "").toUpperCase();
+  const productType = (post.mediaProductType ?? "").toUpperCase();
+  if (mediaType !== "VIDEO" && productType !== "REELS" && productType !== "REEL") return undefined;
+
+  const threeSecViews = post.metrics?.videoThreeSecViews;
+  const impressions = post.metrics?.impressions;
+  if (threeSecViews === undefined || impressions === undefined || impressions === 0) return undefined;
+
+  return (threeSecViews / impressions) * 100;
+}
+
+export function hookRateTier(rate: number): HookRateTier {
+  if (rate >= HOOK_RATE_THRESHOLDS.elite) return "elite";
+  if (rate >= HOOK_RATE_THRESHOLDS.good) return "good";
+  if (rate >= HOOK_RATE_THRESHOLDS.average) return "average";
+  return "poor";
+}
+
+export function sortPosts(posts: OrganicPost[], key: PostSortKey): OrganicPost[] {
+  if (key === "recent") return posts;
+  return [...posts].sort((a, b) => {
+    switch (key) {
+      case "hookRate": {
+        const rA = calculateHookRate(a) ?? -1;
+        const rB = calculateHookRate(b) ?? -1;
+        return rB - rA;
+      }
+      case "views":
+        return (b.metrics?.views ?? 0) - (a.metrics?.views ?? 0);
+      case "reach":
+        return (b.metrics?.reach ?? 0) - (a.metrics?.reach ?? 0);
+      case "engagement":
+        return (b.metrics?.totalInteractions ?? 0) - (a.metrics?.totalInteractions ?? 0);
+      default:
+        return 0;
+    }
+  });
+}
 
 export const POST_GALLERY_WINDOW_DAYS = 30;
 export const POST_GALLERY_MAX_DAYS = 90;
