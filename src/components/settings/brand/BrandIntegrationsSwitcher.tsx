@@ -102,11 +102,11 @@ export function BrandIntegrationsSwitcher({
     <Button
       variant="outline"
       size="sm"
-      className="gap-2"
+      className="gap-1"
       onClick={openAssignments}
       disabled={!activeBrandId || isLoading}
     >
-      <Plus className="h-3.5 w-3.5" />
+      <Plus className="h-4 w-4" />
       Assign accounts
     </Button>
   );

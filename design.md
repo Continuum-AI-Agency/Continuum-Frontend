@@ -1,7 +1,7 @@
 ---
 version: beta
 name: Continuum Singularity
-description: A deeply technical, scalable command-center aesthetic inspired by gravitational physics, utilizing Tailwind CSS, OKLCH color spaces, and responsive component architecture.
+description: A confident AI-marketing command-center aesthetic inspired by gravitational physics, utilizing Tailwind CSS, OKLCH color spaces, and responsive component architecture.
 ---
 
 # Continuum Unified Design System
@@ -196,9 +196,9 @@ Without tokens, developers invent transitions. Continuum motion must feel snappy
 
 | Token | Value | Usage |
 |---|---|---|
-| `duration-fast` | 150ms | Hover color changes, focus rings |
-| `duration-normal` | 250ms | Modals, drawers, panel entrances |
-| `duration-slow` | 400ms | Page-level transitions |
+| `duration-fast` | 50ms | Hover color changes, focus rings |
+| `duration-normal` | 150ms | Modals, drawers, panel entrances |
+| `duration-slow` | 300ms | Page-level transitions |
 | `ease-standard` | `cubic-bezier(0.16, 1, 0.3, 1)` | Micro-interactions, hover states (expo-out) |
 | `ease-entrance` | `cubic-bezier(0, 0, 0.2, 1)` | Elements entering the screen |
 | `ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` | Elements leaving the screen |
