@@ -10,6 +10,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DCOActionsWidget } from "@/components/dashboard/DCOActionsWidget";
+import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
 import {
   Tooltip,
   TooltipContent,
@@ -313,10 +314,17 @@ export function PaidDashboardView({ brandId }: PaidDashboardViewProps) {
             onAnimationComplete={dispatchResize}
           >
             <div style={{ width: RAIL_WIDTH_PX }} className="relative h-full">
-              <DCOActionsWidget
+              <PendingActivityTabs
                 brandId={brandId}
                 variant="rail"
                 className="h-full"
+                activityContent={
+                  <DCOActionsWidget
+                    brandId={brandId}
+                    variant="rail"
+                    className="h-full"
+                  />
+                }
               />
               <DCORailCollapseButton onCollapse={handleCollapse} />
             </div>

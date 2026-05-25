@@ -26,16 +26,17 @@ type Props = {
   brandId: string;
   isLoading: boolean;
   onAdvance: () => void;
+  bindGlobalKeys?: boolean;
 };
 
-export function FocusComposer({ action, brandId, isLoading, onAdvance }: Props) {
+export function FocusComposer({ action, brandId, isLoading, onAdvance, bindGlobalKeys = true }: Props) {
   const reduceMotion = useReducedMotion();
   const [payloadOpen, setPayloadOpen] = React.useState(false);
   const decisionRef = React.useRef<DecisionActionsHandle>(null);
 
   // P opens payload, S advances. Approve/Reject keys live on DecisionActions.
   React.useEffect(() => {
-    if (!action) return;
+    if (!action || !bindGlobalKeys) return;
     function handler(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
@@ -51,7 +52,7 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance }: Props) 
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [action, onAdvance]);
+  }, [action, bindGlobalKeys, onAdvance]);
 
   if (isLoading && !action) {
     return <ComposerSkeleton />;
@@ -126,6 +127,7 @@ export function FocusComposer({ action, brandId, isLoading, onAdvance }: Props) 
                 action={action}
                 brandId={brandId}
                 onAdvance={onAdvance}
+                bindGlobalKeys={bindGlobalKeys}
               />
             </CardFooter>
           </Card>

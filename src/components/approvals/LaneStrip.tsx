@@ -15,11 +15,12 @@ type Props = {
   actions: RuleAction[];
   focusedId: string | null;
   onFocus: (id: string) => void;
+  bindGlobalKeys?: boolean;
 };
 
 const SPRING = { type: "spring" as const, stiffness: 300, damping: 30 };
 
-export function LaneStrip({ actions, focusedId, onFocus }: Props) {
+export function LaneStrip({ actions, focusedId, onFocus, bindGlobalKeys = true }: Props) {
   const pendingDecisions = useApprovalsStore((s) => s.pendingDecisions);
   const reduceMotion = useReducedMotion();
 
@@ -39,6 +40,7 @@ export function LaneStrip({ actions, focusedId, onFocus }: Props) {
   );
 
   React.useEffect(() => {
+    if (!bindGlobalKeys) return;
     function handler(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
@@ -54,7 +56,7 @@ export function LaneStrip({ actions, focusedId, onFocus }: Props) {
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [advance]);
+  }, [advance, bindGlobalKeys]);
 
   if (!actions.length) return null;
 

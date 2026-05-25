@@ -7,7 +7,9 @@ import {
   DotsHorizontalIcon,
   ReloadIcon,
 } from "@radix-ui/react-icons";
+import { PanelRightCloseIcon, PanelRightOpenIcon } from "lucide-react";
 import type { UTCTimestamp } from "lightweight-charts";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -208,7 +210,8 @@ const METRIC_CARD_COLORS: Record<MetricKey, string> = {
   clicks: "#84cc16",
 };
 
-const CHART_HEIGHT_CLASS = "h-[clamp(260px,42svh,460px)]";
+const CHART_MIN_HEIGHT_CLASS = "min-h-[260px] flex-1";
+const CHART_FIXED_HEIGHT_CLASS = "h-[clamp(260px,42svh,460px)]";
 const RAIL_HEIGHT_CLASS = "h-full";
 const RAIL_SCROLL_HEIGHT_CLASS = "h-full";
 const HOURLY_SLICE_OPTIONS: HourlySliceOption[] = [6, 12, 24, 48, "all"];
@@ -630,6 +633,20 @@ export function CampaignAdSetWorkspace({
   const hasSeededCompareSelectionRef = React.useRef(false);
   const inFlightAdLoadsRef = React.useRef(new Set<string>());
   const pendingMarkerSelectionRef = React.useRef<PendingMarkerSelection | null>(null);
+  const railPanelRef = React.useRef<PanelImperativeHandle | null>(null);
+  const [isRailCollapsed, setIsRailCollapsed] = React.useState(false);
+  const toggleRailCollapsed = React.useCallback(() => {
+    const panel = railPanelRef.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+    } else {
+      panel.collapse();
+    }
+  }, []);
+  const handleRailPanelResize = React.useCallback((size: { asPercentage: number }) => {
+    setIsRailCollapsed(size.asPercentage <= 0);
+  }, []);
   const timeWindow = React.useMemo(() => resolveTimeRangeWindow(timeRange), [timeRange]);
   const metricsRange = React.useMemo(() => toMetricsRange(timeRange), [timeRange]);
 
@@ -1793,14 +1810,34 @@ export function CampaignAdSetWorkspace({
               <Switch checked={activeOnly} onCheckedChange={onActiveOnlyChange} />
               <span className="text-[11px] font-medium">Active only</span>
             </div>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={toggleRailCollapsed}
+              aria-label={isRailCollapsed ? "Show rail" : "Hide rail"}
+              aria-pressed={isRailCollapsed}
+              className="h-9 w-9 rounded-md border border-border/70 bg-background p-0"
+            >
+              {isRailCollapsed ? (
+                <PanelRightOpenIcon className="h-4 w-4" />
+              ) : (
+                <PanelRightCloseIcon className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
       </div>
 
       <CardContent className="flex-1 min-h-0 p-0">
         {viewMode === "campaigns" ? (
-          <section className="grid h-full min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="rounded-md border border-border/70 bg-card p-1.5">
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="h-full min-h-0 gap-1.5 p-1.5"
+          >
+            <ResizablePanel defaultSize={75} minSize={55} className="min-w-0">
+            <div className="flex h-full min-h-0 flex-col rounded-md border border-border/70 bg-card p-1.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="rounded border border-border/70 bg-muted/20 px-2 py-1 text-[11px] text-muted-foreground">
                   {selectedCompareSummary ?? "No selection"} · {labelForMetric(campaignMetric)}
@@ -1875,7 +1912,7 @@ export function CampaignAdSetWorkspace({
 
               <ContextMenu>
                 <ContextMenuTrigger>
-                  <div data-tour-id="paid-performance-chart" className={cn("mt-1.5", CHART_HEIGHT_CLASS)}>
+                  <div data-tour-id="paid-performance-chart" className={cn("mt-1.5 min-h-0", CHART_MIN_HEIGHT_CLASS)}>
                     {compareChartSeries.length > 0 ? (
                       <ObservabilityLightweightChart
                         series={compareChartSeries}
@@ -1957,8 +1994,20 @@ export function CampaignAdSetWorkspace({
                 </ContextMenuContent>
               </ContextMenu>
             </div>
+            </ResizablePanel>
 
-            <aside className="flex flex-col overflow-hidden rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
+            <ResizableHandle withHandle className="mx-0.5 bg-transparent" />
+
+            <ResizablePanel
+              panelRef={railPanelRef}
+              defaultSize={25}
+              minSize={14}
+              collapsible
+              collapsedSize={0}
+              onResize={handleRailPanelResize}
+              className="min-w-0"
+            >
+            <aside className="flex h-full flex-col overflow-hidden rounded-md border border-sidebar-border bg-sidebar text-sidebar-foreground">
               <SidebarHeader className="space-y-2 p-2">
                 <Input
                   value={campaignQuery}
@@ -2412,7 +2461,8 @@ export function CampaignAdSetWorkspace({
                 )}
               </SidebarContent>
             </aside>
-          </section>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         ) : (
           <section className="grid h-full min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-1.5">
@@ -2511,7 +2561,7 @@ export function CampaignAdSetWorkspace({
 
                 <ContextMenu>
                   <ContextMenuTrigger>
-                    <div className={cn("mt-1.5", CHART_HEIGHT_CLASS)}>
+                    <div className={cn("mt-1.5", CHART_FIXED_HEIGHT_CLASS)}>
                       {adSetChartSeries.length > 0 ? (
                         <ObservabilityLightweightChart
                           series={adSetChartSeries}

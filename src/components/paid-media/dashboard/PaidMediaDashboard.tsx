@@ -29,6 +29,7 @@ import { CampaignInsightsPanel } from "./CampaignInsightsPanel";
 import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
 import { CampaignIndexManagerDialog } from "./CampaignIndexManagerDialog";
 import { DCOActionAlertsBox } from "./DCOActionAlertsBox";
+import { PendingActivityTabs } from "@/components/approvals/PendingActivityTabs";
 import {
   buildDefaultCustomRange,
   TIME_RANGE_OPTIONS,
@@ -416,12 +417,19 @@ export function PaidMediaDashboard({
             Alerts
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-[min(96vw,1100px)] p-0">
-          <DCOActionAlertsBox
+        <DropdownMenuContent align="end" className="h-[min(80vh,640px)] w-[min(96vw,1100px)] p-0">
+          <PendingActivityTabs
             brandId={brandId}
-            metaAccountId={adAccountId ?? undefined}
-            campaignId={selectedCampaignId}
-            onRefresh={() => setAlertsRefreshTick((current) => current + 1)}
+            variant="dropdown"
+            className="h-full"
+            activityContent={
+              <DCOActionAlertsBox
+                brandId={brandId}
+                metaAccountId={adAccountId ?? undefined}
+                campaignId={selectedCampaignId}
+                onRefresh={() => setAlertsRefreshTick((current) => current + 1)}
+              />
+            }
           />
         </DropdownMenuContent>
       </DropdownMenu>
