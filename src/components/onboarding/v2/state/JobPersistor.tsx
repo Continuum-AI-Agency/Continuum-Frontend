@@ -6,11 +6,13 @@ import { useOnboarding } from "@/components/onboarding/providers/OnboardingConte
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
 import type { AgentPreviewBuckets } from "./agentPreview";
 import type { OnboardingPatch } from "@/lib/onboarding/state";
+import { internalizeLogo } from "@/lib/onboarding/internalizeLogo";
 
 export function JobPersistor() {
   const { jobs } = useBackgroundJobs();
-  const { updateState } = useOnboarding();
+  const { brandId, updateState } = useOnboarding();
   const persisted = useRef<Set<JobKey>>(new Set());
+  const logoInternalized = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     (Object.keys(jobs) as JobKey[]).forEach((key) => {
@@ -19,8 +21,21 @@ export function JobPersistor() {
       if (!patch) return;
       persisted.current.add(key);
       void updateState(patch);
+
+      if (key === "scrape") {
+        const scrape = jobs[key].data as ScrapeResult | null;
+        const logoUrl = scrape?.logoUrl;
+        if (logoUrl && /^https?:\/\//i.test(logoUrl) && !logoInternalized.current.has(logoUrl)) {
+          logoInternalized.current.add(logoUrl);
+          void internalizeLogo(brandId, logoUrl).then((storagePath) => {
+            if (storagePath) {
+              void updateState({ brand: { logoPath: storagePath } });
+            }
+          });
+        }
+      }
     });
-  }, [jobs, updateState]);
+  }, [jobs, brandId, updateState]);
 
   return null;
 }
