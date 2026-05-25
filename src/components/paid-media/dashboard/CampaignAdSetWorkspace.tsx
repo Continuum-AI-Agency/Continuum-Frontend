@@ -1911,7 +1911,7 @@ export function CampaignAdSetWorkspace({
               </div>
 
               <ContextMenu>
-                <ContextMenuTrigger>
+                <ContextMenuTrigger asChild>
                   <div data-tour-id="paid-performance-chart" className={cn("mt-1.5 min-h-0", CHART_MIN_HEIGHT_CLASS)}>
                     {compareChartSeries.length > 0 ? (
                       <ObservabilityLightweightChart
