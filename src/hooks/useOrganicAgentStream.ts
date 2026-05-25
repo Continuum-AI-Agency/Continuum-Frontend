@@ -9,7 +9,10 @@ import type { AgentChatInput } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
 import { parseOrganicStreamEvent } from "@/components/organic/agent/streamEventParser";
 
-export function useOrganicAgentStream(dispatch: React.Dispatch<PanelAction>) {
+export function useOrganicAgentStream(
+  dispatch: React.Dispatch<PanelAction>,
+  opts?: { onRunStarted?: (runId: string) => void }
+) {
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
@@ -115,6 +118,9 @@ export function useOrganicAgentStream(dispatch: React.Dispatch<PanelAction>) {
                 break;
               case "jobUpdate":
                 dispatch({ type: "JOB_UPDATE", job: parsed.job });
+                break;
+              case "runStarted":
+                opts?.onRunStarted?.(parsed.runId);
                 break;
               case "ignored":
                 break;

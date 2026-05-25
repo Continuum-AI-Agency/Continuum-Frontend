@@ -3,12 +3,6 @@
 import { cn } from "@/lib/utils";
 import type { UiTrendChart } from "./types";
 
-const SERIES_COLORS: Record<string, string> = {
-  Trends: "#5A48F9",
-  Events: "#f59e0b",
-  Questions: "#10b981",
-};
-
 const SIGNAL_TYPE_STYLES: Record<string, string> = {
   trend: "bg-violet-500/15 text-violet-500",
   event: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
@@ -21,17 +15,11 @@ const SIGNAL_TYPE_LABELS: Record<string, string> = {
   question: "Q",
 };
 
-const BAR_MAX_H = 68;
-
 type Props = { chart: UiTrendChart };
 
 export function TrendChartCard({ chart }: Props) {
   const title = typeof chart?.title === "string" ? chart.title : "";
-  const windows = Array.isArray(chart?.windows) ? chart.windows : [];
-  const series = Array.isArray(chart?.series) ? chart.series : [];
   const topSignals = Array.isArray(chart?.topSignals) ? chart.topSignals : [];
-
-  const maxValue = Math.max(1, ...series.flatMap((s) => s.data.map((d) => d.value)));
 
   return (
     <div className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3">
@@ -40,40 +28,6 @@ export function TrendChartCard({ chart }: Props) {
           {title}
         </p>
       )}
-
-      <div className="flex items-end gap-8 px-1">
-        {windows.map((w) => (
-          <div key={w} className="flex flex-col items-center gap-1.5">
-            <div className="flex items-end gap-0.5" style={{ height: BAR_MAX_H }}>
-              {series.map((s) => {
-                const val = s.data.find((d) => d.window === w)?.value ?? 0;
-                const h = Math.max(2, Math.round((val / maxValue) * BAR_MAX_H));
-                return (
-                  <div
-                    key={s.label}
-                    className="w-2.5 rounded-t-sm"
-                    style={{ height: h, backgroundColor: SERIES_COLORS[s.label] }}
-                    title={`${s.label}: ${val}`}
-                  />
-                );
-              })}
-            </div>
-            <span className="text-[10px] text-muted-foreground">{w}d</span>
-          </div>
-        ))}
-
-        <div className="ml-auto flex flex-col justify-end gap-1 pb-5">
-          {series.map((s) => (
-            <div key={s.label} className="flex items-center gap-1.5">
-              <span
-                className="h-1.5 w-1.5 rounded-full shrink-0"
-                style={{ backgroundColor: SERIES_COLORS[s.label] }}
-              />
-              <span className="text-[10px] text-muted-foreground">{s.label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {topSignals.length > 0 && (
         <div className="mt-3 space-y-1.5 border-t border-border/40 pt-3">

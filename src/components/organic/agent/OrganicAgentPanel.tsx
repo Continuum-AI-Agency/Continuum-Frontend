@@ -7,6 +7,7 @@ import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { useCalendarStore } from "@/lib/organic/store";
 import { useOrganicAgentStream } from "@/hooks/useOrganicAgentStream";
+import { useCalendarRunStream } from "@/components/organic/hooks/useCalendarRunStream";
 import { initialPanelState, panelReducer } from "./useOrganicAgentReducer";
 import { mapPlacementToDraft } from "./mapPlacementToDraft";
 import type { AgentJobState } from "./types";
@@ -91,7 +92,8 @@ function createOrganicSuggestion(
 
 export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext }: OrganicAgentPanelProps) {
   const [state, dispatch] = useReducer(panelReducer, undefined, initialPanelState);
-  const { start, isStreaming } = useOrganicAgentStream(dispatch);
+  const { attachRun } = useCalendarRunStream();
+  const { start, isStreaming } = useOrganicAgentStream(dispatch, { onRunStarted: attachRun });
   const { user } = useSession();
   const addDraft = useCalendarStore((s) => s.addDraft);
   const calendarDays = useCalendarStore((s) => s.days);

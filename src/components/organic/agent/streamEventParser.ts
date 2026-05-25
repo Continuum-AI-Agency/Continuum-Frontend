@@ -10,6 +10,7 @@ type ParsedOrganicStreamEvent =
   | { kind: "uiCard"; card: UiCard }
   | { kind: "postCard"; card: UiPostCard }
   | { kind: "jobUpdate"; job: Partial<AgentJobState> & { jobId: string } }
+  | { kind: "runStarted"; runId: string; jobId: string }
   | { kind: "ignored"; type?: string }
   | { kind: "invalid"; type?: string };
 
@@ -362,6 +363,11 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "ui.post_card": {
       const card = parseUiPostCard(raw);
       return card ? { kind: "postCard", card } : { kind: "invalid", type };
+    }
+    case "agent.run_started": {
+      const runId = readNonEmptyString(raw.runId);
+      if (!runId) return { kind: "invalid", type };
+      return { kind: "runStarted", runId, jobId: readNonEmptyString(raw.jobId) ?? "" };
     }
     case "job.enqueued":
     case "job.progress":
