@@ -41,7 +41,7 @@ async function trackPreviewReconnect(runId: string, snapshotLastSeq: number, fro
   }
 }
 
-export type SectionStatus = "idle" | "running" | "done" | "error";
+export type SectionStatus = "idle" | "running" | "done" | "skipped" | "error";
 
 export type AgentPreviewSpark = { section: PreviewSection; label: string };
 

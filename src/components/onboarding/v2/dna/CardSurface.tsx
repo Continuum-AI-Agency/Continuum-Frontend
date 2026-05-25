@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, MinusCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,7 +37,8 @@ export function CardSurface({
   className,
 }: CardSurfaceProps) {
   const isLoading = isEmpty && (status === "idle" || status === "running" || status === "indeterminate");
-  const isError = status === "error";
+  const isError = status === "error" && isEmpty;
+  const isSkipped = status === "skipped" && isEmpty;
 
   let body: ReactNode;
   if (isError) {
@@ -45,6 +46,13 @@ export function CardSurface({
       <div className="flex items-start gap-2 text-[12px] text-[#94a3b8]">
         <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#f97316]" />
         <span>{errorMessage ?? "Couldn't load this section. We'll keep trying in the background."}</span>
+      </div>
+    );
+  } else if (isSkipped) {
+    body = (
+      <div className="flex items-start gap-2 text-[12px] text-[#94a3b8]">
+        <MinusCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#cbd5e1]" />
+        <span>Section unavailable for this brand.</span>
       </div>
     );
   } else if (isLoading) {

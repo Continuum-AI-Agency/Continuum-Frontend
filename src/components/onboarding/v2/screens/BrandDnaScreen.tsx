@@ -15,16 +15,33 @@ import { UnderstandingCard } from "../dna/UnderstandingCard";
 import { ReadinessCard } from "../dna/ReadinessCard";
 import { AuditsCard } from "../dna/AuditsCard";
 import { CitationsCard } from "../dna/CitationsCard";
+import { RunProgressBanner } from "../dna/RunProgressBanner";
 import { DimensionChip } from "../readiness/DimensionChip";
 import { FindingsStack } from "../readiness/FindingsStack";
 import { OverallReadinessChip } from "../readiness/OverallReadinessChip";
 import type { AgentPreviewBuckets } from "../state/agentPreview";
-import type { ReadinessAnalysis, ReadinessFinding } from "@/lib/onboarding/agentClient";
+import type { PreviewSection, ReadinessAnalysis, ReadinessFinding } from "@/lib/onboarding/agentClient";
 
 type BrandDnaScreenProps = {
   agentBuckets: AgentPreviewBuckets | null;
   readinessLoading?: boolean;
+  onRetry?: () => void;
 };
+
+function placeholderFor(
+  status: AgentPreviewBuckets["sectionStatus"][keyof AgentPreviewBuckets["sectionStatus"]] | undefined,
+  defaultText: string,
+): string {
+  if (status === "skipped" || status === "error") {
+    return "We couldn't draft this — write your own";
+  }
+  return defaultText;
+}
+
+function countSuccessfulSections(buckets: AgentPreviewBuckets | null): number {
+  if (!buckets) return 0;
+  return Object.values(buckets.sectionStatus).filter((s) => s === "done").length;
+}
 
 const reveal = {
   hidden: { opacity: 0 },
@@ -53,7 +70,16 @@ function safeHostname(url: string): string | null {
   }
 }
 
-export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScreenProps) {
+function isTerminallyEmpty<T>(
+  buckets: AgentPreviewBuckets | null,
+  section: PreviewSection,
+  data: T | null | undefined,
+): boolean {
+  const status = buckets?.sectionStatus[section];
+  return (status === "skipped" || status === "error") && data == null;
+}
+
+export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: BrandDnaScreenProps) {
   const { state, updateState } = useOnboarding();
   const brand = state.brand;
   const websiteHost = brand.website ? safeHostname(brand.website) : null;
@@ -67,13 +93,16 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
 
   const readiness: ReadinessAnalysis | null = brand.readiness ?? agentBuckets?.readiness ?? null;
   const loading = Boolean(readinessLoading) && !readiness;
+  const settled = !loading && !readinessLoading;
+  const successfulCount = countSuccessfulSections(agentBuckets);
+  const thinResult = settled && successfulCount < 3;
 
   return (
     <motion.div
       variants={reveal}
       initial="hidden"
       animate="visible"
-      className="mx-auto flex w-full min-h-0 max-w-6xl flex-1 flex-col px-4 py-8 md:px-8"
+      className="mx-auto flex w-full min-h-0 max-w-[1400px] flex-1 flex-col px-4 py-8 md:px-8"
     >
       <motion.header
         variants={heroEnter}
@@ -84,9 +113,19 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
             Brand DNA
           </p>
           <h2 className="text-balance text-[44px] font-bold leading-[0.95] tracking-tighter text-[#0b1220] md:text-[72px]">
-            {brand.name || "Your brand"}
-            <span className="text-[#94a3b8]">, decoded</span>
+            {thinResult ? (
+              <>
+                <span className="text-[#94a3b8]">Let&apos;s get to know </span>
+                {brand.name || "your brand"}
+              </>
+            ) : (
+              <>
+                {brand.name || "Your brand"}
+                <span className="text-[#94a3b8]">, decoded</span>
+              </>
+            )}
           </h2>
+          <RunProgressBanner buckets={agentBuckets} running={readinessLoading ?? false} onRetry={onRetry} />
         </div>
         <div className="md:justify-self-end">
           <OverallReadinessChip readiness={readiness} loading={loading} />
@@ -131,7 +170,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
           >
             <EditableProse
               value={overviewText}
-              placeholder="Drafting…"
+              placeholder={placeholderFor(agentBuckets?.sectionStatus.business, "Drafting…")}
               onCommit={(next) => updateState({ brand: { overview: next } })}
             />
             {business ? <BusinessFeatureChips business={business} /> : null}
@@ -166,7 +205,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
           >
             <EditableProse
               value={audienceText}
-              placeholder="Drafting…"
+              placeholder={placeholderFor(agentBuckets?.sectionStatus.audience, "Drafting…")}
               onCommit={(next) => updateState({ brand: { targetAudience: next } })}
             />
             {audience ? <AudienceDetail audience={audience} /> : null}
@@ -174,17 +213,29 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
         </HorizontalRow>
       </motion.div>
 
-      <motion.div variants={card}>
+      <motion.div variants={card} className="mb-4">
         <HorizontalRow label="Analysis">
-          <WebsiteSummaryCard buckets={agentBuckets} />
+          {isTerminallyEmpty(agentBuckets, "website", agentBuckets?.website) ? null : (
+            <WebsiteSummaryCard buckets={agentBuckets} />
+          )}
           <UnderstandingCard buckets={agentBuckets} />
-          <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
+          {isTerminallyEmpty(agentBuckets, "readiness", readiness) ? null : (
+            <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
+          )}
           <AuditsCard buckets={agentBuckets} />
           <CitationsCard buckets={agentBuckets} />
-          <DocumentUploader />
-          <TeamInviteSection />
         </HorizontalRow>
       </motion.div>
+
+      <motion.section variants={card} className="mt-2">
+        <h3 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94a3b8]">
+          Resources
+        </h3>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <DocumentUploader />
+          <TeamInviteSection />
+        </div>
+      </motion.section>
     </motion.div>
   );
 }

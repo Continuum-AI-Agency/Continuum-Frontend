@@ -252,6 +252,14 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     void handleUrlSubmit(domain);
   };
 
+  const handleAgentRerun = useCallback(() => {
+    if (!domain) return;
+    useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
+    patch("agentPreview", emptyBuckets());
+    void handleUrlSubmit(domain);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandId, domain]);
+
   const steps = useMemo(
     () => [
       { id: "website" as const, label: "Your website", description: "Tell us where to start", state: stepState(screen, 0) },
@@ -421,7 +429,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           ) : screen === 1 ? (
             <IntegrationsScreen onAdvance={() => navigate(2)} />
           ) : (
-            <BrandDnaScreen agentBuckets={agentBuckets} readinessLoading={readinessLoading} />
+            <BrandDnaScreen
+              agentBuckets={agentBuckets}
+              readinessLoading={readinessLoading}
+              onRetry={handleAgentRerun}
+            />
           )}
         </motion.div>
       </AnimatePresence>

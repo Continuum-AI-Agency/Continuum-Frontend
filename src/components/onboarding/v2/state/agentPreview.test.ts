@@ -223,6 +223,36 @@ describe("makeEventHandler (reducer)", () => {
     expect(buckets.sectionStatus.audience).toBe("error");
   });
 
+  it("skipped status only marks its own section and leaves run-level state intact", () => {
+    const { buckets, reduce } = setup();
+    buckets.runId = "run-9";
+    buckets.voice = { tone: "Bold" };
+    reduce({ type: "status", section: "audience", status: "running" });
+    reduce({ type: "status", section: "audience", status: "skipped" });
+    expect(buckets.sectionStatus.audience).toBe("skipped");
+    expect(buckets.sectionStatus.voice).toBe("idle");
+    expect(buckets.runId).toBe("run-9");
+    expect(buckets.voice).toEqual({ tone: "Bold" });
+  });
+
+  it("complete with status=ok does not flip skipped sections to done", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "status", section: "audience", status: "skipped" });
+    reduce({ type: "status", section: "voice", status: "running" });
+    reduce({ type: "complete", phase: "preview", status: "ok", result: undefined });
+    expect(buckets.sectionStatus.audience).toBe("skipped");
+    expect(buckets.sectionStatus.voice).toBe("running");
+  });
+
+  it("complete with status=error preserves skipped sections (only flips running)", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "status", section: "audience", status: "skipped" });
+    reduce({ type: "status", section: "voice", status: "running" });
+    reduce({ type: "complete", phase: "preview", status: "error", result: undefined });
+    expect(buckets.sectionStatus.audience).toBe("skipped");
+    expect(buckets.sectionStatus.voice).toBe("error");
+  });
+
   it("dispatches on every state-touching event", () => {
     const { dispatch, reduce } = setup();
     reduce({ type: "status", section: "voice", status: "running" });

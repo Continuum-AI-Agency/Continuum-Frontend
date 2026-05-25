@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Pencil } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 type EditableProseProps = {
@@ -20,9 +21,15 @@ export function EditableProse({ value, placeholder, onCommit, className }: Edita
           setDraft(value);
           setEditing(true);
         }}
-        className={`block w-full text-left text-[11px] leading-[1.75] text-[#374151] transition-colors hover:text-[#0b1220] ${className ?? ""}`}
+        className={`group/edit relative block w-full text-left text-[11px] leading-[1.75] text-[#374151] transition-colors hover:text-[#0b1220] ${className ?? ""}`}
       >
-        {value || <span className="text-[#94a3b8]">{placeholder ?? "Click to add"}</span>}
+        <span className="pr-5">
+          {value || <span className="text-[#94a3b8]">{placeholder ?? "Click to add"}</span>}
+        </span>
+        <Pencil
+          aria-hidden
+          className="absolute right-0 top-0 h-3 w-3 text-[#cbd5e1] opacity-0 transition-opacity group-hover/edit:opacity-100"
+        />
       </button>
     );
   }

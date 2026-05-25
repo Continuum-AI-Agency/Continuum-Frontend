@@ -321,7 +321,7 @@ const previewStatusEventSchema = z
   .object({
     kind: z.literal("status"),
     section: previewSectionSchema,
-    status: z.enum(["running", "done", "error"]),
+    status: z.enum(["running", "done", "skipped", "error"]),
     error: z.string().optional(),
     seq: seqSchema,
   })
@@ -420,7 +420,7 @@ export type OnboardingReportStructured = z.infer<typeof onboardingReportStructur
 export type OnboardingPreviewSection = PreviewSection;
 export type OnboardingPreviewWorkflowResult = z.infer<typeof previewWorkflowResultSchema>;
 
-export type SectionStatusValue = "running" | "done" | "error";
+export type SectionStatusValue = "running" | "done" | "skipped" | "error";
 export type CompleteStatusValue = "ok" | "partial" | "error";
 
 export type OnboardingPreviewEvent =

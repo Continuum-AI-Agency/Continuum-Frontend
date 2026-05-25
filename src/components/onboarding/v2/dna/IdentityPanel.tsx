@@ -40,10 +40,19 @@ export function IdentityPanel({
   const resolvedLogo = useResolvedLogo(logoPath);
   const resolved = resolveFromBuckets({ name, colors, typography, heroStatement }, agentBuckets);
   const firstImpression = agentBuckets?.firstImpression?.headline ?? null;
+  const firstImpressionStatus = agentBuckets?.sectionStatus.first_impression;
+  const hideFirstImpression =
+    !firstImpression && (firstImpressionStatus === "skipped" || firstImpressionStatus === "error");
 
   return (
     <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white shadow-sm">
-      <div className="grid grid-cols-1 divide-y divide-[#e5e7eb]/70 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto] lg:divide-x lg:divide-y-0">
+      <div
+        className={`grid grid-cols-1 divide-y divide-[#e5e7eb]/70 lg:divide-x lg:divide-y-0 ${
+          hideFirstImpression
+            ? "lg:grid-cols-[minmax(0,1.4fr)_auto_auto]"
+            : "lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto_auto]"
+        }`}
+      >
         <Subsection className="lg:py-5">
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 shrink-0 rounded-lg bg-[#0b1220]">
@@ -71,17 +80,19 @@ export function IdentityPanel({
           ) : null}
         </Subsection>
 
-        <Subsection>
-          <SubsectionHeader title="First impression" />
-          {firstImpression ? (
-            <p className="flex items-start gap-1.5 text-[13px] italic leading-snug text-[#0b1220]">
-              <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-[var(--ob-violet)]" />
-              <span className="min-w-0">{firstImpression}</span>
-            </p>
-          ) : (
-            <p className="text-[12px] italic text-[#94a3b8]">Listening for the hook…</p>
-          )}
-        </Subsection>
+        {hideFirstImpression ? null : (
+          <Subsection>
+            <SubsectionHeader title="First impression" />
+            {firstImpression ? (
+              <p className="flex items-start gap-1.5 text-[13px] italic leading-snug text-[#0b1220]">
+                <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-[var(--ob-violet)]" />
+                <span className="min-w-0">{firstImpression}</span>
+              </p>
+            ) : (
+              <p className="text-[12px] italic text-[#94a3b8]">Listening for the hook…</p>
+            )}
+          </Subsection>
+        )}
 
         <Subsection>
           <SubsectionHeader title="Palette" chip={brandIdentityChip} />
