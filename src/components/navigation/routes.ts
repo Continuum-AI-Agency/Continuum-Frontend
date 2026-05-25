@@ -15,6 +15,7 @@ import {
   FileText,
   User,
   Package,
+  CircleCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -83,6 +84,11 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
         label: "Observability",
         href: "/paid-media?tab=dashboard",
         icon: Activity,
+      },
+      {
+        label: "Approvals",
+        href: "/paid-media/approvals",
+        icon: CircleCheck,
       },
       {
         label: "Jaina",

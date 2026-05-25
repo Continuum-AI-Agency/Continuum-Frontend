@@ -780,3 +780,41 @@ body {
     @apply hidden!;
   }
 }
+
+@utility skeleton-shimmer {
+  background-image: linear-gradient(
+    105deg,
+    color-mix(in oklch, var(--muted) 80%, transparent) 0%,
+    color-mix(in oklch, var(--muted) 65%, transparent) 40%,
+    color-mix(in oklch, var(--card) 90%, transparent) 50%,
+    color-mix(in oklch, var(--muted) 65%, transparent) 60%,
+    color-mix(in oklch, var(--muted) 80%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.6s linear infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@utility live-pulse {
+  animation: live-pulse-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes live-pulse-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+    background: var(--muted);
+  }
+  .live-pulse {
+    animation: none;
+  }
+}
