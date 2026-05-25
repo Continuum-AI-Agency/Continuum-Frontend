@@ -25,19 +25,22 @@ export function JobPersistor() {
   return null;
 }
 
+export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
+  return {
+    brand: {
+      website: scrape.url,
+      name: scrape.title ?? undefined,
+      logoPath: scrape.logoUrl ?? undefined,
+      colors: scrape.colors,
+      typography: scrape.typography,
+      overview: scrape.description ?? undefined,
+    },
+  };
+}
+
 function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
   if (key === "scrape") {
-    const r = data as ScrapeResult;
-    return {
-      brand: {
-        website: r.url,
-        name: r.title ?? undefined,
-        logoPath: r.logoUrl ?? undefined,
-        colors: r.colors,
-        typography: r.typography,
-        overview: r.description ?? undefined,
-      },
-    };
+    return scrapeToBrandPatch(data as ScrapeResult);
   }
   if (key === "agentPreview") {
     const raw = data as AgentPreviewBuckets | { buckets: AgentPreviewBuckets } | null;

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { BreathingDot } from "./BreathingDot";
 import type { SectionStatus } from "../state/agentPreview";
 
 type CardSurfaceProps = {
@@ -55,7 +56,10 @@ export function CardSurface({
   return (
     <Card className={cn("border-[#e5e7eb] shadow-sm", className)}>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
-        <CardTitle className="text-[14px]">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          {isLoading ? <BreathingDot tone={isError ? "rose" : "emerald"} /> : null}
+          <CardTitle className="text-[14px]">{title}</CardTitle>
+        </div>
         {(chips || badge) ? (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             {chips}

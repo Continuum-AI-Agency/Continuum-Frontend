@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { CardSurface } from "./CardSurface";
+import { ReadinessArc } from "./ReadinessArc";
 import { DimensionChip } from "../readiness/DimensionChip";
 import { FindingsStack } from "../readiness/FindingsStack";
 import type { ReadinessAnalysis, ReadinessDimension } from "@/lib/onboarding/agentClient";
@@ -34,9 +35,9 @@ export function ReadinessCard({ buckets, readiness, loading }: Props) {
       isEmpty={isEmpty}
       minBodyHeight={220}
       skeleton={
-        <div className="space-y-3">
-          <Skeleton className="h-10 w-24" />
-          <div className="grid grid-cols-2 gap-1.5">
+        <div className="flex items-start gap-4">
+          <Skeleton className="h-24 w-24 rounded-full" />
+          <div className="flex-1 space-y-1.5">
             {Array.from({ length: 6 }).map((_, i) => (
               <Skeleton key={i} className="h-5 w-full rounded-full" />
             ))}
@@ -45,22 +46,19 @@ export function ReadinessCard({ buckets, readiness, loading }: Props) {
       }
     >
       {readiness ? (
-        <>
-          {typeof score === "number" ? (
-            <div className="flex items-baseline gap-2">
-              <span className="text-[28px] font-bold tabular-nums text-[#0b1220]">{Math.round(score)}</span>
-              <span className="text-[11px] uppercase tracking-wide text-[#94a3b8]">/ 100</span>
+        <div className="flex items-start gap-4">
+          <ReadinessArc score={score} />
+          <div className="flex-1 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {DIMENSIONS.map((dim) => (
+                <DimensionChip key={dim} dim={dim} readiness={readiness} loading={loading} />
+              ))}
             </div>
-          ) : null}
-          <div className="flex flex-wrap gap-1.5">
-            {DIMENSIONS.map((dim) => (
-              <DimensionChip key={dim} dim={dim} readiness={readiness} loading={loading} />
-            ))}
+            {readiness.findings && readiness.findings.length > 0 ? (
+              <FindingsStack findings={readiness.findings.slice(0, 3)} />
+            ) : null}
           </div>
-          {readiness.findings && readiness.findings.length > 0 ? (
-            <FindingsStack findings={readiness.findings.slice(0, 3)} />
-          ) : null}
-        </>
+        </div>
       ) : null}
     </CardSurface>
   );

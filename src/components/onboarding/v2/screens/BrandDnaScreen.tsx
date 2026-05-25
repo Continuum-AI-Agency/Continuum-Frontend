@@ -1,10 +1,7 @@
 import { motion } from "motion/react";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
 import { DocumentUploader } from "@/components/onboarding/shared/DocumentUploader";
-import { IdentityCard } from "../dna/IdentityCard";
-import { PaletteCard } from "../dna/PaletteCard";
-import { TypographyCard } from "../dna/TypographyCard";
-import { ToneCard } from "../dna/ToneCard";
+import { IdentityPanel } from "../dna/IdentityPanel";
 import { DnaSectionCard } from "../dna/DnaSectionCard";
 import { VoiceDetail } from "../dna/VoiceDetail";
 import { AudienceDetail } from "../dna/AudienceDetail";
@@ -12,7 +9,7 @@ import { BusinessFeatureChips } from "../dna/BusinessFeatureChips";
 import { StreamFallback } from "../dna/StreamFallback";
 import { EditableProse } from "../dna/EditableProse";
 import { TeamInviteSection } from "../dna/TeamInviteSection";
-import { FirstImpressionCard } from "../dna/FirstImpressionCard";
+import { HorizontalRow } from "../dna/HorizontalRow";
 import { WebsiteSummaryCard } from "../dna/WebsiteSummaryCard";
 import { UnderstandingCard } from "../dna/UnderstandingCard";
 import { ReadinessCard } from "../dna/ReadinessCard";
@@ -78,144 +75,116 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
       animate="visible"
       className="mx-auto flex w-full min-h-0 max-w-6xl flex-1 flex-col px-4 py-8 md:px-8"
     >
-      <motion.header variants={heroEnter} className="mb-5 flex flex-col items-center gap-3 text-center">
-        <h2 className="text-balance text-[32px] font-bold tracking-tight text-[#0b1220] md:text-[40px]">
-          {brand.name || "Your brand"}, decoded
-        </h2>
-        <OverallReadinessChip readiness={readiness} loading={loading} />
+      <motion.header
+        variants={heroEnter}
+        className="mb-6 grid grid-cols-1 items-end gap-4 md:grid-cols-[1fr_auto]"
+      >
+        <div className="space-y-2 text-left">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#94a3b8]">
+            Brand DNA
+          </p>
+          <h2 className="text-balance text-[44px] font-bold leading-[0.95] tracking-tighter text-[#0b1220] md:text-[72px]">
+            {brand.name || "Your brand"}
+            <span className="text-[#94a3b8]">, decoded</span>
+          </h2>
+        </div>
+        <div className="md:justify-self-end">
+          <OverallReadinessChip readiness={readiness} loading={loading} />
+        </div>
       </motion.header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-1">
-          <motion.div variants={card}>
-            <IdentityCard
-              name={brand.name}
-              host={websiteHost}
-              heroStatement={heroStatement ?? brand.tagline ?? null}
-              logoPath={brand.logoPath}
-              onRename={(next) => updateState({ brand: { name: next } })}
-            />
-          </motion.div>
-          <motion.div variants={card}>
-            <PaletteCard
-              colors={brand.colors}
-              chip={<DimensionChip dim="brand_identity" readiness={readiness} loading={loading} />}
-            />
-          </motion.div>
-          <motion.div variants={card}>
-            <TypographyCard
-              primary={brand.typography.primary}
-              secondary={brand.typography.secondary}
-              chip={<DimensionChip dim="brand_identity" readiness={readiness} loading={loading} />}
-            />
-          </motion.div>
-          <motion.div variants={card}>
-            <ToneCard
-              chip={<DimensionChip dim="messaging_coherence" readiness={readiness} loading={loading} />}
-              finding={findingFor(readiness, "messaging_coherence")}
-            />
-          </motion.div>
-          <motion.div variants={card}>
-            <FirstImpressionCard buckets={agentBuckets} />
-          </motion.div>
-          <motion.div variants={card}>
-            <CitationsCard buckets={agentBuckets} />
-          </motion.div>
-        </div>
+      <motion.div variants={card} className="mb-4">
+        <IdentityPanel
+          name={brand.name}
+          host={websiteHost}
+          heroStatement={heroStatement ?? brand.tagline ?? null}
+          logoPath={brand.logoPath}
+          colors={brand.colors}
+          typography={brand.typography}
+          toneFinding={findingFor(readiness, "messaging_coherence")}
+          brandIdentityChip={<DimensionChip dim="brand_identity" readiness={readiness} loading={loading} />}
+          messagingChip={<DimensionChip dim="messaging_coherence" readiness={readiness} loading={loading} />}
+          agentBuckets={agentBuckets}
+          onRename={(next) => updateState({ brand: { name: next } })}
+        />
+      </motion.div>
 
-        <div className="space-y-4 lg:col-span-2">
-          <motion.div variants={card}>
-            <DnaSectionCard
-              title="Business overview"
-              badge="Core"
-              chips={
-                <>
-                  <DimensionChip dim="value_proposition" readiness={readiness} loading={loading} />
-                  <DimensionChip dim="success_metrics" readiness={readiness} loading={loading} />
-                </>
-              }
-              findings={
-                <FindingsStack
-                  findings={[
-                    findingFor(readiness, "value_proposition"),
-                    findingFor(readiness, "success_metrics"),
-                  ]}
-                />
-              }
-            >
-              <EditableProse
-                value={overviewText}
-                placeholder="Drafting…"
-                onCommit={(next) => updateState({ brand: { overview: next } })}
+      <motion.div variants={card} className="mb-4">
+        <HorizontalRow label="Narrative">
+          <DnaSectionCard
+            title="Business overview"
+            badge="Core"
+            chips={
+              <>
+                <DimensionChip dim="value_proposition" readiness={readiness} loading={loading} />
+                <DimensionChip dim="success_metrics" readiness={readiness} loading={loading} />
+              </>
+            }
+            findings={
+              <FindingsStack
+                findings={[
+                  findingFor(readiness, "value_proposition"),
+                  findingFor(readiness, "success_metrics"),
+                ]}
               />
-              {business ? <BusinessFeatureChips business={business} /> : null}
-            </DnaSectionCard>
-          </motion.div>
+            }
+          >
+            <EditableProse
+              value={overviewText}
+              placeholder="Drafting…"
+              onCommit={(next) => updateState({ brand: { overview: next } })}
+            />
+            {business ? <BusinessFeatureChips business={business} /> : null}
+          </DnaSectionCard>
 
-          <motion.div variants={card}>
-            <DnaSectionCard
-              title="Brand voice & tone"
-              badge="Voice"
-              chips={<DimensionChip dim="positioning" readiness={readiness} loading={loading} />}
-              findings={<FindingsStack findings={[findingFor(readiness, "positioning")]} />}
-            >
-              {voice ? <VoiceDetail voice={voice} /> : <StreamFallback text={agentBuckets?.voiceStream ?? ""} />}
-            </DnaSectionCard>
-          </motion.div>
+          <DnaSectionCard
+            title="Brand voice & tone"
+            badge="Voice"
+            chips={<DimensionChip dim="positioning" readiness={readiness} loading={loading} />}
+            findings={<FindingsStack findings={[findingFor(readiness, "positioning")]} />}
+          >
+            {voice ? <VoiceDetail voice={voice} /> : <StreamFallback text={agentBuckets?.voiceStream ?? ""} />}
+          </DnaSectionCard>
 
-          <motion.div variants={card}>
-            <DnaSectionCard
-              title="Target audience"
-              badge="Audience"
-              chips={
-                <>
-                  <DimensionChip dim="icp_clarity" readiness={readiness} loading={loading} />
-                  <DimensionChip dim="customer_pains" readiness={readiness} loading={loading} />
-                </>
-              }
-              findings={
-                <FindingsStack
-                  findings={[
-                    findingFor(readiness, "icp_clarity"),
-                    findingFor(readiness, "customer_pains"),
-                  ]}
-                />
-              }
-            >
-              <EditableProse
-                value={audienceText}
-                placeholder="Drafting…"
-                onCommit={(next) => updateState({ brand: { targetAudience: next } })}
+          <DnaSectionCard
+            title="Target audience"
+            badge="Audience"
+            chips={
+              <>
+                <DimensionChip dim="icp_clarity" readiness={readiness} loading={loading} />
+                <DimensionChip dim="customer_pains" readiness={readiness} loading={loading} />
+              </>
+            }
+            findings={
+              <FindingsStack
+                findings={[
+                  findingFor(readiness, "icp_clarity"),
+                  findingFor(readiness, "customer_pains"),
+                ]}
               />
-              {audience ? <AudienceDetail audience={audience} /> : null}
-            </DnaSectionCard>
-          </motion.div>
+            }
+          >
+            <EditableProse
+              value={audienceText}
+              placeholder="Drafting…"
+              onCommit={(next) => updateState({ brand: { targetAudience: next } })}
+            />
+            {audience ? <AudienceDetail audience={audience} /> : null}
+          </DnaSectionCard>
+        </HorizontalRow>
+      </motion.div>
 
-          <motion.div variants={card}>
-            <WebsiteSummaryCard buckets={agentBuckets} />
-          </motion.div>
-
-          <motion.div variants={card}>
-            <UnderstandingCard buckets={agentBuckets} />
-          </motion.div>
-
-          <motion.div variants={card}>
-            <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
-          </motion.div>
-
-          <motion.div variants={card}>
-            <AuditsCard buckets={agentBuckets} />
-          </motion.div>
-
-          <motion.div variants={card}>
-            <DocumentUploader />
-          </motion.div>
-
-          <motion.div variants={card}>
-            <TeamInviteSection />
-          </motion.div>
-        </div>
-      </div>
+      <motion.div variants={card}>
+        <HorizontalRow label="Analysis">
+          <WebsiteSummaryCard buckets={agentBuckets} />
+          <UnderstandingCard buckets={agentBuckets} />
+          <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
+          <AuditsCard buckets={agentBuckets} />
+          <CitationsCard buckets={agentBuckets} />
+          <DocumentUploader />
+          <TeamInviteSection />
+        </HorizontalRow>
+      </motion.div>
     </motion.div>
   );
 }

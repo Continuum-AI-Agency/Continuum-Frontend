@@ -298,6 +298,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           cached_age_ms: Date.now() - cached.cachedAt,
         });
         if (cancelled) return;
+        if (cached.scrape) {
+          void start("scrape", () => Promise.resolve(cached.scrape!));
+        }
         await start("agentPreview", () => Promise.resolve({ runId: cached.runId, buckets: cached.buckets }));
         return;
       }
