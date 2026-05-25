@@ -309,6 +309,7 @@ export const previewWorkflowResultSchema = z
     understanding: understandingSchema.optional(),
     audits: auditsSchema.optional(),
     first_impression: firstImpressionSchema.nullable().optional(),
+    citations: z.record(z.string(), z.unknown()).optional(),
     prompt_version: z.number().int().nonnegative().optional(),
   })
   .partial()

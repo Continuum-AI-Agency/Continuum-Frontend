@@ -45,7 +45,7 @@ export function OnboardingShell({
           <OnboardingStepper steps={steps} onStepClick={onStepClick} />
         </div>
       </header>
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <footer className="border-t border-[#e5e7eb] bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-8 py-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">

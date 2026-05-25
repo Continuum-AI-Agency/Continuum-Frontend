@@ -12,6 +12,7 @@ import {
   type PreviewSection,
   type ReadinessAnalysis,
   type TargetAudience,
+  type UnderstandingBrief,
   type WebsiteSummary,
 } from "@/lib/onboarding/agentClient";
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
@@ -21,6 +22,20 @@ async function trackPreviewRecovery(runId: string, status: string): Promise<void
   try {
     const { trackOnboardingEvent } = await import("@/lib/onboarding/telemetry");
     trackOnboardingEvent("onboarding_preview_recovered_via_status", { runId, status });
+  } catch {
+    // telemetry is best-effort
+  }
+}
+
+async function trackPreviewReconnect(runId: string, snapshotLastSeq: number, fromSeq: number): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { trackOnboardingEvent } = await import("@/lib/onboarding/telemetry");
+    trackOnboardingEvent("onboarding_preview_reconnected_via_status", {
+      runId,
+      snapshot_last_seq: snapshotLastSeq,
+      from_seq: fromSeq,
+    });
   } catch {
     // telemetry is best-effort
   }
@@ -46,6 +61,7 @@ export type AgentPreviewBuckets = {
   website: WebsiteSummary | null;
   readiness: ReadinessAnalysis | null;
   firstImpression: FirstImpression | null;
+  understanding: UnderstandingBrief | null;
   latestSpark: AgentPreviewSpark | null;
   voiceStream: string;
   audienceStream: string;
@@ -53,6 +69,7 @@ export type AgentPreviewBuckets = {
   websiteStream: string;
   sectionStatus: Record<PreviewSection, SectionStatus>;
   audits: AgentPreviewAudits;
+  citations: Record<string, unknown>;
   result: OnboardingPreviewWorkflowResult | null;
 };
 
@@ -71,6 +88,7 @@ export function emptyBuckets(): AgentPreviewBuckets {
     website: null,
     readiness: null,
     firstImpression: null,
+    understanding: null,
     latestSpark: null,
     voiceStream: "",
     audienceStream: "",
@@ -78,6 +96,7 @@ export function emptyBuckets(): AgentPreviewBuckets {
     websiteStream: "",
     sectionStatus: makeIdleSectionStatus(),
     audits: {},
+    citations: {},
     result: null,
   };
 }
@@ -134,6 +153,50 @@ function applyEnrichProseSection(buckets: AgentPreviewBuckets, section: PreviewS
   }
 }
 
+/**
+ * THE MERGE RULE — see app/agents-ts/onboarding/src/brand_report/frontend.md §4.
+ *
+ * `complete` fires when the report is renderable, not when work is done. The
+ * `result` snapshot can lag the per-section `data` events we've already merged
+ * into buckets, and `result.audits`/`first_impression` may be partial. Trust
+ * partial state per-field; let `result` fill only what's missing.
+ */
+export function mergeCompleteResult(
+  buckets: AgentPreviewBuckets,
+  result: OnboardingPreviewWorkflowResult
+): void {
+  buckets.brandProfile ??= result.brand_profile ?? null;
+  buckets.readiness ??= result.readiness ?? null;
+  buckets.firstImpression ??= result.first_impression ?? null;
+  buckets.understanding ??= result.understanding ?? null;
+
+  const structured = result.structured as
+    | {
+        brand_voice?: BrandVoice;
+        target_audience?: TargetAudience;
+        business?: BusinessSummary;
+        website?: WebsiteSummary | null;
+      }
+    | undefined;
+  buckets.voice ??= structured?.brand_voice ?? null;
+  buckets.audience ??= structured?.target_audience ?? null;
+  buckets.business ??= structured?.business ?? null;
+  if (buckets.website === null && structured?.website !== undefined) {
+    buckets.website = structured.website;
+  }
+
+  if (result.audits) {
+    buckets.audits = { ...result.audits, ...buckets.audits };
+  }
+
+  const resultCitations = (result as { citations?: Record<string, unknown> }).citations;
+  if (resultCitations) {
+    buckets.citations = { ...resultCitations, ...buckets.citations };
+  }
+
+  buckets.result = result;
+}
+
 export function makeEventHandler(buckets: AgentPreviewBuckets, dispatch: () => void) {
   return (event: OnboardingPreviewEvent) => {
     switch (event.type) {
@@ -182,7 +245,7 @@ export function makeEventHandler(buckets: AgentPreviewBuckets, dispatch: () => v
         }
         break;
       case "complete":
-        if (event.result) buckets.result = event.result;
+        if (event.result) mergeCompleteResult(buckets, event.result);
         if (event.status === "error") flipRunningToError(buckets);
         break;
       case "error":
@@ -199,41 +262,20 @@ const SILENCE_THRESHOLD_MS = 30_000;
 const WATCHDOG_INTERVAL_MS = 5_000;
 
 function seedBucketsFromResult(
-  reducer: (event: OnboardingPreviewEvent) => void,
   buckets: AgentPreviewBuckets,
-  result: OnboardingPreviewWorkflowResult
+  result: OnboardingPreviewWorkflowResult,
+  dispatch: () => void
 ): void {
-  if (result.brand_profile) reducer({ type: "brand_profile", payload: result.brand_profile });
-  if (result.first_impression) reducer({ type: "first_impression", payload: result.first_impression });
-  if (result.readiness) reducer({ type: "readiness", payload: result.readiness });
-  const structured = result.structured as
-    | {
-        brand_voice?: BrandVoice;
-        target_audience?: TargetAudience;
-        business?: BusinessSummary;
-        website?: WebsiteSummary | null;
-      }
-    | undefined;
-  if (structured?.brand_voice) reducer({ type: "voice", payload: structured.brand_voice });
-  if (structured?.target_audience) reducer({ type: "audience", payload: structured.target_audience });
-  if (structured?.business) reducer({ type: "business", payload: structured.business });
-  if (structured?.website !== undefined) reducer({ type: "website", payload: structured.website });
-  if (result.audits) {
-    buckets.audits = {
-      ...buckets.audits,
-      ...(result.audits.voice !== undefined ? { voice: result.audits.voice } : {}),
-      ...(result.audits.audience !== undefined ? { audience: result.audits.audience } : {}),
-      ...(result.audits.website !== undefined ? { website: result.audits.website } : {}),
-      ...(result.audits.business !== undefined ? { business: result.audits.business } : {}),
-    };
-  }
-  for (const section of ["brand_profile", "voice", "audience", "website", "business", "readiness", "first_impression"] as const) {
-    if (buckets.sectionStatus[section] !== "error") {
-      reducer({ type: "status", section, status: "done" });
+  mergeCompleteResult(buckets, result);
+  for (const section of previewSectionSchema.options) {
+    if (buckets.sectionStatus[section] === "idle" || buckets.sectionStatus[section] === "running") {
+      buckets.sectionStatus[section] = "done";
     }
   }
-  reducer({ type: "complete", status: "ok", result });
+  dispatch();
 }
+
+const MAX_RECONNECT_ATTEMPTS = 10;
 
 export async function runAgentPreview(
   input: AgentPreviewInput,
@@ -244,38 +286,51 @@ export async function runAgentPreview(
   const reducer = makeEventHandler(buckets, dispatch);
 
   let lastEventAt = Date.now();
+  let lastSeq = input.resumeLastEventId ?? 0;
   const handleEvent = (event: OnboardingPreviewEvent) => {
     lastEventAt = Date.now();
     reducer(event);
   };
+  const onSequence = (n: number) => {
+    if (n > lastSeq) lastSeq = n;
+  };
 
-  const watchdogController = new AbortController();
+  let runId: string | null = input.resumeRunId ?? null;
   let watchdogResolved = false;
-  const onCallerAbort = () => watchdogController.abort();
-  if (signal.aborted) watchdogController.abort();
-  else signal.addEventListener("abort", onCallerAbort, { once: true });
-
-  let runId: string | null = null;
+  let needsReconnect = false;
+  let activeController = new AbortController();
   let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+
+  const onCallerAbort = () => activeController.abort();
+  if (signal.aborted) activeController.abort();
+  else signal.addEventListener("abort", onCallerAbort, { once: true });
 
   const tick = async () => {
     if (!runId) return;
     if (buckets.result) return;
     if (Date.now() - lastEventAt < SILENCE_THRESHOLD_MS) return;
     try {
-      const snap = await fetchPreviewStatus(runId, { signal: watchdogController.signal });
-      if (!snap || snap.status === "running") return;
-      void trackPreviewRecovery(runId, snap.status);
-      if (snap.result) {
-        seedBucketsFromResult(reducer, buckets, snap.result);
+      const snap = await fetchPreviewStatus(runId);
+      if (!snap) return;
+      if (snap.status !== "running") {
+        void trackPreviewRecovery(runId, snap.status);
+        if (snap.result) {
+          seedBucketsFromResult(buckets, snap.result, dispatch);
+        }
+        if (snap.error) {
+          reducer({ type: "error", message: snap.error.message });
+        } else if (snap.status === "failed") {
+          reducer({ type: "error", message: "Preview run failed." });
+        }
+        watchdogResolved = true;
+        activeController.abort();
+        return;
       }
-      if (snap.error) {
-        reducer({ type: "error", message: snap.error.message });
-      } else if (snap.status === "failed") {
-        reducer({ type: "error", message: "Preview run failed." });
+      if (snap.lastSeq != null && snap.lastSeq > lastSeq) {
+        void trackPreviewReconnect(runId, snap.lastSeq, lastSeq);
+        needsReconnect = true;
+        activeController.abort();
       }
-      watchdogResolved = true;
-      watchdogController.abort();
     } catch {
       // ignore — retry next tick or settle when SSE closes
     }
@@ -289,52 +344,68 @@ export async function runAgentPreview(
   };
 
   try {
-    if (input.resumeRunId) {
-      runId = input.resumeRunId;
+    if (runId) {
       input.onRunId?.(runId);
       handleEvent({ type: "run", runId, reused: true });
-      startWatchdog();
-      try {
-        await resumeOnboardingPreview(input.resumeRunId, {
-          onEvent: handleEvent,
-          signal: watchdogController.signal,
-          lastEventId: input.resumeLastEventId,
-        });
-      } catch (error) {
-        if (!watchdogResolved) throw error;
+    }
+    startWatchdog();
+
+    let attempt = 0;
+    while (true) {
+      if (signal.aborted) throw new Error("Preview aborted");
+      needsReconnect = false;
+      if (activeController.signal.aborted && !watchdogResolved) {
+        activeController = new AbortController();
+        if (signal.aborted) activeController.abort();
       }
-    } else {
+
       try {
-        const result = await runOnboardingPreview({
-          payload: {
-            brandProfile: {
-              id: input.brandId,
-              brand_name: input.brandName || "Untitled brand",
-              website_url: input.websiteUrl || undefined,
+        if (runId) {
+          await resumeOnboardingPreview(runId, {
+            onEvent: handleEvent,
+            onSequence,
+            signal: activeController.signal,
+            lastEventId: lastSeq > 0 ? lastSeq : undefined,
+          });
+        } else {
+          const result = await runOnboardingPreview({
+            payload: {
+              brandProfile: {
+                id: input.brandId,
+                brand_name: input.brandName || "Untitled brand",
+                website_url: input.websiteUrl || undefined,
+              },
+              runContext: {
+                user_id: input.userId,
+                brand_id: input.brandId,
+                brand_name: input.brandName || "Untitled brand",
+                created_at: new Date().toISOString(),
+                platform_urls: input.websiteUrl ? [input.websiteUrl] : [],
+                integrated_platforms: [],
+                brand_voice_tags: input.voiceTags,
+                integration_account_ids: [],
+              },
+              scrape: input.scrape ?? null,
             },
-            runContext: {
-              user_id: input.userId,
-              brand_id: input.brandId,
-              brand_name: input.brandName || "Untitled brand",
-              created_at: new Date().toISOString(),
-              platform_urls: input.websiteUrl ? [input.websiteUrl] : [],
-              integrated_platforms: [],
-              brand_voice_tags: input.voiceTags,
-              integration_account_ids: [],
+            signal: activeController.signal,
+            onEvent: handleEvent,
+            onSequence,
+            onRunId: (next) => {
+              runId = next;
+              input.onRunId?.(next);
             },
-            scrape: input.scrape ?? null,
-          },
-          signal: watchdogController.signal,
-          onEvent: handleEvent,
-          onRunId: (next) => {
-            runId = next;
-            input.onRunId?.(next);
-            if (next) startWatchdog();
-          },
-        });
-        if (!runId && result.runId) runId = result.runId;
+          });
+          if (!runId && result.runId) runId = result.runId;
+        }
+        // Consumer returned cleanly — stream is done.
+        break;
       } catch (error) {
-        if (!watchdogResolved) throw error;
+        if (watchdogResolved) break;
+        if (needsReconnect && runId && attempt < MAX_RECONNECT_ATTEMPTS) {
+          attempt += 1;
+          continue;
+        }
+        throw error;
       }
     }
 
@@ -346,6 +417,7 @@ export async function runAgentPreview(
   } finally {
     if (watchdogTimer) clearInterval(watchdogTimer);
     signal.removeEventListener("abort", onCallerAbort);
+    activeController.abort();
   }
 }
 

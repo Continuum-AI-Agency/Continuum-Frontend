@@ -25,7 +25,8 @@ export type OnboardingEventName =
   | "onboarding_launch_succeeded"
   | "onboarding_launch_failed"
   | "onboarding_trends_prewarm_failed"
-  | "onboarding_preview_recovered_via_status";
+  | "onboarding_preview_recovered_via_status"
+  | "onboarding_preview_reconnected_via_status";
 
 export function trackOnboardingEvent(event: OnboardingEventName, props?: EventProps): void {
   if (typeof window === "undefined") return;

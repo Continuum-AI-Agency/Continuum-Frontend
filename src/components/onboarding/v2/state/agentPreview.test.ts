@@ -112,10 +112,12 @@ describe("runAgentPreview", () => {
     expect(b.runId).toBeNull();
     expect(b.voice).toBeNull();
     expect(b.firstImpression).toBeNull();
+    expect(b.understanding).toBeNull();
     expect(b.latestSpark).toBeNull();
     expect(b.voiceStream).toBe("");
     expect(b.result).toBeNull();
     expect(b.audits).toEqual({});
+    expect(b.citations).toEqual({});
     expect(b.sectionStatus.voice).toBe("idle");
     expect(b.sectionStatus.audience).toBe("idle");
     expect(b.sectionStatus.first_impression).toBe("idle");
@@ -226,5 +228,95 @@ describe("makeEventHandler (reducer)", () => {
     reduce({ type: "status", section: "voice", status: "running" });
     reduce({ type: "spark", section: "voice", label: "Listening to voice…" });
     expect(dispatch).toHaveBeenCalledTimes(2);
+  });
+
+  // THE MERGE RULE — backend frontend.md §4.
+  // complete fires when the report is renderable. result snapshot can lag the
+  // per-section data events. State already in buckets must win.
+
+  it("complete merges: pre-existing section data is not overwritten", () => {
+    const { buckets, reduce } = setup();
+    buckets.voice = { tone: "Bold" };
+    buckets.audience = { summary: "Pre-existing audience" };
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: {
+        structured: {
+          brand_voice: { tone: "STALE" },
+          target_audience: { summary: "STALE audience" },
+        },
+      },
+    } as Parameters<typeof reduce>[0]);
+    expect(buckets.voice?.tone).toBe("Bold");
+    expect(buckets.audience?.summary).toBe("Pre-existing audience");
+  });
+
+  it("complete merges: result fills fields the buckets don't have yet", () => {
+    const { buckets, reduce } = setup();
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: {
+        brand_profile: { id: "b1", brand_name: "Acme" },
+        understanding: { positioning_thesis: "Decoded brand DNA" },
+        first_impression: { headline: "Acme, decoded." },
+      },
+    } as Parameters<typeof reduce>[0]);
+    expect(buckets.brandProfile?.brand_name).toBe("Acme");
+    expect(buckets.understanding?.positioning_thesis).toBe("Decoded brand DNA");
+    expect(buckets.firstImpression?.headline).toBe("Acme, decoded.");
+  });
+
+  it("complete merges audits per-key: state wins, result fills missing keys", () => {
+    const { buckets, reduce } = setup();
+    buckets.audits = { voice: { score: 90 } };
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: {
+        audits: {
+          voice: { score: 10 },
+          audience: { score: 50 },
+        },
+      },
+    } as Parameters<typeof reduce>[0]);
+    expect((buckets.audits.voice as { score: number }).score).toBe(90);
+    expect((buckets.audits.audience as { score: number }).score).toBe(50);
+  });
+
+  it("enrich after complete still updates audits (no clobber)", () => {
+    const { buckets, reduce } = setup();
+    buckets.audits = { voice: { score: 90 } };
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: { audits: { voice: { score: 10 }, audience: { score: 50 } } },
+    } as Parameters<typeof reduce>[0]);
+    reduce({ type: "enrich", section: "audit.voice", data: { score: 99 }, seq: 99 });
+    expect((buckets.audits.voice as { score: number }).score).toBe(99);
+    expect((buckets.audits.audience as { score: number }).score).toBe(50);
+  });
+
+  it("complete merges citations passthrough", () => {
+    const { buckets, reduce } = setup();
+    buckets.citations = { voice: { source: "scrape" } };
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: {
+        citations: {
+          voice: { source: "STALE" },
+          audience: { source: "research" },
+        },
+      } as Parameters<typeof reduce>[0]["result"] & { citations: Record<string, unknown> },
+    } as Parameters<typeof reduce>[0]);
+    expect(buckets.citations.voice).toEqual({ source: "scrape" });
+    expect(buckets.citations.audience).toEqual({ source: "research" });
   });
 });

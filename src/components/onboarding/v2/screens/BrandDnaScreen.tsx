@@ -12,6 +12,12 @@ import { BusinessFeatureChips } from "../dna/BusinessFeatureChips";
 import { StreamFallback } from "../dna/StreamFallback";
 import { EditableProse } from "../dna/EditableProse";
 import { TeamInviteSection } from "../dna/TeamInviteSection";
+import { FirstImpressionCard } from "../dna/FirstImpressionCard";
+import { WebsiteSummaryCard } from "../dna/WebsiteSummaryCard";
+import { UnderstandingCard } from "../dna/UnderstandingCard";
+import { ReadinessCard } from "../dna/ReadinessCard";
+import { AuditsCard } from "../dna/AuditsCard";
+import { CitationsCard } from "../dna/CitationsCard";
 import { DimensionChip } from "../readiness/DimensionChip";
 import { FindingsStack } from "../readiness/FindingsStack";
 import { OverallReadinessChip } from "../readiness/OverallReadinessChip";
@@ -70,26 +76,16 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
       variants={reveal}
       initial="hidden"
       animate="visible"
-      className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 md:px-8"
+      className="mx-auto flex w-full min-h-0 max-w-6xl flex-1 flex-col px-4 py-8 md:px-8"
     >
-      <motion.header variants={heroEnter} className="mb-7 flex flex-col items-center gap-3 text-center">
+      <motion.header variants={heroEnter} className="mb-5 flex flex-col items-center gap-3 text-center">
         <h2 className="text-balance text-[32px] font-bold tracking-tight text-[#0b1220] md:text-[40px]">
           {brand.name || "Your brand"}, decoded
         </h2>
-        {agentBuckets?.firstImpression?.headline ? (
-          <motion.p
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="max-w-2xl text-balance text-[15px] italic leading-snug text-[#475569]"
-          >
-            {agentBuckets.firstImpression.headline}
-          </motion.p>
-        ) : null}
         <OverallReadinessChip readiness={readiness} loading={loading} />
       </motion.header>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto pr-1 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-1">
           <motion.div variants={card}>
             <IdentityCard
@@ -118,6 +114,12 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
               chip={<DimensionChip dim="messaging_coherence" readiness={readiness} loading={loading} />}
               finding={findingFor(readiness, "messaging_coherence")}
             />
+          </motion.div>
+          <motion.div variants={card}>
+            <FirstImpressionCard buckets={agentBuckets} />
+          </motion.div>
+          <motion.div variants={card}>
+            <CitationsCard buckets={agentBuckets} />
           </motion.div>
         </div>
 
@@ -188,15 +190,32 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading }: BrandDnaScree
               {audience ? <AudienceDetail audience={audience} /> : null}
             </DnaSectionCard>
           </motion.div>
+
+          <motion.div variants={card}>
+            <WebsiteSummaryCard buckets={agentBuckets} />
+          </motion.div>
+
+          <motion.div variants={card}>
+            <UnderstandingCard buckets={agentBuckets} />
+          </motion.div>
+
+          <motion.div variants={card}>
+            <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
+          </motion.div>
+
+          <motion.div variants={card}>
+            <AuditsCard buckets={agentBuckets} />
+          </motion.div>
+
+          <motion.div variants={card}>
+            <DocumentUploader />
+          </motion.div>
+
+          <motion.div variants={card}>
+            <TeamInviteSection />
+          </motion.div>
         </div>
       </div>
-
-      <motion.div variants={card} className="mt-4">
-        <DocumentUploader />
-      </motion.div>
-      <motion.div variants={card} className="mt-4">
-        <TeamInviteSection />
-      </motion.div>
     </motion.div>
   );
 }
