@@ -1,6 +1,10 @@
-# AGENTS.md: Continuum Frontend Development Guide
+# AGENTS.md — Continuum Frontend
 
-This document outlines the architectural and code quality rules for professional software development on the **Continuum** project, informed by the principles of **Clean Code** and **The Clean Coder** by Robert C. Martin. Our commitment is to deliver value with code that is inherently **easy to read, maintain, and test**.
+> **Monorepo conventions live at [`../AGENTS.md`](../AGENTS.md).** Read that first for layout, shared infrastructure, cross-project communication, env handling, and engineering principles. This file covers **Frontend-specific** practices only (Next.js patterns, Server Components, canvas modules, planner gotchas).
+
+---
+
+This document outlines the architectural and code quality rules specific to the **Continuum Frontend** (Next.js 16 + Bun + Vercel). Universal craftsmanship principles (Clean Code / TDD / boundary defense) are in the root `AGENTS.md` — they apply here too.
 
 ---
 
@@ -68,6 +72,17 @@ These rules apply universally to all TypeScript, React, and Next.js code.
 ### API Layer (`src/lib/api/`)
 
 * **Browser → agents-ts:** Client components call the agents-ts backend directly using `http.request()` from `src/lib/api/http.ts`. This client resolves `getApiBaseUrl()` and attaches `Authorization: Bearer ${token}` automatically via `getBrowserAccessToken()`. **Do NOT add Next.js route handlers as thin auth-forwarding proxies** — they add indirection with no benefit. Only add a route handler when genuinely needed server-side (e.g., streaming responses, server secrets, PostHog analytics).
+
+### Shared Contracts (`@continuum/contracts`) — MANDATORY for response interpreters
+
+Frontend response interpreters that parse Backend agent outputs (NDJSON stream frames, agent output objects, HTTP envelopes) must import their types and Zod schemas from `@continuum/contracts`. The Backend emits frames defined in the same package, so a `safeParse` against the imported schema is the boundary check.
+
+* **Where it lives:** `packages/contracts/src/streaming/<domain>.ts` for stream frames; `packages/contracts/src/<domain>/` for HTTP request/response.
+* **How to import:** `import { organicStreamFrameSchema, type OrganicStreamFrame } from '@continuum/contracts'` — root entry only (kept consistent with Backend, which can't use subpath imports under `moduleResolution: "node"`).
+* **Pattern:** see `src/components/organic/agent/streamEventParser.ts` — it imports `organicStreamFrameSchema`, runs `safeParse` against incoming frames, and uses the inferred type for compile-time linkage with the Backend emit side.
+* **Forbidden:** hand-rolling a TypeScript stream-event union in `src/lib/<domain>/stream.ts` or `src/components/<domain>/streamEventParser.ts` when the Backend has its own parallel hand-rolled union. New event types are added in `packages/contracts/` first, then the interpreter switch-case imports the literal type.
+* **Jaina note:** the heavy Zod schemas in `src/lib/jaina/schemas.ts` (3000+ lines) are scheduled for migration into `packages/contracts/src/streaming/jaina.ts` in a follow-up PR; for now, the cross-side type linkage is via the `JainaStreamEvent` type alias in contracts.
+* **Refer to:** root `AGENTS.md` §4 *Shared contracts* for the cross-project policy.
 
 ### State Management
 

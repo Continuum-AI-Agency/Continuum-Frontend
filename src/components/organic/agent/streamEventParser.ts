@@ -1,7 +1,8 @@
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
+import { organicStreamFrameSchema, type OrganicStreamFrame } from "@continuum/contracts";
 import type { AgentJobState, PlanEvidence, PlanItem, ToolCallEvent, UiCard, UiPlanCard, UiPostCard, UiTrendChart } from "./types";
 
-type ParsedOrganicStreamEvent =
+export type ParsedOrganicStreamEvent =
   | { kind: "delta"; delta: string }
   | { kind: "toolCall"; event: ToolCallEvent }
   | { kind: "toolResult"; toolCallId: string; result: unknown }
@@ -13,6 +14,8 @@ type ParsedOrganicStreamEvent =
   | { kind: "runStarted"; runId: string; jobId: string }
   | { kind: "ignored"; type?: string }
   | { kind: "invalid"; type?: string };
+
+export type OrganicWireFrame = OrganicStreamFrame;
 
 type UiTrendPoint = { window: number; value: number };
 type UiTrendSeries = { label: "Trends" | "Events" | "Questions"; data: UiTrendPoint[] };
@@ -327,6 +330,11 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
   if (!isRecord(raw)) return { kind: "invalid" };
   const type = readNonEmptyString(raw.type);
   if (!type) return { kind: "invalid" };
+
+  const validation = organicStreamFrameSchema.safeParse(raw);
+  if (!validation.success && type !== "response.source" && type !== "response.output_text.done") {
+    console.warn("Invalid Organic stream frame schema for type:", type);
+  }
 
   switch (type) {
     case "response.created":
