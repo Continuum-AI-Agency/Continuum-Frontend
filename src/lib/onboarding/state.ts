@@ -104,6 +104,39 @@ const documentSourceSchema = z.enum([
   "website",
 ]);
 
+const documentKindSchema = z.enum([
+  "pdf",
+  "docx",
+  "pptx",
+  "xlsx",
+  "image",
+  "text",
+  "markdown",
+  "csv",
+  "json",
+  "html",
+  "unknown",
+]);
+
+const documentProgressStepSchema = z.enum([
+  "uploading",
+  "extracting",
+  "chunking",
+  "embedding",
+  "ready",
+  "error",
+]);
+
+const documentErrorCodeSchema = z.enum([
+  "UNSUPPORTED_FORMAT",
+  "STORAGE_FETCH_FAILED",
+  "EXTRACT_FAILED",
+  "EMPTY_TEXT",
+  "EMBED_BATCH_FAILED",
+  "CHUNK_INSERT_FAILED",
+  "INTERNAL_ERROR",
+]);
+
 const onboardingDocumentSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -111,11 +144,23 @@ const onboardingDocumentSchema = z.object({
   createdAt: isoDateString,
   status: z.enum(["processing", "ready", "error"]).default("ready"),
   size: z.number().nonnegative().optional(),
+  mimeType: z.string().optional(),
   externalUrl: z.string().min(1).optional(),
   storagePath: z.string().optional(),
   jobId: z.string().optional(),
   errorMessage: z.string().optional(),
+  errorCode: documentErrorCodeSchema.optional(),
+  progressStep: documentProgressStepSchema.optional(),
+  progressPercent: z.number().int().min(0).max(100).optional(),
+  kind: documentKindSchema.optional(),
+  pageCount: z.number().int().positive().optional(),
+  textExcerpt: z.string().optional(),
+  previewPath: z.string().optional(),
 });
+
+export type DocumentKind = z.infer<typeof documentKindSchema>;
+export type DocumentProgressStep = z.infer<typeof documentProgressStepSchema>;
+export type DocumentErrorCode = z.infer<typeof documentErrorCodeSchema>;
 
 const brandMemberSchema = z.object({
   id: z.string(),
@@ -134,7 +179,7 @@ const brandInviteSchema = z.object({
 });
 
 const onboardingStateSchema = z.object({
-  step: z.number().int().min(0).max(2),
+  step: z.number().int().min(0).max(4),
   brand: brandSchema,
   documents: z.array(onboardingDocumentSchema),
   connections: z.object(connectionShape),
@@ -151,7 +196,7 @@ const onboardingStateSchema = z.object({
 });
 
 const onboardingPatchSchema = z.object({
-  step: z.number().int().min(0).max(2).optional(),
+  step: z.number().int().min(0).max(4).optional(),
   brand: brandSchema.partial().optional(),
   documents: z.array(onboardingDocumentSchema).optional(),
   connections: z.object(connectionPatchShape).partial().optional(),
@@ -286,7 +331,7 @@ export function createBrandId(): string {
 function clampStep(step: number): number {
   if (Number.isNaN(step)) return 0;
   if (step < 0) return 0;
-  if (step > 2) return 2;
+  if (step > 4) return 4;
   return step;
 }
 

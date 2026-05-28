@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Heading, Text } from "@radix-ui/themes";
 import { BrandDocumentsSection } from "@/components/settings/BrandDocumentsSection";
+import { BrandGuidelineSection } from "@/components/settings/BrandGuidelineSection";
 import { BrandMembersSection } from "@/components/settings/BrandMembersSection";
 import { RunStrategicAnalysisButton } from "@/components/strategic-analyses/RunStrategicAnalysisButton";
 import { BrandIdentityHeader } from "@/components/settings/brand/BrandIdentityHeader";
@@ -161,6 +162,12 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         >
           <BrandDocumentsSection brandId={activeBrandId} documents={documents} />
         </SettingsSection>
+        <SettingsSection
+          title="Brand guideline"
+          description="Synthesized from your brand report and uploaded documents."
+        >
+          <BrandGuidelineSection brandId={activeBrandId} />
+        </SettingsSection>
       </>
     );
   } else if (initialSection === "billing") {
@@ -184,7 +191,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         <UserProfileSection
           email={userEmail}
           name={user?.user_metadata?.full_name ?? null}
-          lastSignIn={user?.last_sign_in_at ?? null}
+          lastSignIn={null}
         />
       </SettingsSection>
     );

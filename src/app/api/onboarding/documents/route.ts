@@ -7,6 +7,23 @@ import { sanitizeStorageFileName } from "@/lib/storage/sanitize";
 
 export const runtime = "nodejs";
 
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+const ACCEPTED_MIME_PREFIXES = ["text/", "image/"];
+const ACCEPTED_MIME_EXACT = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/json",
+  "",
+]);
+
+function isAcceptedMime(mime: string): boolean {
+  if (ACCEPTED_MIME_EXACT.has(mime)) return true;
+  return ACCEPTED_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
+}
+
 export async function POST(request: Request) {
   const formData = await request.formData();
   const brandId = formData.get("brandId");
@@ -20,28 +37,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing brand context" }, { status: 400 });
   }
 
+  const incoming = file as File;
+  if (incoming.size > MAX_FILE_BYTES) {
+    return NextResponse.json(
+      { error: `File exceeds ${Math.round(MAX_FILE_BYTES / 1024 / 1024)} MB limit` },
+      { status: 413 },
+    );
+  }
+  if (!isAcceptedMime(incoming.type)) {
+    return NextResponse.json(
+      { error: `Unsupported file type: ${incoming.type || "unknown"}` },
+      { status: 415 },
+    );
+  }
+
   await ensureOnboardingState(brandId);
 
   const source = (formData.get("source") as OnboardingDocument["source"] | null) ?? "upload";
 
   const supabase = await createSupabaseServerClient();
 
-  // Stable document id ties Storage, DB, and vector chunks together
   const documentId = createBrandId();
   const storageBucket = "brand-docs";
-  const sanitizedFileName = sanitizeStorageFileName((file as File).name);
+  const sanitizedFileName = sanitizeStorageFileName(incoming.name);
   const storagePath = `${brandId}/${documentId}/${sanitizedFileName}`;
 
-  // Upload raw file to Supabase Storage
   const { data: uploadData, error: uploadError } = await supabase.storage
     .from(storageBucket)
-    .upload(storagePath, file as File, { contentType: (file as File).type });
+    .upload(storagePath, incoming, { contentType: incoming.type });
 
   if (uploadError) {
     return NextResponse.json({ error: `Upload failed: ${uploadError.message}` }, { status: 500 });
   }
 
-  // Invoke Edge function asynchronously to extract/chunk/embed
+  const finalStoragePath = uploadData?.path ?? storagePath;
+
   type EmbedInvokeResult = { jobId?: string };
 
   const { data: invokeData } = await supabase.functions.invoke<EmbedInvokeResult>("embed_document", {
@@ -49,20 +79,23 @@ export async function POST(request: Request) {
       brandId,
       documentId,
       source,
-      storagePath: uploadData?.path ?? storagePath,
+      storagePath: finalStoragePath,
       fileName: sanitizedFileName,
-      mimeType: (file as File).type,
+      mimeType: incoming.type,
     },
   });
 
   const document: OnboardingDocument = {
     id: documentId,
-    name: (file as File).name,
+    name: incoming.name,
     source,
     createdAt: new Date().toISOString(),
     status: "processing",
-    size: (file as File).size,
-    storagePath: uploadData?.path ?? storagePath,
+    progressStep: "uploading",
+    progressPercent: 100,
+    size: incoming.size,
+    mimeType: incoming.type,
+    storagePath: finalStoragePath,
     jobId: typeof invokeData?.jobId === "string" ? invokeData.jobId : undefined,
   };
 

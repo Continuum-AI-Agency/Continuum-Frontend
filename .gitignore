@@ -77,3 +77,6 @@ calendar/
 /.worktrees/
 .omc/
 .env.local
+
+# Nutrient viewer assets copied from node_modules at dev/build time
+/public/nutrient-viewer/
