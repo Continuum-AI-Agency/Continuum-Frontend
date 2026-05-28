@@ -438,6 +438,7 @@ Reach for these when coding, not on every feature — only when the specific con
 | Skill | Best used for |
 |---|---|
 | `/shadcn` | Scaffolding and customizing Shadcn primitives to match this design system. Use when adding new components from the registry. |
+| `/build-components` | Building new custom UI components from scratch, ensuring compliance with typography, layout, spacing, and accessibility rules. |
 | `/tailwind` | Tailwind v4 syntax, config patterns, custom OKLCH values in config, `@layer` patterns. |
 | `/next-best-practices` | App Router patterns, RSC vs client component decisions, caching, streaming. Use when building new routes or data-fetching patterns. |
 | `/framer-motion-animator` | Layout transitions, gesture-driven interactions, `layoutId` shared element transitions, `AnimatePresence`. Use for complex motion only — not for simple `transition` CSS. |
@@ -493,7 +494,7 @@ Given the stack (Next.js App Router, Tailwind CSS 4, Shadcn, Geist, Framer Motio
 
 ```
 Design phase:    /impeccable → /design-taste-frontend → /frontend-design
-Build phase:     /shadcn (new component) + /next-best-practices (new route)
+Build phase:     /build-components or /shadcn (new component) + /next-best-practices (new route)
 Motion:          /animate (simple) or /framer-motion-animator (complex orchestration)
 Polish:          /polish → /delight
 Audit:           /critique or /audit
