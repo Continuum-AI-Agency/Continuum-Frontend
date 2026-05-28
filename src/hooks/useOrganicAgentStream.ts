@@ -9,6 +9,9 @@ import type { AgentChatInput } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
 import { parseOrganicStreamEvent } from "@/components/organic/agent/streamEventParser";
 
+const RECONNECT_BACKOFF_MS = 750;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
 export function useOrganicAgentStream(
   dispatch: React.Dispatch<PanelAction>,
   opts?: { onRunStarted?: (runId: string) => void }
@@ -34,6 +37,102 @@ export function useOrganicAgentStream(
 
       const controller = new AbortController();
       abortRef.current = controller;
+
+      let chatRunId: string | null = null;
+      let lastSeq = -1;
+      let terminal = false;
+
+      const dispatchParsed = (event: Record<string, unknown>): void => {
+        const type = typeof event.type === "string" ? event.type : undefined;
+
+        // Capture the runId from agent.chat_started; this is the
+        // first frame the Backend emits when the chat path opens a
+        // resumable run. Reconnect needs it.
+        if (type === "agent.chat_started" && !chatRunId) {
+          const data = event.data as { runId?: unknown; sessionId?: unknown } | undefined;
+          const runIdFromEvent = typeof data?.runId === "string" ? data.runId : null;
+          if (runIdFromEvent) {
+            chatRunId = runIdFromEvent;
+            opts?.onRunStarted?.(runIdFromEvent);
+          }
+          return;
+        }
+
+        const parsed = parseOrganicStreamEvent(event);
+
+        switch (parsed.kind) {
+          case "delta":
+            dispatch({ type: "STREAM_DELTA", delta: parsed.delta });
+            break;
+          case "toolCall":
+            dispatch({ type: "STREAM_TOOL_CALL", event: parsed.event });
+            break;
+          case "toolResult":
+            dispatch({
+              type: "STREAM_TOOL_RESULT",
+              toolCallId: parsed.toolCallId,
+              result: parsed.result,
+            });
+            break;
+          case "error":
+            dispatch({ type: "STREAM_ERROR", error: parsed.message });
+            terminal = true;
+            break;
+          case "complete":
+            dispatch({ type: "STREAM_COMPLETE" });
+            terminal = true;
+            break;
+          case "uiCard":
+            dispatch({ type: "STREAM_UI_CARD", card: parsed.card });
+            break;
+          case "postCard":
+            dispatch({
+              type: "JOB_UPDATE",
+              job: { jobId: parsed.card.jobId, brandId: parsed.card.brandId, uiPostCard: parsed.card },
+            });
+            break;
+          case "jobUpdate":
+            dispatch({ type: "JOB_UPDATE", job: parsed.job });
+            break;
+          case "runStarted":
+            opts?.onRunStarted?.(parsed.runId);
+            break;
+          case "ignored":
+            break;
+          case "invalid":
+            console.warn("[organic-agent-stream] Invalid event payload ignored", {
+              type: parsed.type ?? type,
+              payload: event,
+            });
+            break;
+        }
+      };
+
+      const consumeReader = async (
+        reader: ReadableStreamDefaultReader<Uint8Array>
+      ): Promise<void> => {
+        await readNdjsonStream({
+          reader,
+          onLine: (line) => {
+            let event: Record<string, unknown>;
+            try {
+              event = JSON.parse(line) as Record<string, unknown>;
+            } catch {
+              return;
+            }
+
+            const seq = typeof event.seq === "number" ? event.seq : null;
+            // Dedupe across the initial POST stream and any reconnect
+            // GETs — both sources may overlap on the boundary frame.
+            if (seq !== null) {
+              if (seq <= lastSeq) return;
+              lastSeq = seq;
+            }
+
+            dispatchParsed(event);
+          },
+        });
+      };
 
       try {
         const token = await getBrowserAccessToken();
@@ -71,68 +170,50 @@ export function useOrganicAgentStream(
           throw new Error(detail || "Failed to start stream.");
         }
 
-        const reader = response.body.getReader();
-        readerRef.current = reader;
+        const initialReader = response.body.getReader();
+        readerRef.current = initialReader;
+        await consumeReader(initialReader);
 
-        await readNdjsonStream({
-          reader,
-          onLine: (line) => {
-            let event: Record<string, unknown>;
-            try {
-              event = JSON.parse(line) as Record<string, unknown>;
-            } catch {
-              return;
-            }
+        // Stream closed. If we never saw a terminal frame and we have a
+        // runId, the connection dropped mid-turn — reconnect via the
+        // resumable GET endpoint and continue from the last-seen seq.
+        let attempts = 0;
+        while (!terminal && !controller.signal.aborted && chatRunId && attempts < MAX_RECONNECT_ATTEMPTS) {
+          attempts += 1;
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(resolve, RECONNECT_BACKOFF_MS * attempts);
+            controller.signal.addEventListener("abort", () => {
+              clearTimeout(timeout);
+              resolve();
+            });
+          });
+          if (controller.signal.aborted) break;
 
-            const type = typeof event.type === "string" ? event.type : undefined;
-            const parsed = parseOrganicStreamEvent(event);
+          const resumeToken = await getBrowserAccessToken();
+          if (!resumeToken) throw new Error("No authentication token available");
 
-            switch (parsed.kind) {
-              case "delta":
-                dispatch({ type: "STREAM_DELTA", delta: parsed.delta });
-                break;
-              case "toolCall":
-                dispatch({ type: "STREAM_TOOL_CALL", event: parsed.event });
-                break;
-              case "toolResult":
-                dispatch({
-                  type: "STREAM_TOOL_RESULT",
-                  toolCallId: parsed.toolCallId,
-                  result: parsed.result,
-                });
-                break;
-              case "error":
-                dispatch({ type: "STREAM_ERROR", error: parsed.message });
-                break;
-              case "complete":
-                dispatch({ type: "STREAM_COMPLETE" });
-                break;
-              case "uiCard":
-                dispatch({ type: "STREAM_UI_CARD", card: parsed.card });
-                break;
-              case "postCard":
-                dispatch({
-                  type: "JOB_UPDATE",
-                  job: { jobId: parsed.card.jobId, brandId: parsed.card.brandId, uiPostCard: parsed.card },
-                });
-                break;
-              case "jobUpdate":
-                dispatch({ type: "JOB_UPDATE", job: parsed.job });
-                break;
-              case "runStarted":
-                opts?.onRunStarted?.(parsed.runId);
-                break;
-              case "ignored":
-                break;
-              case "invalid":
-                console.warn("[organic-agent-stream] Invalid event payload ignored", {
-                  type: parsed.type ?? type,
-                  payload: event,
-                });
-                break;
-            }
-          },
-        });
+          const resumeUrl = `${getApiBaseUrl()}/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
+          const resumeResponse = await fetch(resumeUrl, {
+            headers: {
+              Accept: "application/x-ndjson",
+              Authorization: `Bearer ${resumeToken}`,
+            },
+            signal: controller.signal,
+          });
+
+          if (!resumeResponse.ok || !resumeResponse.body) {
+            // If the run can't be found (e.g. older deployment without
+            // chat-run persistence), surface the dropped-connection
+            // error instead of silently spinning.
+            throw new Error(
+              `Stream reconnect failed (status ${resumeResponse.status}). The connection was lost and could not be resumed.`
+            );
+          }
+
+          const resumeReader = resumeResponse.body.getReader();
+          readerRef.current = resumeReader;
+          await consumeReader(resumeReader);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Stream failed";
         if (!controller.signal.aborted) {
@@ -146,6 +227,9 @@ export function useOrganicAgentStream(
 
       return {};
     },
+    // Match original hook contract: opts is captured by closure rather than
+    // listed as a dep so consumers don't have to memoize the options object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [dispatch, cancel]
   );
 
