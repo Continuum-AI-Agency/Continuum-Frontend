@@ -5,6 +5,7 @@ import { getApiBaseUrl } from "@/lib/api/config";
 import { ApiError, assertOk } from "@/lib/api/errors";
 import type { RequestOptions } from "@/lib/api/http.types";
 import { BRAND_TRENDS_SCHEMA, type BrandInsights, type BrandInsightsProfile } from "@/lib/schemas/brandInsights";
+import { tags } from "@/lib/cache/tags";
 
 type FetchOptions = {
   revalidateSeconds?: number;
@@ -74,6 +75,7 @@ async function requestWithFallback<TResponse = unknown>(
 export async function fetchBrandInsights(brandId: string, options?: FetchOptions): Promise<BrandInsights> {
   const encodedBrandId = encodeURIComponent(brandId);
   const revalidate = options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS;
+  const next = { revalidate, tags: [tags.brandInsights(brandId)] };
   let response: unknown;
 
   try {
@@ -83,7 +85,7 @@ export async function fetchBrandInsights(brandId: string, options?: FetchOptions
       body: {
         brand_id: brandId,
       },
-      next: { revalidate },
+      next,
     });
   } catch (error) {
     if (!(error instanceof ApiError) || error.status !== 404) {
@@ -95,7 +97,7 @@ export async function fetchBrandInsights(brandId: string, options?: FetchOptions
       `/api/brand-insights/${encodedBrandId}`,
       {
         method: "GET",
-        next: { revalidate },
+        next,
       }
     );
   }
@@ -113,7 +115,10 @@ export async function fetchBrandInsightsProfile(
     `/api/brand-insights/profile/${encodedBrandId}`,
     {
       method: "GET",
-      next: { revalidate: options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS },
+      next: {
+        revalidate: options?.revalidateSeconds ?? DEFAULT_REVALIDATE_SECONDS,
+        tags: [tags.brandInsights(brandId)],
+      },
     }
   );
 

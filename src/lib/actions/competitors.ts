@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import {
   addSavedCompetitor,
@@ -9,6 +9,7 @@ import {
   invalidateCompetitorCache,
   removeSavedCompetitor,
 } from "@/lib/api/competitors.server";
+import { tags } from "@/lib/cache/tags";
 import type { CompetitorDashboard, CompetitorSavedProfile } from "@/lib/schemas/competitors";
 
 export async function getCompetitorDashboardAction(
@@ -34,6 +35,7 @@ export async function getCompetitorDashboardAction(
 export async function refreshCompetitorCacheAction(username: string): Promise<void> {
   try {
     await invalidateCompetitorCache(username);
+    updateTag(tags.competitors.forUsername(username));
     revalidatePath("/dashboard");
   } catch {
     console.error("competitors.invalidateCache.error", { username });

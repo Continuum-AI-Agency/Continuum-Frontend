@@ -17,7 +17,10 @@ export const tags = {
   brandProfile: (brandProfileId: string) => `brand-profile:${brandProfileId}`,
   brandInsights: (brandProfileId: string) => `brand-insights:${brandProfileId}`,
   brandGuidelines: (brandProfileId: string) => `brand-guidelines:${brandProfileId}`,
-  competitors: (brandProfileId: string) => `competitors:${brandProfileId}`,
+  competitors: {
+    forBrand: (brandProfileId: string) => `competitors:brand:${brandProfileId}`,
+    forUsername: (username: string) => `competitors:username:${username}`,
+  },
   campaigns: {
     forBrand: (brandProfileId: string) => `campaigns:brand:${brandProfileId}`,
     forCampaign: (campaignId: string) => `campaigns:campaign:${campaignId}`,

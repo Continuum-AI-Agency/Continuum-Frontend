@@ -1,12 +1,15 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath, updateTag } from "next/cache";
+import { tags } from "@/lib/cache/tags";
 import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
 import type { BrandRole } from "@/lib/onboarding/state";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getFunctionsInvokeErrorMessage } from "@/lib/supabase/functions-errors";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { normalizeBrandDocumentStoragePath } from "@/lib/brands/document-download";
+import { getClaimsIdentity } from "@/lib/auth/claims";
 
 export async function switchActiveBrandAction(brandId: string): Promise<void> {
   if (!brandId) return;
@@ -29,11 +32,8 @@ export async function updateBrandLogoAction(brandId: string, logoPath: string | 
   revalidatePath("/", "layout");
 }
 
-import { revalidatePath } from "next/cache";
-
 export async function createBrandProfileAction(name?: string): Promise<void> {
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getClaimsIdentity();
   const repo = createBrandProfileRepository();
   const result = await repo.createBrand(name?.trim());
 
@@ -169,8 +169,7 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
   if (!brandId) {
     throw new Error("Brand id is required");
   }
-  const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getClaimsIdentity();
   const repo = createBrandProfileRepository();
   const nextBrandId = await repo.deleteBrand(brandId);
 
@@ -199,4 +198,26 @@ export async function createSignedDocumentUrlAction(storagePath: string): Promis
   }
 
   return data.signedUrl;
+}
+
+export async function regenerateBrandGuidelineAction(
+  brandId: string,
+  purpose: string = "general",
+): Promise<{ guidelineId?: string; version?: number; skipped?: string }> {
+  if (!brandId) throw new Error("brandId required");
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.functions.invoke<{
+    guidelineId?: string;
+    version?: number;
+    skipped?: string;
+  }>("generate_brand_guideline", {
+    body: { brandId, trigger: "manual", purpose },
+  });
+  if (error) {
+    const message = await getFunctionsInvokeErrorMessage(error);
+    throw new Error(message ?? "Failed to regenerate brand guideline");
+  }
+  updateTag(tags.brandGuidelines(brandId));
+  revalidatePath("/settings", "page");
+  return data ?? {};
 }
