@@ -1,10 +1,10 @@
+import { MinusCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { CardSurface } from "./CardSurface";
-import type { AgentPreviewBuckets } from "../state/agentPreview";
+import type { AgentPreviewBuckets, AuditAvailability, AuditKey } from "../state/agentPreview";
 
-type AuditKey = "voice" | "audience" | "website" | "business";
 const AUDIT_KEYS: AuditKey[] = ["voice", "audience", "website", "business"];
 const AUDIT_LABELS: Record<AuditKey, string> = {
   voice: "Voice",
@@ -31,10 +31,9 @@ const SEVERITY_BADGE: Record<NonNullable<AuditPayload["severity"]>, string> = {
 
 export function AuditsCard({ buckets }: Props) {
   const audits = buckets?.audits ?? {};
-  const populatedCount = AUDIT_KEYS.filter((k) => audits[k] !== undefined).length;
-  const isEmpty = populatedCount === 0;
-  // No single section status drives this; it's gated by all four audits arriving
-  // (or by complete). Treat as "running" until we've seen any audit at all.
+  const auditStatus = buckets?.auditStatus ?? {};
+  const settledCount = AUDIT_KEYS.filter((k) => auditStatus[k] !== undefined).length;
+  const isEmpty = settledCount === 0;
   const status = isEmpty ? (buckets?.result ? "done" : "running") : "done";
 
   return (
@@ -56,17 +55,41 @@ export function AuditsCard({ buckets }: Props) {
       }
     >
       <div className="grid grid-cols-2 gap-2">
-        {AUDIT_KEYS.map((key) => {
-          const audit = audits[key] as AuditPayload | undefined;
-          return <AuditTile key={key} label={AUDIT_LABELS[key]} audit={audit} />;
-        })}
+        {AUDIT_KEYS.map((key) => (
+          <AuditTile
+            key={key}
+            label={AUDIT_LABELS[key]}
+            audit={audits[key] as AuditPayload | undefined}
+            state={auditStatus[key]}
+          />
+        ))}
       </div>
     </CardSurface>
   );
 }
 
-function AuditTile({ label, audit }: { label: string; audit: AuditPayload | undefined }) {
-  if (!audit) {
+function AuditTile({
+  label,
+  audit,
+  state,
+}: {
+  label: string;
+  audit: AuditPayload | undefined;
+  state: AuditAvailability | undefined;
+}) {
+  if (state === "unavailable") {
+    return (
+      <div className="rounded-lg border border-dashed border-[#e5e7eb] bg-[#f9fafb]/50 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">{label}</p>
+        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-[#94a3b8]">
+          <MinusCircle className="h-3 w-3 shrink-0 text-[#cbd5e1]" />
+          <span>Not available</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (state !== "available" || !audit) {
     return (
       <div className="rounded-lg border border-dashed border-[#e5e7eb] p-3">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">{label}</p>
@@ -74,6 +97,7 @@ function AuditTile({ label, audit }: { label: string; audit: AuditPayload | unde
       </div>
     );
   }
+
   const findingsCount = Array.isArray(audit.findings) ? audit.findings.length : 0;
   return (
     <div className="rounded-lg border border-[#e5e7eb] p-3">

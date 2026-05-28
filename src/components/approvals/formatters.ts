@@ -48,6 +48,7 @@ export function metricLabel(key: string): string {
 
 export function scopeLabel(action: RuleAction): string {
   if (action.scope_type === "GLOBAL") return "Global";
+  if (!action.scope_type) return "Unscoped";
   const id = action.scope_id ?? "—";
   const short = id.length > 12 ? `…${id.slice(-8)}` : id;
   const type = action.scope_type.charAt(0) + action.scope_type.slice(1).toLowerCase();

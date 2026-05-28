@@ -52,6 +52,10 @@ export type AgentPreviewAudits = {
   business?: unknown;
 };
 
+export type AuditAvailability = "available" | "unavailable";
+export type AuditKey = keyof AgentPreviewAudits;
+export type AgentPreviewAuditStatus = Partial<Record<AuditKey, AuditAvailability>>;
+
 export type AgentPreviewBuckets = {
   runId: string | null;
   brandProfile: AgentBrandProfile | null;
@@ -69,6 +73,7 @@ export type AgentPreviewBuckets = {
   websiteStream: string;
   sectionStatus: Record<PreviewSection, SectionStatus>;
   audits: AgentPreviewAudits;
+  auditStatus: AgentPreviewAuditStatus;
   citations: Record<string, unknown>;
   result: OnboardingPreviewWorkflowResult | null;
 };
@@ -96,6 +101,7 @@ export function emptyBuckets(): AgentPreviewBuckets {
     websiteStream: "",
     sectionStatus: makeIdleSectionStatus(),
     audits: {},
+    auditStatus: {},
     citations: {},
     result: null,
   };
@@ -187,6 +193,11 @@ export function mergeCompleteResult(
 
   if (result.audits) {
     buckets.audits = { ...result.audits, ...buckets.audits };
+    const merged: AgentPreviewAuditStatus = { ...buckets.auditStatus };
+    for (const k of Object.keys(result.audits) as AuditKey[]) {
+      if (merged[k] === undefined) merged[k] = "available";
+    }
+    buckets.auditStatus = merged;
   }
 
   const resultCitations = (result as { citations?: Record<string, unknown> }).citations;
@@ -238,8 +249,13 @@ export function makeEventHandler(buckets: AgentPreviewBuckets, dispatch: () => v
         break;
       case "enrich":
         if (event.section.startsWith("audit.")) {
-          const key = event.section.slice("audit.".length) as keyof AgentPreviewAudits;
-          buckets.audits = { ...buckets.audits, [key]: event.data };
+          const key = event.section.slice("audit.".length) as AuditKey;
+          if (event.data === null) {
+            buckets.auditStatus = { ...buckets.auditStatus, [key]: "unavailable" };
+          } else {
+            buckets.audits = { ...buckets.audits, [key]: event.data };
+            buckets.auditStatus = { ...buckets.auditStatus, [key]: "available" };
+          }
         } else {
           applyEnrichProseSection(buckets, event.section as PreviewSection, event.data);
         }

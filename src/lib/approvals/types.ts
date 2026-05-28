@@ -19,13 +19,13 @@ const actionPayloadSchema = z.preprocess((value) => {
 
 export const ruleActionSchema = z.object({
   id: z.string(),
-  status: z.enum(ACTION_STATUSES),
+  status: z.string(),
   action_type: z.string(),
-  scope_type: z.enum(SCOPE_TYPES),
-  scope_id: z.string().nullable(),
+  scope_type: z.string().nullable().optional(),
+  scope_id: z.string().nullable().optional(),
   action_payload: actionPayloadSchema,
   rule_name: z.string().nullable().optional(),
-  evaluation_facts: z.record(z.string(), z.number()).nullable().optional(),
+  evaluation_facts: z.record(z.string(), z.unknown()).nullable().optional(),
   rule_id: z.string().nullable().optional(),
   evaluation_id: z.string().nullable().optional(),
   flow_run_id: z.string().nullable().optional(),
@@ -37,7 +37,7 @@ export const ruleActionSchema = z.object({
   error: z.string().nullable().optional(),
   is_dry_run: z.boolean().optional(),
   created_at: z.string(),
-});
+}).loose();
 
 export type RuleAction = z.infer<typeof ruleActionSchema>;
 

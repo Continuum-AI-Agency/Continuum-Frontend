@@ -197,6 +197,27 @@ describe("makeEventHandler (reducer)", () => {
     reduce({ type: "enrich", section: "audit.voice", data: { score: 82 }, seq: 7 });
     expect(buckets.audits.voice).toEqual({ score: 82 });
     expect(buckets.audits.audience).toBeUndefined();
+    expect(buckets.auditStatus.voice).toBe("available");
+  });
+
+  it("enrich on audit.* with data:null marks unavailable and writes no data", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "enrich", section: "audit.business", data: null, seq: 8 });
+    expect(buckets.audits.business).toBeUndefined();
+    expect(buckets.auditStatus.business).toBe("unavailable");
+  });
+
+  it("enrich audit:null sticks through subsequent complete with a populated result", () => {
+    const { buckets, reduce } = setup();
+    reduce({ type: "enrich", section: "audit.business", data: null, seq: 9 });
+    reduce({
+      type: "complete",
+      phase: "preview",
+      status: "ok",
+      result: { audits: { voice: { score: 80 }, business: { score: 50 } } },
+    } as Parameters<typeof reduce>[0]);
+    expect(buckets.auditStatus.business).toBe("unavailable");
+    expect(buckets.auditStatus.voice).toBe("available");
   });
 
   it("enrich on a prose section populates the matching bucket", () => {

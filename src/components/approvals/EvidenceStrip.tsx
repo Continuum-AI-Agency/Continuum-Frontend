@@ -24,12 +24,14 @@ const DELTA_PAIRS: Array<[actual: string, benchmark: string]> = [
 ];
 
 type Props = {
-  facts: Record<string, number> | null | undefined;
+  facts: Record<string, unknown> | null | undefined;
   className?: string;
 };
 
 export function EvidenceStrip({ facts, className }: Props) {
-  if (!facts || Object.keys(facts).length === 0) {
+  const numericFacts = toNumericFacts(facts);
+
+  if (Object.keys(numericFacts).length === 0) {
     return (
       <div className={cn("rounded-md border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground", className)}>
         No evidence metrics for this action.
@@ -37,8 +39,8 @@ export function EvidenceStrip({ facts, className }: Props) {
     );
   }
 
-  const entries = orderEntries(facts);
-  const deltas = computeDeltas(facts);
+  const entries = orderEntries(numericFacts);
+  const deltas = computeDeltas(numericFacts);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -85,6 +87,20 @@ export function EvidenceStrip({ facts, className }: Props) {
       </div>
     </TooltipProvider>
   );
+}
+
+function toNumericFacts(facts: Record<string, unknown> | null | undefined): Record<string, number> {
+  if (!facts) return {};
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(facts)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      out[key] = value;
+    } else if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) out[key] = parsed;
+    }
+  }
+  return out;
 }
 
 function orderEntries(facts: Record<string, number>): Array<[string, number]> {
