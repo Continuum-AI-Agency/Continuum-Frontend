@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { getApiBaseUrl } from "@/lib/api/config";
 import type { AgentChatInput } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
 import { parseOrganicStreamEvent } from "@/components/organic/agent/streamEventParser";
@@ -135,15 +133,16 @@ export function useOrganicAgentStream(
       };
 
       try {
-        const token = await getBrowserAccessToken();
-        if (!token) throw new Error("No authentication token available");
-
-        const response = await fetch(`${getApiBaseUrl()}/api/organic/agent/chat`, {
+        // Proxied through the Next.js route at /api/organic/agent/chat
+        // (mirrors the Jaina chat-stream pattern). The proxy attaches the
+        // Supabase access token server-side from the request cookie and
+        // emits the PostHog `organic_agent_chat_message_sent` event before
+        // forwarding to the Backend.
+        const response = await fetch("/api/organic/agent/chat", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/x-ndjson",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             brandId: input.brandId,
@@ -189,14 +188,13 @@ export function useOrganicAgentStream(
           });
           if (controller.signal.aborted) break;
 
-          const resumeToken = await getBrowserAccessToken();
-          if (!resumeToken) throw new Error("No authentication token available");
-
-          const resumeUrl = `${getApiBaseUrl()}/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
+          // Proxied through /api/organic/agent/runs/[runId]/events — the
+          // server-side route attaches the Supabase token from the cookie
+          // and forwards to the Backend resume endpoint.
+          const resumeUrl = `/api/organic/agent/runs/${chatRunId}/events?after_seq=${lastSeq + 1}`;
           const resumeResponse = await fetch(resumeUrl, {
             headers: {
               Accept: "application/x-ndjson",
-              Authorization: `Bearer ${resumeToken}`,
             },
             signal: controller.signal,
           });
