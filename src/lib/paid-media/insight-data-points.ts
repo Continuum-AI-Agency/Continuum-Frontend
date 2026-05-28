@@ -204,3 +204,23 @@ export function buildGeneratedCampaignInsights(
   return insights.slice(0, 8);
 }
 
+export function primaryMetricFor(insight: GeneratedCampaignInsight): CampaignInsightMetric {
+  const first = insight.evidence[0];
+  if (!first) throw new Error("Insight is missing evidence; cannot derive primary metric.");
+  return first.metric;
+}
+
+export function primaryStatusFor(insight: GeneratedCampaignInsight): CampaignInsightStatus {
+  const first = insight.evidence[0];
+  if (!first) throw new Error("Insight is missing evidence; cannot derive primary status.");
+  return first.status;
+}
+
+export function computeInsightFingerprint(params: {
+  campaignId: string | null;
+  primaryMetric: CampaignInsightMetric;
+  status: CampaignInsightStatus;
+}): string {
+  return `${params.campaignId ?? "account"}:${params.primaryMetric}:${params.status}`;
+}
+

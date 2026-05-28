@@ -16,6 +16,7 @@ import {
   buildCampaignInsightDataPoints,
   buildGeneratedCampaignInsights,
 } from "@/lib/paid-media/insight-data-points";
+import { persistCampaignInsightsSnapshot } from "@/app/_actions/paidMediaInsights";
 import {
   makeBudgetPacingKey,
   makeCampaignPerformanceKey,
@@ -103,6 +104,37 @@ export function CampaignPerformanceTab({ brandId, adAccountId }: CampaignPerform
   );
   const insights = React.useMemo(() => buildGeneratedCampaignInsights(dataPoints), [dataPoints]);
   const selectedCampaign = campaigns.find((campaign) => campaign.id === selectedCampaignId);
+
+  const lastPersistedHashRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!adAccountId || insights.length === 0) return;
+    if (campaignEntry?.status !== "success") return;
+
+    const hash = `${adAccountId}:${rangePreset}:${insights
+      .map((insight) => insight.id)
+      .toSorted()
+      .join(",")}`;
+    if (hash === lastPersistedHashRef.current) return;
+
+    const handle = window.setTimeout(() => {
+      lastPersistedHashRef.current = hash;
+      void persistCampaignInsightsSnapshot({
+        brandId,
+        adAccountId,
+        platform: "meta",
+        rangePreset,
+        peerSetSize: campaigns.length,
+        insights,
+      }).then((result) => {
+        if (!result.ok) {
+          console.warn("[paid-media] Failed to persist insights snapshot:", result.error);
+          lastPersistedHashRef.current = null;
+        }
+      });
+    }, 2000);
+
+    return () => window.clearTimeout(handle);
+  }, [adAccountId, brandId, campaignEntry?.status, campaigns.length, insights, rangePreset]);
 
   if (!adAccountId) {
     return (

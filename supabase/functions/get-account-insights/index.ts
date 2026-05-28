@@ -10,6 +10,10 @@ import { fetchAdLevelInsights } from "./creative.ts";
 import { computeHeuristicInsights } from "./compute.ts";
 import { generateParallelInsights } from "./gemini.ts";
 import { detectAllAnomalies } from "./anomalies.ts";
+import {
+  computePeriodComparison,
+  hasSanePeriodComparison,
+} from "./period-comparison.ts";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
 
@@ -32,40 +36,6 @@ function buildCacheKey(args: {
   rangePreset: string;
 }) {
   return ["meta", "account_insights", args.accountId, args.rangePreset].join(":");
-}
-
-function computePeriodComparison(
-  current: { placements: { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number }[] },
-  previous: { placements: { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number }[] }
-) {
-  const sum = (arr: typeof current.placements, key: keyof typeof current.placements[0]) =>
-    arr.reduce((s, p) => s + (p[key] as number), 0);
-
-  const curSpend = sum(current.placements, "spend");
-  const prevSpend = sum(previous.placements, "spend");
-  const curConvValue = sum(current.placements, "conversion_value");
-  const prevConvValue = sum(previous.placements, "conversion_value");
-  const curConv = sum(current.placements, "conversions");
-  const prevConv = sum(previous.placements, "conversions");
-  const curClicks = sum(current.placements, "clicks");
-  const prevClicks = sum(previous.placements, "clicks");
-  const curImpressions = sum(current.placements, "impressions");
-  const prevImpressions = sum(previous.placements, "impressions");
-
-  const curRoas = curSpend > 0 ? curConvValue / curSpend : 0;
-  const prevRoas = prevSpend > 0 ? prevConvValue / prevSpend : 0;
-  const curCtr = curImpressions > 0 ? (curClicks / curImpressions) * 100 : 0;
-  const prevCtr = prevImpressions > 0 ? (prevClicks / prevImpressions) * 100 : 0;
-
-  const deltaPct = (cur: number, prev: number) =>
-    prev > 0 ? Math.round(((cur - prev) / prev) * 100) : 0;
-
-  return {
-    spend_delta_pct: deltaPct(curSpend, prevSpend),
-    roas_delta_pct: deltaPct(curRoas, prevRoas),
-    ctr_delta_pct: deltaPct(curCtr, prevCtr),
-    conversions_delta_pct: deltaPct(curConv, prevConv),
-  };
 }
 
 async function readCampaignObjectives(
@@ -192,10 +162,14 @@ serve(async (req: Request) => {
     if (!forceRefresh) {
       const upstashHit = await cacheGet<unknown>(cacheKey);
       if (upstashHit) {
-        log("Cache HIT (upstash)");
-        return new Response(JSON.stringify(upstashHit), {
-          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
-        });
+        if (hasSanePeriodComparison(upstashHit)) {
+          log("Cache HIT (upstash)");
+          return new Response(JSON.stringify(upstashHit), {
+            headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+          });
+        }
+
+        log("Upstash cache ignored due to invalid period comparison");
       }
 
       const { data, error } = await supabase
@@ -218,7 +192,7 @@ serve(async (req: Request) => {
           cachedPayload?.range?.since === sinceStr &&
           cachedPayload?.range?.until === untilStr;
 
-        if (expiresAt.getTime() > Date.now() && rangeMatches) {
+        if (expiresAt.getTime() > Date.now() && rangeMatches && hasSanePeriodComparison(data.payload)) {
           log("Cache HIT (3-day insights)");
           await cacheSet(cacheKey, data.payload, TTL_12H);
 
@@ -255,6 +229,8 @@ serve(async (req: Request) => {
               "X-Cache": "HIT",
             },
           });
+        } else if (expiresAt.getTime() > Date.now() && rangeMatches) {
+          log("Postgres cache ignored due to invalid period comparison");
         }
       }
     }

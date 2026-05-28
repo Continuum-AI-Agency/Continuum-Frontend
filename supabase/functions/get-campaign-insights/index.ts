@@ -6,9 +6,14 @@ import {
 } from "../get-account-insights/breakdowns.ts";
 import { computeHeuristicInsights } from "../get-account-insights/compute.ts";
 import { detectAllAnomalies } from "../get-account-insights/anomalies.ts";
+import {
+  computePeriodComparison,
+  hasSanePeriodComparison,
+} from "../get-account-insights/period-comparison.ts";
 import { generateCampaignInsights } from "./gemini.ts";
 import { resolveMetaAccessToken } from "../_shared/meta-access-token.ts";
 import { cacheGet, cacheSet, TTL_12H } from "../_shared/upstash-cache.ts";
+import { persistGeneratedInsights } from "./insight-persistence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,40 +31,6 @@ const toIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
 
 function buildCacheKey(accountId: string, campaignId: string, preset: string) {
   return `meta:campaign_insights:${accountId}:${campaignId}:${preset}`;
-}
-
-function computePeriodComparison(
-  current: { placements: { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number }[] },
-  previous: { placements: { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number }[] }
-) {
-  const sum = (arr: typeof current.placements, key: keyof typeof current.placements[0]) =>
-    arr.reduce((s, p) => s + (p[key] as number), 0);
-
-  const curSpend = sum(current.placements, "spend");
-  const prevSpend = sum(previous.placements, "spend");
-  const curConvValue = sum(current.placements, "conversion_value");
-  const prevConvValue = sum(previous.placements, "conversion_value");
-  const curConv = sum(current.placements, "conversions");
-  const prevConv = sum(previous.placements, "conversions");
-  const curClicks = sum(current.placements, "clicks");
-  const prevClicks = sum(previous.placements, "clicks");
-  const curImpressions = sum(current.placements, "impressions");
-  const prevImpressions = sum(previous.placements, "impressions");
-
-  const curRoas = curSpend > 0 ? curConvValue / curSpend : 0;
-  const prevRoas = prevSpend > 0 ? prevConvValue / prevSpend : 0;
-  const curCtr = curImpressions > 0 ? (curClicks / curImpressions) * 100 : 0;
-  const prevCtr = prevImpressions > 0 ? (prevClicks / prevImpressions) * 100 : 0;
-
-  const deltaPct = (cur: number, prev: number) =>
-    prev > 0 ? Math.round(((cur - prev) / prev) * 100) : 0;
-
-  return {
-    spend_delta_pct: deltaPct(curSpend, prevSpend),
-    roas_delta_pct: deltaPct(curRoas, prevRoas),
-    ctr_delta_pct: deltaPct(curCtr, prevCtr),
-    conversions_delta_pct: deltaPct(curConv, prevConv),
-  };
 }
 
 serve(async (req: Request) => {
@@ -175,10 +146,14 @@ serve(async (req: Request) => {
     if (!forceRefresh) {
       const upstashHit = await cacheGet<Record<string, unknown>>(cacheKey);
       if (upstashHit) {
-        log("Upstash cache HIT");
-        return new Response(JSON.stringify(upstashHit), {
-          headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
-        });
+        if (hasSanePeriodComparison(upstashHit)) {
+          log("Upstash cache HIT");
+          return new Response(JSON.stringify(upstashHit), {
+            headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
+          });
+        }
+
+        log("Upstash cache ignored due to invalid period comparison");
       }
 
       const { data, error } = await supabase
@@ -199,7 +174,7 @@ serve(async (req: Request) => {
           cachedPayload?.range?.since === sinceStr &&
           cachedPayload?.range?.until === untilStr;
 
-        if (expiresAt.getTime() > Date.now() && rangeMatches) {
+        if (expiresAt.getTime() > Date.now() && rangeMatches && hasSanePeriodComparison(data.payload)) {
           log("Postgres cache HIT");
 
           await cacheSet(cacheKey, data.payload, TTL_12H);
@@ -225,6 +200,8 @@ serve(async (req: Request) => {
           return new Response(JSON.stringify(data.payload), {
             headers: { ...corsHeaders, "Content-Type": "application/json", "X-Cache": "HIT" },
           });
+        } else if (expiresAt.getTime() > Date.now() && rangeMatches) {
+          log("Postgres cache ignored due to invalid period comparison");
         }
       }
     }
@@ -386,6 +363,24 @@ async function generateFresh(args: {
     log(`Cached campaign insights with ${hasLlmInsights ? "3-day" : "1h (partial)"} TTL`);
   } catch (cacheError) {
     log("Cache write failed", cacheError);
+  }
+
+  try {
+    await persistGeneratedInsights({
+      supabase,
+      brandId,
+      adAccountId,
+      campaignId,
+      campaignName: campaignName || null,
+      rangePreset,
+      rangeSince: sinceStr,
+      rangeUntil: untilStr,
+      insights: allInsights,
+      generatedAt: nowTime.toISOString(),
+      log,
+    });
+  } catch (persistError) {
+    log("Insight persistence failed", persistError);
   }
 
   return response;
