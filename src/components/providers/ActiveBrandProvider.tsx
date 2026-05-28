@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
 import type { BrandPermission, BrandSummary } from "@/components/DashboardLayoutShell";
-import { switchActiveBrandAction } from "@/app/(post-auth)/settings/actions";
 import { switchBrand } from "@/lib/brands/switch-brand";
+import * as storeRegistry from "@/lib/storage/storeRegistry";
+import { purgeAllForBrand } from "@/lib/storage/brandScopedStorage";
 import { useToastContext, type ToastOptions } from "@/components/ui/ToastProvider";
 import { useSession } from "@/hooks/useSession";
 import { useRouter } from "next/navigation";
@@ -87,7 +88,22 @@ export function ActiveBrandProvider({
       metadataId !== activeBrandId &&
       summaries.some((brand) => brand.id === metadataId && !brand.isPending)
     ) {
+      const prevBrandId = selectedBrandId;
       setSelectedBrandId(metadataId);
+      const event = {
+        prevBrandId,
+        nextBrandId: metadataId,
+        reason: "cross-tab-sync" as const,
+      };
+      try {
+        storeRegistry.teardown(prevBrandId, event);
+      } catch { /* swallowed by registry handlers */ }
+      try {
+        purgeAllForBrand(prevBrandId);
+      } catch { /* never block sync */ }
+      try {
+        storeRegistry.purge(prevBrandId);
+      } catch { /* swallowed by registry handlers */ }
     }
   }, [user, selectedBrandId, summaries, switchingToBrandId, activeBrandId]);
 
@@ -141,7 +157,6 @@ export function ActiveBrandProvider({
             const switched = await switchBrand({
               targetBrandId: brandId,
               activeBrandId: currentActive,
-              switchAction: switchActiveBrandAction,
               refresh: () => r.refresh(),
             });
 

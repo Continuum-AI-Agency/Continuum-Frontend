@@ -17,7 +17,7 @@ describe("storeRegistry", () => {
     expect(size()).toBe(0);
   });
 
-  it("teardown invokes every registered handler with the previous brandId", () => {
+  it("teardown invokes every registered handler with the previous brandId and a default event", () => {
     const a = mock(() => {});
     const b = mock(() => {});
     register({ name: "a", teardown: a });
@@ -25,8 +25,13 @@ describe("storeRegistry", () => {
 
     teardown("brand-prev");
 
-    expect(a).toHaveBeenCalledWith("brand-prev");
-    expect(b).toHaveBeenCalledWith("brand-prev");
+    const defaultEvent = {
+      prevBrandId: "brand-prev",
+      nextBrandId: null,
+      reason: "local-switch",
+    };
+    expect(a).toHaveBeenCalledWith("brand-prev", defaultEvent);
+    expect(b).toHaveBeenCalledWith("brand-prev", defaultEvent);
   });
 
   it("teardown is a no-op when prevBrandId is empty", () => {
@@ -49,7 +54,11 @@ describe("storeRegistry", () => {
     register({ name: "ok", teardown: okHandler });
 
     expect(() => teardown("brand-prev")).not.toThrow();
-    expect(okHandler).toHaveBeenCalledWith("brand-prev");
+    expect(okHandler).toHaveBeenCalledWith("brand-prev", {
+      prevBrandId: "brand-prev",
+      nextBrandId: null,
+      reason: "local-switch",
+    });
   });
 
   it("purge only invokes entries that defined a purge handler", () => {

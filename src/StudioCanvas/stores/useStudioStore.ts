@@ -21,6 +21,7 @@ import {
 } from '../utils/isValidConnection';
 import { resolveCollisions } from '../utils/nodeCollisions';
 import { isVideoGeneratorNodeType } from '../utils/videoModel';
+import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 
 export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep';
 export type InteractionMode = 'pan' | 'select';
@@ -60,6 +61,7 @@ interface StudioState {
   takeSnapshot: () => void;
   undo: () => void;
   redo: () => void;
+  resetForBrandSwitch: () => void;
 }
 
 // Data type mapping for edges
@@ -471,4 +473,22 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   triggerSave: () => {
     set((state) => ({ saveTrigger: state.saveTrigger + 1 }));
   },
+
+  resetForBrandSwitch: () =>
+    set({
+      nodes: [],
+      edges: [],
+      deletedNodeIds: [],
+      deletedEdgeIds: [],
+      saveTrigger: 0,
+      brandId: undefined,
+      history: { past: [], future: [] },
+    }),
 }));
+
+if (typeof window !== 'undefined') {
+  registerBrandScopedStore({
+    name: 'studio-canvas',
+    reset: () => useStudioStore.getState().resetForBrandSwitch(),
+  });
+}

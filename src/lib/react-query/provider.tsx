@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { onBrandChange } from "@/lib/brands/brand-switch";
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -33,8 +34,13 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
       }
     });
 
+    const unsubscribeBrand = onBrandChange(() => {
+      queryClient.clear();
+    });
+
     return () => {
       subscription.unsubscribe();
+      unsubscribeBrand();
     };
   }, [queryClient]);
 

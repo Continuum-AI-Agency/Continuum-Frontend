@@ -27,8 +27,14 @@ export function useSwitchBrand() {
         return { switched: false, prevBrandId: result.prevBrandId, redirected: false };
       }
 
+      const event = {
+        prevBrandId: result.prevBrandId,
+        nextBrandId: brandId,
+        reason: "local-switch" as const,
+      };
+
       try {
-        storeRegistry.teardown(result.prevBrandId);
+        storeRegistry.teardown(result.prevBrandId, event);
       } catch {
         /* swallowed by registry handlers */
       }

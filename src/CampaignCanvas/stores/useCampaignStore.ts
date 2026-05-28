@@ -20,6 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { applyCampaignGraphValidation } from '../validation/applyCampaignGraphValidation';
 import { getSingleParentConnectionViolationMessage } from '../validation/hierarchyRelationships';
 import { buildCampaignCanvasPayload } from '@/lib/campaign-canvas/payload';
+import { registerBrandScopedStore } from '@/lib/brands/brand-switch';
 
 interface HistoryState {
   nodes: CampaignCanvasNode[];
@@ -49,6 +50,7 @@ interface CampaignStore {
   redo: () => void;
   pushHistory: () => void;
   setEdgeStyle: (style: 'curved' | 'straight') => void;
+  resetForBrandSwitch: () => void;
 }
 
 const CONNECTED_NODE_VERTICAL_OFFSET = 300;
@@ -252,6 +254,19 @@ export const useCampaignStore = create<CampaignStore>((set, get) => ({
 
   setEdgeStyle: (edgeStyle) => set({ edgeStyle }),
 
+  resetForBrandSwitch: () => {
+    if (validationTimer) {
+      clearTimeout(validationTimer);
+      validationTimer = null;
+    }
+    set({
+      nodes: [],
+      edges: [],
+      history: [],
+      redoStack: [],
+    });
+  },
+
   validateGraph: () => {
     const { nodes, edges } = get();
     const validatedNodes = applyCampaignGraphValidation(nodes, edges);
@@ -283,4 +298,11 @@ function validateConnection(sourceType: CampaignNodeType, targetType: CampaignNo
   };
 
   return rules[sourceType]?.includes(targetType) || false;
+}
+
+if (typeof window !== "undefined") {
+  registerBrandScopedStore({
+    name: "campaign-canvas",
+    reset: () => useCampaignStore.getState().resetForBrandSwitch(),
+  });
 }

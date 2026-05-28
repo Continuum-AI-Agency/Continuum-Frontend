@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 
+import { registerBrandScopedStore } from "@/lib/brands/brand-switch";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   fetchCampaignPerformanceRows,
@@ -51,6 +52,7 @@ type PaidMediaPerformanceState = {
   invalidateCampaignPerformance: (key: string) => void;
   invalidateBudgetPacing: (key: string) => void;
   reset: () => void;
+  resetForBrandSwitch: () => void;
 };
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -218,4 +220,11 @@ export const usePaidMediaPerformanceStore = create<PaidMediaPerformanceState>((s
     }),
 
   reset: () => set({ campaigns: {}, budgetPacing: {} }),
+
+  resetForBrandSwitch: () => set({ campaigns: {}, budgetPacing: {} }),
 }));
+
+registerBrandScopedStore({
+  name: "paid-media-performance",
+  reset: () => usePaidMediaPerformanceStore.getState().resetForBrandSwitch(),
+});

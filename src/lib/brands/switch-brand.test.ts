@@ -1,51 +1,55 @@
-import { describe, expect, it, mock } from "bun:test";
-import { switchBrand } from "./switch-brand";
+import { describe, expect, it, beforeEach, mock } from "bun:test";
+
+const switchActiveBrandActionMock = mock(async (_brandId: string) => {});
+
+mock.module("@/app/(post-auth)/settings/actions", () => ({
+  switchActiveBrandAction: switchActiveBrandActionMock,
+}));
+
+const { switchBrand } = await import("./switch-brand");
 
 describe("switchBrand", () => {
-  it("returns false when targetBrandId is not provided", async () => {
-    const switchAction = mock(async () => {});
-    const refresh = mock(() => {});
+  beforeEach(() => {
+    switchActiveBrandActionMock.mockClear();
+    switchActiveBrandActionMock.mockImplementation(async () => {});
+  });
 
-    const result = await switchBrand({ switchAction, refresh });
+  it("returns false when targetBrandId is not provided", async () => {
+    const refresh = mock(() => {});
+    const result = await switchBrand({ refresh });
 
     expect(result).toBe(false);
-    expect(switchAction).not.toHaveBeenCalled();
+    expect(switchActiveBrandActionMock).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
   it("returns false when target matches the current active brand", async () => {
-    const switchAction = mock(async () => {});
     const refresh = mock(() => {});
-
     const result = await switchBrand({
       targetBrandId: "brand-a",
       activeBrandId: "brand-a",
-      switchAction,
       refresh,
     });
 
     expect(result).toBe(false);
-    expect(switchAction).not.toHaveBeenCalled();
+    expect(switchActiveBrandActionMock).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("calls switchAction with targetBrandId when brands differ", async () => {
-    const switchAction = mock(async () => {});
-
+  it("calls switchActiveBrandAction with targetBrandId when brands differ", async () => {
     const result = await switchBrand({
       targetBrandId: "brand-b",
       activeBrandId: "brand-a",
-      switchAction,
     });
 
     expect(result).toBe(true);
-    expect(switchAction).toHaveBeenCalledTimes(1);
-    expect(switchAction).toHaveBeenCalledWith("brand-b");
+    expect(switchActiveBrandActionMock).toHaveBeenCalledTimes(1);
+    expect(switchActiveBrandActionMock).toHaveBeenCalledWith("brand-b");
   });
 
-  it("calls refresh after switchAction completes", async () => {
+  it("calls refresh after switchActiveBrandAction completes", async () => {
     const callOrder: string[] = [];
-    const switchAction = mock(async () => {
+    switchActiveBrandActionMock.mockImplementation(async () => {
       callOrder.push("switch");
     });
     const refresh = mock(() => {
@@ -55,7 +59,6 @@ describe("switchBrand", () => {
     await switchBrand({
       targetBrandId: "brand-b",
       activeBrandId: "brand-a",
-      switchAction,
       refresh,
     });
 
@@ -63,19 +66,16 @@ describe("switchBrand", () => {
   });
 
   it("succeeds without a refresh callback", async () => {
-    const switchAction = mock(async () => {});
-
     const result = await switchBrand({
       targetBrandId: "brand-b",
       activeBrandId: "brand-a",
-      switchAction,
     });
 
     expect(result).toBe(true);
   });
 
-  it("propagates errors thrown by switchAction", async () => {
-    const switchAction = mock(async () => {
+  it("propagates errors thrown by switchActiveBrandAction", async () => {
+    switchActiveBrandActionMock.mockImplementation(async () => {
       throw new Error("DB write failed");
     });
     const refresh = mock(() => {});
@@ -85,7 +85,6 @@ describe("switchBrand", () => {
       await switchBrand({
         targetBrandId: "brand-b",
         activeBrandId: "brand-a",
-        switchAction,
         refresh,
       });
     } catch (err) {

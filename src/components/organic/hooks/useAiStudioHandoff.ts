@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 
 import { useToast } from "@/components/ui/ToastProvider"
 import {
+  AI_STUDIO_CONTEXT_STORAGE_PREFIX,
   brandStorageKeyAiStudioLastDraft,
   buildAiStudioHandoffStorageCandidates,
   buildAiStudioStorageKey,
@@ -22,6 +23,7 @@ import {
   brandStorageKeyAiStudioKeyIndex,
   migrateLegacyAiStudioKeyIndex,
 } from "@/lib/storage-keys"
+import * as storeRegistry from "@/lib/storage/storeRegistry"
 import type { OrganicCalendarDraft } from "../primitives/types"
 
 function readDraftKeyIndex(brandId: string): string[] {
@@ -44,6 +46,37 @@ function pruneStaleAiStudioContextEntries(brandId: string, activeDraftId: string
   const staleKeys = readDraftKeyIndex(brandId).filter((k) => k !== activeKey)
   staleKeys.forEach((k) => removeLocalStorage(k))
   setLocalStorageJSON(brandStorageKeyAiStudioKeyIndex(brandId), [activeKey])
+}
+
+function purgeAllAiStudioHandoffEntries(brandId: string): void {
+  if (!brandId) return
+  const contextKeyPrefix = `${AI_STUDIO_CONTEXT_STORAGE_PREFIX}:`
+  for (const key of readDraftKeyIndex(brandId)) {
+    removeLocalStorage(key)
+    if (key.startsWith(contextKeyPrefix)) {
+      const draftId = key.slice(contextKeyPrefix.length)
+      if (draftId) {
+        removeLocalStorage(buildPendingApplyStorageKey(draftId))
+        removeLocalStorage(buildSessionHistoryStorageKey(draftId))
+      }
+    }
+  }
+  removeLocalStorage(brandStorageKeyAiStudioLastDraft(brandId))
+}
+
+if (typeof window !== "undefined") {
+  storeRegistry.register({
+    name: "ai-studio-handoff",
+    teardown: (prevBrandId) => {
+      try {
+        purgeAllAiStudioHandoffEntries(prevBrandId)
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[ai-studio-handoff] teardown failed", error)
+        }
+      }
+    },
+  })
 }
 
 type UseAiStudioHandoffOptions = {
