@@ -6,9 +6,6 @@ import { PaidDashboardView } from "@/components/dashboard/views/PaidDashboardVie
 import { OrganicDashboardDataWrapper } from "@/components/dashboard/server/OrganicDashboardDataWrapper";
 import { PaidWidgetSkeleton, WidgetSkeleton } from "@/components/dashboard/skeletons/DashboardSkeletons";
 
-// force-dynamic: reads user session cookies via getActiveBrandContext()
-export const dynamic = "force-dynamic";
-
 type DashboardPageProps = {
   searchParams?: Promise<{ view?: string | string[] }>;
 };

@@ -9,10 +9,11 @@ import { revokeIntegrationFromBrandAction } from "@/app/(post-auth)/settings/int
 
 type RevokeGrantButtonProps = {
   grantId: string;
+  brandProfileId: string;
   integrationLabel: string;
 };
 
-export function RevokeGrantButton({ grantId, integrationLabel }: RevokeGrantButtonProps) {
+export function RevokeGrantButton({ grantId, brandProfileId, integrationLabel }: RevokeGrantButtonProps) {
   const router = useRouter();
   const { show } = useToast();
   const [isPending, setIsPending] = React.useState(false);
@@ -20,7 +21,7 @@ export function RevokeGrantButton({ grantId, integrationLabel }: RevokeGrantButt
   const handleRevoke = async () => {
     setIsPending(true);
     try {
-      await revokeIntegrationFromBrandAction(grantId);
+      await revokeIntegrationFromBrandAction(grantId, brandProfileId);
       show({
         title: "Access revoked",
         description: `${integrationLabel} is no longer shared with this brand.`,

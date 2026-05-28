@@ -106,12 +106,12 @@ async function invokePromptTemplatesFallback<T>(
   }
 
   if (body.action === "update") {
-    const updatePayload: Record<string, unknown> = {
+    const updatePayload = {
       updated_at: new Date().toISOString(),
+      ...(body.name ? { name: body.name } : {}),
+      ...(body.prompt ? { prompt: body.prompt } : {}),
+      ...(body.category ? { category: body.category } : {}),
     };
-    if (body.name) updatePayload.name = body.name;
-    if (body.prompt) updatePayload.prompt = body.prompt;
-    if (body.category) updatePayload.category = body.category;
 
     const { data, error } = await supabase
       .schema("brand_profiles")

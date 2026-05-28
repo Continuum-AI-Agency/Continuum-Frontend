@@ -5,8 +5,6 @@ import { GlassPanel } from "@/components/ui/GlassPanel";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
-export const revalidate = 0;
-
 export default async function IntegrationsPage() {
   const { activeBrandId } = await getActiveBrandContext();
 

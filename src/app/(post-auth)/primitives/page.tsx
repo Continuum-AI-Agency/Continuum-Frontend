@@ -8,9 +8,6 @@ import type { BrandGuidelineSummary } from "@/lib/schemas/brandGuidelines";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { redirect } from "next/navigation";
 
-// force-dynamic: reads user session cookies via getActiveBrandContext() and ensureOnboardingState()
-export const dynamic = "force-dynamic";
-
 export default async function PrimitivesPage() {
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {

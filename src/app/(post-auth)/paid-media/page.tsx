@@ -5,9 +5,6 @@ import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import { fetchTimelineAccounts } from "@/lib/paid-media/paid-media-data.server";
 
-// force-dynamic: reads user session cookies and brand tier via getActiveBrandContext()
-export const dynamic = "force-dynamic";
-
 export default async function PaidMediaPage() {
   const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
 

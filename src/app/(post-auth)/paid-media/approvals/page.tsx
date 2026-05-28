@@ -4,9 +4,6 @@ import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import ApprovalsClient from "./ApprovalsClient";
 
-// force-dynamic: reads user session and brand tier via getActiveBrandContext()
-export const dynamic = "force-dynamic";
-
 export default async function ApprovalsPage() {
   const { activeBrandId, activeBrandTier, brandSummaries } = await getActiveBrandContext();
 

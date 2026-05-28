@@ -156,7 +156,7 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
     startRefresh(async () => {
       setStatus(null);
       try {
-        await revalidateBrandInsights();
+        await revalidateBrandInsights(brandId);
       } catch {
         // Best-effort; router.refresh will still refetch in client.
       }

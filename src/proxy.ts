@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { applySupabaseCookies, getSupabaseCookieOptions } from "./lib/supabase/cookies";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request: { headers: request.headers },
   });
@@ -13,7 +13,7 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase middleware configuration missing NEXT_PUBLIC_SUPABASE_URL or key env var.");
+    throw new Error("Supabase proxy configuration missing NEXT_PUBLIC_SUPABASE_URL or key env var.");
   }
 
   const supabase = createServerClient(
@@ -56,7 +56,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/signup") ||
     request.nextUrl.pathname.startsWith("/recovery") ||
     request.nextUrl.pathname.startsWith("/set-password");
-  
+
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/organic") ||
     request.nextUrl.pathname.startsWith("/paid-media") ||
@@ -64,8 +64,8 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/integrations") ||
     request.nextUrl.pathname.startsWith("/settings");
 
-  const needsPassword = user && 
-    user.app_metadata.provider === "email" && 
+  const needsPassword = user &&
+    user.app_metadata.provider === "email" &&
     user.user_metadata?.has_password !== true;
 
   const isImpersonating = request.cookies.get("is_impersonating")?.value === "true";

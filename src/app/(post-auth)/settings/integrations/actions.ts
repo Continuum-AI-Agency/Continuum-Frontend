@@ -1,13 +1,19 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import {
   grantIntegrationToBrand,
   revokeIntegrationFromBrand,
 } from "@/lib/integrations/grants";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { tags } from "@/lib/cache/tags";
 
-function revalidateBrandIntegrationConsumers() {
+function revalidateBrandIntegrationConsumers(brandProfileId: string) {
+  // Immediate invalidation so the same request reads fresh data after the mutation.
+  updateTag(tags.integrations.forBrand(brandProfileId));
+
+  // Path-based invalidation remains until consumer pages adopt cacheTag()
+  // on the read side. Once tagged, drop these revalidatePath calls.
   revalidatePath("/settings");
   revalidatePath("/settings/integrations");
   revalidatePath("/integrations");
@@ -24,15 +30,19 @@ export async function grantIntegrationToBrandAction(
   if (!integrationId) throw new Error("integrationId is required");
 
   const grantId = await grantIntegrationToBrand(brandProfileId, integrationId);
-  revalidateBrandIntegrationConsumers();
+  revalidateBrandIntegrationConsumers(brandProfileId);
   return grantId;
 }
 
-export async function revokeIntegrationFromBrandAction(grantId: string): Promise<void> {
+export async function revokeIntegrationFromBrandAction(
+  grantId: string,
+  brandProfileId: string,
+): Promise<void> {
   if (!grantId) throw new Error("grantId is required");
+  if (!brandProfileId) throw new Error("brandProfileId is required");
 
   await revokeIntegrationFromBrand(grantId);
-  revalidateBrandIntegrationConsumers();
+  revalidateBrandIntegrationConsumers(brandProfileId);
 }
 
 export async function applyBrandIntegrationAssignmentsAction(
@@ -86,6 +96,6 @@ export async function applyBrandIntegrationAssignmentsAction(
     if (insertError) throw new Error(insertError.message);
   }
 
-  revalidateBrandIntegrationConsumers();
+  revalidateBrandIntegrationConsumers(brandProfileId);
   return { linked: desiredAccountIds.length };
 }

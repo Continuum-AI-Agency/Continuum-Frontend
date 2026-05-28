@@ -4,8 +4,6 @@ import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection
 import { MyConnectionsSharingSection } from "@/components/integrations/MyConnectionsSharingSection";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
-export const revalidate = 0;
-
 export default async function IntegrationsSettingsPage() {
   const { activeBrandId, user } = await getActiveBrandContext();
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
 import {
   createBrandGuideline,
@@ -9,12 +9,18 @@ import {
   setBrandGuidelineStatus,
   updateBrandGuideline,
 } from "@/lib/api/brandGuidelines.server";
+import { tags } from "@/lib/cache/tags";
 import type {
   BrandGuidelineDetail,
   BrandGuidelineDraft,
   BrandGuidelineStatus,
   BrandGuidelineSummary,
 } from "@/lib/schemas/brandGuidelines";
+
+function revalidateBrandGuidelineConsumers(brandId: string) {
+  updateTag(tags.brandGuidelines(brandId));
+  revalidatePath("/primitives");
+}
 
 export async function listBrandGuidelinesAction(brandId: string): Promise<BrandGuidelineSummary[]> {
   try {
@@ -46,7 +52,7 @@ export async function saveBrandGuidelineDraftAction(
     const result = guidelineId
       ? await updateBrandGuideline(brandId, guidelineId, payload, "draft")
       : await createBrandGuideline(brandId, payload, "draft");
-    revalidatePath("/primitives");
+    revalidateBrandGuidelineConsumers(brandId);
     return result;
   } catch (error) {
     console.error("brandGuidelines.saveDraft.error", { brandId, guidelineId, error });
@@ -63,7 +69,7 @@ export async function approveBrandGuidelineAction(
     const result = guidelineId
       ? await updateBrandGuideline(brandId, guidelineId, payload, "approved")
       : await createBrandGuideline(brandId, payload, "approved");
-    revalidatePath("/primitives");
+    revalidateBrandGuidelineConsumers(brandId);
     return result;
   } catch (error) {
     console.error("brandGuidelines.approve.error", { brandId, guidelineId, error });
@@ -78,7 +84,7 @@ export async function updateBrandGuidelineStatusAction(
 ): Promise<void> {
   try {
     await setBrandGuidelineStatus(brandId, guidelineId, status);
-    revalidatePath("/primitives");
+    revalidateBrandGuidelineConsumers(brandId);
   } catch (error) {
     console.error("brandGuidelines.status.error", { brandId, guidelineId, status, error });
     throw error instanceof Error ? error : new Error("Unable to update brand guideline status.");

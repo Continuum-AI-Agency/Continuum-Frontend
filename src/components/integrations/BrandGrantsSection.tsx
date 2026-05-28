@@ -94,6 +94,7 @@ export async function BrandGrantsSection({ brandProfileId }: BrandGrantsSectionP
               {canRevoke ? (
                 <RevokeGrantButton
                   grantId={grant.grantId}
+                  brandProfileId={brandProfileId}
                   integrationLabel={label}
                 />
               ) : null}

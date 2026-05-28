@@ -5,8 +5,6 @@ import AIStudioClient from "./AIStudioClient";
 import { TierAccessRedirect } from "@/components/ui/TierAccessRedirect";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
-// force-dynamic: reads user session cookies and brand tier via getActiveBrandContext()
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function AIStudioSkeleton() {

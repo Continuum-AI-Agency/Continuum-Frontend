@@ -7,6 +7,7 @@ import DashboardLayoutShell from "../../components/DashboardLayoutShell";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { DashboardLayoutFallback } from "./DashboardLayoutFallback";
 import { MixpanelInit } from "@/components/analytics/MixpanelInit";
+import { NavigationTransition } from "@/components/ui/NavigationTransition";
 
 export const metadata: Metadata = {
   title: "Dashboard | Continuum AI",
@@ -50,7 +51,7 @@ async function DashboardLayoutContent({
       permissions={permissions}
       sidebarDefaultOpen={sidebarDefaultOpen}
     >
-      {children}
+      <NavigationTransition>{children}</NavigationTransition>
     </DashboardLayoutShell>
   );
 }
