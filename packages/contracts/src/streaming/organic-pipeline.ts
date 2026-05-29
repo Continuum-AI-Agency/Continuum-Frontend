@@ -1,0 +1,420 @@
+import { z } from "zod";
+
+export const organicPipelinePlatformSchema = z.enum([
+  "instagram",
+  "facebook",
+  "tiktok",
+  "linkedin",
+  "youtube",
+]);
+
+export const organicPipelineSeedSourceSchema = z.enum([
+  "trend",
+  "question",
+  "event",
+  "manual",
+]);
+
+export const organicMediaGenerationContextSchema = z.object({
+  sourceAgent: z.literal("asset_producer"),
+  finalPrompt: z.string().min(1),
+  request: z.object({
+    provider: z.string().min(1),
+    model: z.string().min(1),
+    imageSize: z.literal("512px"),
+  }).strict(),
+  placement: z.object({
+    placementId: z.string().min(1),
+    dayId: z.string().min(1),
+    scheduledAt: z.string().min(1),
+  }).strict(),
+  strategist: z.object({
+    objective: z.string().nullable(),
+    funnelStage: z.string().nullable(),
+    targetAudience: z.string().nullable(),
+    tone: z.string().nullable(),
+    angle: z.string().nullable(),
+    postType: z.string().nullable(),
+    postSize: z.string().nullable(),
+  }).strict(),
+  creativeDirection: z.object({
+    conceptTitle: z.string().nullable(),
+    creativeDirection: z.string().nullable(),
+    storyHook: z.string().nullable(),
+    trendIntegration: z.string().nullable(),
+    visualMode: z.string().nullable(),
+    audioMode: z.string().nullable(),
+    productionNotes: z.array(z.string()),
+  }).strict(),
+  trend: z.object({
+    trendId: z.string().nullable(),
+    seedSource: z.string().nullable(),
+  }).strict(),
+}).strict();
+
+export const organicCalendarPlacementSchema = z.object({
+  placementId: z.string().min(1),
+  schedule: z.object({
+    dayId: z.string().min(1),
+    scheduledAt: z.string().min(1),
+    timeOfDay: z.string().nullable().optional(),
+    adjusted: z.boolean().optional(),
+  }).strict(),
+  platform: z.object({
+    name: organicPipelinePlatformSchema,
+    accountId: z.string().nullable().optional(),
+  }).strict(),
+  seed: z.object({
+    trendId: z.string().nullable().optional(),
+    source: organicPipelineSeedSourceSchema.nullable().optional(),
+  }).strict().optional(),
+  content: z.object({
+    type: z.string().nullable().optional(),
+    format: z.string().nullable().optional(),
+    titleTopic: z.string().nullable().optional(),
+    objective: z.string().nullable().optional(),
+    target: z.string().nullable().optional(),
+    tone: z.string().nullable().optional(),
+    cta: z.string().nullable().optional(),
+    numSlides: z.number().nullable().optional(),
+  }).strict(),
+  creative: z.object({
+    creativeIdea: z.string().nullable().optional(),
+    assetIds: z.array(z.string()).optional(),
+    assetHints: z.array(z.object({
+      role: z.string(),
+      suggestion: z.string(),
+    }).strict()).optional(),
+    carousel: z.object({
+      title: z.string(),
+      hook: z.string(),
+      saveRationale: z.string().optional(),
+      shareRationale: z.string().optional(),
+      slides: z.array(z.object({
+        order: z.number().int().min(1),
+        role: z.string(),
+        headline: z.string(),
+        body: z.string(),
+        overlayText: z.string(),
+        visualPrompt: z.string().optional(),
+      }).strict()),
+    }).strict().optional(),
+    mediaSuggestion: z.object({
+      provider: z.string().optional(),
+      model: z.string().optional(),
+      kind: z.string().optional(),
+      prompt: z.string().optional(),
+      width: z.number().optional(),
+      height: z.number().optional(),
+      assetUrl: z.string().optional(),
+      assetBase64: z.string().optional(),
+      alt: z.string().optional(),
+      generationContext: organicMediaGenerationContextSchema.optional(),
+      assets: z.array(z.object({
+        role: z.string(),
+        order: z.number().int().min(1).optional(),
+        slideRole: z.string().optional(),
+        headline: z.string().optional(),
+        body: z.string().optional(),
+        overlayText: z.string().optional(),
+        provider: z.string().optional(),
+        model: z.string().optional(),
+        prompt: z.string().optional(),
+        width: z.number().optional(),
+        height: z.number().optional(),
+        assetUrl: z.string().optional(),
+        assetBase64: z.string().optional(),
+        mimeType: z.string().optional(),
+        error: z.string().optional(),
+        generationContext: organicMediaGenerationContextSchema.optional(),
+      }).strict()).optional(),
+    }).strict().optional(),
+  }).strict().optional(),
+  copy: z.object({
+    caption: z.string().nullable().optional(),
+    hashtags: z.object({
+      high: z.array(z.string()).optional(),
+      medium: z.array(z.string()).optional(),
+      low: z.array(z.string()).optional(),
+    }).strict().optional(),
+  }).strict().optional(),
+  quality: z.object({
+    passed: z.boolean(),
+    overallScore: z.number().min(0).max(100),
+    brandFitScore: z.number().min(0).max(100),
+    platformFitScore: z.number().min(0).max(100),
+    noveltyScore: z.number().min(0).max(100),
+    complianceScore: z.number().min(0).max(100),
+    blockingIssues: z.array(z.string()).optional(),
+    requiredFixes: z.array(z.string()).optional(),
+    fixesApplied: z.array(z.string()).optional(),
+    revisionCount: z.number().int().min(0).optional(),
+    summary: z.string().optional(),
+  }).strict().optional(),
+}).strict();
+
+const organicPipelineStageSchema = z.enum([
+  "analyzing",
+  "optimizing",
+  "drafting",
+  "matching",
+  "finalizing",
+]);
+
+const organicSlotStageSchema = z.enum([
+  "strategizing",
+  "concepting",
+  "drafting",
+  "reviewing",
+  "revising",
+  "generating_assets",
+  "merging",
+]);
+
+const organicSlotHeartbeatStageSchema = z.enum([
+  "queued",
+  "concepting",
+  "drafting",
+  "generating_assets",
+  "reviewing",
+  "revising",
+  "merging",
+]);
+
+export const organicCalendarProgressEventSchema = z.object({
+  type: z.literal("progress"),
+  completed: z.number().min(0),
+  total: z.number().min(0),
+  stage: organicPipelineStageSchema.optional(),
+  message: z.string().optional(),
+}).strict();
+
+export const organicCalendarSlotStartedEventSchema = z.object({
+  type: z.literal("slot_started"),
+  placementId: z.string().min(1),
+  message: z.string().optional(),
+}).strict();
+
+export const organicCalendarSlotStageEventSchema = z.object({
+  type: z.literal("slot_stage"),
+  placementId: z.string().min(1),
+  stage: organicSlotStageSchema,
+  agentName: z.string().min(1),
+  message: z.string().optional(),
+}).strict();
+
+export const organicCalendarSlotHeartbeatEventSchema = z.object({
+  type: z.literal("slot_heartbeat"),
+  placementId: z.string().min(1),
+  stage: organicSlotHeartbeatStageSchema,
+  progress: z.number().min(0).max(1),
+  elapsedMs: z.number().int().min(0),
+  message: z.string().optional(),
+}).strict();
+
+export const organicCalendarSlotCompletedEventSchema = z.object({
+  type: z.enum(["slot_completed", "placement"]),
+  placement: organicCalendarPlacementSchema,
+}).strict();
+
+export const organicCalendarSlotFailedEventSchema = z.object({
+  type: z.literal("slot_failed"),
+  placementId: z.string().min(1),
+  code: z.string().optional(),
+  message: z.string().min(1),
+  retryable: z.boolean().optional(),
+  attempts: z.number().int().min(0).optional(),
+}).strict();
+
+export const organicCalendarErrorEventSchema = z.object({
+  type: z.literal("error"),
+  code: z.string().optional(),
+  message: z.string().min(1),
+  placementId: z.string().optional(),
+}).strict();
+
+export const organicCalendarCompleteEventSchema = z.object({
+  type: z.literal("complete"),
+  summary: z.object({
+    total: z.number().int().min(0),
+    succeeded: z.number().int().min(0),
+    failed: z.number().int().min(0),
+  }).strict().optional(),
+}).strict();
+
+export const organicCalendarBatchGenerateStreamEventSchema = z.union([
+  organicCalendarProgressEventSchema,
+  organicCalendarSlotStartedEventSchema,
+  organicCalendarSlotStageEventSchema,
+  organicCalendarSlotHeartbeatEventSchema,
+  organicCalendarSlotCompletedEventSchema,
+  organicCalendarSlotFailedEventSchema,
+  organicCalendarErrorEventSchema,
+  organicCalendarCompleteEventSchema,
+]);
+
+export const organicGenerationRunStartedEventSchema = z.object({
+  type: z.literal("run_started"),
+  mode: z.enum(["batch", "retry"]),
+  totalPlacements: z.number().int().min(0),
+  protocolVersion: z.string().min(1),
+  includeDiagnostics: z.boolean(),
+}).strict();
+
+export const organicGenerationRunPlanEventSchema = z.object({
+  type: z.literal("run_plan"),
+  totalPlacements: z.number().int().min(0),
+  totalWaves: z.number().int().min(0),
+  waves: z.array(
+    z.object({
+      waveIndex: z.number().int().min(1),
+      objectiveIds: z.array(z.string().min(1)),
+      placementIds: z.array(z.string().min(1)),
+      platforms: z.array(organicPipelinePlatformSchema),
+    }).strict(),
+  ),
+}).strict();
+
+export const organicGenerationRunProgressEventSchema = z.object({
+  type: z.literal("run_progress"),
+  completed: z.number().int().min(0),
+  total: z.number().int().min(0),
+  stage: organicPipelineStageSchema.optional(),
+  message: z.string().optional(),
+}).strict();
+
+export const organicGenerationRunSlotStartedEventSchema = z.object({
+  type: z.literal("slot_started"),
+  placementId: z.string().min(1),
+  message: z.string().optional(),
+}).strict();
+
+export const organicGenerationRunSlotStageEventSchema = z.object({
+  type: z.literal("slot_stage"),
+  placementId: z.string().min(1),
+  stage: organicSlotStageSchema,
+  agentName: z.string().min(1),
+  message: z.string().optional(),
+}).strict();
+
+export const organicGenerationRunSlotCompletedEventSchema = z.object({
+  type: z.literal("slot_completed"),
+  placement: organicCalendarPlacementSchema,
+}).strict();
+
+export const organicGenerationRunSlotFailedEventSchema = z.object({
+  type: z.literal("slot_failed"),
+  placementId: z.string().min(1),
+  code: z.string().optional(),
+  message: z.string().min(1),
+  retryable: z.boolean().optional(),
+  attempts: z.number().int().min(0).optional(),
+}).strict();
+
+export const organicGenerationRunWarningEventSchema = z.object({
+  type: z.literal("run_warning"),
+  code: z.string().optional(),
+  message: z.string().min(1),
+  placementId: z.string().optional(),
+}).strict();
+
+export const organicGenerationRunFailedEventSchema = z.object({
+  type: z.literal("run_failed"),
+  code: z.string().optional(),
+  message: z.string().min(1),
+}).strict();
+
+export const organicGenerationRunCompletedEventSchema = z.object({
+  type: z.literal("run_completed"),
+  summary: z.object({
+    total: z.number().int().min(0),
+    succeeded: z.number().int().min(0),
+    failed: z.number().int().min(0),
+  }).strict().optional(),
+}).strict();
+
+export const organicGenerationRunEventSchema = z.discriminatedUnion("type", [
+  organicGenerationRunStartedEventSchema,
+  organicGenerationRunPlanEventSchema,
+  organicGenerationRunProgressEventSchema,
+  organicGenerationRunSlotStartedEventSchema,
+  organicGenerationRunSlotStageEventSchema,
+  organicGenerationRunSlotCompletedEventSchema,
+  organicGenerationRunSlotFailedEventSchema,
+  organicGenerationRunWarningEventSchema,
+  organicGenerationRunFailedEventSchema,
+  organicGenerationRunCompletedEventSchema,
+]);
+
+export const organicGenerationRunEventEnvelopeSchema = z.object({
+  streamVersion: z.literal("v2"),
+  runId: z.string().min(1),
+  sequence: z.number().int().min(1),
+  timestamp: z.string().datetime(),
+  event: organicGenerationRunEventSchema,
+}).strict();
+
+export type OrganicPipelinePlatform = z.infer<typeof organicPipelinePlatformSchema>;
+export type OrganicMediaGenerationContext = z.infer<typeof organicMediaGenerationContextSchema>;
+export type OrganicCalendarPlacement = z.infer<typeof organicCalendarPlacementSchema>;
+export type OrganicCalendarProgressEvent = z.infer<typeof organicCalendarProgressEventSchema>;
+export type OrganicCalendarSlotStartedEvent = z.infer<typeof organicCalendarSlotStartedEventSchema>;
+export type OrganicCalendarSlotStageEvent = z.infer<typeof organicCalendarSlotStageEventSchema>;
+export type OrganicCalendarSlotHeartbeatEvent = z.infer<typeof organicCalendarSlotHeartbeatEventSchema>;
+export type OrganicCalendarSlotCompletedEvent = z.infer<typeof organicCalendarSlotCompletedEventSchema>;
+export type OrganicCalendarSlotFailedEvent = z.infer<typeof organicCalendarSlotFailedEventSchema>;
+export type OrganicCalendarErrorEvent = z.infer<typeof organicCalendarErrorEventSchema>;
+export type OrganicCalendarCompleteEvent = z.infer<typeof organicCalendarCompleteEventSchema>;
+export type OrganicCalendarBatchGenerateStreamEvent = z.infer<typeof organicCalendarBatchGenerateStreamEventSchema>;
+export type OrganicGenerationRunEvent = z.infer<typeof organicGenerationRunEventSchema>;
+export type OrganicGenerationRunEventEnvelope = z.infer<typeof organicGenerationRunEventEnvelopeSchema>;
+
+export function assertNeverOrganicCalendarEvent(event: never): never {
+  throw new Error(
+    `Unhandled OrganicCalendarBatchGenerateStreamEvent: ${JSON.stringify(event)}`,
+  );
+}
+
+export function assertNeverOrganicRunEvent(event: never): never {
+  throw new Error(
+    `Unhandled OrganicGenerationRunEvent: ${JSON.stringify(event)}`,
+  );
+}
+
+const KNOWN_AGENT_PROGRESS: Record<string, number> = {
+  strategist: 10,
+  angle_strategist: 15,
+  hook_format_architect: 20,
+  carousel_builder: 28,
+  creative_orchestrator: 36,
+  audio_technical: 45,
+  visual_technical: 50,
+  copywriting_technical: 55,
+  hashtag_technical: 60,
+  asset_producer: 75,
+  quality_reviewer: 90,
+  placement_reviser: 95,
+};
+
+const KNOWN_SLOT_STAGE_PROGRESS: Record<string, number> = {
+  strategizing: 10,
+  concepting: 25,
+  drafting: 45,
+  generating_assets: 70,
+  reviewing: 85,
+  revising: 92,
+  merging: 96,
+};
+
+export function derivePlacementProgressPercent(input: {
+  agentName?: string;
+  stage?: string;
+}): number {
+  if (input.agentName && KNOWN_AGENT_PROGRESS[input.agentName] !== undefined) {
+    return KNOWN_AGENT_PROGRESS[input.agentName];
+  }
+  if (input.stage && KNOWN_SLOT_STAGE_PROGRESS[input.stage] !== undefined) {
+    return KNOWN_SLOT_STAGE_PROGRESS[input.stage];
+  }
+  return 0;
+}
