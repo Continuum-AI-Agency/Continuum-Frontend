@@ -34,8 +34,13 @@ export function ReactQueryProvider({ children }: { children: React.ReactNode }) 
       }
     });
 
+    // On brand switch, refetch instead of clearing. invalidateQueries refetches
+    // active queries in the background while keeping the current data on screen
+    // (no empty-state flash), and it catches every brand-scoped query — including
+    // those whose keys don't embed the brand id, which a brand-id predicate would
+    // miss and leave showing the previous brand's data.
     const unsubscribeBrand = onBrandChange(() => {
-      queryClient.clear();
+      void queryClient.invalidateQueries();
     });
 
     return () => {

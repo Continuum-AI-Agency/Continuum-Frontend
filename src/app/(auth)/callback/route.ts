@@ -87,19 +87,6 @@ export async function GET(request: Request) {
       });
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const isEmailUser = user.app_metadata.provider === "email";
-      const hasPassword = user.user_metadata?.has_password === true;
-
-      if (isEmailUser && !hasPassword && !isImpersonating) {
-        return renderPopupAwareResult({
-          success: true,
-          fallbackRedirect: `${origin}/set-password`,
-        });
-      }
-    }
-
     const response = renderPopupAwareResult({
       success: true,
       fallbackRedirect: `${origin}/dashboard`,

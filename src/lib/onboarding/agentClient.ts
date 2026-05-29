@@ -1,6 +1,22 @@
 import { z } from "zod";
+import {
+  readinessDimensionKey as readinessDimensionSchema,
+  readinessFindingSchema,
+  readinessAnalysisSchema,
+  type ReadinessDimensionKey as ReadinessDimension,
+  type ReadinessFinding,
+  type ReadinessAnalysis,
+  type BrandReportProgressEvent,
+} from "@continuum/contracts";
 import { getApiBaseUrl } from "@/lib/api/config";
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
+
+export {
+  readinessDimensionSchema,
+  readinessFindingSchema,
+  readinessAnalysisSchema,
+};
+export type { ReadinessDimension, ReadinessFinding, ReadinessAnalysis };
 
 const CLIENT_BASE_URL_KEYS = [
   "NEXT_PUBLIC_ONBOARDING_AGENT_BASE_URL",
@@ -208,41 +224,6 @@ export type AgentRequestPayload = {
   runContext: AgentRunContext;
   scrape?: ScrapeResult | null;
 };
-
-export const readinessDimensionSchema = z.enum([
-  "value_proposition",
-  "icp_clarity",
-  "customer_pains",
-  "success_metrics",
-  "positioning",
-  "messaging_coherence",
-  "brand_identity",
-]);
-
-export type ReadinessDimension = z.infer<typeof readinessDimensionSchema>;
-
-export const readinessFindingSchema = z.object({
-  dimension: readinessDimensionSchema,
-  score: z.number().min(0).max(100),
-  severity: z.enum(["low", "medium", "high"]),
-  headline: z.string().min(1),
-  detail: z.string().min(1),
-  recommendation: z.string().min(1),
-});
-
-export type ReadinessFinding = z.infer<typeof readinessFindingSchema>;
-
-export const readinessAnalysisSchema = z.object({
-  overall_score: z.number().min(0).max(100),
-  dimensions: z.record(
-    readinessDimensionSchema,
-    z.object({ score: z.number().min(0).max(100), rationale: z.string() })
-  ),
-  findings: z.array(readinessFindingSchema).default([]),
-  generated_at: z.string(),
-});
-
-export type ReadinessAnalysis = z.infer<typeof readinessAnalysisSchema>;
 
 export const previewSectionSchema = z.enum([
   "brand_profile",
@@ -843,7 +824,8 @@ async function consumePreviewStream(
         : null;
 
     if (kind) {
-      switch (kind) {
+      const typedKind = kind as BrandReportProgressEvent["kind"];
+      switch (typedKind) {
         case "ping": {
           previewPingEventSchema.parse(parsedPayload);
           dispatch({ type: "ping" });
@@ -951,9 +933,12 @@ async function consumePreviewStream(
           dispatch({ type: "error", message: parsed.message, seq: parsed.seq });
           throw new Error(parsed.message);
         }
-        default:
+        default: {
+          const _exhaustive: never = typedKind;
+          void _exhaustive;
           console.warn("[agentClient] Unknown SSE event kind ignored", { kind, eventName });
           return;
+        }
       }
     }
 

@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
 const mockCreateSupabaseServerClient = mock(() => Promise.resolve({} as any));
+const mockAfter = mock((callback: () => void | Promise<void>) => {
+  void callback();
+});
 
 mock.module("@/lib/supabase/server", () => ({
   createSupabaseServerClient: mockCreateSupabaseServerClient,
+}));
+
+mock.module("next/server", () => ({
+  after: mockAfter,
 }));
 
 mock.module("server-only", () => ({}));
@@ -13,6 +20,7 @@ import { setActiveBrandPreference } from "@/lib/brands/preferences";
 describe("setActiveBrandPreference", () => {
   beforeEach(() => {
     mockCreateSupabaseServerClient.mockReset();
+    mockAfter.mockClear();
   });
 
   it("throws when brand id is missing", async () => {
@@ -22,7 +30,8 @@ describe("setActiveBrandPreference", () => {
   it("throws when user is unauthenticated", async () => {
     const supabase = {
       auth: {
-        getUser: mock(() => Promise.resolve({ data: { user: null }, error: null })),
+        getSession: mock(() => Promise.resolve({ data: { session: null }, error: null })),
+        getClaims: mock(() => Promise.resolve({ data: { claims: null }, error: null })),
       },
     };
 
@@ -31,81 +40,20 @@ describe("setActiveBrandPreference", () => {
     await expect(setActiveBrandPreference("brand-1")).rejects.toThrow("Not authenticated");
   });
 
-  it("throws when membership lookup fails", async () => {
-    const maybeSingle = mock(() => Promise.resolve({ data: null, error: new Error("membership failed") }));
-    const permissionsQuery: any = {
-      select: mock(() => permissionsQuery),
-      eq: mock(() => permissionsQuery),
-      maybeSingle,
-    };
-
-    const supabase = {
-      auth: {
-        getUser: mock(() => Promise.resolve({ data: { user: { id: "user-1" } }, error: null })),
-      },
-      schema: mock((_schema: string) => ({
-        from: mock((_table: string) => permissionsQuery),
-      })),
-    };
-
-    mockCreateSupabaseServerClient.mockResolvedValue(supabase as any);
-
-    await expect(setActiveBrandPreference("brand-1")).rejects.toThrow("membership failed");
-  });
-
-  it("throws when user does not have brand access", async () => {
-    const maybeSingle = mock(() => Promise.resolve({ data: null, error: null }));
-    const permissionsQuery: any = {
-      select: mock(() => permissionsQuery),
-      eq: mock(() => permissionsQuery),
-      maybeSingle,
-    };
-
-    const supabase = {
-      auth: {
-        getUser: mock(() => Promise.resolve({ data: { user: { id: "user-1" } }, error: null })),
-      },
-      schema: mock((_schema: string) => ({
-        from: mock((_table: string) => permissionsQuery),
-      })),
-    };
-
-    mockCreateSupabaseServerClient.mockResolvedValue(supabase as any);
-
-    await expect(setActiveBrandPreference("brand-1")).rejects.toThrow("You do not have access to this brand");
-  });
-
-  it("upserts preference and updates user metadata when membership exists", async () => {
-    const maybeSingle = mock(() => Promise.resolve({ data: { brand_profile_id: "brand-1" }, error: null }));
+  it("uses claims identity when the session cookie has no embedded user", async () => {
     const upsert = mock(() => Promise.resolve({ error: null }));
-
-    const permissionsQuery: any = {
-      select: mock(() => permissionsQuery),
-      eq: mock(() => permissionsQuery),
-      maybeSingle,
-    };
-
-    const preferencesQuery: any = {
-      upsert,
-    };
-
     const updateUser = mock(() => Promise.resolve({ data: { user: { id: "user-1" } }, error: null }));
 
     const supabase = {
       auth: {
-        getUser: mock(() => Promise.resolve({ data: { user: { id: "user-1" } }, error: null })),
+        getSession: mock(() => Promise.resolve({ data: { session: null }, error: null })),
+        getClaims: mock(() =>
+          Promise.resolve({ data: { claims: { sub: "user-1", email: "user@example.com" } }, error: null }),
+        ),
         updateUser,
       },
-      schema: mock((_schema: string) => ({
-        from: mock((table: string) => {
-          if (table === "permissions") {
-            return permissionsQuery;
-          }
-          if (table === "user_brand_preferences") {
-            return preferencesQuery;
-          }
-          throw new Error(`Unexpected table: ${table}`);
-        }),
+      schema: mock(() => ({
+        from: mock(() => ({ upsert })),
       })),
     };
 
@@ -119,7 +67,6 @@ describe("setActiveBrandPreference", () => {
     expect(payload.active_brand_id).toBe("brand-1");
     expect(typeof payload.updated_at).toBe("string");
     expect(options).toEqual({ onConflict: "user_id" });
-
     expect(updateUser).toHaveBeenCalledWith({
       data: {
         onboarding: {

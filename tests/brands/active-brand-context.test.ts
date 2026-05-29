@@ -69,9 +69,9 @@ describe("getActiveBrandContext", () => {
 
     const supabase = {
       auth: {
-        getUser: mock(() =>
+        getClaims: mock(() =>
           Promise.resolve({
-            data: { user: { id: "user-1", email: "owner@example.com" } },
+            data: { claims: { sub: "user-1", email: "owner@example.com" } },
             error: null,
           }),
         ),
@@ -146,9 +146,9 @@ describe("getActiveBrandContext", () => {
 
     const supabase = {
       auth: {
-        getUser: mock(() =>
+        getClaims: mock(() =>
           Promise.resolve({
-            data: { user: { id: "user-1", email: "owner@example.com" } },
+            data: { claims: { sub: "user-1", email: "owner@example.com" } },
             error: null,
           }),
         ),

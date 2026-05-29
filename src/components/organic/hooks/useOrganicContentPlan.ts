@@ -9,6 +9,15 @@ import type {
 } from "@/lib/organic/chat.types";
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types";
 import type { OrganicPlatformKey } from "@/lib/organic/platforms";
+import {
+  organicGenerationRunEventEnvelopeSchema,
+  organicCalendarBatchGenerateStreamEventSchema,
+  assertNeverOrganicRunEvent,
+  derivePlacementProgressPercent,
+  type OrganicCalendarBatchGenerateStreamEvent,
+  type OrganicGenerationRunEvent,
+  type OrganicCalendarPlacement,
+} from "@continuum/contracts";
 
 type UseOrganicContentPlanOptions = {
   brandId: string;
@@ -54,6 +63,198 @@ function placementToDraft(
   };
 }
 
+type RunEventHandlers = {
+  setGridProgress: (p: {
+    percent: number;
+    stage?: string;
+    message?: string;
+    completed?: number;
+    total?: number;
+  }) => void;
+  setGridStatus: (s: "running" | "complete" | "complete_with_errors" | "error" | "idle") => void;
+  setGridError: (e: string | null) => void;
+  setPlacementProgress: (placementId: string, progress: {
+    percent: number;
+    stage?: string;
+    agentName?: string;
+    message?: string;
+  }) => void;
+  updateDraft: (
+    draftId: string,
+    updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft,
+  ) => void;
+  total: number;
+  completed: number;
+};
+
+type RunEventOutcome = {
+  completed: number;
+  terminal: boolean;
+  fatal: boolean;
+};
+
+function placementPatch(placement: OrganicCalendarPlacement): Partial<OrganicCalendarDraft> {
+  const content = placement.content;
+  const creative = placement.creative;
+  const copy = placement.copy;
+  return {
+    status: "draft",
+    title: content?.titleTopic ?? undefined,
+    format: content?.format ?? undefined,
+    creativeIdea: creative?.creativeIdea ?? undefined,
+    captionPreview: copy?.caption ?? undefined,
+  };
+}
+
+function handleRunEvent(
+  event: OrganicGenerationRunEvent,
+  ctx: RunEventHandlers,
+): RunEventOutcome {
+  let { completed } = ctx;
+  let terminal = false;
+  let fatal = false;
+
+  switch (event.type) {
+    case "run_started":
+    case "run_plan":
+    case "run_warning":
+      break;
+    case "run_progress": {
+      ctx.setGridProgress({
+        percent:
+          event.total > 0
+            ? Math.round((event.completed / event.total) * 100)
+            : 0,
+        stage: event.stage,
+        message: event.message,
+        completed: event.completed,
+        total: event.total,
+      });
+      break;
+    }
+    case "slot_started": {
+      ctx.updateDraft(event.placementId, (d) => ({
+        ...d,
+        status: "streaming" as const,
+      }));
+      ctx.setPlacementProgress(event.placementId, {
+        percent: derivePlacementProgressPercent({ stage: "queued" }),
+        message: event.message,
+      });
+      break;
+    }
+    case "slot_stage": {
+      ctx.setPlacementProgress(event.placementId, {
+        percent: derivePlacementProgressPercent({
+          agentName: event.agentName,
+          stage: event.stage,
+        }),
+        stage: event.stage,
+        agentName: event.agentName,
+        message: event.message,
+      });
+      break;
+    }
+    case "slot_completed": {
+      completed += 1;
+      const placementId = event.placement.placementId;
+      ctx.updateDraft(placementId, (d) => ({ ...d, ...placementPatch(event.placement) }));
+      ctx.setPlacementProgress(placementId, { percent: 100, stage: "merging" });
+      ctx.setGridProgress({
+        percent:
+          ctx.total > 0 ? Math.round((completed / ctx.total) * 100) : 0,
+        completed,
+        total: ctx.total,
+      });
+      break;
+    }
+    case "slot_failed": {
+      ctx.updateDraft(event.placementId, (d) => ({
+        ...d,
+        status: "failed" as const,
+        generationError: event.message,
+      }));
+      break;
+    }
+    case "run_completed": {
+      const summary = event.summary;
+      if (summary && summary.failed > 0 && summary.succeeded > 0) {
+        ctx.setGridStatus("complete_with_errors");
+      } else if (summary && summary.failed > 0 && summary.succeeded === 0) {
+        ctx.setGridStatus("error");
+      } else {
+        ctx.setGridStatus("complete");
+      }
+      terminal = true;
+      break;
+    }
+    case "run_failed": {
+      ctx.setGridStatus("error");
+      ctx.setGridError(event.message);
+      terminal = true;
+      fatal = true;
+      break;
+    }
+    default: {
+      assertNeverOrganicRunEvent(event);
+    }
+  }
+
+  return { completed, terminal, fatal };
+}
+
+function adaptLegacyEvent(event: OrganicCalendarBatchGenerateStreamEvent): OrganicGenerationRunEvent | null {
+  switch (event.type) {
+    case "progress":
+      return {
+        type: "run_progress",
+        completed: event.completed,
+        total: event.total,
+        stage: event.stage,
+        message: event.message,
+      };
+    case "slot_started":
+      return {
+        type: "slot_started",
+        placementId: event.placementId,
+        message: event.message,
+      };
+    case "slot_stage":
+      return {
+        type: "slot_stage",
+        placementId: event.placementId,
+        stage: event.stage,
+        agentName: event.agentName,
+        message: event.message,
+      };
+    case "slot_heartbeat":
+      return null;
+    case "slot_completed":
+    case "placement":
+      return { type: "slot_completed", placement: event.placement };
+    case "slot_failed":
+      return {
+        type: "slot_failed",
+        placementId: event.placementId,
+        code: event.code,
+        message: event.message,
+        retryable: event.retryable,
+        attempts: event.attempts,
+      };
+    case "error":
+      return {
+        type: "run_warning",
+        code: event.code,
+        message: event.message,
+        placementId: event.placementId,
+      };
+    case "complete":
+      return { type: "run_completed", summary: event.summary };
+    default:
+      return null;
+  }
+}
+
 export function useOrganicContentPlan({
   brandId,
   weekStart,
@@ -69,6 +270,8 @@ export function useOrganicContentPlan({
     setGridProgress,
     setGridError,
     setGridJobId,
+    setPlacementProgress,
+    clearPlacementProgress,
     addDraft,
     updateDraft,
     days,
@@ -79,6 +282,8 @@ export function useOrganicContentPlan({
         setGridProgress: s.setGridProgress,
         setGridError: s.setGridError,
         setGridJobId: s.setGridJobId,
+        setPlacementProgress: s.setPlacementProgress,
+        clearPlacementProgress: s.clearPlacementProgress,
         addDraft: s.addDraft,
         updateDraft: s.updateDraft,
         days: s.days,
@@ -210,13 +415,14 @@ export function useOrganicContentPlan({
         }
 
         setGridJobId(planId);
+        clearPlacementProgress();
 
-        // Consume NDJSON stream
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let done = false;
         let buffer = "";
         let completed = 0;
+        let streamSawTerminal = false;
         const total = plan?.placements.length ?? 0;
 
         while (!done) {
@@ -231,85 +437,54 @@ export function useOrganicContentPlan({
 
           for (const line of lines) {
             if (!line.trim()) continue;
-            let event: Record<string, unknown>;
+
+            let parsed: unknown;
             try {
-              event = JSON.parse(line) as Record<string, unknown>;
+              parsed = JSON.parse(line);
             } catch {
               continue;
             }
 
-            const type = event.type as string | undefined;
-
-            if (type === "progress") {
-              const percent = typeof event.percent === "number" ? event.percent : undefined;
-              const stage = typeof event.stage === "string" ? event.stage : undefined;
-              const message = typeof event.message === "string" ? event.message : undefined;
-              setGridProgress({
-                percent: percent ?? 0,
-                stage,
-                message,
-                completed,
-                total,
-              });
-            }
-
-            if (type === "slot_started") {
-              const placementId = event.placement_id as string | undefined;
-              if (placementId) {
-                updateDraft(placementId, (d) => ({ ...d, status: "streaming" as const }));
+            const envelopeResult = organicGenerationRunEventEnvelopeSchema.safeParse(parsed);
+            let event: OrganicGenerationRunEvent | null = null;
+            if (envelopeResult.success) {
+              event = envelopeResult.data.event;
+            } else {
+              const bareResult = organicCalendarBatchGenerateStreamEventSchema.safeParse(parsed);
+              if (!bareResult.success) {
+                console.warn(
+                  "[organic] unrecognized stream event",
+                  envelopeResult.error.issues.slice(0, 2),
+                );
+                continue;
               }
+              event = adaptLegacyEvent(bareResult.data);
+              if (!event) continue;
             }
 
-            if (type === "slot_completed") {
-              completed += 1;
-              setGridProgress({ percent: Math.round((completed / Math.max(total, 1)) * 100), completed, total });
+            const outcome = handleRunEvent(event, {
+              setGridProgress,
+              setGridStatus,
+              setGridError,
+              setPlacementProgress,
+              updateDraft,
+              total,
+              completed,
+            });
+            completed = outcome.completed;
+            if (outcome.terminal) {
+              streamSawTerminal = true;
             }
-
-            if (type === "slot_failed") {
-              const placementId = event.placement_id as string | undefined;
-              if (placementId) {
-                updateDraft(placementId, (d) => ({
-                  ...d,
-                  status: "failed" as const,
-                  generationError: (event.error as string | undefined) ?? "Generation failed",
-                }));
-              }
-            }
-
-            if (type === "placement") {
-              const data = event.data as Record<string, unknown> | undefined;
-              if (!data) continue;
-
-              const placementId = (event.placement_id ?? data.placement_id) as string | undefined;
-              const dayId = (event.day_id ?? data.day_id) as string | undefined;
-
-              if (!dayId) continue;
-
-              const patch: Partial<OrganicCalendarDraft> = {
-                status: "draft",
-                title: (data.title as string | undefined) ?? undefined,
-                summary: (data.summary as string | undefined) ?? undefined,
-                captionPreview: (data.caption_preview ?? data.captionPreview) as string | undefined,
-                creativeIdea: (data.creative_idea ?? data.creativeIdea) as string | undefined,
-                creativeDirectionPrompt: (data.creative_direction_prompt ?? data.creativeDirectionPrompt) as string | undefined,
-                thumbnailPrompt: (data.thumbnail_prompt ?? data.thumbnailPrompt) as string | undefined,
-                format: (data.format as string | undefined) ?? undefined,
-              };
-
-              if (placementId) {
-                updateDraft(placementId, (d) => ({ ...d, ...patch }));
-              }
-            }
-
-            if (type === "error") {
-              setGridStatus("error");
-              setGridError((event.message as string | undefined) ?? "Generation failed");
+            if (outcome.fatal) {
+              done = true;
               break;
             }
           }
         }
 
-        setGridStatus("complete");
+        if (!streamSawTerminal) {
+          setGridStatus("complete");
+        }
         setGridJobId(null);
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
@@ -325,12 +500,14 @@ export function useOrganicContentPlan({
       activePlan,
       addDraft,
       brandProfileId,
+      clearPlacementProgress,
       days,
       platformAccountIds,
       setGridError,
       setGridJobId,
       setGridProgress,
       setGridStatus,
+      setPlacementProgress,
       updateDraft,
       weekStart,
     ]

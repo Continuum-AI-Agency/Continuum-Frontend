@@ -53,9 +53,7 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/signup") ||
-    request.nextUrl.pathname.startsWith("/recovery") ||
-    request.nextUrl.pathname.startsWith("/set-password");
+    request.nextUrl.pathname.startsWith("/signup");
 
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/organic") ||
@@ -64,16 +62,6 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/integrations") ||
     request.nextUrl.pathname.startsWith("/settings");
 
-  const needsPassword = user &&
-    user.app_metadata.provider === "email" &&
-    user.user_metadata?.has_password !== true;
-
-  const isImpersonating = request.cookies.get("is_impersonating")?.value === "true";
-
-  if (needsPassword && !isImpersonating && isProtectedRoute && !request.nextUrl.pathname.startsWith("/set-password")) {
-    return NextResponse.redirect(new URL("/set-password", request.url));
-  }
-
   if (!user && isProtectedRoute) {
     const redirectUrl = new URL("/login", request.url);
     redirectUrl.searchParams.set("redirectTo", request.nextUrl.pathname);
@@ -81,9 +69,6 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && isAuthPage) {
-    if (needsPassword && request.nextUrl.pathname.startsWith("/set-password")) {
-      return supabaseResponse;
-    }
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

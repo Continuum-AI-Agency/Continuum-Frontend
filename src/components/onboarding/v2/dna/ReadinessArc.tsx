@@ -14,10 +14,10 @@ function toneFor(score: number | null | undefined): {
   stroke: string;
   text: string;
 } {
-  if (score == null) return { stroke: "stroke-slate-300", text: "text-[#94a3b8]" };
-  if (score >= 70) return { stroke: "stroke-emerald-500", text: "text-emerald-600" };
-  if (score >= 40) return { stroke: "stroke-amber-500", text: "text-amber-600" };
-  return { stroke: "stroke-rose-500", text: "text-rose-600" };
+  if (score == null) return { stroke: "stroke-muted", text: "text-muted-foreground" };
+  if (score >= 70) return { stroke: "stroke-[var(--cs-success,#53a88a)]", text: "text-[var(--cs-success,#53a88a)]" };
+  if (score >= 40) return { stroke: "stroke-[var(--cs-warning,#cb8e00)]", text: "text-[var(--cs-warning,#cb8e00)]" };
+  return { stroke: "stroke-[var(--cs-error,#ef4444)]", text: "text-[var(--cs-error,#ef4444)]" };
 }
 
 export function ReadinessArc({ score, size = 96, strokeWidth = 8, className }: ReadinessArcProps) {
@@ -42,7 +42,7 @@ export function ReadinessArc({ score, size = 96, strokeWidth = 8, className }: R
           r={radius}
           fill="none"
           strokeWidth={strokeWidth}
-          className="stroke-slate-200"
+          className="stroke-border"
         />
         <motion.circle
           cx={center}
@@ -59,10 +59,10 @@ export function ReadinessArc({ score, size = 96, strokeWidth = 8, className }: R
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={cn("text-[24px] font-bold tabular-nums leading-none", tone.text)}>
+        <span className={cn("text-[24px] font-bold font-mono tabular-nums leading-none", tone.text)}>
           {safeScore == null ? "—" : Math.round(safeScore)}
         </span>
-        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
           / 100
         </span>
       </div>

@@ -10,6 +10,7 @@ type PopupSuccessPayload = {
   context: string;
   accountId: string | null;
   state?: string | null;
+  returnTo?: string | null;
 };
 
 type PopupErrorPayload = {
@@ -39,6 +40,7 @@ export default function IntegrationCallbackPage() {
     const state = params.get("state");
     const status = params.get("status");
     const reason = params.get("reason");
+    const returnTo = params.get("return_to");
 
     if (status === "connection_successful") {
       const successPayload: PopupSuccessPayload = {
@@ -47,6 +49,7 @@ export default function IntegrationCallbackPage() {
         context,
         accountId: null,
         state,
+        returnTo,
       };
       return { payload: successPayload, status: true, reason: null };
     }

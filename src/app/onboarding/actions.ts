@@ -23,6 +23,7 @@ import { mapIntegrationTypeToPlatformKey } from "@/lib/integrations/platform";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { getClaimsIdentity } from "@/lib/auth/claims";
 
 
 const getIntegrationServer = async () => {
@@ -109,7 +110,7 @@ export async function approveAndLaunchOnboardingAction(
   options?: { idempotencyKey?: string }
 ): Promise<OnboardingState> {
   const supabase = await createSupabaseServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getClaimsIdentity();
   const userId = user?.id;
 
   if (!userId) {

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AlertCircle, MinusCircle } from "lucide-react";
+import { WarningCircle, MinusCircle } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,15 +43,15 @@ export function CardSurface({
   let body: ReactNode;
   if (isError) {
     body = (
-      <div className="flex items-start gap-2 text-[12px] text-[#94a3b8]">
-        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#f97316]" />
+      <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
+        <WarningCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--cs-warning,#cb8e00)]" />
         <span>{errorMessage ?? "Couldn't load this section. We'll keep trying in the background."}</span>
       </div>
     );
   } else if (isSkipped) {
     body = (
-      <div className="flex items-start gap-2 text-[12px] text-[#94a3b8]">
-        <MinusCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#cbd5e1]" />
+      <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
+        <MinusCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
         <span>Section unavailable for this brand.</span>
       </div>
     );
@@ -62,7 +62,7 @@ export function CardSurface({
   }
 
   return (
-    <Card className={cn("border-[#e5e7eb] shadow-sm", className)}>
+    <Card className={cn("border-border bg-card shadow-sm text-foreground", className)}>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
         <div className="flex items-center gap-2">
           {isLoading ? <BreathingDot tone={isError ? "rose" : "emerald"} /> : null}
@@ -74,7 +74,7 @@ export function CardSurface({
             {badge ? (
               <Badge
                 variant="outline"
-                className="text-[10px] font-semibold uppercase tracking-wide text-[#64748b]"
+                className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 {badge}
               </Badge>
@@ -83,7 +83,7 @@ export function CardSurface({
         ) : null}
       </CardHeader>
       <CardContent
-        className="space-y-3 text-[13px] leading-relaxed text-[#374151]"
+        className="space-y-3 text-[13px] leading-relaxed text-muted-foreground"
         style={{ minHeight: minBodyHeight }}
       >
         {body}
@@ -92,6 +92,8 @@ export function CardSurface({
     </Card>
   );
 }
+
+document.documentElement.classList.add("light"); // Ensure light mode context
 
 function DefaultSkeleton() {
   return (

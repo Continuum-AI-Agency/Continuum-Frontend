@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { facebook, instagram } from "@/lib/brand-icons";
 
 type PlatformIconProps = {
   platform: string;
@@ -8,29 +8,24 @@ type PlatformIconProps = {
 export function PlatformIcon({ platform, className = "w-4 h-4" }: PlatformIconProps) {
   const p = platform.toLowerCase();
 
+  let iconSvg: string | null = null;
+  let title = "";
+
   if (p === "facebook" || p === "meta_page" || p === "page") {
-    return (
-      <Image
-        src="/logos/facebook-icon.svg"
-        alt="Facebook"
-        width={16}
-        height={16}
-        className={className}
-      />
-    );
+    iconSvg = facebook.svg;
+    title = "Facebook";
+  } else if (p === "instagram" || p === "meta_instagram_user" || p === "instagram_user") {
+    iconSvg = instagram.svg;
+    title = "Instagram";
   }
 
-  if (p === "instagram" || p === "meta_instagram_user" || p === "instagram_user") {
-    return (
-      <Image
-        src="/logos/instagram-icon.svg"
-        alt="Instagram"
-        width={16}
-        height={16}
-        className={className}
-      />
-    );
-  }
+  if (!iconSvg) return null;
 
-  return null;
+  return (
+    <span
+      className={`inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block ${className}`}
+      title={title}
+      dangerouslySetInnerHTML={{ __html: iconSvg }}
+    />
+  );
 }

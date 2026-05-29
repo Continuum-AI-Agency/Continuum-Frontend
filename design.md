@@ -109,6 +109,20 @@ We reject ubiquitous startup fonts for structural UI. For a product promising en
 - Never use extra-bold or black font weights. Never set long body passages in uppercase.
 - Light text on dark backgrounds: add 0.05–0.1 to normal line-height — light type reads as lighter weight and needs more breathing room.
 
+### Skill Reference — `/typeset`
+
+Invoke `/typeset` when reviewing or improving typography. Full guidance lives in the skill; the rules below are the Continuum-specific distillation.
+
+- **Squint test for hierarchy.** Blur your eyes — can you still tell headline from body from caption? If sizes feel muddy, the scale is too tight. Our scale already skips meaningful steps; don't introduce intermediate sizes.
+- **Weight contrast must skip a step.** Regular → Semibold reads as hierarchy; Regular → Medium does not. Use the weights defined in the type scale (400 / 500 / 600 / 700) — never load extras.
+- **Three weights per family, max.** Geist ships with Regular, Medium, Semibold; that is the ceiling. Adding more bloats the bundle and dilutes meaning.
+- **Combine dimensions for hierarchy.** Size + weight + color + space. Never lean on size alone.
+- **Tabular numerals are mandatory for data.** `mono-data` already enforces `tnum`; any custom numeric display must too.
+- **Body text floor: 16px (`body-lg`).** `body-md` is for compact UI chrome only — never long-form reading.
+- **Never pair similar-but-not-identical sans-serifs.** Futura Maxi (display) + Geist (UI) is the only intentional pairing. Don't introduce a third sans.
+
+**NEVER**: arbitrary sizes outside the scale · extra-bold or black weights · uppercase long passages · `px` font sizes (use `rem`) · decorative fonts for body · placeholder text as the only label.
+
 ---
 
 ## Spacing — The 4pt Scale
@@ -166,6 +180,28 @@ The layout strategy relies on **"Modular Connectivity"** and **"Continuous Flow.
 
 Breathing room is non-negotiable. Ample padding must surround all major functional zones to prevent cognitive overload on data-heavy screens. Never apply the same spacing everywhere — varied rhythm communicates hierarchy.
 
+### Skill Reference — `/layout`
+
+Invoke `/layout` when composition feels monotonous, crowded, or structurally weak. Full guidance lives in the skill; the rules below adapt it to Continuum's 4pt scale and density requirements.
+
+- **Visual rhythm = tight clusters + generous breaks.** Related elements: `xs`–`sm` (4–8px). Distinct sections: `3xl`–`5xl` (48–96px). Equal spacing everywhere kills hierarchy.
+- **Flex for 1D, Grid for 2D.** The "default to CSS Grid" rule above governs page-level dashboards; component internals (button rows, card contents, nav clusters) should use Flexbox. Don't reach for Grid when `flex` with `gap` and `flex-wrap` is simpler.
+- **Use `gap`, not margins, for sibling spacing.** Eliminates margin collapse and works identically in Flex and Grid.
+- **Never nest cards inside cards.** Within a card, use spacing and dividers — not another container — to express sub-hierarchy.
+- **Vary card sizes and column spans** to break "icon + heading + text × 4" grid monotony. Asymmetric layouts feel more designed than centered everything.
+- **Z-index uses the semantic scale below.** No arbitrary `999` / `9999` values.
+- **Squint-test verification.** After spacing changes, blur your view — primary element, secondary, and groupings should be obvious within 2 seconds.
+
+**NEVER**: arbitrary spacing outside the 4pt scale · uniform spacing across all gaps · wrap everything in cards · default to CSS Grid for 1D layouts · arbitrary z-index values.
+
+### Skill Reference — `/design-taste-frontend`
+
+Invoke `/design-taste-frontend` when initiating the implementation of a new frontend view, landing page, portfolio component, or visual layout to read the brief correctly and set up design system constraints.
+
+- **Establish the Design Read:** Before touching any code, declare a single-line "Design Read" identifying page kind, target audience, vibe language, and target aesthetic family.
+- **Calibrate Core Dials:** Explicitly calibrate structural density, visual variance, and motion choreography rather than reverting to generic AI/SaaS defaults.
+- **Reject AI-Default Slop:** Actively block neon-purple gradient backdrops, centered hero layout over dark mesh grids, three generic feature cards, and Inter+slate-900 typography pairs.
+
 ---
 
 ## Elevation & Depth — The No-Glow Rule
@@ -212,6 +248,20 @@ All motion must respect `prefers-reduced-motion`. Implementation rules:
 - When reduced motion is active: collapse all durations to `duration-fast` (150ms) or instant
 - Disable all transform-based entrance animations (`translate-y`, `scale`, etc.) — preserve opacity-only fades if needed for comprehension
 - Never rely on animation to convey state — always pair with a color or text change
+
+### Skill Reference — `/animate`
+
+Invoke `/animate` when adding motion to a feature. Full guidance lives in the skill; the rules below are the Continuum-specific layer on top of the motion tokens above. See also the `### Animation rules quick reference` block under Skeleton Loaders for Framer Motion specifics.
+
+- **Animate only `transform` and `opacity`.** These are GPU-accelerated. Animating `width`, `height`, `top`, `left`, or `margin` triggers layout and drops frames — use `transform: scale/translate` instead.
+- **Every animation needs a reason.** Feedback, transition, or guidance. Decoration alone is not a reason.
+- **Layer model:** (1) Hero moment — one signature animation per surface, (2) Feedback layer — micro-interactions on interactive elements, (3) Transition layer — state changes (show/hide, expand/collapse), (4) Delight layer — used sparingly. One well-orchestrated experience beats scattered animations everywhere.
+- **Exit ≈ 75% of entrance.** If a modal enters at `duration-normal` (150ms), it exits faster. Continuum's `ease-exit` token pairs with shorter durations on dismiss.
+- **Durations match purpose** (reinforces the tokens above): 50ms for hover/focus, 150ms for state changes, 300ms for layout/page transitions. Anything over 500ms reads as laggy.
+- **Stagger reveals at 100–150ms** for page-load choreography. Don't fire every element at once.
+- **`prefers-reduced-motion` is non-negotiable** — see Reduced Motion above. Test the surface with the OS toggle on before shipping.
+
+**NEVER**: bounce or elastic easing (`cubic-bezier(0.34, 1.56, ...)`) — feels dated · animate layout properties · durations over 500ms for feedback · animate everything (fatigue) · block interaction during animations · ship motion that isn't tested under `prefers-reduced-motion`.
 
 ---
 
@@ -380,6 +430,19 @@ Never set `strokeWidth` per-instance. Define it once in a wrapper or theme conte
 
 **Forbidden Shapes:** Sharp spikes, aggressive zig-zags, broken or glitchy geometries, and decorative particle/starfield backgrounds.
 
+### Skill Reference — `/brandkit`
+
+Invoke `/brandkit` when generating logo systems, empty-states, illustrations, or identity boards. Ensure generated assets align with the Gravitational Metaphor and strict palette limits:
+- **Presentation substrate:** Dark charcoal or deep gravity backgrounds.
+- **Negative space:** Sparse visual density with large breathing margins.
+- **No sci-fi tropes:** Reject neon grids, floating glowing particles, and generic robot graphics.
+
+### Aesthetic Archetypes — `/industrial-brutalist-ui` and `/minimalist-ui`
+
+While the default visual direction is the slate/teal Continuum Singularity system, specific contexts require alternative visual treatments:
+- **`/industrial-brutalist-ui`**: Invoke this when building raw mechanical telemetry panels, log streams, high-density terminal feeds, or classified blueprint-style views. Enforces monospace typography, visible structural grid dividers, ASCII accents, and CRT scanline/phosphor simulations.
+- **`/minimalist-ui`**: Invoke this when building long-form documentation pages, system settings panels, reports, or blog elements. Enforces a warm monochrome palette (bone/off-white background), serif display typography, and a flat bento container layout without dropshadows or glowing refractions.
+
 ---
 
 ## Do's and Don'ts
@@ -405,9 +468,18 @@ Never set `strokeWidth` per-instance. Define it once in a wrapper or theme conte
 - **Don't** use `h-screen` for full-height sections. Use `min-h-[100dvh]`.
 - **Don't** use "hype" vocabulary: avoid "Magic," "Revolutionizing," or "The AI does everything." AI is a precise assistant to the human operator.
 
+### Skill Reference — `/redesign-existing-projects`
+
+When refactoring, migrating, or visual-upgrading any legacy page or component in this repository, the agent must call upon `/redesign-existing-projects` to run a structural audit before editing:
+- **Scan & Diagnose:** List all default fonts (like Inter everywhere), oversaturated accents, generic shadow constructs, and orphaned text blocks before altering layout styles.
+- **Functional Preservation:** Ensure the styling modifications upgrade the visual quality of typography and colors without breaking operational Javascript logic or component states.
+
 ---
 
 ## Skill Strategy — Frontend Design & Implementation
+
+> [!IMPORTANT]
+> **Complete Deliverables Enforcement:** Before generating or editing any code files, the agent MUST call upon `/full-output-enforcement` to ensure that full, production-ready, non-truncated deliverables are returned. Generating code blocks with comments like `// TODO`, `// ...`, or `/* rest of code */` is strictly prohibited.
 
 ### The Core Stack (Use on Every Feature)
 
@@ -475,6 +547,9 @@ High ROI in specific contexts; wasteful or redundant outside them.
 | `/redesign-existing-projects` | Full visual redesign of an existing component or page. Exploration + design + implementation in one pass. |
 | `/audit-website` | Run before touching an existing page — surfaces what's broken before new debt is added. |
 | `/impeccable extract` | Pulls a design pattern from an existing component into reusable form. Useful during refactor phases. |
+| `/brandkit` | Generating high-end brand presentation boards, logo systems, or illustrations matching Singularity constraints. |
+| `/industrial-brutalist-ui` | Building raw mechanical telemetry grids, monospace terminal feeds, or Swiss typographic structures. |
+| `/minimalist-ui` | Designing warm monochrome bento layouts, documentation, or editorial report views. |
 
 ---
 
@@ -483,7 +558,7 @@ High ROI in specific contexts; wasteful or redundant outside them.
 | Skill | Why |
 |---|---|
 | `/three` / `/react-three-fiber` | Only when the design genuinely calls for 3D canvas. Usually overkill. |
-| `/stitch-design` | Generates design system artifacts. Redundant when this document already exists. |
+| `/stitch-design-taste` | Generates Stitch-compatible design representations of screens/pages. Useful only when translating Singularity layouts to Google Stitch agent prompts. |
 | `/high-end-visual-design` | Marketing and brand design — wrong tool for product dashboards. |
 
 ---

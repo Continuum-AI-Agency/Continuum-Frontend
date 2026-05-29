@@ -17,18 +17,18 @@ export function StepPill({ label, state, onClick }: StepPillProps) {
       disabled={!interactive}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors",
-        state === "done" && "bg-[color-mix(in_srgb,#0daea2_12%,transparent)] text-[#0daea2]",
-        state === "active" && "bg-[color-mix(in_srgb,#5a39ff_12%,transparent)] text-[#5a39ff]",
-        state === "pending" && "cursor-default bg-[#f2f4f8] text-[#64748b]",
+        state === "done" && "bg-[color-mix(in_srgb,var(--cs-teal,#0daea2)_12%,transparent)] text-[var(--cs-teal,#0daea2)]",
+        state === "active" && "bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_12%,transparent)] text-[var(--cs-violet,#5a39ff)]",
+        state === "pending" && "cursor-default bg-muted text-muted-foreground",
         interactive && "cursor-pointer"
       )}
     >
       <span
         className={cn(
           "h-1.5 w-1.5 rounded-full",
-          state === "done" && "bg-[#0daea2]",
-          state === "active" && "bg-[#5a39ff]",
-          state === "pending" && "bg-[#94a3b8]"
+          state === "done" && "bg-[var(--cs-teal,#0daea2)]",
+          state === "active" && "bg-[var(--cs-violet,#5a39ff)]",
+          state === "pending" && "bg-muted-foreground"
         )}
       />
       {label}

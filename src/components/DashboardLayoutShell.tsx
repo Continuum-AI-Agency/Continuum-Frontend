@@ -20,7 +20,7 @@ const TourProvider = dynamic(
   () => import("./onboarding/v2/tour/TourProvider").then((m) => ({ default: m.TourProvider })),
 );
 
-import { User } from "@supabase/supabase-js";
+import type { AuthIdentity } from "@/lib/auth/identity";
 
 export type BrandSummary = {
   id: string;
@@ -40,7 +40,7 @@ type DashboardLayoutShellProps = {
   children: React.ReactNode;
   activeBrandId: string;
   brandSummaries: BrandSummary[];
-  user: User | null;
+  user: AuthIdentity | null;
   permissions: BrandPermission[];
   sidebarDefaultOpen?: boolean;
 };

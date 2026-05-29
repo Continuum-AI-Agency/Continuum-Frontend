@@ -1,6 +1,5 @@
 import { motion } from "motion/react";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { DocumentUploader } from "@/components/onboarding/shared/DocumentUploader";
 import { IdentityPanel } from "../dna/IdentityPanel";
 import { DnaSectionCard } from "../dna/DnaSectionCard";
 import { VoiceDetail } from "../dna/VoiceDetail";
@@ -8,7 +7,6 @@ import { AudienceDetail } from "../dna/AudienceDetail";
 import { BusinessFeatureChips } from "../dna/BusinessFeatureChips";
 import { StreamFallback } from "../dna/StreamFallback";
 import { EditableProse } from "../dna/EditableProse";
-import { TeamInviteSection } from "../dna/TeamInviteSection";
 import { HorizontalRow } from "../dna/HorizontalRow";
 import { WebsiteSummaryCard } from "../dna/WebsiteSummaryCard";
 import { UnderstandingCard } from "../dna/UnderstandingCard";
@@ -109,19 +107,19 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
         className="mb-6 grid grid-cols-1 items-end gap-4 md:grid-cols-[1fr_auto]"
       >
         <div className="space-y-2 text-left">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#94a3b8]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Brand DNA
           </p>
-          <h2 className="text-balance text-[44px] font-bold leading-[0.95] tracking-tighter text-[#0b1220] md:text-[72px]">
+          <h2 className="text-balance text-[44px] font-bold leading-[0.95] tracking-tighter text-foreground md:text-[72px]">
             {thinResult ? (
               <>
-                <span className="text-[#94a3b8]">Let&apos;s get to know </span>
+                <span className="text-muted-foreground">Let&apos;s get to know </span>
                 {brand.name || "your brand"}
               </>
             ) : (
               <>
                 {brand.name || "Your brand"}
-                <span className="text-[#94a3b8]">, decoded</span>
+                <span className="text-muted-foreground">, decoded</span>
               </>
             )}
           </h2>
@@ -171,6 +169,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             <EditableProse
               value={overviewText}
               placeholder={placeholderFor(agentBuckets?.sectionStatus.business, "Drafting…")}
+              loading={loading}
               onCommit={(next) => updateState({ brand: { overview: next } })}
             />
             {business ? <BusinessFeatureChips business={business} /> : null}
@@ -182,7 +181,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             chips={<DimensionChip dim="positioning" readiness={readiness} loading={loading} />}
             findings={<FindingsStack findings={[findingFor(readiness, "positioning")]} />}
           >
-            {voice ? <VoiceDetail voice={voice} /> : <StreamFallback text={agentBuckets?.voiceStream ?? ""} />}
+            {voice ? <VoiceDetail voice={voice} /> : <StreamFallback text={agentBuckets?.voiceStream ?? ""} loading={loading} />}
           </DnaSectionCard>
 
           <DnaSectionCard
@@ -206,6 +205,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
             <EditableProse
               value={audienceText}
               placeholder={placeholderFor(agentBuckets?.sectionStatus.audience, "Drafting…")}
+              loading={loading}
               onCommit={(next) => updateState({ brand: { targetAudience: next } })}
             />
             {audience ? <AudienceDetail audience={audience} /> : null}
@@ -227,15 +227,6 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
         </HorizontalRow>
       </motion.div>
 
-      <motion.section variants={card} className="mt-2">
-        <h3 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#94a3b8]">
-          Resources
-        </h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <DocumentUploader />
-          <TeamInviteSection />
-        </div>
-      </motion.section>
     </motion.div>
   );
 }

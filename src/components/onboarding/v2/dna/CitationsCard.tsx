@@ -36,14 +36,14 @@ export function CitationsCard({ buckets }: Props) {
       {groupKeys.length > 0 ? (
         groupKeys.map((key) => (
           <div key={key}>
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#94a3b8]">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {key.replace(/_/g, " ")}
             </p>
             <CitationGroup value={citations[key]} />
           </div>
         ))
       ) : (
-        <p className="text-[12px] text-[#94a3b8]">No sources were recorded for this run.</p>
+        <p className="text-[12px] text-muted-foreground">No sources were recorded for this run.</p>
       )}
     </CardSurface>
   );
@@ -54,7 +54,7 @@ function CitationGroup({ value }: { value: unknown }) {
     return (
       <ul className="space-y-1 text-[12px]">
         {value.map((item, idx) => (
-          <li key={idx} className="leading-snug text-[#374151]">
+          <li key={idx} className="leading-snug text-muted-foreground">
             <CitationItem item={item} />
           </li>
         ))}
@@ -87,7 +87,7 @@ function ExternalLink({ href, children }: { href: string; children: React.ReactN
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="break-words text-[12px] text-[var(--ob-violet)] underline-offset-2 hover:underline"
+      className="break-words text-[12px] text-[var(--cs-violet,#5a39ff)] underline-offset-2 hover:underline"
     >
       {children}
     </a>

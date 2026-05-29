@@ -149,13 +149,11 @@ describe("ActiveBrandProvider", () => {
 
   // ─── Regression ─────────────────────────────────────────────────────────────
   //
-  // Cross-tab sync effect used metadataId !== selectedBrandId as its only guard.
-  // After a local switch: switchingToBrandId → null fires the effect with stale
-  // metadata (after() hasn't updated it yet). metadataId("brand-a") !==
-  // selectedBrandId("brand-b") → reverts optimistic update back to brand-a.
-  //
-  // Fix: also guard on metadataId !== activeBrandId. Metadata that matches the
-  // server-confirmed brand is a stale echo, not a real cross-tab change.
+  // The old cross-tab effect polled auth metadata, which is written via after()
+  // and trails the response. After a local switch it would see stale metadata
+  // ("brand-a") and revert the fresh optimistic switch ("brand-b"). The provider
+  // no longer consults auth metadata at all, so a stale session user can never
+  // revert an optimistic switch.
   it("does not revert optimistic activeBrandId when session metadata is stale (after() not yet fired)", async () => {
     // Simulate: user metadata still has the old brand (after() hasn't fired yet)
     mockSessionUser = {
@@ -201,5 +199,40 @@ describe("ActiveBrandProvider", () => {
 
     // Optimistic "brand-b" must survive — the icon must not revert to brand-a.
     expect(readActiveBrand(container)).toBe("brand-b");
+  });
+
+  // Cross-tab sync now flows through an explicit BroadcastChannel signal rather
+  // than polling lagging auth metadata: a tab that switches broadcasts the new
+  // brand id, and listening tabs adopt it. A broadcast for a known, non-pending
+  // brand must update the active brand id.
+  it("adopts a brand-switched broadcast from another tab", async () => {
+    if (typeof BroadcastChannel === "undefined") return;
+
+    const { container } = renderProvider({ activeBrandId: "brand-a" });
+    expect(readActiveBrand(container)).toBe("brand-a");
+
+    const otherTab = new BroadcastChannel("continuum:brand");
+    await act(async () => {
+      otherTab.postMessage({ type: "brand-switched", brandId: "brand-b" });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    otherTab.close();
+
+    expect(readActiveBrand(container)).toBe("brand-b");
+  });
+
+  it("ignores a broadcast for an unknown brand", async () => {
+    if (typeof BroadcastChannel === "undefined") return;
+
+    const { container } = renderProvider({ activeBrandId: "brand-a" });
+
+    const otherTab = new BroadcastChannel("continuum:brand");
+    await act(async () => {
+      otherTab.postMessage({ type: "brand-switched", brandId: "brand-unknown" });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    otherTab.close();
+
+    expect(readActiveBrand(container)).toBe("brand-a");
   });
 });

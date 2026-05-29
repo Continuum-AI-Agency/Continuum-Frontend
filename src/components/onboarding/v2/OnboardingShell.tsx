@@ -1,7 +1,7 @@
 import { OnboardingStepper, type StepperState } from "./OnboardingStepper";
 import { StartOverButton } from "./StartOverButton";
 
-export type ShellPillId = "website" | "dna" | "integrations";
+export type ShellPillId = "website" | "documents" | "integrations" | "invites" | "dna";
 
 type StepDef = { id: ShellPillId; label: string; description: string; state: StepperState };
 
@@ -25,19 +25,11 @@ export function OnboardingShell({
   children,
 }: OnboardingShellProps) {
   return (
-    <div
-      className="flex min-h-dvh flex-col bg-[#f7f8fb]"
-      style={{
-        ["--ob-violet" as string]: "#5a39ff",
-        ["--ob-deep" as string]: "#2e2257",
-        ["--ob-teal" as string]: "#0daea2",
-        ["--ob-cyan" as string]: "#39d0ff",
-      }}
-    >
-      <header className="border-b border-[#e5e7eb] bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <header className="border-b border-border bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-card/80">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-8 py-4">
           <ContinuumWordmark />
-          <p className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-[#94a3b8] md:block">
+          <p className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
             Get set up
           </p>
         </div>
@@ -46,11 +38,11 @@ export function OnboardingShell({
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
-      <footer className="border-t border-[#e5e7eb] bg-white">
+      <footer className="border-t border-border bg-white dark:bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-8 py-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {onStartOver ? <StartOverButton onConfirm={onStartOver} disabled={startOverDisabled} /> : null}
-            <span className="truncate text-[12px] leading-snug text-[#64748b]">{bottomHint}</span>
+            <span className="truncate text-[12px] leading-snug text-muted-foreground">{bottomHint}</span>
           </div>
           <div className="flex items-center gap-2.5">{bottomActions}</div>
         </div>

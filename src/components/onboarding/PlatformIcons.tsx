@@ -2,6 +2,17 @@
 
 import React from "react";
 import type { PlatformKey } from "./platforms";
+import {
+  amazon,
+  facebook,
+  google,
+  instagram,
+  linkedin,
+  meta,
+  threads,
+  tiktok,
+  youtube,
+} from "@/lib/brand-icons";
 
 type IconProps = {
   size?: number;
@@ -120,36 +131,39 @@ function XIcon(props: IconProps) {
   );
 }
 
-import Image from "next/image";
+function SvgRenderer({ svgContent, size, className, title }: { svgContent: string; size: number; className?: string; title: string }) {
+  return (
+    <span
+      className={`inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block ${className || ""}`}
+      style={{ width: size, height: size }}
+      title={title}
+      dangerouslySetInnerHTML={{ __html: svgContent }}
+    />
+  );
+}
 
 export function PlatformIcon({ platform, size = 18, className }: IconProps & { platform: PlatformKey | "google" | "meta" }) {
   switch (platform) {
     case "google":
     case "googleAds":
-    case "youtube":
     case "dv360":
-      return (
-        <Image 
-          src={platform === "youtube" ? "/logos/youtube.svg" : "/logos/google.svg"} 
-          alt={platform} 
-          width={size} 
-          height={size} 
-          className={className}
-        />
-      );
+      return <SvgRenderer svgContent={google.svg} size={size} className={className} title="Google" />;
+    case "youtube":
+      return <SvgRenderer svgContent={youtube.svg} size={size} className={className} title="YouTube" />;
     case "meta":
+      return <SvgRenderer svgContent={meta.svg} size={size} className={className} title="Meta" />;
     case "facebook":
-      return <Image src={platform === "facebook" ? "/logos/facebook-icon.svg" : "/logos/meta.svg"} alt="Meta" width={size} height={size} className={className} />;
+      return <SvgRenderer svgContent={facebook.svg} size={size} className={className} title="Facebook" />;
     case "instagram":
-      return <Image src="/logos/instagram-icon.svg" alt="Instagram" width={size} height={size} className={className} />;
+      return <SvgRenderer svgContent={instagram.svg} size={size} className={className} title="Instagram" />;
     case "threads":
-      return <Image src="/logos/threads.svg" alt="Threads" width={size} height={size} className={className} />;
+      return <SvgRenderer svgContent={threads.svg} size={size} className={className} title="Threads" />;
     case "tiktok":
-      return <Image src="/logos/tiktok-icon-light.svg" alt="TikTok" width={size} height={size} className={className} />;
+      return <SvgRenderer svgContent={tiktok.svg} size={size} className={className} title="TikTok" />;
     case "linkedin":
-      return <LinkedInIcon size={size} className={className} />;
+      return <SvgRenderer svgContent={linkedin.svg} size={size} className={className} title="LinkedIn" />;
     case "amazonAds":
-      return <AmazonAdsIcon size={size} className={className} />;
+      return <SvgRenderer svgContent={amazon.svg} size={size} className={className} title="Amazon" />;
     default:
       return <Svg size={size} className={className}><circle cx="12" cy="12" r="8" fill="#64748B" /></Svg>;
   }
@@ -260,5 +274,3 @@ export function DocumentSourceIcon({ source, size = 18, className }: IconProps &
       return <Svg size={size} className={className}><circle cx="12" cy="12" r="8" fill="#64748B" /></Svg>;
   }
 }
-
-

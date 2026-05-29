@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { Trash } from "@phosphor-icons/react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,9 +25,9 @@ export function StartOverButton({ onConfirm, disabled }: StartOverButtonProps) {
           variant="ghost"
           size="sm"
           disabled={disabled}
-          className="gap-1.5 text-[12px] text-[#94a3b8] hover:bg-destructive/10 hover:text-destructive"
+          className="gap-1.5 text-[12px] text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash className="h-3.5 w-3.5" />
           Start over
         </Button>
       </AlertDialogTrigger>

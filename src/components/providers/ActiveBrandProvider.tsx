@@ -8,7 +8,7 @@ import { purgeAllForBrand } from "@/lib/storage/brandScopedStorage";
 import { useToastContext, type ToastOptions } from "@/components/ui/ToastProvider";
 import { useSession } from "@/hooks/useSession";
 import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
+import type { AuthIdentity } from "@/lib/auth/identity";
 
 export type SelectBrandResult = {
   switched: boolean;
@@ -23,7 +23,7 @@ type ActiveBrandContextValue = {
   switchingToBrandId: string | null;
   selectBrand: (brandId: string) => Promise<SelectBrandResult>;
   updateBrandName: (brandId: string, name: string) => void;
-  user: User | null;
+  user: AuthIdentity | null;
 };
 
 const ActiveBrandContext = createContext<ActiveBrandContextValue | null>(null);
@@ -32,7 +32,7 @@ type ActiveBrandProviderProps = {
   activeBrandId: string;
   brandSummaries: BrandSummary[];
   permissions: BrandPermission[];
-  user: User | null;
+  user: AuthIdentity | null;
   children: React.ReactNode;
 };
 
@@ -52,7 +52,7 @@ export function ActiveBrandProvider({
   const { user: sessionUser } = useSession();
   const router = useRouter();
 
-  const user = sessionUser || initialUser;
+  const user = (sessionUser ?? initialUser) as AuthIdentity | null;
 
   const showToast = React.useCallback(
     (options: ToastOptions) => {
@@ -67,45 +67,6 @@ export function ActiveBrandProvider({
     },
     [toast]
   );
-
-  // Cross-tab sync: when auth metadata changes in another tab, update local state.
-  // Skipped while a local switch is in progress to prevent race-condition reversions.
-  //
-  // Guard: compare metadataId against the server-confirmed activeBrandId, not the
-  // optimistic selectedBrandId. The auth metadata update runs via after() — it fires
-  // after the response is sent — so when setSwitchingToBrandId(null) fires in the
-  // finally block, the metadata still points to the old brand. Without this guard,
-  // the effect sees (metadataId="brand-a") !== (selectedBrandId="brand-b") and
-  // reverts the optimistic switch. Metadata that echoes the server value is not a
-  // cross-tab change; skip it.
-  useEffect(() => {
-    if (switchingToBrandId) return;
-    const metadata = user?.user_metadata as { onboarding?: { activeBrandId?: string } } | undefined;
-    const metadataId = metadata?.onboarding?.activeBrandId;
-    if (
-      metadataId &&
-      metadataId !== selectedBrandId &&
-      metadataId !== activeBrandId &&
-      summaries.some((brand) => brand.id === metadataId && !brand.isPending)
-    ) {
-      const prevBrandId = selectedBrandId;
-      setSelectedBrandId(metadataId);
-      const event = {
-        prevBrandId,
-        nextBrandId: metadataId,
-        reason: "cross-tab-sync" as const,
-      };
-      try {
-        storeRegistry.teardown(prevBrandId, event);
-      } catch { /* swallowed by registry handlers */ }
-      try {
-        purgeAllForBrand(prevBrandId);
-      } catch { /* never block sync */ }
-      try {
-        storeRegistry.purge(prevBrandId);
-      } catch { /* swallowed by registry handlers */ }
-    }
-  }, [user, selectedBrandId, summaries, switchingToBrandId, activeBrandId]);
 
   // Sync selectedBrandId only when the server-confirmed activeBrandId changes.
   // Intentionally NOT combined with the summaries effect: router.refresh() always
@@ -130,11 +91,49 @@ export function ActiveBrandProvider({
     );
   }, []);
 
-  const stateRef = React.useRef({ activeBrandId, selectedBrandId, router, showToast });
-  stateRef.current = { activeBrandId, selectedBrandId, router, showToast };
+  const stateRef = React.useRef({ activeBrandId, selectedBrandId, summaries, router, showToast });
+  stateRef.current = { activeBrandId, selectedBrandId, summaries, router, showToast };
 
   // Tracks the most recent switch request ID so a newer click discards an older in-flight switch.
   const switchRequestRef = React.useRef<string | null>(null);
+
+  // Cross-tab sync. The server-confirmed activeBrandId prop (read from
+  // user_brand_preferences) is the single source of truth; we deliberately do NOT
+  // poll lagging auth metadata to detect cross-tab changes (the metadata write runs
+  // via after() and trails the response, which previously reverted fresh local
+  // switches). Instead, a tab that completes a switch broadcasts the new brand id;
+  // other tabs adopt it optimistically, tear down brand-scoped stores, and
+  // router.refresh() to re-pull authoritative server state.
+  const channelRef = React.useRef<BroadcastChannel | null>(null);
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    let channel: BroadcastChannel;
+    try {
+      channel = new BroadcastChannel("continuum:brand");
+    } catch {
+      return;
+    }
+    channelRef.current = channel;
+    channel.onmessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; brandId?: string } | undefined;
+      if (!data || data.type !== "brand-switched" || !data.brandId) return;
+      const { selectedBrandId: current, summaries: known, router: r } = stateRef.current;
+      const nextBrandId = data.brandId;
+      if (nextBrandId === current) return;
+      if (!known.some((brand) => brand.id === nextBrandId && !brand.isPending)) return;
+
+      setSelectedBrandId(nextBrandId);
+      const evt = { prevBrandId: current, nextBrandId, reason: "cross-tab-sync" as const };
+      try { storeRegistry.teardown(current, evt); } catch { /* swallowed by registry handlers */ }
+      try { purgeAllForBrand(current); } catch { /* never block sync */ }
+      try { storeRegistry.purge(current); } catch { /* swallowed by registry handlers */ }
+      r.refresh();
+    };
+    return () => {
+      channelRef.current = null;
+      channel.close();
+    };
+  }, []);
 
   const selectBrand = React.useCallback(
     async (brandId: string) =>
@@ -168,6 +167,10 @@ export function ActiveBrandProvider({
 
             if (!switched) {
               setSelectedBrandId(previous);
+            } else {
+              try {
+                channelRef.current?.postMessage({ type: "brand-switched", brandId });
+              } catch { /* cross-tab notify is best-effort */ }
             }
             resolve({ switched, prevBrandId: previous });
             return;

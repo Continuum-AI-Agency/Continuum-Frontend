@@ -1,38 +1,48 @@
-import Image from "next/image";
-import {
-  BarChart3,
-  Briefcase,
-  ShoppingBag,
-} from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlatformKey } from "@/components/onboarding/platforms";
+import {
+  amazon,
+  facebook,
+  google,
+  instagram,
+  linkedin,
+  meta,
+  threads,
+  tiktok,
+  youtube,
+} from "@/lib/brand-icons";
 
 export type IconComponent = React.ComponentType<{ className?: string }>;
 
-function makeSvgIcon(src: string, alt: string): IconComponent {
+interface IconData {
+  svg: string;
+  title: string;
+}
+
+function makeSvgIcon(iconData: IconData): IconComponent {
   function SvgIcon({ className }: { className?: string }) {
     return (
-      <Image
-        src={src}
-        alt={alt}
-        width={20}
-        height={20}
-        className={cn("h-4 w-4 object-contain", className)}
-        unoptimized
+      <span
+        className={cn("h-4 w-4 inline-block shrink-0 [&>svg]:w-full [&>svg]:h-full [&>svg]:block", className)}
+        title={iconData.title}
+        dangerouslySetInnerHTML={{ __html: iconData.svg }}
       />
     );
   }
-  SvgIcon.displayName = `PlatformIcon(${alt})`;
+  SvgIcon.displayName = `PlatformIcon(${iconData.title})`;
   return SvgIcon;
 }
 
-const FacebookIcon = makeSvgIcon("/logos/facebook-icon.svg", "Facebook");
-const InstagramIcon = makeSvgIcon("/logos/instagram-icon.svg", "Instagram");
-const GoogleIcon = makeSvgIcon("/logos/google.svg", "Google");
-const YouTubeIcon = makeSvgIcon("/logos/youtube.svg", "YouTube");
-const TikTokIcon = makeSvgIcon("/logos/tiktok-icon-light.svg", "TikTok");
-const ThreadsIcon = makeSvgIcon("/logos/threads.svg", "Threads");
-const MetaIcon = makeSvgIcon("/logos/meta.svg", "Meta");
+const FacebookIcon = makeSvgIcon(facebook);
+const InstagramIcon = makeSvgIcon(instagram);
+const GoogleIcon = makeSvgIcon(google);
+const YouTubeIcon = makeSvgIcon(youtube);
+const TikTokIcon = makeSvgIcon(tiktok);
+const ThreadsIcon = makeSvgIcon(threads);
+const MetaIcon = makeSvgIcon(meta);
+const LinkedInIcon = makeSvgIcon(linkedin);
+const AmazonIcon = makeSvgIcon(amazon);
 
 export const PLATFORM_LABELS: Record<PlatformKey, string> = {
   youtube: "YouTube",
@@ -51,9 +61,9 @@ export const PLATFORM_ICONS: Record<PlatformKey, IconComponent> = {
   instagram: InstagramIcon,
   facebook: FacebookIcon,
   tiktok: TikTokIcon,
-  linkedin: Briefcase,
+  linkedin: LinkedInIcon,
   googleAds: GoogleIcon,
-  amazonAds: ShoppingBag,
+  amazonAds: AmazonIcon,
   dv360: BarChart3,
   threads: ThreadsIcon,
 };

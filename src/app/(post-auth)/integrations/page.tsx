@@ -1,8 +1,5 @@
 import { Container, Flex, Heading, Text } from "@radix-ui/themes";
-import { BrandIntegrationsCard } from "@/components/settings/BrandIntegrationsCard";
-import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection";
-import { GlassPanel } from "@/components/ui/GlassPanel";
-import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
+import { BrandAssetAssigner } from "@/components/integrations/BrandAssetAssigner";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 
 export default async function IntegrationsPage() {
@@ -16,30 +13,27 @@ export default async function IntegrationsPage() {
             Integrations
           </Heading>
           <Text color="gray">
-            Create a brand profile in settings to manage integrations. Once a brand is active you can assign OAuth
-            connections and business accounts here.
+            Create a brand profile in settings to manage integrations. Once a brand is active you can connect
+            accounts and assign them here.
           </Text>
         </Flex>
       </Container>
     );
   }
 
-  const integrationSummary = await fetchBrandIntegrationSummary(activeBrandId);
-
   return (
     <Container size="4" className="py-10">
       <Flex direction="column" gap="4">
-        <Heading size="6" className="text-white">
-          Integrations
-        </Heading>
-        <Text color="gray">
-          Manage which social and ads accounts are linked to your active brand profile. OAuth flows remain managed
-          centrally by Continuum.
-        </Text>
-        <BrandGrantsSection brandProfileId={activeBrandId} />
-        <GlassPanel className="p-6">
-          <BrandIntegrationsCard summary={integrationSummary} showHeader={false} />
-        </GlassPanel>
+        <div>
+          <Heading size="6" className="text-white">
+            Integrations
+          </Heading>
+          <Text color="gray">
+            Connect your ad and social accounts, then tag the ones this brand should use. You can change this
+            any time.
+          </Text>
+        </div>
+        <BrandAssetAssigner brandId={activeBrandId} className="flex flex-col gap-6" />
       </Flex>
     </Container>
   );

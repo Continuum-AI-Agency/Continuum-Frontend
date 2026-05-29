@@ -3,16 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  loginAction,
-  signupAction,
   logoutAction,
-  recoveryAction,
   signInWithGoogleAction,
-  signInWithLinkedInAction,
   sendMagicLinkAction,
-  checkUserStatusAction,
 } from "@/lib/auth/actions";
-import type { LoginInput, SignupInput, RecoveryInput, MagicLinkInput } from "@/lib/auth/schemas";
+import type { MagicLinkInput } from "@/lib/auth/schemas";
 import { openCenteredPopup, waitForPopupMessage } from "@/lib/popup";
 import { buildOAuthStartUrl } from "@/lib/oauth";
 
@@ -23,47 +18,13 @@ export function useAuth() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const login = async (input: LoginInput): Promise<boolean> => {
-    setError(null);
-    
-    return new Promise((resolve) => {
-      startTransition(async () => {
-        const result = await loginAction(input);
-        
-        if (!result.success) {
-          setError(result.error);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-    });
-  };
-
-  const signup = async (input: SignupInput): Promise<boolean> => {
-    setError(null);
-    
-    return new Promise((resolve) => {
-      startTransition(async () => {
-        const result = await signupAction(input);
-        
-        if (!result.success) {
-          setError(result.error);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-    });
-  };
-
   const logout = async (): Promise<boolean> => {
     setError(null);
-    
+
     return new Promise((resolve) => {
       startTransition(async () => {
         const result = await logoutAction();
-        
+
         if (!result.success) {
           setError(result.error);
           resolve(false);
@@ -72,49 +33,6 @@ export function useAuth() {
         }
       });
     });
-  };
-
-  const recovery = async (input: RecoveryInput): Promise<boolean> => {
-    setError(null);
-    
-    return new Promise((resolve) => {
-      startTransition(async () => {
-        const result = await recoveryAction(input);
-        
-        if (!result.success) {
-          setError(result.error);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-    });
-  };
-
-  const signInWithGoogle = async (redirectTo?: string) => {
-    setError(null);
-
-    const result = await signInWithGoogleAction(redirectTo);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-
-    router.push(result.data.url);
-  };
-
-  const signInWithLinkedIn = async (redirectTo?: string) => {
-    setError(null);
-
-    const result = await signInWithLinkedInAction(redirectTo);
-
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-
-    router.push(result.data.url);
   };
 
   const sendMagicLink = async (input: MagicLinkInput): Promise<boolean> => {
@@ -132,11 +50,6 @@ export function useAuth() {
         }
       });
     });
-  };
-
-  const checkUserStatus = async (email: string) => {
-    setError(null);
-    return await checkUserStatusAction(email);
   };
 
   const signInWithGooglePopup = async (redirectTo?: string): Promise<void> => {
@@ -204,14 +117,8 @@ export function useAuth() {
   const clearError = () => setError(null);
 
   return {
-    login,
-    signup,
     logout,
-    recovery,
-    signInWithGoogle,
-    signInWithLinkedIn,
     sendMagicLink,
-    checkUserStatus,
     signInWithGooglePopup,
     isPending,
     isGooglePending,

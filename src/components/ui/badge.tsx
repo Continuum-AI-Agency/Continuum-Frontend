@@ -18,11 +18,11 @@ const badgeVariants = cva(
         outline:
           "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         violet:
-          "border-[color-mix(in_srgb,#5a39ff_20%,transparent)] bg-[color-mix(in_srgb,#5a39ff_8%,transparent)] text-[#5a39ff]",
+          "border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_20%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] text-[var(--cs-violet,#5a39ff)]",
         teal:
-          "border-[color-mix(in_srgb,#0daea2_20%,transparent)] bg-[color-mix(in_srgb,#0daea2_8%,transparent)] text-[#0daea2]",
+          "border-[color-mix(in_srgb,var(--cs-teal,#0daea2)_20%,transparent)] bg-[color-mix(in_srgb,var(--cs-teal,#0daea2)_8%,transparent)] text-[var(--cs-teal,#0daea2)]",
         success:
-          "border-[color-mix(in_srgb,#0daea2_30%,transparent)] bg-[color-mix(in_srgb,#0daea2_10%,transparent)] text-[#0daea2]",
+          "border-[color-mix(in_srgb,var(--cs-success,#53a88a)_30%,transparent)] bg-[color-mix(in_srgb,var(--cs-success,#53a88a)_10%,transparent)] text-[var(--cs-success,#53a88a)]",
       },
     },
     defaultVariants: {

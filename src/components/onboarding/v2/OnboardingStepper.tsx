@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "@phosphor-icons/react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import type { ShellPillId } from "./OnboardingShell";
@@ -35,10 +35,10 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                 transition={{ type: "spring", stiffness: 380, damping: 28 }}
                 className={cn(
                   "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold",
-                  step.state === "done" && "bg-[var(--ob-teal)] text-white",
+                  step.state === "done" && "bg-primary text-primary-foreground",
                   step.state === "active" &&
-                    "bg-[var(--ob-violet)] text-white ring-4 ring-[color-mix(in_srgb,var(--ob-violet)_18%,transparent)]",
-                  step.state === "pending" && "border border-[#cbd5e1] bg-white text-[#94a3b8]"
+                    "bg-[var(--cs-violet,#5a39ff)] text-white ring-4 ring-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_18%,transparent)]",
+                  step.state === "pending" && "border border-border bg-white text-muted-foreground dark:bg-card"
                 )}
               >
                 {step.state === "done" ? (
@@ -47,7 +47,7 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                     animate={{ scale: 1, rotate: 0 }}
                     transition={{ type: "spring", stiffness: 460, damping: 22 }}
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="h-4 w-4" weight="bold" />
                   </motion.span>
                 ) : (
                   <motion.span
@@ -64,24 +64,24 @@ export function OnboardingStepper({ steps, onStepClick }: OnboardingStepperProps
                 <p
                   className={cn(
                     "truncate text-[13px] font-semibold leading-tight transition-colors",
-                    step.state === "active" && "text-[#0b1220]",
-                    step.state === "done" && "text-[#0b1220]",
-                    step.state === "pending" && "text-[#94a3b8]"
+                    step.state === "active" && "text-foreground",
+                    step.state === "done" && "text-foreground",
+                    step.state === "pending" && "text-muted-foreground"
                   )}
                 >
                   {step.label}
                 </p>
-                <p className="mt-0.5 truncate text-[11px] text-[#94a3b8]">{step.description}</p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{step.description}</p>
               </div>
             </button>
             {isLast ? null : (
-              <div className="relative h-px flex-1 overflow-hidden bg-[#e5e7eb]">
+              <div className="relative h-px flex-1 overflow-hidden bg-border">
                 <motion.span
                   initial={false}
                   animate={{ scaleX: step.state === "done" ? 1 : 0 }}
                   transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                   style={{ transformOrigin: "left center" }}
-                  className="absolute inset-0 bg-[var(--ob-teal)]"
+                  className="absolute inset-0 bg-primary"
                 />
               </div>
             )}

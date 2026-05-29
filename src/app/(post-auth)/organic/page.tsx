@@ -23,9 +23,7 @@ import { redirect } from "next/navigation";
 import type { OrganicTrendGroup, OrganicTrendType } from "@/components/organic/primitives/types";
 
 type OrganicPageProps = {
-  searchParams?:
-    | Record<string, string | string[] | undefined>
-    | Promise<Record<string, string | string[] | undefined>>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 function OrganicContentSkeleton() {

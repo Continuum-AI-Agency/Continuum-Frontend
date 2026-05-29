@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
@@ -16,17 +17,14 @@ export function useCalendarRunStream() {
 
   const { setGridStatus, setGridProgress, setGridError, setGridJobId, addDraft, updateDraft } =
     useCalendarStore(
-      useCallback(
-        (s) => ({
-          setGridStatus: s.setGridStatus,
-          setGridProgress: s.setGridProgress,
-          setGridError: s.setGridError,
-          setGridJobId: s.setGridJobId,
-          addDraft: s.addDraft,
-          updateDraft: s.updateDraft,
-        }),
-        []
-      )
+      useShallow((s) => ({
+        setGridStatus: s.setGridStatus,
+        setGridProgress: s.setGridProgress,
+        setGridError: s.setGridError,
+        setGridJobId: s.setGridJobId,
+        addDraft: s.addDraft,
+        updateDraft: s.updateDraft,
+      }))
     );
 
   useEffect(

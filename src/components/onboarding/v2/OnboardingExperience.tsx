@@ -9,6 +9,9 @@ import type { StepperState } from "./OnboardingStepper";
 import { UrlScreen } from "./screens/UrlScreen";
 import { BrandDnaScreen } from "./screens/BrandDnaScreen";
 import { IntegrationsScreen } from "./screens/IntegrationsScreen";
+import { DocumentsScreen } from "./screens/DocumentsScreen";
+import { InvitesScreen } from "./screens/InvitesScreen";
+import { WelcomeScreen, hasSeenWelcome } from "./screens/WelcomeScreen";
 import { BackgroundJobsProvider, useBackgroundJobs } from "./state/BackgroundJobsProvider";
 import { runScrape, runTrendsPrewarm } from "./state/jobRunners";
 import { runAgentPreview, emptyBuckets, type AgentPreviewBuckets } from "./state/agentPreview";
@@ -29,7 +32,9 @@ import { useBrandProfileRevealCache } from "@/lib/onboarding/revealCache";
 import { timing, trackOnboardingEvent } from "@/lib/onboarding/telemetry";
 import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
 
-type ScreenIndex = 0 | 1 | 2;
+type ScreenIndex = 0 | 1 | 2 | 3 | 4;
+
+const TOTAL_STEPS = 5;
 
 const swipeVariants = {
   enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
@@ -58,14 +63,27 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const router = useRouter();
   const { show } = useToast();
   const [screen, setScreen] = useState<ScreenIndex>(resumeScreenFor(initialState));
+  const [welcomeVisible, setWelcomeVisible] = useState(false);
+  const persistedStepRef = useRef<ScreenIndex>(screen);
+
+  useEffect(() => {
+    if (resumeScreenFor(initialState) === 0 && !hasSeenWelcome()) {
+      setWelcomeVisible(true);
+    }
+  }, [initialState]);
   const directionRef = useRef<1 | -1>(1);
+  const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? "");
+  const { start, patch, jobs, reset } = useBackgroundJobs();
+  const { brandId, resetState, state, updateState } = useOnboarding();
+
   const navigate = useCallback((next: ScreenIndex) => {
     directionRef.current = next > screen ? 1 : -1;
     setScreen(next);
-  }, [screen]);
-  const [domain, setDomain] = useState<string>(initialState.brand.website ?? defaultUrl ?? "");
-  const { start, patch, jobs, reset } = useBackgroundJobs();
-  const { brandId, resetState, state } = useOnboarding();
+    if (next > persistedStepRef.current) {
+      persistedStepRef.current = next;
+      void updateState({ step: next });
+    }
+  }, [screen, updateState]);
   const { assignedIds: assignedAccountIds } = useBrandAssignedAccountIds(brandId);
   const [launching, startLaunch] = useTransition();
   const [resetting, startReset] = useTransition();
@@ -79,6 +97,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       prewarmedRef.current = false;
       launchInFlightRef.current = false;
       launchKeyRef.current = null;
+      persistedStepRef.current = 0;
       useBrandProfileRevealCache.getState().invalidateBrand(brandId);
       try {
         await resetState();
@@ -91,7 +110,8 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         return;
       }
       setDomain(defaultUrl ?? "");
-      navigate(0);
+      directionRef.current = -1;
+      setScreen(0);
     });
   };
 
@@ -154,7 +174,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       useBrandProfileRevealCache.getState().invalidateUrl(brandId, domain);
     }
     setDomain(url);
-    navigate(1);
+    navigate(1); // Documents
     patch("agentPreview", emptyBuckets());
 
     const scrapePromise = start("scrape", (signal) => runScrape(url, signal));
@@ -263,22 +283,26 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const steps = useMemo(
     () => [
       { id: "website" as const, label: "Your website", description: "Tell us where to start", state: stepState(screen, 0) },
-      { id: "integrations" as const, label: "Connect channels", description: "Link your accounts", state: stepState(screen, 1) },
-      { id: "dna" as const, label: "Brand DNA", description: "Review and launch", state: stepState(screen, 2) },
+      { id: "documents" as const, label: "Documents", description: "Add brand assets", state: stepState(screen, 1) },
+      { id: "integrations" as const, label: "Connect channels", description: "Link your accounts", state: stepState(screen, 2) },
+      { id: "invites" as const, label: "Invite team", description: "Bring teammates in", state: stepState(screen, 3) },
+      { id: "dna" as const, label: "Brand DNA", description: "Review and launch", state: stepState(screen, 4) },
     ],
     [screen]
   );
 
   const onStepClick = (id: ShellPillId) => {
     if (id === "website") navigate(0);
-    if (id === "integrations" && screen >= 1) navigate(1);
-    if (id === "dna" && screen >= 2) navigate(2);
+    if (id === "documents" && screen >= 1) navigate(1);
+    if (id === "integrations" && screen >= 2) navigate(2);
+    if (id === "invites" && screen >= 3) navigate(3);
+    if (id === "dna" && screen >= 4) navigate(4);
   };
 
   const { hint, actions } = useBottomBar({
     screen,
+    navigate,
     onChangeUrl: () => navigate(0),
-    onAdvanceToDna: () => navigate(2),
     onLaunch: handleLaunch,
     launching,
   });
@@ -293,7 +317,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   }, [screen]);
 
   useEffect(() => {
-    if (screen !== 2) return;
+    if (screen !== 4) return;
     if (jobs.agentPreview.status !== "idle") return;
     if (!domain) return;
 
@@ -324,7 +348,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       if (cancelled || !latest) return;
 
       if (latest.status === "running") {
-        trackOnboardingEvent("onboarding_step_viewed", { screen: 2, resumed: true });
+        trackOnboardingEvent("onboarding_step_viewed", { screen: 4, resumed: true });
         await start("agentPreview", (signal) =>
           runAgentPreview(
             {
@@ -427,7 +451,11 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
               retrying={jobs.scrape.status === "running"}
             />
           ) : screen === 1 ? (
-            <IntegrationsScreen onAdvance={() => navigate(2)} />
+            <DocumentsScreen totalSteps={TOTAL_STEPS} />
+          ) : screen === 2 ? (
+            <IntegrationsScreen onAdvance={() => navigate(3)} />
+          ) : screen === 3 ? (
+            <InvitesScreen totalSteps={TOTAL_STEPS} />
           ) : (
             <BrandDnaScreen
               agentBuckets={agentBuckets}
@@ -437,6 +465,9 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           )}
         </motion.div>
       </AnimatePresence>
+      {welcomeVisible ? (
+        <WelcomeScreen onDismiss={() => setWelcomeVisible(false)} />
+      ) : null}
     </OnboardingShell>
   );
 }
@@ -455,12 +486,21 @@ function resumeScreenFor(state: OnboardingState): ScreenIndex {
   const brand = state.brand;
   const hasAnyConnection = Object.values(state.connections).some((c) => c.connected);
   const hasDna = Boolean(brand.overview) || brand.colors.length > 0 || Boolean(brand.brandVoice);
-  if (hasAnyConnection || hasDna) return 2;
-  if (brand.website) return 1;
-  return 0;
+  const hasInvites = (state.invites?.length ?? 0) > 0;
+  const hasDocuments = (state.documents?.length ?? 0) > 0;
+
+  let dataFloor: ScreenIndex = 0;
+  if (brand.website) dataFloor = 1;
+  if (hasDocuments) dataFloor = 2;
+  if (hasAnyConnection) dataFloor = 3;
+  if (hasInvites) dataFloor = 4;
+  if (hasDna) dataFloor = 4;
+
+  const persistedStep = Math.min(4, Math.max(0, state.step ?? 0)) as ScreenIndex;
+  return Math.max(persistedStep, dataFloor) as ScreenIndex;
 }
 
-function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2): StepperState {
+function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2 | 3 | 4): StepperState {
   if (pillIndex < screen) return "done";
   if (pillIndex === screen) return "active";
   return "pending";
@@ -468,14 +508,14 @@ function stepState(screen: ScreenIndex, pillIndex: 0 | 1 | 2): StepperState {
 
 function useBottomBar({
   screen,
+  navigate,
   onChangeUrl,
-  onAdvanceToDna,
   onLaunch,
   launching,
 }: {
   screen: ScreenIndex;
+  navigate: (next: ScreenIndex) => void;
   onChangeUrl: () => void;
-  onAdvanceToDna: () => void;
   onLaunch: () => void;
   launching: boolean;
 }) {
@@ -487,13 +527,52 @@ function useBottomBar({
   }
   if (screen === 1) {
     return {
-      hint: "",
+      hint: "Add brand assets — or skip and we'll infer from your website.",
       actions: (
         <>
           <Button variant="outline" size="sm" onClick={onChangeUrl}>
             ← Change URL
           </Button>
-          <Button variant="brand" size="sm" onClick={onAdvanceToDna}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(2)}>
+            Skip for now
+          </Button>
+          <Button variant="default" size="sm" onClick={() => navigate(2)}>
+            Continue →
+          </Button>
+        </>
+      ),
+    };
+  }
+  if (screen === 2) {
+    return {
+      hint: "",
+      actions: (
+        <>
+          <Button variant="outline" size="sm" onClick={() => navigate(1)}>
+            ← Back
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => navigate(3)}>
+            Skip for now
+          </Button>
+          <Button variant="default" size="sm" onClick={() => navigate(3)}>
+            Continue →
+          </Button>
+        </>
+      ),
+    };
+  }
+  if (screen === 3) {
+    return {
+      hint: "Add teammates — or invite them later from Settings.",
+      actions: (
+        <>
+          <Button variant="outline" size="sm" onClick={() => navigate(2)}>
+            ← Back
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => navigate(4)}>
+            Skip for now
+          </Button>
+          <Button variant="default" size="sm" onClick={() => navigate(4)}>
             {dnaReady ? "Reveal Brand DNA →" : "Continue →"}
           </Button>
         </>

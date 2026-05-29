@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button";
 import { BrandSwitcher } from "./BrandSwitcher";
 import { useTheme } from "@/components/theme-provider";
 import { useCommandPalette } from "./CommandPaletteProvider";
+import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 
 function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams, item: { href: string }) {
   if (item.href === "/dashboard") {
@@ -73,7 +74,9 @@ function NavIcon({ icon: Icon, active, accentColor }: { icon: ElementType<{ clas
   );
 }
 
-import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
 
 function AppSidebarInner() {
   const pathname = usePathname();
@@ -85,6 +88,11 @@ function AppSidebarInner() {
   const { appearance, toggle } = useTheme();
   const { setOpen: openPalette } = useCommandPalette();
   const isAdmin = isAdminUser(user);
+  const userDisplayName =
+    readString(user?.user_metadata?.full_name) ??
+    readString(user?.user_metadata?.name) ??
+    readString(user?.email?.split("@")[0]) ??
+    "User";
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
 
   return (
@@ -432,7 +440,7 @@ function AppSidebarInner() {
                 <CurrentUserAvatar size={32} />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{user?.user_metadata?.name || "User"}</span>
+                <span className="truncate text-[0.78rem] font-medium tracking-[0.01em]">{userDisplayName}</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>

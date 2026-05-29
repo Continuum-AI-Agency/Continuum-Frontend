@@ -3,10 +3,16 @@
 import { useEffect, useRef } from "react";
 import { useBackgroundJobs, type JobKey } from "./BackgroundJobsProvider";
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import type { ScrapeResult } from "@/lib/onboarding/scrape";
+import { scrapeSchema, type ScrapeResult } from "@/lib/onboarding/scrape";
 import type { AgentPreviewBuckets } from "./agentPreview";
 import type { OnboardingPatch } from "@/lib/onboarding/state";
 import { internalizeLogo } from "@/lib/onboarding/internalizeLogo";
+
+function parseScrape(data: unknown): ScrapeResult | null {
+  if (data == null) return null;
+  const parsed = scrapeSchema.safeParse(data);
+  return parsed.success ? (parsed.data as ScrapeResult) : null;
+}
 
 export function JobPersistor() {
   const { jobs } = useBackgroundJobs();
@@ -23,7 +29,7 @@ export function JobPersistor() {
       void updateState(patch);
 
       if (key === "scrape") {
-        const scrape = jobs[key].data as ScrapeResult | null;
+        const scrape = parseScrape(jobs[key].data);
         const logoUrl = scrape?.logoUrl;
         if (logoUrl && /^https?:\/\//i.test(logoUrl) && !logoInternalized.current.has(logoUrl)) {
           logoInternalized.current.add(logoUrl);
@@ -41,13 +47,19 @@ export function JobPersistor() {
 }
 
 export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
+  const typography = scrape.typography
+    ? {
+        primary: scrape.typography.primary ?? null,
+        secondary: scrape.typography.secondary ?? null,
+      }
+    : undefined;
   return {
     brand: {
       website: scrape.url,
       name: scrape.title ?? undefined,
       logoPath: scrape.logoUrl ?? undefined,
       colors: scrape.colors,
-      typography: scrape.typography,
+      typography,
       overview: scrape.description ?? undefined,
     },
   };
@@ -55,7 +67,8 @@ export function scrapeToBrandPatch(scrape: ScrapeResult): OnboardingPatch {
 
 function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
   if (key === "scrape") {
-    return scrapeToBrandPatch(data as ScrapeResult);
+    const scrape = parseScrape(data);
+    return scrape ? scrapeToBrandPatch(scrape) : null;
   }
   if (key === "agentPreview") {
     const raw = data as AgentPreviewBuckets | { buckets: AgentPreviewBuckets } | null;

@@ -2,6 +2,7 @@ import "server-only";
 
 import { after } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { toAuthIdentity } from "@/lib/auth/claims";
 
 type SupabaseLikeError = {
   message?: string;
@@ -44,13 +45,13 @@ async function getSessionUserId() {
     return { supabase, userId: session.user.id };
   }
 
-  // Fallback: make the authoritative call if the session cookie wasn't readable.
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) {
+  const { data, error } = await supabase.auth.getClaims();
+  const identity = toAuthIdentity(data?.claims);
+  if (error || !identity) {
     throw new Error("Not authenticated");
   }
 
-  return { supabase, userId: user.id };
+  return { supabase, userId: identity.id };
 }
 
 export async function setActiveBrandPreference(brandId: string): Promise<void> {

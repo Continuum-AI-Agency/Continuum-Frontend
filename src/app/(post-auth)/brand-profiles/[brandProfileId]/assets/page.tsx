@@ -6,10 +6,11 @@ import {
 } from "@/lib/integrations/selectableAssets";
 import { BrandAssetsForm } from "./BrandAssetsForm";
 
-export default async function Page({ params }: { params: { brandProfileId: string } }) {
+export default async function Page({ params }: { params: Promise<{ brandProfileId: string }> }) {
+	const { brandProfileId } = await params;
 	const [selectableAssetsResponse, integrationSummary] = await Promise.all([
 		fetchSelectableAssetsForCurrentUser(),
-		fetchBrandIntegrationSummary(params.brandProfileId),
+		fetchBrandIntegrationSummary(brandProfileId),
 	]);
 	const mergedSelectableAssetsResponse = mergeSelectableAssetsWithBrandSummary(
 		selectableAssetsResponse,
@@ -24,7 +25,7 @@ export default async function Page({ params }: { params: { brandProfileId: strin
 	);
 	return (
 		<BrandAssetsForm
-			brandProfileId={params.brandProfileId}
+			brandProfileId={brandProfileId}
 			selectableAssetsResponse={brandSelectableAssetsResponse}
 			assignedIntegrationAccountIds={assignedIntegrationAccountIds}
 		/>

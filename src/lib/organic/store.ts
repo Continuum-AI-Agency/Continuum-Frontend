@@ -88,6 +88,12 @@ interface CalendarState {
   };
   gridError: string | null;
   gridJobId: string | null;
+  placementProgress: Record<string, {
+    percent: number;
+    stage?: string;
+    agentName?: string;
+    message?: string;
+  }>;
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
   viewMode: "week" | "month" | "list";
@@ -117,6 +123,13 @@ interface CalendarState {
   }) => void;
   setGridError: (error: string | null) => void;
   setGridJobId: (jobId: string | null) => void;
+  setPlacementProgress: (placementId: string, progress: {
+    percent: number;
+    stage?: string;
+    agentName?: string;
+    message?: string;
+  }) => void;
+  clearPlacementProgress: () => void;
   setGhosts: (dayId: string, count: number) => void;
   addEvent: (event: StreamEvent) => void;
   clearEventHistory: () => void;
@@ -202,6 +215,7 @@ export const useCalendarStore = create<CalendarState>()(
       gridProgress: { percent: 0 },
       gridError: null,
       gridJobId: null,
+      placementProgress: {},
       scheduledEvents: {},
       viewMode: "month",
       eventHistory: [],
@@ -332,6 +346,11 @@ export const useCalendarStore = create<CalendarState>()(
       setGridProgress: (progress) => set({ gridProgress: progress }),
       setGridError: (error) => set({ gridError: error }),
       setGridJobId: (jobId) => set({ gridJobId: jobId }),
+      setPlacementProgress: (placementId, progress) =>
+        set((state) => ({
+          placementProgress: { ...state.placementProgress, [placementId]: progress },
+        })),
+      clearPlacementProgress: () => set({ placementProgress: {} }),
       addEvent: (event) =>
         set((state) => ({
           eventHistory: [...state.eventHistory, event].slice(-20),
@@ -353,6 +372,7 @@ export const useCalendarStore = create<CalendarState>()(
           gridStatus: "idle",
           gridProgress: { percent: 0 },
           gridError: null,
+          placementProgress: {},
           eventHistory: [],
         })),
 

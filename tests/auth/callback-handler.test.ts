@@ -24,6 +24,7 @@ import { handleAuthCallbackRequest } from "@/lib/auth/callback-handler";
 function createRequest(url: string): NextRequest {
   return {
     url,
+    headers: new Headers(),
     cookies: {
       get: () => undefined,
     },
@@ -56,5 +57,16 @@ describe("handleAuthCallbackRequest impersonation", () => {
 
     expect(response.status).toBe(200);
     expect(response.cookies.get("is_impersonating")).toBeUndefined();
+  });
+
+  it("falls back to dashboard when next points outside the app", async () => {
+    const response = await handleAuthCallbackRequest(
+      createRequest("https://app.trycontinuum.ai/auth/callback?code=test-code&next=https://evil.example.com/phish"),
+    );
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("https://app.trycontinuum.ai/dashboard");
+    expect(html).not.toContain("evil.example.com");
   });
 });

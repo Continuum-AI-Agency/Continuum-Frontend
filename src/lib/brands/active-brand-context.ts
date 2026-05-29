@@ -1,13 +1,13 @@
 import "server-only";
 
 import { cache } from "react";
-import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { resolveActiveBrandId } from "@/lib/brands/resolve-active-brand";
 import { setActiveBrandPreference } from "@/lib/brands/preferences";
 import type { BrandSummary } from "@/lib/repositories/brandProfile";
-import type { User } from "@supabase/supabase-js";
+import { requireClaimsIdentity } from "@/lib/auth/claims";
+import type { AuthIdentity } from "@/lib/auth/identity";
 
 function describeError(error: unknown): string {
   if (error instanceof Error) {
@@ -38,7 +38,7 @@ export type ActiveBrandContext = {
     role: string | null;
   }>;
   activeBrandTier: number;
-  user: User | null;
+  user: AuthIdentity | null;
 };
 
 type BrandPermissionRow = {
@@ -59,7 +59,7 @@ function isStatementTooComplex(error: unknown): boolean {
   return (error as { code?: string }).code === "54001";
 }
 
-async function fetchAccessibleBrandRows(user: User, supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+async function fetchAccessibleBrandRows(user: AuthIdentity, supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   const [{ data: perms, error: permsError }, { data: invites, error: invitesError }] = await Promise.all([
     supabase
       .schema("brand_profiles")
@@ -131,13 +131,7 @@ async function fetchAccessibleBrandRows(user: User, supabase: Awaited<ReturnType
 
 export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext> => {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
+  const user = await requireClaimsIdentity();
 
   const { permissions: perms, invites } = await fetchAccessibleBrandRows(user, supabase);
 

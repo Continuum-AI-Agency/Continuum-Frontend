@@ -1,7 +1,7 @@
 import { useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
 import { BRAND_VOICE_TAGS, type BrandVoiceTag } from "@/lib/onboarding/state";
 import { EditablePopover } from "./EditablePopover";
-import { Plus, X } from "lucide-react";
+import { Plus, X } from "@phosphor-icons/react";
 
 export function TonePicker() {
   const { state, updateState } = useOnboarding();
@@ -17,7 +17,7 @@ export function TonePicker() {
       {tags.map((tag) => (
         <span
           key={tag}
-          className="group inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,#5a39ff_20%,transparent)] bg-[color-mix(in_srgb,#5a39ff_8%,transparent)] px-2.5 py-1 text-[11px] font-medium text-[#5a39ff]"
+          className="group inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_20%,transparent)] bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] px-2.5 py-1 text-[11px] font-medium text-[var(--cs-violet,#5a39ff)]"
         >
           {tag}
           <button
@@ -35,14 +35,14 @@ export function TonePicker() {
         trigger={
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#94a3b8]/60 bg-white px-2.5 py-1 text-[11px] font-medium text-[#94a3b8] transition-colors hover:border-[#5a39ff] hover:text-[#5a39ff]"
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-muted-foreground/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
           >
             <Plus className="h-3 w-3" /> Add
           </button>
         }
         content={(close) => (
           <div className="space-y-1">
-            <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">Tone of voice</p>
+            <p className="px-1 pb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Tone of voice</p>
             {BRAND_VOICE_TAGS.map((tag) => {
               const active = tags.includes(tag);
               return (
@@ -54,7 +54,7 @@ export function TonePicker() {
                     if (!active) close();
                   }}
                   className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors ${
-                    active ? "bg-[color-mix(in_srgb,#5a39ff_8%,transparent)] text-[#5a39ff]" : "hover:bg-[#f2f4f8] text-[#0b1220]"
+                    active ? "bg-[color-mix(in_srgb,var(--cs-violet,#5a39ff)_8%,transparent)] text-[var(--cs-violet,#5a39ff)]" : "hover:bg-muted text-foreground"
                   }`}
                 >
                   {tag}
