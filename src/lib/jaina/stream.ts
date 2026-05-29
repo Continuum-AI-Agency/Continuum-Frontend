@@ -19,6 +19,8 @@ import {
   responseCheckpointReportSchema,
   responseBlockDeltaSchema,
   responseBlockDeltaV2Schema,
+  responseBlockDeltaV2TolerantSchema,
+  degradeToNarrativeBlockV2,
   checkpointReportV2Schema,
   type CheckpointReportV2,
   type CheckpointBlockV2,
@@ -1879,6 +1881,52 @@ export function reduceJainaStreamEvent(
             source: v2Payload.source,
             agent: v2Payload.agent,
             block: v2Payload.block,
+          },
+        ].sort((left, right) => left.sequence - right.sequence);
+
+        const existingMeta = state.reportV2?._meta;
+        const progressiveV2: CheckpointReportV2 = {
+          language: state.reportV2?.language ?? "en",
+          executive_summary: state.reportV2?.executive_summary ?? "",
+          blocks: nextV2Deltas.map((entry) => entry.block),
+          follow_up_questions: state.reportV2?.follow_up_questions ?? [],
+          media_map: state.reportV2?.media_map ?? {},
+          _meta: {
+            schema_version: "2" as const,
+            block_count: existingMeta?.block_count ?? nextV2Deltas.length,
+            has_charts: existingMeta?.has_charts ?? nextV2Deltas.some((d) => d.block.category === "chart"),
+            has_media: existingMeta?.has_media ?? false,
+            primary_scope: existingMeta?.primary_scope ?? nextV2Deltas[0]?.block.scope ?? "",
+          },
+        };
+
+        return {
+          ...nextBase,
+          blockDeltasV2: nextV2Deltas,
+          reportV2: progressiveV2,
+          finalContentKind: "report",
+        };
+      }
+
+      // Fail-visible: a block that carries a V2 category but fails contract
+      // validation degrades to a narrative placeholder instead of being dropped.
+      const tolerant = responseBlockDeltaV2TolerantSchema.safeParse(event);
+      if (tolerant.success && tolerant.data.data) {
+        const tolerantPayload = tolerant.data.data;
+        if (tolerantPayload.block_category && tolerantPayload.block_category !== "chart") {
+          return nextBase;
+        }
+        if (state.blockDeltasV2.some((entry) => entry.sequence === tolerantPayload.sequence)) {
+          return nextBase;
+        }
+        const degradedBlock = degradeToNarrativeBlockV2(tolerantPayload.block);
+        const nextV2Deltas = [
+          ...state.blockDeltasV2,
+          {
+            sequence: tolerantPayload.sequence,
+            source: tolerantPayload.source,
+            agent: tolerantPayload.agent,
+            block: degradedBlock,
           },
         ].sort((left, right) => left.sequence - right.sequence);
 

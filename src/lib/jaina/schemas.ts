@@ -1,4 +1,19 @@
 import { z } from "zod";
+import {
+  blockBaseSchema as contractBlockBaseSchema,
+  narrativeBlockSchema as contractNarrativeBlockSchema,
+  metricGridBlockSchema as contractMetricGridBlockSchema,
+  chartBlockBaseSchema as contractChartBlockBaseSchema,
+  chartBlockSchema as contractChartBlockSchema,
+  dataTableBlockSchema as contractDataTableBlockSchema,
+  insightListBlockSchema as contractInsightListBlockSchema,
+  comparisonBlockSchema as contractComparisonBlockSchema,
+  metricItemSchema as contractMetricItemSchema,
+  tableColumnSchema as contractTableColumnSchema,
+  insightListItemSchema as contractInsightListItemSchema,
+  comparisonPairSchema as contractComparisonPairSchema,
+  chartSeriesConfigSchema as contractChartSeriesConfigSchema,
+} from "@continuum/contracts";
 import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
 import {
   agentMentionMetadataSchema,
@@ -326,12 +341,33 @@ export type FrontendCheckpointReport = z.infer<typeof frontendCheckpointReportSc
 // V2 Checkpoint Block Schemas
 // ============================================================================
 
+// The V2 *block* shapes are now imported from the canonical contract
+// (`@continuum/contracts`, ported from the Backend runtime schema) so the
+// Backend emit side and this renderer share ONE definition. See root AGENTS.md
+// §4 "Shared contracts". The Backend validates/repairs/degrades every block
+// against this same schema before emit.
+//
+// Two render-only concerns stay layered on TOP of the canonical shape rather
+// than forked into a parallel copy:
+//   1. `priority` — the contract types it as the enum primary/secondary/
+//      supplementary, but `JainaReportV2` sorts blocks with `a.priority -
+//      b.priority` (numeric) and `persistedReport.test` asserts the
+//      "primary"→0 / "secondary"→1 rank mapping. We preprocess any string OR
+//      enum value into a numeric rank for the renderer.
+//   2. `value_format` / `format` — the contract's enums cover the four formats
+//      the Backend emits; `formatValue` additionally understands legacy
+//      `integer`/`compact`/`text`. We widen those fields (superset) so old
+//      persisted reports that used them still render. New emits stay within the
+//      contract enum.
+
 export const severitySchema = z.enum(["positive", "neutral", "watch", "risk"]);
 export type Severity = z.infer<typeof severitySchema>;
 
 export const changeDirectionSchema = z.enum(["up", "down", "flat"]);
 export type ChangeDirection = z.infer<typeof changeDirectionSchema>;
 
+// Render-only superset of the contract format enums (adds legacy
+// integer/compact/text understood by `formatValue`).
 export const valueFormatSchema = z.enum([
   "currency",
   "percent",
@@ -355,9 +391,13 @@ export type CheckpointBlockCategoryV2 = z.infer<typeof checkpointBlockCategoryV2
 const BLOCK_PRIORITY_RANK: Record<string, number> = {
   primary: 0,
   secondary: 1,
+  supplementary: 2,
   tertiary: 2,
 };
 
+// Render-only: the contract `priority` is an enum, but the renderer sorts
+// numerically. Accept the enum strings, legacy rank strings, or raw numbers and
+// project them onto a numeric rank.
 const blockPriorityV2Schema = z.preprocess((value) => {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
@@ -367,16 +407,16 @@ const blockPriorityV2Schema = z.preprocess((value) => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return value;
-}, z.number().int().nonnegative().default(0));
+}, z.number().int().nonnegative().default(1));
 
-const checkpointBlockBaseV2Schema = z.object({
-  block_id: z.string().min(1),
-  category: checkpointBlockCategoryV2Schema,
-  scope: z.string().min(1),
-  title: z.string().min(1),
+// Override the contract base `priority` with the numeric-rank render shape.
+const checkpointBlockBaseV2Schema = contractBlockBaseSchema.extend({
   priority: blockPriorityV2Schema,
 });
 
+// Narrative highlights: the contract narrative carries richer insight items;
+// the renderer (`NarrativeBlock`, `reportExport`) only reads category/text/
+// severity and tolerates a missing category, so keep the lenient shape.
 export const highlightItemSchema = z.object({
   category: z.string().nullish(),
   text: z.string(),
@@ -384,104 +424,71 @@ export const highlightItemSchema = z.object({
 });
 export type HighlightItem = z.infer<typeof highlightItemSchema>;
 
-export const narrativeBlockV2Schema = checkpointBlockBaseV2Schema.extend({
-  category: z.literal("narrative"),
+export const narrativeBlockV2Schema = contractNarrativeBlockSchema.extend({
+  priority: blockPriorityV2Schema,
   body: z.string(),
   highlights: z.array(highlightItemSchema).default([]),
 });
 export type NarrativeBlockV2 = z.infer<typeof narrativeBlockV2Schema>;
 
-export const metricItemV2Schema = z.object({
-  label: z.string(),
-  value: z.union([z.number(), z.string()]),
-  unit: z.string().nullish(),
+export const metricItemV2Schema = contractMetricItemSchema.extend({
   format: valueFormatSchema.nullish(),
-  change: z.number().nullish(),
-  change_direction: changeDirectionSchema.nullish(),
-  severity: severitySchema.nullish(),
 });
 export type MetricItemV2 = z.infer<typeof metricItemV2Schema>;
 
-export const metricGridBlockV2Schema = checkpointBlockBaseV2Schema.extend({
-  category: z.literal("metric_grid"),
+export const metricGridBlockV2Schema = contractMetricGridBlockSchema.extend({
+  priority: blockPriorityV2Schema,
   metrics: z.array(metricItemV2Schema).min(1),
 });
 export type MetricGridBlockV2 = z.infer<typeof metricGridBlockV2Schema>;
 
-export const chartConfigEntrySchema = z.object({
-  label: z.string(),
-  color: z.string(),
-});
+export const chartConfigEntrySchema = contractChartSeriesConfigSchema;
 
-export const chartBlockV2Schema = checkpointBlockBaseV2Schema.extend({
-  category: z.literal("chart"),
-  chart_type: z.enum(["line", "bar", "area", "pie", "doughnut", "stacked_bar", "radar"]),
-  category_key: z.string(),
-  value_key: z.string().nullish(),
+export const chartBlockV2Schema = contractChartBlockBaseSchema.extend({
+  priority: blockPriorityV2Schema,
   value_format: valueFormatSchema.optional(),
-  description: z.string().nullish(),
-  annotation: z.string().nullish(),
-  x_axis_label: z.string().nullish(),
-  y_axis_label: z.string().nullish(),
-  data: z.array(z.record(z.string(), z.unknown())),
-  chart_config: z.record(z.string(), chartConfigEntrySchema),
 });
 export type ChartBlockV2 = z.infer<typeof chartBlockV2Schema>;
 
-export const tableColumnV2Schema = z.object({
-  key: z.string(),
-  label: z.string(),
+export const tableColumnV2Schema = contractTableColumnSchema.extend({
   format: valueFormatSchema.nullish(),
-  align: z.enum(["left", "center", "right"]).nullish(),
 });
 export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
 
-export const dataTableBlockV2Schema = checkpointBlockBaseV2Schema.extend({
-  category: z.literal("data_table"),
+export const dataTableBlockV2Schema = contractDataTableBlockSchema.extend({
+  priority: blockPriorityV2Schema,
   columns: z.array(tableColumnV2Schema).min(1),
-  rows: z.array(z.record(z.string(), z.unknown())),
-  notes: z.string().nullish(),
 });
 export type DataTableBlockV2 = z.infer<typeof dataTableBlockV2Schema>;
 
-export const insightItemV2Schema = z.object({
-  item_type: z.enum(["recommendation", "insight", "action", "question"]),
-  title: z.string(),
-  summary: z.string(),
+// Render leniency: the contract requires non-empty rationale/impact (the
+// Backend repairs to satisfy that before emit), but the renderer treats both as
+// optional (`item.rationale ? ... : ""`). Legacy persisted reports may omit
+// them, so keep them optional here to avoid dropping old reports.
+export const insightItemV2Schema = contractInsightListItemSchema.extend({
   rationale: z.string().nullish(),
   impact: z.string().nullish(),
-  severity: severitySchema.nullish(),
-  priority: z.string().nullish(),
 });
 export type InsightItemV2 = z.infer<typeof insightItemV2Schema>;
 
-export const insightListBlockV2Schema = checkpointBlockBaseV2Schema.extend({
-  category: z.literal("insight_list"),
+export const insightListBlockV2Schema = contractInsightListBlockSchema.extend({
+  priority: blockPriorityV2Schema,
   items: z.array(insightItemV2Schema).min(1),
 });
 export type InsightListBlockV2 = z.infer<typeof insightListBlockV2Schema>;
 
-export const comparisonPairSchema = z.object({
-  label: z.string(),
-  before: z.union([z.number(), z.string()]),
-  after: z.union([z.number(), z.string()]),
-  unit: z.string().nullish(),
+export const comparisonPairSchema = contractComparisonPairSchema.extend({
   format: valueFormatSchema.nullish(),
-  change: z.number().nullish(),
-  change_direction: changeDirectionSchema.nullish(),
-  severity: severitySchema.nullish(),
 });
 export type ComparisonPair = z.infer<typeof comparisonPairSchema>;
 
-export const comparisonBlockV2Schema = checkpointBlockBaseV2Schema.extend({
-  category: z.literal("comparison"),
-  before_label: z.string(),
-  after_label: z.string(),
+export const comparisonBlockV2Schema = contractComparisonBlockSchema.extend({
+  priority: blockPriorityV2Schema,
   pairs: z.array(comparisonPairSchema).min(1),
 });
 export type ComparisonBlockV2 = z.infer<typeof comparisonBlockV2Schema>;
 
-export const checkpointBlockV2Schema = z.discriminatedUnion("category", [
+const checkpointBlockV2UnionSchema = z.discriminatedUnion("category", [
   narrativeBlockV2Schema,
   metricGridBlockV2Schema,
   chartBlockV2Schema,
@@ -489,7 +496,90 @@ export const checkpointBlockV2Schema = z.discriminatedUnion("category", [
   insightListBlockV2Schema,
   comparisonBlockV2Schema,
 ]);
-export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2Schema>;
+
+// Re-apply the contract's chart-renderability invariants (category_key present
+// on every row; for cartesian charts every chart_config series key appears in a
+// data row). The discriminated union can't hold a ZodEffects member, so the
+// chart branch is validated against the contract's refined `chartBlockSchema`.
+export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine(
+  (block, ctx) => {
+    if (block.category !== "chart") return;
+    // Re-parse against the contract's refined chart schema to re-apply the
+    // chart-renderability invariants. Our union has already projected
+    // `priority` (→ number) and `value_format` (→ render superset) onto shapes
+    // the contract's base would reject; a base-field rejection short-circuits
+    // the refine before the invariant checks run, so normalize those two fields
+    // to contract-valid values first, then forward only the invariant issues
+    // (data/chart_config paths).
+    const normalizedForInvariants = {
+      ...block,
+      priority: "secondary" as const,
+      value_format: "number" as const,
+    };
+    const chartResult = contractChartBlockSchema.safeParse(normalizedForInvariants);
+    if (chartResult.success) return;
+    const invariantPaths = new Set(["data", "chart_config"]);
+    for (const issue of chartResult.error.issues) {
+      if (issue.path.length > 0 && invariantPaths.has(String(issue.path[0]))) {
+        // Re-emit as a well-typed custom issue (forwarding the raw $ZodIssue
+        // union trips Zod 4's addIssue input typing on the unrecognized_keys
+        // variant). The invariant issues are all code:"custom" anyway.
+        ctx.addIssue({ code: "custom", message: issue.message, path: [...issue.path] });
+      }
+    }
+  },
+);
+export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
+
+// Fail-visible degradation — mirrors the Backend's `degradeToNarrativeBlock`
+// (App/agents-ts/Jaina/src/agents/orchestrator.ts). When a block fails contract
+// validation we surface a visible narrative placeholder instead of silently
+// dropping it, so the user sees that a section was produced but couldn't render.
+const asRenderRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const pickRenderString = (value: unknown, fallback: string): string =>
+  typeof value === "string" && value.trim() ? value : fallback;
+
+export function degradeToNarrativeBlockV2(block: unknown): NarrativeBlockV2 {
+  const rec = asRenderRecord(block);
+  const category = typeof rec.category === "string" ? rec.category : "content";
+  return narrativeBlockV2Schema.parse({
+    block_id: pickRenderString(rec.block_id, "block_degraded"),
+    category: "narrative",
+    scope: pickRenderString(rec.scope, "account"),
+    title: pickRenderString(rec.title, "Section unavailable"),
+    priority: "supplementary",
+    body: `This ${category} block could not be rendered.`,
+    highlights: [],
+  });
+}
+
+// A blocks array that NEVER silently drops a block: each entry is validated
+// against the canonical block schema; on failure it is replaced by a visible
+// degraded narrative placeholder (with a console.warn for diagnostics). Used by
+// both the live stream report and persisted-report ingestion.
+export const tolerantCheckpointBlocksV2Schema = z
+  .array(z.unknown())
+  .transform((rawBlocks) =>
+    rawBlocks.map((rawBlock) => {
+      const parsed = checkpointBlockV2Schema.safeParse(rawBlock);
+      if (parsed.success) return parsed.data;
+      const rec = asRenderRecord(rawBlock);
+      // eslint-disable-next-line no-console -- render-boundary diagnostic
+      console.warn(
+        "Jaina report block failed contract validation; rendering degraded placeholder.",
+        {
+          category: rec.category,
+          block_id: rec.block_id,
+          issues: parsed.error.issues,
+        },
+      );
+      return degradeToNarrativeBlockV2(rawBlock);
+    }),
+  );
 
 export const mediaMapEntrySchema = z.object({
   image_url: z.string(),
@@ -513,7 +603,7 @@ export const checkpointReportV2MetaSchema = z.object({
 export const checkpointReportV2Schema = z.object({
   language: z.string().default("en"),
   executive_summary: z.string().default(""),
-  blocks: z.array(checkpointBlockV2Schema).default([]),
+  blocks: tolerantCheckpointBlocksV2Schema.default([]),
   follow_up_questions: z.array(z.string()).default([]),
   media_map: mediaMapSchema.default({}),
   _meta: checkpointReportV2MetaSchema,
@@ -791,6 +881,23 @@ export const responseBlockDeltaV2Schema = streamEventSchema(
     block_category: z.string().optional(),
     chart_type: z.string().optional(),
     block: checkpointBlockV2Schema,
+  })
+);
+
+// Envelope for a V2 block delta whose block is parsed tolerantly: a block that
+// carries a V2 category but fails contract validation degrades to a visible
+// narrative placeholder instead of dropping the delta. Legacy (non-V2-category)
+// blocks are excluded by `checkpointBlockCategoryV2Schema` so they still fall
+// through to the legacy delta path.
+export const responseBlockDeltaV2TolerantSchema = streamEventSchema(
+  "response.block.delta",
+  z.object({
+    sequence: z.number().int().nonnegative(),
+    source: z.string(),
+    agent: z.string().optional(),
+    block_category: z.string().optional(),
+    chart_type: z.string().optional(),
+    block: z.object({ category: checkpointBlockCategoryV2Schema }).passthrough(),
   })
 );
 
