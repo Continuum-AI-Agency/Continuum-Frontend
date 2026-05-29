@@ -488,4 +488,53 @@ describe('buildNodePayload', () => {
         expect(payload?.prompt).toBe('');
     });
   });
+
+  describe('variationCount → num_images in buildNanoGenPayload', () => {
+    const makeNode = (model: string, variationCount?: 1 | 4): StudioNode => ({
+      id: 'nano',
+      type: 'nanoGen',
+      position: { x: 0, y: 0 },
+      data: { model, positivePrompt: 'test', aspectRatio: '1:1', variationCount } as any,
+    });
+
+    it('omits numImages when variationCount is 1', () => {
+      const payload = buildNanoGenPayload(makeNode('nano-banana', 1), new Map(), [], []);
+      expect(payload?.numImages).toBeUndefined();
+    });
+
+    it('omits numImages when variationCount is not set', () => {
+      const payload = buildNanoGenPayload(makeNode('nano-banana'), new Map(), [], []);
+      expect(payload?.numImages).toBeUndefined();
+    });
+
+    it('sets numImages to 4 for nano-banana with variationCount 4', () => {
+      const payload = buildNanoGenPayload(makeNode('nano-banana', 4), new Map(), [], []);
+      expect(payload?.numImages).toBe(4);
+    });
+
+    it('sets numImages to 4 for nano-banana-pro with variationCount 4', () => {
+      const payload = buildNanoGenPayload(makeNode('nano-banana-pro', 4), new Map(), [], []);
+      expect(payload?.numImages).toBe(4);
+    });
+
+    it('sets numImages to 4 for nano-banana-2 with variationCount 4', () => {
+      const payload = buildNanoGenPayload(makeNode('nano-banana-2', 4), new Map(), [], []);
+      expect(payload?.numImages).toBe(4);
+    });
+
+    it('sets numImages to 4 for gpt-image-2 with variationCount 4', () => {
+      const payload = buildNanoGenPayload(makeNode('gpt-image-2', 4), new Map(), [], []);
+      expect(payload?.numImages).toBe(4);
+    });
+
+    it('sets numImages to 4 for flux-2-pro with variationCount 4', () => {
+      const payload = buildNanoGenPayload(makeNode('flux-2-pro', 4), new Map(), [], []);
+      expect(payload?.numImages).toBe(4);
+    });
+
+    it('sets numImages to 4 for flux-2-max with variationCount 4', () => {
+      const payload = buildNanoGenPayload(makeNode('flux-2-max', 4), new Map(), [], []);
+      expect(payload?.numImages).toBe(4);
+    });
+  });
 });

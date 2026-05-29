@@ -14,7 +14,7 @@ import {
   resolveVideoGeneratorModel,
 } from './videoModel';
 
-function resolveInputValue(
+export function resolveInputValue(
   nodeId: string,
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
@@ -34,6 +34,13 @@ function resolveInputValue(
     }
     if (sourceOutput.type === 'image') {
       return { image: sourceOutput.base64 };
+    }
+    if (sourceOutput.type === 'images') {
+      const handleIndex = incomingEdge.sourceHandle === 'image' || !incomingEdge.sourceHandle
+        ? 0
+        : parseInt(incomingEdge.sourceHandle.replace('image-', ''), 10) || 0;
+      const item = sourceOutput.items[handleIndex] ?? sourceOutput.items[0];
+      return item ? { image: item.base64 } : undefined;
     }
     return undefined;
   }
@@ -162,6 +169,11 @@ async function resolveImageInput(
   const output = resolvedData.get(edge.source);
   if (output?.type === 'image' && output.base64) {
     return { base64: output.base64, mimeType: output.mimeType };
+  }
+  if (output?.type === 'images') {
+    const idx = edge.sourceHandle === 'image' || !edge.sourceHandle ? 0 : parseInt(edge.sourceHandle.replace('image-', ''), 10) || 0;
+    const item = output.items[idx] ?? output.items[0];
+    if (item) return { base64: item.base64, mimeType: item.mimeType };
   }
 
   const sourceNode = nodeById.get(edge.source);
@@ -358,13 +370,18 @@ export function buildNanoGenPayload(
           }
       }
 
-      if (output?.type === 'image') {
-        return {
-          data: output.base64,
-          mimeType: output.mimeType,
-          weight: 1,
-          referenceType: 'asset' as const,
-        };
+      const resolvedBase64 = output?.type === 'image'
+        ? { base64: output.base64, mimeType: output.mimeType }
+        : output?.type === 'images'
+          ? (() => {
+              const idx = edge.sourceHandle === 'image' || !edge.sourceHandle ? 0 : parseInt(edge.sourceHandle.replace('image-', ''), 10) || 0;
+              const item = output.items[idx] ?? output.items[0];
+              return item ? { base64: item.base64, mimeType: item.mimeType } : null;
+            })()
+          : null;
+
+      if (resolvedBase64) {
+        return { data: resolvedBase64.base64, mimeType: resolvedBase64.mimeType, weight: 1, referenceType: 'asset' as const };
       }
       return null;
     })
@@ -388,6 +405,7 @@ export function buildNanoGenPayload(
               ? 'fal-ai/flux-2-max/edit'
               : data.model;
   const isHighFidelityNanoModel = data.model === 'nano-banana-pro' || data.model === 'nano-banana-2';
+  const supportsVariations = true;
   const imageSize = data.model === 'nano-banana-pro'
     ? (data.imageSize === '1K' || data.imageSize === '2K' || data.imageSize === '4K' ? data.imageSize : '1K')
     : data.model === 'nano-banana-2'
@@ -415,6 +433,9 @@ export function buildNanoGenPayload(
     resolution,
     imageSize: isHighFidelityNanoModel ? imageSize : undefined,
     referenceImages: referenceImages && referenceImages.length > 0 ? referenceImages : undefined,
+    numImages: supportsVariations && data.variationCount && data.variationCount > 1
+      ? data.variationCount
+      : undefined,
   };
 }
 
@@ -518,13 +539,18 @@ export function buildVeoPayload(
               }
           }
 
-          if (output?.type === 'image') {
-            return {
-              data: output.base64,
-              mimeType: output.mimeType,
-              weight: 1,
-              referenceType: 'asset' as const,
-            };
+          const resolvedBase64 = output?.type === 'image'
+            ? { base64: output.base64, mimeType: output.mimeType }
+            : output?.type === 'images'
+              ? (() => {
+                  const idx = edge.sourceHandle === 'image' || !edge.sourceHandle ? 0 : parseInt(edge.sourceHandle.replace('image-', ''), 10) || 0;
+                  const item = output.items[idx] ?? output.items[0];
+                  return item ? { base64: item.base64, mimeType: item.mimeType } : null;
+                })()
+              : null;
+
+          if (resolvedBase64) {
+            return { data: resolvedBase64.base64, mimeType: resolvedBase64.mimeType, weight: 1, referenceType: 'asset' as const };
           }
           return null;
         }).filter(Boolean) as GenerationPayload['referenceImages'];
@@ -628,6 +654,7 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
       weight: img.weight,
       referenceType: img.referenceType,
     })),
+    num_images: payload.numImages,
   };
 }
 

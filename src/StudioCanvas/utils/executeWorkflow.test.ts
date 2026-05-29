@@ -689,4 +689,74 @@ describe('executeWorkflow', () => {
     const payload = executeGeneration.mock.calls[0][1];
     expect(payload.reference_images?.[0]?.data).toBe('original_only');
   });
+
+  it('should store generatedImages array when output type is images', async () => {
+    const nodes: StudioNode[] = [
+      { id: 'gen', position: { x: 0, y: 0 }, data: { model: 'gpt-image-2', positivePrompt: 'test', aspectRatio: '1:1', variationCount: 4 }, type: 'nanoGen' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges([]);
+
+    const executeGeneration = mock(async () => ({
+      success: true,
+      output: {
+        type: 'images',
+        items: [
+          { base64: 'img0', mimeType: 'image/png' },
+          { base64: 'img1', mimeType: 'image/png' },
+          { base64: 'img2', mimeType: 'image/png' },
+          { base64: 'img3', mimeType: 'image/png' },
+        ],
+      },
+    }));
+
+    await executeWorkflow(buildControls(executeGeneration) as any);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const updatedNode = useStudioStore.getState().nodes.find(n => n.id === 'gen');
+    const generatedImages = updatedNode?.data.generatedImages as Array<{ dataUrl: string; url?: string }> | undefined;
+    expect(generatedImages).toHaveLength(4);
+    expect(generatedImages?.[0].dataUrl).toBe('data:image/png;base64,img0');
+    expect(updatedNode?.data.generatedImage).toBe('data:image/png;base64,img0');
+    expect(updatedNode?.data.isComplete).toBe(true);
+  });
+
+  it('should route a specific variation to a downstream node via image-N handle', async () => {
+    const { buildNanoGenPayload, toBackendPayload } = await import('./buildNodePayload');
+
+    const genNode: StudioNode = {
+      id: 'gen',
+      position: { x: 0, y: 0 },
+      type: 'nanoGen',
+      data: { model: 'gpt-image-2', positivePrompt: 'test', aspectRatio: '1:1' } as any,
+    };
+    const consumerNode: StudioNode = {
+      id: 'consumer',
+      position: { x: 100, y: 0 },
+      type: 'nanoGen',
+      data: { model: 'nano-banana', positivePrompt: 'use it', aspectRatio: '1:1' } as any,
+    };
+    const allNodes = [genNode, consumerNode];
+    const allEdges: Edge[] = [
+      { id: 'e1', source: 'gen', target: 'consumer', sourceHandle: 'image-2', targetHandle: 'ref-image' } as Edge,
+    ];
+    const resolvedOutputs = new Map([
+      ['gen', {
+        type: 'images' as const,
+        items: [
+          { base64: 'img0', mimeType: 'image/png' },
+          { base64: 'img1', mimeType: 'image/png' },
+          { base64: 'img2', mimeType: 'image/png' },
+          { base64: 'img3', mimeType: 'image/png' },
+        ],
+      }],
+    ]);
+
+    const payload = buildNanoGenPayload(consumerNode, resolvedOutputs, allNodes, allEdges, 'brand');
+    const backend = toBackendPayload(payload!);
+
+    expect(backend.reference_images).toHaveLength(1);
+    expect(backend.reference_images?.[0]).toMatchObject({ data: 'img2' });
+  });
 });

@@ -41,8 +41,10 @@ export interface NanoGenNodeData extends BaseNodeData {
   guidance?: number;
   scheduler?: string;
   promptEnhancement?: boolean;
+  variationCount?: 1 | 4;
   generatedImage?: string | Blob;
   generatedImageUrl?: string;
+  generatedImages?: Array<{ dataUrl: string; url?: string }>;
 }
 
 export interface StringNodeData extends BaseNodeData {

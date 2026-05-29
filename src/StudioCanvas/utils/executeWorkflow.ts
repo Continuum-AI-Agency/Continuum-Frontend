@@ -79,6 +79,11 @@ const resolveImageInput = (
   if (output?.type === 'image' && output.base64) {
     return { base64: output.base64, mimeType: output.mimeType };
   }
+  if (output?.type === 'images') {
+    const idx = edge.sourceHandle === 'image' || !edge.sourceHandle ? 0 : parseInt(edge.sourceHandle.replace('image-', ''), 10) || 0;
+    const item = output.items[idx] ?? output.items[0];
+    if (item) return { base64: item.base64, mimeType: item.mimeType };
+  }
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'image') {
@@ -458,13 +463,22 @@ export async function executeWorkflow(
     // Pre-populate completed generator outputs if they were not reset
     if (!resetNodeIds.includes(node.id) && (node.data as any).isComplete && !(node.data as any).error) {
       if (node.type === 'nanoGen') {
-         const genImage = (node.data as any).generatedImage as string | undefined;
-         const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
-         if (genImage) {
-            const parsed = parseDataUrl(genImage);
-            if (parsed?.base64) {
-                resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType, url: genImageUrl });
-            }
+         const genImages = (node.data as any).generatedImages as Array<{ dataUrl: string; url?: string }> | undefined;
+         if (genImages && genImages.length > 1) {
+           const items = genImages.flatMap((img) => {
+             const parsed = parseDataUrl(img.dataUrl);
+             return parsed?.base64 ? [{ base64: parsed.base64, mimeType: parsed.mimeType, url: img.url }] : [];
+           });
+           if (items.length > 0) resolvedOutputs.set(node.id, { type: 'images', items });
+         } else {
+           const genImage = (node.data as any).generatedImage as string | undefined;
+           const genImageUrl = (node.data as any).generatedImageUrl as string | undefined;
+           if (genImage) {
+             const parsed = parseDataUrl(genImage);
+             if (parsed?.base64) {
+               resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType, url: genImageUrl });
+             }
+           }
          }
       } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo' || node.type === 'videoEditor') {
          const genVideo = ((node.data as any).generatedVideo as string | undefined) ?? ((node.data as any).generatedVideoUrl as string | undefined);
@@ -498,7 +512,24 @@ export async function executeWorkflow(
 
   const setNodeOutput = (nodeId: string, output: NodeOutput) => {
     resolvedOutputs.set(nodeId, output);
-    if (output.type === 'image') {
+    if (output.type === 'images') {
+      const generatedImages = output.items.map((item) => {
+        const parsed = item.base64.startsWith("data:") ? parseDataUrl(item.base64) : null;
+        const mimeType = parsed?.mimeType ?? item.mimeType;
+        const base64 = (parsed?.base64 ?? item.base64).replace(/\s+/g, "");
+        const dataUrl = buildDataUrl(mimeType, base64);
+        const url = item.url && !item.url.startsWith("data:") ? item.url : undefined;
+        return { dataUrl, url };
+      });
+      useStudioStore.getState().updateNodeData(nodeId, {
+        generatedImages,
+        generatedImage: generatedImages[0]?.dataUrl,
+        generatedImageUrl: generatedImages[0]?.url,
+        isComplete: true,
+        isExecuting: false,
+      });
+      useStudioStore.getState().triggerSave();
+    } else if (output.type === 'image') {
       const parsed = output.base64.startsWith("data:") ? parseDataUrl(output.base64) : null;
       const mimeType = parsed?.mimeType ?? output.mimeType;
       const base64 = (parsed?.base64 ?? output.base64).replace(/\s+/g, "");
@@ -513,6 +544,7 @@ export async function executeWorkflow(
       useStudioStore.getState().updateNodeData(nodeId, {
         generatedImage: dataUrl,
         generatedImageUrl: persistentUrl,
+        generatedImages: undefined,
         isComplete: true,
         isExecuting: false
       });

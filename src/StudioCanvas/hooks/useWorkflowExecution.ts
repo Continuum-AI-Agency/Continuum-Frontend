@@ -116,6 +116,7 @@ export function useWorkflowExecution() {
         const decoder = new TextDecoder();
         let buffer = "";
         let finalOutput: NodeOutput | undefined;
+        const imageAccumulator: Array<{ base64: string; mimeType: string; url?: string }> = [];
 
         const processChunk = (chunk: string) => {
           const events = chunk.split(/\r?\n\r?\n/);
@@ -200,12 +201,7 @@ export function useWorkflowExecution() {
                   hasUrl: Boolean(persistentImageUrl),
                 });
                 if (expectedMedium === "image") {
-                  finalOutput = {
-                    type: "image",
-                    base64: normalizedImageBase64,
-                    mimeType: imageMimeType,
-                    url: persistentImageUrl,
-                  };
+                  imageAccumulator.push({ base64: normalizedImageBase64, mimeType: imageMimeType, url: persistentImageUrl });
                 }
               }
 
@@ -244,7 +240,7 @@ export function useWorkflowExecution() {
 
               if ((eventName === "video" || eventName === "stored") && videoUrl) {
                 if (expectedMedium !== "video") {
-                  return;
+                  continue;
                 }
                 finalOutput = {
                   type: "video",
@@ -253,14 +249,13 @@ export function useWorkflowExecution() {
                 };
               }
 
-              if (eventName === "complete" && !finalOutput) {
-                if (expectedMedium === "image" && normalizedImageBase64) {
-                  finalOutput = {
-                    type: "image",
-                    base64: normalizedImageBase64,
-                    mimeType: imageMimeType,
-                    url: persistentImageUrl,
-                  };
+              if (eventName === "complete") {
+                if (expectedMedium === "image" && imageAccumulator.length > 0) {
+                  finalOutput = imageAccumulator.length === 1
+                    ? { type: "image", ...imageAccumulator[0] }
+                    : { type: "images", items: imageAccumulator };
+                } else if (expectedMedium === "image" && !finalOutput && normalizedImageBase64) {
+                  finalOutput = { type: "image", base64: normalizedImageBase64, mimeType: imageMimeType, url: persistentImageUrl };
                 } else if (expectedMedium === "video" && videoUrl) {
                   finalOutput = {
                     type: "video",
