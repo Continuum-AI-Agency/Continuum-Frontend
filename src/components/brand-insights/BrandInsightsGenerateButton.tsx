@@ -10,6 +10,7 @@ import {
   subscribeToBrandInsightsJob,
 } from "@/lib/api/brandInsights.client";
 import { buildBrandInsightsProgressSteps } from "@/lib/brand-insights/progress";
+import { revalidateBrandInsights } from "@/lib/actions/brandInsights";
 import { useSmoothTrendProgress } from "@/hooks/useSmoothTrendProgress";
 import { TrendGenerationProgress } from "@/components/brand-insights/TrendGenerationProgress";
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,18 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props)
     []
   );
 
+  // Busting the tagged Data Cache (tags.brandInsights) is what actually pulls
+  // the new generation in — router.refresh() alone re-renders against the stale
+  // cached /api/trends/read response.
+  const refreshInsights = async () => {
+    try {
+      await revalidateBrandInsights(brandId);
+    } catch {
+      // Best-effort; router.refresh still re-renders from the server.
+    }
+    router.refresh();
+  };
+
   const handleRun = () => {
     setError(null);
     setStatus(null);
@@ -154,7 +167,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props)
                 stopTrackingRef.current?.();
                 stopTrackingRef.current = null;
                 setGenerationId(null);
-                router.refresh();
+                void refreshInsights();
               }
             },
             onMessage: (message) => {
@@ -188,7 +201,7 @@ export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props)
             description: "Showing the latest saved trends.",
             variant: "success",
           });
-          router.refresh();
+          await refreshInsights();
         }
       } catch (runError) {
         setError(runError instanceof Error ? runError.message : "Unable to start generation");
