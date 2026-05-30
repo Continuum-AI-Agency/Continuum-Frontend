@@ -5,14 +5,12 @@ import path from "node:path";
 // Off by default until Phase 2 audits dynamic boundaries for every page.
 const cacheComponentsEnabled = process.env.NEXT_CACHE_COMPONENTS === "1";
 
-// Monorepo root (one level up from Continuum-Frontend/). Bun's workspaces
-// hoist dependencies there, so Turbopack must trace from this root to
-// resolve next/react/etc. Hard-coding the relative parent avoids __dirname
-// (which doesn't survive Next's config loader in all cases).
-const workspaceRoot = path.resolve(__dirname, "..");
+// Monorepo root (one level up from Continuum-Frontend/). Vercel runs the build
+// command from Continuum-Frontend, so derive this from cwd rather than
+// __dirname, which can be rewritten by Next's config loader.
+const workspaceRoot = path.resolve(process.cwd(), "..");
 
 const nextConfig: NextConfig = {
-  outputFileTracingRoot: workspaceRoot,
   // Disable fetch cache in development to prevent infinite cache growth
   ...(process.env.NODE_ENV === 'development' && {
     cacheHandler: require.resolve('./cache-handler.js'),
