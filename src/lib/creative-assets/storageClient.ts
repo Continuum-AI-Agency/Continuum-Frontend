@@ -1,7 +1,5 @@
 "use client";
 
-import type { FileObject } from "@supabase/storage-js";
-
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { getCreativeAssetsBucket, resolveStoragePath } from "./config";
@@ -21,10 +19,20 @@ type MoveOptions = {
   destinationFolder?: string;
 };
 
+type StorageListItem = {
+  id: string | null;
+  name: string;
+  updated_at: string | null;
+  metadata?: {
+    size?: unknown;
+    mimetype?: unknown;
+  } | null;
+};
+
 function mapStorageListing(
   brandProfileId: string,
   folder: string,
-  items: FileObject[]
+  items: StorageListItem[]
 ): CreativeAsset[] {
   return items.map((item) => {
     const parentPath = resolveStoragePath(brandProfileId, folder);
