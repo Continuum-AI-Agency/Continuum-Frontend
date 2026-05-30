@@ -202,6 +202,14 @@ export const brandInsightsTaskStatusSchema = z.enum(["pending", "running", "comp
 
 export const brandInsightsJobStageSchema = z.string().optional();
 
+// Runtime telemetry the backend emits at each stage (payload.runtime). Drives
+// the "~Xs remaining" estimate in the progress UI.
+export const brandInsightsRuntimeSchema = z.object({
+  elapsedMs: z.number().nonnegative().optional(),
+  remainingMs: z.number().nonnegative().optional(),
+  maxDurationMs: z.number().positive().optional(),
+});
+
 export const brandInsightsWarningsSchema = z
   .object({
     scrapeFailures: z.array(z.unknown()).default([]),
@@ -236,6 +244,7 @@ export const brandInsightsStatusResponseSchema = z.object({
   warnings: brandInsightsWarningsSchema,
   competitor: brandInsightsCompetitorJobSchema,
   stream: brandInsightsJobStreamSchema.optional(),
+  runtime: brandInsightsRuntimeSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   error: z.string().optional(),
   message: z.string().optional(),
@@ -248,6 +257,7 @@ export const brandInsightsStatusMessageSchema = z.object({
   stage: z.string().optional(),
   progressPercent: z.number().min(0).max(100).optional(),
   stageMessage: z.string().optional(),
+  runtime: brandInsightsRuntimeSchema.optional(),
   payload: z.record(z.string(), z.unknown()).optional(),
   createdAt: tolerantTimestampSchema("createdAt must be an ISO timestamp").optional(),
 });

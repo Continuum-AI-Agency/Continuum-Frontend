@@ -1,37 +1,20 @@
-export const BRAND_INSIGHTS_PROGRESS_STAGE_ORDER = [
-  "awaiting_strategic_analysis",
-  "queued",
-  "scraping",
-  "raw_search",
-  "synthesis",
-  "web_enrichment",
-  "questions",
-  "secondary_platform_eval",
-  "persisting",
-  "completed",
-  "failed",
-] as const;
+import {
+  TRENDS_STAGE_LABELS,
+  TRENDS_STAGE_ORDER,
+  type TrendsStage,
+} from "@continuum/contracts";
 
-export type BrandInsightsProgressStage = (typeof BRAND_INSIGHTS_PROGRESS_STAGE_ORDER)[number];
+// Stage vocabulary is owned by @continuum/contracts and shared with the Backend
+// emit side (setProgress in metaHarvesterWorkflow.ts) so the two cannot drift.
+
+export const BRAND_INSIGHTS_PROGRESS_STAGE_ORDER = TRENDS_STAGE_ORDER;
+
+export type BrandInsightsProgressStage = TrendsStage;
 
 export type BrandInsightsProgressStep = {
   id: BrandInsightsProgressStage;
   label: string;
   status: "completed" | "current" | "pending";
-};
-
-const STAGE_LABELS: Record<BrandInsightsProgressStage, string> = {
-  awaiting_strategic_analysis: "Awaiting Strategic Analysis",
-  queued: "Queued",
-  scraping: "Scraping",
-  raw_search: "Raw Search",
-  synthesis: "Synthesis",
-  web_enrichment: "Web Enrichment",
-  questions: "Questions",
-  secondary_platform_eval: "Secondary Platform Eval",
-  persisting: "Persisting",
-  completed: "Completed",
-  failed: "Failed",
 };
 
 export function isBrandInsightsProgressStage(value: string): value is BrandInsightsProgressStage {
@@ -63,7 +46,7 @@ export function buildBrandInsightsProgressSteps(input: {
 
   return BRAND_INSIGHTS_PROGRESS_STAGE_ORDER.map((id, index) => ({
     id,
-    label: STAGE_LABELS[id],
+    label: TRENDS_STAGE_LABELS[id],
     status: index < currentIndex ? "completed" : index === currentIndex ? "current" : "pending",
   }));
 }

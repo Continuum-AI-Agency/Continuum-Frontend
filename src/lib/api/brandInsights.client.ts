@@ -5,6 +5,11 @@ import {
   mapBackendStatusMessage,
   mapBackendStatusResponse,
 } from "@/lib/brand-insights/backend";
+import {
+  trendsSseMessageDataSchema,
+  trendsSseSnapshotDataSchema,
+} from "@continuum/contracts";
+
 import { getApiBaseUrl } from "@/lib/api/config";
 import { assertOk } from "@/lib/api/errors";
 import type { RequestOptions } from "@/lib/api/http.types";
@@ -125,7 +130,7 @@ export async function generateBrandInsights(input: unknown) {
     windowEnd: parsed.windowEnd,
   });
   const response = await request({
-    path: "/api/trends/run",
+    path: "/api/trends/jobs/start",
     method: "POST",
     body: {
       brand_id: parsed.brandId,
@@ -164,6 +169,15 @@ function parseJsonEventData<T = unknown>(event: MessageEvent<string>): T | null 
     return JSON.parse(event.data) as T;
   } catch {
     return null;
+  }
+}
+
+// A malformed frame is a contract drift signal, not something to silently
+// swallow. In development we surface it so the mismatch is caught early; in
+// production we skip the frame and keep the stream alive.
+function warnContractDrift(kind: string, issues: unknown): void {
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(`[brand-insights] dropped malformed ${kind} frame (contract drift)`, issues);
   }
 }
 
@@ -282,8 +296,14 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
       const payload = parseJsonEventData(event as MessageEvent<string>);
       if (!payload) return;
 
+      const validated = trendsSseSnapshotDataSchema.safeParse(payload);
+      if (!validated.success) {
+        warnContractDrift("snapshot", validated.error.issues);
+        return;
+      }
+
       try {
-        const status = mapBackendStatusResponse({ status: "success", data: payload });
+        const status = mapBackendStatusResponse({ status: "success", data: validated.data });
         if (status.stream && typeof status.stream.latestMessageId === "number") {
           lastMessageId = status.stream.latestMessageId;
         }
@@ -292,7 +312,7 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
           stop();
         }
       } catch {
-        // Ignore malformed snapshot payloads and continue receiving stream events.
+        // Mapping failed on an otherwise valid frame; skip and keep streaming.
       }
     });
 
@@ -301,14 +321,20 @@ export function subscribeToBrandInsightsJob(options: BrandInsightsJobTrackerOpti
       const payload = parseJsonEventData(event as MessageEvent<string>);
       if (!payload) return;
 
+      const validated = trendsSseMessageDataSchema.safeParse(payload);
+      if (!validated.success) {
+        warnContractDrift("message", validated.error.issues);
+        return;
+      }
+
       try {
-        const message = mapBackendStatusMessage(payload);
+        const message = mapBackendStatusMessage(validated.data);
         if (typeof message.messageId === "number") {
           lastMessageId = message.messageId;
         }
         options.onMessage?.(message);
       } catch {
-        // Ignore malformed message payloads and continue receiving stream events.
+        // Mapping failed on an otherwise valid frame; skip and keep streaming.
       }
     });
 

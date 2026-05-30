@@ -362,7 +362,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
               generationId: mentionContext?.generationId,
               weekStart: mentionContext?.weekStartDate,
               source: trend.source,
-              isSelected: trend.isSelected || selectedTrendIds.includes(trend.id),
+              // Selection is single-sourced from the Zustand store so the planner
+              // selection and the agent mention context can never diverge. The
+              // server-provided trend.isSelected is intentionally not consulted.
+              isSelected: selectedTrendIds.includes(trend.id),
             },
           },
           {

@@ -10,17 +10,30 @@ import {
   subscribeToBrandInsightsJob,
 } from "@/lib/api/brandInsights.client";
 import { buildBrandInsightsProgressSteps } from "@/lib/brand-insights/progress";
-import { revalidateBrandInsights } from "@/lib/actions/brandInsights";
+import { useSmoothTrendProgress } from "@/hooks/useSmoothTrendProgress";
 import { TrendGenerationProgress } from "@/components/brand-insights/TrendGenerationProgress";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/ToastProvider";
 import { cn } from "@/lib/utils";
 
+// Matches the backend reuse window (findFreshCompletedGeneration withinDays: 5):
+// within this window a click re-pulls the cached generation; past it the backend
+// regenerates. The single button reflects that to the user.
+const STALE_AFTER_DAYS = 5;
+
 type Props = {
   brandId: string;
+  lastGeneratedAt?: string;
 };
 
-export function BrandInsightsGenerateButton({ brandId }: Props) {
+function ageInDays(iso?: string): number | null {
+  if (!iso) return null;
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return null;
+  return Math.floor((Date.now() - timestamp) / 86_400_000);
+}
+
+export function BrandInsightsGenerateButton({ brandId, lastGeneratedAt }: Props) {
   const router = useRouter();
   const { show } = useToast();
   const [generationId, setGenerationId] = useState<string | null>(null);
@@ -28,23 +41,34 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
   const [status, setStatus] = useState<string | null>(null);
   const [stage, setStage] = useState<string | null>(null);
   const [progressPercent, setProgressPercent] = useState<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | undefined>(undefined);
   const [stageMessage, setStageMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [isRefreshing, startRefresh] = useTransition();
   const stopTrackingRef = useRef<(() => void) | null>(null);
   const completedToastGenerationRef = useRef<string | null>(null);
 
-  const isWorking = isPending || Boolean(generationId) || isRefreshing;
+  const isWorking = isPending || Boolean(generationId);
   const isFailureStatus = status === "failed" || status === "error" || status === "not_found";
   const isWorkflowRunning =
     isPending || Boolean(generationId) || (status ? !isTerminalBrandInsightsStatus(status) : false);
   const showProgress = isWorkflowRunning || isFailureStatus || Boolean(error);
 
+  const ageDays = ageInDays(lastGeneratedAt);
+  const isStale = ageDays === null || ageDays >= STALE_AFTER_DAYS;
+
   const buttonLabel = useMemo(() => {
     if (generationId) return "Generating…";
     if (isPending) return "Starting…";
-    return "Regenerate";
-  }, [generationId, isPending]);
+    return isStale ? "Regenerate" : "Refresh";
+  }, [generationId, isPending, isStale]);
+
+  // Relative age caption, hidden while a run is in flight (the progress row
+  // takes over). Null when we have no prior generation to describe.
+  const ageLabel = useMemo(() => {
+    if (isWorking || ageDays === null) return null;
+    if (ageDays <= 0) return "Up to date";
+    return isStale ? `${ageDays}d old` : "Up to date";
+  }, [isWorking, ageDays, isStale]);
 
   const progressSteps = useMemo(() => {
     const steps = buildBrandInsightsProgressSteps({ stage, status });
@@ -65,6 +89,13 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
     [progressSteps]
   );
 
+  const isTerminal = isFailureStatus || status === "completed";
+  const { displayPercent, etaSeconds } = useSmoothTrendProgress({
+    targetPercent: progressPercent ?? 0,
+    remainingMs,
+    isTerminal,
+  });
+
   useEffect(
     () => () => {
       stopTrackingRef.current?.();
@@ -78,6 +109,7 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
     setStatus(null);
     setStage("queued");
     setProgressPercent(null);
+    setRemainingMs(undefined);
     setStageMessage(null);
     startTransition(async () => {
       try {
@@ -106,6 +138,9 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
                 return previous;
               });
               setProgressPercent(next.progressPercent ?? null);
+              if (typeof next.runtime?.remainingMs === "number") {
+                setRemainingMs(next.runtime.remainingMs);
+              }
               setStageMessage(next.stageMessage ?? next.errorDetail ?? next.message ?? null);
               if (isTerminalBrandInsightsStatus(next.status)) {
                 if (next.status === "completed" && completedToastGenerationRef.current !== activeGenerationId) {
@@ -126,6 +161,9 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
               if (typeof message.progressPercent === "number") {
                 setProgressPercent(message.progressPercent);
               }
+              if (typeof message.runtime?.remainingMs === "number") {
+                setRemainingMs(message.runtime.remainingMs);
+              }
               if (message.stageMessage) {
                 setStageMessage(message.stageMessage);
               }
@@ -143,6 +181,13 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
             },
           });
         } else {
+          // Fresh (<5d) generation reused by the backend — nothing to stream,
+          // just re-pull the page so the latest saved trends render.
+          show({
+            title: "Trends up to date",
+            description: "Showing the latest saved trends.",
+            variant: "success",
+          });
           router.refresh();
         }
       } catch (runError) {
@@ -151,37 +196,26 @@ export function BrandInsightsGenerateButton({ brandId }: Props) {
     });
   };
 
-  const handleRefresh = () => {
-    setError(null);
-    startRefresh(async () => {
-      setStatus(null);
-      try {
-        await revalidateBrandInsights(brandId);
-      } catch {
-        // Best-effort; router.refresh will still refetch in client.
-      }
-      router.refresh();
-    });
-  };
+  const Icon = isStale ? Sparkles : RefreshCw;
 
   return (
     <div className={cn("flex flex-col items-end gap-1.5", showProgress ? "w-full" : "w-auto")}>
-      <div className="flex flex-wrap justify-end gap-1.5">
-        <Button onClick={handleRefresh} disabled={isWorking} variant="outline" size="sm" className="h-7 px-2 text-xs">
-          {isRefreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-          Refresh
-        </Button>
+      <div className="flex items-center gap-2">
+        {ageLabel ? (
+          <span className="text-[11px] tabular-nums text-muted-foreground">{ageLabel}</span>
+        ) : null}
         <Button onClick={handleRun} disabled={isWorking} size="sm" className="h-7 px-2 text-xs">
-          {isWorking ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+          {isWorking ? <Loader2 className="size-3.5 animate-spin" /> : <Icon className="size-3.5" />}
           {buttonLabel}
         </Button>
       </div>
       {showProgress && (
         <TrendGenerationProgress
-          progressPercent={progressPercent ?? 0}
+          progressPercent={displayPercent}
           currentLabel={currentLabel}
           isError={isFailureStatus || Boolean(error)}
           errorMessage={error ?? stageMessage ?? undefined}
+          etaSeconds={etaSeconds}
         />
       )}
     </div>

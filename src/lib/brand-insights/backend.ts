@@ -594,6 +594,27 @@ function mapCounts(payload?: z.infer<typeof backendTotalsSchema> | null) {
   };
 }
 
+function mapRuntime(raw: unknown) {
+  if (!raw || typeof raw !== "object") return undefined;
+  const record = raw as Record<string, unknown>;
+  const pick = (snake: string, camel: string) => {
+    const value = record[snake] ?? record[camel];
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  };
+  const elapsedMs = pick("elapsed_ms", "elapsedMs");
+  const remainingMs = pick("remaining_ms", "remainingMs");
+  const maxDurationMs = pick("max_duration_ms", "maxDurationMs");
+  if (elapsedMs === undefined && remainingMs === undefined && maxDurationMs === undefined) {
+    return undefined;
+  }
+  return { elapsedMs, remainingMs, maxDurationMs };
+}
+
+function pickRuntimeFromMetadata(metadata: Record<string, unknown> | null | undefined) {
+  if (!metadata) return undefined;
+  return mapRuntime(metadata.runtime);
+}
+
 function mapStream(payload?: z.infer<typeof backendStreamSchema> | null) {
   if (!payload) return undefined;
   const channel = payload.channel?.trim();
@@ -1162,6 +1183,7 @@ export function mapBackendStatusResponse(payload: unknown) {
               : stream.latestMessageId ?? null,
         }
       : undefined,
+    runtime: pickRuntimeFromMetadata(data?.metadata ?? parsed.metadata),
     metadata: data?.metadata ?? parsed.metadata ?? undefined,
     error,
     message,
@@ -1187,6 +1209,7 @@ export function mapBackendStatusMessage(payload: unknown) {
     stage: parsed.stage ?? undefined,
     progressPercent: typeof progress === "number" ? Math.max(0, Math.min(100, progress)) : undefined,
     stageMessage: parsed.stage_message ?? parsed.stageMessage ?? undefined,
+    runtime: mapRuntime((parsed.payload as Record<string, unknown> | undefined)?.runtime),
     payload: parsed.payload ?? undefined,
     createdAt: normalizeTimestamp(parsed.created_at ?? parsed.createdAt),
   });

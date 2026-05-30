@@ -30,15 +30,26 @@ type TrendGenerationProgressProps = {
   currentLabel: string;
   isError?: boolean;
   errorMessage?: string;
+  etaSeconds?: number | null;
 };
+
+function formatEta(seconds: number): string {
+  if (seconds <= 0) return "almost done";
+  if (seconds < 60) return `~${seconds}s left`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return rest === 0 ? `~${minutes}m left` : `~${minutes}m ${rest}s left`;
+}
 
 export function TrendGenerationProgress({
   progressPercent,
   currentLabel,
   isError = false,
   errorMessage,
+  etaSeconds,
 }: TrendGenerationProgressProps) {
   const pct = clampPercent(progressPercent);
+  const showEta = !isError && typeof etaSeconds === "number" && pct < 100;
   const offset = CIRCUMFERENCE * (1 - pct / 100);
   const center = RING_SIZE / 2;
 
@@ -70,7 +81,7 @@ export function TrendGenerationProgress({
           strokeDashoffset={offset}
           transform={`rotate(-90 ${center} ${center})`}
           style={{
-            stroke: isError ? "var(--destructive)" : "#5A48F9",
+            stroke: isError ? "var(--destructive)" : "var(--primary)",
             transition: "stroke-dashoffset 600ms ease, stroke 300ms ease",
           }}
         />
@@ -95,6 +106,12 @@ export function TrendGenerationProgress({
           </span>
         )}
       </div>
+
+      {showEta && (
+        <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground/80">
+          {formatEta(etaSeconds as number)}
+        </span>
+      )}
 
       {!isError && (
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">

@@ -51,7 +51,12 @@ export function OrganicDashboardView({
           country={trendsAndEvents.country}
           generatedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
           status={trendsAndEvents.status ?? insightsStatus}
-          statusSlot={<BrandInsightsGenerateButton brandId={brandId} />}
+          statusSlot={
+            <BrandInsightsGenerateButton
+              brandId={brandId}
+              lastGeneratedAt={trendsAndEvents.generatedAt ?? insightsGeneratedAt}
+            />
+          }
         />
       </section>
     </div>

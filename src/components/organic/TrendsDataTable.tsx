@@ -316,7 +316,7 @@ export function TrendsDataTable({
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 h-7 text-[10px] uppercase"
+            className="-ml-3 h-7 text-xs font-medium text-muted-foreground"
             onClick={(e) => {
               e.stopPropagation()
               column.toggleSorting(column.getIsSorted() === "asc")
@@ -403,7 +403,7 @@ export function TrendsDataTable({
                     <span className="tabular-nums">{meta.sourceSignalCount}</span>
                   </span>
                 ) : null}
-                {meta?.niche ? <span className="uppercase tracking-wide">{meta.niche}</span> : null}
+                {meta?.niche ? <span className="tracking-wide">{meta.niche}</span> : null}
               </div>
             </div>
           )
@@ -561,7 +561,7 @@ export function TrendsDataTable({
                   {headerGroup.headers.map((header) => (
                     <TableHead
                       key={header.id}
-                      className="text-[10px] uppercase tracking-wider font-bold px-3 h-8"
+                      className="px-3 h-8 text-xs font-medium text-muted-foreground"
                     >
                       {header.isPlaceholder
                         ? null
@@ -582,7 +582,7 @@ export function TrendsDataTable({
                       onClick={() =>
                         setExpandedId((prev) => (prev === row.id ? undefined : row.id))
                       }
-                      className="cursor-pointer"
+                      className="cursor-pointer transition-colors motion-safe:duration-150"
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id} className="px-3 py-2">

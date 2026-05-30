@@ -12,6 +12,7 @@ const cacheComponentsEnabled = process.env.NEXT_CACHE_COMPONENTS === "1";
 const workspaceRoot = path.resolve(__dirname, "..");
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: workspaceRoot,
   // Disable fetch cache in development to prevent infinite cache growth
   ...(process.env.NODE_ENV === 'development' && {
     cacheHandler: require.resolve('./cache-handler.js'),
