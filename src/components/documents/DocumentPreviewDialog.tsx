@@ -63,13 +63,13 @@ export function DocumentPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[85vh] max-w-5xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b px-5 py-3">
+      <DialogContent className="flex h-[85vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b px-5 py-3">
           <DialogTitle className="text-sm font-medium">
             {document?.name ?? "Document preview"}
           </DialogTitle>
         </DialogHeader>
-        <div className="relative h-full w-full">
+        <div className="relative min-h-0 flex-1 w-full">
           {error ? (
             <div className="p-4 text-sm text-rose-600" role="alert">
               {error}
