@@ -20,12 +20,13 @@ function SimilarityBadge({ value }: { value: number }) {
 }
 
 function MediaThumbnail({ item }: { item: SearchResultItem }) {
-  if (item.signedUrl) {
+  const url = item.asset.signedUrl ?? item.asset.thumbnailUrl;
+  if (url) {
     return (
       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
         <Image
-          src={item.signedUrl}
-          alt={item.title ?? "Media asset"}
+          src={url}
+          alt={item.asset.title ?? "Media asset"}
           fill
           className="object-cover"
           sizes="64px"
@@ -56,22 +57,22 @@ function MediaResultRow({
       <MediaThumbnail item={item} />
 
       <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-center gap-1.5 flex-wrap">
-          {item.title && (
-            <span className="text-xs font-medium text-foreground truncate">{item.title}</span>
+        <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+          {item.asset.title && (
+            <span className="truncate text-xs font-medium text-foreground">{item.asset.title}</span>
           )}
           <SimilarityBadge value={item.similarity} />
         </div>
 
-        {item.description && (
+        {item.asset.description && (
           <p className="mb-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-            {item.description}
+            {item.asset.description}
           </p>
         )}
 
-        {item.tags.length > 0 && (
+        {item.asset.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {item.tags.slice(0, 4).map((tag) => (
+            {item.asset.tags.slice(0, 4).map((tag) => (
               <Badge key={tag} variant="outline" size="1" color="gray">
                 {tag}
               </Badge>
@@ -123,10 +124,10 @@ export function MediaLibrarySearchResults({
           <div className="flex flex-col gap-1.5">
             {items.map((item) => (
               <MediaResultRow
-                key={item.assetId}
+                key={item.asset.id}
                 item={item}
                 disabled={disabled}
-                onUse={(picked) => onUseAsset(picked.assetId, picked.signedUrl)}
+                onUse={(picked) => onUseAsset(picked.asset.id, picked.asset.signedUrl)}
               />
             ))}
           </div>
