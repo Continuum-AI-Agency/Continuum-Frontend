@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { Message } from "@/components/ai-elements/message";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
@@ -13,6 +13,7 @@ import { mapPlacementToDraft } from "./mapPlacementToDraft";
 import type { AgentJobState } from "./types";
 import { JobGrid } from "./JobGrid";
 import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
+import { ActiveStagesPanel } from "./ActiveStagesPanel";
 import { TrendChartCard } from "./TrendChartCard";
 import { PlanCard } from "./PlanCard";
 import { PipelinePlacementGrid } from "./PipelinePlacementGrid";
@@ -489,6 +490,13 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     ]
   );
 
+  const activeStages = useMemo(() => {
+    if (!state.streamingMessageId) return [];
+    const cards = Object.values(state.pipeline);
+    const card = cards.find((c) => c.status === "running") ?? cards[cards.length - 1];
+    return card?.stages.filter((s) => s.status !== "pending") ?? [];
+  }, [state.pipeline, state.streamingMessageId]);
+
   return (
     <div data-tour-id="organic-agent-panel" className="flex h-full min-h-0">
       <OrganicSessionSidebar
@@ -550,6 +558,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                 )}
                 <OrganicThinkingPanel
                   toolCalls={msg.toolCalls ?? []}
+                  isStreaming={msg.id === state.streamingMessageId}
+                />
+                <ActiveStagesPanel
+                  stages={msg.id === state.streamingMessageId ? activeStages : []}
                   isStreaming={msg.id === state.streamingMessageId}
                 />
                 {msg.uiCards && msg.uiCards.length > 0 && (

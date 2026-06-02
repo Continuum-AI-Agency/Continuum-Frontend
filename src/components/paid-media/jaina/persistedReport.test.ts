@@ -281,6 +281,72 @@ describe("parsePersistedReportValue", () => {
     expect(parsed?.blocks[4]?.chart_config.control.label).toBe("Control Revenue");
   });
 
+  it("REPRO: parses the exact persisted `checkpoint_report` envelope shape from the DB content column", () => {
+    // Mirrors the real DB `content` value: { type: "checkpoint_report", report: {...} }
+    // (NOT the `response.checkpoint_report` + `data.report` stream shape).
+    const content = JSON.stringify({
+      type: "checkpoint_report",
+      report: {
+        reasoning_trace: "El análisis se centró en la comparación...",
+        language: "en",
+        executive_summary:
+          "Recommendation: Placement Restructuring... Recommendation: Audit lead quality...",
+        blocks: [
+          {
+            body: "He evaluado el desempeño del piloto de WhatsApp...",
+            scope: "análisis de desempeño",
+            title: "Análisis de Desempeño",
+            block_id: "blk_1c84d0eb",
+            category: "narrative",
+            priority: "primary",
+            citations: [],
+            highlights: [],
+          },
+          {
+            items: [
+              {
+                title: "Recommendation 1",
+                impact: "Improvement expected",
+                summary: "No rationale provided.",
+                cite_ids: [],
+                priority: "now",
+                severity: "neutral",
+                item_type: "recommendation",
+                rationale: "No rationale provided.",
+              },
+            ],
+            scope: "account",
+            title: "Strategic Recommendations",
+            block_id: "blk_aa9e5d73",
+            category: "insight_list",
+            priority: "secondary",
+            citations: [],
+          },
+        ],
+        media_map: {},
+        handoff_trace: [],
+        cached_sources: [],
+        follow_up_questions: [],
+        execution_objectives: [],
+        _meta: {
+          has_media: false,
+          has_charts: false,
+          block_count: 2,
+          has_citations: false,
+          primary_scope: "análisis de desempeño",
+          schema_version: "2",
+        },
+      },
+    });
+
+    const parsed = parsePersistedReportV2Value({ report: undefined, content });
+
+    expect(parsed).toBeDefined();
+    expect(parsed?.blocks).toHaveLength(2);
+    expect(parsed?.blocks[0]?.category).toBe("narrative");
+    expect(parsed?.blocks[1]?.category).toBe("insight_list");
+  });
+
   it("parses near-json checkpoint content that contains raw newlines in strings", () => {
     const content =
       '{"type":"checkpoint_report","report":{"executive_summary":"Line 1\nLine 2","sections":[],"performance_snapshot":[],"strategic_recommendations":[],"follow_up_questions":[],"handoff_trace":[],"execution_objectives":[],"cached_sources":[],"graphs":[]}}';

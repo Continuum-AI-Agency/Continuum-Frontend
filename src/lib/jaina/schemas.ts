@@ -13,6 +13,8 @@ import {
   insightListItemSchema as contractInsightListItemSchema,
   comparisonPairSchema as contractComparisonPairSchema,
   chartSeriesConfigSchema as contractChartSeriesConfigSchema,
+  checkpointBlockV2LenientSchema,
+  degradeToNarrativeBlockV2 as contractDegradeToNarrativeBlockV2,
 } from "@continuum/contracts";
 import { campaignCanvasActionsEnvelopeSchema } from "@/lib/campaign-canvas/agent-actions";
 import {
@@ -531,30 +533,17 @@ export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine(
 );
 export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
 
-// Fail-visible degradation — mirrors the Backend's `degradeToNarrativeBlock`
-// (App/agents-ts/Jaina/src/agents/orchestrator.ts). When a block fails contract
-// validation we surface a visible narrative placeholder instead of silently
-// dropping it, so the user sees that a section was produced but couldn't render.
+// Fail-visible degradation. The canonical placeholder logic is shared from
+// `@continuum/contracts` (also used by the Backend salvage path); this wrapper
+// only re-parses through `narrativeBlockV2Schema` to apply the render-only
+// layering (numeric `priority` rank) the renderer sorts on.
 const asRenderRecord = (value: unknown): Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 
-const pickRenderString = (value: unknown, fallback: string): string =>
-  typeof value === "string" && value.trim() ? value : fallback;
-
 export function degradeToNarrativeBlockV2(block: unknown): NarrativeBlockV2 {
-  const rec = asRenderRecord(block);
-  const category = typeof rec.category === "string" ? rec.category : "content";
-  return narrativeBlockV2Schema.parse({
-    block_id: pickRenderString(rec.block_id, "block_degraded"),
-    category: "narrative",
-    scope: pickRenderString(rec.scope, "account"),
-    title: pickRenderString(rec.title, "Section unavailable"),
-    priority: "supplementary",
-    body: `This ${category} block could not be rendered.`,
-    highlights: [],
-  });
+  return narrativeBlockV2Schema.parse(contractDegradeToNarrativeBlockV2(block));
 }
 
 // A blocks array that NEVER silently drops a block: each entry is validated
@@ -897,7 +886,7 @@ export const responseBlockDeltaV2TolerantSchema = streamEventSchema(
     agent: z.string().optional(),
     block_category: z.string().optional(),
     chart_type: z.string().optional(),
-    block: z.object({ category: checkpointBlockCategoryV2Schema }).passthrough(),
+    block: checkpointBlockV2LenientSchema,
   })
 );
 

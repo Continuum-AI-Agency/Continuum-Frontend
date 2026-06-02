@@ -152,12 +152,13 @@ export function CompetitorInspirationsScreen({
           ← Back
         </Button>
         <div className="flex items-center gap-2">
-          {selected ? (
-            <span className="text-xs text-muted-foreground">
-              Using a post from <strong>{selected.competitorName}</strong>
-            </span>
-          ) : null}
-          <Button variant="default" size="sm" onClick={onContinue} disabled={phase === "loading"}>
+          {/* Always-enabled escape hatch: competitor discovery can be slow or fail
+              (it waits on strategic analysis). The user must never be locked here —
+              creatives are generated from brand guidelines regardless. */}
+          <Button variant="ghost" size="sm" onClick={onContinue}>
+            Skip
+          </Button>
+          <Button variant="default" size="sm" onClick={onContinue}>
             Continue to generations →
           </Button>
         </div>

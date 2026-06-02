@@ -19,7 +19,7 @@ import {
 import { InspirationGenerationScreen } from "./screens/InspirationGenerationScreen";
 import { WelcomeScreen, hasSeenWelcome } from "./screens/WelcomeScreen";
 import { BackgroundJobsProvider, useBackgroundJobs } from "./state/BackgroundJobsProvider";
-import { runScrape, runTrendsPrewarm } from "./state/jobRunners";
+import { runScrape, runTrendsPrewarm, runStrategicPrewarm, runCreativePrewarm } from "./state/jobRunners";
 import { runAgentPreview, emptyBuckets, type AgentPreviewBuckets } from "./state/agentPreview";
 import {
   computePreviewInputHash,
@@ -508,7 +508,37 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         console.warn("[onboarding] trends prewarm failed", error);
       }
     })();
-  }, [jobs.agentPreview.status, brandId, start, router]);
+    // Kick competitor strategic analysis in parallel with trends, the moment the
+    // brand profile is finished — independent of approval. Best-effort; failures
+    // must never block the inspirations/generation finale.
+    void (async () => {
+      try {
+        await start("strategicPrewarm", () => runStrategicPrewarm(brandId));
+      } catch (error) {
+        console.warn("[onboarding] strategic analysis prewarm failed", error);
+      }
+    })();
+    // Generate the first on-brand creatives now too — decoupled from the strategic
+    // analysis, grounded in the brand profile. Persists the kit (colors) first.
+    if (INSPIRATIONS_ENABLED) {
+      const kit = {
+        colors: state.brand.colors ?? [],
+        typography: state.brand.typography ?? { primary: null, secondary: null },
+        logoPath: state.brand.logoPath ?? null,
+      };
+      void (async () => {
+        try {
+          await start("creativePrewarm", (signal) =>
+            runCreativePrewarm(brandId, kit, signal, (images) =>
+              patch("creativePrewarm", { images }),
+            ),
+          );
+        } catch (error) {
+          console.warn("[onboarding] creative prewarm failed", error);
+        }
+      })();
+    }
+  }, [jobs.agentPreview.status, brandId, start, router, state.brand]);
 
   return (
     <OnboardingShell
@@ -562,7 +592,6 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
           ) : (
             <InspirationGenerationScreen
               brandId={brandId}
-              reference={selectedInspiration}
               onFinish={handleFinishToDashboard}
               finishing={launching}
               onBack={() => navigate(hasConnectedInstagram(state) ? 5 : 4)}

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const SIGNED_URL_TTL_SECONDS = 3600; // 1 hour
 
@@ -16,8 +16,8 @@ export async function mintSignedUrl(
   storagePath: string,
   bucket: string,
 ): Promise<string | null> {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.storage
+  const client = await createSupabaseServerClient();
+  const { data, error } = await client.storage
     .from(bucket)
     .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS);
   if (error || !data?.signedUrl) {
@@ -36,7 +36,7 @@ export async function mintSignedUrls(
   const map = new Map<string, string>();
   if (items.length === 0) return map;
 
-  const admin = createSupabaseAdminClient();
+  const client = await createSupabaseServerClient();
 
   const pathsByBucket = new Map<string, string[]>();
   for (const { path, bucket } of items) {
@@ -50,7 +50,7 @@ export async function mintSignedUrls(
 
   await Promise.all(
     Array.from(pathsByBucket.entries()).map(async ([bucket, paths]) => {
-      const { data, error } = await admin.storage
+      const { data, error } = await client.storage
         .from(bucket)
         .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
       if (error || !data) {

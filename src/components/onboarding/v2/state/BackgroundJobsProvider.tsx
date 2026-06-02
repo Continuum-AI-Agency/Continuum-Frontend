@@ -11,7 +11,7 @@ export type JobState<T> = {
   startedAt: number | null;
 };
 
-export type JobKey = "scrape" | "agentPreview" | "trendsPrewarm";
+export type JobKey = "scrape" | "agentPreview" | "trendsPrewarm" | "strategicPrewarm" | "creativePrewarm";
 
 type JobsState = Record<JobKey, JobState<unknown>>;
 
@@ -26,6 +26,8 @@ const initialState: JobsState = {
   scrape: initialJob(),
   agentPreview: initialJob(),
   trendsPrewarm: initialJob(),
+  strategicPrewarm: initialJob(),
+  creativePrewarm: initialJob(),
 };
 
 type JobRunner<T> = (signal: AbortSignal) => Promise<T>;

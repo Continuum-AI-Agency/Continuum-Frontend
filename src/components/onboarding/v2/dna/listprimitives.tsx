@@ -5,8 +5,8 @@ export function ChipRow({ label, values, variant }: { label: string; values: str
     <div>
       <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="flex flex-wrap gap-1.5">
-        {values.map((value) => (
-          <Badge key={value} variant={variant}>
+        {values.map((value, idx) => (
+          <Badge key={`${value}-${idx}`} variant={variant}>
             {value}
           </Badge>
         ))}

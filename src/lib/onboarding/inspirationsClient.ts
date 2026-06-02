@@ -63,6 +63,29 @@ const readFrames = async <TFrame>(
   flushLine(buffer);
 };
 
+// Persists the brand kit (colors/typography/logo) before a pre-approve creative
+// prewarm so generation is grounded in real brand colors. JSON response, not a
+// stream. Idempotent upsert on the Backend; safe to call again at approve.
+export const persistOnboardingBrandKit = async (params: {
+  brandId: string;
+  colors: string[];
+  typography: { primary: string | null; secondary: string | null };
+  logoPath?: string | null;
+}): Promise<void> => {
+  const token = await getBrowserAccessToken();
+  const response = await fetch(`${getApiBaseUrl()}/api/onboarding/brand-kit`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) {
+    throw new Error(`onboarding_brand_kit_failed_${response.status}`);
+  }
+};
+
 export const streamInspirations = async (params: {
   brandId: string;
   signal?: AbortSignal;

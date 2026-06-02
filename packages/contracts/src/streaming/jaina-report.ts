@@ -8,10 +8,12 @@
  * They drifted; when they did, the Backend emitted blocks the Frontend silently
  * dropped. This is the canonical source both sides now import (root AGENTS.md §4).
  *
- * Scope: the RUNTIME block shape that crosses the wire. The Backend's
- * Gemini-specific *synthesis* schemas (`{k,v}` cell arrays, narrowed number
- * unions, merged anyOf variants) and the `coerceV2Block` reconstruction stay
- * Backend-local — they are generation implementation detail, not a contract.
+ * Scope: the RUNTIME block shape that crosses the wire, plus the shared runtime
+ * tolerance (lenient block schema + `degradeToNarrativeBlockV2`) both sides use
+ * when a block arrives malformed. The Backend's Gemini-specific *synthesis*
+ * schemas (`{k,v}` cell arrays, narrowed number unions, merged anyOf variants)
+ * and the `coerceV2Block` reconstruction stay Backend-local — they are
+ * generation implementation detail, not a contract.
  *
  * Import via the root entry only: `import { checkpointBlockV2Schema } from
  * '@continuum/contracts'` — Backend `moduleResolution: node` does not resolve
@@ -290,6 +292,49 @@ export const checkpointBlockV2Schema = checkpointBlockV2UnionSchema.superRefine(
   }
 });
 export type CheckpointBlockV2 = z.infer<typeof checkpointBlockV2UnionSchema>;
+
+// ---------------------------------------------------------------------------
+// Runtime tolerance (shared FE/BE): lenient block schema + visible degrade.
+//
+// Unlike the Gemini-specific *synthesis* schemas — which stay Backend-local
+// (see the header note) — how a malformed block is *tolerated* on the wire is a
+// cross-boundary concern, so it is canonical here. The strict
+// `checkpointBlockV2Schema` above remains the emit/render contract; the lenient
+// pair below is the shared fallback used by the Backend synthesis-salvage path
+// and the Frontend tolerant parser.
+// ---------------------------------------------------------------------------
+
+// Accepts any object carrying a valid V2 `category`; all other fields pass
+// through unchecked. Legacy/non-V2 categories are excluded so they still fall
+// to the Frontend's legacy parse path.
+export const checkpointBlockV2LenientSchema = z
+  .object({ category: blockCategorySchema })
+  .loose();
+export type CheckpointBlockV2Lenient = z.infer<typeof checkpointBlockV2LenientSchema>;
+
+const asBlockRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+const blockStringOrFallback = (value: unknown, fallback: string): string =>
+  typeof value === "string" && value.trim().length > 0 ? value : fallback;
+
+// Fail-visible degradation: turn any block into a narrative placeholder so a
+// section that was produced but cannot render is surfaced, not silently lost.
+export const degradeToNarrativeBlockV2 = (block: unknown): NarrativeBlock => {
+  const rec = asBlockRecord(block);
+  const category = typeof rec.category === "string" ? rec.category : "content";
+  return narrativeBlockSchema.parse({
+    block_id: blockStringOrFallback(rec.block_id, "block_degraded"),
+    category: "narrative",
+    scope: blockStringOrFallback(rec.scope, "account"),
+    title: blockStringOrFallback(rec.title, "Section unavailable"),
+    priority: "supplementary",
+    body: `This ${category} block could not be rendered.`,
+    highlights: [],
+  });
+};
 
 // ---------------------------------------------------------------------------
 // Checkpoint report metadata (small, cross-boundary)

@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { MediaAsset, MediaCollection } from "@continuum/contracts";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mediaSchema } from "./supabase-media";
 import { rowToMediaAsset } from "./mapper";
 import { mintSignedUrls } from "./signed-urls";
@@ -13,10 +13,10 @@ export async function fetchMediaAssets(
   brandId: string,
   options: { collectionId?: string; limit?: number } = {},
 ): Promise<MediaAsset[]> {
-  const admin = createSupabaseAdminClient();
+  const client = await createSupabaseServerClient();
   const limit = options.limit ?? PAGE_SIZE;
 
-  let query = mediaSchema(admin)
+  let query = mediaSchema(client)
     .from("assets")
     .select(MEDIA_ASSET_SELECT)
     .eq("brand_id", brandId)
@@ -26,7 +26,7 @@ export async function fetchMediaAssets(
 
   if (options.collectionId) {
     // Join via collection_items to filter by collection
-    const { data: items, error: itemsError } = await mediaSchema(admin)
+    const { data: items, error: itemsError } = await mediaSchema(client)
       .from("collection_items")
       .select("asset_id")
       .eq("collection_id", options.collectionId)
@@ -40,7 +40,7 @@ export async function fetchMediaAssets(
     const assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
     if (assetIds.length === 0) return [];
 
-    query = mediaSchema(admin)
+    query = mediaSchema(client)
       .from("assets")
       .select(MEDIA_ASSET_SELECT)
       .in("id", assetIds)
@@ -67,9 +67,9 @@ export async function fetchMediaAssets(
 export async function fetchMediaCollections(
   brandId: string,
 ): Promise<MediaCollection[]> {
-  const admin = createSupabaseAdminClient();
+  const client = await createSupabaseServerClient();
 
-  const { data, error } = await mediaSchema(admin)
+  const { data, error } = await mediaSchema(client)
     .from("collections")
     .select("*")
     .eq("brand_id", brandId)
@@ -98,8 +98,8 @@ export async function fetchMediaCollections(
 }
 
 export async function fetchStorageUsedBytes(brandId: string): Promise<number> {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await mediaSchema(admin)
+  const client = await createSupabaseServerClient();
+  const { data, error } = await mediaSchema(client)
     .from("assets")
     .select("size_bytes")
     .eq("brand_id", brandId)
