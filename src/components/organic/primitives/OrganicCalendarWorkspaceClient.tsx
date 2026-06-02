@@ -430,6 +430,8 @@ export function OrganicCalendarWorkspaceClient({
     seededDraftCount,
     gridStatus,
     handleGenerateDrafts,
+    handleAutoSort,
+    handleGenerateGridJob,
     handleRegenerate,
     handleClearFailure,
   } = useDraftGeneration({

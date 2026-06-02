@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import {
+  CopyIcon,
   CheckIcon,
   CopyIcon,
   Cross2Icon,
@@ -48,7 +49,7 @@ import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
 import { useProgressAnimation } from "@/components/organic/hooks/useProgressAnimation";
 import { useOpenDraftInAiStudio } from "./AiStudioHandoffContext";
 
-const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "linkedin"];
+const QUICK_PLATFORM_OPTIONS: OrganicPlatformKey[] = ["instagram", "facebook", "linkedin"];
 const QUICK_TIME_OPTIONS = ["9:00 AM", "1:00 PM", "5:00 PM"] as const;
 const QUICK_PLATFORM_LABELS: Record<OrganicPlatformKey, string> = {
   instagram: "Instagram",

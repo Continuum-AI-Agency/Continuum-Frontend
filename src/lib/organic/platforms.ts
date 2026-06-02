@@ -12,6 +12,7 @@ export type OrganicPlatformKey = (typeof ORGANIC_PLATFORM_KEYS)[number];
 
 export const ORGANIC_MVP_PLATFORM_KEYS = [
   "instagram",
+  "facebook",
   "linkedin",
 ] as const satisfies readonly OrganicPlatformKey[];
 

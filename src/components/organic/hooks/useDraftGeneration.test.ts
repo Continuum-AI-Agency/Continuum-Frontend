@@ -36,6 +36,7 @@ describe("useDraftGeneration", () => {
     setGhosts: mock(),
     addEvent: mock(),
     setDays: mock(),
+    setUnscheduledDrafts: mock(),
   };
 
   const defaultProps: HookProps = {
@@ -649,6 +650,77 @@ describe("mapWeeklyGridToCalendarPlacements", () => {
       activePlatforms: ["instagram", "linkedin"],
       platformAccountIds: {
         instagram: "ig-1",
+        linkedin: "li-1",
+      },
+    });
+
+    expect(placements).toHaveLength(2);
+    expect(placements[0]).toEqual(
+      expect.objectContaining({
+        dayId: "2026-01-26",
+        draft: expect.objectContaining({
+          timeLabel: "9:00 AM",
+          platforms: ["instagram"],
+          seedTrendId: "trend-1",
+        }),
+      })
+    );
+    expect(placements[1]).toEqual(
+      expect.objectContaining({
+        dayId: "2026-01-26",
+        draft: expect.objectContaining({
+          timeLabel: "1:00 PM",
+          platforms: ["linkedin"],
+          seedTrendId: "trend-2",
+        }),
+      })
+    );
+  });
+});
+
+describe("mapWeeklyGridToCalendarPlacements", () => {
+  it("maps weekly grid rows to day slots with platform rotation", () => {
+    const placements = mapWeeklyGridToCalendarPlacements({
+      weeklyGrid: {
+        grid: [
+          {
+            day: "Monday",
+            type: "Post",
+            format: "Reel",
+            tone: "Educational",
+            title_topic: "Trend A",
+            objective: "Awareness",
+            target: "Founders",
+            cta: "Comment below",
+            num_slides: 1,
+          },
+          {
+            day: "Monday",
+            type: "Post",
+            format: "Carousel",
+            tone: "Confident",
+            title_topic: "Trend B",
+            objective: "Engagement",
+            target: "Marketers",
+            cta: "Share this",
+            num_slides: 3,
+          },
+        ],
+      },
+      calendarDays: [
+        {
+          id: "2026-01-26",
+          label: "Mon",
+          dateLabel: "Jan 26",
+          suggestedTimes: ["9:00 AM", "1:00 PM"],
+          slots: [],
+        },
+      ],
+      selectedTrendIds: ["trend-1", "trend-2"],
+      activePlatforms: ["instagram", "facebook", "linkedin"],
+      platformAccountIds: {
+        instagram: "ig-1",
+        facebook: "fb-1",
         linkedin: "li-1",
       },
     });

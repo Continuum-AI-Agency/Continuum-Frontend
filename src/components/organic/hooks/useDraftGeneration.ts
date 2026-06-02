@@ -43,7 +43,7 @@ const DEFAULT_GRID_PROMPT: GenerationRequestPayload["prompt"] = {
   name: "Calendar Weekly MVP",
   description: "Generate a weekly post plan for selected trends.",
   content:
-    "Generate a weekly content grid for Instagram and LinkedIn. Keep posts distinct by platform and optimize for posting time.",
+    "Generate a weekly content grid for Instagram, Facebook, and LinkedIn. Keep posts distinct by platform and optimize for posting time.",
   source: "preset",
 };
 
@@ -158,7 +158,6 @@ function resolveProgressStageFloor(stage?: string): number {
   if (stage === "finalizing") return 90;
   return 10;
 }
-
 
 function resolveSlotStageFloor(stage: string): number {
   if (stage === "concepting") return 15;
@@ -533,6 +532,7 @@ export function useDraftGeneration({
 
     return Object.keys(metadata).length > 0 ? metadata : undefined;
   }, []);
+
 
   const hydrateCalendarFromGrid = React.useCallback(
     (weeklyGrid: WeeklyGrid) => {
@@ -1105,7 +1105,7 @@ export function useDraftGeneration({
 
       if (Object.keys(availableAccountIds).length === 0) {
         setGridStatus("error");
-        setGridError("Connect at least one Instagram or LinkedIn account.");
+        setGridError("Connect at least one Instagram, Facebook, or LinkedIn account.");
         return;
       }
 

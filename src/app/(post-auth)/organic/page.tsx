@@ -74,6 +74,7 @@ async function OrganicContent({
     );
   }
 
+
   const platformAccounts = ORGANIC_PLATFORMS.filter(({ key }) =>
     mvpPlatformSet.has(key as OrganicPlatformKey)
   ).map(({ key, label }) => {
