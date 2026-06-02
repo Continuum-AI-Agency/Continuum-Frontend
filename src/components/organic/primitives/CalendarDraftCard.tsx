@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   CopyIcon,
   CheckIcon,
-  CopyIcon,
   Cross2Icon,
   ImageIcon,
   LightningBoltIcon,
