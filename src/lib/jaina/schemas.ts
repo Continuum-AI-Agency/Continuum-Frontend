@@ -210,7 +210,16 @@ export const frontendBudgetSchema = z
 export const executionObjectiveSchema = z.object({
   id: z.string(),
   title: z.string(),
-  status: z.enum(["pending", "in_progress", "completed", "failed"]),
+  // Mirrors the Backend objective lifecycle (richer than the original 4 states).
+  status: z.enum([
+    "pending",
+    "in_progress",
+    "completed",
+    "failed",
+    "blocked",
+    "deferred",
+    "partial",
+  ]),
   scope: z.string().nullable(),
   details: z.string().nullable(),
   created_at: z.string(),
@@ -592,9 +601,15 @@ export const checkpointReportV2MetaSchema = z.object({
 export const checkpointReportV2Schema = z.object({
   language: z.string().default("en"),
   executive_summary: z.string().default(""),
+  reasoning_trace: z.string().catch(""),
   blocks: tolerantCheckpointBlocksV2Schema.default([]),
   follow_up_questions: z.array(z.string()).default([]),
   media_map: mediaMapSchema.default({}),
+  // Supplementary display data — never let a malformed trace entry fail the whole
+  // report parse; degrade each to empty so blocks + summary still render.
+  handoff_trace: z.array(handoffTraceEntrySchema).catch([]),
+  execution_objectives: z.array(executionObjectiveSchema).catch([]),
+  cached_sources: z.array(z.string()).catch([]),
   _meta: checkpointReportV2MetaSchema,
 });
 export type CheckpointReportV2 = z.infer<typeof checkpointReportV2Schema>;

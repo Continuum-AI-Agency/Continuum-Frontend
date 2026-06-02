@@ -781,13 +781,60 @@ describe("parsePersistedReportV2Value — full payload coverage (real Supabase f
     expect(block.notes).toBeNull();
   });
 
-  it("strips extra envelope fields that are not in the schema", () => {
+  it("retains supplementary report fields (reasoning, objectives, sources, handoff) for display", () => {
     const parsed = parsePersistedReportV2Value({ report: undefined, content: JSON.stringify(FULL_PAYLOAD) });
-    // handoff_trace, reasoning_trace, execution_objectives, cached_sources must not leak through
-    expect((parsed as Record<string, unknown>)?.["handoff_trace"]).toBeUndefined();
-    expect((parsed as Record<string, unknown>)?.["reasoning_trace"]).toBeUndefined();
-    expect((parsed as Record<string, unknown>)?.["execution_objectives"]).toBeUndefined();
-    expect((parsed as Record<string, unknown>)?.["cached_sources"]).toBeUndefined();
+    // These ride along in every persisted report and are now surfaced in the UI
+    // (previously dropped). reasoning_trace is a plain string — retained verbatim.
+    expect(parsed?.reasoning_trace).toBe("The analysis compared ...");
+    // The supplementary arrays are present (defined), never undefined. Malformed /
+    // minimal trace entries degrade to [] via the tolerance guard rather than
+    // failing the whole report parse; well-formed entries from real runs survive.
+    expect(Array.isArray(parsed?.handoff_trace)).toBe(true);
+    expect(Array.isArray(parsed?.execution_objectives)).toBe(true);
+    expect(Array.isArray(parsed?.cached_sources)).toBe(true);
+  });
+
+  it("retains well-formed execution_objectives including the deferred lifecycle status", () => {
+    const payload = {
+      type: "checkpoint_report",
+      report: {
+        _meta: {
+          has_media: false,
+          has_charts: false,
+          block_count: 1,
+          primary_scope: "account",
+          schema_version: "2",
+        },
+        executive_summary: "Summary",
+        blocks: [
+          { block_id: "blk_1", category: "narrative", scope: "account", title: "Overview", priority: 1, body: "Body." },
+        ],
+        execution_objectives: [
+          {
+            id: "objective_1",
+            title: "Resolve campaign IDs",
+            status: "completed",
+            scope: "campaign",
+            details: "done",
+            created_at: "2026-06-02T10:21:35.929Z",
+            updated_at: "2026-06-02T10:22:17.444Z",
+          },
+          {
+            id: "objective_2",
+            title: "Analyze ad-level performance",
+            status: "deferred",
+            scope: "ad",
+            details: "Deferred by Jaina core",
+            created_at: "2026-06-02T10:21:35.929Z",
+            updated_at: "2026-06-02T10:22:56.306Z",
+          },
+        ],
+      },
+    };
+
+    const parsed = parsePersistedReportV2Value({ report: undefined, content: JSON.stringify(payload) });
+    expect(parsed?.execution_objectives).toHaveLength(2);
+    expect(parsed?.execution_objectives[1]).toMatchObject({ status: "deferred", title: "Analyze ad-level performance" });
   });
 
   it("blocks sorted by priority produce primary blocks before secondary blocks", () => {

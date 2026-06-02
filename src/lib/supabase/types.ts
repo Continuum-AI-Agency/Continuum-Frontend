@@ -942,7 +942,9 @@ export type Database = {
         Row: {
           active: boolean
           approval_chain_required: boolean
+          brand_colors: Json
           brand_name: string
+          brand_typography: Json
           brand_voice: Json | null
           completed_at: string | null
           context: Json
@@ -958,7 +960,9 @@ export type Database = {
         Insert: {
           active?: boolean
           approval_chain_required?: boolean
+          brand_colors?: Json
           brand_name: string
+          brand_typography?: Json
           brand_voice?: Json | null
           completed_at?: string | null
           context?: Json
@@ -974,7 +978,9 @@ export type Database = {
         Update: {
           active?: boolean
           approval_chain_required?: boolean
+          brand_colors?: Json
           brand_name?: string
+          brand_typography?: Json
           brand_voice?: Json | null
           completed_at?: string | null
           context?: Json
@@ -5032,6 +5038,42 @@ export type Database = {
   }
   organic: {
     Tables: {
+      hyperframe_mp4_renders: {
+        Row: {
+          brand_id: string
+          composition_id: string
+          created_at: string
+          draft_id: string | null
+          error_message: string | null
+          mp4_bucket: string | null
+          mp4_path: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brand_id: string
+          composition_id: string
+          created_at?: string
+          draft_id?: string | null
+          error_message?: string | null
+          mp4_bucket?: string | null
+          mp4_path?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brand_id?: string
+          composition_id?: string
+          created_at?: string
+          draft_id?: string | null
+          error_message?: string | null
+          mp4_bucket?: string | null
+          mp4_path?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media_insights_cache: {
         Row: {
           expires_at: string
