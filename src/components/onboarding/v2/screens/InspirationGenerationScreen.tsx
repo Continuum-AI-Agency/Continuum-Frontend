@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { streamGeneration } from "@/lib/onboarding/inspirationsClient";
@@ -33,11 +33,15 @@ export function InspirationGenerationScreen({ brandId, reference, onFinish, fini
   const [phase, setPhase] = useState<Phase>("generating");
   const startedRef = useRef(false);
   const erroredRef = useRef(false);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+  const runGeneration = useCallback(() => {
+    controllerRef.current?.abort();
     const controller = new AbortController();
+    controllerRef.current = controller;
+    erroredRef.current = false;
+    setImages([]);
+    setPhase("generating");
 
     const handleFrame = (frame: OnboardingGenerationStreamFrame) => {
       switch (frame.type) {
@@ -66,14 +70,23 @@ export function InspirationGenerationScreen({ brandId, reference, onFinish, fini
       // The server signals failure with an error FRAME and then ends the stream
       // cleanly, so the promise resolves without a completion frame. Settle the
       // phase on stream end too — otherwise the screen is stuck "generating" and
-      // the "Go to dashboard" button never enables.
+      // the retry/continue buttons never enable.
       .then(() =>
         setPhase((p) => (p === "generating" ? (erroredRef.current ? "error" : "done") : p)),
       )
-      .catch(() => setPhase("error"));
-
-    return () => controller.abort();
+      // Ignore the abort we trigger ourselves on retry/unmount; only a real
+      // transport failure should flip to the error state.
+      .catch(() => {
+        if (!controller.signal.aborted) setPhase("error");
+      });
   }, [brandId, reference]);
+
+  useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    runGeneration();
+    return () => controllerRef.current?.abort();
+  }, [runGeneration]);
 
   const slots = Array.from({ length: Math.max(total, images.length) });
 
@@ -114,10 +127,15 @@ export function InspirationGenerationScreen({ brandId, reference, onFinish, fini
         })}
       </div>
 
-      {phase === "error" && images.length === 0 ? (
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          We couldn&apos;t generate previews right now — you can continue and create them later in the studio.
-        </p>
+      {phase === "error" ? (
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-center text-sm text-muted-foreground">
+            We couldn&apos;t generate previews right now — try again, or continue and create them later in the studio.
+          </p>
+          <Button variant="default" size="sm" onClick={runGeneration} disabled={finishing}>
+            Try again
+          </Button>
+        </div>
       ) : null}
 
       <footer className="fixed inset-x-0 bottom-0 z-10 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:px-8">

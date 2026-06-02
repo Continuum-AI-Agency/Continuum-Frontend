@@ -31,6 +31,22 @@ function deriveBrandName(state: OnboardingState): string {
   return "Untitled Brand";
 }
 
+// The approve schema's brand_voice.tone caps at 420 and target_audience.summary
+// at 1800 (packages/contracts/src/onboarding/{brand-voice,target-audience}.ts).
+// The contracts call these "lenient input" bounds meant to absorb verbose Gemini
+// output WITHOUT rejecting the section — so clamp a too-long value to fit rather
+// than let it 400 the entire launch. Trims to a word boundary, then hard-caps.
+const BRAND_VOICE_TONE_MAX = 420;
+const AUDIENCE_SUMMARY_MAX = 1800;
+
+export function clampText(value: string, max: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= max) return trimmed;
+  const slice = trimmed.slice(0, max);
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > max * 0.6 ? slice.slice(0, lastSpace) : slice).trim();
+}
+
 const PLATFORM_TO_PROVIDER: Record<string, IntegrationProvider> = {
   youtube: "youtube",
   googleAds: "google-ads",
@@ -73,8 +89,12 @@ export function mapOnboardingStateToAgentPayload(
     id: brandId,
     brand_name: brandName,
     website_url: state.brand.website || undefined,
-    brand_voice: state.brand.brandVoice ? { tone: state.brand.brandVoice } : undefined,
-    target_audience: state.brand.targetAudience ? { summary: state.brand.targetAudience } : undefined,
+    brand_voice: state.brand.brandVoice
+      ? { tone: clampText(state.brand.brandVoice, BRAND_VOICE_TONE_MAX) }
+      : undefined,
+    target_audience: state.brand.targetAudience
+      ? { summary: clampText(state.brand.targetAudience, AUDIENCE_SUMMARY_MAX) }
+      : undefined,
     description: [state.brand.industry, state.brand.name].filter(Boolean).join(" — ") || undefined,
   };
 
