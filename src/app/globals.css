@@ -828,14 +828,16 @@ body {
   }
 }
 
-.mention-token {
-  background-color: color-mix(in oklch, var(--primary) 13%, transparent);
+.mention-token,
+.link-token {
+  background-color: color-mix(in oklch, var(--primary) 20%, white);
   border-radius: 2px;
   padding-inline: 1px;
 }
 
-.link-token {
-  background-color: color-mix(in oklch, var(--secondary) 12%, transparent);
-  border-radius: 2px;
-  padding-inline: 1px;
+.dark .mention-token,
+[data-theme="dark"] .mention-token,
+.dark .link-token,
+[data-theme="dark"] .link-token {
+  background-color: color-mix(in oklch, var(--primary) 28%, transparent);
 }

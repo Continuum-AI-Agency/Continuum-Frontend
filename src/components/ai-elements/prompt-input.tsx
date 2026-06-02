@@ -388,7 +388,7 @@ export function PromptInput({
           isProcessing={isSpeechProcessing}
           isRecording={isListening}
         >
-          <div className="relative">
+          <div className="relative w-full">
             <div
               ref={mirrorRef}
               aria-hidden="true"
