@@ -8,6 +8,66 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
 }
 
+type HyperframeMediaSuggestion = NonNullable<
+  NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["hyperframe"]
+>
+
+function restoreHyperframe(value: unknown): HyperframeMediaSuggestion | undefined {
+  const obj = asRecord(value)
+  if (Object.keys(obj).length === 0) return undefined
+  const mp4StatusRaw = readString(obj.mp4Status)
+  const mp4Status =
+    mp4StatusRaw === "pending" || mp4StatusRaw === "ready" || mp4StatusRaw === "failed"
+      ? mp4StatusRaw
+      : null
+  return {
+    generated: typeof obj.generated === "boolean" ? obj.generated : null,
+    compositionId: readString(obj.compositionId) ?? null,
+    bucket: readString(obj.bucket) ?? null,
+    htmlPath: readString(obj.htmlPath) ?? null,
+    coverImageUrl: readString(obj.coverImageUrl) ?? null,
+    coverPath: readString(obj.coverPath) ?? null,
+    coverBase64: readString(obj.coverBase64) ?? null,
+    mp4Bucket: readString(obj.mp4Bucket) ?? null,
+    mp4Path: readString(obj.mp4Path) ?? null,
+    mp4Url: readString(obj.mp4Url) ?? null,
+    mp4Status,
+    error: readString(obj.error) ?? null,
+    spec: obj.spec ?? null,
+  }
+}
+
+type ReelMediaSuggestion = NonNullable<NonNullable<OrganicCalendarDraft["mediaSuggestion"]>["reel"]>
+
+function restoreReel(value: unknown): ReelMediaSuggestion | undefined {
+  const obj = asRecord(value)
+  if (Object.keys(obj).length === 0) return undefined
+  const roleOf = (raw: unknown): "hook" | "body" | "cta" | null => {
+    const r = readString(raw)
+    return r === "hook" || r === "body" || r === "cta" ? r : null
+  }
+  return {
+    generated: typeof obj.generated === "boolean" ? obj.generated : null,
+    url: readString(obj.url) ?? null,
+    signedUrl: readString(obj.signedUrl) ?? null,
+    mimeType: readString(obj.mimeType) ?? null,
+    durationSec: readNumber(obj.durationSec) ?? null,
+    scenes: asArray(obj.scenes)
+      .filter((s): s is Record<string, unknown> => Boolean(s && typeof s === "object" && !Array.isArray(s)))
+      .map((scene) => ({
+        index: readNumber(scene.index) ?? null,
+        role: roleOf(scene.role),
+        prompt: readString(scene.prompt) ?? null,
+        captionText: readString(scene.captionText) ?? null,
+        durationSec: readNumber(scene.durationSec) ?? null,
+        clipUrl: readString(scene.clipUrl) ?? null,
+        signedClipUrl: readString(scene.signedClipUrl) ?? null,
+        error: readString(scene.error) ?? null,
+      })),
+    error: readString(obj.error) ?? null,
+  }
+}
+
 function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSuggestion"] {
   const obj = asRecord(value)
   if (Object.keys(obj).length === 0) return undefined
@@ -20,6 +80,8 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSugg
     height: readNumber(obj.height) ?? null,
     assetUrl: readString(obj.assetUrl) ?? null,
     alt: readString(obj.alt) ?? null,
+    hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
+    reel: restoreReel(obj.reel) ?? null,
     // assetBase64 intentionally excluded — too large for Supabase round-trips
     assets: asArray(obj.assets)
       .filter((a): a is Record<string, unknown> => Boolean(a && typeof a === "object" && !Array.isArray(a)))
@@ -84,6 +146,11 @@ export type PersistedOrganicDraftRow = {
   platform_account_id: string | null
   instagram_post_id?: string | null
   updated_at?: string | null
+  // Backend-generated drafts (createPost + bulk) carry the rich content here
+  // (the CalendarPlacement) rather than in slot_data.draftSnapshot.
+  content_json?: unknown
+  // Non-null for drafts that belong to a bulk plan — the "planned" provenance tag.
+  content_plan_id?: string | null
 }
 
 export type PersistedDraftWritePayload = {
@@ -155,6 +222,18 @@ function normalizePlatform(value: unknown): OrganicPlatformKey {
   return FALLBACK_PLATFORM
 }
 
+/** Derive a "h:mm AM/PM" label from an ISO/timestamptz string's time part. */
+function formatIsoTimeLabel(iso: string | null): string | null {
+  if (!iso) return null
+  const match = iso.match(/[T ](\d{2}):(\d{2})/)
+  if (!match) return null
+  let hour = Number(match[1])
+  const minute = match[2]
+  const meridiem = hour >= 12 ? "PM" : "AM"
+  hour = hour % 12 || 12
+  return `${hour}:${minute} ${meridiem}`
+}
+
 function mapSlotDataDraftId(slotData: Record<string, unknown>, rowId: string): string {
   return (
     readString(slotData.placementId) ??
@@ -223,8 +302,24 @@ export function mapPersistedRowToCalendarEntry(
 
   const slotData = asRecord(row.slot_data)
   const snapshot = asRecord(slotData.draftSnapshot)
+  // Backend-generated drafts (createPost + bulk) have no draftSnapshot; their
+  // content lives in content_json (the CalendarPlacement) and the day under
+  // slot_data.schedule. Resolve from both shapes so generated content places
+  // on the grid instead of being dropped or rendered empty.
+  const scheduleData = asRecord(slotData.schedule)
+  const placement = asRecord(row.content_json)
+  const placementSchedule = asRecord(placement.schedule)
+  const placementContent = asRecord(placement.content)
+  const placementCopy = asRecord(placement.copy)
+  const placementPlatform = asRecord(placement.platform)
+  const placementCreative = asRecord(placement.creative)
+  const scheduledIso = readString(row.scheduled_date)
 
-  const dayId = readString(slotData.dayId) ?? readString(row.scheduled_date)
+  const dayId =
+    readString(slotData.dayId) ??
+    readString(scheduleData.dayId) ??
+    readString(placementSchedule.dayId) ??
+    (scheduledIso ? scheduledIso.slice(0, 10) : null)
   if (!dayId) return null
   const day = days.find((item) => item.id === dayId)
   if (!day) return null
@@ -233,24 +328,41 @@ export function mapPersistedRowToCalendarEntry(
   const platforms =
     snapshotPlatforms.length > 0
       ? snapshotPlatforms.map((platform) => normalizePlatform(platform))
-      : [normalizePlatform(slotData.platform)]
+      : [
+          normalizePlatform(
+            readString(asRecord(slotData.platform).name) ??
+              slotData.platform ??
+              placementPlatform.name,
+          ),
+        ]
 
   const draftId = mapSlotDataDraftId(slotData, row.id)
 
   const draft: OrganicCalendarDraft = {
     id: draftId,
     backendDraftId: row.id,
-    title: readString(snapshot.title) ?? readString(slotData.title) ?? "Saved draft",
+    title:
+      readString(snapshot.title) ??
+      readString(slotData.title) ??
+      readString(placementContent.titleTopic) ??
+      "Saved draft",
     summary: readString(snapshot.summary) ?? "",
-    timeLabel: readString(slotData.timeLabel) ?? readString(snapshot.timeLabel) ?? day.suggestedTimes[0] ?? "9:00 AM",
+    timeLabel:
+      readString(slotData.timeLabel) ??
+      readString(snapshot.timeLabel) ??
+      formatIsoTimeLabel(scheduledIso) ??
+      day.suggestedTimes[0] ??
+      "9:00 AM",
     dateLabel: `${day.label}, ${day.dateLabel}`,
     status: normalizePersistedStatus(row.status),
     platforms,
-    format: readString(snapshot.format) ?? "Post",
-    objective: readString(snapshot.objective) ?? "Draft",
+    contentPlanId: readString(row.content_plan_id) ?? null,
+    format: readString(snapshot.format) ?? readString(placementContent.format) ?? "Post",
+    objective: readString(snapshot.objective) ?? readString(placementContent.objective) ?? "Draft",
     captionPreview:
       readString(snapshot.captionPreview) ??
       readString(slotData.caption) ??
+      readString(placementCopy.caption) ??
       "",
     tags: readStringArray(snapshot.tags),
     mediaCount: readNumber(snapshot.mediaCount) ?? 1,
@@ -269,7 +381,11 @@ export function mapPersistedRowToCalendarEntry(
     slideCount: readNumber(snapshot.slideCount) ?? undefined,
     adjusted: typeof snapshot.adjusted === "boolean" ? snapshot.adjusted : undefined,
     generationAttempts: readNumber(snapshot.generationAttempts) ?? undefined,
-    mediaSuggestion: restoreMediaSuggestion(snapshot.mediaSuggestion),
+    mediaSuggestion: restoreMediaSuggestion(
+      Object.keys(asRecord(snapshot.mediaSuggestion)).length > 0
+        ? snapshot.mediaSuggestion
+        : placementCreative.mediaSuggestion,
+    ),
     publishingAssets: restorePublishingAssets(snapshot.publishingAssets),
     hashtags: restoreHashtags(snapshot.hashtags),
     assetHints: restoreAssetHints(snapshot.assetHints),

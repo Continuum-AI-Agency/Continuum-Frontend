@@ -90,6 +90,15 @@ function StatusBadge({ status }: { status: OrganicDraftStatus }) {
   )
 }
 
+/** Provenance tag for drafts that belong to a bulk content plan. */
+function PlannedBadge() {
+  return (
+    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-blue-500/15 text-blue-600 dark:text-blue-400">
+      Planned
+    </span>
+  )
+}
+
 const DraftRow = React.memo(function DraftRow({
   draft,
   isSelected,
@@ -154,6 +163,7 @@ const DraftRow = React.memo(function DraftRow({
             {draft.dateLabel && (
               <span className="text-xs text-muted-foreground">{draft.dateLabel}</span>
             )}
+            {draft.contentPlanId && <PlannedBadge />}
             <StatusBadge status={draft.status} />
             <button
               type="button"

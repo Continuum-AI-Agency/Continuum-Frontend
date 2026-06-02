@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 import type { PlatformKey } from "@/components/onboarding/platforms";
 import {
   amazon,
-  facebook,
   google,
   instagram,
   linkedin,
@@ -34,7 +33,7 @@ function makeSvgIcon(iconData: IconData): IconComponent {
   return SvgIcon;
 }
 
-const FacebookIcon = makeSvgIcon(facebook);
+const FacebookIcon = makeSvgIcon(meta);
 const InstagramIcon = makeSvgIcon(instagram);
 const GoogleIcon = makeSvgIcon(google);
 const YouTubeIcon = makeSvgIcon(youtube);

@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import {
   AlertCircle,
+  CheckCircle2,
   Download,
   Eye,
   FileSpreadsheet,
@@ -142,31 +143,10 @@ export function DocumentRow({
       ? `${label.text}`
       : label.text;
 
-  const trailingTone: ActionTone =
-    label.tone === "success"
-      ? "success"
-      : label.tone === "error"
-        ? "error"
-        : label.tone === "progress"
-          ? "progress"
-          : "neutral";
-
-  const trailingIcon =
-    label.tone === "success"
-      ? Eye
-      : label.tone === "error"
-        ? AlertCircle
-        : Loader2;
-  const trailingSpin = label.tone === "progress";
-
-  const trailingLabel =
-    label.tone === "success"
-      ? canPreview
-        ? "Preview document"
-        : "Preview unavailable"
-      : label.tone === "error"
-        ? "Show error"
-        : "Processing";
+  const statusIcon =
+    label.tone === "success" ? CheckCircle2 : label.tone === "error" ? AlertCircle : Loader2;
+  const statusTone: ActionTone =
+    label.tone === "success" ? "success" : label.tone === "error" ? "error" : "progress";
 
   return (
     <motion.li
@@ -209,7 +189,23 @@ export function DocumentRow({
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        <div className="flex items-center gap-0.5 opacity-0 motion-safe:transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+        {/* Preview, download, remove — revealed on hover (always visible for errors) */}
+        <div
+          className={cn(
+            "flex items-center gap-0.5 motion-safe:transition-opacity",
+            label.tone === "error"
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
+          )}
+        >
+          {canPreview && (
+            <CircleAction
+              ariaLabel="Preview document"
+              tone="muted"
+              icon={Eye}
+              onClick={() => onPreview(doc)}
+            />
+          )}
           {doc.storagePath ? (
             <CircleAction
               ariaLabel="Download"
@@ -225,26 +221,37 @@ export function DocumentRow({
             onClick={() => onRemove(doc.id)}
           />
         </div>
-        <CircleAction
-          ariaLabel={trailingLabel}
-          tone={trailingTone}
-          icon={trailingIcon}
-          spin={trailingSpin}
-          onClick={
-            label.tone === "success" && canPreview
-              ? () => onPreview(doc)
-              : undefined
-          }
-          disabled={
-            (label.tone === "success" && !canPreview) || label.tone === "progress"
-          }
-        />
+        {/* Ingestion status badge — independent of preview */}
+        <StatusBadge tone={statusTone} icon={statusIcon} spin={label.tone === "progress"} />
       </div>
     </motion.li>
   );
 }
 
 type ActionTone = "success" | "error" | "progress" | "neutral" | "muted";
+
+function StatusBadge({
+  tone,
+  icon: Icon,
+  spin,
+}: {
+  tone: ActionTone;
+  icon: LucideIcon;
+  spin?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-7 w-7 items-center justify-center rounded-full",
+        tone === "success" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+        tone === "error" && "bg-rose-500/10 text-rose-600",
+        tone === "progress" && "bg-emerald-500/5 text-emerald-600 dark:text-emerald-400",
+      )}
+    >
+      <Icon className={cn("h-4 w-4", spin && "animate-spin")} />
+    </span>
+  );
+}
 
 function CircleAction({
   ariaLabel,

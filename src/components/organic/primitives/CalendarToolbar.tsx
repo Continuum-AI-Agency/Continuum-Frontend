@@ -13,6 +13,7 @@ import {
 import { RefreshCw } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { useCalendarStore } from "@/lib/organic/store"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -68,6 +69,8 @@ export function CalendarToolbar({
   onFetchPostedContent,
 }: CalendarToolbarProps) {
   const router = useRouter()
+  const showPlanned = useCalendarStore((state) => state.showPlanned)
+  const setShowPlanned = useCalendarStore((state) => state.setShowPlanned)
 
   return (
     <ContextMenu>
@@ -99,6 +102,19 @@ export function CalendarToolbar({
                   </Button>
                 ))}
               </div>
+              {viewMode !== "list" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={showPlanned ? "secondary" : "ghost"}
+                  aria-pressed={showPlanned}
+                  className="h-7 rounded px-2.5 text-xs"
+                  onClick={() => setShowPlanned(!showPlanned)}
+                  title="Show or hide planned (bulk-plan) content on the calendar"
+                >
+                  Planned
+                </Button>
+              ) : null}
               <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
                 {selectedTrendCount}
                 {typeof maxTrendSelections === "number"

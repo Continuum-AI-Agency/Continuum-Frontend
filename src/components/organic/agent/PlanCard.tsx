@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { PlanEvidence, PlanItem, UiPlanCard } from "./types";
+import type { PlanEvidence, PlanItem, PlanItemStatus, UiPlanCard } from "./types";
+
+const ITEM_STATUS_STYLES: Record<PlanItemStatus, string> = {
+  pending: "bg-muted/60 text-muted-foreground",
+  executing: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  completed: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  failed: "bg-red-500/15 text-red-500",
+  cancelled: "bg-muted/60 text-muted-foreground",
+};
 
 const PLATFORM_STYLES: Record<string, string> = {
   instagram: "bg-violet-500/15 text-violet-500",
@@ -53,7 +61,7 @@ function formatScheduledAt(iso: string): string {
   }
 }
 
-function PlanItemRow({ item }: { item: PlanItem }) {
+function PlanItemRow({ item, status }: { item: PlanItem; status: PlanItemStatus }) {
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -69,6 +77,7 @@ function PlanItemRow({ item }: { item: PlanItem }) {
           label={item.objective}
           style={OBJECTIVE_STYLES[item.objective] ?? "bg-muted/60 text-muted-foreground"}
         />
+        {status !== "pending" && <Chip label={status} style={ITEM_STATUS_STYLES[status]} />}
       </div>
       {item.trendTitle && (
         <p className="text-[11px] text-muted-foreground">
@@ -96,11 +105,12 @@ function EvidenceRow({ evidence }: { evidence: PlanEvidence }) {
 
 type Props = {
   plan: UiPlanCard;
-  onApprove: () => void;
-  onReject: () => void;
+  planItemStatus?: Record<string, PlanItemStatus>;
+  onApproveAction: () => void;
+  onRejectAction: () => void;
 };
 
-export function PlanCard({ plan, onApprove, onReject }: Props) {
+export function PlanCard({ plan, planItemStatus, onApproveAction, onRejectAction }: Props) {
   const [decided, setDecided] = useState(false);
 
   const title = typeof plan?.title === "string" ? plan.title : "";
@@ -108,16 +118,22 @@ export function PlanCard({ plan, onApprove, onReject }: Props) {
   const items = Array.isArray(plan?.items) ? plan.items : [];
   const evidence = Array.isArray(plan?.evidence) ? plan.evidence : [];
 
+  const resolveStatus = (item: PlanItem): PlanItemStatus =>
+    planItemStatus?.[item.itemId] ?? item.status ?? "pending";
+  // Once any item has started, the plan has been acted on — lock the buttons.
+  const alreadyActioned = items.some((item) => resolveStatus(item) !== "pending");
+  const locked = decided || alreadyActioned;
+
   function handleApprove() {
-    if (decided) return;
+    if (locked) return;
     setDecided(true);
-    onApprove();
+    onApproveAction();
   }
 
   function handleReject() {
-    if (decided) return;
+    if (locked) return;
     setDecided(true);
-    onReject();
+    onRejectAction();
   }
 
   return (
@@ -143,7 +159,7 @@ export function PlanCard({ plan, onApprove, onReject }: Props) {
           {items.map((item, i) => (
             <div key={item.itemId ?? i}>
               {i > 0 && <div className="mb-3 border-t border-border/30" />}
-              <PlanItemRow item={item} />
+              <PlanItemRow item={item} status={resolveStatus(item)} />
             </div>
           ))}
         </div>
@@ -163,20 +179,20 @@ export function PlanCard({ plan, onApprove, onReject }: Props) {
       <div className="mt-3 flex justify-end gap-2 border-t border-border/40 pt-3">
         <button
           onClick={handleReject}
-          disabled={decided}
+          disabled={locked}
           className={cn(
             "rounded-md border border-border px-3 py-1.5 text-[12px] font-medium transition-opacity",
-            decided ? "opacity-40 cursor-not-allowed" : "hover:bg-muted/40"
+            locked ? "opacity-40 cursor-not-allowed" : "hover:bg-muted/40"
           )}
         >
           Reject
         </button>
         <button
           onClick={handleApprove}
-          disabled={decided}
+          disabled={locked}
           className={cn(
             "rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-opacity",
-            decided ? "opacity-40 cursor-not-allowed" : "hover:opacity-90"
+            locked ? "opacity-40 cursor-not-allowed" : "hover:opacity-90"
           )}
         >
           Approve Plan →

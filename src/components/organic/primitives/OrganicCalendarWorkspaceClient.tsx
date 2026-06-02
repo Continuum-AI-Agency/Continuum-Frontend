@@ -34,6 +34,7 @@ import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistenc
 import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
+import { useGenerateReelVideos } from "@/components/organic/hooks/useGenerateReelVideos"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
 import { Button } from "@/components/ui/button"
 import {
@@ -348,6 +349,20 @@ export function OrganicCalendarWorkspaceClient({
     [calendarDays]
   )
 
+  // "Planned" calendar lens: when off, hide bulk-plan drafts from the week/month
+  // grids (the list view still shows them, tagged). Default on.
+  const showPlanned = useCalendarStore((state) => state.showPlanned)
+  const gridDays = React.useMemo(
+    () =>
+      showPlanned
+        ? calendarDays
+        : calendarDays.map((day) => ({
+            ...day,
+            slots: day.slots.filter((slot) => !slot.contentPlanId),
+          })),
+    [calendarDays, showPlanned]
+  )
+
   const selectedDraft = React.useMemo(() => {
     if (!selectedId) return null
     return drafts.find((draft) => draft.id === selectedId) ?? null
@@ -559,6 +574,41 @@ export function OrganicCalendarWorkspaceClient({
     clearAll()
   }, [bulkMoveDrafts, selectedIds, calendarDays, clearAll])
 
+  const { generate: generateReelVideos, isGenerating: isGeneratingReels } = useGenerateReelVideos()
+
+  // Selected reel drafts that carry a persisted storyboard and have not yet been
+  // rendered to video — the eligible set for the gated "Generate videos" batch.
+  const reelTargets = React.useMemo(() => {
+    const selected = new Set(selectedIds)
+    return drafts
+      .filter((d) => selected.has(d.id))
+      .filter((d) => {
+        const format = (d.format ?? "").toLowerCase()
+        const reel = d.mediaSuggestion?.reel
+        const hasStoryboard = Array.isArray(reel?.scenes) && reel.scenes.length > 0
+        return (
+          (format === "reel" || format === "video") &&
+          hasStoryboard &&
+          reel?.generated !== true &&
+          Boolean(d.backendDraftId)
+        )
+      })
+      .map((d) => ({ id: d.id, backendDraftId: d.backendDraftId as string }))
+  }, [drafts, selectedIds])
+
+  const handleGenerateReels = React.useCallback(() => {
+    if (!brandProfileId || reelTargets.length === 0) return
+    if (typeof window !== "undefined") {
+      const approxClips = reelTargets.length * 4
+      const confirmed = window.confirm(
+        `Generate ${reelTargets.length} reel video${reelTargets.length === 1 ? "" : "s"}? ` +
+          `This renders ~${approxClips} AI video clips and may take a few minutes.`
+      )
+      if (!confirmed) return
+    }
+    void generateReelVideos(brandProfileId, reelTargets)
+  }, [brandProfileId, reelTargets, generateReelVideos])
+
   const isGenerating = gridStatus === "running"
   const slotProgress = React.useMemo(() => {
     const completed = gridProgress.completed
@@ -661,7 +711,7 @@ export function OrganicCalendarWorkspaceClient({
                       <ResizablePanel defaultSize={74} minSize={48}>
                         <div data-tour-id="organic-calendar" className="h-full overflow-hidden">
                           <TimeGridCanvas
-                            days={calendarDays}
+                            days={gridDays}
                             platforms={plannerPlatforms}
                             selectedDraftId={selectedId}
                             selectedDraftIds={selectedIds}
@@ -714,7 +764,7 @@ export function OrganicCalendarWorkspaceClient({
                     className="h-full"
                   >
                     <OrganicMonthlyCalendar
-                      days={calendarDays}
+                      days={gridDays}
                       monthAnchorDate={monthAnchorDate}
                       platforms={plannerPlatforms}
                       postedContent={postedContent}
@@ -853,6 +903,9 @@ export function OrganicCalendarWorkspaceClient({
         onDelete={handleBulkDelete}
         onMove={handleBulkMove}
         onApprove={handleBulkApprove}
+        reelCount={reelTargets.length}
+        onGenerateReels={brandProfileId ? handleGenerateReels : undefined}
+        isGeneratingReels={isGeneratingReels}
       />
     </div>
     </AiStudioHandoffProvider>

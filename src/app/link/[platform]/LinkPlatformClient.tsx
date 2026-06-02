@@ -238,7 +238,7 @@ export default function LinkPlatformClient({ platform, token }: LinkPlatformClie
                 className="h-12 w-full rounded-lg bg-[oklch(65%_0.13_180)] text-[oklch(14%_0.01_265)] hover:bg-[oklch(75%_0.13_180)]"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                Continue with Clerk
+                Continue to sign in
               </Button>
             </div>
           ) : null}

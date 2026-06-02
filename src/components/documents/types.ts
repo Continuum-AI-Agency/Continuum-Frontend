@@ -80,8 +80,6 @@ export function kindLabel(doc: DocumentView): string {
 }
 
 export function isPreviewSupported(doc: DocumentView): boolean {
-  if (doc.progressStep && doc.progressStep !== "ready") return false;
-  if (doc.status !== "ready") return false;
   if (!doc.storagePath) return false;
   const kind = doc.kind ?? inferKindFromName(doc.name);
   return kind !== "unknown";

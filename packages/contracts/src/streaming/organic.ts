@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { mediaSearchResultsFrameSchema } from "./media";
 
 const jobEventDataSchema = z.object({
   jobId: z.string().min(1),
@@ -6,6 +7,34 @@ const jobEventDataSchema = z.object({
 }).loose();
 
 const uiCardDataSchema = z.record(z.string(), z.unknown());
+
+/**
+ * Canonical ordered content-creation pipeline timeline. The backend content
+ * runner's raw stages collapse onto these six steps; the Frontend renders one
+ * timeline node per member, in this order.
+ */
+export const pipelineStageEnum = z.enum([
+  "strategist",
+  "concept",
+  "draft",
+  "assets",
+  "quality",
+  "merge",
+]);
+
+/**
+ * Per-plan-item creative brief the planner attaches so a content job can skip
+ * the strategist stage. Mirrors the Backend content runner's CreativeBrief.
+ */
+export const organicCreativeBriefSchema = z.object({
+  contentObjective: z.string(),
+  targetAudience: z.string(),
+  angle: z.string(),
+  trendIntegration: z.string().nullable(),
+  toneAndVoice: z.string(),
+  formatSuggestion: z.enum(["reel", "post", "carousel", "story", "hyperframe"]),
+  productionNotes: z.array(z.string()),
+}).strict();
 
 const responseCreatedSchema = z.object({
   type: z.literal("response.created"),
@@ -109,6 +138,23 @@ const uiPlanStatusSchema = z.object({
   data: uiCardDataSchema,
 });
 
+/**
+ * Emitted when an approved BULK plan kicks off its single background `runV2`
+ * batch run. Carries the runId the FE BulkRunPanel uses to stream aggregate
+ * progress from the batch run-events replay endpoint (the bulk run does NOT
+ * pipe its v2 envelopes through this chat stream). `total` is the placement
+ * count for the run.
+ */
+const uiBulkRunSchema = z.object({
+  type: z.literal("ui.bulk_run"),
+  data: z.object({
+    runId: z.string().min(1),
+    planId: z.string().min(1),
+    brandId: z.string().min(1),
+    total: z.number().int().min(0),
+  }).loose(),
+});
+
 const agentRunStartedSchema = z.object({
   type: z.literal("agent.run_started"),
   data: z.object({
@@ -161,6 +207,51 @@ const draftReadySchema = z.object({
   data: jobEventDataSchema,
 });
 
+const pipelineStageSchema = z.object({
+  type: z.literal("pipeline.stage"),
+  data: z.object({
+    jobId: z.string().min(1),
+    brandId: z.string().min(1),
+    planId: z.string().nullable().optional(),
+    planItemId: z.string().nullable().optional(),
+    stage: pipelineStageEnum,
+    agentName: z.string().optional(),
+    pct: z.number().min(0).max(100).optional(),
+    status: z.enum(["active", "done", "failed"]).optional(),
+  }).loose(),
+});
+
+const pipelineQualitySchema = z.object({
+  passed: z.boolean(),
+  overallScore: z.number(),
+  brandFitScore: z.number().optional(),
+  platformFitScore: z.number().optional(),
+  noveltyScore: z.number().optional(),
+  complianceScore: z.number().optional(),
+  summary: z.string().optional(),
+}).loose();
+
+const uiPipelineCardSchema = z.object({
+  type: z.literal("ui.pipeline_card"),
+  data: z.object({
+    jobId: z.string().min(1),
+    brandId: z.string().min(1),
+    planId: z.string().nullable().optional(),
+    planItemId: z.string().nullable().optional(),
+    platform: z.string().optional(),
+    status: z.enum(["running", "completed", "failed", "cancelled"]),
+    currentStage: pipelineStageEnum.optional(),
+    preview: z.object({
+      caption: z.string().nullable().optional(),
+      imageUrl: z.string().nullable().optional(),
+      images: z.array(z.string()).optional(),
+      format: z.string().nullable().optional(),
+    }).loose().optional(),
+    quality: pipelineQualitySchema.nullable().optional(),
+    draftId: z.string().nullable().optional(),
+  }).loose(),
+});
+
 export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   responseCreatedSchema,
   responseOutputTextDeltaSchema,
@@ -178,6 +269,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   uiPostCardSchema,
   uiPostEnqueuedSchema,
   uiPlanStatusSchema,
+  uiBulkRunSchema,
   agentRunStartedSchema,
   agentChatStartedSchema,
   jobEnqueuedSchema,
@@ -186,6 +278,9 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   jobFailedSchema,
   jobCancelledSchema,
   draftReadySchema,
+  pipelineStageSchema,
+  uiPipelineCardSchema,
+  mediaSearchResultsFrameSchema,
 ]);
 
 export type OrganicStreamFrame = z.infer<typeof organicStreamFrameSchema>;
@@ -193,3 +288,13 @@ export type OrganicStreamFrame = z.infer<typeof organicStreamFrameSchema>;
 export type OrganicJobEventData = z.infer<typeof jobEventDataSchema>;
 
 export type OrganicFrameType = OrganicStreamFrame["type"];
+
+export type OrganicPipelineStage = z.infer<typeof pipelineStageEnum>;
+
+export type OrganicPipelineStageFrame = z.infer<typeof pipelineStageSchema>;
+
+export type OrganicUiPipelineCardFrame = z.infer<typeof uiPipelineCardSchema>;
+
+export type OrganicCreativeBrief = z.infer<typeof organicCreativeBriefSchema>;
+
+export type OrganicUiBulkRunFrame = z.infer<typeof uiBulkRunSchema>;

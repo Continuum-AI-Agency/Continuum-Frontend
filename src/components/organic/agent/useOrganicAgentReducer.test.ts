@@ -89,8 +89,124 @@ describe("LOAD_MESSAGES_START", () => {
     const next = panelReducer(withData, { type: "LOAD_MESSAGES_START" })
     expect(next.messages).toHaveLength(0)
     expect(next.jobs).toEqual({})
+    expect(next.pipeline).toEqual({})
+    expect(next.planItemStatus).toEqual({})
+    expect(next.pendingToolApprovals).toEqual([])
     expect(next.streamingMessageId).toBeNull()
     expect(next.isHydrated).toBe(false)
     expect(next.sessionId).toBe("s1")  // sessionId is preserved
+  })
+})
+
+describe("PIPELINE_STAGE", () => {
+  it("builds the timeline with prior stages done and the current stage active", () => {
+    const next = panelReducer(initialPanelState(), {
+      type: "PIPELINE_STAGE",
+      event: {
+        jobId: "job-1",
+        brandId: "brand-1",
+        planId: "plan-1",
+        planItemId: "item-1",
+        stage: "draft",
+        agentName: "creative",
+        pct: 45,
+        status: "active",
+      },
+    })
+    const card = next.pipeline["job-1"]
+    expect(card.status).toBe("running")
+    expect(card.currentStage).toBe("draft")
+    expect(card.pct).toBe(45)
+    expect(card.planId).toBe("plan-1")
+    const byStage = Object.fromEntries(card.stages.map((s) => [s.stage, s.status]))
+    expect(byStage.strategist).toBe("done")
+    expect(byStage.concept).toBe("done")
+    expect(byStage.draft).toBe("active")
+    expect(byStage.quality).toBe("pending")
+    expect(byStage.merge).toBe("pending")
+  })
+
+  it("advances the timeline across successive stage frames", () => {
+    let state = panelReducer(initialPanelState(), {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "j", brandId: "b", planId: null, planItemId: null, stage: "strategist", status: "active" },
+    })
+    state = panelReducer(state, {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "j", brandId: "b", planId: null, planItemId: null, stage: "quality", status: "active" },
+    })
+    const byStage = Object.fromEntries(state.pipeline["j"].stages.map((s) => [s.stage, s.status]))
+    expect(byStage.strategist).toBe("done")
+    expect(byStage.assets).toBe("done")
+    expect(byStage.quality).toBe("active")
+  })
+})
+
+describe("PIPELINE_CARD", () => {
+  it("on completed, marks all stages done and merges preview + quality", () => {
+    const start = panelReducer(initialPanelState(), {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "j", brandId: "b", planId: "p", planItemId: "i", stage: "draft", status: "active" },
+    })
+    const next = panelReducer(start, {
+      type: "PIPELINE_CARD",
+      card: {
+        jobId: "j",
+        status: "completed",
+        currentStage: "merge",
+        preview: { caption: "hi", imageUrl: null, format: "carousel" },
+        quality: { passed: true, overallScore: 88 },
+        draftId: "draft-1",
+      },
+    })
+    const card = next.pipeline["j"]
+    expect(card.status).toBe("completed")
+    expect(card.pct).toBe(100)
+    expect(card.stages.every((s) => s.status === "done")).toBe(true)
+    expect(card.preview?.caption).toBe("hi")
+    expect(card.quality?.overallScore).toBe(88)
+    expect(card.draftId).toBe("draft-1")
+  })
+
+  it("on failed, marks the current stage failed", () => {
+    const start = panelReducer(initialPanelState(), {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "j", brandId: "b", planId: null, planItemId: null, stage: "assets", status: "active" },
+    })
+    const next = panelReducer(start, {
+      type: "PIPELINE_CARD",
+      card: { jobId: "j", status: "failed", currentStage: "assets", error: { message: "boom" } },
+    })
+    const card = next.pipeline["j"]
+    expect(card.status).toBe("failed")
+    expect(card.stages.find((s) => s.stage === "assets")?.status).toBe("failed")
+    expect(card.error?.message).toBe("boom")
+  })
+})
+
+describe("PLAN_STATUS + tool approvals", () => {
+  it("records plan item status by itemId", () => {
+    const next = panelReducer(initialPanelState(), {
+      type: "PLAN_STATUS",
+      event: { planId: "p", itemId: "item-1", status: "executing" },
+    })
+    expect(next.planItemStatus["item-1"]).toBe("executing")
+  })
+
+  it("adds and resolves tool approvals without duplicates", () => {
+    const approval = { approvalId: "a1", toolCallId: "tc1", toolName: "publishDraft", input: {} }
+    let state = panelReducer(initialPanelState(), { type: "TOOL_APPROVAL_ADD", approval })
+    state = panelReducer(state, { type: "TOOL_APPROVAL_ADD", approval })
+    expect(state.pendingToolApprovals).toHaveLength(1)
+    state = panelReducer(state, { type: "TOOL_APPROVAL_RESOLVE", approvalId: "a1" })
+    expect(state.pendingToolApprovals).toHaveLength(0)
+  })
+
+  it("registers a bulk run by runId (idempotent upsert)", () => {
+    const run = { runId: "run_p1", planId: "p1", total: 80 }
+    let state = panelReducer(initialPanelState(), { type: "BULK_RUN_START", run })
+    expect(state.bulkRuns["run_p1"]).toEqual(run)
+    state = panelReducer(state, { type: "BULK_RUN_START", run })
+    expect(Object.keys(state.bulkRuns)).toHaveLength(1)
   })
 })

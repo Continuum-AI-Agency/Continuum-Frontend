@@ -198,7 +198,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
   const brandSummaries: BrandSummary[] = allBrandIds.flatMap((id) => {
     const brandData = brandMap.get(id);
-    if (!brandData?.completedAt) return [];
+    if (!brandData) return [];
 
     const logoPath = brandData.logoPath;
     const isPending = !permittedIds.includes(id);
@@ -206,7 +206,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     return [{
       id,
       name: brandData.name,
-      completed: true,
+      completed: brandData.completedAt !== null,
       logoPath,
       logoUrl: logoPath ? signedUrlMap.get(logoPath) ?? null : null,
       isPending,

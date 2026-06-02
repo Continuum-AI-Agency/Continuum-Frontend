@@ -1,0 +1,196 @@
+"use client";
+
+import { useCallback, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Upload, ScanSearch } from "lucide-react";
+import type { MediaAsset, MediaCollection, MediaSearchResultItem } from "@continuum/contracts";
+import { Button } from "@/components/ui/button";
+import { LibrarySidebar } from "./LibrarySidebar";
+import { MediaGrid } from "./MediaGrid";
+import { MediaSearchBar } from "./MediaSearchBar";
+import { MediaDetailDialog } from "./MediaDetailDialog";
+import { UploadStrip } from "./UploadStrip";
+import { useMediaLibrary } from "./useMediaLibrary";
+import { useMediaUpload } from "./useMediaUpload";
+
+type Props = {
+  brandId: string;
+  isPaid: boolean;
+  initialAssets: MediaAsset[];
+  initialCollections: MediaCollection[];
+  storageUsedBytes: number;
+  selectedCollectionId: string | null;
+};
+
+export function LibraryViewer({
+  brandId,
+  isPaid,
+  initialAssets,
+  initialCollections,
+  storageUsedBytes,
+  selectedCollectionId,
+}: Props) {
+  const router = useRouter();
+  const reduceMotion = useReducedMotion();
+  const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
+    brandId,
+    collectionId: selectedCollectionId,
+    seed: initialAssets,
+  });
+  const { uploads, uploadFiles } = useMediaUpload(brandId);
+
+  const [openAsset, setOpenAsset] = useState<MediaAsset | null>(null);
+  const [searchResults, setSearchResults] = useState<MediaSearchResultItem[] | null>(null);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+
+  const isSearching = searchResults !== null;
+  const displayedAssets = isSearching ? searchResults!.map((r) => r.asset) : assets;
+  const activeCollection = selectedCollectionId
+    ? initialCollections.find((c) => c.id === selectedCollectionId)
+    : null;
+
+  const onSelectCollection = useCallback(
+    (id: string | null) => {
+      setSearchResults(null);
+      router.push(id ? `/library?collection=${id}` : "/library");
+    },
+    [router],
+  );
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current += 1;
+    if (Array.from(e.dataTransfer.types).includes("Files")) setDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setDragging(false);
+    }
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    void uploadFiles(e.dataTransfer.files);
+  };
+
+  return (
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <LibrarySidebar
+        brandId={brandId}
+        collections={initialCollections}
+        selectedCollectionId={selectedCollectionId}
+        onSelectCollection={onSelectCollection}
+        storageUsedBytes={storageUsedBytes}
+      />
+
+      <div
+        className="relative flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4"
+        onDragEnter={handleDragEnter}
+        onDragOver={(e) => e.preventDefault()}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <h1 className="text-base font-semibold text-balance">
+            {activeCollection?.name ?? "All Media"}
+          </h1>
+          <div className="min-w-0 flex-1">
+            <MediaSearchBar
+              brandId={brandId}
+              onResults={setSearchResults}
+              onClear={() => setSearchResults(null)}
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant={showBoundingBoxes ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowBoundingBoxes((v) => !v)}
+              title="Toggle detected-object overlays"
+              className="active:scale-[0.96] [transition-property:scale]"
+            >
+              <ScanSearch className="size-4" />
+              <span className="hidden sm:inline">Objects</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              className="active:scale-[0.96] [transition-property:scale]"
+            >
+              <Upload className="size-4" />
+              Upload
+            </Button>
+          </div>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void uploadFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
+
+        <AnimatePresence initial={false}>
+          {uploads.length > 0 && <UploadStrip uploads={uploads} />}
+        </AnimatePresence>
+
+        {!isPaid && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-600 dark:text-amber-400">
+            Upgrade to a paid plan to enable AI analysis, descriptions, and semantic search.
+          </div>
+        )}
+
+        <MediaGrid
+          assets={displayedAssets}
+          onOpenAsset={setOpenAsset}
+          showBoundingBoxes={showBoundingBoxes}
+          emptyHint={isSearching ? "No results. Try a different search." : undefined}
+          onLoadMore={isSearching ? undefined : loadMore}
+          hasMore={isSearching ? false : hasMore}
+          loadingMore={loadingMore}
+        />
+
+        {/* Full-area drop overlay */}
+        <AnimatePresence>
+          {dragging && (
+            <motion.div
+              initial={reduceMotion ? undefined : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/5 backdrop-blur-sm"
+            >
+              <div className="flex flex-col items-center gap-2 text-primary">
+                <Upload className="size-7" />
+                <span className="text-sm font-medium">Drop to upload</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <MediaDetailDialog
+        asset={openAsset}
+        onClose={() => setOpenAsset(null)}
+        brandId={brandId}
+        collections={initialCollections}
+      />
+    </div>
+  );
+}

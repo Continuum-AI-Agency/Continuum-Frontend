@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { TrashIcon, MixerHorizontalIcon, Cross2Icon, CheckIcon } from "@radix-ui/react-icons";
+import { TrashIcon, MixerHorizontalIcon, Cross2Icon, CheckIcon, VideoIcon } from "@radix-ui/react-icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,10 @@ interface BulkActionToolbarProps {
   onDelete: () => void;
   onMove: () => void;
   onApprove?: () => void;
+  /** Number of selected reel drafts eligible for video generation. */
+  reelCount?: number;
+  onGenerateReels?: () => void;
+  isGeneratingReels?: boolean;
   className?: string;
 }
 
@@ -20,6 +24,9 @@ export function BulkActionToolbar({
   onDelete,
   onMove,
   onApprove,
+  reelCount = 0,
+  onGenerateReels,
+  isGeneratingReels = false,
   className,
 }: BulkActionToolbarProps) {
   if (selectedCount === 0) return null;
@@ -47,6 +54,18 @@ export function BulkActionToolbar({
         </div>
 
         <div className="flex items-center gap-2">
+          {onGenerateReels && reelCount > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onGenerateReels}
+              disabled={isGeneratingReels}
+              className="h-8 gap-2 text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary"
+            >
+              <VideoIcon className="w-4 h-4" />
+              {isGeneratingReels ? "Generating…" : `Generate ${reelCount} video${reelCount === 1 ? "" : "s"}`}
+            </Button>
+          ) : null}
           {onApprove ? (
             <Button
               variant="ghost"

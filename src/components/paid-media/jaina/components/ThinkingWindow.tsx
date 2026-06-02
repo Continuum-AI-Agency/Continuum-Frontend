@@ -27,7 +27,10 @@ import {
   formatAgentLabel,
   formatToolLabel,
   resolveToolEntries,
+  resolveToolResultFromRef,
+  resolveToolCallFromRef,
   toMarkdownDetail,
+  type AgentLifecycleSegment,
 } from "./thinkingUtils";
 import type { JainaProgressEntry, JainaStreamState } from "@/lib/jaina/stream";
 import {
@@ -35,6 +38,8 @@ import {
   ChevronDownIcon,
   WrenchIcon,
   ArrowRightLeftIcon,
+  CircleDotIcon,
+  CheckCircle2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -101,6 +106,92 @@ export function LatestJainaThought({
   );
 }
 
+type ActiveAgentsPanelProps = {
+  agents: AgentLifecycleSegment[];
+  toolCalls: JainaStreamState["toolCalls"];
+  toolResults: JainaStreamState["toolResults"];
+  isStreaming: boolean;
+};
+
+function AgentStatusRow({
+  agent,
+  isLast,
+  toolCalls,
+  toolResults,
+}: {
+  agent: AgentLifecycleSegment;
+  isLast: boolean;
+  toolCalls: JainaStreamState["toolCalls"];
+  toolResults: JainaStreamState["toolResults"];
+}) {
+  const safeToolCalls = toolCalls ?? [];
+  const safeToolResults = toolResults ?? [];
+  const toolCount = agent.workerToolRefs?.length ?? 0;
+  const isDone = Boolean(agent.completeStatus);
+
+  const latestActivity = React.useMemo(() => {
+    if (isDone || !agent.workerToolRefs?.length) return null;
+    const lastRef = agent.workerToolRefs[agent.workerToolRefs.length - 1];
+    const result = resolveToolResultFromRef(lastRef, safeToolResults);
+    const call = resolveToolCallFromRef(lastRef, safeToolCalls);
+    const name = call?.name ?? result?.name ?? lastRef.replace(/^name:/, "");
+    if (result) return null;
+    return name ? `${name}…` : null;
+  }, [isDone, agent.workerToolRefs, safeToolCalls, safeToolResults]);
+
+  const treeChar = isLast ? "└─" : "├─";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 3 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      className="flex items-baseline gap-1.5 text-xs"
+    >
+      <span className="shrink-0 font-mono text-muted-foreground/50 select-none">{treeChar}</span>
+      <span className="font-medium text-foreground/80">{agent.agentLabel}</span>
+      {toolCount > 0 && (
+        <>
+          <span className="text-muted-foreground/40">·</span>
+          <span className="text-muted-foreground/60">
+            {toolCount} tool{toolCount !== 1 ? "s" : ""}
+          </span>
+        </>
+      )}
+      <span className="text-muted-foreground/40">·</span>
+      {isDone ? (
+        <span className="flex items-center gap-1 text-emerald-500/70">
+          <CheckCircle2Icon className="size-3" />
+          {agent.durationMs !== undefined ? `${(agent.durationMs / 1000).toFixed(1)}s` : "done"}
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-muted-foreground/50">
+          <CircleDotIcon className="size-3 animate-pulse" />
+          {latestActivity ?? "running"}
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+function ActiveAgentsPanel({ agents, toolCalls, toolResults, isStreaming }: ActiveAgentsPanelProps) {
+  if (!isStreaming || agents.length === 0) return null;
+
+  return (
+    <div className="mt-0.5 space-y-0.5 px-3 pb-1">
+      {agents.map((agent, index) => (
+        <AgentStatusRow
+          key={agent.agentId}
+          agent={agent}
+          isLast={index === agents.length - 1}
+          toolCalls={toolCalls}
+          toolResults={toolResults}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ThinkingWindow({
   reasoning,
   toolCalls,
@@ -115,6 +206,11 @@ export function ThinkingWindow({
   const segments = React.useMemo(
     () => buildThinkingSegments(reasoning, safeToolCalls),
     [reasoning, safeToolCalls]
+  );
+
+  const agentSegments = React.useMemo(
+    () => segments.filter((s): s is AgentLifecycleSegment => s.kind === "agent_lifecycle"),
+    [segments]
   );
 
   const currentStage = React.useMemo(() => {
@@ -188,6 +284,13 @@ export function ThinkingWindow({
           />
         </button>
       </CollapsibleTrigger>
+
+      <ActiveAgentsPanel
+        agents={agentSegments}
+        toolCalls={toolCalls}
+        toolResults={toolResults}
+        isStreaming={isStreaming}
+      />
 
       <ChainOfThoughtContent className="space-y-1 px-2 pb-3">
         {segments.map((segment, segmentIndex) => {

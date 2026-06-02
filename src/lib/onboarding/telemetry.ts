@@ -22,6 +22,7 @@ export type OnboardingEventName =
   | "onboarding_assets_cleared"
   | "onboarding_member_invited"
   | "onboarding_launch_clicked"
+  | "onboarding_inspirations_skipped"
   | "onboarding_launch_succeeded"
   | "onboarding_launch_failed"
   | "onboarding_trends_prewarm_failed"

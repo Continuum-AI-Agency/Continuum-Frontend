@@ -92,6 +92,24 @@ export function useOrganicAgentStream(
           case "jobUpdate":
             dispatch({ type: "JOB_UPDATE", job: parsed.job });
             break;
+          case "pipelineStage":
+            dispatch({ type: "PIPELINE_STAGE", event: parsed.event });
+            break;
+          case "pipelineCard":
+            dispatch({ type: "PIPELINE_CARD", card: parsed.card });
+            break;
+          case "planStatus":
+            dispatch({ type: "PLAN_STATUS", event: parsed.event });
+            break;
+          case "toolApproval":
+            dispatch({ type: "TOOL_APPROVAL_ADD", approval: parsed.approval });
+            break;
+          case "bulkRun":
+            dispatch({
+              type: "BULK_RUN_START",
+              run: { runId: parsed.run.runId, planId: parsed.run.planId, total: parsed.run.total },
+            });
+            break;
           case "runStarted":
             opts?.onRunStarted?.(parsed.runId);
             break;
@@ -152,6 +170,7 @@ export function useOrganicAgentStream(
             sessionId: input.sessionId,
             messages: input.messages,
             references: input.references,
+            approvals: input.approvals,
             weekStart: input.weekStart,
             timezone: input.timezone,
             platformAccountIds: input.platformAccountIds,

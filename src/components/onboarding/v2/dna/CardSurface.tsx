@@ -93,8 +93,6 @@ export function CardSurface({
   );
 }
 
-document.documentElement.classList.add("light"); // Ensure light mode context
-
 function DefaultSkeleton() {
   return (
     <div className="space-y-2">

@@ -97,6 +97,8 @@ interface CalendarState {
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
   viewMode: "week" | "month" | "list";
+  // Calendar lens: show/hide drafts that belong to a bulk content plan ("planned").
+  showPlanned: boolean;
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -141,6 +143,7 @@ interface CalendarState {
   updateEventTime: (eventId: string, newTime: { start: string; end: string }) => void;
   moveEventToDay: (eventId: string, targetDate: string) => void;
   setViewMode: (mode: "week" | "month" | "list") => void;
+  setShowPlanned: (value: boolean) => void;
 
   addBacklogDraft: (draft: OrganicCalendarDraft) => void;
   updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
@@ -218,6 +221,7 @@ export const useCalendarStore = create<CalendarState>()(
       placementProgress: {},
       scheduledEvents: {},
       viewMode: "month",
+      showPlanned: true,
       eventHistory: [],
       backlogDrafts: [],
       weekCache: {},
@@ -434,6 +438,7 @@ export const useCalendarStore = create<CalendarState>()(
         }),
 
       setViewMode: (mode) => set({ viewMode: mode }),
+      setShowPlanned: (value) => set({ showPlanned: value }),
 
       addBacklogDraft: (draft) =>
         set((state) => ({

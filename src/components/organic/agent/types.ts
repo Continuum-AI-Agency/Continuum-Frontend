@@ -1,5 +1,8 @@
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation"
 import type { AgentMentionMetadata, AgentMentionReference } from "@/lib/agent-references"
+import type { BulkContentPlan } from "@continuum/contracts"
+
+export type { BulkContentPlan } from "@continuum/contracts"
 
 export type AgentJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
 
@@ -92,6 +95,26 @@ export type PlanApprovalDecision =
 export type UiCard =
   | { type: "trend_chart"; data: UiTrendChart }
   | { type: "plan_card"; data: UiPlanCard }
+  | { type: "bulk_plan_card"; data: BulkContentPlan }
+
+export type BulkRunStatus = "running" | "completed" | "failed"
+
+/**
+ * Aggregate state for a background bulk generation run, derived by the
+ * BulkRunPanel from the v2 run-event envelopes it polls. Keyed by runId
+ * (deterministic `run_<planId>`).
+ */
+export type BulkRunState = {
+  runId: string
+  planId: string
+  brandId: string
+  total: number
+  completed: number
+  failed: number
+  byPlatform: Record<string, number>
+  byFormat: Record<string, number>
+  status: BulkRunStatus
+}
 
 export type AgentJobState = {
   jobId: string
@@ -107,6 +130,67 @@ export type AgentJobState = {
   draftId?: string
   placement?: CalendarPlacement
   uiPostCard?: UiPostCard
+}
+
+export const PIPELINE_STAGES = [
+  "strategist",
+  "concept",
+  "draft",
+  "assets",
+  "quality",
+  "merge",
+] as const
+
+export type PipelineStage = (typeof PIPELINE_STAGES)[number]
+
+export type PipelineStageNodeStatus = "pending" | "active" | "done" | "failed"
+
+export type PipelineStageNode = {
+  stage: PipelineStage
+  status: PipelineStageNodeStatus
+  agentName?: string
+}
+
+export type PipelinePreview = {
+  caption: string | null
+  imageUrl: string | null
+  images?: string[] | null
+  format: string | null
+}
+
+export type PipelineQuality = {
+  passed: boolean
+  overallScore: number
+  brandFitScore?: number
+  platformFitScore?: number
+  noveltyScore?: number
+  complianceScore?: number
+  summary?: string
+}
+
+export type PipelineCardStatus = "running" | "completed" | "failed" | "cancelled"
+
+export type PipelineCardState = {
+  jobId: string
+  brandId?: string
+  planId?: string | null
+  planItemId?: string | null
+  platform?: string
+  stages: PipelineStageNode[]
+  currentStage?: PipelineStage
+  pct?: number
+  status: PipelineCardStatus
+  preview?: PipelinePreview
+  quality?: PipelineQuality | null
+  draftId?: string | null
+  error?: { code?: string; message: string }
+}
+
+export type ToolApproval = {
+  approvalId: string
+  toolCallId: string
+  toolName: string
+  input: unknown
 }
 
 export type ConversationMessage = {
@@ -128,6 +212,7 @@ export type AgentChatInput = {
     metadata?: AgentMentionMetadata & { planApproval?: PlanApprovalDecision }
   }>
   references?: AgentMentionReference[]
+  approvals?: Array<{ id: string; approved: boolean; reason?: string }>
   weekStart?: string
   timezone?: string
   platformAccountIds?: Record<string, string>

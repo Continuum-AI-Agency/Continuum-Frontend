@@ -15,7 +15,11 @@ import { JobGrid } from "./JobGrid";
 import { OrganicThinkingPanel } from "./OrganicThinkingPanel";
 import { TrendChartCard } from "./TrendChartCard";
 import { PlanCard } from "./PlanCard";
-import type { PlanApprovalDecision } from "./types";
+import { PipelinePlacementGrid } from "./PipelinePlacementGrid";
+import { BulkPlanCard } from "./BulkPlanCard";
+import { BulkRunPanel } from "./BulkRunPanel";
+import { ToolApprovalCard } from "./ToolApprovalCard";
+import type { PlanApprovalDecision, ToolApproval } from "./types";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { useOrganicSessions } from "./useOrganicSessions";
 import { useSession } from "@/hooks/useSession";
@@ -263,6 +267,42 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, refreshSessions]
   );
 
+  const handleToolApproval = useCallback(
+    (approval: ToolApproval, approved: boolean) => {
+      const currentSessionId = state.sessionId ?? activeSessionId;
+      if (!currentSessionId || isStreaming) return;
+
+      dispatch({ type: "TOOL_APPROVAL_RESOLVE", approvalId: approval.approvalId });
+
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const now = new Date();
+      const daysToMonday = (now.getDay() + 6) % 7;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - daysToMonday);
+      const weekStart = monday.toISOString().slice(0, 10);
+
+      const existingMessages = state.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        metadata: m.metadata,
+      }));
+
+      start({
+        brandId,
+        sessionId: currentSessionId,
+        messages: existingMessages,
+        approvals: [{ id: approval.approvalId, approved }],
+        weekStart,
+        timezone,
+        platformAccountIds,
+      })
+        .then(() => refreshSessions())
+        .catch(() => {});
+    },
+    [state.sessionId, state.messages, isStreaming, brandId, platformAccountIds, start, activeSessionId, refreshSessions]
+  );
+
   const handleRetry = useCallback(
     (jobId: string) => {
       handleSubmit(`Please retry the failed post for job ${jobId}`);
@@ -467,6 +507,20 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         </div>
       )}
 
+      {state.pendingToolApprovals.length > 0 && (
+        <div className="shrink-0 space-y-2">
+          {state.pendingToolApprovals.map((approval) => (
+            <ToolApprovalCard
+              key={approval.approvalId}
+              approval={approval}
+              disabled={isStreaming}
+              onApproveAction={() => handleToolApproval(approval, true)}
+              onDenyAction={() => handleToolApproval(approval, false)}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1">
         {isLoadingMessages ? (
           <div className="space-y-3 p-1">
@@ -505,17 +559,45 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                         return <TrendChartCard key={i} chart={card.data} />;
                       }
                       if (card.type === "plan_card") {
+                        const planId = card.data.planId;
+                        const pipelineCards = Object.values(state.pipeline).filter(
+                          (p) => p.planId === planId
+                        );
                         return (
-                          <PlanCard
-                            key={i}
-                            plan={card.data}
-                            onApprove={() =>
-                              handlePlanDecision({ decision: "approve", planId: card.data.planId })
-                            }
-                            onReject={() =>
-                              handlePlanDecision({ decision: "reject", planId: card.data.planId })
-                            }
-                          />
+                          <div key={i} className="space-y-2">
+                            <PlanCard
+                              plan={card.data}
+                              planItemStatus={state.planItemStatus}
+                              onApproveAction={() =>
+                                handlePlanDecision({ decision: "approve", planId })
+                              }
+                              onRejectAction={() =>
+                                handlePlanDecision({ decision: "reject", planId })
+                              }
+                            />
+                            <PipelinePlacementGrid cards={pipelineCards} />
+                          </div>
+                        );
+                      }
+                      if (card.type === "bulk_plan_card") {
+                        const planId = card.data.planId;
+                        const runId = `run_${planId}`;
+                        const run = state.bulkRuns[runId];
+                        return (
+                          <div key={i} className="space-y-2">
+                            <BulkPlanCard
+                              plan={card.data}
+                              onApproveAction={() => {
+                                dispatch({
+                                  type: "BULK_RUN_START",
+                                  run: { runId, planId, total: card.data.placements.length },
+                                });
+                                handlePlanDecision({ decision: "approve", planId });
+                              }}
+                              onRejectAction={() => handlePlanDecision({ decision: "reject", planId })}
+                            />
+                            {run && <BulkRunPanel runId={run.runId} total={run.total} />}
+                          </div>
                         );
                       }
                       return null;

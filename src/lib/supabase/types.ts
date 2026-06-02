@@ -501,48 +501,122 @@ export type Database = {
         Row: {
           brand_id: string
           created_at: string
+          error_code: string | null
           error_message: string | null
           external_url: string | null
           id: string
+          kind: string | null
           mime_type: string | null
           name: string
+          page_count: number | null
+          preview_path: string | null
+          progress_percent: number | null
+          progress_step: string | null
           size: number | null
           source: string
           status: string
           storage_path: string | null
+          text_excerpt: string | null
           updated_at: string
         }
         Insert: {
           brand_id: string
           created_at?: string
+          error_code?: string | null
           error_message?: string | null
           external_url?: string | null
           id: string
+          kind?: string | null
           mime_type?: string | null
           name: string
+          page_count?: number | null
+          preview_path?: string | null
+          progress_percent?: number | null
+          progress_step?: string | null
           size?: number | null
           source: string
           status?: string
           storage_path?: string | null
+          text_excerpt?: string | null
           updated_at?: string
         }
         Update: {
           brand_id?: string
           created_at?: string
+          error_code?: string | null
           error_message?: string | null
           external_url?: string | null
           id?: string
+          kind?: string | null
           mime_type?: string | null
           name?: string
+          page_count?: number | null
+          preview_path?: string | null
+          progress_percent?: number | null
+          progress_step?: string | null
           size?: number | null
           source?: string
           status?: string
           storage_path?: string | null
+          text_excerpt?: string | null
           updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "brand_documents_brand_profile_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_guideline_jobs: {
+        Row: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          payload: Json
+          status: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
+          trigger: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          brand_id: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          job_id?: string
+          payload?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
+          trigger?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          brand_id?: string
+          claimed_at?: string | null
+          completed_at?: string | null
+          enqueued_at?: string
+          error?: Json | null
+          heartbeat_at?: string | null
+          job_id?: string
+          payload?: Json
+          status?: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
+          trigger?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_guideline_jobs_brand_fkey"
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brand_profiles"
@@ -1074,6 +1148,57 @@ export type Database = {
             columns: ["preview_run_id"]
             isOneToOne: true
             referencedRelation: "preview_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brand_report_readiness: {
+        Row: {
+          brand_profile_id: string
+          brand_report_id: string | null
+          created_at: string
+          dimensions: Json
+          id: string
+          overall_score: number | null
+          recommendations: Json
+          source_phase: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_profile_id: string
+          brand_report_id?: string | null
+          created_at?: string
+          dimensions?: Json
+          id?: string
+          overall_score?: number | null
+          recommendations?: Json
+          source_phase?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_profile_id?: string
+          brand_report_id?: string | null
+          created_at?: string
+          dimensions?: Json
+          id?: string
+          overall_score?: number | null
+          recommendations?: Json
+          source_phase?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_report_readiness_brand_profile_id_fkey"
+            columns: ["brand_profile_id"]
+            isOneToOne: false
+            referencedRelation: "brand_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_report_readiness_brand_report_id_fkey"
+            columns: ["brand_report_id"]
+            isOneToOne: false
+            referencedRelation: "brand_reports"
             referencedColumns: ["id"]
           },
         ]
@@ -3065,6 +3190,29 @@ export type Database = {
           embedding_text: string
         }[]
       }
+      claim_next_brand_guideline_job: {
+        Args: { p_lease_ttl_sec: number; p_worker_id: string }
+        Returns: {
+          attempts: number
+          brand_id: string
+          claimed_at: string | null
+          completed_at: string | null
+          enqueued_at: string
+          error: Json | null
+          heartbeat_at: string | null
+          job_id: string
+          payload: Json
+          status: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
+          trigger: string
+          worker_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "brand_guideline_jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_next_brand_report_job: {
         Args: { p_lease_ttl_sec: number; p_worker_id: string }
         Returns: {
@@ -3090,6 +3238,15 @@ export type Database = {
       }
       cleanup_old_canvas_sessions: { Args: never; Returns: undefined }
       cleanup_old_chat_messages: { Args: never; Returns: undefined }
+      complete_brand_guideline_job_owned: {
+        Args: {
+          p_error?: Json
+          p_job_id: string
+          p_status: Database["brand_profiles"]["Enums"]["brand_guideline_job_status"]
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       complete_brand_report_job_owned: {
         Args: {
           p_error?: Json
@@ -3101,6 +3258,10 @@ export type Database = {
       }
       decrypt_token: { Args: { ct: string }; Returns: string }
       encrypt_token: { Args: { token: string }; Returns: string }
+      enqueue_brand_guideline_job: {
+        Args: { p_brand_id: string; p_payload: Json; p_trigger: string }
+        Returns: string
+      }
       enqueue_brand_report_job: {
         Args: { p_brand_id: string; p_payload: Json; p_preview_run_id: string }
         Returns: string
@@ -3195,6 +3356,10 @@ export type Database = {
       has_brand_access:
         | { Args: { brand_id: string }; Returns: boolean }
         | { Args: { p_brand_id: string; p_user_id: string }; Returns: boolean }
+      heartbeat_brand_guideline_job: {
+        Args: { p_job_id: string; p_worker_id: string }
+        Returns: boolean
+      }
       heartbeat_brand_report_job: {
         Args: { p_job_id: string; p_worker_id: string }
         Returns: boolean
@@ -3330,6 +3495,7 @@ export type Database = {
       }
     }
     Enums: {
+      brand_guideline_job_status: "queued" | "running" | "completed" | "failed"
       brand_report_job_status: "queued" | "running" | "completed" | "failed"
     }
     CompositeTypes: {
@@ -4900,9 +5066,12 @@ export type Database = {
           estimated_duration_seconds: number
           evidence: Json
           items: Json
+          kind: string
           plan_id: string
+          schedule: Json | null
           session_id: string
           status: string
+          strategy_brief: Json | null
           summary: string
           title: string
           updated_at: string
@@ -4915,9 +5084,12 @@ export type Database = {
           estimated_duration_seconds?: number
           evidence?: Json
           items: Json
+          kind?: string
           plan_id: string
+          schedule?: Json | null
           session_id: string
           status?: string
+          strategy_brief?: Json | null
           summary: string
           title: string
           updated_at?: string
@@ -4930,9 +5102,12 @@ export type Database = {
           estimated_duration_seconds?: number
           evidence?: Json
           items?: Json
+          kind?: string
           plan_id?: string
+          schedule?: Json | null
           session_id?: string
           status?: string
+          strategy_brief?: Json | null
           summary?: string
           title?: string
           updated_at?: string
@@ -8661,6 +8836,7 @@ export const Constants = {
   },
   brand_profiles: {
     Enums: {
+      brand_guideline_job_status: ["queued", "running", "completed", "failed"],
       brand_report_job_status: ["queued", "running", "completed", "failed"],
     },
   },

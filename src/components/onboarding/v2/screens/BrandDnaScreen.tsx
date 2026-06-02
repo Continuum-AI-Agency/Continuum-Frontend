@@ -11,8 +11,6 @@ import { HorizontalRow } from "../dna/HorizontalRow";
 import { WebsiteSummaryCard } from "../dna/WebsiteSummaryCard";
 import { UnderstandingCard } from "../dna/UnderstandingCard";
 import { ReadinessCard } from "../dna/ReadinessCard";
-import { AuditsCard } from "../dna/AuditsCard";
-import { CitationsCard } from "../dna/CitationsCard";
 import { RunProgressBanner } from "../dna/RunProgressBanner";
 import { DimensionChip } from "../readiness/DimensionChip";
 import { FindingsStack } from "../readiness/FindingsStack";
@@ -100,7 +98,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       variants={reveal}
       initial="hidden"
       animate="visible"
-      className="mx-auto flex w-full min-h-0 max-w-[1400px] flex-1 flex-col px-4 py-8 md:px-8"
+      className="mx-auto flex w-full min-h-0 max-w-[1700px] flex-1 flex-col px-4 py-8 md:px-8"
     >
       <motion.header
         variants={heroEnter}
@@ -147,7 +145,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
-        <HorizontalRow label="Narrative">
+        <HorizontalRow label="Narrative" layout="grid">
           <DnaSectionCard
             title="Business overview"
             badge="Core"
@@ -214,7 +212,7 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
       </motion.div>
 
       <motion.div variants={card} className="mb-4">
-        <HorizontalRow label="Analysis">
+        <HorizontalRow label="Analysis" layout="grid">
           {isTerminallyEmpty(agentBuckets, "website", agentBuckets?.website) ? null : (
             <WebsiteSummaryCard buckets={agentBuckets} />
           )}
@@ -222,8 +220,6 @@ export function BrandDnaScreen({ agentBuckets, readinessLoading, onRetry }: Bran
           {isTerminallyEmpty(agentBuckets, "readiness", readiness) ? null : (
             <ReadinessCard buckets={agentBuckets} readiness={readiness} loading={loading} />
           )}
-          <AuditsCard buckets={agentBuckets} />
-          <CitationsCard buckets={agentBuckets} />
         </HorizontalRow>
       </motion.div>
 

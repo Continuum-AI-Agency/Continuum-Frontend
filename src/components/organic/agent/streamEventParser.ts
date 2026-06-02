@@ -1,6 +1,47 @@
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation";
-import { organicStreamFrameSchema, type OrganicStreamFrame } from "@continuum/contracts";
-import type { AgentJobState, PlanEvidence, PlanItem, ToolCallEvent, UiCard, UiPlanCard, UiPostCard, UiTrendChart } from "./types";
+import {
+  bulkContentPlanSchema,
+  mediaSearchResultsFrameSchema,
+  organicStreamFrameSchema,
+  type BulkContentPlan,
+  type MediaSearchResultsFrame,
+  type OrganicStreamFrame,
+} from "@continuum/contracts";
+import type {
+  AgentJobState,
+  PipelineCardState,
+  PipelineQuality,
+  PipelineStage,
+  PlanEvidence,
+  PlanItem,
+  PlanItemStatus,
+  ToolApproval,
+  ToolCallEvent,
+  UiCard,
+  UiPlanCard,
+  UiPostCard,
+  UiTrendChart,
+} from "./types";
+import { PIPELINE_STAGES } from "./types";
+
+export type ParsedPipelineStage = {
+  jobId: string;
+  brandId: string;
+  planId: string | null;
+  planItemId: string | null;
+  stage: PipelineStage;
+  agentName?: string;
+  pct?: number;
+  status?: "active" | "done" | "failed";
+};
+
+export type ParsedPlanStatus = {
+  planId: string | null;
+  itemId: string;
+  status: PlanItemStatus;
+  jobId?: string;
+  draftId?: string;
+};
 
 export type ParsedOrganicStreamEvent =
   | { kind: "delta"; delta: string }
@@ -12,8 +53,21 @@ export type ParsedOrganicStreamEvent =
   | { kind: "postCard"; card: UiPostCard }
   | { kind: "jobUpdate"; job: Partial<AgentJobState> & { jobId: string } }
   | { kind: "runStarted"; runId: string; jobId: string }
+  | { kind: "pipelineStage"; event: ParsedPipelineStage }
+  | { kind: "pipelineCard"; card: Partial<PipelineCardState> & { jobId: string } }
+  | { kind: "planStatus"; event: ParsedPlanStatus }
+  | { kind: "toolApproval"; approval: ToolApproval }
+  | { kind: "bulkRun"; run: ParsedBulkRun }
+  | { kind: "mediaSearchResults"; frame: MediaSearchResultsFrame }
   | { kind: "ignored"; type?: string }
   | { kind: "invalid"; type?: string };
+
+export type ParsedBulkRun = {
+  runId: string;
+  planId: string;
+  brandId: string;
+  total: number;
+};
 
 export type OrganicWireFrame = OrganicStreamFrame;
 
@@ -326,6 +380,140 @@ function parseUiPlanCard(event: Record<string, unknown>): UiPlanCard | null {
   };
 }
 
+function parseBulkPlanCard(event: Record<string, unknown>): BulkContentPlan | null {
+  const payload = getEventPayload(event);
+  const result = bulkContentPlanSchema.safeParse(payload);
+  return result.success ? result.data : null;
+}
+
+function parseBulkRun(event: Record<string, unknown>): ParsedBulkRun | null {
+  const payload = getEventPayload(event);
+  const runId = readNonEmptyString(payload.runId);
+  const planId = readNonEmptyString(payload.planId);
+  const brandId = readNonEmptyString(payload.brandId);
+  if (!runId || !planId || !brandId) return null;
+  return {
+    runId,
+    planId,
+    brandId,
+    total: typeof payload.total === "number" ? payload.total : 0,
+  };
+}
+
+const PIPELINE_STAGE_SET = new Set<string>(PIPELINE_STAGES);
+
+function isPipelineStage(value: unknown): value is PipelineStage {
+  return typeof value === "string" && PIPELINE_STAGE_SET.has(value);
+}
+
+function parsePipelineStage(event: Record<string, unknown>): ParsedPipelineStage | null {
+  const payload = getEventPayload(event);
+  const jobId = readNonEmptyString(payload.jobId);
+  const brandId = readNonEmptyString(payload.brandId);
+  if (!jobId || !brandId) return null;
+  if (!isPipelineStage(payload.stage)) return null;
+
+  const status =
+    payload.status === "active" || payload.status === "done" || payload.status === "failed"
+      ? payload.status
+      : undefined;
+
+  return {
+    jobId,
+    brandId,
+    planId: typeof payload.planId === "string" ? payload.planId : null,
+    planItemId: typeof payload.planItemId === "string" ? payload.planItemId : null,
+    stage: payload.stage,
+    agentName: readNonEmptyString(payload.agentName) ?? undefined,
+    pct: typeof payload.pct === "number" && Number.isFinite(payload.pct) ? payload.pct : undefined,
+    status,
+  };
+}
+
+function parsePipelineQuality(raw: unknown): PipelineQuality | null {
+  if (!isRecord(raw)) return null;
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  return {
+    passed: raw.passed === true,
+    overallScore: num(raw.overallScore) ?? 0,
+    brandFitScore: num(raw.brandFitScore),
+    platformFitScore: num(raw.platformFitScore),
+    noveltyScore: num(raw.noveltyScore),
+    complianceScore: num(raw.complianceScore),
+    summary: readNonEmptyString(raw.summary) ?? undefined,
+  };
+}
+
+function parsePipelineCard(
+  event: Record<string, unknown>,
+): (Partial<PipelineCardState> & { jobId: string }) | null {
+  const payload = getEventPayload(event);
+  const jobId = readNonEmptyString(payload.jobId);
+  if (!jobId) return null;
+
+  const status =
+    payload.status === "running" ||
+    payload.status === "completed" ||
+    payload.status === "failed" ||
+    payload.status === "cancelled"
+      ? payload.status
+      : "running";
+
+  const preview = isRecord(payload.preview)
+    ? {
+        caption: typeof payload.preview.caption === "string" ? payload.preview.caption : null,
+        imageUrl: typeof payload.preview.imageUrl === "string" ? payload.preview.imageUrl : null,
+        images: Array.isArray(payload.preview.images)
+          ? (payload.preview.images as unknown[]).filter((u): u is string => typeof u === "string")
+          : undefined,
+        format: typeof payload.preview.format === "string" ? payload.preview.format : null,
+      }
+    : undefined;
+
+  return {
+    jobId,
+    brandId: readNonEmptyString(payload.brandId) ?? undefined,
+    planId: typeof payload.planId === "string" ? payload.planId : null,
+    planItemId: typeof payload.planItemId === "string" ? payload.planItemId : null,
+    platform: readNonEmptyString(payload.platform) ?? undefined,
+    status,
+    currentStage: isPipelineStage(payload.currentStage) ? payload.currentStage : undefined,
+    preview,
+    quality: parsePipelineQuality(payload.quality),
+    draftId: typeof payload.draftId === "string" ? payload.draftId : null,
+    error: isRecord(payload.error)
+      ? {
+          code: readNonEmptyString(payload.error.code) ?? undefined,
+          message: readNonEmptyString(payload.error.message) ?? "Pipeline failed",
+        }
+      : undefined,
+  };
+}
+
+function parsePlanStatus(event: Record<string, unknown>): ParsedPlanStatus | null {
+  const payload = getEventPayload(event);
+  const itemId = readNonEmptyString(payload.itemId);
+  if (!itemId) return null;
+  const status = (readNonEmptyString(payload.status) ?? "pending") as PlanItemStatus;
+  return {
+    planId: typeof payload.planId === "string" ? payload.planId : null,
+    itemId,
+    status,
+    jobId: readNonEmptyString(payload.jobId) ?? undefined,
+    draftId: readNonEmptyString(payload.draftId) ?? undefined,
+  };
+}
+
+function parseToolApproval(event: Record<string, unknown>): ToolApproval | null {
+  const payload = getEventPayload(event);
+  const approvalId = readNonEmptyString(payload.approvalId);
+  const toolCallId = readNonEmptyString(payload.toolCallId);
+  const toolName = readNonEmptyString(payload.toolName);
+  if (!approvalId || !toolCallId || !toolName) return null;
+  return { approvalId, toolCallId, toolName, input: payload.input };
+}
+
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
   if (!isRecord(raw)) return { kind: "invalid" };
   const type = readNonEmptyString(raw.type);
@@ -365,6 +553,13 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "ui.trend_chart":
       return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(raw) } };
     case "ui.plan_card": {
+      // The bulk plan rides on the same frame, discriminated by data.kind.
+      if (getEventPayload(raw).kind === "bulk") {
+        const bulk = parseBulkPlanCard(raw);
+        return bulk
+          ? { kind: "uiCard", card: { type: "bulk_plan_card", data: bulk } }
+          : { kind: "invalid", type };
+      }
       const card = parseUiPlanCard(raw);
       return card ? { kind: "uiCard", card: { type: "plan_card", data: card } } : { kind: "invalid", type };
     }
@@ -385,6 +580,32 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "job.cancelled": {
       const job = parseJobUpdate(type, raw);
       return job ? { kind: "jobUpdate", job } : { kind: "invalid", type };
+    }
+    case "pipeline.stage": {
+      const event = parsePipelineStage(raw);
+      return event ? { kind: "pipelineStage", event } : { kind: "invalid", type };
+    }
+    case "ui.pipeline_card": {
+      const card = parsePipelineCard(raw);
+      return card ? { kind: "pipelineCard", card } : { kind: "invalid", type };
+    }
+    case "ui.plan_status": {
+      const event = parsePlanStatus(raw);
+      return event ? { kind: "planStatus", event } : { kind: "invalid", type };
+    }
+    case "tool.approval_required": {
+      const approval = parseToolApproval(raw);
+      return approval ? { kind: "toolApproval", approval } : { kind: "invalid", type };
+    }
+    case "ui.bulk_run": {
+      const run = parseBulkRun(raw);
+      return run ? { kind: "bulkRun", run } : { kind: "invalid", type };
+    }
+    case "media.search_results": {
+      const result = mediaSearchResultsFrameSchema.safeParse(raw);
+      return result.success
+        ? { kind: "mediaSearchResults", frame: result.data }
+        : { kind: "invalid", type };
     }
     default:
       return { kind: "ignored", type };

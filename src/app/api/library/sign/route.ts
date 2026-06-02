@@ -1,0 +1,66 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { callerHasBrandAccess } from "@/lib/media/brand-access.server";
+import { mediaSchema } from "@/lib/media/supabase-media";
+import { mintSignedUrl } from "@/lib/media/signed-urls";
+
+export const runtime = "nodejs";
+
+const bodySchema = z.object({
+  brandId: z.string().uuid(),
+  assetId: z.string().uuid(),
+});
+
+// Mints a single signed URL for one asset. Used by the realtime hook to fill in
+// a thumbnail for an asset that arrived via a postgres INSERT (which carries no
+// signed URL). The asset is looked up scoped to the caller's brand.
+export async function POST(request: Request) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = bodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.message }, { status: 422 });
+  }
+  const { brandId, assetId } = parsed.data;
+
+  if (!(await callerHasBrandAccess(supabase, brandId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await mediaSchema(admin)
+    .from("assets")
+    .select("storage_path, bucket")
+    .eq("id", assetId)
+    .eq("brand_id", brandId)
+    .is("deleted_at", null)
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  }
+
+  const row = data as { storage_path: string; bucket: string };
+  const signedUrl = await mintSignedUrl(row.storage_path, row.bucket);
+  if (!signedUrl) {
+    return NextResponse.json({ error: "Sign failed" }, { status: 500 });
+  }
+
+  return NextResponse.json({ signedUrl });
+}

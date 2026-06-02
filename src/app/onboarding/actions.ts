@@ -105,10 +105,14 @@ export async function completeOnboardingAction(brandId: string): Promise<Onboard
   return state;
 }
 
-export async function approveAndLaunchOnboardingAction(
+// Approves the brand profile and kicks the background strategic analysis WITHOUT
+// marking onboarding complete. Used when leaving Brand DNA so competitor analysis
+// is computing while the user moves through the inspirations + generation finale.
+// approveAndLaunchOnboardingAction = this + completeOnboardingAction (classic flow).
+export async function approveOnboardingAndStartAnalysisAction(
   brandId: string,
   options?: { idempotencyKey?: string }
-): Promise<OnboardingState> {
+): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const user = await getClaimsIdentity();
   const userId = user?.id;
@@ -132,7 +136,7 @@ export async function approveAndLaunchOnboardingAction(
     payload,
     idempotencyKey: options?.idempotencyKey,
   });
-  console.info("[approveAndLaunchOnboardingAction] Brand profile approved", {
+  console.info("[approveOnboardingAndStartAnalysisAction] Brand profile approved", {
     brandId,
     agentBrandProfileId: approved.brand_profile.id,
   });
@@ -147,14 +151,47 @@ export async function approveAndLaunchOnboardingAction(
         readinessScore,
         readinessFindings,
       });
-      console.info("[approveAndLaunchOnboardingAction] Strategic analysis triggered", {
+      console.info("[approveOnboardingAndStartAnalysisAction] Strategic analysis triggered", {
         brandId,
         runId: analysisAck.runId,
         taskId: analysisAck.taskId,
         status: analysisAck.status,
       });
     } catch (error) {
-      console.warn("[approveAndLaunchOnboardingAction] Strategic analysis kickoff failed", {
+      console.warn("[approveOnboardingAndStartAnalysisAction] Strategic analysis kickoff failed", {
+        brandId,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  });
+
+  if (process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== "false") {
+    after(async () => {
+      try {
+        const { warmOnboardingCompetitorsServer } = await import("@/lib/api/onboardingInspirations.server");
+        await warmOnboardingCompetitorsServer(brandId);
+      } catch (error) {
+        console.warn("[approveOnboardingAndStartAnalysisAction] competitor warm failed", {
+          brandId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+  }
+
+  // Persist the deterministic brand kit (colors/typography columns + logo +
+  // brand-kit.json) so generation and other features can map to it by brandId.
+  after(async () => {
+    try {
+      const { persistBrandKitServer } = await import("@/lib/api/onboardingInspirations.server");
+      await persistBrandKitServer({
+        brandId,
+        colors: state.brand.colors ?? [],
+        typography: state.brand.typography ?? { primary: null, secondary: null },
+        logoPath: state.brand.logoPath ?? null,
+      });
+    } catch (error) {
+      console.warn("[approveOnboardingAndStartAnalysisAction] brand kit persist failed", {
         brandId,
         message: error instanceof Error ? error.message : "Unknown error",
       });
@@ -171,7 +208,13 @@ export async function approveAndLaunchOnboardingAction(
     },
   });
   await posthog.shutdown();
+}
 
+export async function approveAndLaunchOnboardingAction(
+  brandId: string,
+  options?: { idempotencyKey?: string }
+): Promise<OnboardingState> {
+  await approveOnboardingAndStartAnalysisAction(brandId, options);
   return completeOnboardingAction(brandId);
 }
 

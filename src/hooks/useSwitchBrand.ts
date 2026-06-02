@@ -47,7 +47,12 @@ export function useSwitchBrand() {
 
       const onboarding = pathname?.startsWith("/onboarding") ?? false;
       if (onboarding) {
-        router.push("/");
+        const targetBrand = brandSummaries.find((b) => b.id === brandId);
+        router.push(
+          targetBrand && !targetBrand.completed
+            ? `/onboarding?brand=${brandId}`
+            : "/"
+        );
       }
 
       try {

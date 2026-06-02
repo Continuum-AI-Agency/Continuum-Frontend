@@ -14,7 +14,9 @@
     "./streaming/common": "./src/streaming/common.ts",
     "./streaming/organic": "./src/streaming/organic.ts",
     "./streaming/organic-pipeline": "./src/streaming/organic-pipeline.ts",
-    "./streaming/jaina": "./src/streaming/jaina.ts"
+    "./streaming/jaina": "./src/streaming/jaina.ts",
+    "./streaming/media": "./src/streaming/media.ts",
+    "./media": "./src/media/index.ts"
   },
   "peerDependencies": {
     "zod": "^3.22.0 || ^4.0.0"

@@ -12,6 +12,7 @@ type OnboardingShellProps = {
   bottomActions: React.ReactNode;
   onStartOver?: () => void;
   startOverDisabled?: boolean;
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -22,6 +23,7 @@ export function OnboardingShell({
   bottomActions,
   onStartOver,
   startOverDisabled,
+  headerRight,
   children,
 }: OnboardingShellProps) {
   return (
@@ -29,9 +31,12 @@ export function OnboardingShell({
       <header className="border-b border-border bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-card/80">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-8 py-4">
           <ContinuumWordmark />
-          <p className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
-            Get set up
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
+              Get set up
+            </p>
+            {headerRight}
+          </div>
         </div>
         <div className="mx-auto max-w-6xl px-8 pb-5">
           <OnboardingStepper steps={steps} onStepClick={onStepClick} />

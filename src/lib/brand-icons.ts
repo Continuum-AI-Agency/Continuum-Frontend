@@ -20,7 +20,7 @@ export const google: BrandIconData = {
 
 export const instagram: BrandIconData = {
   title: "Instagram",
-  svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><linearGradient id="ig" x1="3" y1="21" x2="21" y2="3"><stop stop-color="#FEDA75"/><stop offset=".35" stop-color="#FA7E1E"/><stop offset=".65" stop-color="#D62976"/><stop offset="1" stop-color="#4F5BD5"/></linearGradient></defs><rect x="2.5" y="2.5" width="19" height="19" rx="5.2" fill="url(#ig)"/><circle cx="12" cy="12" r="4.1" fill="none" stroke="#fff" stroke-width="2"/><circle cx="17.2" cy="6.8" r="1.3" fill="#fff"/></svg>`,
+  svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><defs><radialGradient id="ig-rg" cx="30%" cy="100%" r="130%"><stop offset="0%" stop-color="#ffd676"/><stop offset="20%" stop-color="#f56040"/><stop offset="45%" stop-color="#e1306c"/><stop offset="70%" stop-color="#833ab4"/><stop offset="100%" stop-color="#405de6"/></radialGradient></defs><rect width="24" height="24" rx="5.5" fill="url(#ig-rg)"/><rect x="6" y="6" width="12" height="12" rx="3.2" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="none" stroke="#fff" stroke-width="1.5"/><circle cx="16.4" cy="7.6" r="1" fill="#fff"/></svg>`,
 };
 
 export const linkedin: BrandIconData = {

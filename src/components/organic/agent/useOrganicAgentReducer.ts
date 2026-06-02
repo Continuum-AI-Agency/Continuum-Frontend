@@ -1,5 +1,20 @@
-import type { AgentJobState, ConversationMessage, ToolCallEvent, UiCard } from "./types"
+import type {
+  AgentJobState,
+  ConversationMessage,
+  PipelineCardState,
+  PipelineStage,
+  PipelineStageNode,
+  PipelineStageNodeStatus,
+  PlanItemStatus,
+  ToolApproval,
+  ToolCallEvent,
+  UiCard,
+} from "./types"
+import { PIPELINE_STAGES } from "./types"
+import type { ParsedPipelineStage, ParsedPlanStatus } from "./streamEventParser"
 import type { AgentMentionMetadata } from "@/lib/agent-references"
+
+export type BulkRunRef = { runId: string; planId: string; total: number }
 
 export type PanelState = {
   sessionId: string | null
@@ -7,6 +22,10 @@ export type PanelState = {
   inputValue: string
   isHydrated: boolean
   jobs: Record<string, AgentJobState>
+  pipeline: Record<string, PipelineCardState>
+  planItemStatus: Record<string, PlanItemStatus>
+  pendingToolApprovals: ToolApproval[]
+  bulkRuns: Record<string, BulkRunRef>
   streamingMessageId: string | null
 }
 
@@ -22,8 +41,85 @@ export type PanelAction =
   | { type: "STREAM_ERROR"; error: string }
   | { type: "STREAM_UI_CARD"; card: UiCard }
   | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
+  | { type: "PIPELINE_STAGE"; event: ParsedPipelineStage }
+  | { type: "PIPELINE_CARD"; card: Partial<PipelineCardState> & { jobId: string } }
+  | { type: "PLAN_STATUS"; event: ParsedPlanStatus }
+  | { type: "TOOL_APPROVAL_ADD"; approval: ToolApproval }
+  | { type: "TOOL_APPROVAL_RESOLVE"; approvalId: string }
+  | { type: "BULK_RUN_START"; run: BulkRunRef }
   | { type: "SESSION_SWITCH"; sessionId: string; messages: ConversationMessage[] }
   | { type: "LOAD_MESSAGES_START" }
+
+const STAGE_ORDER: readonly PipelineStage[] = PIPELINE_STAGES
+
+function buildStages(
+  currentStage: PipelineStage,
+  currentStatus: PipelineStageNodeStatus,
+  agentName?: string,
+): PipelineStageNode[] {
+  const idx = STAGE_ORDER.indexOf(currentStage)
+  return STAGE_ORDER.map((stage, i) => {
+    if (i < idx) return { stage, status: "done" as const }
+    if (i === idx) return { stage, status: currentStatus, agentName }
+    return { stage, status: "pending" as const }
+  })
+}
+
+function applyPipelineStage(
+  prev: PipelineCardState | undefined,
+  ev: ParsedPipelineStage,
+): PipelineCardState {
+  const nodeStatus: PipelineStageNodeStatus =
+    ev.status === "done" ? "done" : ev.status === "failed" ? "failed" : "active"
+  const terminal =
+    prev?.status === "completed" || prev?.status === "failed" || prev?.status === "cancelled"
+  return {
+    jobId: ev.jobId,
+    brandId: ev.brandId ?? prev?.brandId,
+    planId: ev.planId ?? prev?.planId ?? null,
+    planItemId: ev.planItemId ?? prev?.planItemId ?? null,
+    platform: prev?.platform,
+    stages: terminal && prev ? prev.stages : buildStages(ev.stage, nodeStatus, ev.agentName),
+    currentStage: ev.stage,
+    pct: ev.pct ?? prev?.pct,
+    status: terminal && prev ? prev.status : "running",
+    preview: prev?.preview,
+    quality: prev?.quality,
+    draftId: prev?.draftId,
+    error: prev?.error,
+  }
+}
+
+function applyPipelineCard(
+  prev: PipelineCardState | undefined,
+  card: Partial<PipelineCardState> & { jobId: string },
+): PipelineCardState {
+  const base: PipelineCardState =
+    prev ?? {
+      jobId: card.jobId,
+      stages: STAGE_ORDER.map((stage) => ({ stage, status: "pending" as const })),
+      status: "running",
+    }
+
+  let stages = base.stages
+  if (card.status === "completed") {
+    stages = STAGE_ORDER.map((stage) => ({ stage, status: "done" as const }))
+  } else if (card.status === "failed") {
+    const failStage = card.currentStage ?? base.currentStage
+    stages = base.stages.map((s) =>
+      s.stage === failStage ? { ...s, status: "failed" as const } : s,
+    )
+  }
+
+  return {
+    ...base,
+    ...card,
+    stages,
+    pct: card.status === "completed" ? 100 : base.pct,
+    quality: card.quality ?? base.quality,
+    preview: card.preview ?? base.preview,
+  }
+}
 
 export function initialPanelState(): PanelState {
   return {
@@ -32,6 +128,10 @@ export function initialPanelState(): PanelState {
     inputValue: "",
     isHydrated: false,
     jobs: {},
+    pipeline: {},
+    planItemStatus: {},
+    pendingToolApprovals: [],
+    bulkRuns: {},
     streamingMessageId: null,
   }
 }
@@ -145,11 +245,65 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         },
       }
 
+    case "PIPELINE_STAGE":
+      return {
+        ...state,
+        pipeline: {
+          ...state.pipeline,
+          [action.event.jobId]: applyPipelineStage(state.pipeline[action.event.jobId], action.event),
+        },
+      }
+
+    case "PIPELINE_CARD":
+      return {
+        ...state,
+        pipeline: {
+          ...state.pipeline,
+          [action.card.jobId]: applyPipelineCard(state.pipeline[action.card.jobId], action.card),
+        },
+      }
+
+    case "PLAN_STATUS":
+      return {
+        ...state,
+        planItemStatus: {
+          ...state.planItemStatus,
+          [action.event.itemId]: action.event.status,
+        },
+      }
+
+    case "TOOL_APPROVAL_ADD":
+      if (state.pendingToolApprovals.some((a) => a.approvalId === action.approval.approvalId)) {
+        return state
+      }
+      return {
+        ...state,
+        pendingToolApprovals: [...state.pendingToolApprovals, action.approval],
+      }
+
+    case "TOOL_APPROVAL_RESOLVE":
+      return {
+        ...state,
+        pendingToolApprovals: state.pendingToolApprovals.filter(
+          (a) => a.approvalId !== action.approvalId,
+        ),
+      }
+
+    case "BULK_RUN_START":
+      return {
+        ...state,
+        bulkRuns: { ...state.bulkRuns, [action.run.runId]: action.run },
+      }
+
     case "LOAD_MESSAGES_START":
       return {
         ...state,
         messages: [],
         jobs: {},
+        pipeline: {},
+        planItemStatus: {},
+        pendingToolApprovals: [],
+        bulkRuns: {},
         streamingMessageId: null,
         isHydrated: false,
       }

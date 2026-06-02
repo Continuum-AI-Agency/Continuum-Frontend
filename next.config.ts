@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   ...(cacheComponentsEnabled && { cacheComponents: true }),
   experimental: {
     serverActions: {
-      bodySizeLimit: '3mb',
+      bodySizeLimit: '25mb',
     },
     viewTransition: true,
   },

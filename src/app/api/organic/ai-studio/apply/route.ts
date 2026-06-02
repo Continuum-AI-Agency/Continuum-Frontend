@@ -5,10 +5,92 @@ import {
   plannerAiStudioApplyRequestSchema,
   plannerAiStudioApplyResponseSchema,
 } from "@/lib/organic/ai-studio-bridge";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7;
 export const runtime = "nodejs";
+
+// Register a generated creative as a durable media.assets row so it is
+// searchable by the Organic agent in future sessions.
+async function registerAiCreativeAsMediaAsset(params: {
+  brandProfileId: string;
+  userId: string;
+  draftId: string;
+  bucket: string;
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  kind: "image" | "video";
+  width?: number | null;
+  height?: number | null;
+}): Promise<void> {
+  const admin = createSupabaseAdminClient();
+
+  // Cast for the media schema which may not be fully reflected in generated types.
+  const { error } = await (admin.schema("media") as unknown as typeof admin)
+    .from("assets")
+    .insert({
+      brand_id: params.brandProfileId,
+      created_by: params.userId,
+      kind: params.kind,
+      bucket: params.bucket,
+      storage_path: params.storagePath,
+      file_name: params.fileName,
+      mime_type: params.mimeType,
+      width: params.width ?? null,
+      height: params.height ?? null,
+      source: "ai_generated",
+      origin_ref: { draftId: params.draftId },
+      status: "stored",
+    });
+
+  if (error) {
+    // Non-fatal: log and continue. The asset is still usable; it just won't be
+    // searchable until a future backfill adds it.
+    console.warn("[apply] media.assets insert failed", {
+      storagePath: params.storagePath,
+      error: error.message,
+    });
+    return;
+  }
+
+  // Enqueue vision analysis. Tier-gated inside the edge function itself.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (supabaseUrl && serviceKey) {
+    // Fetch the newly inserted row's id so analyze_media can locate it.
+    const { data: row } = await (admin.schema("media") as unknown as typeof admin)
+      .from("assets")
+      .select("id")
+      .eq("storage_path", params.storagePath)
+      .eq("brand_id", params.brandProfileId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (row) {
+      const assetId = (row as unknown as { id: string }).id;
+      fetch(`${supabaseUrl}/functions/v1/analyze_media`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          brandId: params.brandProfileId,
+          assetId,
+          storagePath: params.storagePath,
+          bucket: params.bucket,
+          mimeType: params.mimeType,
+          fileName: params.fileName,
+        }),
+      }).catch((err) => {
+        console.warn("[apply] analyze_media enqueue failed", { assetId, error: String(err) });
+      });
+    }
+  }
+}
 
 function resolveAssetMimeType(kind: "image" | "video", provided?: string | null): string {
   const normalized = typeof provided === "string" ? provided.trim().toLowerCase() : "";
@@ -161,6 +243,24 @@ export async function POST(request: Request) {
         width: asset.width,
         height: asset.height,
         generationContext: asset.generationContext,
+      });
+
+      // Register the AI-generated asset in the media library so it becomes
+      // durable and searchable by the Organic agent. Fire-and-forget: failure
+      // must not block the apply response.
+      registerAiCreativeAsMediaAsset({
+        brandProfileId: payload.brandProfileId,
+        userId: user.id,
+        draftId: payload.draftId,
+        bucket,
+        storagePath,
+        fileName,
+        mimeType: source.mimeType,
+        kind: asset.kind,
+        width: asset.width,
+        height: asset.height,
+      }).catch((err) => {
+        console.warn("[apply] registerAiCreativeAsMediaAsset failed", { storagePath, error: String(err) });
       });
     }
 

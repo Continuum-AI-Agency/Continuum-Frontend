@@ -16,6 +16,7 @@ import {
   User,
   Package,
   CircleCheck,
+  Images,
   type LucideIcon,
 } from "lucide-react";
 
@@ -96,6 +97,13 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
         icon: Bot,
       },
     ],
+  },
+  {
+    label: "Library",
+    href: "/library",
+    icon: Images,
+    accentColor: "text-rose-500",
+    description: "Semantically-understood media library for your brand assets.",
   },
   {
     label: "Primitives",

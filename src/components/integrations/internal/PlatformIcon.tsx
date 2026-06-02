@@ -1,4 +1,4 @@
-import { facebook, instagram } from "@/lib/brand-icons";
+import { meta, instagram } from "@/lib/brand-icons";
 
 type PlatformIconProps = {
   platform: string;
@@ -12,8 +12,8 @@ export function PlatformIcon({ platform, className = "w-4 h-4" }: PlatformIconPr
   let title = "";
 
   if (p === "facebook" || p === "meta_page" || p === "page") {
-    iconSvg = facebook.svg;
-    title = "Facebook";
+    iconSvg = meta.svg;
+    title = "Meta";
   } else if (p === "instagram" || p === "meta_instagram_user" || p === "instagram_user") {
     iconSvg = instagram.svg;
     title = "Instagram";

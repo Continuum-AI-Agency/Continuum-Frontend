@@ -325,7 +325,7 @@ export function PromptInput({
           <InputGroupTextarea
             aria-label="Message Jaina Analyst"
             className={cn(
-              "min-h-[74px] border-none bg-transparent py-3.5 text-sm leading-6 focus-visible:ring-0",
+              "min-h-[74px] max-h-[160px] overflow-y-auto border-none bg-transparent py-3.5 text-sm leading-6 focus-visible:ring-0",
               "placeholder:text-muted-foreground/85"
             )}
             disabled={disabled}

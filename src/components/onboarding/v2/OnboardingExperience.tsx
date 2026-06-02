@@ -5,12 +5,18 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { OnboardingShell, type ShellPillId } from "./OnboardingShell";
+import { OnboardingBrandSwitcher } from "./OnboardingBrandSwitcher";
 import type { StepperState } from "./OnboardingStepper";
 import { UrlScreen } from "./screens/UrlScreen";
 import { BrandDnaScreen } from "./screens/BrandDnaScreen";
 import { IntegrationsScreen } from "./screens/IntegrationsScreen";
 import { DocumentsScreen } from "./screens/DocumentsScreen";
 import { InvitesScreen } from "./screens/InvitesScreen";
+import {
+  CompetitorInspirationsScreen,
+  type SelectedInspiration,
+} from "./screens/CompetitorInspirationsScreen";
+import { InspirationGenerationScreen } from "./screens/InspirationGenerationScreen";
 import { WelcomeScreen, hasSeenWelcome } from "./screens/WelcomeScreen";
 import { BackgroundJobsProvider, useBackgroundJobs } from "./state/BackgroundJobsProvider";
 import { runScrape, runTrendsPrewarm } from "./state/jobRunners";
@@ -24,7 +30,11 @@ import {
 } from "@/lib/onboarding/agentClient";
 import { JobPersistor } from "./state/JobPersistor";
 import { OnboardingProvider, useOnboarding } from "@/components/onboarding/providers/OnboardingContext";
-import { approveAndLaunchOnboardingAction } from "@/app/onboarding/actions";
+import {
+  approveAndLaunchOnboardingAction,
+  approveOnboardingAndStartAnalysisAction,
+  completeOnboardingAction,
+} from "@/app/onboarding/actions";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { OnboardingState } from "@/lib/onboarding/state";
@@ -32,9 +42,15 @@ import { useBrandProfileRevealCache } from "@/lib/onboarding/revealCache";
 import { timing, trackOnboardingEvent } from "@/lib/onboarding/telemetry";
 import { useBrandAssignedAccountIds } from "@/hooks/useBrandAssignedAccountIds";
 
-type ScreenIndex = 0 | 1 | 2 | 3 | 4;
+type ScreenIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 const TOTAL_STEPS = 5;
+
+// Post-Brand-DNA "Competitor Inspirations → brand-guided generations" finale.
+// On by default: only disabled when the flag is explicitly "false" (then Brand
+// DNA keeps the classic launch → dashboard flow).
+const INSPIRATIONS_ENABLED =
+  process.env.NEXT_PUBLIC_ONBOARDING_INSPIRATIONS_ENABLED !== "false";
 
 const swipeVariants = {
   enter: (dir: number) => ({ x: dir * 56, opacity: 0 }),
@@ -90,6 +106,17 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
   const prewarmedRef = useRef(false);
   const launchInFlightRef = useRef(false);
   const launchKeyRef = useRef<string | null>(null);
+  const [selectedInspiration, setSelectedInspiration] = useState<SelectedInspiration | null>(null);
+
+  const ensureLaunchKey = () => {
+    if (!launchKeyRef.current) {
+      launchKeyRef.current =
+        typeof globalThis.crypto?.randomUUID === "function"
+          ? globalThis.crypto.randomUUID()
+          : `${brandId}-${Date.now().toString(36)}`;
+    }
+    return launchKeyRef.current;
+  };
 
   const handleStartOver = () => {
     startReset(async () => {
@@ -156,6 +183,65 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
         router.push("/dashboard");
       } catch (error) {
         launchInFlightRef.current = false;
+        trackOnboardingEvent("onboarding_launch_failed", {
+          duration_ms: launchTimer.sinceStart(),
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+        show({
+          title: "Launch failed",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "error",
+        });
+      }
+    });
+  };
+
+  // Flag-on path: leaving Brand DNA approves the profile + kicks the background
+  // strategic analysis (so competitor analysis is computing), then advances to
+  // the inspirations screen. Onboarding is NOT marked complete until the finale.
+  //
+  // Competitor organic posts come from Meta Business Discovery, which requires the
+  // brand's own Instagram account to be connected. Without it the inspirations
+  // screen has no organic data to show, so we skip it gracefully and go straight
+  // to the brand-guided generation screen (which only needs the brand guidelines).
+  const handleContinueToInspirations = () => {
+    const integrationCount = Math.max(assignedAccountIds.length, countSelectedAccounts(state));
+    trackOnboardingEvent("onboarding_launch_clicked", { integration_count: integrationCount, confirmed: true });
+    const idempotencyKey = ensureLaunchKey();
+    const skipInspirations = !hasConnectedInstagram(state);
+    startLaunch(async () => {
+      try {
+        await approveOnboardingAndStartAnalysisAction(brandId, { idempotencyKey });
+        if (skipInspirations) {
+          trackOnboardingEvent("onboarding_inspirations_skipped", {
+            reason: "no_connected_instagram",
+          });
+        }
+        navigate(skipInspirations ? 6 : 5);
+      } catch (error) {
+        show({
+          title: "Couldn't continue",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "error",
+        });
+      }
+    });
+  };
+
+  // Flag-on path: the finale's final CTA only completes onboarding + routes; the
+  // approve/analysis already ran when leaving Brand DNA.
+  const handleFinishToDashboard = () => {
+    const launchTimer = timing();
+    startLaunch(async () => {
+      try {
+        await completeOnboardingAction(brandId);
+        useBrandProfileRevealCache.getState().invalidateBrand(brandId);
+        trackOnboardingEvent("onboarding_launch_succeeded", {
+          duration_ms: launchTimer.sinceStart(),
+          integration_count: Math.max(assignedAccountIds.length, countSelectedAccounts(state)),
+        });
+        router.push("/dashboard");
+      } catch (error) {
         trackOnboardingEvent("onboarding_launch_failed", {
           duration_ms: launchTimer.sinceStart(),
           message: error instanceof Error ? error.message : "Unknown error",
@@ -304,6 +390,8 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
     navigate,
     onChangeUrl: () => navigate(0),
     onLaunch: handleLaunch,
+    onContinueToInspirations: handleContinueToInspirations,
+    inspirationsEnabled: INSPIRATIONS_ENABLED,
     launching,
   });
 
@@ -430,6 +518,7 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       bottomActions={actions}
       onStartOver={handleStartOver}
       startOverDisabled={resetting || launching}
+      headerRight={<OnboardingBrandSwitcher />}
     >
       <AnimatePresence mode="wait" custom={directionRef.current}>
         <motion.div
@@ -456,11 +545,27 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
             <IntegrationsScreen onAdvance={() => navigate(3)} />
           ) : screen === 3 ? (
             <InvitesScreen totalSteps={TOTAL_STEPS} />
-          ) : (
+          ) : screen === 4 ? (
             <BrandDnaScreen
               agentBuckets={agentBuckets}
               readinessLoading={readinessLoading}
               onRetry={handleAgentRerun}
+            />
+          ) : screen === 5 ? (
+            <CompetitorInspirationsScreen
+              brandId={brandId}
+              selected={selectedInspiration}
+              onSelect={setSelectedInspiration}
+              onContinue={() => navigate(6)}
+              onBack={() => navigate(4)}
+            />
+          ) : (
+            <InspirationGenerationScreen
+              brandId={brandId}
+              reference={selectedInspiration}
+              onFinish={handleFinishToDashboard}
+              finishing={launching}
+              onBack={() => navigate(hasConnectedInstagram(state) ? 5 : 4)}
             />
           )}
         </motion.div>
@@ -470,6 +575,16 @@ function ExperienceInner({ initialState, defaultUrl }: OnboardingExperienceProps
       ) : null}
     </OnboardingShell>
   );
+}
+
+// The brand has a usable Instagram connection (enables Meta Business Discovery
+// for competitor organic posts) if the IG connection is marked connected, has any
+// resolved accounts, or carries assigned Meta integration ids. IG OAuths through
+// Meta, so selectableAssetsMerge tracks those integration ids under "instagram".
+function hasConnectedInstagram(state: OnboardingState): boolean {
+  const ig = state.connections.instagram;
+  if (!ig) return false;
+  return ig.connected || ig.accounts.length > 0 || ig.integrationIds.length > 0;
 }
 
 function countSelectedAccounts(state: OnboardingState): number {
@@ -511,12 +626,16 @@ function useBottomBar({
   navigate,
   onChangeUrl,
   onLaunch,
+  onContinueToInspirations,
+  inspirationsEnabled,
   launching,
 }: {
   screen: ScreenIndex;
   navigate: (next: ScreenIndex) => void;
   onChangeUrl: () => void;
   onLaunch: () => void;
+  onContinueToInspirations: () => void;
+  inspirationsEnabled: boolean;
   launching: boolean;
 }) {
   const { jobs } = useBackgroundJobs();
@@ -579,12 +698,26 @@ function useBottomBar({
       ),
     };
   }
-  return {
-    hint: "",
-    actions: (
-      <Button variant="success" size="sm" onClick={onLaunch} disabled={launching}>
-        {launching ? "Launching…" : "Launch Continuum ✦"}
-      </Button>
-    ),
-  };
+  if (screen === 4) {
+    if (inspirationsEnabled) {
+      return {
+        hint: "",
+        actions: (
+          <Button variant="default" size="sm" onClick={onContinueToInspirations} disabled={launching}>
+            {launching ? "Preparing…" : "Continue →"}
+          </Button>
+        ),
+      };
+    }
+    return {
+      hint: "",
+      actions: (
+        <Button variant="success" size="sm" onClick={onLaunch} disabled={launching}>
+          {launching ? "Launching…" : "Launch Continuum ✦"}
+        </Button>
+      ),
+    };
+  }
+  // Screens 5 (inspirations) and 6 (generation) render their own footer CTAs.
+  return { hint: "", actions: null };
 }

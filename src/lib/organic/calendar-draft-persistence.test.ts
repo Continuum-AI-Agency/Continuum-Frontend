@@ -96,3 +96,94 @@ describe("calendar draft persistence utils", () => {
     expect(isDayIdInWeekRange("invalid", "2026-04-20")).toBe(false)
   })
 })
+
+describe("mapPersistedRowToCalendarEntry — generated drafts (content_json shape)", () => {
+  const days = buildWeekDays(new Date("2026-06-01T12:00:00"))
+
+  const generatedRow = (): PersistedOrganicDraftRow => ({
+    id: "row-1",
+    status: "draft",
+    scheduled_date: "2026-06-01 11:00:00+00",
+    platform_account_id: "acct-1",
+    content_plan_id: "11111111-1111-1111-1111-111111111111",
+    slot_data: {
+      slotId: "spec-1",
+      schedule: { dayId: "2026-06-01", timeOfDay: "morning", postIndex: 0 },
+      platform: { name: "instagram", accountId: "acct-1" },
+      strategy: { objective: "save" },
+      contentPlan: { titleTopic: "Glass skin", type: "Reel", format: "carousel" },
+    },
+    content_json: {
+      placementId: "spec-1",
+      schedule: { dayId: "2026-06-01", scheduledAt: "2026-06-01T11:00:00.000Z" },
+      platform: { name: "instagram", accountId: "acct-1" },
+      content: { titleTopic: "Glass skin routine", format: "carousel", objective: "save" },
+      copy: { caption: "Your 3-step glass skin routine" },
+      creative: { mediaSuggestion: { assetUrl: "https://signed/img.png", kind: "carousel" } },
+    },
+  })
+
+  it("places a generated draft on the grid and reads content from content_json", () => {
+    const entry = mapPersistedRowToCalendarEntry(generatedRow(), days)
+    expect(entry).not.toBeNull()
+    expect(entry?.dayId).toBe("2026-06-01")
+    expect(entry?.draft.title).toBe("Glass skin routine")
+    expect(entry?.draft.captionPreview).toBe("Your 3-step glass skin routine")
+    expect(entry?.draft.format).toBe("carousel")
+    expect(entry?.draft.platforms).toEqual(["instagram"])
+    expect(entry?.draft.timeLabel).toBe("11:00 AM")
+    expect(entry?.draft.contentPlanId).toBe("11111111-1111-1111-1111-111111111111")
+    expect(entry?.draft.mediaSuggestion?.assetUrl).toBe("https://signed/img.png")
+  })
+
+  it("resolves the day from scheduled_date when no dayId is present", () => {
+    const row = generatedRow()
+    ;(row.slot_data as Record<string, unknown>).schedule = {}
+    ;(row.content_json as Record<string, unknown>).schedule = {}
+    const entry = mapPersistedRowToCalendarEntry(row, days)
+    expect(entry?.dayId).toBe("2026-06-01")
+  })
+
+  it("leaves contentPlanId null for non-bulk (ad-hoc) drafts", () => {
+    const row = generatedRow()
+    row.content_plan_id = null
+    const entry = mapPersistedRowToCalendarEntry(row, days)
+    expect(entry?.draft.contentPlanId).toBeNull()
+  })
+
+  it("carries the hyperframe sub-object through from content_json", () => {
+    const row = generatedRow()
+    ;(row.content_json as Record<string, unknown>).content = {
+      titleTopic: "Glass skin routine",
+      format: "HyperFrame",
+      objective: "save",
+    }
+    ;(row.content_json as Record<string, unknown>).creative = {
+      mediaSuggestion: {
+        mimeType: "text/html",
+        url: "compositions/brand/hf_123/index.html",
+        hyperframe: {
+          generated: true,
+          compositionId: "hf_123",
+          bucket: "hyperframes-compositions",
+          htmlPath: "compositions/brand/hf_123/index.html",
+          coverImageUrl: "https://signed/cover.png",
+          coverPath: "compositions/brand/hf_123/cover.png",
+          mp4Status: "pending",
+        },
+      },
+    }
+    const entry = mapPersistedRowToCalendarEntry(row, days)
+    expect(entry).not.toBeNull()
+    expect(entry?.draft.format).toBe("HyperFrame")
+    expect(entry?.draft.mediaSuggestion?.hyperframe?.compositionId).toBe("hf_123")
+    expect(entry?.draft.mediaSuggestion?.hyperframe?.htmlPath).toBe(
+      "compositions/brand/hf_123/index.html"
+    )
+    expect(entry?.draft.mediaSuggestion?.hyperframe?.coverImageUrl).toBe(
+      "https://signed/cover.png"
+    )
+    expect(entry?.draft.mediaSuggestion?.hyperframe?.mp4Status).toBe("pending")
+    expect(entry?.draft.mediaSuggestion?.hyperframe?.generated).toBe(true)
+  })
+})

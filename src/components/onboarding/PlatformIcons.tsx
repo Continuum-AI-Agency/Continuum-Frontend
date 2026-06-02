@@ -4,7 +4,6 @@ import React from "react";
 import type { PlatformKey } from "./platforms";
 import {
   amazon,
-  facebook,
   google,
   instagram,
   linkedin,
@@ -153,7 +152,7 @@ export function PlatformIcon({ platform, size = 18, className }: IconProps & { p
     case "meta":
       return <SvgRenderer svgContent={meta.svg} size={size} className={className} title="Meta" />;
     case "facebook":
-      return <SvgRenderer svgContent={facebook.svg} size={size} className={className} title="Facebook" />;
+      return <SvgRenderer svgContent={meta.svg} size={size} className={className} title="Meta" />;
     case "instagram":
       return <SvgRenderer svgContent={instagram.svg} size={size} className={className} title="Instagram" />;
     case "threads":

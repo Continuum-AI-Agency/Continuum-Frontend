@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  AlertTriangle,
   ChevronsUpDown,
   Loader2,
   Plus,
@@ -122,6 +123,9 @@ export function BrandSwitcher() {
                         )}
                       </div>
                       <span className="flex-1 truncate text-[0.8rem]">{brand.name}</span>
+                      {!brand.completed && (
+                        <AlertTriangle className="size-3.5 shrink-0 text-amber-500" aria-label="Onboarding incomplete" />
+                      )}
                       {brand.isPending && (
                         <span className="text-[10px] bg-amber-500/20 text-amber-500 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">
                           Pending

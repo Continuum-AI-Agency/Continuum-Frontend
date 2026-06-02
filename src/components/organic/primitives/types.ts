@@ -33,6 +33,8 @@ export type OrganicCalendarDraft = {
   location?: string
   mediaCount: number
   seedTrendId?: string
+  // Non-null when this draft belongs to a bulk content plan ("planned" provenance).
+  contentPlanId?: string | null
   targetAccountId?: string
   adjusted?: boolean
   titleTopic?: string
@@ -54,6 +56,39 @@ export type OrganicCalendarDraft = {
     assetUrl?: string | null
     alt?: string | null
     assetBase64?: string | null
+    hyperframe?: {
+      generated?: boolean | null
+      compositionId?: string | null
+      bucket?: string | null
+      htmlPath?: string | null
+      coverImageUrl?: string | null
+      coverPath?: string | null
+      coverBase64?: string | null
+      mp4Bucket?: string | null
+      mp4Path?: string | null
+      mp4Url?: string | null
+      mp4Status?: "pending" | "ready" | "failed" | null
+      error?: string | null
+      spec?: unknown
+    } | null
+    reel?: {
+      generated?: boolean | null
+      url?: string | null
+      signedUrl?: string | null
+      mimeType?: string | null
+      durationSec?: number | null
+      scenes?: Array<{
+        index?: number | null
+        role?: "hook" | "body" | "cta" | null
+        prompt?: string | null
+        captionText?: string | null
+        durationSec?: number | null
+        clipUrl?: string | null
+        signedClipUrl?: string | null
+        error?: string | null
+      }> | null
+      error?: string | null
+    } | null
     assets?: Array<{
       role?: string | null
       order?: number | null

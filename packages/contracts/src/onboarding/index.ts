@@ -9,3 +9,5 @@ export * from "./readiness";
 export * from "./first-impression";
 export * from "./brand-report";
 export * from "./sse-events";
+export * from "./inspirations";
+export * from "./brand-kit";

@@ -52,6 +52,68 @@ export const organicMediaGenerationContextSchema = z.object({
   }).strict(),
 }).strict();
 
+/** Style/tone/aspect for a HyperFrames composition (mirrors the backend HyperframeBrief enums). */
+export const organicHyperframeStylePresetSchema = z.enum([
+  "cinematic",
+  "kinetic-type",
+  "minimal",
+  "brutalist",
+  "editorial",
+  "neon",
+  "retro",
+  "futuristic",
+]);
+export const organicHyperframeToneSchema = z.enum(["calm", "balanced", "high-energy"]);
+export const organicHyperframeAspectRatioSchema = z.enum(["16:9", "9:16", "1:1"]);
+
+/** One scene of a multi-shot reel (mirrors backend ReelSceneAsset). */
+export const organicReelSceneAssetSchema = z.object({
+  index: z.number().int().min(0),
+  role: z.enum(["hook", "body", "cta"]),
+  prompt: z.string(),
+  captionText: z.string().nullable().optional(),
+  durationSec: z.number(),
+  clipUrl: z.string().nullable().optional(),
+  signedClipUrl: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+}).strict();
+
+/** A stitched/storyboarded reel asset (mirrors backend ReelAsset). */
+export const organicReelAssetSchema = z.object({
+  generated: z.boolean(),
+  url: z.string().nullable().optional(),
+  signedUrl: z.string().nullable().optional(),
+  mimeType: z.string().nullable().optional(),
+  durationSec: z.number(),
+  scenes: z.array(organicReelSceneAssetSchema),
+  error: z.string().nullable().optional(),
+  qualityIssues: z.array(z.string()).optional(),
+  qualityScore: z.number().optional(),
+}).strict();
+
+/**
+ * A HyperFrames (HTML video composition) asset. The composition HTML is the
+ * source of truth (durable `bucket`+`htmlPath`, re-signed on read); `mp4*` is
+ * the derived publishable video, persisted async by the FE render + edge fn.
+ * `spec` is left `unknown` — the canonical ai-studio CompositionSpec is
+ * backend-only and is not forked into contracts.
+ */
+export const organicHyperframeAssetSchema = z.object({
+  generated: z.boolean(),
+  compositionId: z.string().nullable(),
+  bucket: z.string().nullable().optional(),
+  htmlPath: z.string().nullable().optional(),
+  coverImageUrl: z.string().nullable().optional(),
+  coverPath: z.string().nullable().optional(),
+  coverBase64: z.string().nullable().optional(),
+  mp4Bucket: z.string().nullable().optional(),
+  mp4Path: z.string().nullable().optional(),
+  mp4Url: z.string().nullable().optional(),
+  mp4Status: z.enum(["pending", "ready", "failed"]).nullable().optional(),
+  error: z.string().nullable().optional(),
+  spec: z.unknown().nullable().optional(),
+}).strict();
+
 export const organicCalendarPlacementSchema = z.object({
   placementId: z.string().min(1),
   schedule: z.object({
@@ -108,6 +170,9 @@ export const organicCalendarPlacementSchema = z.object({
       height: z.number().optional(),
       assetUrl: z.string().optional(),
       assetBase64: z.string().optional(),
+      url: z.string().optional(),
+      signedUrl: z.string().optional(),
+      mimeType: z.string().optional(),
       alt: z.string().optional(),
       generationContext: organicMediaGenerationContextSchema.optional(),
       assets: z.array(z.object({
@@ -124,10 +189,15 @@ export const organicCalendarPlacementSchema = z.object({
         height: z.number().optional(),
         assetUrl: z.string().optional(),
         assetBase64: z.string().optional(),
+        url: z.string().nullable().optional(),
+        signedUrl: z.string().nullable().optional(),
+        generated: z.boolean().optional(),
         mimeType: z.string().optional(),
-        error: z.string().optional(),
+        error: z.string().nullable().optional(),
         generationContext: organicMediaGenerationContextSchema.optional(),
       }).strict()).optional(),
+      reel: organicReelAssetSchema.optional(),
+      hyperframe: organicHyperframeAssetSchema.optional(),
     }).strict().optional(),
   }).strict().optional(),
   copy: z.object({
@@ -356,6 +426,12 @@ export const organicGenerationRunEventEnvelopeSchema = z.object({
 
 export type OrganicPipelinePlatform = z.infer<typeof organicPipelinePlatformSchema>;
 export type OrganicMediaGenerationContext = z.infer<typeof organicMediaGenerationContextSchema>;
+export type OrganicReelSceneAsset = z.infer<typeof organicReelSceneAssetSchema>;
+export type OrganicReelAsset = z.infer<typeof organicReelAssetSchema>;
+export type OrganicHyperframeAsset = z.infer<typeof organicHyperframeAssetSchema>;
+export type OrganicHyperframeStylePreset = z.infer<typeof organicHyperframeStylePresetSchema>;
+export type OrganicHyperframeTone = z.infer<typeof organicHyperframeToneSchema>;
+export type OrganicHyperframeAspectRatio = z.infer<typeof organicHyperframeAspectRatioSchema>;
 export type OrganicCalendarPlacement = z.infer<typeof organicCalendarPlacementSchema>;
 export type OrganicCalendarProgressEvent = z.infer<typeof organicCalendarProgressEventSchema>;
 export type OrganicCalendarSlotStartedEvent = z.infer<typeof organicCalendarSlotStartedEventSchema>;

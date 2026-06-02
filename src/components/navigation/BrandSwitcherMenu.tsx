@@ -11,6 +11,7 @@ import {
   ScrollArea,
 } from "@radix-ui/themes";
 import {
+  AlertTriangle,
   CircleCheck,
   Loader2,
   LogOut,
@@ -159,6 +160,8 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
                     />
                   ) : isActiveRow ? (
                     <BadgeIndicator />
+                  ) : !brand.completed ? (
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Onboarding incomplete" />
                   ) : null}
                 </DropdownMenu.Item>
               );

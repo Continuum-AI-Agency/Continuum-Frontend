@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { PlayIcon } from "@radix-ui/react-icons"
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDraft } from "./types"
 
@@ -55,9 +56,43 @@ export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {
 
 export function resolveFormatAspectClass(format: string): string {
   const f = (format ?? "").toLowerCase()
+  if (f === "hyperframe") return "aspect-video"
   if (f === "reel" || f === "video") return "aspect-[4/5]"
   if (f === "story") return "aspect-[9/16]"
   return "aspect-square"
+}
+
+export type DraftHyperframeCover = {
+  coverImageUrl?: string | null
+  coverBase64?: string | null
+  coverPath?: string | null
+  bucket?: string | null
+}
+
+export function isHyperframeDraft(draft: OrganicCalendarDraft): boolean {
+  return (draft.format ?? "").toLowerCase() === "hyperframe"
+}
+
+export function resolveDraftHyperframeCover(
+  draft: OrganicCalendarDraft
+): DraftHyperframeCover | null {
+  const hf = draft.mediaSuggestion?.hyperframe
+  if (!hf) return null
+  const hasCover =
+    hasText(hf.coverImageUrl) || hasText(hf.coverBase64) || hasText(hf.coverPath)
+  if (!hasCover) return null
+  return {
+    coverImageUrl: hf.coverImageUrl ?? null,
+    coverBase64: hf.coverBase64 ?? null,
+    coverPath: hf.coverPath ?? null,
+    bucket: hf.bucket ?? null,
+  }
+}
+
+function resolveHyperframeCoverUrl(cover: DraftHyperframeCover): string | null {
+  if (hasText(cover.coverImageUrl)) return cover.coverImageUrl.trim()
+  if (hasText(cover.coverBase64)) return toDataUrl(cover.coverBase64, "image/png")
+  return null
 }
 
 export function DraftCardMedia({
@@ -71,13 +106,37 @@ export function DraftCardMedia({
   className?: string
   sizes?: string
 }) {
-  const mediaUrl = resolveDraftMediaAssetUrl(draft)
   const platform = draft.platforms[0] ?? "instagram"
   const [gradientStart, gradientEnd] = PLATFORM_GRADIENTS[platform] ?? ["#5A48F9", "#7C6FFF"]
   const altText =
     typeof draft.mediaSuggestion?.alt === "string" && draft.mediaSuggestion.alt.trim()
       ? draft.mediaSuggestion.alt.trim()
       : draft.title
+
+  const hyperframeCover = isHyperframeDraft(draft) ? resolveDraftHyperframeCover(draft) : null
+  const hyperframeCoverUrl = hyperframeCover ? resolveHyperframeCoverUrl(hyperframeCover) : null
+
+  if (hyperframeCoverUrl) {
+    return (
+      <div className={cn("relative overflow-hidden", aspectClass, className)}>
+        <Image
+          src={hyperframeCoverUrl}
+          alt={altText}
+          fill
+          unoptimized
+          className="object-cover"
+          sizes={sizes}
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
+            <PlayIcon className="h-4 w-4 translate-x-[1px]" />
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  const mediaUrl = resolveDraftMediaAssetUrl(draft)
 
   return (
     <div className={cn("relative overflow-hidden", aspectClass, className)}>

@@ -25,6 +25,7 @@ import {
   resolvePreviewMaxWidth,
 } from "./social-preview-utils"
 import { OrganicCreativesPicker } from "./OrganicCreativesPicker"
+import { HyperFramePlayer } from "./HyperFramePlayer"
 import { usePublishDraft } from "@/components/organic/hooks/usePublishDraft"
 
 interface OrganicDraftPreviewProps {
@@ -279,8 +280,9 @@ function LifecyclePill({ status }: { status: OrganicCalendarDraft["status"] }) {
   )
 }
 
-function toPublishFormat(format: string): "Post" | "Carousel" | "Reel" {
+function toPublishFormat(format: string): "Post" | "Carousel" | "Reel" | "HyperFrame" {
   const f = format.toLowerCase()
+  if (f === "hyperframe") return "HyperFrame"
   if (f === "reel" || f === "video") return "Reel"
   if (f === "carousel") return "Carousel"
   return "Post"
@@ -322,6 +324,7 @@ function HashtagInput({ onAdd }: { onAdd: (tag: string) => void }) {
 
 export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprove }: OrganicDraftPreviewProps) {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
+  const isHyperframeFormat = draft.format.toLowerCase() === "hyperframe"
   const selectedPlatform = draft.platforms[0] || "instagram"
   const previewMaxWidth = resolvePreviewMaxWidth(selectedPlatform)
   const mediaAspectRatio = resolvePreviewAspectRatio(selectedPlatform, draft.format)
@@ -392,6 +395,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               <SelectItem value="Post">Post</SelectItem>
               <SelectItem value="Carousel">Carousel</SelectItem>
               <SelectItem value="Reel">Reel</SelectItem>
+              <SelectItem value="HyperFrame">HyperFrame</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -511,7 +515,24 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
           {/* Social preview mock */}
           <div className="mx-auto w-full" style={{ maxWidth: `${previewMaxWidth}px` }}>
-            {selectedPlatform === "instagram" ? (
+            {isHyperframeFormat ? (
+              <div className="flex flex-col gap-3">
+                <HyperFramePlayer draft={draft} brandId={brandProfileId ?? ""} />
+                <div className="rounded-xl border border-border/70 bg-background/90 p-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Caption
+                  </p>
+                  <InlinePreviewTextarea
+                    value={draft.captionPreview}
+                    onChange={(event) => handleCaptionChange(event.target.value)}
+                    placeholder="Write a caption..."
+                    className="min-h-[5rem] text-sm leading-relaxed"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {!isHyperframeFormat && selectedPlatform === "instagram" ? (
               <div className="overflow-hidden rounded-[2.5rem] border-[5px] border-foreground/10 shadow-2xl">
                 {/* Phone status bar */}
                 <div className="relative flex items-center justify-center bg-background px-4 pt-3 pb-2">
@@ -550,7 +571,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               </div>
             ) : null}
 
-            {selectedPlatform === "facebook" ? (
+            {!isHyperframeFormat && selectedPlatform === "facebook" ? (
               <FacebookFeedPreview
                 draft={draft}
                 mediaAspectRatio={mediaAspectRatio}
@@ -560,7 +581,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               />
             ) : null}
 
-            {selectedPlatform === "linkedin" ? (
+            {!isHyperframeFormat && selectedPlatform === "linkedin" ? (
               <LinkedInDesktopPreview
                 draft={draft}
                 mediaAspectRatio={mediaAspectRatio}
@@ -570,7 +591,8 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               />
             ) : null}
 
-            {selectedPlatform !== "instagram" &&
+            {!isHyperframeFormat &&
+            selectedPlatform !== "instagram" &&
             selectedPlatform !== "facebook" &&
             selectedPlatform !== "linkedin" ? (
               <div className="flex min-h-[24rem] items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/30 px-4 py-10">

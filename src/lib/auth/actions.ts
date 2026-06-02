@@ -2,11 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { magicLinkSchema } from "./schemas";
 import type { MagicLinkInput } from "./schemas";
 import { resolveAuthRedirect } from "./redirect";
+import { resolveHeadersOrigin } from "@/lib/server/origin";
+
+async function resolveRuntimeSiteUrl(): Promise<string> {
+  const headerStore = await headers();
+  const fallback = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  return resolveHeadersOrigin(headerStore, fallback);
+}
 
 type ActionResult<T = void> =
   | { success: true; data: T }
@@ -68,7 +75,7 @@ export async function logoutAction(): Promise<ActionResult> {
 
 export async function signInWithGoogleAction(redirectTo?: string): Promise<ActionResult<{ url: string }>> {
   const supabase = await createSupabaseServerClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = await resolveRuntimeSiteUrl();
   const oauthRedirectTo = resolveAuthRedirect({
     requestedRedirect: redirectTo,
     siteUrl,
@@ -120,7 +127,7 @@ export async function sendMagicLinkAction(input: MagicLinkInput): Promise<Action
   }
 
   const supabase = await createSupabaseServerClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const siteUrl = await resolveRuntimeSiteUrl();
   const emailRedirectTo = resolveAuthRedirect({
     requestedRedirect: validation.data.redirectTo,
     siteUrl,

@@ -426,9 +426,23 @@ export type OnboardingPreviewEvent =
 async function assertOk(response: Response): Promise<void> {
   if (response.ok) return;
   let detail: string | undefined;
+  let issues: string | undefined;
   try {
-    const data = (await response.json()) as { error?: string; message?: string };
+    const data = (await response.json()) as {
+      error?: string;
+      message?: string;
+      details?: Array<{ path?: Array<string | number>; message?: string }>;
+    };
     detail = data?.error ?? data?.message;
+    if (Array.isArray(data?.details) && data.details.length > 0) {
+      issues = data.details
+        .map((issue) => {
+          const path = Array.isArray(issue?.path) ? issue.path.join(".") : "";
+          const reason = issue?.message ?? "invalid";
+          return path ? `${path}: ${reason}` : reason;
+        })
+        .join("; ");
+    }
   } catch {
     try {
       detail = await response.text();
@@ -436,7 +450,8 @@ async function assertOk(response: Response): Promise<void> {
       detail = undefined;
     }
   }
-  const message = detail && detail.trim().length > 0 ? detail : `${response.status} ${response.statusText}`;
+  const base = detail && detail.trim().length > 0 ? detail : `${response.status} ${response.statusText}`;
+  const message = issues ? `${base} (${issues})` : base;
   throw new Error(message);
 }
 
