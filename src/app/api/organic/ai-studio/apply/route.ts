@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getCreativeAssetsBucket, resolveStoragePath } from "@/lib/creative-assets/config";
 import {
@@ -27,10 +28,9 @@ async function registerAiCreativeAsMediaAsset(params: {
 }): Promise<void> {
   const admin = createSupabaseAdminClient();
 
-  // Cast for the media schema which may not be fully reflected in generated types.
-  const { error } = await (admin.schema("media") as unknown as typeof admin)
-    .from("assets")
-    .insert({
+  // "media" schema is not in generated types yet; cast to untyped base client.
+  const mediaAdmin = (admin as unknown as SupabaseClient).schema("media");
+  const { error } = await mediaAdmin.from("assets").insert({
       brand_id: params.brandProfileId,
       created_by: params.userId,
       kind: params.kind,
@@ -60,8 +60,7 @@ async function registerAiCreativeAsMediaAsset(params: {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (supabaseUrl && serviceKey) {
     // Fetch the newly inserted row's id so analyze_media can locate it.
-    const { data: row } = await (admin.schema("media") as unknown as typeof admin)
-      .from("assets")
+    const { data: row } = await mediaAdmin.from("assets")
       .select("id")
       .eq("storage_path", params.storagePath)
       .eq("brand_id", params.brandProfileId)
