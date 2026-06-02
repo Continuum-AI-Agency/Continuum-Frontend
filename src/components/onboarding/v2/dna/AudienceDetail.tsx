@@ -7,7 +7,7 @@ type Props = {
 };
 
 export function AudienceDetail({ audience }: Props) {
-  const sections: { label: string; items?: string[] }[] = [
+  const sections: { label: string; items?: string[] | null }[] = [
     { label: "Demographics", items: audience.demographics },
     { label: "Psychographics", items: audience.psychographics },
     { label: "Pain points", items: audience.pain_points },

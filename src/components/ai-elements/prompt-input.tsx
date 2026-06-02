@@ -24,6 +24,53 @@ import {
   type AgentMentionSuggestion,
 } from "@/lib/agent-references";
 
+const URL_RE = /https?:\/\/[^\s<>"]+/g;
+
+// All user-supplied strings are run through escapeHtml before entering the
+// HTML string, so dangerouslySetInnerHTML on the mirror div is XSS-safe.
+// Only hardcoded class names and <mark>/<br> tags are injected by this code.
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function processTextSegment(text: string): string {
+  const urlParts = text.split(/(https?:\/\/[^\s<>"]+)/g);
+  return urlParts
+    .map((part, i) =>
+      i % 2 === 1
+        ? `<mark class="link-token">${escapeHtml(part)}</mark>`
+        : escapeHtml(part).replace(/\n/g, "<br>")
+    )
+    .join("");
+}
+
+function buildHighlightHtml(value: string, tokens: string[]): string {
+  if (tokens.length === 0) return processTextSegment(value);
+  const pattern = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return value
+    .split(new RegExp(`(${pattern})`, "g"))
+    .map((part, i) =>
+      i % 2 === 1
+        ? `<mark class="mention-token">${escapeHtml(part)}</mark>`
+        : processTextSegment(part)
+    )
+    .join("");
+}
+
+function extractLinkReferences(
+  text: string,
+  source: AgentMentionReference["source"]
+): AgentMentionReference[] {
+  const matches = [...text.matchAll(new RegExp(URL_RE.source, "g"))];
+  return [...new Set(matches.map((m) => m[0]))].map((url) => ({
+    id: url,
+    type: "link" as const,
+    label: url,
+    source,
+    metadata: { url },
+  }));
+}
+
 type PromptInputProps = {
   onSubmit: (
     value: string,
@@ -34,6 +81,7 @@ type PromptInputProps = {
   placeholder?: string;
   actions?: React.ReactNode;
   mentionProvider?: AgentMentionProvider;
+  mentionSource?: AgentMentionReference["source"];
 };
 
 type ActiveMention = {
@@ -92,6 +140,7 @@ export function PromptInput({
   placeholder,
   actions,
   mentionProvider,
+  mentionSource = "organic",
 }: PromptInputProps) {
   const [value, setValue] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
@@ -105,6 +154,7 @@ export function PromptInput({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
 
   const canSubmit = useMemo(
@@ -112,13 +162,29 @@ export function PromptInput({
     [attachments.length, value]
   );
 
+  const highlightHtml = useMemo(() => {
+    const tokens = [...new Set(references.map((r) => r.token))];
+    return buildHighlightHtml(value, tokens);
+  }, [value, references]);
+
+  const syncMirrorScroll = useCallback(() => {
+    if (mirrorRef.current && textareaRef.current) {
+      mirrorRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }, []);
+
   const handleSubmit = useCallback(
     (event?: React.FormEvent) => {
       event?.preventDefault();
       if (!canSubmit || disabled) return;
       const trimmedValue = value.trim();
       const validReferences = pruneReferencesForValue(references, trimmedValue);
-      onSubmit(trimmedValue, attachments, validReferences.map(({ token, ...reference }) => reference));
+      const linkReferences = extractLinkReferences(trimmedValue, mentionSource);
+      onSubmit(
+        trimmedValue,
+        attachments,
+        [...validReferences.map(({ token, ...reference }) => reference), ...linkReferences]
+      );
       setValue("");
       setAttachments([]);
       setReferences([]);
@@ -126,7 +192,7 @@ export function PromptInput({
       setMentionParent(null);
       setMentionSuggestions([]);
     },
-    [attachments, canSubmit, disabled, onSubmit, references, value]
+    [attachments, canSubmit, disabled, mentionSource, onSubmit, references, value]
   );
 
   useEffect(() => {
@@ -322,23 +388,32 @@ export function PromptInput({
           isProcessing={isSpeechProcessing}
           isRecording={isListening}
         >
-          <InputGroupTextarea
-            aria-label="Message Jaina Analyst"
-            className={cn(
-              "min-h-[74px] max-h-[160px] overflow-y-auto border-none bg-transparent py-3.5 text-sm leading-6 focus-visible:ring-0",
-              "placeholder:text-muted-foreground/85"
-            )}
-            disabled={disabled}
-            onChange={(event) => updateValue(event.target.value, event.target.selectionStart)}
-            onKeyDown={handleKeyDown}
-            onSelect={(event) => {
-              const target = event.currentTarget;
-              setActiveMention(findActiveMention(target.value, target.selectionStart));
-            }}
-            placeholder={placeholder ?? "Ask Jaina..."}
-            ref={textareaRef}
-            value={value}
-          />
+          <div className="relative">
+            <div
+              ref={mirrorRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words px-3 py-3.5 text-sm leading-6 text-transparent"
+              dangerouslySetInnerHTML={{ __html: highlightHtml }}
+            />
+            <InputGroupTextarea
+              aria-label="Message Jaina Analyst"
+              className={cn(
+                "relative min-h-[74px] max-h-[160px] overflow-y-auto border-none bg-transparent py-3.5 text-sm leading-6 focus-visible:ring-0",
+                "placeholder:text-muted-foreground/85"
+              )}
+              disabled={disabled}
+              onChange={(event) => updateValue(event.target.value, event.target.selectionStart)}
+              onKeyDown={handleKeyDown}
+              onScroll={syncMirrorScroll}
+              onSelect={(event) => {
+                const target = event.currentTarget;
+                setActiveMention(findActiveMention(target.value, target.selectionStart));
+              }}
+              placeholder={placeholder ?? "Ask Jaina..."}
+              ref={textareaRef}
+              value={value}
+            />
+          </div>
           {activeMention && mentionProvider && (
             <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-full max-w-[42rem] overflow-hidden rounded-md border border-border/70 bg-popover text-popover-foreground shadow-xl">
               {mentionParent ? (

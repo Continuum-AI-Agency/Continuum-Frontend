@@ -5,6 +5,7 @@ import { Text } from "@radix-ui/themes";
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2Icon } from "lucide-react";
 import { Message } from "@/components/ai-elements/message";
+import { LinkifiedText } from "@/components/ai-elements/linkified-text";
 import { Checkpoint, CheckpointIcon } from "@/components/ai-elements/checkpoint";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import {
@@ -224,7 +225,7 @@ export function JainaMessageItem({
         className="group w-full space-y-4"
       >
         {message.role === "user" ? (
-          <Text size="2" className="font-medium">{message.content}</Text>
+          <Text size="2" className="font-medium whitespace-pre-wrap"><LinkifiedText text={message.content} /></Text>
         ) : (
           <>
             {hasRenderableContent ? (

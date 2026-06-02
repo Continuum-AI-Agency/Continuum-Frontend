@@ -2985,6 +2985,7 @@ export function JainaChatSurface({
                 }
                 disabled={isInputDisabled}
                 mentionProvider={jainaMentionProvider}
+                mentionSource="jaina"
                 placeholder={pendingClarificationId ? "Reply to Jaina's question…" : "Ask Jaina anything…"}
                 actions={
                   <TooltipProvider delayDuration={180}>

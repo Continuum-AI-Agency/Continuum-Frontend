@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { interpretCheckpointReportPayload } from "@/lib/jaina/stream";
 import {
   parsePersistedReportV2Value,
   parsePersistedReportValue,
@@ -958,5 +959,51 @@ describe("parsePersistedReportV2Value — numeric schema_version", () => {
 
     expect(parsed).toBeDefined();
     expect(parsed?.executive_summary).toBe("Nested budget analysis");
+  });
+});
+
+// The DB loader and the live-stream reducer MUST interpret a checkpoint-report
+// payload identically (same strict-V2-then-heal tiering). Both now delegate to
+// interpretCheckpointReportPayload; these tests lock the two paths together.
+describe("DB loader matches the live-stream interpreter", () => {
+  const validV2 = {
+    _meta: {
+      has_media: false,
+      has_charts: false,
+      block_count: 1,
+      primary_scope: "account",
+      schema_version: "2",
+    },
+    executive_summary: "Summary",
+    blocks: [
+      { block_id: "b1", category: "narrative", scope: "account", title: "T", priority: 1, body: "Body." },
+    ],
+  };
+
+  it("valid V2 report — DB reportV2 equals the stream's reportV2", () => {
+    const stream = interpretCheckpointReportPayload(validV2);
+    expect(stream?.reportV2).toBeDefined();
+
+    const dbV2 = parsePersistedReportV2Value({ report: validV2, content: "" });
+    expect(dbV2).toEqual(stream!.reportV2!);
+  });
+
+  it("drifted legacy report — DB heals to the same legacy report as the stream (no reportV2)", () => {
+    const legacy = {
+      executive_summary: "Legacy summary",
+      sections: [
+        { heading: "Pulse", scope: "account", summary: "Performance diverged.", highlights: [{ text: "CPC up 18%." }] },
+      ],
+    };
+
+    const stream = interpretCheckpointReportPayload(legacy);
+    // Strict V2 fails (no _meta / V2 blocks) → stream heals via normalize.
+    expect(stream?.reportV2).toBeUndefined();
+    expect(stream?.report).toBeDefined();
+
+    const dbV2 = parsePersistedReportV2Value({ report: legacy, content: "" });
+    const dbLegacy = parsePersistedReportValue({ report: legacy, content: "" });
+    expect(dbV2).toBeUndefined();
+    expect(dbLegacy).toEqual(stream!.report!);
   });
 });

@@ -80,7 +80,7 @@ function patchFor(key: JobKey, data: unknown): OnboardingPatch | null {
       targetAudience: audienceText(b),
       overview: (b.business?.business_description ?? b.businessStream) || undefined,
       tagline: (b.website?.hero_statement ?? b.business?.business_cta) ?? undefined,
-      values: b.voice?.core_values,
+      values: b.voice?.core_values ?? undefined,
       readiness: b.readiness ?? undefined,
       understanding: b.result?.understanding ?? undefined,
       audits: b.result?.audits ?? undefined,

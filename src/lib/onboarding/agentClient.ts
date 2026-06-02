@@ -3,20 +3,64 @@ import {
   readinessDimensionKey as readinessDimensionSchema,
   readinessFindingSchema,
   readinessAnalysisSchema,
+  // Canonical onboarding section + profile schemas. The Backend generates and
+  // emits against these exact schemas, so the Frontend interpreter must parse
+  // against them too — no parallel hand-rolled copies (monorepo §4).
+  brandVoiceSchema,
+  targetAudienceSchema,
+  audienceSegmentSchema,
+  websiteSummarySchema,
+  businessSummarySchema,
+  firstImpressionSchema,
+  brandProfileSchema,
+  onboardingReportStructuredSchema,
   type ReadinessDimensionKey as ReadinessDimension,
   type ReadinessFinding,
   type ReadinessAnalysis,
   type BrandReportProgressEvent,
+  type BrandVoice,
+  type TargetAudience,
+  type AudienceSegment,
+  type WebsiteSummary,
+  type BrandPalette,
+  type BrandTypography,
+  type BusinessSummary,
+  type FirstImpression,
+  type BrandProfile,
 } from "@continuum/contracts";
 import { getApiBaseUrl } from "@/lib/api/config";
 import type { ScrapeResult } from "@/lib/onboarding/scrape";
 
+// Re-export the canonical contracts schemas under the names the rest of the
+// onboarding Frontend already imports, so consumers stay stable while the
+// definitions live in @continuum/contracts.
 export {
   readinessDimensionSchema,
   readinessFindingSchema,
   readinessAnalysisSchema,
+  brandVoiceSchema,
+  targetAudienceSchema,
+  websiteSummarySchema,
+  businessSummarySchema,
+  firstImpressionSchema,
 };
-export type { ReadinessDimension, ReadinessFinding, ReadinessAnalysis };
+export type {
+  ReadinessDimension,
+  ReadinessFinding,
+  ReadinessAnalysis,
+  BrandVoice,
+  TargetAudience,
+  WebsiteSummary,
+  BusinessSummary,
+  FirstImpression,
+};
+// Legacy Frontend aliases for renamed/equivalent contracts exports.
+export const audiencePersonaSchema = audienceSegmentSchema;
+export const agentBrandProfileSchema = brandProfileSchema;
+export type AudiencePersona = AudienceSegment;
+export type AgentBrandProfile = BrandProfile;
+export type WebsitePalette = BrandPalette;
+export type WebsiteTypography = BrandTypography;
 
 const CLIENT_BASE_URL_KEYS = [
   "NEXT_PUBLIC_ONBOARDING_AGENT_BASE_URL",
@@ -81,121 +125,6 @@ const integrationProviderSchema = z.enum([
 
 export type IntegrationProvider = z.infer<typeof integrationProviderSchema>;
 
-export const brandVoiceSchema = z.object({
-  tone: z.string().min(1).optional(),
-  voice_style: z.string().optional(),
-  key_messaging: z.array(z.string()).optional(),
-  keywords: z.array(z.string().min(1)).optional(),
-  emoji_usage: z.string().optional(),
-  mission: z.string().optional(),
-  vision: z.string().optional(),
-  core_values: z.array(z.string()).optional(),
-  banned_words: z.array(z.string()).optional(),
-  power_verbs: z.array(z.string()).optional(),
-});
-
-export type BrandVoice = z.infer<typeof brandVoiceSchema>;
-
-export const audiencePersonaSchema = z.object({
-  name: z.string().min(2).max(60),
-  headline: z.string().max(220).nullable().optional(),
-  jtbd: z.string().max(280).nullable().optional(),
-  pains_verbatim: z.array(z.string().max(280)).max(5).nullable().optional(),
-  buying_criteria: z.array(z.string().max(220)).max(5).nullable().optional(),
-  objections: z.array(z.string().max(280)).max(5).nullable().optional(),
-  journey_stage: z
-    .enum(["awareness", "consideration", "decision", "implementation"])
-    .nullable()
-    .optional(),
-  status_quo_loss: z.string().max(280).nullable().optional(),
-});
-
-export type AudiencePersona = z.infer<typeof audiencePersonaSchema>;
-
-export const targetAudienceSchema = z.object({
-  summary: z.string().optional(),
-  segments: z.array(audiencePersonaSchema).min(1).max(3).nullable().optional(),
-  demographics: z.array(z.string()).optional(),
-  psychographics: z.array(z.string()).optional(),
-  behaviors: z.array(z.string()).optional(),
-  motivations: z.array(z.string()).optional(),
-  pain_points: z.array(z.string()).optional(),
-  goals: z.array(z.string()).optional(),
-  challenges: z.array(z.string()).optional(),
-  solutions: z.array(z.string()).optional(),
-  benefits: z.array(z.string()).optional(),
-  interests: z.array(z.string()).optional(),
-  buying_criteria: z.array(z.string()).optional(),
-  other: z.array(z.string()).optional(),
-});
-
-export type TargetAudience = z.infer<typeof targetAudienceSchema>;
-
-const platformAgentResultSchema = z.object({ provider: z.string().optional() }).passthrough();
-
-const websitePaletteSchema = z.object({
-  primary: z.union([z.string(), z.null()]).optional(),
-  secondary: z.union([z.string(), z.null()]).optional(),
-  accent: z.union([z.string(), z.null()]).optional(),
-  background: z.union([z.string(), z.null()]).optional(),
-  text: z.union([z.string(), z.null()]).optional(),
-});
-
-const websiteTypographySchema = z.object({
-  primary: z.union([z.string(), z.null()]).optional(),
-  secondary: z.union([z.string(), z.null()]).optional(),
-});
-
-const websiteSummarySchema = z
-  .object({
-    website_url: z.union([z.string().min(1), z.null()]).optional(),
-    hero_statement: z.union([z.string(), z.null()]).optional(),
-    hero_subhead: z.union([z.string(), z.null()]).optional(),
-    palette: websitePaletteSchema.nullable().optional(),
-    typography: websiteTypographySchema.nullable().optional(),
-  })
-  .passthrough();
-
-const documentsSummarySchema = z
-  .object({
-    primary_topics: z.array(z.string()).default([]),
-    secondary_topics: z.array(z.string()).default([]),
-    notes: z.string().optional(),
-  })
-  .passthrough();
-
-const businessSummarySchema = z
-  .object({
-    business_name: z.string().optional(),
-    business_description: z.string().optional(),
-    business_features: z.array(z.string()).optional(),
-    business_benefits: z.array(z.string()).optional(),
-    business_cta: z.union([z.string(), z.null()]).optional(),
-    differentiators: z.array(z.string()).nullable().optional(),
-    alt_ctas: z.array(z.string()).nullable().optional(),
-  })
-  .passthrough();
-
-const onboardingReportStructuredSchema = z
-  .object({
-    connected_accounts: z.array(platformAgentResultSchema).default([]),
-    website: websiteSummarySchema,
-    documents: documentsSummarySchema,
-    target_audience: targetAudienceSchema.default({}),
-    business: businessSummarySchema.nullable().optional(),
-  })
-  .passthrough();
-
-export const agentBrandProfileSchema = z.object({
-  id: z.string().min(1),
-  brand_name: z.string().min(1),
-  description: z.string().optional(),
-  brand_voice: brandVoiceSchema.optional(),
-  target_audience: targetAudienceSchema.optional(),
-  website_url: z.string().min(1).optional(),
-});
-
-export type AgentBrandProfile = z.infer<typeof agentBrandProfileSchema>;
 
 export const agentRunContextSchema = z.object({
   user_id: z.string().min(1),
@@ -245,11 +174,6 @@ const auditEnrichSectionSchema = z.enum([
 const enrichSectionSchema = z.union([previewSectionSchema, auditEnrichSectionSchema]);
 export type EnrichSection = z.infer<typeof enrichSectionSchema>;
 
-export const firstImpressionSchema = z.object({
-  headline: z.string().min(1),
-});
-export type FirstImpression = z.infer<typeof firstImpressionSchema>;
-
 export const understandingSchema = z
   .object({
     positioning_thesis: z.string().optional(),
@@ -282,16 +206,21 @@ export type SectionAudit = z.infer<typeof sectionAuditSchema>;
 export type SectionAudits = z.infer<typeof auditsSchema>;
 export type UnderstandingBrief = z.infer<typeof understandingSchema>;
 
+// Every heavy sub-field is wrapped in `.catch(...)` so a degraded run (a section
+// whose structured generation failed and was assembled into a partial/invalid
+// slot) never throws when we parse the terminal `complete` frame. A malformed
+// field drops to undefined/null and the rest of the report still surfaces; the
+// per-section `data` events remain the primary populate path.
 export const previewWorkflowResultSchema = z
   .object({
-    brand_profile: agentBrandProfileSchema.optional(),
-    structured: onboardingReportStructuredSchema.optional(),
-    readiness: readinessAnalysisSchema.nullable().optional(),
-    understanding: understandingSchema.optional(),
-    audits: auditsSchema.optional(),
-    first_impression: firstImpressionSchema.nullable().optional(),
-    citations: z.record(z.string(), z.unknown()).optional(),
-    prompt_version: z.number().int().nonnegative().optional(),
+    brand_profile: agentBrandProfileSchema.optional().catch(undefined),
+    structured: onboardingReportStructuredSchema.optional().catch(undefined),
+    readiness: readinessAnalysisSchema.nullable().optional().catch(null),
+    understanding: understandingSchema.optional().catch(undefined),
+    audits: auditsSchema.optional().catch(undefined),
+    first_impression: firstImpressionSchema.nullable().optional().catch(null),
+    citations: z.record(z.string(), z.unknown()).optional().catch(undefined),
+    prompt_version: z.number().int().nonnegative().optional().catch(undefined),
   })
   .partial()
   .passthrough();
@@ -391,12 +320,6 @@ const previewCompleteSchema = z
   })
   .passthrough();
 
-export type PlatformAgentResult = z.infer<typeof platformAgentResultSchema>;
-export type WebsitePalette = z.infer<typeof websitePaletteSchema>;
-export type WebsiteTypography = z.infer<typeof websiteTypographySchema>;
-export type WebsiteSummary = z.infer<typeof websiteSummarySchema>;
-export type DocumentsSummary = z.infer<typeof documentsSummarySchema>;
-export type BusinessSummary = z.infer<typeof businessSummarySchema>;
 export type OnboardingReportStructured = z.infer<typeof onboardingReportStructuredSchema>;
 export type OnboardingPreviewSection = PreviewSection;
 export type OnboardingPreviewWorkflowResult = z.infer<typeof previewWorkflowResultSchema>;
@@ -772,42 +695,58 @@ async function consumePreviewStream(
     options.onEvent?.(event);
   };
 
+  // A single malformed section must never abort the whole stream — safeParse and
+  // skip the offending section, keeping every other section renderable.
+  const skipMalformedSection = (section: PreviewSection, error: z.ZodError) => {
+    console.warn("[agentClient] Malformed section data ignored", {
+      section,
+      issues: error.issues.map((i) => i.path.join(".")).join(", "),
+    });
+  };
+
   const handleDataEvent = (payload: z.infer<typeof previewDataEventSchema>) => {
     switch (payload.section) {
       case "brand_profile": {
-        const parsed = agentBrandProfileSchema.parse(payload.data);
-        latestProfile = parsed;
-        dispatch({ type: "brand_profile", payload: parsed });
+        const parsed = agentBrandProfileSchema.safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("brand_profile", parsed.error);
+        latestProfile = parsed.data;
+        dispatch({ type: "brand_profile", payload: parsed.data });
         break;
       }
       case "voice": {
-        const parsed = brandVoiceSchema.parse(payload.data);
-        dispatch({ type: "voice", payload: parsed });
+        const parsed = brandVoiceSchema.safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("voice", parsed.error);
+        dispatch({ type: "voice", payload: parsed.data });
         break;
       }
       case "audience": {
-        const parsed = targetAudienceSchema.parse(payload.data);
-        dispatch({ type: "audience", payload: parsed });
+        const parsed = targetAudienceSchema.safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("audience", parsed.error);
+        dispatch({ type: "audience", payload: parsed.data });
         break;
       }
       case "website": {
-        const parsed = websiteSummarySchema.nullable().parse(payload.data);
-        dispatch({ type: "website", payload: parsed });
+        const parsed = websiteSummarySchema.nullable().safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("website", parsed.error);
+        dispatch({ type: "website", payload: parsed.data });
         break;
       }
       case "business": {
-        const parsed = businessSummarySchema.nullable().parse(payload.data);
-        dispatch({ type: "business", payload: parsed });
+        const parsed = businessSummarySchema.nullable().safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("business", parsed.error);
+        dispatch({ type: "business", payload: parsed.data });
         break;
       }
       case "readiness": {
-        const parsed = readinessAnalysisSchema.parse(payload.data);
-        dispatch({ type: "readiness", payload: parsed });
+        const parsed = readinessAnalysisSchema.safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("readiness", parsed.error);
+        dispatch({ type: "readiness", payload: parsed.data });
         break;
       }
       case "first_impression": {
-        const parsed = firstImpressionSchema.parse(payload.data);
-        dispatch({ type: "first_impression", payload: parsed });
+        const parsed = firstImpressionSchema.safeParse(payload.data);
+        if (!parsed.success) return skipMalformedSection("first_impression", parsed.error);
+        dispatch({ type: "first_impression", payload: parsed.data });
         break;
       }
       default:
@@ -924,14 +863,19 @@ async function consumePreviewStream(
           return;
         }
         case "complete": {
-          const parsed = previewCompleteSchema.parse(parsedPayload);
+          // `complete` is terminal-ish and must always reach the reducer so the
+          // report renders. `previewWorkflowResultSchema` already drops invalid
+          // sub-fields (see its `.catch(...)`), so envelope parsing can't throw on
+          // a degraded run; safeParse guards a malformed envelope itself.
+          const res = previewCompleteSchema.safeParse(parsedPayload);
+          if (!res.success) {
+            console.warn("[agentClient] Malformed complete event ignored", { eventName });
+            return;
+          }
+          const parsed = res.data;
           if (parsed.result) {
-            if (parsed.result.brand_profile) {
-              latestProfile = agentBrandProfileSchema.parse(parsed.result.brand_profile);
-            }
-            if (parsed.result.structured) {
-              latestStructured = onboardingReportStructuredSchema.parse(parsed.result.structured);
-            }
+            if (parsed.result.brand_profile) latestProfile = parsed.result.brand_profile;
+            if (parsed.result.structured) latestStructured = parsed.result.structured;
             finalResult = parsed.result;
           }
           dispatch({
@@ -944,9 +888,13 @@ async function consumePreviewStream(
           return;
         }
         case "error": {
+          // Surface the error to the reducer (flips running sections to error) but
+          // do NOT abort the consumer — already-streamed sections must survive. A
+          // truly-empty run is caught downstream by `runAgentPreview`'s
+          // `hasAnyBucket` gate, which throws the "no data" error there.
           const parsed = previewErrorSchema.parse(parsedPayload);
           dispatch({ type: "error", message: parsed.message, seq: parsed.seq });
-          throw new Error(parsed.message);
+          return;
         }
         default: {
           const _exhaustive: never = typedKind;

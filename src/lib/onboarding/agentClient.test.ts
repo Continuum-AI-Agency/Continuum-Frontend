@@ -202,6 +202,85 @@ describe("runOnboardingPreview SSE parser", () => {
     expect(complete && "status" in complete && complete.status).toBe("partial");
   });
 
+  it("does not abort the stream when complete.result fails strict validation (degraded run)", async () => {
+    // A degraded run (e.g. the audience section failed all structured-gen attempts)
+    // still fires `complete`, but its `result.structured` is missing FE-required
+    // fields (website/documents). The consumer must surface the sections that DID
+    // succeed instead of discarding the whole report.
+    fetchSpy.mockImplementationOnce(async () =>
+      makeStreamResponse([
+        runHandshake(),
+        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 1),
+        sse(
+          { kind: "data", section: "business", data: { business_name: "Acme", business_description: "B2B analytics platform" } },
+          2,
+        ),
+        sse(
+          { kind: "complete", phase: "preview", status: "partial", result: { structured: { target_audience: {} } } },
+          3,
+        ),
+      ])
+    );
+
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const events: OnboardingPreviewEvent[] = [];
+      await runOnboardingPreview({
+        payload: minimalPayload,
+        onEvent: (event: OnboardingPreviewEvent) => events.push(event),
+      });
+      expect(events.some((e) => e.type === "voice")).toBe(true);
+      expect(events.some((e) => e.type === "business")).toBe(true);
+      expect(events.some((e) => e.type === "complete")).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("skips a single malformed data event without aborting the stream", async () => {
+    // A malformed/degraded section data event must not nuke the sections around it.
+    fetchSpy.mockImplementationOnce(async () =>
+      makeStreamResponse([
+        runHandshake(),
+        sse({ kind: "data", section: "brand_profile", data: {} }, 1), // missing id/brand_name
+        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 2),
+        sse({ kind: "complete", phase: "preview", status: "partial" }, 3),
+      ])
+    );
+
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const events: OnboardingPreviewEvent[] = [];
+      await runOnboardingPreview({
+        payload: minimalPayload,
+        onEvent: (event: OnboardingPreviewEvent) => events.push(event),
+      });
+      expect(events.some((e) => e.type === "brand_profile")).toBe(false);
+      expect(events.some((e) => e.type === "voice")).toBe(true);
+      expect(events.some((e) => e.type === "complete")).toBe(true);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("does not throw on an error frame; dispatches it and lets the stream settle", async () => {
+    fetchSpy.mockImplementationOnce(async () =>
+      makeStreamResponse([
+        runHandshake(),
+        sse({ kind: "data", section: "voice", data: { tone: "Bold" } }, 1),
+        sse({ kind: "error", message: "section synthesis failed" }, 2),
+      ])
+    );
+
+    const events: OnboardingPreviewEvent[] = [];
+    await runOnboardingPreview({
+      payload: minimalPayload,
+      onEvent: (event: OnboardingPreviewEvent) => events.push(event),
+    });
+    expect(events.some((e) => e.type === "voice")).toBe(true);
+    expect(events.some((e) => e.type === "error")).toBe(true);
+  });
+
   it("dedupes events whose SSE id is <= the high-water mark", async () => {
     fetchSpy.mockImplementationOnce(async () =>
       makeStreamResponse([

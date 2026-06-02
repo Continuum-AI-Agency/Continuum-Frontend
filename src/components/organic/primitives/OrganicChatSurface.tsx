@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { OrganicChatMessage, OrganicContentPlan } from "@/lib/organic/chat.types";
+import { LinkifiedText } from "@/components/ai-elements/linkified-text";
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
             : "rounded-bl-sm bg-muted/80 text-foreground ring-1 ring-border/40"
         )}
       >
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+        <p className="whitespace-pre-wrap break-words"><LinkifiedText text={message.content} /></p>
       </div>
     </motion.div>
   );

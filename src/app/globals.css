@@ -827,3 +827,15 @@ body {
     background-position: -200% 0;
   }
 }
+
+.mention-token {
+  background-color: color-mix(in oklch, var(--primary) 13%, transparent);
+  border-radius: 2px;
+  padding-inline: 1px;
+}
+
+.link-token {
+  background-color: color-mix(in oklch, var(--secondary) 12%, transparent);
+  border-radius: 2px;
+  padding-inline: 1px;
+}

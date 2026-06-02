@@ -107,6 +107,22 @@ describe("runAgentPreview", () => {
     );
   });
 
+  it("resolves with partial buckets when a degraded run mixes good sections with an error", async () => {
+    runOnboardingPreviewMock.mockImplementation(async ({ onEvent, onRunId }) => {
+      onRunId?.("run-degraded");
+      onEvent?.({ type: "voice", payload: { tone: "Bold" } });
+      onEvent?.({ type: "business", payload: { business_description: "B2B analytics" } });
+      onEvent?.({ type: "status", section: "audience", status: "error", error: "No object generated" });
+      onEvent?.({ type: "error", message: "audience synthesis failed" });
+      return { runId: "run-degraded" };
+    });
+
+    const outcome = await runAgentPreview(makeInput(), new AbortController().signal);
+    expect(outcome.buckets.voice?.tone).toBe("Bold");
+    expect(outcome.buckets.business?.business_description).toBe("B2B analytics");
+    expect(outcome.buckets.sectionStatus.audience).toBe("error");
+  });
+
   it("emptyBuckets returns a fully-zeroed shape", () => {
     const b = emptyBuckets();
     expect(b.runId).toBeNull();

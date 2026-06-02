@@ -1,7 +1,9 @@
+import { z } from "zod";
+import { httpUrlSchema, integrationProviderEnum } from "./_shared";
+import { targetAudienceSchema } from "./target-audience";
+import { websiteSummarySchema } from "./website-summary";
+import { businessSummarySchema } from "./business-summary";
 import type { BrandProfile } from "./brand-profile";
-import type { TargetAudience } from "./target-audience";
-import type { WebsiteSummary } from "./website-summary";
-import type { BusinessSummary } from "./business-summary";
 import type { ReadinessAnalysis } from "./readiness";
 import type { FirstImpression } from "./first-impression";
 
@@ -70,21 +72,31 @@ export type GroundingCitation = {
 /** Keyed by the stage that surfaced them (comprehension, audience, business). */
 export type GroundingCitations = Record<string, GroundingCitation[]>;
 
-export type OnboardingReportStructured = {
-  connected_accounts: Array<{
-    platform: string;
-    primary_url?: string | null;
-    notes: string;
-  }>;
-  website: WebsiteSummary;
-  documents: {
-    primary_topics: string[];
-    secondary_topics: string[];
-    notes: string;
-  };
-  target_audience: TargetAudience;
-  business?: BusinessSummary | null;
-};
+// Canonical structured-report object the Backend assembles and emits and the
+// Frontend interpreter parses. Defined here (not hand-rolled per side) so the
+// FE↔BE shape can't drift. Defaults mirror the Backend's assembly call.
+export const connectedAccountSchema = z.object({
+  platform: integrationProviderEnum,
+  primary_url: httpUrlSchema.nullable().optional(),
+  notes: z.string().max(600).default(""),
+});
+export type ConnectedAccount = z.infer<typeof connectedAccountSchema>;
+
+export const documentsSummarySchema = z.object({
+  primary_topics: z.array(z.string().min(1).max(120)).max(15).default([]),
+  secondary_topics: z.array(z.string().min(1).max(120)).max(15).default([]),
+  notes: z.string().max(600).default(""),
+});
+export type DocumentsSummary = z.infer<typeof documentsSummarySchema>;
+
+export const onboardingReportStructuredSchema = z.object({
+  connected_accounts: z.array(connectedAccountSchema).default([]),
+  website: websiteSummarySchema,
+  documents: documentsSummarySchema,
+  target_audience: targetAudienceSchema.default({}),
+  business: businessSummarySchema.nullable().optional(),
+});
+export type OnboardingReportStructured = z.infer<typeof onboardingReportStructuredSchema>;
 
 export type BrandReportResult = {
   brand_profile: BrandProfile;

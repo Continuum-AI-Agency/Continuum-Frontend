@@ -7,6 +7,7 @@ export const agentMentionReferenceTypeSchema = z.enum([
   "draft",
   "campaign",
   "adset",
+  "link",
 ]);
 
 export const agentMentionReferenceSourceSchema = z.enum(["organic", "jaina"]);

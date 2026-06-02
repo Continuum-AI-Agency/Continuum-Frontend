@@ -1,25 +1,34 @@
 import {
-  checkpointReportV2Schema,
   hasReportContent,
   reportPayloadSchema,
   type CheckpointReportV2,
   type ReportPayload,
 } from "@/lib/jaina/schemas";
+import { interpretCheckpointReportPayload } from "@/lib/jaina/stream";
 import {
   extractJsonObjectCandidates,
   parseLooseJsonCandidate,
   unwrapReportEnvelope,
 } from "@/lib/jaina/unwrapping";
 
+// The DB loader and the live-stream reducer MUST interpret a checkpoint-report
+// payload identically — same strict-V2-then-heal tiering — so a report renders
+// the same whether it just streamed in or was reloaded from history. Both
+// delegate to `interpretCheckpointReportPayload` (single source of truth).
 function parseReportPayload(value: unknown): ReportPayload | undefined {
+  // Heal a checkpoint report first (normalize/coerce → merged shape), exactly as
+  // the stream's extractReportPayloadFromUnknown does. normalize returns null for
+  // non-report payloads, so direct-answer / specialist-insight payloads fall
+  // through to their dedicated schema parse below — no divergence with the stream.
+  const interpreted = interpretCheckpointReportPayload(value);
+  if (interpreted?.report) return interpreted.report;
   const parsed = reportPayloadSchema.safeParse(value);
-  if (!parsed.success) return undefined;
-  return hasReportContent(parsed.data) ? parsed.data : undefined;
+  if (parsed.success && hasReportContent(parsed.data)) return parsed.data;
+  return undefined;
 }
 
 function parseReportV2Payload(value: unknown): CheckpointReportV2 | undefined {
-  const parsed = checkpointReportV2Schema.safeParse(value);
-  return parsed.success && parsed.data.blocks.length > 0 ? parsed.data : undefined;
+  return interpretCheckpointReportPayload(value)?.reportV2 ?? undefined;
 }
 
 function parseReportFromUnknown(value: unknown, depth = 0): ReportPayload | undefined {

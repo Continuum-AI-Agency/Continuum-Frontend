@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { Message } from "@/components/ai-elements/message";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
+import { LinkifiedText } from "@/components/ai-elements/linkified-text";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { useCalendarStore } from "@/lib/organic/store";
@@ -554,7 +555,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                     isAnimating={msg.id === state.streamingMessageId}
                   />
                 ) : (
-                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</p>
+                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed"><LinkifiedText text={msg.content} /></p>
                 )}
                 <OrganicThinkingPanel
                   toolCalls={msg.toolCalls ?? []}
