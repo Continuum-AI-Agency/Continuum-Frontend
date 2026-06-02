@@ -633,7 +633,7 @@ function mergeBlockDerivedCompatibility(
 }
 
 
-function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointReport | null {
+export function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointReport | null {
   const unwrappedValue = unwrapReportEnvelope(value);
 
   const strict = frontendCheckpointReportSchema.safeParse(unwrappedValue);
@@ -799,6 +799,29 @@ function normalizeCheckpointReportPayload(value: unknown): FrontendCheckpointRep
   if (!fallbackResult.success) return null;
   const mergedFallback = mergeBlockDerivedCompatibility(fallbackResult.data);
   return hasStructuredReportContent(mergedFallback) ? mergedFallback : null;
+}
+
+/**
+ * Canonical interpretation of a checkpoint-report payload, shared by the live
+ * stream reducer AND the persisted/DB loader so the two can never diverge.
+ * Tier 1: strict V2 parse (the current render contract → `reportV2`). Tier 2:
+ * normalize/coerce-heal into the legacy report shape (drifted blocks, legacy
+ * sections → `report`). Returns whichever the payload supports, or null.
+ */
+export type InterpretedCheckpointReport =
+  | { reportV2: CheckpointReportV2; report?: undefined }
+  | { reportV2?: undefined; report: FrontendCheckpointReport };
+
+export function interpretCheckpointReportPayload(
+  rawReport: unknown,
+): InterpretedCheckpointReport | null {
+  const v2Parsed = checkpointReportV2Schema.safeParse(unwrapReportEnvelope(rawReport));
+  if (v2Parsed.success) return { reportV2: v2Parsed.data };
+
+  const normalized = normalizeCheckpointReportPayload(rawReport);
+  if (normalized) return { report: normalized };
+
+  return null;
 }
 
 function parseReportFromAccumulatedText(reportJson: string): ReportPayload | null {
@@ -1824,16 +1847,17 @@ export function reduceJainaStreamEvent(
       }
 
       const rawReport = parsed.data.data.report;
-      const v2Parsed = checkpointReportV2Schema.safeParse(
-        unwrapReportEnvelope(rawReport)
-      );
+      const interpreted = interpretCheckpointReportPayload(rawReport);
+      if (!interpreted) {
+        return { ...nextBase, status: "error", error: "Invalid response.checkpoint_report payload" };
+      }
 
-      if (v2Parsed.success) {
+      if (interpreted.reportV2) {
         return {
           ...nextBase,
           itemId: parsed.data.data.item_id,
           partId: parsed.data.data.part_id,
-          reportV2: v2Parsed.data,
+          reportV2: interpreted.reportV2,
           reportSourceEventId: undefined,
           hasCanonicalCheckpointReport: true,
           blockDeltas: [],
@@ -1842,11 +1866,7 @@ export function reduceJainaStreamEvent(
         };
       }
 
-      const normalizedReport = normalizeCheckpointReportPayload(rawReport);
-      if (!normalizedReport) {
-        return { ...nextBase, status: "error", error: "Invalid response.checkpoint_report payload" };
-      }
-
+      const normalizedReport = interpreted.report;
       return {
         ...nextBase,
         itemId: parsed.data.data.item_id,
@@ -1888,9 +1908,13 @@ export function reduceJainaStreamEvent(
         const progressiveV2: CheckpointReportV2 = {
           language: state.reportV2?.language ?? "en",
           executive_summary: state.reportV2?.executive_summary ?? "",
+          reasoning_trace: state.reportV2?.reasoning_trace ?? "",
           blocks: nextV2Deltas.map((entry) => entry.block),
           follow_up_questions: state.reportV2?.follow_up_questions ?? [],
           media_map: state.reportV2?.media_map ?? {},
+          handoff_trace: state.reportV2?.handoff_trace ?? [],
+          execution_objectives: state.reportV2?.execution_objectives ?? [],
+          cached_sources: state.reportV2?.cached_sources ?? [],
           _meta: {
             schema_version: "2" as const,
             block_count: existingMeta?.block_count ?? nextV2Deltas.length,
@@ -1934,9 +1958,13 @@ export function reduceJainaStreamEvent(
         const progressiveV2: CheckpointReportV2 = {
           language: state.reportV2?.language ?? "en",
           executive_summary: state.reportV2?.executive_summary ?? "",
+          reasoning_trace: state.reportV2?.reasoning_trace ?? "",
           blocks: nextV2Deltas.map((entry) => entry.block),
           follow_up_questions: state.reportV2?.follow_up_questions ?? [],
           media_map: state.reportV2?.media_map ?? {},
+          handoff_trace: state.reportV2?.handoff_trace ?? [],
+          execution_objectives: state.reportV2?.execution_objectives ?? [],
+          cached_sources: state.reportV2?.cached_sources ?? [],
           _meta: {
             schema_version: "2" as const,
             block_count: existingMeta?.block_count ?? nextV2Deltas.length,
