@@ -241,7 +241,7 @@ export function OrganicCalendarWorkspaceClient({
   }, [])
   const weekStartId = formatDayId(weekStart)
 
-  useCalendarDraftPersistence({
+  const { refetch: refetchCalendarDrafts } = useCalendarDraftPersistence({
     brandProfileId,
     weekStartId,
     calendarDays,
@@ -249,6 +249,21 @@ export function OrganicCalendarWorkspaceClient({
     updateDraftById,
     platformAccountIds,
   })
+
+  // Reconcile against the backend when agent-side work completes (bulk run done,
+  // single draft ready) so en-masse generated drafts appear without a manual reload.
+  const calendarRefetchNonce = useCalendarStore((state) => state.calendarRefetchNonce)
+  React.useEffect(() => {
+    if (calendarRefetchNonce === 0) return
+    // Debounce so a burst of completions (a bulk run's per-item signals) coalesces
+    // into a single reconcile.
+    const timer = setTimeout(() => {
+      void refetchCalendarDrafts().catch(() => {
+        // Best-effort reconcile; the local store remains usable.
+      })
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [calendarRefetchNonce, refetchCalendarDrafts])
 
   const postedContentAccounts = React.useMemo<CalendarPostAccountsByPlatform>(
     () => ({
@@ -698,7 +713,7 @@ export function OrganicCalendarWorkspaceClient({
               />
             </motion.div>
 
-            <motion.div layout transition={layoutTransition} className="min-h-0 flex-1 overflow-hidden">
+            <motion.div layout transition={layoutTransition} data-tour-id="organic-list" className="min-h-0 flex-1 overflow-hidden">
               <AnimatePresence mode="wait">
                 {viewMode === "week" && (
                   <motion.div
@@ -786,7 +801,6 @@ export function OrganicCalendarWorkspaceClient({
                 {viewMode === "list" && (
                   <motion.div
                     key="view-list"
-                    data-tour-id="organic-list"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -794,7 +808,7 @@ export function OrganicCalendarWorkspaceClient({
                     className="h-full"
                   >
                     <OrganicListView
-                      days={calendarDays}
+                      days={gridDays}
                       platforms={plannerPlatforms}
                       selectedDraftId={selectedId}
                       selectedDraftIds={selectedIds}

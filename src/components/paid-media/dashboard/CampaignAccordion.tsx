@@ -13,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AdSetTable, type AdSet, type AdSetAdsLoadState } from "./AdSetTable";
 import { PerformanceDetails, type PaidMetricsComparison, type PaidMetricsTrendPoint } from "./PerformanceDetails";
+import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
+import type { IntegrationErrorCode } from "@continuum/contracts";
 
 type Campaign = {
   id: string;
@@ -50,6 +52,8 @@ type AdSetLoadState = {
     status: "idle" | "loading" | "success" | "error";
     adSets: AdSet[];
     errorMessage?: string;
+    errorCode?: IntegrationErrorCode;
+    retryAfter?: number;
   };
 };
 
@@ -96,23 +100,25 @@ function isMetaRateLimitMessage(message: string): boolean {
   );
 }
 
-async function extractInvokeErrorMessage(error: unknown): Promise<string> {
+async function extractInvokeError(error: unknown): Promise<{ message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }> {
   if (!(error instanceof Error)) {
-    return "Edge function request failed";
+    return { message: "Edge function request failed" };
   }
 
   const baseMessage = error.message;
   const maybeContext = (error as { context?: { json?: () => Promise<unknown>; text?: () => Promise<string> } }).context;
   if (!maybeContext) {
-    return baseMessage;
+    return { message: baseMessage };
   }
 
   try {
     if (typeof maybeContext.json === "function") {
-      const payload = (await maybeContext.json()) as { error?: string };
-      if (payload?.error) {
-        return payload.error;
-      }
+      const payload = (await maybeContext.json()) as { error?: string; errorCode?: IntegrationErrorCode; retryAfter?: number };
+      return {
+        message: typeof payload?.error === "string" ? payload.error : baseMessage,
+        errorCode: payload?.errorCode,
+        retryAfter: payload?.retryAfter,
+      };
     }
   } catch {
     // Ignore and fallback.
@@ -122,14 +128,14 @@ async function extractInvokeErrorMessage(error: unknown): Promise<string> {
     if (typeof maybeContext.text === "function") {
       const text = await maybeContext.text();
       if (text) {
-        return text;
+        return { message: text };
       }
     }
   } catch {
     // Ignore and return base message.
   }
 
-  return baseMessage;
+  return { message: baseMessage };
 }
 
 export function CampaignAccordion({
@@ -218,8 +224,9 @@ export function CampaignAccordion({
         );
 
         if (fetchError) {
-          const message = await extractInvokeErrorMessage(fetchError);
-          throw new Error(`Failed to fetch ad sets: ${message}`);
+          const { message, errorCode, retryAfter } = await extractInvokeError(fetchError);
+          const err = Object.assign(new Error(message), { errorCode, retryAfter });
+          throw err;
         }
 
         const rawAdSets = data?.adsets ?? [];
@@ -262,7 +269,10 @@ export function CampaignAccordion({
         }));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error";
-        if (isMetaRateLimitMessage(message)) {
+        const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
+        const retryAfter = (error as { retryAfter?: number }).retryAfter;
+
+        if (errorCode === "RATE_LIMITED" || isMetaRateLimitMessage(message)) {
           rateLimitedUntilRef.current = Date.now() + META_RATE_LIMIT_COOLDOWN_MS;
         }
 
@@ -273,6 +283,8 @@ export function CampaignAccordion({
             status: "error",
             adSets: [],
             errorMessage: message,
+            errorCode,
+            retryAfter,
           },
         }));
       }
@@ -422,7 +434,14 @@ export function CampaignAccordion({
                   </div>
                 ) : null}
                 {state.status === "error" ? (
-                  <div className="py-8 text-center text-destructive">{state.errorMessage || "Failed to load ad sets"}</div>
+                  <div className="py-4">
+                    <IntegrationErrorBanner
+                      errorCode={state.errorCode}
+                      message={state.errorMessage}
+                      platform="meta"
+                      retryAfter={state.retryAfter}
+                    />
+                  </div>
                 ) : null}
                 {state.status === "success" ? (
                   <AdSetTable

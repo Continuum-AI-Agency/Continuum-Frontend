@@ -49,7 +49,34 @@ describe("parseOrganicStreamEvent — bulk frames", () => {
   it("still parses a single (non-bulk) ui.plan_card as plan_card", () => {
     const parsed = parseOrganicStreamEvent({
       type: "ui.plan_card",
-      data: { planId: "p1", title: "t", summary: "s", items: [], evidence: [] },
+      data: {
+        planId: "p1",
+        sessionId: "sess-1",
+        brandId: "brand-1",
+        userId: "user-1",
+        weekStart: "2026-06-01",
+        title: "t",
+        summary: "s",
+        items: [
+          {
+            itemId: "item-1",
+            kind: "create_post",
+            platform: "instagram",
+            scheduledAt: "2026-06-01T12:00:00.000Z",
+            format: "post",
+            trendId: null,
+            trendTitle: null,
+            angle: "a",
+            objective: "save",
+            audienceSegment: "students",
+            rationale: "r",
+            guidancePrompt: null,
+            draftId: null,
+          },
+        ],
+        estimatedDurationSeconds: 60,
+        createdAt: "2026-06-01T00:00:00.000Z",
+      },
     })
     expect(parsed.kind).toBe("uiCard")
     if (parsed.kind === "uiCard") expect(parsed.card.type).toBe("plan_card")

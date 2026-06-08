@@ -13,10 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { ToolCallChip } from "./ToolCallChip";
 import type { ToolCallEvent } from "./types";
-
-function formatToolName(name: string): string {
-  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import { formatOrganicToolName } from "./organicToolLabels";
 
 type OrganicThinkingPanelProps = {
   toolCalls: ToolCallEvent[];
@@ -31,9 +28,9 @@ export function OrganicThinkingPanel({ toolCalls, isStreaming }: OrganicThinking
   const activeToolName = React.useMemo(() => {
     if (!isStreaming) return null;
     for (let i = toolCalls.length - 1; i >= 0; i--) {
-      if (toolCalls[i].result === undefined) return formatToolName(toolCalls[i].toolName);
+      if (toolCalls[i].result === undefined) return formatOrganicToolName(toolCalls[i].toolName);
     }
-    return toolCalls.length > 0 ? formatToolName(toolCalls[toolCalls.length - 1].toolName) : null;
+    return toolCalls.length > 0 ? formatOrganicToolName(toolCalls[toolCalls.length - 1].toolName) : null;
   }, [toolCalls, isStreaming]);
 
   if (toolCalls.length === 0) return null;

@@ -34,6 +34,11 @@ export async function POST(request: Request) {
   }
 
   const req = parsed.data;
+  // Coarse source/type chips. Applied to the hydration of the ranked/match set;
+  // ranked rows that don't match are dropped, so a filtered search may under-fill
+  // `limit` (acceptable for chip-level filtering — no RPC/migration change).
+  const filterSource = req.filters?.source;
+  const filterKind = req.filters?.kind;
 
   // Verify the caller belongs to the brand before using the admin client
   // (which bypasses RLS). has_brand_access is SECURITY DEFINER and reads
@@ -69,10 +74,13 @@ export async function POST(request: Request) {
         return NextResponse.json(result);
       }
 
-      const { data: assetRows, error: assetError } = await mediaSchema(admin)
+      let assetQuery = mediaSchema(admin)
         .from("assets")
         .select(MEDIA_ASSET_SELECT)
         .in("id", ids);
+      if (filterSource) assetQuery = assetQuery.eq("source", filterSource);
+      if (filterKind) assetQuery = assetQuery.eq("kind", filterKind);
+      const { data: assetRows, error: assetError } = await assetQuery;
 
       if (assetError) {
         console.error("[library/search] asset hydration failed", assetError);
@@ -145,10 +153,13 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
 
-    const { data: assetRows, error: assetError } = await mediaSchema(admin)
+    let similarQuery = mediaSchema(admin)
       .from("assets")
       .select(MEDIA_ASSET_SELECT)
       .in("id", ids);
+    if (filterSource) similarQuery = similarQuery.eq("source", filterSource);
+    if (filterKind) similarQuery = similarQuery.eq("kind", filterKind);
+    const { data: assetRows, error: assetError } = await similarQuery;
 
     if (assetError) {
       console.error("[library/search] similar asset hydration failed", assetError);

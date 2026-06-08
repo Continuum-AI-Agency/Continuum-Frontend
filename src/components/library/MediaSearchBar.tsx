@@ -2,17 +2,24 @@
 
 import { useState, useRef } from "react";
 import { Search, X, Loader2 } from "lucide-react";
-import type { MediaSearchResultItem } from "@continuum/contracts";
+import type {
+  MediaKind,
+  MediaSearchFilters,
+  MediaSearchResultItem,
+  MediaSource,
+} from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 
 type Props = {
   brandId: string;
+  source?: MediaSource | null;
+  kind?: MediaKind | null;
   onResults: (items: MediaSearchResultItem[]) => void;
   onClear: () => void;
   className?: string;
 };
 
-export function MediaSearchBar({ brandId, onResults, onClear, className }: Props) {
+export function MediaSearchBar({ brandId, source, kind, onResults, onClear, className }: Props) {
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,10 +36,19 @@ export function MediaSearchBar({ brandId, onResults, onClear, className }: Props
     }
     setSearching(true);
     try {
+      const filters: MediaSearchFilters = {};
+      if (source) filters.source = source;
+      if (kind) filters.kind = kind;
       const resp = await fetch("/api/library/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId, mode: "text", query: q, limit: 48 }),
+        body: JSON.stringify({
+          brandId,
+          mode: "text",
+          query: q,
+          limit: 48,
+          ...(Object.keys(filters).length > 0 ? { filters } : {}),
+        }),
       });
       const data = (await resp.json()) as { items?: MediaSearchResultItem[] };
       onResults(data.items ?? []);

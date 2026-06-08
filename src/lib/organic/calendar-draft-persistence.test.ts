@@ -151,6 +151,29 @@ describe("mapPersistedRowToCalendarEntry — generated drafts (content_json shap
     expect(entry?.draft.contentPlanId).toBeNull()
   })
 
+  it("restores durable publishingAssets from content_json (no draftSnapshot)", () => {
+    const row = generatedRow()
+    ;(row.content_json as Record<string, unknown>).publishingAssets = [
+      { role: "primary", kind: "image", assetId: "asset-1", bucket: "brand-profile-assets", storagePath: "b/p/1.png", storageUrl: "https://signed/1.png", slideIndex: 1 },
+      { role: "slide_2", kind: "image", assetId: "asset-2", bucket: "brand-profile-assets", storagePath: "b/p/2.png", storageUrl: "https://signed/2.png", slideIndex: 2 },
+    ]
+    const entry = mapPersistedRowToCalendarEntry(row, days)
+    expect(entry?.draft.publishingAssets).toHaveLength(2)
+    expect(entry?.draft.publishingAssets?.[0].storageUrl).toBe("https://signed/1.png")
+    expect(entry?.draft.publishingAssets?.[0].assetId).toBe("asset-1")
+    expect(entry?.draft.publishingAssets?.[0].bucket).toBe("brand-profile-assets")
+    expect(entry?.draft.publishingAssets?.[0].storagePath).toBe("b/p/1.png")
+  })
+
+  it("falls back to mediaSuggestion.url/signedUrl when assetUrl is absent", () => {
+    const row = generatedRow()
+    ;(row.content_json as Record<string, unknown>).creative = {
+      mediaSuggestion: { kind: "static", signedUrl: "https://signed/legacy.png" },
+    }
+    const entry = mapPersistedRowToCalendarEntry(row, days)
+    expect(entry?.draft.mediaSuggestion?.assetUrl).toBe("https://signed/legacy.png")
+  })
+
   it("carries the hyperframe sub-object through from content_json", () => {
     const row = generatedRow()
     ;(row.content_json as Record<string, unknown>).content = {

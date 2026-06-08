@@ -250,6 +250,13 @@ function resolveDocumentInput(
   return documents.length > 0 ? documents : undefined;
 }
 
+const normalizeVeoResolution = (model: VideoGenNodeData['model'], resolution?: string): string => {
+  if ((model === 'veo-3.1' || model === 'veo-3.1-fast' || model === 'veo-3.1-lite') && resolution === '4K') {
+    return '4k';
+  }
+  return resolution || '720p';
+};
+
 
 export async function buildEnrichPayload(
   node: StudioNode,
@@ -557,7 +564,7 @@ export function buildVeoPayload(
     prompt,
     negativePrompt: negativePrompt || undefined,
     aspectRatio: data.aspectRatio || '16:9',
-    resolution: (data as any).resolution || '720p',
+    resolution: normalizeVeoResolution(model, data.resolution),
     durationSeconds: data.durationSeconds ? Number(data.durationSeconds) : 8,
     firstFrame,
     lastFrame,

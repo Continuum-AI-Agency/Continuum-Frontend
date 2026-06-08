@@ -9,3 +9,5 @@ export * from "./jaina";
 export * from "./jaina-report";
 export * from "./media";
 export * from "./onboarding-inspirations";
+export * from "./hyperframes";
+export * from "./competitor-spy";

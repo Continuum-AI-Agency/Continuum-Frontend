@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MediaAsset } from "@continuum/contracts";
+import type { MediaAsset, MediaKind, MediaSource } from "@continuum/contracts";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { buildLibraryQuery } from "@/lib/media/filters";
 import type { MediaAssetRow } from "@/lib/media/schema";
 
 const PAGE_SIZE = 48;
@@ -61,9 +62,11 @@ export type UseMediaLibraryResult = {
 export function useMediaLibrary(params: {
   brandId: string;
   collectionId: string | null;
+  source: MediaSource | null;
+  kind: MediaKind | null;
   seed: MediaAsset[];
 }): UseMediaLibraryResult {
-  const { brandId, collectionId, seed } = params;
+  const { brandId, collectionId, source, kind, seed } = params;
   const [assets, setAssets] = useState<MediaAsset[]>(seed);
   const [hasMore, setHasMore] = useState(seed.length >= PAGE_SIZE);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -79,12 +82,14 @@ export function useMediaLibrary(params: {
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    const sp = new URLSearchParams({
+    const sp = buildLibraryQuery({
       brandId,
-      offset: String(offsetRef.current),
-      limit: String(PAGE_SIZE),
+      collectionId,
+      source,
+      kind,
+      offset: offsetRef.current,
+      limit: PAGE_SIZE,
     });
-    if (collectionId) sp.set("collectionId", collectionId);
 
     fetch(`/api/library/assets?${sp.toString()}`)
       .then((r) => r.json())
@@ -102,7 +107,7 @@ export function useMediaLibrary(params: {
         setHasMore(false);
       })
       .finally(() => setLoadingMore(false));
-  }, [brandId, collectionId, hasMore, loadingMore]);
+  }, [brandId, collectionId, source, kind, hasMore, loadingMore]);
 
   // Fills a realtime-inserted asset's signed URL (INSERT payloads carry none).
   const hydrateSignedUrl = useCallback(
@@ -142,8 +147,12 @@ export function useMediaLibrary(params: {
           } else if (payload.eventType === "INSERT") {
             // Only auto-surface inserts in the unfiltered "All Media" view; a
             // collection view shows only its members, which a raw insert is not.
+            // Likewise respect active source/type chips so a filtered view never
+            // gains a non-matching row.
             if (collectionId) return;
             const inserted = payload.new as MediaAssetRow;
+            if (source && inserted.source !== source) return;
+            if (kind && inserted.kind !== kind) return;
             setAssets((prev) => {
               if (prev.some((a) => a.id === inserted.id)) return prev;
               return [rowToStub(inserted), ...prev];
@@ -160,7 +169,7 @@ export function useMediaLibrary(params: {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [brandId, collectionId, hydrateSignedUrl]);
+  }, [brandId, collectionId, source, kind, hydrateSignedUrl]);
 
   return useMemo(
     () => ({ assets, hasMore, loadingMore, loadMore }),

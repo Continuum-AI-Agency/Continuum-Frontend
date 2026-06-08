@@ -23,6 +23,7 @@ import type {
 } from "@/lib/types/chatImage";
 import { getApiUrl } from "@/lib/api/config";
 import { readServerSentEvents } from "@/lib/sse/readServerSentEvents";
+import { fetchBrandStyle, type BrandStyle } from "@/lib/ai-studio/brandStyle.server";
 import type {
   PromptTemplate,
   PromptTemplateCreateInput,
@@ -84,6 +85,11 @@ export function ChatSurface({
   const [previewMarkup, setPreviewMarkup] = React.useState<{ base64: string; mime: string } | null>(null);
   const [isEnriching, setIsEnriching] = React.useState(false);
   const [enrichedPrompt, setEnrichedPrompt] = React.useState<string | null>(null);
+  const [brandStyle, setBrandStyle] = React.useState<BrandStyle>({ colors: [], typography: { primary: null, secondary: null } });
+
+  React.useEffect(() => {
+    fetchBrandStyle(brandProfileId).then(setBrandStyle).catch(() => {});
+  }, [brandProfileId]);
 
   const handleEnrich = React.useCallback(async (currentPrompt: string) => {
     if (!currentPrompt || isEnriching) return;
@@ -91,21 +97,19 @@ export function ChatSurface({
     setEnrichedPrompt("");
 
     try {
-      // Get the user's session token for authentication
       const { data: { session } } = await supabaseAuth.getSession();
       if (!session?.access_token) {
         throw new Error("No authentication session found");
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/prompt-fast-enrich`, {
+      const response = await fetch(getApiUrl("/api/ai-studio/enrich"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
-          apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify({ prompt: currentPrompt }),
+        body: JSON.stringify({ prompt: currentPrompt, brandId: brandProfileId }),
       });
 
       if (!response.ok) {
@@ -123,11 +127,12 @@ export function ChatSurface({
         onEvent: (eventName, data) => {
           const payload = data.trimStart();
 
-          if (eventName === "delta" || eventName === "message") {
+          if (eventName === "delta" || eventName === "message" || eventName === "text") {
             try {
-              const parsed = JSON.parse(payload) as { delta?: string };
-              if (typeof parsed.delta === "string" && parsed.delta.length > 0) {
-                accumulated += parsed.delta;
+              const parsed = JSON.parse(payload) as { delta?: string; text?: string };
+              const chunk = parsed.delta ?? parsed.text ?? "";
+              if (chunk.length > 0) {
+                accumulated += chunk;
                 setEnrichedPrompt(accumulated);
               }
             } catch {
@@ -154,8 +159,7 @@ export function ChatSurface({
         throw new Error("Prompt enrichment returned empty output");
       }
 
-      // Show success toast when enrichment completes
-      show({ title: "Prompt enriched", description: "Your prompt has been enhanced!", variant: "success" });
+      show({ title: "Aligned to brand", description: "Your prompt has been enhanced with brand context.", variant: "success" });
     } catch (err) {
       show({ title: "Enrichment failed", description: String(err), variant: "error" });
     } finally {
@@ -410,6 +414,8 @@ export function ChatSurface({
             getAspectsForModel={getAspectsForModel}
             mediumForModel={getMediumForModel}
             hasAnyReferences={hasAnyReferences}
+            brandColors={brandStyle.colors}
+            brandTypography={brandStyle.typography}
             refsSummary={{
               refCount: refs.length,
               hasFirst: Boolean(firstFrame),

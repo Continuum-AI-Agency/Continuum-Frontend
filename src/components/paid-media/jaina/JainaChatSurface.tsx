@@ -2978,7 +2978,7 @@ export function JainaChatSurface({
                 </div>
               ) : null}
 
-              <div data-tour-id="paid-jaina-chat">
+              <div data-tour-id="paid-jaina-chat" className="w-full">
               <PromptInput
                 onSubmit={(value, attachments, references) =>
                   handleSubmit(value, attachments, references)

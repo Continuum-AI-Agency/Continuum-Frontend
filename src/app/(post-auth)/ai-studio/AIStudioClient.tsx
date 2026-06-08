@@ -75,7 +75,7 @@ export default function AIStudioClient({
           padding: "var(--app-shell-pad-block-compact) var(--app-shell-pad-inline-compact)",
         }}
       >
-        <div data-tour-id="studio-canvas" className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-baseline gap-3">
             <Heading size="7" className="text-white">AI Studio</Heading>
             <Text color="gray">Build flows for {brandName}</Text>
@@ -89,7 +89,7 @@ export default function AIStudioClient({
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
+        <div data-tour-id="studio-canvas" className="flex-1 min-h-0 w-full overflow-hidden rounded-xl border border-white/10 shadow-2xl">
           <div className="h-full w-full">
             <StudioCanvas
               brandProfileId={brandProfileId}

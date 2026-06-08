@@ -20,6 +20,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Card, CardContent } from "@/components/ui/card";
+import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
+import type { IntegrationErrorCode } from "@continuum/contracts";
 import {
   ContextMenu,
   ContextMenuCheckboxItem,
@@ -151,6 +153,8 @@ type AdSetAdsLoadState = {
   status: "idle" | "loading" | "success" | "error";
   ads: MetaAd[];
   errorMessage?: string;
+  errorCode?: IntegrationErrorCode;
+  retryAfter?: number;
 };
 
 type AdSetLoadState = {
@@ -158,6 +162,8 @@ type AdSetLoadState = {
   adSets: ScopedAdSet[];
   source?: "live" | "timeline";
   errorMessage?: string;
+  errorCode?: IntegrationErrorCode;
+  retryAfter?: number;
 };
 
 type CompareEntity = {
@@ -998,7 +1004,12 @@ export function CampaignAdSetWorkspace({
         );
 
         if (error) {
-          throw new Error(error.message);
+          const payload = await (error as { context?: { json?: () => Promise<unknown> } }).context?.json?.().catch(() => null) as { error?: string; errorCode?: IntegrationErrorCode; retryAfter?: number } | null;
+          const err = Object.assign(new Error(payload?.error ?? error.message), {
+            errorCode: payload?.errorCode,
+            retryAfter: payload?.retryAfter,
+          });
+          throw err;
         }
 
         const rawAdSets: AdSet[] = (data?.adsets ?? []).map((adSet: AdSet) => ({
@@ -1063,6 +1074,8 @@ export function CampaignAdSetWorkspace({
         }));
       } catch (error) {
         const fallback = timelineFallbackByCampaign[campaign.id] ?? [];
+        const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
+        const retryAfter = (error as { retryAfter?: number }).retryAfter;
         setAdSetsByCampaign((prev) => ({
           ...prev,
           [campaign.id]: {
@@ -1075,6 +1088,8 @@ export function CampaignAdSetWorkspace({
                 : error instanceof Error
                   ? error.message
                   : "Failed to load ad sets",
+            errorCode: fallback.length > 0 ? undefined : errorCode,
+            retryAfter: fallback.length > 0 ? undefined : retryAfter,
           },
         }));
       }
@@ -1146,7 +1161,12 @@ export function CampaignAdSetWorkspace({
         });
 
         if (error) {
-          throw new Error(error.message);
+          const payload = await (error as { context?: { json?: () => Promise<unknown> } }).context?.json?.().catch(() => null) as { error?: string; errorCode?: IntegrationErrorCode; retryAfter?: number } | null;
+          const err = Object.assign(new Error(payload?.error ?? error.message), {
+            errorCode: payload?.errorCode,
+            retryAfter: payload?.retryAfter,
+          });
+          throw err;
         }
 
         const ads = Array.isArray(data?.ads) ? (data.ads as MetaAd[]) : [];
@@ -1164,6 +1184,8 @@ export function CampaignAdSetWorkspace({
             status: "error",
             ads: prev[adSetId]?.ads ?? [],
             errorMessage: error instanceof Error ? error.message : "Failed to load ads",
+            errorCode: (error as { errorCode?: IntegrationErrorCode }).errorCode,
+            retryAfter: (error as { retryAfter?: number }).retryAfter,
           },
         }));
       } finally {
@@ -1547,8 +1569,9 @@ export function CampaignAdSetWorkspace({
   );
 
   const adSetErrors = scopedCampaignIds
-    .map((campaignId) => adSetsByCampaign[campaignId]?.errorMessage)
-    .filter((message): message is string => Boolean(message));
+    .map((campaignId) => adSetsByCampaign[campaignId])
+    .filter((s) => Boolean(s?.errorMessage))
+    .map((s) => ({ message: s!.errorMessage!, errorCode: s!.errorCode, retryAfter: s!.retryAfter }));
 
   const scopeRailItems = React.useMemo(() => {
     const indexItems = filteredIndexCards.map((entry) => ({
@@ -2467,9 +2490,12 @@ export function CampaignAdSetWorkspace({
           <section className="grid h-full min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-1.5">
               {adSetErrors.length > 0 ? (
-                <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {adSetErrors[0]}
-                </div>
+                <IntegrationErrorBanner
+                  errorCode={adSetErrors[0]?.errorCode}
+                  message={adSetErrors[0]?.message}
+                  platform="meta"
+                  retryAfter={adSetErrors[0]?.retryAfter}
+                />
               ) : null}
 
               <div className="rounded-md border border-border/70 p-1.5">
@@ -2680,8 +2706,13 @@ export function CampaignAdSetWorkspace({
                     ) : null}
 
                     {focusedAdSetAdsState?.status === "error" ? (
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
-                        <span>{focusedAdSetAdsState.errorMessage ?? "Failed to load ad creatives"}</span>
+                      <div className="space-y-1">
+                        <IntegrationErrorBanner
+                          errorCode={focusedAdSetAdsState.errorCode}
+                          message={focusedAdSetAdsState.errorMessage}
+                          platform="meta"
+                          retryAfter={focusedAdSetAdsState.retryAfter}
+                        />
                         <Button
                           variant="outline"
                           size="xs"

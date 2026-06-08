@@ -17,8 +17,12 @@ import {
   Package,
   CircleCheck,
   Images,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
+
+const COMPETITOR_SPY_ENABLED =
+  (process.env.NEXT_PUBLIC_COMPETITOR_AD_SPY_ENABLED ?? "").toLowerCase() === "true";
 
 export type AppNavigationItem = {
   label: string;
@@ -98,6 +102,18 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       },
     ],
   },
+  ...((COMPETITOR_SPY_ENABLED
+    ? [
+        {
+          label: "Competitor Spy",
+          href: "/competitor-spy",
+          icon: Eye,
+          accentColor: "text-cyan-500",
+          badge: { label: "Beta", tone: "violet" },
+          description: "Track competitors' paid ad creatives and how they evolve over time.",
+        },
+      ]
+    : []) as AppNavigationItem[]),
   {
     label: "Library",
     href: "/library",

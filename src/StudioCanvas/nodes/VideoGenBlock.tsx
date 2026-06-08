@@ -70,6 +70,11 @@ const LimitedHandle = ({ maxConnections, isConnectable, ...props }: HandleProps 
   return <Handle {...props} isConnectable={baseConnectable && withinLimit} />;
 };
 
+const getResolutionOptions = (model: VideoGeneratorModel): Array<NonNullable<VideoGenNodeData['resolution']>> => {
+  if (model === 'veo-3.1' || model === 'veo-3.1-fast') return ['720p', '1080p', '4k'];
+  return ['720p', '1080p'];
+};
+
 export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<VideoGenNodeData>>) {
   const updateNode = useStudioStore((state) => state.updateNode);
   const setEdges = useStudioStore((state) => state.setEdges);
@@ -157,7 +162,7 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
         ...node,
         data: {
           ...(node.data as VideoGenNodeData),
-          resolution: value,
+          resolution: value as VideoGenNodeData['resolution'],
         },
       }));
       triggerSave();
@@ -484,10 +489,10 @@ export function VideoGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vi
           <ContextMenuSub>
             <ContextMenuSubTrigger>Resolution</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
-              {(model === 'veo-3.1' ? ['720p', '1080p', '2K', '4K'] : ['720p', '1080p']).map((value) => (
+              {getResolutionOptions(model).map((value) => (
                 <ContextMenuCheckboxItem
                   key={value}
-                  checked={(data.resolution ?? '720p') === value}
+                  checked={(data.resolution ?? '720p').toLowerCase() === value.toLowerCase()}
                   onClick={() => handleResolutionChange(value)}
                 >
                   {value}

@@ -190,6 +190,8 @@ export type OrganicCalendarDraft = {
     role: string
     kind: "image" | "video"
     slideIndex?: number
+    assetId?: string | null
+    bucket?: string | null
     storagePath: string
     storageUrl: string
     mimeType?: string

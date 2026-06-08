@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { mediaKindSchema, mediaSourceSchema } from "@continuum/contracts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { callerHasBrandAccess } from "@/lib/media/brand-access.server";
@@ -15,6 +16,8 @@ const PAGE_SIZE = 48;
 const querySchema = z.object({
   brandId: z.string().uuid(),
   collectionId: z.string().uuid().optional(),
+  source: mediaSourceSchema.optional(),
+  kind: mediaKindSchema.optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(96).default(PAGE_SIZE),
 });
@@ -35,13 +38,15 @@ export async function GET(request: Request) {
   const parsed = querySchema.safeParse({
     brandId: url.searchParams.get("brandId"),
     collectionId: url.searchParams.get("collectionId") ?? undefined,
+    source: url.searchParams.get("source") ?? undefined,
+    kind: url.searchParams.get("kind") ?? undefined,
     offset: url.searchParams.get("offset") ?? undefined,
     limit: url.searchParams.get("limit") ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 });
   }
-  const { brandId, collectionId, offset, limit } = parsed.data;
+  const { brandId, collectionId, source, kind, offset, limit } = parsed.data;
 
   if (!(await callerHasBrandAccess(supabase, brandId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -72,6 +77,9 @@ export async function GET(request: Request) {
     .select(MEDIA_ASSET_SELECT)
     .eq("brand_id", brandId)
     .is("deleted_at", null);
+
+  if (source) query = query.eq("source", source);
+  if (kind) query = query.eq("kind", kind);
 
   if (assetIds) {
     query = query.in("id", assetIds);

@@ -8,6 +8,7 @@ import {
   resolveReferenceMimeType,
 } from "@/lib/ai-studio/referenceDrop";
 import { resolveDroppedBase64 } from "@/lib/ai-studio/referenceDropClient";
+import { resignCanvasNodes } from "./resignCanvasNodes";
 
 type Base64Resolver = (
   parsed: ParsedReferenceDropPayload,
@@ -88,7 +89,7 @@ export async function rehydrateWorkflowMediaNodes(
   nodes: StudioNode[],
   resolver: Base64Resolver = resolveDroppedBase64
 ): Promise<StudioNode[]> {
-  return Promise.all(
+  const rehydrated = await Promise.all(
     nodes.map(async (node) => {
       if (node.type === "image") {
         return rehydrateMediaNode(node, {
@@ -107,4 +108,8 @@ export async function rehydrateWorkflowMediaNodes(
       return node;
     })
   );
+
+  // Re-sign durable storage paths on generator nodes (nanoGen, video gen types).
+  // Generated image/video URLs are stripped on save; this restores fresh signed URLs.
+  return resignCanvasNodes(rehydrated);
 }

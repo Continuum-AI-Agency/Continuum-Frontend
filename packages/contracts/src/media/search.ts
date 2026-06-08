@@ -3,7 +3,7 @@
 // multimodal image embeddings (1408) for a reference asset.
 
 import { z } from "zod";
-import { mediaAssetSchema, mediaKindSchema } from "./asset";
+import { mediaAssetSchema, mediaKindSchema, mediaSourceSchema } from "./asset";
 
 export const mediaSearchModeSchema = z.enum(["text", "similar"]);
 export type MediaSearchMode = z.infer<typeof mediaSearchModeSchema>;
@@ -12,6 +12,7 @@ export const mediaSearchFiltersSchema = z
   .object({
     tags: z.array(z.string().min(1)).optional(),
     kind: mediaKindSchema.optional(),
+    source: mediaSourceSchema.optional(),
     collectionId: z.string().min(1).optional(),
   })
   .strict();

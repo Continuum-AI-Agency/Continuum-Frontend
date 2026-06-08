@@ -33,10 +33,11 @@ function paidMediaTabForStep(step: number): PaidMediaTourTab {
   return "dashboard";
 }
 
-// Steps 0-4 sit on the organic view; the "switch to Paid" step (4) still shows
-// the organic view so the toggle is in context, then steps 5-6 are paid.
+// Step 4 pre-switches to the paid view so steps 5-6 find paid widgets already
+// mounted when nextstepjs queries. The toggle button (step 4 target) is in the
+// header and visible on both views, so the switch is transparent to the user.
 function dashboardViewForStep(step: number): DashboardTourView {
-  return step >= 5 ? "paid" : "organic";
+  return step >= 4 ? "paid" : "organic";
 }
 
 export function TourProvider({ children }: { children: React.ReactNode }) {

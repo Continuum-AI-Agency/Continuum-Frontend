@@ -13,12 +13,16 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from "./types"
 import type { PlannerPlatform } from "./planner-platforms"
+import { DraftHoverCardContent } from "./DraftHoverCardContent"
+import { resolveDraftMediaAssetUrl } from "./DraftCardMedia"
+import { statusFrameClasses } from "./draft-card-styles"
 
 const PLATFORM_BADGE_COLORS: Record<string, string> = {
   instagram: "bg-pink-500/15 text-pink-700 dark:text-pink-400",
@@ -48,20 +52,6 @@ type OrganicListViewProps = {
   onAddBacklogDraft: (draft: OrganicCalendarDraft) => void
   onDeleteBacklogDraft: (draftId: string) => void
   onPromoteBacklogDraft: (draftId: string, dayId: string, timeLabel: string) => void
-}
-
-function resolveDraftThumbnail(draft: OrganicCalendarDraft): string | null {
-  const persisted = draft.publishingAssets?.find((a) => a.kind === "image")
-  if (persisted?.storageUrl) return persisted.storageUrl
-  if (draft.mediaSuggestion?.assetUrl) return draft.mediaSuggestion.assetUrl
-  const primaryAsset = (draft.mediaSuggestion?.assets ?? [])
-    .filter((a) => a?.assetBase64)
-    .sort((a, b) => (a?.order ?? 999) - (b?.order ?? 999))[0]
-  if (primaryAsset?.assetBase64) {
-    const b64 = primaryAsset.assetBase64.trim()
-    return b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`
-  }
-  return null
 }
 
 function PlatformBadge({ platform }: { platform: string }) {
@@ -116,14 +106,18 @@ const DraftRow = React.memo(function DraftRow({
   onDelete: () => void
   onRegenerate?: () => void
 }) {
-  const thumbnail = resolveDraftThumbnail(draft)
+  const thumbnail = resolveDraftMediaAssetUrl(draft)
+  const framePlatform = draft.platforms[0] ?? "instagram"
 
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
+    <HoverCard openDelay={300} closeDelay={120}>
+      <ContextMenu>
+        <HoverCardTrigger asChild>
+          <ContextMenuTrigger asChild>
         <div
           className={cn(
             "group flex cursor-pointer items-center gap-3 border-b border-border/40 px-4 py-2.5 transition-colors hover:bg-muted/40",
+            statusFrameClasses(framePlatform, draft.status, "row"),
             isSelected && "bg-primary/[0.05]"
           )}
           onClick={onSelect}
@@ -175,31 +169,45 @@ const DraftRow = React.memo(function DraftRow({
             </button>
           </div>
         </div>
-      </ContextMenuTrigger>
-      <ContextMenuContent className="w-48">
-        <ContextMenuItem onSelect={onSelect}>
-          <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
-          Open in editor
-        </ContextMenuItem>
-        {onRegenerate && draft.status !== "streaming" && (
-          <>
-            <ContextMenuSeparator />
-            <ContextMenuItem onSelect={onRegenerate}>
-              <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
-              {draft.status === "failed" ? "Retry generation" : "Regenerate"}
-            </ContextMenuItem>
-          </>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem
-          className="text-destructive focus:text-destructive"
-          onSelect={onDelete}
-        >
-          <TrashIcon className="mr-2 h-3.5 w-3.5" />
-          Delete
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+          </ContextMenuTrigger>
+        </HoverCardTrigger>
+        <ContextMenuContent className="w-48">
+          <ContextMenuItem onSelect={onSelect}>
+            <Pencil1Icon className="mr-2 h-3.5 w-3.5" />
+            Open in editor
+          </ContextMenuItem>
+          {onRegenerate && draft.status !== "streaming" && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={onRegenerate}>
+                <LightningBoltIcon className="mr-2 h-3.5 w-3.5" />
+                {draft.status === "failed" ? "Retry generation" : "Regenerate"}
+              </ContextMenuItem>
+            </>
+          )}
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            className="text-destructive focus:text-destructive"
+            onSelect={onDelete}
+          >
+            <TrashIcon className="mr-2 h-3.5 w-3.5" />
+            Delete
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <HoverCardContent
+        side="right"
+        align="start"
+        className="p-0 border-none bg-transparent shadow-none"
+        avoidCollisions
+      >
+        <DraftHoverCardContent
+          draft={draft}
+          onEdit={() => onSelect()}
+          onRegenerate={onRegenerate ? () => onRegenerate() : undefined}
+        />
+      </HoverCardContent>
+    </HoverCard>
   )
 })
 

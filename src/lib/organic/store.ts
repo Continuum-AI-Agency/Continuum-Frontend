@@ -99,6 +99,9 @@ interface CalendarState {
   viewMode: "week" | "month" | "list";
   // Calendar lens: show/hide drafts that belong to a bulk content plan ("planned").
   showPlanned: boolean;
+  // Cross-subtree signal: agent-side completion (bulk run done, single draft ready)
+  // bumps this so the calendar workspace re-fetches persisted drafts from the backend.
+  calendarRefetchNonce: number;
   eventHistory: EventHistory;
   backlogDrafts: OrganicCalendarDraft[];
 
@@ -144,6 +147,7 @@ interface CalendarState {
   moveEventToDay: (eventId: string, targetDate: string) => void;
   setViewMode: (mode: "week" | "month" | "list") => void;
   setShowPlanned: (value: boolean) => void;
+  requestCalendarRefetch: () => void;
 
   addBacklogDraft: (draft: OrganicCalendarDraft) => void;
   updateBacklogDraft: (draftId: string, updater: (draft: OrganicCalendarDraft) => OrganicCalendarDraft) => void;
@@ -222,6 +226,7 @@ export const useCalendarStore = create<CalendarState>()(
       scheduledEvents: {},
       viewMode: "month",
       showPlanned: true,
+      calendarRefetchNonce: 0,
       eventHistory: [],
       backlogDrafts: [],
       weekCache: {},
@@ -439,6 +444,8 @@ export const useCalendarStore = create<CalendarState>()(
 
       setViewMode: (mode) => set({ viewMode: mode }),
       setShowPlanned: (value) => set({ showPlanned: value }),
+      requestCalendarRefetch: () =>
+        set((state) => ({ calendarRefetchNonce: state.calendarRefetchNonce + 1 })),
 
       addBacklogDraft: (draft) =>
         set((state) => ({

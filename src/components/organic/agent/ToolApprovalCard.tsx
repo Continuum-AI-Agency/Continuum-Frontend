@@ -1,18 +1,56 @@
 "use client";
 
-import { ShieldQuestion } from "lucide-react";
-import { Badge } from "@radix-ui/themes";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Check, X } from "lucide-react";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { AgentButton, MetaRow, PlatformTag } from "./agentCardKit";
 import type { ToolApproval } from "./types";
 
-function summarizeInput(input: unknown): string | null {
-  if (input == null) return null;
+type ContentInput = {
+  platform?: string;
+  format?: string;
+  scheduledAt?: string;
+  scheduled_at?: string;
+  angle?: string;
+  topic?: string;
+  description?: string;
+  objective?: string;
+};
+
+function parseContentInput(input: unknown): ContentInput {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) return {};
+  return input as ContentInput;
+}
+
+function formatScheduledAt(raw: string | undefined): string | null {
+  if (!raw) return null;
   try {
-    const text = typeof input === "string" ? input : JSON.stringify(input);
-    return text.length > 240 ? `${text.slice(0, 240)}…` : text;
+    return new Date(raw).toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   } catch {
     return null;
+  }
+}
+
+function inputSummary(input: unknown): string {
+  try {
+    const text = typeof input === "string" ? input : JSON.stringify(input, null, 2);
+    return text.length > 400 ? `${text.slice(0, 400)}…` : text;
+  } catch {
+    return String(input);
   }
 }
 
@@ -27,31 +65,97 @@ export function ToolApprovalCard({
   onDenyAction: () => void;
   disabled?: boolean;
 }) {
-  const summary = summarizeInput(approval.input);
+  const content = parseContentInput(approval.input);
+  const platform = content.platform;
+  const format = content.format;
+  const scheduledAt = formatScheduledAt(content.scheduledAt ?? content.scheduled_at);
+  const angle = content.angle ?? content.topic ?? content.description;
+
   return (
-    <Card className="overflow-hidden border-amber-400/40">
-      <CardContent className="flex flex-col gap-2 p-3">
-        <div className="flex items-center gap-1.5">
-          <ShieldQuestion className="h-3.5 w-3.5 text-amber-500" />
-          <span className="text-sm font-medium text-foreground">Approval required</span>
-          <Badge variant="soft" color="amber" size="1">
-            {approval.toolName}
-          </Badge>
-        </div>
-        {summary && (
-          <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted/50 p-2 text-[11px] leading-relaxed text-muted-foreground">
-            {summary}
-          </pre>
-        )}
-        <div className="flex items-center justify-end gap-2">
-          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={disabled} onClick={onDenyAction}>
-            Deny
-          </Button>
-          <Button size="sm" className="h-7 text-xs" disabled={disabled} onClick={onApproveAction}>
-            Approve
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <HoverCard openDelay={400}>
+          <HoverCardTrigger asChild>
+            <Card className="w-[210px] shrink-0 cursor-default gap-0 rounded-xl py-0 transition-shadow hover:shadow-md">
+              <CardContent className="space-y-2.5 px-3.5 pt-3.5 pb-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {platform && <PlatformTag platform={platform} />}
+                  {format && (
+                    <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {format}
+                    </span>
+                  )}
+                </div>
+                {scheduledAt && (
+                  <MetaRow items={[scheduledAt]} className="text-[11px]" />
+                )}
+                {angle && (
+                  <p className="line-clamp-3 text-[12px] leading-relaxed text-foreground/80">
+                    {angle}
+                  </p>
+                )}
+                {!platform && !angle && (
+                  <p className="text-[11.5px] text-muted-foreground">
+                    {approval.toolName}
+                  </p>
+                )}
+              </CardContent>
+              <CardFooter className="flex items-center justify-end gap-1 border-t border-border/50 px-3 py-2">
+                <AgentButton
+                  variant="ghost"
+                  disabled={disabled}
+                  onClick={onDenyAction}
+                  className="h-7 min-h-0 gap-1 px-2.5 text-[11.5px]"
+                >
+                  <X className="h-3 w-3" />
+                  Deny
+                </AgentButton>
+                <AgentButton
+                  variant="primary"
+                  disabled={disabled}
+                  onClick={onApproveAction}
+                  className="h-7 min-h-0 gap-1 px-2.5 text-[11.5px]"
+                >
+                  <Check className="h-3 w-3" />
+                  Approve
+                </AgentButton>
+              </CardFooter>
+            </Card>
+          </HoverCardTrigger>
+          <HoverCardContent side="top" align="start" className="w-72 p-0">
+            <div className="space-y-2 p-3.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {approval.toolName}
+              </p>
+              <pre className="max-h-52 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/60 p-2.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                {inputSummary(approval.input)}
+              </pre>
+            </div>
+          </HoverCardContent>
+        </HoverCard>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-44">
+        <ContextMenuLabel className="text-[11px] text-muted-foreground">
+          {approval.toolName}
+        </ContextMenuLabel>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          disabled={disabled}
+          onSelect={onApproveAction}
+          className="gap-2 text-emerald-600 focus:text-emerald-600 dark:text-emerald-400"
+        >
+          <Check className="h-3.5 w-3.5" />
+          Approve
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={disabled}
+          onSelect={onDenyAction}
+          className="gap-2 text-destructive focus:text-destructive"
+        >
+          <X className="h-3.5 w-3.5" />
+          Deny
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

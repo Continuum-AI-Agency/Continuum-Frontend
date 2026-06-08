@@ -5,9 +5,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import type { AgentChatInput } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
-import { parseOrganicStreamEvent } from "@/components/organic/agent/streamEventParser";
+import {
+  normalizePostToolResult,
+  parseOrganicStreamEvent,
+} from "@/components/organic/agent/streamEventParser";
+import { POST_FETCHING_TOOL_NAMES } from "@continuum/contracts";
 
 const RECONNECT_BACKOFF_MS = 750;
+
+const POST_TOOL_LABELS: Record<string, string> = {
+  listDrafts: "Drafts",
+  getTopPosts: "Top Posts",
+  listOwnInstagramMedia: "Recent Media",
+  getCalendarPostedContent: "Posted Content",
+  rankPostPerformers: "Top Performers",
+};
 const MAX_RECONNECT_ATTEMPTS = 5;
 
 export function useOrganicAgentStream(
@@ -65,13 +77,20 @@ export function useOrganicAgentStream(
           case "toolCall":
             dispatch({ type: "STREAM_TOOL_CALL", event: parsed.event });
             break;
-          case "toolResult":
+          case "toolResult": {
             dispatch({
               type: "STREAM_TOOL_RESULT",
               toolCallId: parsed.toolCallId,
               result: parsed.result,
             });
+            if ((POST_FETCHING_TOOL_NAMES as readonly string[]).includes(parsed.toolName)) {
+              const posts = normalizePostToolResult(parsed.toolName, parsed.result);
+              if (posts.length > 0) {
+                dispatch({ type: "STREAM_UI_CARD", card: { type: "post_list", data: posts, label: POST_TOOL_LABELS[parsed.toolName] } });
+              }
+            }
             break;
+          }
           case "error":
             dispatch({ type: "STREAM_ERROR", error: parsed.message });
             terminal = true;
@@ -109,6 +128,9 @@ export function useOrganicAgentStream(
               type: "BULK_RUN_START",
               run: { runId: parsed.run.runId, planId: parsed.run.planId, total: parsed.run.total },
             });
+            break;
+          case "mediaSearchResults":
+            dispatch({ type: "STREAM_MEDIA_SEARCH_RESULTS", frame: parsed.frame });
             break;
           case "runStarted":
             opts?.onRunStarted?.(parsed.runId);

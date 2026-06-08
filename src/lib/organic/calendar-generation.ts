@@ -448,6 +448,21 @@ const placementCopySchema = z
   })
   .optional();
 
+const placementPublishingAssetSchema = z
+  .object({
+    role: z.string(),
+    kind: z.enum(["image", "video"]),
+    slideIndex: z.number().nullish(),
+    assetId: z.string().nullish(),
+    bucket: z.string().nullish(),
+    storagePath: z.string(),
+    storageUrl: z.string(),
+    mimeType: z.string().nullish(),
+    width: z.number().nullish(),
+    height: z.number().nullish(),
+  })
+  .passthrough();
+
 export const calendarPlacementSchema = z.object({
   placementId: z.string().min(1),
   schedule: placementScheduleSchema,
@@ -456,6 +471,7 @@ export const calendarPlacementSchema = z.object({
   content: placementContentSchema.optional().default({}),
   creative: placementCreativeSchema,
   copy: placementCopySchema,
+  publishingAssets: z.array(placementPublishingAssetSchema).nullish(),
 });
 
 export type CalendarPlacement = z.infer<typeof calendarPlacementSchema>;

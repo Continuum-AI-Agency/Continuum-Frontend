@@ -126,7 +126,7 @@ export function OrganicWorkspaceTabs({
               <button
                 key={view}
                 type="button"
-                data-tour-id={view === "metrics" ? "organic-metrics-tab" : undefined}
+                data-tour-id={view === "metrics" ? "organic-metrics-tab" : view === "agent" ? "organic-agent-tab" : undefined}
                 onClick={() => handleValueChange(view)}
                 className={cn(
                   "h-7 rounded-md px-3 text-xs font-medium transition-colors sm:h-8 sm:px-3.5 sm:text-sm",

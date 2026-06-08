@@ -3,7 +3,7 @@
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField } from "@radix-ui/themes";
+import { Badge, Button, Callout, Card, Flex, RadioGroup, Select, Separator, Text, TextArea, TextField, Tooltip } from "@radix-ui/themes";
 import { ExclamationTriangleIcon, MagicWandIcon, MixerVerticalIcon, PaperPlaneIcon, StopIcon } from "@radix-ui/react-icons";
 import { getAspectsForModel, getMediumForModel } from "@/lib/schemas/chatImageRequest";
 import type { SupportedModel } from "@/lib/types/chatImage";
@@ -51,6 +51,8 @@ type ChatPanelProps = {
   getAspectsForModel: typeof getAspectsForModel;
   mediumForModel: typeof getMediumForModel;
   hasAnyReferences?: boolean;
+  brandColors?: string[];
+  brandTypography?: { primary: string | null; secondary: string | null };
   refsSummary?: { refCount: number; hasFirst: boolean; hasLast: boolean };
   promptTemplates?: {
     templates: PromptTemplate[];
@@ -94,9 +96,13 @@ export function ChatPanel({
   getAspectsForModel,
   mediumForModel,
   hasAnyReferences,
+  brandColors,
+  brandTypography,
   refsSummary,
   promptTemplates,
 }: ChatPanelProps) {
+  const brandAccent = brandColors?.[0];
+  const brandFont = brandTypography?.primary ?? undefined;
   const form = useForm<FormValues>({
     resolver: zodResolver(chatPanelFormSchema),
     defaultValues: {
@@ -210,24 +216,27 @@ export function ChatPanel({
             />
             <div className="absolute right-2 top-2 flex flex-col gap-2">
               {onEnrich && (
-                <Button
-                  size="1"
-                  variant="ghost"
-                  color="gray"
-                  type="button"
-                  disabled={disabled || isStreaming || isEnriching || !form.watch("prompt")}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onEnrich(form.getValues("prompt"));
-                  }}
-                  className="hover:text-brand-primary"
-                >
-                  {isEnriching ? (
-                    <div className="animate-spin">◌</div>
-                  ) : (
-                    <MagicWandIcon />
-                  )}
-                </Button>
+                <Tooltip content="Align to Brand — rewrites your prompt using your brand's colors, typography, and voice">
+                  <Button
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    type="button"
+                    aria-label="Align to Brand"
+                    disabled={disabled || isStreaming || isEnriching || !form.watch("prompt")}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onEnrich(form.getValues("prompt"));
+                    }}
+                    style={brandAccent ? { color: brandAccent, fontFamily: brandFont } : { fontFamily: brandFont }}
+                  >
+                    {isEnriching ? (
+                      <div className="animate-spin">◌</div>
+                    ) : (
+                      <MagicWandIcon />
+                    )}
+                  </Button>
+                </Tooltip>
               )}
               {promptTemplates ? (
                 <PromptTemplatePicker

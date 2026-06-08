@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2Icon, CircleDotIcon, AlertCircleIcon } from "lucide-react";
 import type { PipelineStage, PipelineStageNode } from "./types";
 
@@ -13,12 +13,15 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   merge: "Merging",
 };
 
+const TOTAL_STAGES = 6;
+
 type StageRowProps = {
   node: PipelineStageNode;
   isLast: boolean;
+  index: number;
 };
 
-function StageRow({ node, isLast }: StageRowProps) {
+function StageRow({ node, isLast, index }: StageRowProps) {
   const treeChar = isLast ? "└─" : "├─";
   const label = STAGE_LABELS[node.stage] ?? node.stage;
   const codename = node.agentName ?? node.stage;
@@ -27,7 +30,7 @@ function StageRow({ node, isLast }: StageRowProps) {
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ delay: index * 0.06, duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
       className="flex items-baseline gap-1.5 text-xs"
     >
       <span className="shrink-0 font-mono text-muted-foreground/50">{treeChar}</span>
@@ -63,11 +66,32 @@ type ActiveStagesPanelProps = {
 export function ActiveStagesPanel({ stages, isStreaming }: ActiveStagesPanelProps) {
   if (!isStreaming || stages.length === 0) return null;
 
+  const doneCount = stages.filter((s) => s.status === "done").length;
+
   return (
-    <div className="mt-0.5 space-y-0.5 px-3 pb-1">
-      {stages.map((node, index) => (
-        <StageRow key={node.stage} node={node} isLast={index === stages.length - 1} />
-      ))}
-    </div>
+    <AnimatePresence initial={false}>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+        className="mt-0.5 space-y-0.5 px-3 pb-1"
+      >
+        <div className="mb-0.5 flex items-center gap-2 text-xs text-muted-foreground/50">
+          <span className="font-mono">Pipeline</span>
+          <span className="tabular-nums">{doneCount}/{TOTAL_STAGES}</span>
+        </div>
+        <AnimatePresence initial={false}>
+          {stages.map((node, index) => (
+            <StageRow
+              key={node.stage}
+              node={node}
+              isLast={index === stages.length - 1}
+              index={index}
+            />
+          ))}
+        </AnimatePresence>
+      </motion.div>
+    </AnimatePresence>
   );
 }

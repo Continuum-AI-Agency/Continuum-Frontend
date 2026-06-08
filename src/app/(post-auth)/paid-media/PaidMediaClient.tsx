@@ -356,6 +356,7 @@ export default function PaidMediaClientPage({
               </TabsTrigger>
               <TabsTrigger
                 value="jaina"
+                data-tour-id="paid-jaina-tab"
                 className="px-3 text-xs"
                 onMouseEnter={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}
                 onFocus={() => { void import("@/components/paid-media/jaina/JainaChatSurface"); }}

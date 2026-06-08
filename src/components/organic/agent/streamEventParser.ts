@@ -3,18 +3,19 @@ import {
   bulkContentPlanSchema,
   mediaSearchResultsFrameSchema,
   organicStreamFrameSchema,
+  proposedPlanSchema,
   type BulkContentPlan,
   type MediaSearchResultsFrame,
   type OrganicStreamFrame,
 } from "@continuum/contracts";
+import type { UiFetchedPost } from "@continuum/contracts";
 import type {
   AgentJobState,
   PipelineCardState,
   PipelineQuality,
   PipelineStage,
-  PlanEvidence,
-  PlanItem,
   PlanItemStatus,
+  SkillProposalCardData,
   ToolApproval,
   ToolCallEvent,
   UiCard,
@@ -46,7 +47,8 @@ export type ParsedPlanStatus = {
 export type ParsedOrganicStreamEvent =
   | { kind: "delta"; delta: string }
   | { kind: "toolCall"; event: ToolCallEvent }
-  | { kind: "toolResult"; toolCallId: string; result: unknown }
+  | { kind: "toolResult"; toolCallId: string; toolName: string; result: unknown }
+  | { kind: "postList"; posts: UiFetchedPost[] }
   | { kind: "error"; message: string }
   | { kind: "complete" }
   | { kind: "uiCard"; card: UiCard }
@@ -132,6 +134,7 @@ export function normalizeToolResultEvent(event: Record<string, unknown>) {
   const hasResult = Object.prototype.hasOwnProperty.call(payload, "result");
   return {
     toolCallId,
+    toolName,
     result: hasResult
       ? payload.result
       : {
@@ -313,77 +316,41 @@ function parseUiPostCard(event: Record<string, unknown>): UiPostCard | null {
   };
 }
 
-function parsePlanItems(raw: unknown): PlanItem[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((entry) => {
-    if (!isRecord(entry)) return [];
-    const itemId = readNonEmptyString(entry.itemId);
-    if (!itemId) return [];
-    return [
-      {
-        itemId,
-        kind: (readNonEmptyString(entry.kind) ?? "create_post") as PlanItem["kind"],
-        platform: (readNonEmptyString(entry.platform) ?? "instagram") as PlanItem["platform"],
-        scheduledAt: readNonEmptyString(entry.scheduledAt) ?? "",
-        format: (typeof entry.format === "string" ? entry.format : null) as PlanItem["format"],
-        trendId: typeof entry.trendId === "string" ? entry.trendId : null,
-        trendTitle: typeof entry.trendTitle === "string" ? entry.trendTitle : null,
-        angle: typeof entry.angle === "string" ? entry.angle : "",
-        objective: (readNonEmptyString(entry.objective) ?? "share") as PlanItem["objective"],
-        audienceSegment: typeof entry.audienceSegment === "string" ? entry.audienceSegment : "",
-        rationale: typeof entry.rationale === "string" ? entry.rationale : "",
-        guidancePrompt: typeof entry.guidancePrompt === "string" ? entry.guidancePrompt : null,
-        draftId: typeof entry.draftId === "string" ? entry.draftId : null,
-        jobId: typeof entry.jobId === "string" ? entry.jobId : null,
-        dependsOn: Array.isArray(entry.dependsOn)
-          ? entry.dependsOn.filter((d): d is string => typeof d === "string")
-          : [],
-        status: (readNonEmptyString(entry.status) ?? "pending") as PlanItem["status"],
-      },
-    ];
-  });
-}
-
-function parsePlanEvidence(raw: unknown): PlanEvidence[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((entry) => {
-    if (!isRecord(entry)) return [];
-    const summary = typeof entry.summary === "string" ? entry.summary : "";
-    return [
-      {
-        kind: (readNonEmptyString(entry.kind) ?? "trend") as PlanEvidence["kind"],
-        refId: typeof entry.refId === "string" ? entry.refId : null,
-        summary,
-      },
-    ];
-  });
-}
-
+// The Backend emits the full ProposedPlan as the ui.plan_card payload, so the
+// boundary check is a single safeParse against the shared contract schema — no
+// hand-rolled parallel parser to drift. On failure we drop the card (the
+// caller's tolerant fallthrough), preserving rolling-deploy resilience.
 function parseUiPlanCard(event: Record<string, unknown>): UiPlanCard | null {
   const payload = getEventPayload(event);
-  const planId = readNonEmptyString(payload.planId);
-  if (!planId) return null;
-
-  return {
-    planId,
-    sessionId: readNonEmptyString(payload.sessionId) ?? "",
-    brandId: readNonEmptyString(payload.brandId) ?? "",
-    weekStart: readNonEmptyString(payload.weekStart) ?? "",
-    title: typeof payload.title === "string" ? payload.title : "",
-    summary: typeof payload.summary === "string" ? payload.summary : "",
-    items: parsePlanItems(payload.items),
-    evidence: parsePlanEvidence(payload.evidence),
-    estimatedDurationSeconds:
-      typeof payload.estimatedDurationSeconds === "number" ? payload.estimatedDurationSeconds : 0,
-    status: "proposed",
-    createdAt: readNonEmptyString(payload.createdAt) ?? "",
-  };
+  const result = proposedPlanSchema.safeParse(payload);
+  return result.success ? result.data : null;
 }
 
 function parseBulkPlanCard(event: Record<string, unknown>): BulkContentPlan | null {
   const payload = getEventPayload(event);
   const result = bulkContentPlanSchema.safeParse(payload);
   return result.success ? result.data : null;
+}
+
+function parseSkillProposalCard(event: Record<string, unknown>): SkillProposalCardData | null {
+  const payload = getEventPayload(event);
+  const proposalId = readNonEmptyString(payload.proposalId);
+  const brandId = readNonEmptyString(payload.brandId);
+  const name = readNonEmptyString(payload.name);
+  const directives = typeof payload.directives === "string" ? payload.directives : "";
+  if (!proposalId || !brandId || !name || !directives) return null;
+  const kind = payload.kind === "analytic" ? "analytic" : "creative_direction";
+  return {
+    proposalId,
+    brandId,
+    name,
+    kind,
+    description: typeof payload.description === "string" ? payload.description : null,
+    directives,
+    tags: Array.isArray(payload.tags)
+      ? payload.tags.filter((t): t is string => typeof t === "string")
+      : [],
+  };
 }
 
 function parseBulkRun(event: Record<string, unknown>): ParsedBulkRun | null {
@@ -514,6 +481,168 @@ function parseToolApproval(event: Record<string, unknown>): ToolApproval | null 
   return { approvalId, toolCallId, toolName, input: payload.input };
 }
 
+function toSourcePlatform(raw: unknown): UiFetchedPost["source"] {
+  if (raw === "facebook") return "facebook";
+  if (raw === "tiktok") return "tiktok";
+  if (raw === "instagram") return "instagram";
+  return "instagram";
+}
+
+function extractArray(result: unknown, ...keys: string[]): unknown[] {
+  if (Array.isArray(result)) return result;
+  if (!isRecord(result)) return [];
+  for (const key of keys) {
+    if (Array.isArray(result[key])) return result[key] as unknown[];
+  }
+  return [];
+}
+
+export function normalizePostToolResult(toolName: string, result: unknown): UiFetchedPost[] {
+  switch (toolName) {
+    case "listDrafts": {
+      return extractArray(result, "drafts").flatMap((item) => {
+        if (!isRecord(item)) return [];
+        const draftId = readNonEmptyString(item.draftId);
+        if (!draftId) return [];
+        return [{
+          postId: draftId,
+          source: "draft" as const,
+          platform: readNonEmptyString(item.platform),
+          caption: readNonEmptyString(item.caption),
+          mediaUrl: null,
+          permalink: null,
+          postedAt: null,
+          scheduledAt: readNonEmptyString(item.scheduledAt),
+          format: readNonEmptyString(item.format),
+          status: readNonEmptyString(item.status),
+          topic: readNonEmptyString(item.topic),
+          metrics: null,
+          rank: null,
+          quality: isRecord(item.quality) ? { passed: item.quality.passed === true } : null,
+        }];
+      });
+    }
+
+    case "getTopPosts": {
+      if (!isRecord(result) || !result.ok) return [];
+      const platform = toSourcePlatform(result.platform);
+      return extractArray(result, "rows").flatMap((item) => {
+        if (!isRecord(item)) return [];
+        const postId = readNonEmptyString(item.post_id);
+        if (!postId) return [];
+        const metrics = isRecord(item.metrics)
+          ? (item.metrics as Record<string, number | null>)
+          : null;
+        return [{
+          postId,
+          source: platform,
+          platform: typeof result.platform === "string" ? result.platform : null,
+          caption: readNonEmptyString(item.caption_snippet),
+          mediaUrl: null,
+          permalink: readNonEmptyString(item.permalink),
+          postedAt: readNonEmptyString(item.posted_at),
+          scheduledAt: null,
+          format: null,
+          status: "published",
+          topic: null,
+          metrics,
+          rank: typeof item.rank === "number" ? item.rank : null,
+          quality: null,
+        }];
+      });
+    }
+
+    case "listOwnInstagramMedia": {
+      return extractArray(result, "posts").flatMap((item) => {
+        if (!isRecord(item)) return [];
+        const mediaId = readNonEmptyString(item.mediaId);
+        if (!mediaId) return [];
+        const likeCount = typeof item.likeCount === "number" ? item.likeCount : null;
+        const commentsCount = typeof item.commentsCount === "number" ? item.commentsCount : null;
+        return [{
+          postId: mediaId,
+          source: "instagram" as const,
+          platform: "instagram",
+          caption: readNonEmptyString(item.captionSnippet),
+          mediaUrl: null,
+          permalink: readNonEmptyString(item.permalink),
+          postedAt: readNonEmptyString(item.timestamp),
+          scheduledAt: null,
+          format: readNonEmptyString(item.productType) ?? readNonEmptyString(item.mediaType),
+          status: "published",
+          topic: null,
+          metrics: { likes: likeCount, comments: commentsCount },
+          rank: typeof item.rank === "number" ? item.rank : null,
+          quality: null,
+        }];
+      });
+    }
+
+    case "getCalendarPostedContent": {
+      if (!isRecord(result) || !result.ok) return [];
+      return extractArray(result, "posts").flatMap((item) => {
+        if (!isRecord(item)) return [];
+        const postId = readNonEmptyString(item.post_id);
+        if (!postId) return [];
+        const platform = toSourcePlatform(item.platform);
+        const metrics = isRecord(item.metrics)
+          ? (item.metrics as Record<string, number | null>)
+          : null;
+        return [{
+          postId,
+          source: platform,
+          platform: typeof item.platform === "string" ? item.platform : null,
+          caption: readNonEmptyString(item.caption),
+          mediaUrl: readNonEmptyString(item.media_url),
+          permalink: readNonEmptyString(item.permalink),
+          postedAt: readNonEmptyString(item.posted_at),
+          scheduledAt: null,
+          format: null,
+          status: "published",
+          topic: null,
+          metrics,
+          rank: null,
+          quality: null,
+        }];
+      });
+    }
+
+    case "rankPostPerformers": {
+      if (!isRecord(result) || !result.ok) return [];
+      const metric = readNonEmptyString(result.metric);
+      const allRows = [
+        ...extractArray(result, "top"),
+        ...extractArray(result, "bottom"),
+      ];
+      return allRows.flatMap((item, i) => {
+        if (!isRecord(item)) return [];
+        const mediaId = readNonEmptyString(item.mediaId);
+        if (!mediaId) return [];
+        const metricValue = typeof item.metricValue === "number" ? item.metricValue : null;
+        return [{
+          postId: mediaId,
+          source: "instagram" as const,
+          platform: "instagram",
+          caption: readNonEmptyString(item.captionSnippet),
+          mediaUrl: null,
+          permalink: readNonEmptyString(item.permalink),
+          postedAt: null,
+          scheduledAt: null,
+          format: null,
+          status: typeof item.bucket === "string" ? item.bucket : "published",
+          topic: metric ?? null,
+          metrics: metric && metricValue !== null ? { [metric]: metricValue } : null,
+          rank: i + 1,
+          quality: null,
+        }];
+      });
+    }
+
+    default:
+      return [];
+  }
+}
+
 export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent {
   if (!isRecord(raw)) return { kind: "invalid" };
   const type = readNonEmptyString(raw.type);
@@ -548,8 +677,10 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     }
     case "tool.call":
       return { kind: "toolCall", event: normalizeToolCallEvent(raw) };
-    case "tool.result":
-      return { kind: "toolResult", ...normalizeToolResultEvent(raw) };
+    case "tool.result": {
+      const { toolCallId, toolName, result } = normalizeToolResultEvent(raw);
+      return { kind: "toolResult", toolCallId, toolName, result };
+    }
     case "ui.trend_chart":
       return { kind: "uiCard", card: { type: "trend_chart", data: normalizeTrendChartEvent(raw) } };
     case "ui.plan_card": {
@@ -567,10 +698,17 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
       const card = parseUiPostCard(raw);
       return card ? { kind: "postCard", card } : { kind: "invalid", type };
     }
+    case "ui.skill_proposal": {
+      const card = parseSkillProposalCard(raw);
+      return card
+        ? { kind: "uiCard", card: { type: "skill_proposal", data: card } }
+        : { kind: "invalid", type };
+    }
     case "agent.run_started": {
-      const runId = readNonEmptyString(raw.runId);
+      const payload = getEventPayload(raw);
+      const runId = readNonEmptyString(payload.runId);
       if (!runId) return { kind: "invalid", type };
-      return { kind: "runStarted", runId, jobId: readNonEmptyString(raw.jobId) ?? "" };
+      return { kind: "runStarted", runId, jobId: readNonEmptyString(payload.jobId) ?? "" };
     }
     case "job.enqueued":
     case "job.progress":

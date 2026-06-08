@@ -12,8 +12,8 @@ export type NodeExecutionState = {
 
 export type NodeOutput =
   | { type: 'text'; value: string }
-  | { type: 'image'; base64: string; mimeType: string; url?: string }
-  | { type: 'video'; url: string; posterBase64?: string };
+  | { type: 'image'; base64: string; mimeType: string; url?: string; storagePath?: string; storageBucket?: string }
+  | { type: 'video'; url: string; posterBase64?: string; storagePath?: string; storageBucket?: string };
 
 export interface WorkflowExecutionContext {
   brandProfileId: string;

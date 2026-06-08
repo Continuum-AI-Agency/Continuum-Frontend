@@ -129,7 +129,7 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vid
         ...node,
         data: {
           ...(node.data as VideoGenNodeData),
-          resolution: value,
+          resolution: value as VideoGenNodeData['resolution'],
         },
       }));
       triggerSave();
@@ -396,10 +396,10 @@ export function VeoFastBlock({ id, data, selected }: NodeProps<ReactFlowNode<Vid
           <ContextMenuSub>
             <ContextMenuSubTrigger>Resolution</ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-36">
-              {['720p', '1080p'].map((value) => (
+              {(['720p', '1080p', '4k'] as const).map((value) => (
                 <ContextMenuCheckboxItem
                   key={value}
-                  checked={(data.resolution ?? '720p') === value}
+                  checked={(data.resolution ?? '720p').toLowerCase() === value.toLowerCase()}
                   onClick={() => handleResolutionChange(value)}
                 >
                   {value}

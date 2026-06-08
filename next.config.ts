@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '25mb',
     },
     viewTransition: true,
+    optimizePackageImports: ['lucide-react'],
   },
   turbopack: {
     root: workspaceRoot,

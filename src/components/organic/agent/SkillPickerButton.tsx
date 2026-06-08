@@ -1,0 +1,68 @@
+"use client";
+
+import { useState } from "react";
+import { Sparkles } from "lucide-react";
+import type { Skill } from "@continuum/contracts";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+
+type Props = {
+  skills: Skill[];
+  onPickAction: (skill: Skill) => void;
+};
+
+// Composer-adjacent picker so users can browse and apply brand skills without
+// typing "@". Selecting a skill adds it as a chat reference (same channel the
+// @-mention uses), so it is loaded into the agent's context for the next turn.
+export function SkillPickerButton({ skills, onPickAction }: Props) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Apply a brand skill"
+          className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Skills
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <Command>
+          <CommandInput placeholder="Apply a brand skill…" />
+          <CommandList>
+            <CommandEmpty>No skills yet. Ask the agent to save one.</CommandEmpty>
+            <CommandGroup heading="Brand skills">
+              {skills.map((skill) => (
+                <CommandItem
+                  key={skill.id}
+                  value={`${skill.name} ${skill.description ?? ""}`}
+                  onSelect={() => {
+                    onPickAction(skill);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="flex flex-col">
+                    <span className="text-[13px] font-medium">{skill.name}</span>
+                    {skill.description && (
+                      <span className="text-[11px] text-muted-foreground">{skill.description}</span>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}

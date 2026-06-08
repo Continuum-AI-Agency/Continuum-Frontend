@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { MediaAsset, MediaCollection } from "@continuum/contracts";
+import type { MediaAsset, MediaCollection, MediaKind, MediaSource } from "@continuum/contracts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { mediaSchema } from "./supabase-media";
 import { rowToMediaAsset } from "./mapper";
@@ -11,7 +11,7 @@ const PAGE_SIZE = 48;
 
 export async function fetchMediaAssets(
   brandId: string,
-  options: { collectionId?: string; limit?: number } = {},
+  options: { collectionId?: string; limit?: number; source?: MediaSource; kind?: MediaKind } = {},
 ): Promise<MediaAsset[]> {
   const client = await createSupabaseServerClient();
   const limit = options.limit ?? PAGE_SIZE;
@@ -47,6 +47,9 @@ export async function fetchMediaAssets(
       .is("deleted_at", null)
       .limit(limit);
   }
+
+  if (options.source) query = query.eq("source", options.source);
+  if (options.kind) query = query.eq("kind", options.kind);
 
   const { data, error } = await query;
   if (error) {

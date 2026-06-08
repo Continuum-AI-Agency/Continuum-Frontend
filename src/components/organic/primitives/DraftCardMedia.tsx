@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import { PlayIcon } from "@radix-ui/react-icons"
+import { resolveOrganicImageUrl } from "@continuum/contracts"
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDraft } from "./types"
 
@@ -25,29 +26,15 @@ function toDataUrl(base64: string, mimeType?: string | null): string {
   return `data:${mime};base64,${normalized}`
 }
 
+/**
+ * Single FE draft → image resolver. Persisted publishing assets win (durable
+ * storage URL); otherwise defer to the shared contracts resolver so chat, list
+ * and calendar all surface the same media (incl. base64-only 512px mockups).
+ */
 export function resolveDraftMediaAssetUrl(draft: OrganicCalendarDraft): string | null {
   const persistedImageAsset = draft.publishingAssets?.find((a) => a.kind === "image")
   if (persistedImageAsset?.storageUrl) return persistedImageAsset.storageUrl
-
-  const m = draft.mediaSuggestion
-  if (!m) return null
-
-  const assetUrl = hasText(m.assetUrl) ? m.assetUrl.trim() : ""
-  if (assetUrl.length > 0) return assetUrl
-
-  if (hasText(m.assetBase64)) return toDataUrl(m.assetBase64, "image/png")
-
-  const primaryAsset = (m.assets ?? [])
-    .filter(
-      (a): a is NonNullable<NonNullable<typeof m.assets>[number]> & { assetBase64: string } =>
-        Boolean(a && hasText(a.assetBase64))
-    )
-    .sort(
-      (l, r) => (l.order ?? Number.MAX_SAFE_INTEGER) - (r.order ?? Number.MAX_SAFE_INTEGER)
-    )[0]
-
-  if (!primaryAsset) return null
-  return toDataUrl(primaryAsset.assetBase64, primaryAsset.mimeType)
+  return resolveOrganicImageUrl(draft.mediaSuggestion)
 }
 
 export function hasDraftMedia(draft: OrganicCalendarDraft): boolean {

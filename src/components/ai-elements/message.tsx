@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import { Avatar, Box, Flex } from "@radix-ui/themes";
+import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 type MessageProps = {
@@ -13,30 +12,34 @@ export function Message({ role, children }: MessageProps) {
   const isUser = role === "user";
 
   return (
-    <Flex
-      gap="3"
-      direction={isUser ? "row-reverse" : "row"}
-      className={cn("w-full", isUser ? "justify-end" : "justify-start")}
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      className={cn(
+        "flex w-full gap-3",
+        isUser ? "flex-row-reverse justify-end" : "flex-row justify-start"
+      )}
     >
-      <Avatar
-        size="2"
-        radius="full"
-        fallback={isUser ? "U" : "J"}
-        color={isUser ? "gray" : "purple"}
-        variant="soft"
-        className="mt-1 shrink-0 shadow-sm"
-        aria-hidden="true"
-      />
-      <Box
+      <div
         className={cn(
-          "rounded-2xl px-4 py-2 text-[15px] leading-relaxed shadow-sm",
+          "mt-1 size-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-medium select-none",
+          isUser ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"
+        )}
+        aria-hidden="true"
+      >
+        {isUser ? "U" : "A"}
+      </div>
+      <div
+        className={cn(
+          "px-4 py-2.5 text-[15px] leading-relaxed shadow-sm",
           isUser
-            ? "max-w-[85%] rounded-tr-sm bg-muted text-foreground font-medium"
-            : "max-w-full min-w-0 flex-1 rounded-tl-sm border border-border/70 bg-card/90 text-foreground"
+            ? "max-w-[85%] rounded-2xl rounded-tr-sm bg-muted text-foreground font-medium"
+            : "min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-border/50 bg-card/80 text-foreground"
         )}
       >
         {children}
-      </Box>
-    </Flex>
+      </div>
+    </motion.div>
   );
 }

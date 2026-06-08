@@ -61,7 +61,6 @@ type GridPlacement = {
 type PlacementMediaSuggestion = NonNullable<
   NonNullable<CalendarPlacement["creative"]>["mediaSuggestion"]
 >;
-type PlacementMediaAsset = NonNullable<NonNullable<PlacementMediaSuggestion["assets"]>[number]>;
 
 function normalizeTimestamp(value?: string): string {
   if (!value) return "";
@@ -91,59 +90,19 @@ function hasText(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function toDataUrl(base64: string, mimeType?: string | null): string {
-  const normalized = base64.trim();
-  if (normalized.startsWith("data:")) return normalized;
-  const mime = hasText(mimeType) ? mimeType.trim() : "image/png";
-  return `data:${mime};base64,${normalized}`;
-}
-
-function resolvePrimaryMediaAsset(
-  mediaSuggestion: PlacementMediaSuggestion
-): PlacementMediaAsset | undefined {
-  const assets = Array.isArray(mediaSuggestion.assets) ? mediaSuggestion.assets : [];
-  const withBase64 = assets.filter(
-    (asset): asset is PlacementMediaAsset => !!asset && hasText(asset.assetBase64)
-  );
-  if (withBase64.length === 0) return undefined;
-  return withBase64.sort((left, right) => (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER))[0];
-}
-
+// Storage-first: previews resolve from the storage signed URL on the placement
+// (mediaSuggestion.assetUrl / publishingAssets.storageUrl) — never from in-memory
+// base64. We only normalize the assetUrl string here; durable bytes live in the
+// media-library bucket and are re-signed lazily on the client.
 function normalizeMediaSuggestionAssetUrl(
   mediaSuggestion?: PlacementMediaSuggestion | null
 ): PlacementMediaSuggestion | undefined {
   if (!mediaSuggestion) return undefined;
   const rawAssetUrl =
     hasText(mediaSuggestion.assetUrl) ? mediaSuggestion.assetUrl.trim() : "";
-  if (rawAssetUrl.length > 0) {
-    return {
-      ...mediaSuggestion,
-      assetUrl: rawAssetUrl,
-    };
-  }
-
-  if (hasText(mediaSuggestion.assetBase64)) {
-    return {
-      ...mediaSuggestion,
-      assetUrl: toDataUrl(mediaSuggestion.assetBase64, "image/png"),
-    };
-  }
-
-  const primaryAsset = resolvePrimaryMediaAsset(mediaSuggestion);
-  if (!primaryAsset || !hasText(primaryAsset.assetBase64)) return mediaSuggestion;
-
-  return {
-    ...mediaSuggestion,
-    provider: mediaSuggestion.provider ?? primaryAsset.provider ?? null,
-    model: mediaSuggestion.model ?? primaryAsset.model ?? null,
-    prompt: mediaSuggestion.prompt ?? primaryAsset.prompt ?? null,
-    width: mediaSuggestion.width ?? primaryAsset.width ?? null,
-    height: mediaSuggestion.height ?? primaryAsset.height ?? null,
-    assetBase64: mediaSuggestion.assetBase64 ?? primaryAsset.assetBase64 ?? null,
-    generationContext:
-      mediaSuggestion.generationContext ?? primaryAsset.generationContext ?? null,
-    assetUrl: toDataUrl(primaryAsset.assetBase64, primaryAsset.mimeType),
-  };
+  return rawAssetUrl.length > 0
+    ? { ...mediaSuggestion, assetUrl: rawAssetUrl }
+    : mediaSuggestion;
 }
 
 function normalizeDayToken(value: string): string {
@@ -467,25 +426,23 @@ export function useDraftGeneration({
         placement.creative?.creativeIdea ?? content.objective ?? existing?.summary ?? "Planned draft";
       const finalCaption = placement.copy?.caption ?? existing?.captionPreview ?? "Details incoming.";
       const mediaSuggestion = normalizeMediaSuggestionAssetUrl(placement.creative?.mediaSuggestion);
+      // Storage-first: carry the durable publishing assets the backend registered
+      // (assetId + bucket + storagePath + signed storageUrl). The FE re-signs these
+      // lazily by assetId — no base64, no using a URL as a storagePath.
+      const placementPublishingAssets = (placement.publishingAssets ?? []).map((asset) => ({
+        role: asset.role,
+        kind: asset.kind,
+        slideIndex: asset.slideIndex ?? undefined,
+        assetId: asset.assetId ?? undefined,
+        bucket: asset.bucket ?? undefined,
+        storagePath: asset.storagePath,
+        storageUrl: asset.storageUrl,
+        mimeType: asset.mimeType ?? undefined,
+        width: asset.width ?? undefined,
+        height: asset.height ?? undefined,
+      }));
       const publishingAssets =
-        mediaSuggestion?.assetUrl && mediaSuggestion.assetUrl.trim().length > 0
-          ? [
-              {
-                role: "primary",
-                kind: "image" as const,
-                storagePath: mediaSuggestion.assetUrl,
-                storageUrl: mediaSuggestion.assetUrl,
-                mimeType:
-                  typeof mediaSuggestion.provider === "string" &&
-                  mediaSuggestion.provider.toLowerCase().includes("video")
-                    ? "video/mp4"
-                    : "image/png",
-                width: mediaSuggestion.width ?? undefined,
-                height: mediaSuggestion.height ?? undefined,
-                generationContext: mediaSuggestion.generationContext,
-              },
-            ]
-          : existing?.publishingAssets;
+        placementPublishingAssets.length > 0 ? placementPublishingAssets : existing?.publishingAssets;
 
       return {
         id: draftIdOverride ?? existing?.id ?? placement.placementId,

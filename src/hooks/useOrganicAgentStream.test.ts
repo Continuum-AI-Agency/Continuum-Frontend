@@ -69,6 +69,7 @@ describe("normalizeToolResultEvent", () => {
 
     expect(normalized).toEqual({
       toolCallId: "call_1",
+      toolName: "fetch_metrics",
       result: { rows: 3 },
     });
   });
@@ -82,6 +83,7 @@ describe("normalizeToolResultEvent", () => {
 
     expect(normalized).toEqual({
       toolCallId: "call_2",
+      toolName: "fetch_insights",
       result: { rows: 7 },
     });
   });
@@ -93,6 +95,7 @@ describe("normalizeToolResultEvent", () => {
     });
 
     expect(normalized.toolCallId.startsWith("getTrend-")).toBe(true);
+    expect(normalized.toolName).toBe("getTrend");
     expect(normalized.result).toEqual({ id: "trend_1" });
   });
 });
@@ -224,6 +227,7 @@ describe("parseOrganicStreamEvent contract coverage", () => {
     ).toEqual({
       kind: "toolResult",
       toolCallId: "call_1",
+      toolName: "listTrends",
       result: [{ id: "trend_1" }],
     });
   });

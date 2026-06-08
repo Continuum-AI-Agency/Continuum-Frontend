@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Paperclip } from "lucide-react";
+import { ImageIcon, Paperclip, Video, Workflow, X } from "lucide-react";
 
 import { Attachments, type Attachment } from "./attachments";
 import { SpeechInput } from "./speech-input";
@@ -80,8 +81,11 @@ type PromptInputProps = {
   disabled?: boolean;
   placeholder?: string;
   actions?: React.ReactNode;
+  className?: string;
   mentionProvider?: AgentMentionProvider;
   mentionSource?: AgentMentionReference["source"];
+  queuedMentionSuggestions?: AgentMentionSuggestion[];
+  onQueuedMentionSuggestionsConsumed?: () => void;
 };
 
 type ActiveMention = {
@@ -92,6 +96,7 @@ type ActiveMention = {
 
 type TrackedReference = AgentMentionReference & {
   token: string;
+  preview?: AgentMentionSuggestion["preview"];
 };
 
 function appendTranscript(base: string, incoming: string): string {
@@ -134,13 +139,108 @@ function pruneReferencesForValue(
   });
 }
 
+function ReferencePreviewThumb({
+  preview,
+  label,
+  className,
+}: {
+  preview?: AgentMentionSuggestion["preview"];
+  label: string;
+  className?: string;
+}) {
+  const baseClass = cn(
+    "flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground",
+    className
+  );
+
+  if (preview?.url && preview.kind === "video") {
+    return (
+      <video
+        aria-label={label}
+        className={cn(baseClass, "object-cover")}
+        muted
+        playsInline
+        preload="metadata"
+        src={preview.url}
+      />
+    );
+  }
+
+  if (preview?.url) {
+    return (
+      <span className={cn(baseClass, "relative")}>
+        <Image
+          alt={label}
+          className="object-cover"
+          fill
+          sizes="36px"
+          src={preview.url}
+          unoptimized
+        />
+      </span>
+    );
+  }
+
+  if (preview?.kind === "video") return <span className={baseClass}><Video className="size-4" /></span>;
+  if (preview?.kind === "canvas") return <span className={baseClass}><Workflow className="size-4" /></span>;
+  return <span className={baseClass}><ImageIcon className="size-4" /></span>;
+}
+
+function ReferencePreviewChips({
+  references,
+  onRemove,
+}: {
+  references: TrackedReference[];
+  onRemove: (reference: TrackedReference) => void;
+}) {
+  if (references.length === 0) return null;
+
+  return (
+    <motion.div
+      key="references"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.18 }}
+      className="flex max-h-24 flex-wrap gap-2 overflow-y-auto rounded-md border border-border/60 bg-card/80 p-2"
+    >
+      {references.map((reference, index) => (
+        <span
+          key={`${reference.type}:${reference.id}:${index}`}
+          className="flex min-w-0 max-w-[15rem] items-center gap-2 rounded-md border border-border/60 bg-background/85 px-2 py-1.5"
+        >
+          <ReferencePreviewThumb
+            preview={reference.preview}
+            label={reference.preview?.label ?? reference.label}
+          />
+          <span className="min-w-0">
+            <span className="block truncate text-xs font-medium text-foreground">{reference.label}</span>
+            <span className="block text-[10px] uppercase text-muted-foreground">{reference.type}</span>
+          </span>
+          <button
+            type="button"
+            aria-label={`Remove ${reference.label}`}
+            className="ml-auto rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            onClick={() => onRemove(reference)}
+          >
+            <X className="size-3.5" />
+          </button>
+        </span>
+      ))}
+    </motion.div>
+  );
+}
+
 export function PromptInput({
   onSubmit,
   disabled,
   placeholder,
   actions,
+  className,
   mentionProvider,
   mentionSource = "organic",
+  queuedMentionSuggestions,
+  onQueuedMentionSuggestionsConsumed,
 }: PromptInputProps) {
   const [value, setValue] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
@@ -183,7 +283,10 @@ export function PromptInput({
       onSubmit(
         trimmedValue,
         attachments,
-        [...validReferences.map(({ token, ...reference }) => reference), ...linkReferences]
+        [
+          ...validReferences.map(({ token: _token, preview: _preview, ...reference }) => reference),
+          ...linkReferences,
+        ]
       );
       setValue("");
       setAttachments([]);
@@ -234,6 +337,33 @@ export function PromptInput({
     }
   }, []);
 
+  const appendMentionSuggestion = useCallback((suggestion: AgentMentionSuggestion) => {
+    if (!suggestion.reference) return;
+    const reference = suggestion.reference;
+    const token = createMentionToken(reference.label);
+    setValue((previous) => {
+      const prefix = previous.trimEnd();
+      const nextValue = `${prefix}${prefix ? " " : ""}${token} `;
+      setReferences((current) =>
+        pruneReferencesForValue(
+          [...current, { ...reference, token, preview: suggestion.preview }],
+          nextValue
+        )
+      );
+      return nextValue;
+    });
+    setActiveMention(null);
+    setMentionParent(null);
+    setMentionSuggestions([]);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (!queuedMentionSuggestions?.length) return;
+    queuedMentionSuggestions.forEach(appendMentionSuggestion);
+    onQueuedMentionSuggestionsConsumed?.();
+  }, [appendMentionSuggestion, onQueuedMentionSuggestionsConsumed, queuedMentionSuggestions]);
+
   const insertMention = useCallback(
     (suggestion: AgentMentionSuggestion) => {
       if (!activeMention || !suggestion.reference) return;
@@ -246,7 +376,7 @@ export function PromptInput({
       setValue(nextValue);
       setReferences((previous) =>
         pruneReferencesForValue(
-          [...previous, { ...reference, token }],
+          [...previous, { ...reference, token, preview: suggestion.preview }],
           nextValue
         )
       );
@@ -260,6 +390,24 @@ export function PromptInput({
     },
     [activeMention, value]
   );
+
+  const removeReference = useCallback((reference: TrackedReference) => {
+    const escaped = reference.token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tokenPattern = new RegExp(`(^|\\s)${escaped}(?=\\s|$)`);
+    const nextValue = value.replace(tokenPattern, " ").replace(/\s{2,}/g, " ").trimStart();
+    let removed = false;
+    const nextReferences = references.filter((candidate) => {
+      if (!removed && candidate.id === reference.id && candidate.type === reference.type && candidate.token === reference.token) {
+        removed = true;
+        return false;
+      }
+      return true;
+    });
+    setValue(nextValue);
+    setReferences(pruneReferencesForValue(nextReferences, nextValue));
+    setActiveMention(null);
+    setMentionParent(null);
+  }, [references, value]);
 
   const selectMentionSuggestion = useCallback(
     (suggestion: AgentMentionSuggestion) => {
@@ -364,9 +512,12 @@ export function PromptInput({
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8">
+    <div className={cn("mx-auto w-full max-w-[1600px] px-4 md:px-6 lg:px-8", className)}>
       <form onSubmit={handleSubmit} className="relative flex flex-col gap-2">
         <AnimatePresence initial={false}>
+          {references.length > 0 ? (
+            <ReferencePreviewChips references={references} onRemove={removeReference} />
+          ) : null}
           {attachments.length > 0 ? (
             <motion.div
               key="attachments"
@@ -450,10 +601,19 @@ export function PromptInput({
                       onMouseEnter={() => setHighlightedMentionIndex(index)}
                       onClick={() => selectMentionSuggestion(suggestion)}
                     >
-                      <span className="min-w-0">
+                      <span className="flex min-w-0 flex-1 items-start gap-2">
+                        {suggestion.preview ? (
+                          <ReferencePreviewThumb
+                            className="h-8 w-8"
+                            label={suggestion.preview.label ?? suggestion.label}
+                            preview={suggestion.preview}
+                          />
+                        ) : null}
+                        <span className="min-w-0">
                         <span className="block truncate font-medium">{suggestion.label}</span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {suggestion.description ?? suggestion.group ?? suggestion.type}
+                        </span>
                         </span>
                       </span>
                       <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">

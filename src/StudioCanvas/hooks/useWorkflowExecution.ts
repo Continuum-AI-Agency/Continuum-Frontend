@@ -151,6 +151,8 @@ export function useWorkflowExecution() {
                 video_url?: string;
                 poster_base64?: string;
                 storage?: { signed_url?: string };
+                path?: string;
+                bucket?: string;
                 message?: string;
                 text?: string;
                 delta?: string;
@@ -242,6 +244,15 @@ export function useWorkflowExecution() {
                                 : undefined;
               const videoUrl = rawVideoString;
 
+              if (eventName === "stored" && expectedMedium === "image" && finalOutput?.type === "image") {
+                finalOutput = {
+                  ...finalOutput,
+                  url: parsed.signed_url ?? parsed.storage?.signed_url ?? finalOutput.url,
+                  storagePath: parsed.path,
+                  storageBucket: parsed.bucket,
+                };
+              }
+
               if ((eventName === "video" || eventName === "stored") && videoUrl) {
                 if (expectedMedium !== "video") {
                   return;
@@ -250,6 +261,8 @@ export function useWorkflowExecution() {
                   type: "video",
                   url: videoUrl,
                   posterBase64: parsed.poster_base64,
+                  storagePath: parsed.path,
+                  storageBucket: parsed.bucket,
                 };
               }
 

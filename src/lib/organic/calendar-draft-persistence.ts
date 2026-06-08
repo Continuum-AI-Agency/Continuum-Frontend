@@ -78,7 +78,7 @@ function restoreMediaSuggestion(value: unknown): OrganicCalendarDraft["mediaSugg
     prompt: readString(obj.prompt) ?? null,
     width: readNumber(obj.width) ?? null,
     height: readNumber(obj.height) ?? null,
-    assetUrl: readString(obj.assetUrl) ?? null,
+    assetUrl: readString(obj.assetUrl) ?? readString(obj.url) ?? readString(obj.signedUrl) ?? null,
     alt: readString(obj.alt) ?? null,
     hyperframe: restoreHyperframe(obj.hyperframe) ?? null,
     reel: restoreReel(obj.reel) ?? null,
@@ -109,6 +109,8 @@ function restorePublishingAssets(value: unknown): OrganicCalendarDraft["publishi
     role: readString(item.role) ?? "primary",
     kind: readString(item.kind) === "video" ? ("video" as const) : ("image" as const),
     slideIndex: readNumber(item.slideIndex) ?? undefined,
+    assetId: readString(item.assetId) ?? null,
+    bucket: readString(item.bucket) ?? null,
     storagePath: readString(item.storagePath) ?? "",
     storageUrl: readString(item.storageUrl) ?? "",
     mimeType: readString(item.mimeType) ?? undefined,
@@ -386,7 +388,11 @@ export function mapPersistedRowToCalendarEntry(
         ? snapshot.mediaSuggestion
         : placementCreative.mediaSuggestion,
     ),
-    publishingAssets: restorePublishingAssets(snapshot.publishingAssets),
+    publishingAssets: restorePublishingAssets(
+      asArray(snapshot.publishingAssets).length > 0
+        ? snapshot.publishingAssets
+        : placement.publishingAssets,
+    ),
     hashtags: restoreHashtags(snapshot.hashtags),
     assetHints: restoreAssetHints(snapshot.assetHints),
   }

@@ -1,8 +1,20 @@
 import type { CalendarPlacement } from "@/lib/organic/calendar-generation"
 import type { AgentMentionMetadata, AgentMentionReference } from "@/lib/agent-references"
-import type { BulkContentPlan } from "@continuum/contracts"
+import { pipelineStageEnum } from "@continuum/contracts"
+import type {
+  BulkContentPlan,
+  MediaSearchResultsFrame,
+  PipelineStage,
+  PlanItem,
+  ProposedPlan,
+  UiFetchedPost,
+} from "@continuum/contracts"
 
-export type { BulkContentPlan } from "@continuum/contracts"
+export type { BulkContentPlan, PipelineStage } from "@continuum/contracts"
+// Canonical agent plan types live in @continuum/contracts; re-export so existing
+// `from "./types"` import sites (PlanCard, ConceptPlan, ...) stay unchanged and
+// the Frontend can never drift from the Backend plan shape.
+export type { PlanItem, PlanItemStatus, PlanEvidence, PlanStatus } from "@continuum/contracts"
 
 export type AgentJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
 
@@ -46,56 +58,34 @@ export type UiPostCard = {
   trendId: string | null
 }
 
-export type PlanItemStatus = "pending" | "executing" | "completed" | "failed" | "cancelled"
-
-export type PlanItem = {
-  itemId: string
-  kind: "create_post" | "create_draft" | "edit_draft" | "publish_draft"
-  platform: "instagram" | "facebook" | "linkedin" | "tiktok" | "youtube"
-  scheduledAt: string
-  format: "reel" | "post" | "carousel" | "story" | null
-  trendId: string | null
-  trendTitle: string | null
-  angle: string
-  objective: "follow" | "save" | "click" | "comment" | "dm" | "share"
-  audienceSegment: string
-  rationale: string
-  guidancePrompt: string | null
-  draftId: string | null
-  jobId: string | null
-  dependsOn: string[]
-  status: PlanItemStatus
-}
-
-export type PlanEvidence = {
-  kind: "trend" | "metric" | "competitor" | "past_draft" | "brand_doc"
-  refId: string | null
-  summary: string
-}
-
-export type UiPlanCard = {
-  planId: string
-  sessionId: string
-  brandId: string
-  weekStart: string
-  title: string
-  summary: string
-  items: PlanItem[]
-  evidence: PlanEvidence[]
-  estimatedDurationSeconds: number
-  status: "proposed"
-  createdAt: string
-}
+// PlanItem, PlanItemStatus, PlanEvidence, PlanStatus are re-exported from
+// @continuum/contracts above. UiPlanCard is the canonical proposed-plan shape.
+export type UiPlanCard = ProposedPlan
 
 export type PlanApprovalDecision =
-  | { decision: "approve"; planId: string }
+  | { decision: "approve"; planId: string; itemId?: string }
   | { decision: "edit"; planId: string; edits: PlanItem[] }
   | { decision: "reject"; planId: string; reason?: string }
+
+export type { UiFetchedPost } from "@continuum/contracts"
+
+// Agent-proposed brand skill awaiting the user's confirm/edit/save (ui.skill_proposal).
+export type SkillProposalCardData = {
+  proposalId: string
+  brandId: string
+  name: string
+  kind: "creative_direction" | "analytic"
+  description: string | null
+  directives: string
+  tags: string[]
+}
 
 export type UiCard =
   | { type: "trend_chart"; data: UiTrendChart }
   | { type: "plan_card"; data: UiPlanCard }
   | { type: "bulk_plan_card"; data: BulkContentPlan }
+  | { type: "post_list"; data: UiFetchedPost[]; label?: string }
+  | { type: "skill_proposal"; data: SkillProposalCardData }
 
 export type BulkRunStatus = "running" | "completed" | "failed"
 
@@ -132,16 +122,8 @@ export type AgentJobState = {
   uiPostCard?: UiPostCard
 }
 
-export const PIPELINE_STAGES = [
-  "strategist",
-  "concept",
-  "draft",
-  "assets",
-  "quality",
-  "merge",
-] as const
-
-export type PipelineStage = (typeof PIPELINE_STAGES)[number]
+// Canonical ordering comes straight from the contract enum — no FE duplicate.
+export const PIPELINE_STAGES: readonly PipelineStage[] = pipelineStageEnum.options
 
 export type PipelineStageNodeStatus = "pending" | "active" | "done" | "failed"
 
@@ -200,6 +182,7 @@ export type ConversationMessage = {
   metadata?: AgentMentionMetadata
   toolCalls?: ToolCallEvent[]
   uiCards?: UiCard[]
+  mediaSearchResults?: MediaSearchResultsFrame[]
 }
 
 export type AgentChatInput = {

@@ -4,15 +4,27 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Upload, ScanSearch } from "lucide-react";
-import type { MediaAsset, MediaCollection, MediaSearchResultItem } from "@continuum/contracts";
+import type {
+  MediaAsset,
+  MediaCollection,
+  MediaKind,
+  MediaSearchResultItem,
+  MediaSource,
+} from "@continuum/contracts";
 import { Button } from "@/components/ui/button";
 import { LibrarySidebar } from "./LibrarySidebar";
+import { LibraryFilterBar } from "./LibraryFilterBar";
 import { MediaGrid } from "./MediaGrid";
 import { MediaSearchBar } from "./MediaSearchBar";
 import { MediaDetailDialog } from "./MediaDetailDialog";
 import { UploadStrip } from "./UploadStrip";
 import { useMediaLibrary } from "./useMediaLibrary";
 import { useMediaUpload } from "./useMediaUpload";
+import {
+  buildLibraryQuery,
+  type KindFilterValue,
+  type SourceFilterValue,
+} from "@/lib/media/filters";
 
 type Props = {
   brandId: string;
@@ -21,6 +33,8 @@ type Props = {
   initialCollections: MediaCollection[];
   storageUsedBytes: number;
   selectedCollectionId: string | null;
+  selectedSource: MediaSource | null;
+  selectedKind: MediaKind | null;
 };
 
 export function LibraryViewer({
@@ -30,12 +44,18 @@ export function LibraryViewer({
   initialCollections,
   storageUsedBytes,
   selectedCollectionId,
+  selectedSource,
+  selectedKind,
 }: Props) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
+  const sourceFilter: SourceFilterValue = selectedSource ?? "all";
+  const kindFilter: KindFilterValue = selectedKind ?? "all";
   const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
     brandId,
     collectionId: selectedCollectionId,
+    source: selectedSource,
+    kind: selectedKind,
     seed: initialAssets,
   });
   const { uploads, uploadFiles } = useMediaUpload(brandId);
@@ -53,12 +73,28 @@ export function LibraryViewer({
     ? initialCollections.find((c) => c.id === selectedCollectionId)
     : null;
 
-  const onSelectCollection = useCallback(
-    (id: string | null) => {
+  // All library navigation is URL-driven (shareable + RSC refetch). Pagination
+  // params (offset/limit) are intentionally omitted here so the chip/collection
+  // change resets to page 0.
+  const pushFilters = useCallback(
+    (next: { collectionId?: string | null; source?: SourceFilterValue; kind?: KindFilterValue }) => {
       setSearchResults(null);
-      router.push(id ? `/library?collection=${id}` : "/library");
+      const params = buildLibraryQuery({
+        brandId,
+        collectionId: next.collectionId !== undefined ? next.collectionId : selectedCollectionId,
+        source: next.source ?? sourceFilter,
+        kind: next.kind ?? kindFilter,
+      });
+      params.delete("brandId");
+      const qs = params.toString();
+      router.push(qs ? `/library?${qs}` : "/library");
     },
-    [router],
+    [brandId, router, selectedCollectionId, sourceFilter, kindFilter],
+  );
+
+  const onSelectCollection = useCallback(
+    (id: string | null) => pushFilters({ collectionId: id }),
+    [pushFilters],
   );
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -106,6 +142,8 @@ export function LibraryViewer({
           <div className="min-w-0 flex-1">
             <MediaSearchBar
               brandId={brandId}
+              source={selectedSource}
+              kind={selectedKind}
               onResults={setSearchResults}
               onClear={() => setSearchResults(null)}
             />
@@ -133,6 +171,13 @@ export function LibraryViewer({
             </Button>
           </div>
         </div>
+
+        <LibraryFilterBar
+          source={sourceFilter}
+          kind={kindFilter}
+          onSourceChange={(value) => pushFilters({ source: value })}
+          onKindChange={(value) => pushFilters({ kind: value })}
+        />
 
         <input
           ref={fileInputRef}

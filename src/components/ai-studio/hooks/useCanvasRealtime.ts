@@ -9,6 +9,7 @@ import type { Edge } from "@xyflow/react";
 import { stringToColor } from "@/lib/utils/color";
 import { mergeNodes, mergeEdges } from "./merge-strategy";
 import { serializeWorkflowSnapshot } from "@/StudioCanvas/utils/workflowSerialization";
+import { resignCanvasNodes } from "@/StudioCanvas/utils/resignCanvasNodes";
 
 type CanvasSession = {
   brand_profile_id: string;
@@ -268,9 +269,12 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         const session = data as unknown as CanvasSession;
         isRemoteChangeRef.current = true;
         hasLoadedInitialDataRef.current = true;
-        
+
+        const rawNodes = (session.nodes || []) as StudioNode[];
+        const resignedNodes = await resignCanvasNodes(rawNodes);
+
         const store = useStudioStore.getState();
-        store.setNodes((session.nodes || []) as StudioNode[]);
+        store.setNodes(resignedNodes);
         store.setEdges((session.edges || []) as Edge[]);
         lastUpdateRef.current = session.updated_at;
         lastRevisionRef.current = toFiniteNumber(session.revision);
@@ -446,9 +450,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       const deletedNodeIds = state.getDeletedNodeIds();
       const deletedEdgeIds = state.getDeletedEdgeIds();
 
-      const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType, {
-        preserveGeneratedOutputs: true,
-      });
+      const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
 
       const { data, error } = await supabase
         .schema("brand_profiles" as any)

@@ -100,7 +100,7 @@ export function MediaLibrarySearchResults({
   disabled,
 }: {
   frame: MediaSearchResultsFrame;
-  onUseAsset: (assetId: string, signedUrl: string | null | undefined) => void;
+  onUseAsset: (item: SearchResultItem) => void;
   disabled?: boolean;
 }) {
   const { query, items } = frame.data;
@@ -127,7 +127,7 @@ export function MediaLibrarySearchResults({
                 key={item.asset.id}
                 item={item}
                 disabled={disabled}
-                onUse={(picked) => onUseAsset(picked.asset.id, picked.asset.signedUrl)}
+                onUse={(picked) => onUseAsset(picked)}
               />
             ))}
           </div>

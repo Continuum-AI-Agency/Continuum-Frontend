@@ -72,6 +72,8 @@ import {
 import {
   fetchOrganicAnalytics,
 } from "@/lib/api/organicAnalytics.client";
+import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
+import type { IntegrationErrorCode } from "@continuum/contracts";
 import { consumePrefetched } from "@/lib/prefetch/organic-metrics-cache";
 import type {
   MetricComparison,
@@ -124,13 +126,13 @@ type Props = {
 type LoadState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }
   | { status: "success"; data: OrganicMetricsResponse };
 
 type SectionState<T> =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }
   | { status: "success"; data: T };
 
 type DemographicsSlice = {
@@ -1793,7 +1795,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         } catch (error) {
           if (cancelled) return;
           const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
-          setState({ status: "error", message });
+          const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
+          const retryAfter = (error as { retryAfter?: number }).retryAfter;
+          setState({ status: "error", message, errorCode, retryAfter });
         }
       }
       void runPosts();
@@ -1820,7 +1824,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         .catch((error) => {
           if (!cancelled) {
             const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
-            setKpisState({ status: "error", message });
+            const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
+            const retryAfter = (error as { retryAfter?: number }).retryAfter;
+            setKpisState({ status: "error", message, errorCode, retryAfter });
           }
         });
 
@@ -1837,7 +1843,9 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           .catch((error) => {
             if (!cancelled) {
               const message = error instanceof Error ? error.message : "Unable to load demographics.";
-              setDemographicsState({ status: "error", message });
+              const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
+              const retryAfter = (error as { retryAfter?: number }).retryAfter;
+              setDemographicsState({ status: "error", message, errorCode, retryAfter });
             }
           });
       }
@@ -1863,8 +1871,8 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
 
   const isLoadingView = viewMode === "posts" ? state.status === "loading" : kpisState.status === "loading";
   const viewError = viewMode === "posts"
-    ? (state.status === "error" ? state.message : null)
-    : (kpisState.status === "error" ? kpisState.message : null);
+    ? (state.status === "error" ? { message: state.message, errorCode: state.errorCode, retryAfter: state.retryAfter } : null)
+    : (kpisState.status === "error" ? { message: kpisState.message, errorCode: kpisState.errorCode, retryAfter: kpisState.retryAfter } : null);
   const demographicsLoading = demographicsState.status === "loading";
 
   return (
@@ -2034,9 +2042,12 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.18 }}
                 >
-                  <Callout.Root color="red" variant="surface">
-                    <Callout.Text>{viewError}</Callout.Text>
-                  </Callout.Root>
+                  <IntegrationErrorBanner
+                    errorCode={viewError.errorCode}
+                    message={viewError.message}
+                    platform={platform}
+                    retryAfter={viewError.retryAfter}
+                  />
                 </motion.div>
               ) : dashboardData ? (
                 <motion.div

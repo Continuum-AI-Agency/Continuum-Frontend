@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/chart";
 import { fetchOrganicMetrics, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
 import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicMetrics } from "@/lib/schemas/organicMetrics";
+import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
+import type { IntegrationErrorCode } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
@@ -44,7 +46,7 @@ type ViewMode = "overview" | "trends";
 type LoadState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; errorCode?: IntegrationErrorCode; retryAfter?: number }
   | { status: "success"; data: OrganicMetricsResponse };
 
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
@@ -414,7 +416,9 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
       } catch (error) {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : `Unable to load ${platform} organic metrics.`;
-        setState({ status: "error", message });
+        const errorCode = (error as { errorCode?: IntegrationErrorCode }).errorCode;
+        const retryAfter = (error as { retryAfter?: number }).retryAfter;
+        setState({ status: "error", message, errorCode, retryAfter });
       }
     }
 
@@ -523,9 +527,12 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
               No {platform} accounts are linked to this brand profile.
             </Text>
           ) : state.status === "error" ? (
-            <Callout.Root color="red" variant="surface">
-              <Callout.Text>{state.message}</Callout.Text>
-            </Callout.Root>
+            <IntegrationErrorBanner
+              errorCode={state.errorCode}
+              message={state.message}
+              platform={platform}
+              retryAfter={state.retryAfter}
+            />
           ) : state.status === "loading" ? (
             <OrganicMetricsWidgetSkeleton />
            ) : state.status === "success" ? (

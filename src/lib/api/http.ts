@@ -4,7 +4,7 @@ import type { RequestOptions } from "@/lib/api/http.types";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 
 export async function request<TResponse = unknown>(options: RequestOptions<TResponse>): Promise<TResponse> {
-  const { path, method = "GET", body, headers = {}, schema, cache, next } = options;
+  const { path, method = "GET", body, headers = {}, schema, cache, next, signal } = options;
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`;
 
@@ -23,6 +23,7 @@ export async function request<TResponse = unknown>(options: RequestOptions<TResp
     body: body ? JSON.stringify(body) : undefined,
     cache,
     next,
+    signal,
   });
 
   await assertOk(response);

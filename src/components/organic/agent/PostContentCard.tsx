@@ -1,0 +1,234 @@
+"use client"
+
+import { useState } from "react"
+import { motion } from "motion/react"
+import { ExternalLink } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+import { PlatformTag, MetaRow, StatusLabel } from "./agentCardKit"
+import type { UiFetchedPost } from "@continuum/contracts"
+
+const PLATFORM_GRADIENTS: Record<string, string> = {
+  instagram: "from-purple-600 to-pink-500",
+  facebook: "from-blue-600 to-blue-400",
+  tiktok: "from-zinc-800 to-zinc-600",
+  draft: "from-slate-600 to-slate-500",
+}
+
+function formatMetricValue(value: number | null): string {
+  if (value === null) return "—"
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  if (value < 1 && value > 0) return `${(value * 100).toFixed(1)}%`
+  return value.toFixed(0)
+}
+
+function formatMetricName(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function formatDate(iso: string): string | null {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    })
+  } catch {
+    return null
+  }
+}
+
+type Props = {
+  post: UiFetchedPost
+}
+
+export function PostContentCard({ post }: Props) {
+  const [open, setOpen] = useState(false)
+  const [showFullCaption, setShowFullCaption] = useState(false)
+
+  const platformLabel = post.platform ?? post.source
+  const hasMedia = Boolean(post.mediaUrl)
+  const gradient = PLATFORM_GRADIENTS[post.source] ?? "from-muted to-muted/60"
+
+  const topMetric = post.metrics
+    ? (Object.entries(post.metrics).find(([, v]) => v !== null) ?? null)
+    : null
+
+  const metricEntries = post.metrics
+    ? Object.entries(post.metrics).filter(([, v]) => v !== null).slice(0, 6)
+    : []
+
+  const dateStr = post.postedAt
+    ? formatDate(post.postedAt)
+    : post.scheduledAt
+      ? formatDate(post.scheduledAt)
+      : null
+  const dateLabel = post.postedAt ? "Posted" : "Scheduled"
+
+  const statusText =
+    post.status && !["published", "top", "bottom"].includes(post.status)
+      ? post.status
+      : null
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <motion.button
+          className={cn(
+            "w-[132px] shrink-0 rounded-xl overflow-hidden cursor-pointer text-left",
+            "border border-border/40 bg-card",
+            "transition-[border-color,box-shadow] duration-150",
+            "hover:border-primary/30 hover:shadow-[0_2px_12px_rgba(0,0,0,0.10)]",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+          )}
+          whileHover={{ scale: 1.02, y: -1 }}
+          transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+          aria-label={
+            post.caption
+              ? `Post: ${post.caption.slice(0, 60)}`
+              : `${platformLabel} post`
+          }
+        >
+          <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted">
+            {hasMedia ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={post.mediaUrl!}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <div className={cn("absolute inset-0 bg-gradient-to-br", gradient)} />
+            )}
+            {post.rank != null && (
+              <span className="absolute top-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 backdrop-blur-sm leading-none">
+                #{post.rank}
+              </span>
+            )}
+          </div>
+
+          <div className="p-2 space-y-1">
+            <div className="flex items-center justify-between gap-1 min-w-0">
+              <PlatformTag platform={platformLabel} />
+              {post.format && (
+                <span className="text-[10px] text-muted-foreground capitalize shrink-0">
+                  {post.format}
+                </span>
+              )}
+            </div>
+            {post.caption ? (
+              <p className="line-clamp-2 text-[11px] leading-snug text-foreground/80">
+                {post.caption}
+              </p>
+            ) : post.topic ? (
+              <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground italic">
+                {post.topic}
+              </p>
+            ) : null}
+            {topMetric && (
+              <p className="text-[11px] text-muted-foreground tabular-nums">
+                <span className="font-medium text-foreground/90">
+                  {formatMetricValue(topMetric[1])}
+                </span>
+                {" "}
+                {formatMetricName(topMetric[0])}
+              </p>
+            )}
+          </div>
+        </motion.button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-80 p-0 overflow-hidden"
+        align="center"
+        side="top"
+        sideOffset={8}
+      >
+        <div
+          className={cn(
+            "h-1 w-full",
+            hasMedia
+              ? "bg-muted"
+              : cn("bg-gradient-to-r", gradient),
+          )}
+        />
+        <div className="p-4 space-y-3">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <PlatformTag platform={platformLabel} />
+            {post.format && (
+              <span className="text-[11px] text-muted-foreground capitalize">
+                {post.format}
+              </span>
+            )}
+            {post.quality && (
+              <span className="ml-auto">
+                <StatusLabel tone={post.quality.passed ? "done" : "failed"}>
+                  {post.quality.passed ? "Quality passed" : "Quality failed"}
+                  {post.quality.score !== undefined &&
+                    ` · ${Math.round(post.quality.score * 100)}%`}
+                </StatusLabel>
+              </span>
+            )}
+          </div>
+
+          <MetaRow
+            items={[
+              dateStr ? `${dateLabel} ${dateStr}` : null,
+              statusText,
+            ]}
+          />
+
+          {post.caption && (
+            <div>
+              <p
+                className={cn(
+                  "text-[13px] leading-relaxed text-foreground whitespace-pre-line",
+                  !showFullCaption && "line-clamp-4",
+                )}
+              >
+                {post.caption}
+              </p>
+              {post.caption.length > 200 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFullCaption((v) => !v)}
+                  className="mt-1 text-[12px] text-primary hover:underline"
+                >
+                  {showFullCaption ? "Show less" : "Show more"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {metricEntries.length > 0 && (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2 border-t border-border/50">
+              {metricEntries.map(([key, value]) => (
+                <div key={key}>
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatMetricName(key)}
+                  </p>
+                  <p className="text-[14px] font-semibold tabular-nums">
+                    {formatMetricValue(value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {post.permalink && (
+            <a
+              href={post.permalink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[12px] text-primary hover:underline pt-1 border-t border-border/50"
+            >
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              View on {post.platform ?? "platform"}
+            </a>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}

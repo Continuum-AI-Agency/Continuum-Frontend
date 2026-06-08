@@ -166,7 +166,7 @@ describe("useDraftGeneration", () => {
               creativeIdea: "Generated idea",
               mediaSuggestion: {
                 kind: "carousel",
-                assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
+                assetUrl: "https://signed/img.png",
                 generationContext: {
                   sourceAgent: "asset_producer",
                   strategist: {
@@ -201,8 +201,7 @@ describe("useDraftGeneration", () => {
         id: "seed-1",
         title: "Generated Title",
         mediaSuggestion: expect.objectContaining({
-          assetBase64: "iVBORw0KGgoAAAANSUhEUgAA",
-          assetUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA",
+          assetUrl: "https://signed/img.png",
           generationContext: expect.objectContaining({
             strategist: expect.objectContaining({
               funnelStage: "middle",
@@ -218,7 +217,7 @@ describe("useDraftGeneration", () => {
     );
   });
 
-  it("uses mediaSuggestion.assets primary image when top-level assetBase64 is missing", async () => {
+  it("carries durable publishingAssets (storage-first, no base64) through to the draft", async () => {
     const { result } = renderHook(() => useDraftGeneration(defaultProps));
 
     (streamCalendarGeneration as unknown as ReturnType<typeof mock>).mockImplementation(
@@ -233,25 +232,12 @@ describe("useDraftGeneration", () => {
             content: { titleTopic: "Carousel Title", format: "Carousel" },
             creative: {
               creativeIdea: "Carousel idea",
-              mediaSuggestion: {
-                kind: "carousel",
-                assetBase64: null,
-                assets: [
-                  {
-                    role: "slide_1",
-                    order: 1,
-                    assetBase64: "firstslidebase64",
-                    mimeType: "image/webp",
-                    prompt: "Slide 1 prompt",
-                  },
-                  {
-                    role: "slide_2",
-                    order: 2,
-                    error: "generation failed",
-                  },
-                ],
-              },
+              mediaSuggestion: { kind: "carousel", assetUrl: "https://signed/slide1.png" },
             },
+            publishingAssets: [
+              { role: "slide_1", kind: "image", slideIndex: 1, assetId: "asset-1", bucket: "brand-profile-assets", storagePath: "b/p/1.png", storageUrl: "https://signed/slide1.png" },
+              { role: "slide_2", kind: "image", slideIndex: 2, assetId: "asset-2", bucket: "brand-profile-assets", storagePath: "b/p/2.png", storageUrl: "https://signed/slide2.png" },
+            ],
             copy: { caption: "Generated caption" },
           },
         });
@@ -267,14 +253,10 @@ describe("useDraftGeneration", () => {
       "2026-01-26",
       expect.objectContaining({
         id: "seed-1",
-        mediaSuggestion: expect.objectContaining({
-          assetBase64: "firstslidebase64",
-          assetUrl: "data:image/webp;base64,firstslidebase64",
-          assets: expect.arrayContaining([
-            expect.objectContaining({ role: "slide_1", order: 1 }),
-            expect.objectContaining({ role: "slide_2", order: 2, error: "generation failed" }),
-          ]),
-        }),
+        publishingAssets: expect.arrayContaining([
+          expect.objectContaining({ role: "slide_1", assetId: "asset-1", storageUrl: "https://signed/slide1.png" }),
+          expect.objectContaining({ role: "slide_2", assetId: "asset-2", storageUrl: "https://signed/slide2.png" }),
+        ]),
       })
     );
   });

@@ -1,19 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
-import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { getApiBaseUrl } from "@/lib/api/config";
 import { useCalendarStore } from "@/lib/organic/store";
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types";
-
-const REPOLL_DELAY_MS = 1500;
-const REPOLL_AFTER_EVENTS_MS = 500;
+import { useRunEventStream, type ParsedRunEvent } from "@/hooks/useRunEventStream";
 
 export function useCalendarRunStream() {
-  const abortRef = useRef<AbortController | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const progressRef = useRef({ completed: 0, total: 0 });
 
   const { setGridStatus, setGridProgress, setGridError, setGridJobId, addDraft, updateDraft } =
     useCalendarStore(
@@ -27,173 +23,116 @@ export function useCalendarRunStream() {
       }))
     );
 
-  useEffect(
-    () => () => {
-      abortRef.current?.abort();
-    },
-    []
-  );
+  const handleEvent = useCallback(
+    (event: ParsedRunEvent) => {
+      const d = event.data;
 
-  const attachRun = useCallback(
-    async (runId: string) => {
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      setGridJobId(runId);
-      setGridStatus("running");
-
-      let afterSeq = 0;
-      let isTerminal = false;
-      let isError = false;
-      let completed = 0;
-      let total = 0;
-
-      try {
-        while (!isTerminal && !controller.signal.aborted) {
-          const token = await getBrowserAccessToken();
-          if (!token) throw new Error("No authentication token available");
-
-          const url = `${getApiBaseUrl()}/api/organic/agent/runs/${runId}/events?after_seq=${afterSeq}`;
-          const response = await fetch(url, {
-            headers: {
-              Accept: "application/x-ndjson",
-              Authorization: `Bearer ${token}`,
-            },
-            signal: controller.signal,
+      switch (event.type) {
+        case "progress": {
+          const total = typeof d.total === "number" ? d.total : progressRef.current.total;
+          progressRef.current.total = total;
+          setGridProgress({
+            percent: typeof d.percent === "number" ? d.percent : 0,
+            stage: typeof d.stage === "string" ? d.stage : undefined,
+            message: typeof d.message === "string" ? d.message : undefined,
+            completed: progressRef.current.completed,
+            total,
           });
-
-          if (!response.ok || !response.body) {
-            throw new Error(`Run events fetch failed: ${response.status}`);
-          }
-
-          let hadEvents = false;
-
-          await readNdjsonStream({
-            reader: response.body.getReader(),
-            onLine: (line) => {
-              let event: Record<string, unknown>;
-              try {
-                event = JSON.parse(line) as Record<string, unknown>;
-              } catch {
-                return;
-              }
-
-              const seq = typeof event.seq === "number" ? event.seq : null;
-              if (seq !== null) afterSeq = seq + 1;
-              hadEvents = true;
-
-              const type = typeof event.type === "string" ? event.type : undefined;
-
-              if (type === "progress") {
-                total = typeof event.total === "number" ? event.total : total;
-                setGridProgress({
-                  percent: typeof event.percent === "number" ? event.percent : 0,
-                  stage: typeof event.stage === "string" ? event.stage : undefined,
-                  message: typeof event.message === "string" ? event.message : undefined,
-                  completed,
-                  total,
-                });
-              }
-
-              if (type === "slot_started") {
-                const placementId = event.placement_id as string | undefined;
-                const dayId = (event.day_id ?? event.dayId) as string | undefined;
-
-                if (placementId && dayId) {
-                  const platform = (event.platform as string | undefined) ?? "instagram";
-                  addDraft(dayId, buildPlaceholderDraft(placementId, dayId, platform, event));
-                } else if (placementId) {
-                  updateDraft(placementId, (d) => ({ ...d, status: "streaming" }));
-                }
-              }
-
-              if (type === "slot_completed") {
-                completed += 1;
-                const placementId = event.placement_id as string | undefined;
-                if (placementId) {
-                  updateDraft(placementId, (d) => ({ ...d, status: "draft" }));
-                }
-                setGridProgress({
-                  percent: Math.round((completed / Math.max(total, 1)) * 100),
-                  completed,
-                  total,
-                });
-              }
-
-              if (type === "slot_failed") {
-                const placementId = event.placement_id as string | undefined;
-                if (placementId) {
-                  updateDraft(placementId, (d) => ({
-                    ...d,
-                    status: "failed",
-                    generationError: (event.error as string | undefined) ?? "Generation failed",
-                  }));
-                }
-              }
-
-              if (type === "placement") {
-                const data = isRecord(event.data) ? event.data : event;
-                const placementId = (event.placement_id ?? data.placement_id) as string | undefined;
-                const dayId = (event.day_id ?? data.day_id) as string | undefined;
-
-                if (!placementId) return;
-
-                const patch = buildPlacementPatch(data, event);
-
-                if (dayId) {
-                  const platform = (data.platform ?? event.platform) as string | undefined;
-                  addDraft(dayId, {
-                    id: placementId,
-                    timeLabel: strOf(data.time ?? event.time) ?? "",
-                    dateLabel: dayId,
-                    platforms: [(platform ?? "instagram") as OrganicCalendarDraft["platforms"][number]],
-                    tags: [],
-                    mediaCount: 1,
-                    objective: "Draft",
-                    ...patch,
-                  });
-                } else {
-                  updateDraft(placementId, (d) => ({ ...d, ...patch }));
-                }
-              }
-
-              if (type === "error") {
-                setGridStatus("error");
-                setGridError((event.message as string | undefined) ?? "Generation failed");
-                isError = true;
-                isTerminal = true;
-              }
-
-              if (type === "complete" || type === "run_completed") {
-                isTerminal = true;
-              }
-            },
-          });
-
-          if (!isTerminal && !controller.signal.aborted) {
-            await delay(hadEvents ? REPOLL_AFTER_EVENTS_MS : REPOLL_DELAY_MS, controller.signal);
-          }
+          break;
         }
 
-        if (!controller.signal.aborted && !isError) {
-          setGridStatus("complete");
-          setGridJobId(null);
+        case "slot_started": {
+          const placementId = d.placement_id as string | undefined;
+          const dayId = (d.day_id ?? d.dayId) as string | undefined;
+          if (placementId && dayId) {
+            const platform = (d.platform as string | undefined) ?? "instagram";
+            addDraft(dayId, buildPlaceholderDraft(placementId, dayId, platform, d));
+          } else if (placementId) {
+            updateDraft(placementId, (dr) => ({ ...dr, status: "streaming" }));
+          }
+          break;
         }
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") return;
-        setGridStatus("error");
-        setGridError(error instanceof Error ? error.message : "Run stream failed");
+
+        case "slot_completed": {
+          progressRef.current.completed += 1;
+          const { completed, total } = progressRef.current;
+          const placementId = d.placement_id as string | undefined;
+          if (placementId) updateDraft(placementId, (dr) => ({ ...dr, status: "draft" }));
+          setGridProgress({
+            percent: Math.round((completed / Math.max(total, 1)) * 100),
+            completed,
+            total,
+          });
+          break;
+        }
+
+        case "slot_failed": {
+          const placementId = d.placement_id as string | undefined;
+          if (placementId) {
+            updateDraft(placementId, (dr) => ({
+              ...dr,
+              status: "failed",
+              generationError: (d.error as string | undefined) ?? "Generation failed",
+            }));
+          }
+          break;
+        }
+
+        case "placement": {
+          const placementId = d.placement_id as string | undefined;
+          const dayId = d.day_id as string | undefined;
+          if (!placementId) break;
+          const patch = buildPlacementPatch(d);
+          if (dayId) {
+            addDraft(dayId, {
+              id: placementId,
+              timeLabel: strOf(d.time) ?? "",
+              dateLabel: dayId,
+              platforms: [((d.platform as string | undefined) ?? "instagram") as OrganicCalendarDraft["platforms"][number]],
+              tags: [],
+              mediaCount: 1,
+              objective: "Draft",
+              ...patch,
+            });
+          } else {
+            updateDraft(placementId, (dr) => ({ ...dr, ...patch }));
+          }
+          break;
+        }
+
+        case "error": {
+          setGridStatus("error");
+          setGridError((d.message as string | undefined) ?? "Generation failed");
+          break;
+        }
       }
     },
-    [addDraft, setGridError, setGridJobId, setGridProgress, setGridStatus, updateDraft]
+    [addDraft, setGridError, setGridProgress, setGridStatus, updateDraft]
+  );
+
+  const { status: streamStatus } = useRunEventStream(activeRunId, handleEvent);
+
+  useEffect(() => {
+    if (streamStatus === "completed") {
+      setGridStatus("complete");
+      setGridJobId(null);
+    } else if (streamStatus === "failed" || streamStatus === "timed_out") {
+      setGridStatus("error");
+      setGridError("Generation run did not complete");
+    }
+  }, [streamStatus, setGridStatus, setGridJobId, setGridError]);
+
+  const attachRun = useCallback(
+    (runId: string) => {
+      progressRef.current = { completed: 0, total: 0 };
+      setActiveRunId(runId);
+      setGridJobId(runId);
+      setGridStatus("running");
+    },
+    [setGridJobId, setGridStatus]
   );
 
   return { attachRun };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function strOf(value: unknown): string | undefined {
@@ -204,17 +143,17 @@ function buildPlaceholderDraft(
   placementId: string,
   dayId: string,
   platform: string,
-  event: Record<string, unknown>
+  d: Record<string, unknown>
 ): OrganicCalendarDraft {
   return {
     id: placementId,
     title: "",
     summary: "",
-    timeLabel: strOf(event.time) ?? "",
+    timeLabel: strOf(d.time) ?? "",
     dateLabel: dayId,
     status: "streaming",
     platforms: [platform as OrganicCalendarDraft["platforms"][number]],
-    format: strOf(event.format) ?? "Post",
+    format: strOf(d.format) ?? "Post",
     objective: "Draft",
     captionPreview: "",
     tags: [],
@@ -223,27 +162,16 @@ function buildPlaceholderDraft(
 }
 
 function buildPlacementPatch(
-  data: Record<string, unknown>,
-  event: Record<string, unknown>
+  d: Record<string, unknown>
 ): Partial<OrganicCalendarDraft> & Pick<OrganicCalendarDraft, "status" | "title" | "summary" | "captionPreview" | "format"> {
   return {
     status: "draft",
-    title: strOf(data.title) ?? "",
-    summary: strOf(data.summary) ?? "",
-    captionPreview: strOf(data.caption_preview ?? data.captionPreview) ?? "",
-    creativeIdea: strOf(data.creative_idea ?? data.creativeIdea),
-    creativeDirectionPrompt: strOf(data.creative_direction_prompt ?? data.creativeDirectionPrompt),
-    thumbnailPrompt: strOf(data.thumbnail_prompt ?? data.thumbnailPrompt),
-    format: strOf(data.format ?? event.format) ?? "Post",
+    title: strOf(d.title) ?? "",
+    summary: strOf(d.summary) ?? "",
+    captionPreview: strOf(d.caption_preview ?? d.captionPreview) ?? "",
+    creativeIdea: strOf(d.creative_idea ?? d.creativeIdea),
+    creativeDirectionPrompt: strOf(d.creative_direction_prompt ?? d.creativeDirectionPrompt),
+    thumbnailPrompt: strOf(d.thumbnail_prompt ?? d.thumbnailPrompt),
+    format: strOf(d.format) ?? "Post",
   };
-}
-
-function delay(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
-      clearTimeout(timeout);
-      resolve();
-    });
-  });
 }

@@ -7,7 +7,10 @@ export const agentMentionReferenceTypeSchema = z.enum([
   "draft",
   "campaign",
   "adset",
+  "media_asset",
+  "canvas_node",
   "link",
+  "skill",
 ]);
 
 export const agentMentionReferenceSourceSchema = z.enum(["organic", "jaina"]);
@@ -37,6 +40,11 @@ export type AgentMentionSuggestion = {
   badge?: string;
   reference?: AgentMentionReference;
   childrenLabel?: string;
+  preview?: {
+    url?: string | null;
+    kind?: "image" | "video" | "canvas";
+    label?: string;
+  };
 };
 
 export type AgentMentionProvider = {

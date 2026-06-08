@@ -10,4 +10,5 @@ export type RequestOptions<TResponse> = {
   schema?: ZodType<TResponse, any, any>;
   cache?: RequestCache;
   next?: NextFetchRequestConfig;
+  signal?: AbortSignal;
 };

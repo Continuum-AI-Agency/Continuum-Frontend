@@ -68,6 +68,36 @@ describe("parseOrganicStreamEvent — pipeline frames", () => {
     }
   })
 
+  it("parses agent.run_started from the nested data envelope", () => {
+    // Regression: the Backend emits runId/jobId under `data` (matching the
+    // contracts agentRunStartedSchema), but the parser previously read the top
+    // level, so every frame was dropped as "invalid" and job tracking broke.
+    const parsed = parseOrganicStreamEvent({
+      type: "agent.run_started",
+      data: {
+        runId: "run-1",
+        jobId: "job-1",
+        platform: "instagram",
+        planItemId: "item-1",
+        scheduledAt: "2025-06-10T18:00:00Z",
+        trendId: null,
+      },
+    })
+    expect(parsed.kind).toBe("runStarted")
+    if (parsed.kind === "runStarted") {
+      expect(parsed.runId).toBe("run-1")
+      expect(parsed.jobId).toBe("job-1")
+    }
+  })
+
+  it("rejects agent.run_started without a runId", () => {
+    const parsed = parseOrganicStreamEvent({
+      type: "agent.run_started",
+      data: { jobId: "job-1" },
+    })
+    expect(parsed.kind).toBe("invalid")
+  })
+
   it("parses tool.approval_required (previously dropped)", () => {
     const parsed = parseOrganicStreamEvent({
       type: "tool.approval_required",

@@ -43,6 +43,8 @@ export interface NanoGenNodeData extends BaseNodeData {
   promptEnhancement?: boolean;
   generatedImage?: string | Blob;
   generatedImageUrl?: string;
+  generatedImageStoragePath?: string;
+  generatedImageBucket?: string;
 }
 
 export interface StringNodeData extends BaseNodeData {
@@ -92,18 +94,22 @@ export interface VideoGenNodeData extends BaseNodeData {
   negativePrompt?: string;
   enhancePrompt: boolean;
   aspectRatio?: '16:9' | '9:16';
-  resolution?: '720p' | '1080p' | '2K' | '4K';
+  resolution?: '720p' | '1080p' | '2K' | '4K' | '4k';
   durationSeconds?: 4 | 6 | 8;
   referenceMode?: 'images' | 'frames' | 'omni';
   frameList?: FrameSlot[];
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
 }
 
 export interface ExtendVideoNodeData extends BaseNodeData {
   prompt?: string;
   generatedVideo?: string | Blob;
   generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
 }
 
 export interface ClipSlot {
@@ -122,6 +128,8 @@ export interface VideoEditorNodeData extends BaseNodeData {
   progress?: number;
   generatedVideo?: string;
   generatedVideoUrl?: string;
+  generatedVideoStoragePath?: string;
+  generatedVideoBucket?: string;
   unsupportedReason?: string;
 }
 

@@ -1,105 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { useCalendarStore } from "@/lib/organic/store";
 import type { BulkRunState, BulkRunStatus } from "./types";
+import { useRunEventStream, type ParsedRunEvent } from "@/hooks/useRunEventStream";
 
-const POLL_INTERVAL_MS = 2500;
-
-type RunEvent = {
-  type?: string;
-  totalPlacements?: number;
-  placement?: { platform?: { name?: string }; content?: { format?: string } };
-};
-
-function readRunEvent(line: string): RunEvent | null {
-  try {
-    const frame = JSON.parse(line) as { data?: unknown };
-    const data = frame.data as { event?: RunEvent } | RunEvent | undefined;
-    if (data && typeof data === "object" && "event" in data && data.event) return data.event as RunEvent;
-    return (data as RunEvent) ?? null;
-  } catch {
-    return null;
-  }
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
 }
 
-/**
- * Polls the durable run-events replay endpoint and folds the v2 envelopes into
- * an aggregate. The runId is deterministic (`run_<planId>`); a 404 simply means
- * the background run row is not written yet, so we keep polling.
- */
-function useBulkRunProgress(runId: string, total: number): BulkRunState {
-  const [state, setState] = useState<BulkRunState>({
-    runId,
-    planId: runId.replace(/^run_/, ""),
-    brandId: "",
-    total,
-    completed: 0,
-    failed: 0,
-    byPlatform: {},
-    byFormat: {},
-    status: "running",
-  });
-  const lastSeqRef = useRef(0);
+function foldEvent(prev: BulkRunState, event: ParsedRunEvent): BulkRunState {
+  // bulkExecution.ts stores the V2 envelope as payload, so event.data is the
+  // full envelope and the actual run-event data lives at event.data.event.
+  const inner = isRecord(event.data.event) ? event.data.event : event.data;
 
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const poll = async () => {
-      try {
-        const res = await fetch(`/api/organic/agent/runs/${runId}/events?after_seq=${lastSeqRef.current}`, {
-          headers: { Accept: "application/x-ndjson" },
-        });
-        if (res.ok && res.body) {
-          const reader = res.body.getReader();
-          await readNdjsonStream({
-            reader,
-            onLine: (line) => {
-              const seq = (() => {
-                try {
-                  return (JSON.parse(line) as { seq?: number }).seq ?? 0;
-                } catch {
-                  return 0;
-                }
-              })();
-              if (seq > lastSeqRef.current) lastSeqRef.current = seq;
-              const event = readRunEvent(line);
-              if (!event?.type) return;
-              setState((prev) => foldEvent(prev, event));
-            },
-          });
-        }
-      } catch {
-        // Transient network/404 — keep polling.
-      }
-      if (!cancelled) {
-        setState((prev) => {
-          if (prev.status !== "running") return prev;
-          timer = setTimeout(poll, POLL_INTERVAL_MS);
-          return prev;
-        });
-      }
-    };
-
-    void poll();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [runId]);
-
-  return state;
-}
-
-function foldEvent(prev: BulkRunState, event: RunEvent): BulkRunState {
   switch (event.type) {
     case "run_started":
-      return { ...prev, total: event.totalPlacements ?? prev.total };
+      return { ...prev, total: typeof inner.totalPlacements === "number" ? inner.totalPlacements : prev.total };
     case "slot_completed": {
-      const platform = event.placement?.platform?.name ?? "unknown";
-      const format = event.placement?.content?.format ?? "unknown";
+      const pl = isRecord(inner.placement) ? inner.placement : {};
+      const platform = isRecord(pl.platform) ? String(pl.platform.name ?? "unknown") : "unknown";
+      const format = isRecord(pl.content) ? String(pl.content.format ?? "unknown") : "unknown";
       return {
         ...prev,
         completed: prev.completed + 1,
@@ -116,6 +38,28 @@ function foldEvent(prev: BulkRunState, event: RunEvent): BulkRunState {
     default:
       return prev;
   }
+}
+
+function useBulkRunProgress(runId: string, total: number): BulkRunState {
+  const [state, setState] = useState<BulkRunState>({
+    runId,
+    planId: runId.replace(/^run_/, ""),
+    brandId: "",
+    total,
+    completed: 0,
+    failed: 0,
+    byPlatform: {},
+    byFormat: {},
+    status: "running",
+  });
+
+  const handleEvent = useCallback((event: ParsedRunEvent) => {
+    setState((prev) => foldEvent(prev, event));
+  }, []);
+
+  useRunEventStream(runId, handleEvent);
+
+  return state;
 }
 
 function CountRow({ label, counts }: { label: string; counts: Record<string, number> }) {
@@ -137,6 +81,16 @@ export function BulkRunPanel({ runId, total }: { runId: string; total: number })
   const run = useBulkRunProgress(runId, total);
   const done = run.completed + run.failed;
   const pct = run.total > 0 ? Math.round((done / run.total) * 100) : 0;
+
+  const requestCalendarRefetch = useCalendarStore((state) => state.requestCalendarRefetch);
+  const reconciledRef = useRef(false);
+  useEffect(() => {
+    if (reconciledRef.current) return;
+    if (run.status === "completed" || run.status === "failed") {
+      reconciledRef.current = true;
+      requestCalendarRefetch();
+    }
+  }, [run.status, requestCalendarRefetch]);
 
   return (
     <div className="mt-2 rounded-xl border border-border/60 bg-muted/20 p-3">

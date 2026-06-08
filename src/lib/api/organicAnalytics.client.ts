@@ -6,6 +6,7 @@ import {
   type OrganicAnalyticsScope,
   type OrganicPlatform,
 } from "@/lib/schemas/organicMetrics";
+import type { IntegrationErrorCode } from "@continuum/contracts";
 
 export type OrganicAnalyticsRequest = {
   brandId: string;
@@ -29,13 +30,17 @@ export async function fetchOrganicAnalytics(request: OrganicAnalyticsRequest) {
 
   if (!response.ok) {
     let message = `Unable to load ${request.platform} organic analytics.`;
+    let errorCode: IntegrationErrorCode | undefined;
+    let retryAfter: number | undefined;
     try {
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as { error?: string; errorCode?: IntegrationErrorCode; retryAfter?: number };
       if (payload.error) message = payload.error;
+      errorCode = payload.errorCode;
+      retryAfter = payload.retryAfter;
     } catch {
       // ignore non-JSON
     }
-    throw new Error(message);
+    throw Object.assign(new Error(message), { errorCode, retryAfter });
   }
 
   const json = (await response.json()) as unknown;

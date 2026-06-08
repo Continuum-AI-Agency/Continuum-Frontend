@@ -22,11 +22,15 @@ export const pipelineStageEnum = z.enum([
   "merge",
 ]);
 
+export type PipelineStage = z.infer<typeof pipelineStageEnum>;
+
 /**
  * Per-plan-item creative brief the planner attaches so a content job can skip
- * the strategist stage. Mirrors the Backend content runner's CreativeBrief.
+ * the strategist stage. Canonical shape shared by the Backend content runner and
+ * the Frontend response interpreter. Not strict: unknown keys are stripped (not
+ * rejected) so a rolling deploy that adds a field never breaks an older peer.
  */
-export const organicCreativeBriefSchema = z.object({
+export const creativeBriefSchema = z.object({
   contentObjective: z.string(),
   targetAudience: z.string(),
   angle: z.string(),
@@ -34,7 +38,82 @@ export const organicCreativeBriefSchema = z.object({
   toneAndVoice: z.string(),
   formatSuggestion: z.enum(["reel", "post", "carousel", "story", "hyperframe"]),
   productionNotes: z.array(z.string()),
-}).strict();
+});
+export type CreativeBrief = z.infer<typeof creativeBriefSchema>;
+
+// --- Canonical agent plan schemas ------------------------------------------
+// Moved here from Backend App/organic/agent/src/agents/planSchema.ts so the
+// Frontend response interpreter validates plan cards against the same source
+// instead of hand-parsing. The Backend re-exports these (PascalCase aliases).
+export const planItemStatusSchema = z.enum([
+  "pending",
+  "executing",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export type PlanItemStatus = z.infer<typeof planItemStatusSchema>;
+
+export const planItemSchema = z.object({
+  itemId: z.string().describe("uuid; agent-generated"),
+  kind: z.enum(["create_post", "create_draft", "edit_draft", "publish_draft"]),
+  platform: z.enum(["instagram", "facebook", "linkedin", "tiktok", "youtube"]),
+  scheduledAt: z.string().describe("ISO datetime"),
+  format: z.enum(["reel", "post", "carousel", "story", "hyperframe"]).nullable(),
+  // trend_id is a uuid FK column. The planner sometimes emits a slug derived
+  // from the trend title; coerce anything that isn't a real uuid to null.
+  trendId: z.string().uuid().nullable().catch(null),
+  trendTitle: z.string().nullable(),
+  angle: z.string().describe("1-line creative direction"),
+  objective: z.enum(["follow", "save", "click", "comment", "dm", "share"]),
+  audienceSegment: z.string(),
+  rationale: z.string().describe("Why this item, evidence-cited"),
+  guidancePrompt: z.string().nullable(),
+  draftId: z.string().nullable().describe("For edit_draft / publish_draft, or once executed"),
+  jobId: z.string().nullable().default(null).describe("Filled after createPost fires"),
+  dependsOn: z.array(z.string()).default([]).describe("itemId references"),
+  status: planItemStatusSchema.default("pending"),
+  creativeBrief: creativeBriefSchema.nullable().default(null).describe(
+    "Pre-resolved creative brief for this item. When present, the content job skips the strategist stage.",
+  ),
+});
+export type PlanItem = z.infer<typeof planItemSchema>;
+
+export const planEvidenceSchema = z.object({
+  kind: z.enum(["trend", "metric", "competitor", "past_draft", "brand_doc"]),
+  refId: z.string().nullable(),
+  summary: z.string(),
+});
+export type PlanEvidence = z.infer<typeof planEvidenceSchema>;
+
+export const planStatusSchema = z.enum([
+  "proposed",
+  "approved",
+  "edited",
+  "rejected",
+  "executing",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+export type PlanStatus = z.infer<typeof planStatusSchema>;
+
+export const proposedPlanSchema = z.object({
+  planId: z.string().describe("uuid"),
+  sessionId: z.string(),
+  brandId: z.string(),
+  userId: z.string(),
+  weekStart: z.string().describe("YYYY-MM-DD"),
+  title: z.string().describe('e.g. "Back-to-school week — IG focus"'),
+  summary: z.string().describe("2-3 line overview"),
+  items: z.array(planItemSchema).min(1).max(12).describe("Soft cap 12 items per plan"),
+  evidence: z.array(planEvidenceSchema).default([]),
+  estimatedDurationSeconds: z.number().int().nonnegative(),
+  status: planStatusSchema.default("proposed"),
+  createdAt: z.string(),
+  updatedAt: z.string().optional(),
+});
+export type ProposedPlan = z.infer<typeof proposedPlanSchema>;
 
 const responseCreatedSchema = z.object({
   type: z.literal("response.created"),
@@ -136,6 +215,24 @@ const uiPostEnqueuedSchema = z.object({
 const uiPlanStatusSchema = z.object({
   type: z.literal("ui.plan_status"),
   data: uiCardDataSchema,
+});
+
+/**
+ * Emitted when the agent proposes saving a reusable brand skill (propose_skill
+ * tool). The FE renders a confirm/edit card; persistence is user-gated (Save ->
+ * POST /api/organic/skills). The agent does not persist.
+ */
+const uiSkillProposalSchema = z.object({
+  type: z.literal("ui.skill_proposal"),
+  data: z.object({
+    proposalId: z.string().min(1),
+    brandId: z.string().min(1),
+    name: z.string().min(1),
+    kind: z.enum(["creative_direction", "analytic"]),
+    description: z.string().nullable().optional(),
+    directives: z.string().min(1),
+    tags: z.array(z.string()).default([]),
+  }).loose(),
 });
 
 /**
@@ -269,6 +366,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   uiPostCardSchema,
   uiPostEnqueuedSchema,
   uiPlanStatusSchema,
+  uiSkillProposalSchema,
   uiBulkRunSchema,
   agentRunStartedSchema,
   agentChatStartedSchema,
@@ -295,6 +393,38 @@ export type OrganicPipelineStageFrame = z.infer<typeof pipelineStageSchema>;
 
 export type OrganicUiPipelineCardFrame = z.infer<typeof uiPipelineCardSchema>;
 
-export type OrganicCreativeBrief = z.infer<typeof organicCreativeBriefSchema>;
+export type OrganicCreativeBrief = z.infer<typeof creativeBriefSchema>;
 
 export type OrganicUiBulkRunFrame = z.infer<typeof uiBulkRunSchema>;
+
+/**
+ * Normalized display shape for a post fetched by any of the organic agent's
+ * content-retrieval tools (listDrafts, getTopPosts, listOwnInstagramMedia,
+ * getCalendarPostedContent, rankPostPerformers). Consumed by PostContentCard.
+ */
+export type UiFetchedPost = {
+  postId: string
+  source: "draft" | "instagram" | "facebook" | "tiktok"
+  platform: string | null
+  caption: string | null
+  mediaUrl: string | null
+  permalink: string | null
+  postedAt: string | null
+  scheduledAt: string | null
+  format: string | null
+  status: string | null
+  topic: string | null
+  metrics: Record<string, number | null> | null
+  rank: number | null
+  quality: { passed: boolean; score?: number } | null
+}
+
+export const POST_FETCHING_TOOL_NAMES = [
+  "listDrafts",
+  "getTopPosts",
+  "listOwnInstagramMedia",
+  "getCalendarPostedContent",
+  "rankPostPerformers",
+] as const
+
+export type PostFetchingToolName = (typeof POST_FETCHING_TOOL_NAMES)[number]

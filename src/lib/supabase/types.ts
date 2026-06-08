@@ -5304,7 +5304,9 @@ export type Database = {
           metadata: Json | null
           role: string
           session_id: string
-          user_id: string
+          ui_cards: Json
+          user_email: string | null
+          user_id: string | null
         }
         Insert: {
           brand_id: string
@@ -5314,7 +5316,9 @@ export type Database = {
           metadata?: Json | null
           role: string
           session_id: string
-          user_id: string
+          ui_cards?: Json
+          user_email?: string | null
+          user_id?: string | null
         }
         Update: {
           brand_id?: string
@@ -5324,7 +5328,9 @@ export type Database = {
           metadata?: Json | null
           role?: string
           session_id?: string
-          user_id?: string
+          ui_cards?: Json
+          user_email?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -5340,6 +5346,7 @@ export type Database = {
           timezone: string
           title: string | null
           updated_at: string
+          user_email: string | null
           user_id: string
           week_start: string | null
         }
@@ -5354,6 +5361,7 @@ export type Database = {
           timezone?: string
           title?: string | null
           updated_at?: string
+          user_email?: string | null
           user_id: string
           week_start?: string | null
         }
@@ -5368,6 +5376,7 @@ export type Database = {
           timezone?: string
           title?: string | null
           updated_at?: string
+          user_email?: string | null
           user_id?: string
           week_start?: string | null
         }
@@ -5675,6 +5684,7 @@ export type Database = {
           claimed_at: string | null
           completed_at: string | null
           creative_brief: Json | null
+          dead_lettered_at: string | null
           dispatch_context: Json | null
           draft_id: string | null
           enqueued_at: string
@@ -5683,6 +5693,11 @@ export type Database = {
           guidance_prompt: string | null
           heartbeat_at: string | null
           job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          next_run_at: string
+          payload: Json | null
           plan_id: string | null
           plan_item_id: string | null
           platform: string
@@ -5704,6 +5719,7 @@ export type Database = {
           claimed_at?: string | null
           completed_at?: string | null
           creative_brief?: Json | null
+          dead_lettered_at?: string | null
           dispatch_context?: Json | null
           draft_id?: string | null
           enqueued_at?: string
@@ -5712,6 +5728,11 @@ export type Database = {
           guidance_prompt?: string | null
           heartbeat_at?: string | null
           job_id?: string
+          job_type?: string
+          last_error?: Json | null
+          max_attempts?: number
+          next_run_at?: string
+          payload?: Json | null
           plan_id?: string | null
           plan_item_id?: string | null
           platform: string
@@ -5733,6 +5754,7 @@ export type Database = {
           claimed_at?: string | null
           completed_at?: string | null
           creative_brief?: Json | null
+          dead_lettered_at?: string | null
           dispatch_context?: Json | null
           draft_id?: string | null
           enqueued_at?: string
@@ -5741,6 +5763,11 @@ export type Database = {
           guidance_prompt?: string | null
           heartbeat_at?: string | null
           job_id?: string
+          job_type?: string
+          last_error?: Json | null
+          max_attempts?: number
+          next_run_at?: string
+          payload?: Json | null
           plan_id?: string | null
           plan_item_id?: string | null
           platform?: string
@@ -5948,6 +5975,7 @@ export type Database = {
           claimed_at: string | null
           completed_at: string | null
           creative_brief: Json | null
+          dead_lettered_at: string | null
           dispatch_context: Json | null
           draft_id: string | null
           enqueued_at: string
@@ -5956,6 +5984,11 @@ export type Database = {
           guidance_prompt: string | null
           heartbeat_at: string | null
           job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          next_run_at: string
+          payload: Json | null
           plan_id: string | null
           plan_item_id: string | null
           platform: string
@@ -5986,6 +6019,7 @@ export type Database = {
           claimed_at: string | null
           completed_at: string | null
           creative_brief: Json | null
+          dead_lettered_at: string | null
           dispatch_context: Json | null
           draft_id: string | null
           enqueued_at: string
@@ -5994,6 +6028,11 @@ export type Database = {
           guidance_prompt: string | null
           heartbeat_at: string | null
           job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          next_run_at: string
+          payload: Json | null
           plan_id: string | null
           plan_item_id: string | null
           platform: string
@@ -6033,36 +6072,33 @@ export type Database = {
         }
         Returns: boolean
       }
-      enqueue_post_generation_job:
-        | {
-            Args: {
-              p_account_id: string
-              p_brand_id: string
-              p_guidance_prompt: string
-              p_platform: string
-              p_scheduled_at: string
-              p_session_id: string
-              p_trend_id: string
-              p_user_id: string
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_account_id: string
-              p_brand_id: string
-              p_creative_brief?: Json
-              p_guidance_prompt: string
-              p_plan_id?: string
-              p_plan_item_id?: string
-              p_platform: string
-              p_scheduled_at: string
-              p_session_id: string
-              p_trend_id: string
-              p_user_id: string
-            }
-            Returns: string
-          }
+      enqueue_post_generation_job: {
+        Args: {
+          p_account_id: string
+          p_brand_id: string
+          p_creative_brief?: Json
+          p_guidance_prompt: string
+          p_job_type?: string
+          p_payload?: Json
+          p_plan_id?: string
+          p_plan_item_id?: string
+          p_platform: string
+          p_scheduled_at: string
+          p_session_id: string
+          p_trend_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      fail_or_retry_post_generation_job: {
+        Args: {
+          p_backoff_sec: number
+          p_error: Json
+          p_job_id: string
+          p_worker_id: string
+        }
+        Returns: string
+      }
       get_post_generation_job: {
         Args: { p_job_id: string }
         Returns: {
@@ -6073,6 +6109,7 @@ export type Database = {
           claimed_at: string | null
           completed_at: string | null
           creative_brief: Json | null
+          dead_lettered_at: string | null
           dispatch_context: Json | null
           draft_id: string | null
           enqueued_at: string
@@ -6081,6 +6118,11 @@ export type Database = {
           guidance_prompt: string | null
           heartbeat_at: string | null
           job_id: string
+          job_type: string
+          last_error: Json | null
+          max_attempts: number
+          next_run_at: string
+          payload: Json | null
           plan_id: string | null
           plan_item_id: string | null
           platform: string
@@ -6116,6 +6158,7 @@ export type Database = {
               claimed_at: string | null
               completed_at: string | null
               creative_brief: Json | null
+              dead_lettered_at: string | null
               dispatch_context: Json | null
               draft_id: string | null
               enqueued_at: string
@@ -6124,6 +6167,11 @@ export type Database = {
               guidance_prompt: string | null
               heartbeat_at: string | null
               job_id: string
+              job_type: string
+              last_error: Json | null
+              max_attempts: number
+              next_run_at: string
+              payload: Json | null
               plan_id: string | null
               plan_item_id: string | null
               platform: string
@@ -6159,6 +6207,7 @@ export type Database = {
               claimed_at: string | null
               completed_at: string | null
               creative_brief: Json | null
+              dead_lettered_at: string | null
               dispatch_context: Json | null
               draft_id: string | null
               enqueued_at: string
@@ -6167,6 +6216,11 @@ export type Database = {
               guidance_prompt: string | null
               heartbeat_at: string | null
               job_id: string
+              job_type: string
+              last_error: Json | null
+              max_attempts: number
+              next_run_at: string
+              payload: Json | null
               plan_id: string | null
               plan_item_id: string | null
               platform: string
@@ -6187,6 +6241,10 @@ export type Database = {
               isSetofReturn: true
             }
           }
+      requeue_post_generation_job: {
+        Args: { p_backoff_sec: number; p_job_id: string; p_worker_id: string }
+        Returns: boolean
+      }
       update_post_generation_job_progress: {
         Args: { p_job_id: string; p_progress: Json }
         Returns: undefined

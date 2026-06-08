@@ -253,4 +253,6 @@ export function useCalendarDraftPersistence({
 
     return () => clearTimeout(timer)
   }, [brandProfileId, calendarDays, platformAccountIds, refetch, supabase, updateDraftById, weekStartId])
+
+  return { refetch }
 }

@@ -95,8 +95,11 @@ export const organicReelAssetSchema = z.object({
  * A HyperFrames (HTML video composition) asset. The composition HTML is the
  * source of truth (durable `bucket`+`htmlPath`, re-signed on read); `mp4*` is
  * the derived publishable video, persisted async by the FE render + edge fn.
- * `spec` is left `unknown` — the canonical ai-studio CompositionSpec is
- * backend-only and is not forked into contracts.
+ * `spec` stays `unknown` HERE to avoid coupling this pipeline-frame schema to the
+ * CompositionSpec shape (the backend's parallel media schema keeps its own loose
+ * spec; tightening only one side breaks structural assignability across the two
+ * zod instances). The canonical `CompositionSpec` is exported from this package
+ * (./hyperframes) for typed consumers (FE spec viewer, ai-studio endpoints).
  */
 export const organicHyperframeAssetSchema = z.object({
   generated: z.boolean(),
@@ -221,6 +224,24 @@ export const organicCalendarPlacementSchema = z.object({
     revisionCount: z.number().int().min(0).optional(),
     summary: z.string().optional(),
   }).strict().optional(),
+  // Durable, re-signable storage references for the generated media. Posts/carousels
+  // upload their bytes during generation (the raw base64 is stripped before persist),
+  // so the calendar/list previews read a durable `storagePath`+`bucket` and re-sign on
+  // read rather than relying on the 1h upload-time signed URL or large base64 blobs.
+  publishingAssets: z.array(z.object({
+    role: z.string(),
+    kind: z.enum(["image", "video"]),
+    slideIndex: z.number().int().min(0).optional(),
+    // media.assets registry id (source 'ai_generated') — the durable handle the FE
+    // re-signs via /api/library/sign for lazy-loaded preview.
+    assetId: z.string().optional(),
+    bucket: z.string().optional(),
+    storagePath: z.string(),
+    storageUrl: z.string(),
+    mimeType: z.string().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+  }).strict()).optional(),
 }).strict();
 
 const organicPipelineStageSchema = z.enum([

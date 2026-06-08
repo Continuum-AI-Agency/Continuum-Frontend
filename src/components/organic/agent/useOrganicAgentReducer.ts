@@ -13,6 +13,7 @@ import type {
 import { PIPELINE_STAGES } from "./types"
 import type { ParsedPipelineStage, ParsedPlanStatus } from "./streamEventParser"
 import type { AgentMentionMetadata } from "@/lib/agent-references"
+import type { MediaSearchResultsFrame } from "@continuum/contracts"
 
 export type BulkRunRef = { runId: string; planId: string; total: number }
 
@@ -34,12 +35,14 @@ export type PanelAction =
   | { type: "HYDRATE_JOBS"; jobs: AgentJobState[] }
   | { type: "SET_INPUT"; value: string }
   | { type: "SUBMIT_USER_MESSAGE"; content: string; messageId: string; metadata?: AgentMentionMetadata }
+  | { type: "BEGIN_STREAMING" }
   | { type: "STREAM_DELTA"; delta: string }
   | { type: "STREAM_TOOL_CALL"; event: ToolCallEvent }
   | { type: "STREAM_TOOL_RESULT"; toolCallId: string; result: unknown }
   | { type: "STREAM_COMPLETE" }
   | { type: "STREAM_ERROR"; error: string }
   | { type: "STREAM_UI_CARD"; card: UiCard }
+  | { type: "STREAM_MEDIA_SEARCH_RESULTS"; frame: MediaSearchResultsFrame }
   | { type: "JOB_UPDATE"; job: Partial<AgentJobState> & { jobId: string } }
   | { type: "PIPELINE_STAGE"; event: ParsedPipelineStage }
   | { type: "PIPELINE_CARD"; card: Partial<PipelineCardState> & { jobId: string } }
@@ -168,6 +171,18 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
       }
     }
 
+    case "BEGIN_STREAMING": {
+      const streamingId = `msg-${Date.now()}-assistant`
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          { id: streamingId, role: "assistant" as const, content: "" },
+        ],
+        streamingMessageId: streamingId,
+      }
+    }
+
     case "STREAM_DELTA":
       if (!state.streamingMessageId) return state
       return {
@@ -215,6 +230,17 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
         messages: state.messages.map((m) =>
           m.id === state.streamingMessageId
             ? { ...m, uiCards: [...(m.uiCards ?? []), action.card] }
+            : m
+        ),
+      }
+
+    case "STREAM_MEDIA_SEARCH_RESULTS":
+      if (!state.streamingMessageId) return state
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === state.streamingMessageId
+            ? { ...m, mediaSearchResults: [...(m.mediaSearchResults ?? []), action.frame] }
             : m
         ),
       }

@@ -465,6 +465,8 @@ export async function executeWorkflow(
             if (parsed?.base64) {
                 resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType, url: genImageUrl });
             }
+         } else if (genImageUrl) {
+            resolvedOutputs.set(node.id, { type: 'image', base64: '', mimeType: 'image/png', url: genImageUrl });
          }
       } else if (isVideoGeneratorNodeType(node.type) || node.type === 'extendVideo' || node.type === 'videoEditor') {
          const genVideo = ((node.data as any).generatedVideo as string | undefined) ?? ((node.data as any).generatedVideoUrl as string | undefined);
@@ -513,6 +515,8 @@ export async function executeWorkflow(
       useStudioStore.getState().updateNodeData(nodeId, {
         generatedImage: dataUrl,
         generatedImageUrl: persistentUrl,
+        generatedImageStoragePath: output.storagePath,
+        generatedImageBucket: output.storageBucket,
         isComplete: true,
         isExecuting: false
       });
@@ -531,6 +535,8 @@ export async function executeWorkflow(
       useStudioStore.getState().updateNodeData(nodeId, {
         generatedVideo: output.url,
         generatedVideoUrl: persistentUrl,
+        generatedVideoStoragePath: output.storagePath,
+        generatedVideoBucket: output.storageBucket,
         isComplete: true,
         isExecuting: false
       });

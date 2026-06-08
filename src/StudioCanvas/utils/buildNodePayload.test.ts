@@ -194,6 +194,25 @@ describe('buildNodePayload', () => {
       expect(getVideoGeneratorTargetHandles('veo-3.1-lite')).not.toContain('ref-images');
     });
 
+    it('should canonicalize saved uppercase 4K Veo resolution to Gemini API 4k spelling', () => {
+      const node: StudioNode = {
+        id: 'veo',
+        type: 'veoFast',
+        position: { x: 0, y: 0 },
+        data: {
+          model: 'veo-3.1-fast',
+          prompt: 'A sharp product reveal',
+          enhancePrompt: false,
+          resolution: '4K',
+        },
+      };
+
+      const payload = buildVeoPayload(node, new Map(), [], []);
+      expect(payload).not.toBeNull();
+      expect(payload?.model).toBe('veo-3.1-fast-generate-preview');
+      expect(payload?.resolution).toBe('4k');
+    });
+
     it('should prioritize negative prompt from edge input', () => {
       const node: StudioNode = {
         id: 'veo',

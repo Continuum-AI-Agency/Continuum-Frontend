@@ -245,8 +245,8 @@ export const organicTour: Tour = {
       content: paragraph(
         "Ask the Organic agent to draft posts from trends, your brand DNA, and what's performing — then send them straight to the Planner."
       ),
-      selector: "[data-tour-id='organic-agent-panel']",
-      side: "top",
+      selector: "[data-tour-id='organic-agent-tab']",
+      side: "bottom",
       showControls: true,
       showSkip: true,
     },
@@ -339,8 +339,8 @@ export const paidMediaTour: Tour = {
       content: paragraph(
         "Jaina is your paid-media analyst. Prompt her for reports, diagnostics, and recommendations in plain language."
       ),
-      selector: "[data-tour-id='paid-jaina-chat']",
-      side: "top",
+      selector: "[data-tour-id='paid-jaina-tab']",
+      side: "bottom",
       showControls: true,
       showSkip: true,
     },

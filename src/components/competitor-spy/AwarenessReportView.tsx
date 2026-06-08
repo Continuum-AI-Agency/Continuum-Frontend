@@ -1,0 +1,98 @@
+"use client";
+
+import type { AwarenessBlock, AwarenessReportPayload } from "@continuum/contracts";
+
+interface Metric {
+  label: string;
+  value: number;
+}
+interface CountItem {
+  label: string;
+  count: number;
+}
+interface FeedRow {
+  sourceAdId: string;
+  eventType: string;
+  eventAt: string;
+  competitorId: string;
+}
+
+function MetricGrid({ metrics }: { metrics: Metric[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {metrics.map((m) => (
+        <div key={m.label} className="rounded-lg bg-muted/60 p-3">
+          <div className="text-2xl font-semibold">{m.value}</div>
+          <div className="text-xs text-muted-foreground">{m.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CountList({ items }: { items: CountItem[] }) {
+  if (items.length === 0) return <p className="text-xs text-muted-foreground">No data yet.</p>;
+  const max = Math.max(...items.map((i) => i.count), 1);
+  return (
+    <ul className="space-y-1.5">
+      {items.map((item) => (
+        <li key={item.label} className="flex items-center gap-2">
+          <span className="w-40 shrink-0 truncate text-xs capitalize">{item.label.replace(/_/g, " ")}</span>
+          <span className="h-2 rounded-full bg-primary/70" style={{ width: `${(item.count / max) * 100}%` }} />
+          <span className="text-xs text-muted-foreground">{item.count}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Feed({ rows }: { rows: FeedRow[] }) {
+  if (rows.length === 0) return <p className="text-xs text-muted-foreground">No recent activity.</p>;
+  return (
+    <ul className="divide-y divide-border">
+      {rows.slice(0, 20).map((row, i) => (
+        <li key={`${row.sourceAdId}-${i}`} className="flex items-center justify-between py-1.5 text-xs">
+          <span className="capitalize">{row.eventType.replace(/_/g, " ")}</span>
+          <span className="text-muted-foreground">{new Date(row.eventAt).toLocaleDateString()}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function BlockCard({ block }: { block: AwarenessBlock }) {
+  const data = (block.data ?? {}) as Record<string, unknown>;
+  return (
+    <section className="rounded-xl border border-border bg-card p-4">
+      <h3 className="mb-3 text-sm font-semibold">{block.title}</h3>
+      {block.category === "summary" ? (
+        <MetricGrid metrics={(data.metrics as Metric[]) ?? []} />
+      ) : block.category === "lifecycle_feed" ? (
+        <Feed rows={(data.rows as FeedRow[]) ?? []} />
+      ) : (
+        <CountList items={(data.items as CountItem[]) ?? []} />
+      )}
+    </section>
+  );
+}
+
+export function AwarenessReportView({ report }: { report: AwarenessReportPayload | null }) {
+  if (!report) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border p-10 text-center">
+        <p className="text-sm font-medium">No awareness report yet</p>
+        <p className="text-xs text-muted-foreground">Run a sync to generate competitor awareness signals.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">
+        Window: {new Date(report.windowStart).toLocaleDateString()} – {new Date(report.windowEnd).toLocaleDateString()}
+      </p>
+      {report.blocks.map((block, i) => (
+        <BlockCard key={`${block.category}-${i}`} block={block} />
+      ))}
+    </div>
+  );
+}

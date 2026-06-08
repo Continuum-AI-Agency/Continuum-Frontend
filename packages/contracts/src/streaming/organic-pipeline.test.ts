@@ -94,6 +94,34 @@ describe("organicCalendarPlacementSchema — hyperframe asset", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("accepts a placement carrying durable publishingAssets", () => {
+    const placement = {
+      ...baseFields(),
+      content: { type: "carousel", format: "carousel" },
+      creative: {
+        mediaSuggestion: { kind: "carousel", assetUrl: "https://s/1" },
+      },
+      publishingAssets: [
+        { role: "primary", kind: "image", assetId: "asset-1", bucket: "brand-profile-assets", storagePath: "b/p/1.png", storageUrl: "https://s/1", mimeType: "image/png", width: 512, height: 512 },
+        { role: "slide_2", kind: "image", slideIndex: 2, bucket: "brand-profile-assets", storagePath: "b/p/2.png", storageUrl: "https://s/2" },
+      ],
+    };
+    const parsed = organicCalendarPlacementSchema.safeParse(placement);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.publishingAssets?.[0].assetId).toBe("asset-1");
+    }
+  });
+
+  it("rejects a publishingAsset missing its storagePath (stays strict)", () => {
+    const placement = {
+      ...baseFields(),
+      publishingAssets: [{ role: "primary", kind: "image", storageUrl: "https://s/1" }],
+    };
+    const parsed = organicCalendarPlacementSchema.safeParse(placement);
+    expect(parsed.success).toBe(false);
+  });
+
   it("rejects an unknown key on mediaSuggestion (stays strict)", () => {
     const placement = {
       ...baseFields(),

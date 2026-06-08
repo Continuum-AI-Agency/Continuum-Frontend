@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { mediaKindSchema, mediaSourceSchema } from "@continuum/contracts";
+import type { MediaKind, MediaSource } from "@continuum/contracts";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { fetchMediaAssets, fetchMediaCollections, fetchStorageUsedBytes } from "@/lib/media/fetchers.server";
 import { isPaidTier } from "@/lib/media/tier";
@@ -27,7 +29,15 @@ function LibrarySkeleton() {
   );
 }
 
-async function LibraryContent({ collectionId }: { collectionId?: string }) {
+async function LibraryContent({
+  collectionId,
+  source,
+  kind,
+}: {
+  collectionId?: string;
+  source?: MediaSource;
+  kind?: MediaKind;
+}) {
   const { activeBrandId, activeBrandTier } = await getActiveBrandContext();
 
   if (!activeBrandId) {
@@ -35,7 +45,7 @@ async function LibraryContent({ collectionId }: { collectionId?: string }) {
   }
 
   const [assets, collections, storageUsedBytes] = await Promise.all([
-    fetchMediaAssets(activeBrandId, { collectionId }),
+    fetchMediaAssets(activeBrandId, { collectionId, source, kind }),
     fetchMediaCollections(activeBrandId),
     fetchStorageUsedBytes(activeBrandId),
   ]);
@@ -48,6 +58,8 @@ async function LibraryContent({ collectionId }: { collectionId?: string }) {
       initialCollections={collections}
       storageUsedBytes={storageUsedBytes}
       selectedCollectionId={collectionId ?? null}
+      selectedSource={source ?? null}
+      selectedKind={kind ?? null}
     />
   );
 }
@@ -55,13 +67,21 @@ async function LibraryContent({ collectionId }: { collectionId?: string }) {
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ collection?: string }>;
+  searchParams: Promise<{ collection?: string; source?: string; kind?: string }>;
 }) {
-  const { collection } = await searchParams;
+  const { collection, source, kind } = await searchParams;
+  const parsedSource = mediaSourceSchema.safeParse(source);
+  const parsedKind = mediaKindSchema.safeParse(kind);
+  const source_ = parsedSource.success ? parsedSource.data : undefined;
+  const kind_ = parsedKind.success ? parsedKind.data : undefined;
+
   return (
     <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height,600px)] w-full overflow-hidden">
-      <Suspense key={collection ?? "all"} fallback={<LibrarySkeleton />}>
-        <LibraryContent collectionId={collection} />
+      <Suspense
+        key={`${collection ?? "all"}:${source_ ?? "all"}:${kind_ ?? "all"}`}
+        fallback={<LibrarySkeleton />}
+      >
+        <LibraryContent collectionId={collection} source={source_} kind={kind_} />
       </Suspense>
     </div>
   );

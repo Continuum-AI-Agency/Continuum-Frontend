@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import {
-  organicCreativeBriefSchema,
+  creativeBriefSchema,
   organicStreamFrameSchema,
   pipelineStageEnum,
+  planItemSchema,
+  proposedPlanSchema,
 } from "./organic";
 
 describe("organic pipeline frames", () => {
@@ -119,6 +121,68 @@ describe("organic pipeline frames", () => {
       formatSuggestion: "carousel",
       productionNotes: ["bright palette"],
     };
-    expect(organicCreativeBriefSchema.safeParse(brief).success).toBe(true);
+    expect(creativeBriefSchema.safeParse(brief).success).toBe(true);
+  });
+});
+
+describe("canonical plan schemas", () => {
+  const validItem = {
+    itemId: "item-1",
+    kind: "create_post",
+    platform: "instagram",
+    scheduledAt: "2026-06-01T12:00:00.000Z",
+    format: "hyperframe",
+    trendId: null,
+    trendTitle: null,
+    angle: "back to school",
+    objective: "save",
+    audienceSegment: "students",
+    rationale: "evidence-cited",
+    guidancePrompt: null,
+    draftId: null,
+  };
+
+  const validPlan = {
+    planId: "plan-1",
+    sessionId: "sess-1",
+    brandId: "brand-1",
+    userId: "user-1",
+    weekStart: "2026-06-01",
+    title: "Week plan",
+    summary: "overview",
+    items: [validItem],
+    estimatedDurationSeconds: 120,
+    createdAt: "2026-06-01T00:00:00.000Z",
+  };
+
+  it("accepts a full proposed plan and applies defaults", () => {
+    const parsed = proposedPlanSchema.safeParse(validPlan);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.status).toBe("proposed");
+      expect(parsed.data.evidence).toEqual([]);
+      expect(parsed.data.items[0].status).toBe("pending");
+      expect(parsed.data.items[0].creativeBrief).toBeNull();
+      // 'hyperframe' is a valid format (FE drift fix).
+      expect(parsed.data.items[0].format).toBe("hyperframe");
+    }
+  });
+
+  it("tolerates an unknown extra field (strips, does not reject)", () => {
+    const parsed = proposedPlanSchema.safeParse({ ...validPlan, somethingNew: true });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects an item missing itemId", () => {
+    const { itemId, ...itemNoId } = validItem;
+    void itemId;
+    const parsed = proposedPlanSchema.safeParse({ ...validPlan, items: [itemNoId] });
+    expect(parsed.success).toBe(false);
+  });
+
+  it("coerces a non-uuid trendId to null", () => {
+    const parsed = planItemSchema.safeParse({ ...validItem, trendId: "not-a-uuid-slug" });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.trendId).toBeNull();
   });
 });

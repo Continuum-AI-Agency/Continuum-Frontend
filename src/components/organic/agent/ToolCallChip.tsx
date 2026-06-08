@@ -8,6 +8,7 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import type { ToolCallEvent } from "./types";
+import { formatOrganicToolName } from "./organicToolLabels";
 
 type ToolCallChipProps = {
   toolCall: ToolCallEvent;
@@ -19,7 +20,7 @@ export function ToolCallChip({ toolCall }: ToolCallChipProps) {
 
   return (
     <Tool type={toolCall.toolName} state={state}>
-      <ToolHeader />
+      <ToolHeader title={formatOrganicToolName(toolCall.toolName)} />
       <ToolContent>
         <ToolInput value={toolCall.args} />
         {hasResult && <ToolOutput value={toolCall.result} />}

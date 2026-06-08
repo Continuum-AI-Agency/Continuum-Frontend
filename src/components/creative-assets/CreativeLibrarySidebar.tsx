@@ -51,7 +51,10 @@ import type { CreativeAsset } from "@/lib/creative-assets/types";
 import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl";
 import { useToast } from "@/components/ui/ToastProvider";
 import { CREATIVE_ASSET_DRAG_TYPE } from "@/lib/creative-assets/drag";
+import { StudioMediaLibraryPanel } from "@/components/creative-assets/StudioMediaLibraryPanel";
 import { cn } from "@/lib/utils";
+
+type SidebarTab = "files" | "library";
 
 const DRAG_MIME = "application/reactflow-node-data";
 const FOLDER_CACHE_LIMIT = 20;
@@ -71,6 +74,7 @@ export function CreativeLibrarySidebar({
 function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { brandProfileId: string; expandedWidth: number }) {
   const [open, setOpen] = React.useState(false);
   const { show } = useToast();
+  const [tab, setTab] = React.useState<SidebarTab>("files");
   const [query, setQuery] = React.useState("");
   const browser = useCreativeAssetBrowser(brandProfileId);
   const previewCache = React.useRef<Map<string, string>>(new Map());
@@ -246,13 +250,32 @@ function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { bran
                   </SheetClose>
                </div>
 
+              <div className="mb-3 inline-flex w-full items-center rounded-md bg-white/5 p-0.5">
+                {(["files", "library"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTab(value)}
+                    className={cn(
+                      "flex-1 rounded-[5px] px-3 py-1.5 text-xs font-medium capitalize active:scale-[0.96] [transition-property:scale,color,background-color]",
+                      tab === value ? "bg-white/15 text-white" : "text-gray-400 hover:text-white",
+                    )}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+
+              {tab === "files" && (
               <div className="flex items-center gap-2 mb-2">
                 <BreadcrumbTrail
                    items={browser.breadcrumbs}
                    onSelect={(path) => void browser.navigateTo(path)}
                 />
               </div>
+              )}
 
+              {tab === "files" && (
               <div className="flex items-center gap-2">
                  <div className="relative flex-1">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -281,9 +304,13 @@ function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { bran
                     </button>
                  </Tooltip>
               </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-hidden">
+              {tab === "library" ? (
+                <StudioMediaLibraryPanel brandProfileId={brandProfileId} />
+              ) : (
               <div className="p-2 h-full overflow-y-auto">
                 {browser.loading ? (
                   <div className="p-4 text-sm text-gray-400">Loading assets...</div>
@@ -305,6 +332,7 @@ function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { bran
                   />
                 )}
               </div>
+              )}
             </div>
           </div>
         </SheetPrimitive.Content>

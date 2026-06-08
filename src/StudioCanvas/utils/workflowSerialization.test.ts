@@ -140,7 +140,7 @@ describe('workflowSerialization', () => {
     expect((snapshot.nodes[0].data as any).image).toBeUndefined();
   });
 
-  it('always strips base64 generatedImage/generatedVideo even with preserveGeneratedOutputs', () => {
+  it('strips all generated output fields including signed URLs, preserves durable storage paths', () => {
     const snapshot = serializeWorkflowSnapshot(
       [
         buildNode({
@@ -150,23 +150,26 @@ describe('workflowSerialization', () => {
             model: 'nano-banana',
             positivePrompt: 'hero shot',
             generatedImage: 'data:image/png;base64,strip-base64',
-            generatedVideo: 'https://cdn.example.com/generated.mp4',
+            generatedImageUrl: 'https://signed.supabase.co/generated.png',
+            generatedImageStoragePath: 'brand-assets/generated.png',
+            generatedImageBucket: 'brand-profile-assets',
             image: 'data:image/png;base64,strip-input-image',
           } as any,
         }),
       ],
       [],
-      'bezier',
-      { preserveGeneratedOutputs: true }
+      'bezier'
     );
 
     const generatorNode = snapshot.nodes.find((node) => node.id === 'gen');
     expect((generatorNode?.data as any)?.generatedImage).toBeUndefined();
-    expect((generatorNode?.data as any)?.generatedVideo).toBe('https://cdn.example.com/generated.mp4');
+    expect((generatorNode?.data as any)?.generatedImageUrl).toBeUndefined();
+    expect((generatorNode?.data as any)?.generatedImageStoragePath).toBe('brand-assets/generated.png');
+    expect((generatorNode?.data as any)?.generatedImageBucket).toBe('brand-profile-assets');
     expect((generatorNode?.data as any)?.image).toBeUndefined();
   });
 
-  it('persists generatedImageUrl/generatedVideoUrl while dropping base64 fields', () => {
+  it('strips base64 and signed URL generated fields for both image and video nodes', () => {
     const snapshot = serializeWorkflowSnapshot(
       [
         buildNode({
@@ -177,6 +180,8 @@ describe('workflowSerialization', () => {
             positivePrompt: '',
             generatedImage: 'data:image/png;base64,base64-payload',
             generatedImageUrl: 'https://cdn.example.com/generated.png',
+            generatedImageStoragePath: 'brand-assets/generated.png',
+            generatedImageBucket: 'brand-profile-assets',
           } as any,
         }),
         buildNode({
@@ -188,6 +193,8 @@ describe('workflowSerialization', () => {
             enhancePrompt: false,
             generatedVideo: 'data:video/mp4;base64,base64-video-payload',
             generatedVideoUrl: 'https://cdn.example.com/generated.mp4',
+            generatedVideoStoragePath: 'brand-assets/generated.mp4',
+            generatedVideoBucket: 'brand-profile-assets',
           } as any,
         }),
       ],
@@ -197,11 +204,15 @@ describe('workflowSerialization', () => {
 
     const imageGenNode = snapshot.nodes.find((node) => node.id === 'gen');
     expect((imageGenNode?.data as any)?.generatedImage).toBeUndefined();
-    expect((imageGenNode?.data as any)?.generatedImageUrl).toBe('https://cdn.example.com/generated.png');
+    expect((imageGenNode?.data as any)?.generatedImageUrl).toBeUndefined();
+    expect((imageGenNode?.data as any)?.generatedImageStoragePath).toBe('brand-assets/generated.png');
+    expect((imageGenNode?.data as any)?.generatedImageBucket).toBe('brand-profile-assets');
 
     const videoGenNode = snapshot.nodes.find((node) => node.id === 'video-gen');
     expect((videoGenNode?.data as any)?.generatedVideo).toBeUndefined();
-    expect((videoGenNode?.data as any)?.generatedVideoUrl).toBe('https://cdn.example.com/generated.mp4');
+    expect((videoGenNode?.data as any)?.generatedVideoUrl).toBeUndefined();
+    expect((videoGenNode?.data as any)?.generatedVideoStoragePath).toBe('brand-assets/generated.mp4');
+    expect((videoGenNode?.data as any)?.generatedVideoBucket).toBe('brand-profile-assets');
   });
 
   it('preserves style and dimensions during serialization', () => {

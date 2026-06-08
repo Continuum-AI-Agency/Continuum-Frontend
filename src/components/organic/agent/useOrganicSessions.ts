@@ -4,9 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import {
   fetchOrganicSessions,
   fetchOrganicSessionMessages,
-  OrganicSession,
-  OrganicSessionMessage,
+  type OrganicSession,
+  type OrganicSessionMessage,
 } from "@/lib/organic/agent-sessions";
+import { useOrganicSessionStore } from "@/lib/organic/organic-session-store";
 
 export function useOrganicSessions(
   brandId: string,
@@ -28,35 +29,41 @@ export function useOrganicSessions(
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
+
+    const cached = useOrganicSessionStore.getState().getFreshSessions(brandId);
+    if (cached) {
+      setSessions(cached);
+      setActiveSessionId(cached[0]?.sessionId ?? crypto.randomUUID());
+      setIsLoadingSessions(false);
+      return;
+    }
+
     setIsLoadingSessions(true);
     fetchOrganicSessions(brandId).then((fetched) => {
       if (cancelled) return;
+      useOrganicSessionStore.getState().setSessions(brandId, fetched);
       setSessions(fetched);
-      if (fetched.length > 0) {
-        setActiveSessionId(fetched[0].sessionId);
-      } else {
-        setActiveSessionId(`${brandId}:${userId}:${crypto.randomUUID()}`);
-      }
+      setActiveSessionId(fetched[0]?.sessionId ?? crypto.randomUUID());
       setIsLoadingSessions(false);
     });
+
     return () => {
       cancelled = true;
     };
   }, [brandId, userId]);
 
   const startNewSession = useCallback((): string => {
-    const id = `${brandId}:${userId ?? "unknown"}:${crypto.randomUUID()}`;
+    const id = crypto.randomUUID();
     setActiveSessionId(id);
     return id;
-  }, [brandId, userId]);
+  }, []);
 
   const selectSession = useCallback(
     async (sessionId: string): Promise<OrganicSessionMessage[]> => {
       setActiveSessionId(sessionId);
       setIsLoadingMessages(true);
       try {
-        const msgs = await fetchOrganicSessionMessages(sessionId, brandId);
-        return msgs;
+        return await fetchOrganicSessionMessages(sessionId, brandId);
       } finally {
         setIsLoadingMessages(false);
       }
@@ -66,6 +73,7 @@ export function useOrganicSessions(
 
   const refreshSessions = useCallback(async (): Promise<void> => {
     const fetched = await fetchOrganicSessions(brandId);
+    useOrganicSessionStore.getState().setSessions(brandId, fetched);
     setSessions(fetched);
   }, [brandId]);
 
