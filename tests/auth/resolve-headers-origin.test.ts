@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveHeadersOrigin } from "../../src/lib/server/origin";
+import { resolveHeadersOrigin, resolveRequestOrigin } from "../../src/lib/server/origin";
 
 function withEnv<T>(patch: Record<string, string | undefined>, fn: () => T): T {
   const previous: Record<string, string | undefined> = {};
@@ -127,6 +127,52 @@ test("resolveHeadersOrigin uses beta host when server action origin header is ab
       });
 
       const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
+      assert.equal(origin, "https://app.beta.trycontinuum.ai");
+    }
+  );
+});
+
+test("resolveHeadersOrigin uses beta origin when hosted request host is production", () => {
+  withEnv(
+    {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      SITE_URL: undefined,
+      OAUTH_ALLOWED_ORIGINS: undefined,
+      NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
+    },
+    () => {
+      const headerStore = new Headers({
+        host: "app.trycontinuum.ai",
+        origin: "https://app.beta.trycontinuum.ai",
+        "x-forwarded-proto": "https",
+      });
+
+      const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
+      assert.equal(origin, "https://app.beta.trycontinuum.ai");
+    }
+  );
+});
+
+test("resolveRequestOrigin accepts beta override when request URL resolves as production", () => {
+  withEnv(
+    {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      SITE_URL: undefined,
+      OAUTH_ALLOWED_ORIGINS: undefined,
+      NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
+    },
+    () => {
+      const request = new Request("https://app.trycontinuum.ai/oauth/start", {
+        headers: {
+          host: "app.trycontinuum.ai",
+          "x-forwarded-proto": "https",
+        },
+      });
+      const url = new URL(request.url);
+
+      const origin = resolveRequestOrigin(request, url, "https://app.beta.trycontinuum.ai");
       assert.equal(origin, "https://app.beta.trycontinuum.ai");
     }
   );

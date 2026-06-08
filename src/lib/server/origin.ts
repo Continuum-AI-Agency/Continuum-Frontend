@@ -147,8 +147,10 @@ export function resolveHeadersOrigin(headerStore: Headers, fallbackOrigin: strin
   const requestTargetOrigin = forwardedOrigin ?? hostOrigin;
   const knownAppOrigins = [normalizedFallback, ...envOrigins];
 
-  if (requestTargetOrigin && isSameAppDomain(requestTargetOrigin, knownAppOrigins)) {
-    allowedOrigins.add(requestTargetOrigin);
+  for (const candidateOrigin of [headerOrigin, requestTargetOrigin, refererOrigin]) {
+    if (candidateOrigin && isSameAppDomain(candidateOrigin, knownAppOrigins)) {
+      allowedOrigins.add(candidateOrigin);
+    }
   }
 
   if (process.env.NODE_ENV !== "production" && isLocalhostOrigin(headerOrigin)) {
@@ -174,16 +176,22 @@ export function resolveRequestOrigin(request: Request, url: URL, override?: stri
   const fallbackOrigin = normalizeOrigin(url.origin) ?? url.origin;
   const forwardedOrigin = parseForwardedOrigin(request);
   const allowedOrigins = new Set<string>([fallbackOrigin]);
+  const envOrigins = collectEnvOrigins();
 
   if (forwardedOrigin) {
     allowedOrigins.add(forwardedOrigin);
   }
 
-  for (const envOrigin of collectEnvOrigins()) {
+  for (const envOrigin of envOrigins) {
     allowedOrigins.add(envOrigin);
   }
 
   const requestedOrigin = normalizeOrigin(override);
+  const knownAppOrigins = [fallbackOrigin, ...envOrigins];
+  if (requestedOrigin && isSameAppDomain(requestedOrigin, knownAppOrigins)) {
+    allowedOrigins.add(requestedOrigin);
+  }
+
   if (requestedOrigin && allowedOrigins.has(requestedOrigin)) {
     return requestedOrigin;
   }
