@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test"
 
+import { reelVideoBatchFrameSchema } from "@continuum/contracts"
+
 import { parseNdjson } from "./useGenerateReelVideos"
 
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
@@ -50,5 +52,24 @@ describe("parseNdjson", () => {
       streamFromChunks(['\n{"type":"reel_started","draftId":"d1"}\nnot-json\n\n']),
     )
     expect(frames).toEqual([{ type: "reel_started", draftId: "d1" }])
+  })
+
+  it("parses a reel_clips_ready frame that validates against the contract schema", async () => {
+    const line = JSON.stringify({
+      type: "reel_clips_ready",
+      draftId: "d1",
+      aspectRatio: "9:16",
+      durationSec: 12,
+      clips: [
+        { index: 0, role: "hook", durationSec: 6, clipUrl: "reel/b/s0.mp4", signedClipUrl: "https://s/0" },
+        { index: 1, role: "cta", durationSec: 6, clipUrl: "reel/b/s1.mp4", signedClipUrl: "https://s/1" },
+      ],
+    })
+    const [frame] = await collect(streamFromChunks([`${line}\n`]))
+    const parsed = reelVideoBatchFrameSchema.safeParse(frame)
+    expect(parsed.success).toBe(true)
+    if (parsed.success && parsed.data.type === "reel_clips_ready") {
+      expect(parsed.data.clips).toHaveLength(2)
+    }
   })
 })

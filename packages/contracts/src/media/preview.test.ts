@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveOrganicImageUrl, resolveOrganicImageUrls } from "./preview";
+import {
+  hasDurableAsset,
+  resolveDurableImageUrls,
+  resolveOrganicImageUrl,
+  resolveOrganicImageUrls,
+} from "./preview";
 
 describe("resolveOrganicImageUrl", () => {
   it("returns null for empty media", () => {
@@ -52,5 +57,32 @@ describe("resolveOrganicImageUrls", () => {
 
   it("returns [] for empty media", () => {
     expect(resolveOrganicImageUrls(null)).toEqual([]);
+  });
+});
+
+describe("durable asset resolution (no base64 masking)", () => {
+  it("hasDurableAsset is true only for a hosted URL", () => {
+    expect(hasDurableAsset({ signedUrl: "https://s/x.png" })).toBe(true);
+    expect(hasDurableAsset({ url: "https://s/x.png" })).toBe(true);
+    expect(hasDurableAsset({ assetUrl: "https://s/x.png" })).toBe(true);
+  });
+
+  it("hasDurableAsset is false for base64-only or empty (not durable)", () => {
+    expect(hasDurableAsset({ assetBase64: "AAAA", mimeType: "image/png" })).toBe(false);
+    expect(hasDurableAsset({})).toBe(false);
+    expect(hasDurableAsset(null)).toBe(false);
+  });
+
+  it("resolveDurableImageUrls omits base64-only assets", () => {
+    expect(resolveDurableImageUrls({ assetBase64: "AAAA" })).toEqual([]);
+    expect(resolveDurableImageUrls({ signedUrl: "https://s/x.png" })).toEqual(["https://s/x.png"]);
+    expect(
+      resolveDurableImageUrls({
+        assets: [
+          { signedUrl: "https://s/1.png", order: 0 },
+          { assetBase64: "BBBB", order: 1 },
+        ],
+      }),
+    ).toEqual(["https://s/1.png"]);
   });
 });

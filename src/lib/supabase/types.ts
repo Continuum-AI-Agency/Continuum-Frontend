@@ -418,10 +418,13 @@ export type Database = {
           created_at: string | null
           id: string
           instagram_handle: string | null
+          is_user_tagged: boolean
           is_verified: boolean | null
           last_resolved_at: string | null
+          meta_page_id: string | null
           metadata: Json | null
           name: string
+          tagged_at: string | null
           updated_at: string | null
           website_url: string | null
         }
@@ -430,10 +433,13 @@ export type Database = {
           created_at?: string | null
           id?: string
           instagram_handle?: string | null
+          is_user_tagged?: boolean
           is_verified?: boolean | null
           last_resolved_at?: string | null
+          meta_page_id?: string | null
           metadata?: Json | null
           name: string
+          tagged_at?: string | null
           updated_at?: string | null
           website_url?: string | null
         }
@@ -442,10 +448,13 @@ export type Database = {
           created_at?: string | null
           id?: string
           instagram_handle?: string | null
+          is_user_tagged?: boolean
           is_verified?: boolean | null
           last_resolved_at?: string | null
+          meta_page_id?: string | null
           metadata?: Json | null
           name?: string
+          tagged_at?: string | null
           updated_at?: string | null
           website_url?: string | null
         }

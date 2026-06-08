@@ -25,7 +25,13 @@ function Pill({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AdSnapshotCard({ entry }: { entry: TimelineEntry }) {
+export function AdSnapshotCard({
+  entry,
+  inspiration = false,
+}: {
+  entry: TimelineEntry;
+  inspiration?: boolean;
+}) {
   const hasMedia = entry.hasCreativeMedia ?? false;
   const { data: creativeUrl } = useCreativeUrl(entry.snapshotId, hasMedia);
   const analysis = entry.analysis ?? null;
@@ -48,6 +54,11 @@ export function AdSnapshotCard({ entry }: { entry: TimelineEntry }) {
         >
           {entry.status}
         </span>
+        {inspiration ? (
+          <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            Inspiration
+          </span>
+        ) : null}
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3">

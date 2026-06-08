@@ -181,7 +181,9 @@ function skillToMentionSuggestion(skill: Skill): AgentMentionSuggestion {
     {
       id: skill.id,
       type: "skill",
-      label: skill.name,
+      // The @-mention token renders the stable slug (no spaces); resolution is by
+      // skill id (metadata.skillId), never by this label.
+      label: skill.slug ?? skill.name,
       source: "organic",
       metadata: {
         skillId: skill.id,
@@ -263,7 +265,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   const setViewMode = useCalendarStore((s) => s.setViewMode);
   const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const canvasNodes = useStudioStore((s) => s.nodes);
-  const { skills: brandSkills, refresh: refreshBrandSkills } = useBrandSkills(brandId);
+  const { skills: brandSkills, refresh: refreshBrandSkills, isError: brandSkillsError } = useBrandSkills(brandId);
   const [queuedMentionSuggestions, setQueuedMentionSuggestions] = useState<AgentMentionSuggestion[]>([]);
   const syncedJobsRef = useRef(new Set<string>());
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -877,14 +879,13 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
           queuedMentionSuggestions={queuedMentionSuggestions}
           onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
           actions={
-            brandSkills.length > 0 ? (
-              <SkillPickerButton
-                skills={brandSkills}
-                onPickAction={(skill) =>
-                  setQueuedMentionSuggestions((current) => [...current, skillToMentionSuggestion(skill)])
-                }
-              />
-            ) : undefined
+            <SkillPickerButton
+              skills={brandSkills}
+              isError={brandSkillsError}
+              onPickAction={(skill) =>
+                setQueuedMentionSuggestions((current) => [...current, skillToMentionSuggestion(skill)])
+              }
+            />
           }
           placeholder="Plan me 3 posts this week on the beauty trend…"
         />

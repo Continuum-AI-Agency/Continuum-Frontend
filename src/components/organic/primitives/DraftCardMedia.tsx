@@ -123,6 +123,30 @@ export function DraftCardMedia({
     )
   }
 
+  const reel = draft.mediaSuggestion?.reel
+  const reelUrl = reel?.generated && hasText(reel.signedUrl) ? reel.signedUrl.trim() : null
+  if (reelUrl) {
+    return (
+      <div className={cn("relative overflow-hidden", aspectClass, className)}>
+        {/* Muted, paused preview — the first frame is the implicit poster. */}
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video
+          src={reelUrl}
+          muted
+          playsInline
+          preload="metadata"
+          aria-label={altText}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm">
+            <PlayIcon className="h-4 w-4 translate-x-[1px]" />
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   const mediaUrl = resolveDraftMediaAssetUrl(draft)
 
   return (

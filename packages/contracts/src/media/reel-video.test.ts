@@ -2,9 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_REEL_VIDEO_BATCH_MAX,
+  reelClipSchema,
   reelVideoBatchFrameSchema,
   reelVideoBatchRequestSchema,
 } from "./reel-video";
+
+const clip = (index: number) => ({
+  index,
+  role: "hook" as const,
+  durationSec: 6,
+  clipUrl: `reel/9x16/scene-${index}.mp4`,
+  signedClipUrl: `https://signed/scene-${index}.mp4`,
+});
 
 describe("reelVideoBatchRequestSchema", () => {
   it("accepts a brand + non-empty draftIds list", () => {
@@ -73,5 +82,42 @@ describe("reelVideoBatchFrameSchema", () => {
     expect(
       reelVideoBatchFrameSchema.safeParse({ type: "reel_paused", draftId: "d1" }).success,
     ).toBe(false);
+  });
+
+  it("round-trips a reel_clips_ready frame with >=2 verified clips", () => {
+    const parsed = reelVideoBatchFrameSchema.safeParse({
+      type: "reel_clips_ready",
+      draftId: "d1",
+      aspectRatio: "9:16",
+      durationSec: 18,
+      clips: [clip(0), clip(1)],
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a reel_clips_ready frame with fewer than 2 clips", () => {
+    expect(
+      reelVideoBatchFrameSchema.safeParse({
+        type: "reel_clips_ready",
+        draftId: "d1",
+        aspectRatio: "9:16",
+        durationSec: 6,
+        clips: [clip(0)],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("reelClipSchema", () => {
+  it("accepts a verified clip", () => {
+    expect(reelClipSchema.safeParse(clip(0)).success).toBe(true);
+  });
+
+  it("rejects a blank signedClipUrl (must be verified)", () => {
+    expect(reelClipSchema.safeParse({ ...clip(0), signedClipUrl: "" }).success).toBe(false);
+  });
+
+  it("rejects an unknown role", () => {
+    expect(reelClipSchema.safeParse({ ...clip(0), role: "outro" }).success).toBe(false);
   });
 });

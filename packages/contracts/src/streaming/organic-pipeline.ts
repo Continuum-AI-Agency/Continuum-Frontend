@@ -82,6 +82,7 @@ export const organicReelSceneAssetSchema = z.object({
 export const organicReelAssetSchema = z.object({
   generated: z.boolean(),
   url: z.string().nullable().optional(),
+  bucket: z.string().nullable().optional(),
   signedUrl: z.string().nullable().optional(),
   mimeType: z.string().nullable().optional(),
   durationSec: z.number(),
@@ -421,6 +422,9 @@ export const organicGenerationRunCompletedEventSchema = z.object({
     total: z.number().int().min(0),
     succeeded: z.number().int().min(0),
     failed: z.number().int().min(0),
+    // Completed but media not verified durable (base64-only mockup). Optional
+    // for back-compat with summaries persisted before this field existed.
+    degraded: z.number().int().min(0).optional(),
   }).strict().optional(),
 }).strict();
 

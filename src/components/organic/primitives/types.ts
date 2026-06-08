@@ -74,6 +74,7 @@ export type OrganicCalendarDraft = {
     reel?: {
       generated?: boolean | null
       url?: string | null
+      bucket?: string | null
       signedUrl?: string | null
       mimeType?: string | null
       durationSec?: number | null

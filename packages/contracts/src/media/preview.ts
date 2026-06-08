@@ -62,3 +62,40 @@ export function resolveOrganicImageUrls(media: OrganicMediaLike): string[] {
 export function resolveOrganicImageUrl(media: OrganicMediaLike): string | null {
   return resolveOrganicImageUrls(media)[0] ?? null;
 }
+
+/**
+ * A hosted/durable URL only — NEVER a base64 data URL. Use this (not
+ * `resolveAsset`) when deciding whether a post actually has media persisted to
+ * storage, so a base64-only 512px mockup is not mistaken for a saved asset.
+ */
+function resolveDurableAsset(asset: OrganicMediaAsset | null | undefined): string | null {
+  if (!asset) return null;
+  if (typeof asset.signedUrl === "string" && asset.signedUrl.trim()) return asset.signedUrl.trim();
+  if (typeof asset.url === "string" && asset.url.trim()) return asset.url.trim();
+  if (typeof asset.assetUrl === "string" && asset.assetUrl.trim()) return asset.assetUrl.trim();
+  return null;
+}
+
+/**
+ * All durable (hosted) preview URLs for a media suggestion, carousel-aware.
+ * Unlike `resolveOrganicImageUrls`, base64-only assets are dropped — a slot with
+ * only base64 has NO durable URL and must not be reported as a completed asset.
+ */
+export function resolveDurableImageUrls(media: OrganicMediaLike): string[] {
+  if (!media) return [];
+
+  const assets = Array.isArray(media.assets) ? media.assets : [];
+  if (assets.length > 0) {
+    const ordered = [...assets].sort((a, b) => (a?.order ?? 999) - (b?.order ?? 999));
+    const urls = ordered.map(resolveDurableAsset).filter((u): u is string => u !== null);
+    if (urls.length > 0) return urls;
+  }
+
+  const single = resolveDurableAsset(media);
+  return single ? [single] : [];
+}
+
+/** True when the media suggestion has at least one durable (hosted) asset URL. */
+export function hasDurableAsset(media: OrganicMediaLike): boolean {
+  return resolveDurableImageUrls(media).length > 0;
+}

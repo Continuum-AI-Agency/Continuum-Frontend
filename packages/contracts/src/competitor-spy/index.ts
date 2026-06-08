@@ -29,6 +29,15 @@ export const competitorSchema = z.object({
 });
 export type Competitor = z.infer<typeof competitorSchema>;
 
+// Meta Page autocomplete result. The Library "Inspiration" tagger lets a user
+// type a brand name; the backend resolves real advertiser Pages from the Ad
+// Library and returns these so the user picks the exact page_id to track.
+export const metaPageSearchResultSchema = z.object({
+  pageId: z.string(),
+  pageName: z.string(),
+});
+export type MetaPageSearchResult = z.infer<typeof metaPageSearchResultSchema>;
+
 export const competitorAdSchema = z.object({
   sourceAdId: z.string(),
   pageId: z.string().nullable(),

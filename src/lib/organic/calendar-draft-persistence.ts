@@ -49,6 +49,7 @@ function restoreReel(value: unknown): ReelMediaSuggestion | undefined {
   return {
     generated: typeof obj.generated === "boolean" ? obj.generated : null,
     url: readString(obj.url) ?? null,
+    bucket: readString(obj.bucket) ?? null,
     signedUrl: readString(obj.signedUrl) ?? null,
     mimeType: readString(obj.mimeType) ?? null,
     durationSec: readNumber(obj.durationSec) ?? null,

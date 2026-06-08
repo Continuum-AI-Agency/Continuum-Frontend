@@ -33,6 +33,23 @@ export const reelVideoStageEnum = z.enum([
   "persisting",
 ]);
 
+/**
+ * One persisted, verified scene clip the backend hands to the browser for the
+ * frontend-stitch path. `signedClipUrl` is required and non-empty — the backend
+ * only emits clips that landed in storage with a usable URL (`isVerifiedAsset`).
+ */
+export const reelClipSchema = z
+  .object({
+    index: z.number().int().min(0),
+    role: z.enum(["hook", "body", "cta"]),
+    durationSec: z.number().nonnegative(),
+    clipUrl: z.string(),
+    signedClipUrl: z.string().min(1),
+    captionText: z.string().nullable().optional(),
+    mimeType: z.string().optional(),
+  })
+  .strict();
+
 export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("batch_started"), total: z.number().int().nonnegative() }).strict(),
   z.object({ type: z.literal("reel_started"), draftId: z.string().min(1) }).strict(),
@@ -56,6 +73,15 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
     .strict(),
   z
     .object({
+      type: z.literal("reel_clips_ready"),
+      draftId: z.string().min(1),
+      aspectRatio: z.string().min(1),
+      durationSec: z.number().nonnegative(),
+      clips: z.array(reelClipSchema).min(2),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal("reel_failed"),
       draftId: z.string().min(1),
       error: z.string(),
@@ -73,3 +99,4 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
 export type ReelVideoBatchRequest = z.infer<typeof reelVideoBatchRequestSchema>;
 export type ReelVideoStage = z.infer<typeof reelVideoStageEnum>;
 export type ReelVideoBatchFrame = z.infer<typeof reelVideoBatchFrameSchema>;
+export type ReelClip = z.infer<typeof reelClipSchema>;

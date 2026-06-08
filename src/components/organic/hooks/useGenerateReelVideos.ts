@@ -7,7 +7,8 @@ import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken"
 import { useCalendarStore } from "@/lib/organic/store"
 import { useToast } from "@/components/ui/ToastProvider"
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
-import type { ReelVideoBatchFrame } from "@continuum/contracts"
+import { reelVideoBatchFrameSchema } from "@continuum/contracts"
+import { stitchAndFinalizeReel } from "@/lib/organic/reelClientStitch"
 
 /** A tagged draft eligible for reel-video generation: the FE id + its persisted backend id. */
 export type ReelVideoTarget = { id: string; backendDraftId: string }
@@ -59,6 +60,10 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
   const updateDraft = useCalendarStore((state) => state.updateDraft)
   const { show } = useToast()
   const [isGenerating, setIsGenerating] = React.useState(false)
+  const abortRef = React.useRef<AbortController | null>(null)
+
+  // Abort any in-flight stitch/upload when the component unmounts.
+  React.useEffect(() => () => abortRef.current?.abort(), [])
 
   const generate = React.useCallback(
     async (brandId: string, targets: ReelVideoTarget[]) => {
@@ -73,6 +78,10 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
         updateDraft(feId, (draft: OrganicCalendarDraft) => ({ ...draft, generationStage: stage }))
       }
 
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+
       setIsGenerating(true)
       try {
         const token = await getBrowserAccessToken()
@@ -83,6 +92,7 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ brandId, draftIds: targets.map((t) => t.backendDraftId) }),
+          signal: controller.signal,
         })
 
         if (!response.ok || !response.body) {
@@ -92,14 +102,57 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
         }
 
         for await (const raw of parseNdjson(response.body)) {
-          const frame = raw as ReelVideoBatchFrame
+          const parsed = reelVideoBatchFrameSchema.safeParse(raw)
+          if (!parsed.success) continue
+          const frame = parsed.data
           switch (frame.type) {
+            case "batch_started":
+              break
             case "reel_started":
               setStage(frame.draftId, REEL_STAGE_LABELS.planning)
               break
             case "reel_progress":
               setStage(frame.draftId, REEL_STAGE_LABELS[frame.stage] ?? "Working…")
               break
+            case "reel_clips_ready": {
+              const feId = feIdFor(frame.draftId)
+              if (!feId) break
+              try {
+                const linked = await stitchAndFinalizeReel({
+                  brandId,
+                  draftId: frame.draftId,
+                  clips: frame.clips,
+                  durationSec: frame.durationSec,
+                  signal: controller.signal,
+                  onStage: (label) => setStage(frame.draftId, label),
+                })
+                updateDraft(feId, (draft: OrganicCalendarDraft) => ({
+                  ...draft,
+                  generationStage: undefined,
+                  generationError: undefined,
+                  mediaSuggestion: {
+                    ...draft.mediaSuggestion,
+                    reel: {
+                      ...draft.mediaSuggestion?.reel,
+                      generated: true,
+                      url: linked.path,
+                      bucket: linked.bucket,
+                      signedUrl: linked.signedUrl,
+                      durationSec: linked.durationSec,
+                      error: null,
+                    },
+                  },
+                }))
+              } catch (err) {
+                if (err instanceof DOMException && err.name === "AbortError") break
+                updateDraft(feId, (draft: OrganicCalendarDraft) => ({
+                  ...draft,
+                  generationStage: undefined,
+                  generationError: err instanceof Error ? err.message : "Reel stitching failed.",
+                }))
+              }
+              break
+            }
             case "reel_ready": {
               const feId = feIdFor(frame.draftId)
               if (feId) {
@@ -113,6 +166,7 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
                       ...draft.mediaSuggestion?.reel,
                       generated: true,
                       url: frame.mp4Path,
+                      bucket: frame.mp4Bucket,
                       signedUrl: frame.mp4Url,
                       durationSec: frame.durationSec,
                       error: null,
@@ -150,12 +204,14 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
           }
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return
         show({
           title: "Reel generation failed",
           description: error instanceof Error ? error.message : "Unexpected error.",
           variant: "error",
         })
       } finally {
+        if (abortRef.current === controller) abortRef.current = null
         setIsGenerating(false)
       }
     },

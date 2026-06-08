@@ -22,7 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { FolderOpen, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { FolderOpen, Link2, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -45,6 +45,10 @@ import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
+import { ImportFromLinkDialog } from './ImportFromLinkDialog';
+import { layoutInRow } from '../utils/layoutImportedNodes';
+import { buildReferenceNodes } from '../utils/buildReferenceNodes';
+import type { UnfurlMediaItem } from '@continuum/contracts';
 import { WorkflowLibrary } from '@/components/ai-studio/WorkflowLibrary';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -662,7 +666,36 @@ function Flow({
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
+  const [isImportLinkOpen, setIsImportLinkOpen] = useState(false);
   const hydratedPlannerSeedRef = useRef<string | null>(null);
+
+  // Places unfurled media as unattached reference nodes, laid out in a centered
+  // row at the viewport center. Nodes have no edges, so they are inert references
+  // until the user wires them into a generator.
+  const placeImportedReferenceNodes = useCallback(
+    (items: UnfurlMediaItem[]) => {
+      if (items.length === 0) return;
+      takeSnapshot();
+      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+      const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
+      const center = screenToFlowPosition({ x: viewportWidth / 2, y: viewportHeight / 2 });
+      const positions = layoutInRow(items.length, center);
+      const built = buildReferenceNodes(items, positions, () => uuidv4());
+      const newNodes = built.map(
+        (node) =>
+          ({
+            id: node.id,
+            type: node.type,
+            position: node.position,
+            data: node.data as StudioNode['data'],
+            style: node.style,
+          }) as StudioNode,
+      );
+      setNodes(nodes.concat(newNodes));
+      triggerSave();
+    },
+    [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave],
+  );
 
   const handleMouseMove = useCallback(
     (event: React.MouseEvent) => {
@@ -1036,6 +1069,16 @@ function Flow({
           >
             <Panel position="top-left" className="flex items-center gap-2 bg-background/95 p-1 backdrop-blur">
               <InteractionModeToggle />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsImportLinkOpen(true)}
+                aria-label="Import media from a link"
+              >
+                <Link2 className="mr-2 h-4 w-4" />
+                Import from link
+              </Button>
             </Panel>
 
             <Controls />
@@ -1107,6 +1150,11 @@ function Flow({
             Load Workflow
           </ContextMenuItem>
 
+          <ContextMenuItem inset onSelect={() => setIsImportLinkOpen(true)}>
+            <Link2 className="mr-2 h-4 w-4" />
+            Import from link
+          </ContextMenuItem>
+
           <ContextMenuSub>
             <ContextMenuSubTrigger inset>
               <ScanLine className="mr-2 h-4 w-4" />
@@ -1150,6 +1198,11 @@ function Flow({
         open={isLoadWorkflowOpen}
         onOpenChange={setIsLoadWorkflowOpen}
         showTrigger={false}
+      />
+      <ImportFromLinkDialog
+        open={isImportLinkOpen}
+        onOpenChange={setIsImportLinkOpen}
+        onPlace={placeImportedReferenceNodes}
       />
     </div>
   );

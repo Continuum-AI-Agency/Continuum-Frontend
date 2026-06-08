@@ -16,12 +16,13 @@ import {
 type Props = {
   skills: Skill[];
   onPickAction: (skill: Skill) => void;
+  isError?: boolean;
 };
 
 // Composer-adjacent picker so users can browse and apply brand skills without
 // typing "@". Selecting a skill adds it as a chat reference (same channel the
 // @-mention uses), so it is loaded into the agent's context for the next turn.
-export function SkillPickerButton({ skills, onPickAction }: Props) {
+export function SkillPickerButton({ skills, onPickAction, isError = false }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,7 +41,11 @@ export function SkillPickerButton({ skills, onPickAction }: Props) {
         <Command>
           <CommandInput placeholder="Apply a brand skill…" />
           <CommandList>
-            <CommandEmpty>No skills yet. Ask the agent to save one.</CommandEmpty>
+            <CommandEmpty>
+              {isError
+                ? "Couldn't load brand skills. Check your connection and try again."
+                : "No skills yet — ask the agent to save one (e.g. “save this as a skill”)."}
+            </CommandEmpty>
             <CommandGroup heading="Brand skills">
               {skills.map((skill) => (
                 <CommandItem

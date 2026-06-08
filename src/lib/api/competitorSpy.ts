@@ -2,7 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { request } from "@/lib/api/http";
-import type { Competitor, TimelineEntry, AwarenessReportPayload } from "@continuum/contracts";
+import type {
+  Competitor,
+  TimelineEntry,
+  AwarenessReportPayload,
+  MetaPageSearchResult,
+} from "@continuum/contracts";
 
 const BASE = "/api/competitor-ad-spy";
 
@@ -10,6 +15,7 @@ export interface TimelineParams {
   brandId: string;
   competitorId?: string;
   status?: "active" | "paused";
+  q?: string;
   limit?: number;
 }
 
@@ -33,9 +39,16 @@ export async function fetchTimeline(params: TimelineParams): Promise<TimelineEnt
   const qs = new URLSearchParams({ brandId: params.brandId });
   if (params.competitorId) qs.set("competitorId", params.competitorId);
   if (params.status) qs.set("status", params.status);
+  if (params.q) qs.set("q", params.q);
   qs.set("limit", String(params.limit ?? 60));
   const res = await request<{ items: TimelineEntry[] }>({ path: `${BASE}/timeline?${qs.toString()}` });
   return res.items;
+}
+
+export async function searchMetaPages(brandId: string, q: string): Promise<MetaPageSearchResult[]> {
+  const qs = new URLSearchParams({ brandId, q });
+  const res = await request<{ pages: MetaPageSearchResult[] }>({ path: `${BASE}/pages/search?${qs.toString()}` });
+  return res.pages;
 }
 
 export async function fetchAwareness(brandId: string): Promise<AwarenessReportPayload | null> {
@@ -84,9 +97,18 @@ export async function triggerSync(brandId: string, competitorIds?: string[]): Pr
 const keys = {
   competitors: (brandId: string) => ["competitor-spy", "competitors", brandId] as const,
   timeline: (p: TimelineParams) =>
-    ["competitor-spy", "timeline", p.brandId, p.competitorId ?? null, p.status ?? null, p.limit ?? null] as const,
+    [
+      "competitor-spy",
+      "timeline",
+      p.brandId,
+      p.competitorId ?? null,
+      p.status ?? null,
+      p.q ?? null,
+      p.limit ?? null,
+    ] as const,
   awareness: (brandId: string) => ["competitor-spy", "awareness", brandId] as const,
   creative: (snapshotId: string) => ["competitor-spy", "creative", snapshotId] as const,
+  pageSearch: (brandId: string, q: string) => ["competitor-spy", "page-search", brandId, q] as const,
 };
 
 export function useCompetitors(brandId: string) {
@@ -102,6 +124,18 @@ export function useAdTimeline(params: TimelineParams) {
     queryKey: keys.timeline(params),
     queryFn: () => fetchTimeline(params),
     enabled: Boolean(params.brandId),
+  });
+}
+
+// Meta Page autocomplete for the competitor tagger. Caller debounces `q`; the
+// query only fires for terms of length >= 2.
+export function useMetaPageSearch(brandId: string, q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: keys.pageSearch(brandId, term),
+    queryFn: () => searchMetaPages(brandId, term),
+    enabled: Boolean(brandId) && term.length >= 2,
+    staleTime: 5 * 60_000,
   });
 }
 
