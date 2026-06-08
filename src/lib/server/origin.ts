@@ -48,6 +48,51 @@ function parseForwardedOrigin(request: Request): string | null {
   return normalizeOrigin(`${protocol}://${host}`);
 }
 
+function parseHostOrigin(headerStore: Headers): string | null {
+  const host = firstHeaderValue(headerStore.get("host"));
+  if (!host) return null;
+
+  const forwardedProto = firstHeaderValue(headerStore.get("x-forwarded-proto"));
+  const protocol = forwardedProto ?? (host.startsWith("localhost") ? "http" : "https");
+  return normalizeOrigin(`${protocol}://${host}`);
+}
+
+function parseRefererOrigin(headerStore: Headers): string | null {
+  return normalizeOrigin(firstHeaderValue(headerStore.get("referer")));
+}
+
+function hostnameFromOrigin(origin: string): string | null {
+  try {
+    return new URL(origin).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function baseDomain(hostname: string): string | null {
+  const labels = hostname.split(".").filter(Boolean);
+  if (labels.length < 2) return null;
+  return labels.slice(-2).join(".");
+}
+
+function isSameAppDomain(candidateOrigin: string, knownOrigins: string[]): boolean {
+  const candidateHost = hostnameFromOrigin(candidateOrigin);
+  if (!candidateHost) return false;
+
+  for (const knownOrigin of knownOrigins) {
+    const knownHost = hostnameFromOrigin(knownOrigin);
+    if (!knownHost) continue;
+    if (candidateHost === knownHost) return true;
+
+    const knownBaseDomain = baseDomain(knownHost);
+    if (knownBaseDomain && candidateHost.endsWith(`.${knownBaseDomain}`)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function collectEnvOrigins(): string[] {
   const rawValues: Array<string | null | undefined> = [
     process.env.NEXT_PUBLIC_SITE_URL,
@@ -97,9 +142,13 @@ export function resolveHeadersOrigin(headerStore: Headers, fallbackOrigin: strin
 
   const headerOrigin = normalizeOrigin(firstHeaderValue(headerStore.get("origin")));
   const forwardedOrigin = parseForwardedOrigin({ headers: headerStore } as unknown as Request);
+  const hostOrigin = parseHostOrigin(headerStore);
+  const refererOrigin = parseRefererOrigin(headerStore);
+  const requestTargetOrigin = forwardedOrigin ?? hostOrigin;
+  const knownAppOrigins = [normalizedFallback, ...envOrigins];
 
-  if (forwardedOrigin) {
-    allowedOrigins.add(forwardedOrigin);
+  if (requestTargetOrigin && isSameAppDomain(requestTargetOrigin, knownAppOrigins)) {
+    allowedOrigins.add(requestTargetOrigin);
   }
 
   if (process.env.NODE_ENV !== "production" && isLocalhostOrigin(headerOrigin)) {
@@ -110,8 +159,12 @@ export function resolveHeadersOrigin(headerStore: Headers, fallbackOrigin: strin
     return headerOrigin;
   }
 
-  if (forwardedOrigin && allowedOrigins.has(forwardedOrigin)) {
-    return forwardedOrigin;
+  if (!headerOrigin && requestTargetOrigin && allowedOrigins.has(requestTargetOrigin)) {
+    return requestTargetOrigin;
+  }
+
+  if (!headerOrigin && refererOrigin && allowedOrigins.has(refererOrigin)) {
+    return refererOrigin;
   }
 
   return normalizedFallback;

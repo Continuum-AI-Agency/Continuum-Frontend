@@ -88,3 +88,46 @@ test("resolveHeadersOrigin accepts explicitly allowed origins in production", ()
   );
 });
 
+test("resolveHeadersOrigin uses beta host from the same app domain in production", () => {
+  withEnv(
+    {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      SITE_URL: undefined,
+      OAUTH_ALLOWED_ORIGINS: undefined,
+      NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
+    },
+    () => {
+      const headerStore = new Headers({
+        host: "app.beta.trycontinuum.ai",
+        origin: "https://app.beta.trycontinuum.ai",
+        "x-forwarded-proto": "https",
+      });
+
+      const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
+      assert.equal(origin, "https://app.beta.trycontinuum.ai");
+    }
+  );
+});
+
+test("resolveHeadersOrigin uses beta host when server action origin header is absent", () => {
+  withEnv(
+    {
+      NODE_ENV: "production",
+      NEXT_PUBLIC_SITE_URL: "https://app.trycontinuum.ai",
+      SITE_URL: undefined,
+      OAUTH_ALLOWED_ORIGINS: undefined,
+      NEXT_PUBLIC_OAUTH_ALLOWED_ORIGINS: undefined,
+    },
+    () => {
+      const headerStore = new Headers({
+        host: "app.beta.trycontinuum.ai",
+        referer: "https://app.beta.trycontinuum.ai/login",
+        "x-forwarded-proto": "https",
+      });
+
+      const origin = resolveHeadersOrigin(headerStore, "https://app.trycontinuum.ai");
+      assert.equal(origin, "https://app.beta.trycontinuum.ai");
+    }
+  );
+});

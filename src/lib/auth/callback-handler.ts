@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { resolveCallbackContext } from "@/lib/auth/callback-context";
+import { resolveAuthRedirectPath } from "@/lib/auth/redirect";
 
 function renderPopupAwareResult(options: {
   success: boolean;
@@ -141,7 +142,10 @@ export async function handleAuthCallbackRequest(request: NextRequest): Promise<N
     success: true,
     context: resolved.context,
     provider: resolved.provider,
-    fallbackRedirect: next ? `${origin}${next}` : `${origin}/dashboard`,
+    fallbackRedirect: `${origin}${resolveAuthRedirectPath({
+      requestedRedirect: next ?? undefined,
+      siteUrl: origin,
+    })}`,
     isPopup,
   });
 
