@@ -8,14 +8,7 @@ export const metadata: Metadata = {
   description: "Track competitors' paid ad creatives and how they evolve over time.",
 };
 
-const FEATURE_ENABLED =
-  (process.env.NEXT_PUBLIC_COMPETITOR_AD_SPY_ENABLED ?? "").toLowerCase() === "true";
-
 export default async function CompetitorSpyPage() {
-  if (!FEATURE_ENABLED) {
-    redirect("/dashboard");
-  }
-
   const { activeBrandId } = await getActiveBrandContext();
   if (!activeBrandId) {
     redirect("/onboarding");

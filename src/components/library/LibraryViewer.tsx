@@ -27,9 +27,6 @@ import {
 } from "@/lib/media/filters";
 import { CompetitorInspirationPanel } from "@/components/competitor-spy/CompetitorInspirationPanel";
 
-const INSPIRATION_ENABLED =
-  (process.env.NEXT_PUBLIC_COMPETITOR_AD_SPY_ENABLED ?? "").toLowerCase() === "true";
-
 type Props = {
   brandId: string;
   isPaid: boolean;
@@ -124,27 +121,25 @@ export function LibraryViewer({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {INSPIRATION_ENABLED ? (
-        <div className="flex shrink-0 items-center gap-1 border-b border-border px-4 pt-2" role="tablist" aria-label="Library sections">
-          {(["media", "inspiration"] as const).map((id) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={view === id}
-              onClick={() => setView(id)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize ${
-                view === id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {id}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex shrink-0 items-center gap-1 border-b border-border px-4 pt-2" role="tablist" aria-label="Library sections">
+        {(["media", "inspiration"] as const).map((id) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize ${
+              view === id
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {id}
+          </button>
+        ))}
+      </div>
 
-      {INSPIRATION_ENABLED && view === "inspiration" ? (
+      {view === "inspiration" ? (
         <CompetitorInspirationPanel brandId={brandId} />
       ) : (
         <div className="flex min-h-0 flex-1 overflow-hidden">
