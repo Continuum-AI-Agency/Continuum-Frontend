@@ -22,7 +22,7 @@ export function buildOAuthCallbackUrl(
   options?: OAuthUrlOptions
 ): string {
   const trimmedOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-  const callbackUrl = new URL(`${trimmedOrigin}/oauth/callback`);
+  const callbackUrl = new URL(`${trimmedOrigin}/callback`);
   callbackUrl.searchParams.set("provider", provider);
   callbackUrl.searchParams.set("context", context);
   callbackUrl.searchParams.set("origin", trimmedOrigin);

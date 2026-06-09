@@ -6,7 +6,7 @@ describe("buildOAuthCallbackUrl", () => {
   it("builds callback url with provider/context/origin parameters", () => {
     const callbackUrl = new URL(buildOAuthCallbackUrl("https://app.continuum.test/", "google", "login"));
 
-    expect(callbackUrl.pathname).toBe("/oauth/callback");
+    expect(callbackUrl.pathname).toBe("/callback");
     expect(callbackUrl.searchParams.get("provider")).toBe("google");
     expect(callbackUrl.searchParams.get("context")).toBe("login");
     expect(callbackUrl.searchParams.get("origin")).toBe("https://app.continuum.test");

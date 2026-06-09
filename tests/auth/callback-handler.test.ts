@@ -69,4 +69,16 @@ describe("handleAuthCallbackRequest impersonation", () => {
     expect(html).toContain("https://app.trycontinuum.ai/dashboard");
     expect(html).not.toContain("evil.example.com");
   });
+
+  it("keeps popup context on the shared /callback route", async () => {
+    const response = await handleAuthCallbackRequest(
+      createRequest("https://app.beta.trycontinuum.ai/callback?code=test-code&context=login&provider=google&popup=true"),
+    );
+
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain('"context":"login"');
+    expect(html).toContain('"provider":"google"');
+    expect(html).toContain("https://app.beta.trycontinuum.ai/dashboard");
+  });
 });
