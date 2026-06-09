@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CalendarDays, List, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentCard, MetaRow, PlatformTag, StatusLabel } from "./agentCardKit";
+import { resolveConceptPreviewUrl } from "./conceptPreview";
 import type { PipelineCardState, PlanItem, PlanItemStatus } from "./types";
 
 const STATUS_TONE: Record<PlanItemStatus, "neutral" | "running" | "done" | "failed"> = {
@@ -34,13 +35,6 @@ function formatScheduledAt(iso: string): string {
   }
 }
 
-function previewImage(pipeline?: PipelineCardState): string | null {
-  const p = pipeline?.preview;
-  if (!p) return null;
-  if (p.imageUrl) return p.imageUrl;
-  if (p.images && p.images.length > 0) return p.images[0];
-  return null;
-}
 
 type Props = {
   concept: PlanItem;
@@ -63,7 +57,7 @@ export function ConceptCard({
 }: Props) {
   const [dispatched, setDispatched] = useState(false);
 
-  const image = previewImage(pipeline);
+  const image = resolveConceptPreviewUrl(pipeline?.preview);
   const caption = pipeline?.preview?.caption ?? null;
   const isGenerating = status === "executing" || pipeline?.status === "running";
   const isDone = status === "completed" || pipeline?.status === "completed";

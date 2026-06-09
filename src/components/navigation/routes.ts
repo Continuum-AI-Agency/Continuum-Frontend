@@ -2,10 +2,9 @@ import {
   Home,
   Settings,
   ShieldCheck,
-  Plug,
-  Sparkles,
+  Frame,
   Sprout,
-  Target,
+  TrendingUp,
   Activity,
   Bot,
   CalendarDays,
@@ -37,22 +36,30 @@ export type AppNavigationItem = {
     icon: LucideIcon;
   }[];
   adminOnly?: boolean;
+  // Greyed-out, non-interactive nav entry (e.g. not yet available).
+  disabled?: boolean;
 };
 
-export const APP_NAVIGATION: AppNavigationItem[] = [
+export type AppNavigationGroup = {
+  label: string | null;
+  items: AppNavigationItem[];
+};
+
+// The four product areas. Order and labels are the canonical IA.
+export const APP_NAVIGATION_PRIMARY: AppNavigationItem[] = [
   {
-    label: "Dashboard",
+    label: "Home",
     href: "/dashboard",
     icon: Home,
   },
   {
-    label: "Creative Studio",
+    label: "Canvas",
     href: "/ai-studio",
-    icon: Sparkles,
+    icon: Frame,
     accentColor: "text-violet-500",
   },
   {
-    label: "Organic Content",
+    label: "Organic",
     href: "/organic",
     icon: Sprout,
     accentColor: "text-emerald-500",
@@ -71,33 +78,33 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     ],
   },
   {
-    label: "Campaigns",
-    href: "/paid-media",
-    icon: Target,
+    label: "Scale",
+    href: "/scale",
+    icon: TrendingUp,
     accentColor: "text-amber-500",
     quickTabs: true,
-    badge: {
-      label: "Beta",
-      tone: "violet",
-    },
     items: [
       {
         label: "Observability",
-        href: "/paid-media?tab=dashboard",
+        href: "/scale?tab=dashboard",
         icon: Activity,
       },
       {
         label: "Approvals",
-        href: "/paid-media/approvals",
+        href: "/scale/approvals",
         icon: CircleCheck,
       },
       {
         label: "Jaina",
-        href: "/paid-media?tab=jaina",
+        href: "/scale?tab=jaina",
         icon: Bot,
       },
     ],
   },
+];
+
+// Cross-cutting tools that support the four areas, demoted below them.
+export const APP_NAVIGATION_SECONDARY: AppNavigationItem[] = [
   {
     label: "Library",
     href: "/library",
@@ -110,8 +117,9 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     href: "/primitives",
     icon: Blocks,
     accentColor: "text-sky-500",
+    disabled: true,
     badge: {
-      label: "MVP",
+      label: "Soon",
       tone: "blue",
     },
     description: "Shared building blocks for paid media (audiences, guidelines, personas).",
@@ -140,16 +148,23 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
   },
 ];
 
+// Visual grouping consumed by AppSidebar. A null label renders no header.
+export const APP_NAVIGATION_GROUPS: AppNavigationGroup[] = [
+  { label: null, items: APP_NAVIGATION_PRIMARY },
+  { label: "Resources", items: APP_NAVIGATION_SECONDARY },
+];
+
+// Flat list for non-grouped consumers (breadcrumb, command palette).
+export const APP_NAVIGATION: AppNavigationItem[] = [
+  ...APP_NAVIGATION_PRIMARY,
+  ...APP_NAVIGATION_SECONDARY,
+];
+
 export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [
   {
     label: "Settings",
     href: "/settings",
     icon: Settings,
-  },
-  {
-    label: "Integrations",
-    href: "/settings/integrations",
-    icon: Plug,
   },
   {
     label: "Admin",
@@ -158,3 +173,34 @@ export const APP_NAVIGATION_FOOTER: AppNavigationItem[] = [
     adminOnly: true,
   },
 ];
+
+type SearchParamsLike = { get(key: string): string | null };
+
+// Active when the current location matches the item href. Dashboard matches
+// only on exact equality; query-bearing hrefs require every param to match;
+// otherwise the path matches exactly or as a parent prefix.
+export function isRouteActive(
+  currentPath: string,
+  currentSearchParams: SearchParamsLike,
+  item: { href: string },
+): boolean {
+  if (item.href === "/dashboard") {
+    return currentPath === item.href;
+  }
+
+  if (item.href.includes("?")) {
+    const [path, query] = item.href.split("?");
+    const itemParams = new URLSearchParams(query);
+
+    if (currentPath !== path) return false;
+
+    for (const [key, value] of itemParams.entries()) {
+      if (currentSearchParams.get(key) !== value) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
+}

@@ -42,7 +42,6 @@ type DashboardLayoutShellProps = {
   brandSummaries: BrandSummary[];
   user: AuthIdentity | null;
   permissions: BrandPermission[];
-  sidebarDefaultOpen?: boolean;
 };
 
 export default function DashboardLayoutShell({
@@ -51,7 +50,6 @@ export default function DashboardLayoutShell({
   brandSummaries,
   user,
   permissions,
-  sidebarDefaultOpen = true,
 }: DashboardLayoutShellProps) {
   return (
     <ActiveBrandProvider activeBrandId={activeBrandId} brandSummaries={brandSummaries} user={user} permissions={permissions}>
@@ -62,15 +60,7 @@ export default function DashboardLayoutShell({
           <div className="particle-layer top" aria-hidden="true" />
           <div className="particle-layer bottom" aria-hidden="true" />
 
-          <SidebarProvider
-            defaultOpen={sidebarDefaultOpen}
-            style={
-              {
-                "--sidebar-width": "var(--shell-sidebar-w)",
-                "--sidebar-width-icon": "var(--shell-sidebar-w-icon)",
-              } as React.CSSProperties
-            }
-          >
+          <SidebarProvider defaultOpen={false}>
             <AppSidebar />
             <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
               <TourProvider>

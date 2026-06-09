@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -70,9 +71,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { AdSet } from "./AdSetTable";
 import { mapActionLogsToTimelineMarkers } from "./actionMarkers";
-import { CreativeHoverCard } from "./creatives/CreativeHoverCard";
 import { CreativeRotationSheet } from "./creatives/CreativeRotationSheet";
-import { CREATIVE_SWAP_ACTION_TYPES, type OpenCreativeDetail } from "./creatives/types";
+import { CreativeGallery } from "./creatives/CreativeGallery";
+import {
+  CREATIVE_SWAP_ACTION_TYPES,
+  type CreativeAd,
+  type OpenCreativeDetail,
+} from "./creatives/types";
 import dynamic from "next/dynamic";
 import type {
   ObservabilityChartMarkerSelection,
@@ -118,36 +123,8 @@ type ScopedAdSet = AdSet & {
   campaignName: string;
 };
 
-type AdMetrics = {
-  spend: number;
-  roas: number;
-  ctr: number;
-  cpc: number;
-  cpa: number;
-  impressions: number;
-  clicks: number;
-};
-
-type MetaAd = {
-  id: string;
-  name: string;
-  status: string;
-  effectiveStatus?: string;
-  adsetId?: string;
-  campaignId?: string | null;
-  previewShareableLink?: string | null;
-  metrics?: AdMetrics | null;
-  trends?: PaidMetricsTrendPoint[];
-  creative?: {
-    id: string;
-    name?: string | null;
-    title?: string | null;
-    body?: string | null;
-    thumbnailUrl?: string | null;
-    imageUrl?: string | null;
-    callToActionType?: string | null;
-  } | null;
-};
+// Canonical shape lives in ./creatives/types and is shared with CreativeGallery.
+type MetaAd = CreativeAd;
 
 type AdSetAdsLoadState = {
   status: "idle" | "loading" | "success" | "error";
@@ -1372,6 +1349,7 @@ export function CampaignAdSetWorkspace({
   }, [focusedAdSetAds]);
 
   const selectedAdIdSet = React.useMemo(() => new Set(selectedAdIds), [selectedAdIds]);
+  const prefersReducedMotion = useReducedMotion();
 
   const selectedAds = React.useMemo(() => {
     return focusedAdSetAds.filter((ad) => selectedAdIdSet.has(ad.id));
@@ -1605,11 +1583,6 @@ export function CampaignAdSetWorkspace({
     const idx = campaignIndexes.find((entry) => entry.id === scope.id);
     return idx ? `Index · ${idx.name}` : "Index";
   }, [campaignById, campaignIndexes, scope]);
-
-  const creativeGalleryAds = React.useMemo(() => {
-    if (selectedAds.length > 0) return selectedAds;
-    return focusedAdSetAds.slice(0, 6);
-  }, [focusedAdSetAds, selectedAds]);
 
   const applyAdSetSelectionById = React.useCallback(
     (adSetId: string): boolean => {
@@ -2487,7 +2460,8 @@ export function CampaignAdSetWorkspace({
             </ResizablePanel>
           </ResizablePanelGroup>
         ) : (
-          <section className="grid h-full min-h-0 gap-1.5 p-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="flex h-full min-h-0 flex-col gap-1.5 overflow-auto p-1.5">
+            <div className="grid min-h-0 gap-1.5 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-1.5">
               {adSetErrors.length > 0 ? (
                 <IntegrationErrorBanner
@@ -2683,118 +2657,6 @@ export function CampaignAdSetWorkspace({
                     </ContextMenuSub>
                   </ContextMenuContent>
                 </ContextMenu>
-
-                {focusedScopedAdSet ? (
-                  <div className="mt-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="text-xs font-medium">Creatives · {focusedScopedAdSet.name}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Select up to 3 ads to overlay ad-level KPI trends.
-                        </div>
-                      </div>
-                      <span className="rounded border border-border/70 bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
-                        {selectedAdIds.length}/3 selected
-                      </span>
-                    </div>
-
-                    {focusedAdSetAdsState?.status === "loading" ? (
-                      <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-                        <ReloadIcon className="h-3.5 w-3.5 animate-spin" />
-                        Loading ad creatives...
-                      </div>
-                    ) : null}
-
-                    {focusedAdSetAdsState?.status === "error" ? (
-                      <div className="space-y-1">
-                        <IntegrationErrorBanner
-                          errorCode={focusedAdSetAdsState.errorCode}
-                          message={focusedAdSetAdsState.errorMessage}
-                          platform="meta"
-                          retryAfter={focusedAdSetAdsState.retryAfter}
-                        />
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
-                        >
-                          Retry
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {focusedAdSetAdsState?.status === "success" && creativeGalleryAds.length === 0 ? (
-                      <div className="text-xs text-muted-foreground">No creatives returned for this ad set.</div>
-                    ) : null}
-
-                    {creativeGalleryAds.length > 0 ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {creativeGalleryAds.map((ad) => {
-                          const isSelected = selectedAdIdSet.has(ad.id);
-                          const atSelectionLimit = selectedAdIds.length >= 3 && !isSelected;
-                          const imageUrl = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
-                          const title = ad.creative?.title || ad.name || "Untitled ad";
-                          const body = ad.creative?.body || "No copy available.";
-
-                          return (
-                            <CreativeHoverCard
-                              key={`creative-gallery-${ad.id}`}
-                              ad={{
-                                id: ad.id,
-                                name: ad.name,
-                                adSetName: focusedScopedAdSet?.name ?? null,
-                                status: ad.effectiveStatus ?? ad.status ?? null,
-                                creative: ad.creative ?? null,
-                              }}
-                              logs={actionLogs}
-                              onOpenDetail={(focusLogId) =>
-                                setOpenCreativeDetail({ adId: ad.id, focusLogId })
-                              }
-                            >
-                            <button
-                              type="button"
-                              onClick={() => toggleAdSelection(ad.id)}
-                              disabled={atSelectionLimit}
-                              className={cn(
-                                "rounded-md border bg-background p-2 text-left transition-colors",
-                                isSelected ? "border-primary/60 bg-primary/[0.06]" : "border-border/70 hover:bg-muted/40",
-                                atSelectionLimit && "cursor-not-allowed opacity-55"
-                              )}
-                            >
-                              <div className="relative mb-2 h-24 overflow-hidden rounded bg-muted/50">
-                                {imageUrl ? (
-                                  <img src={imageUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
-                                ) : (
-                                  <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
-                                    No preview
-                                  </div>
-                                )}
-                              </div>
-                              <div className="line-clamp-1 text-xs font-medium">{title}</div>
-                              <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{body}</div>
-                              <div className="mt-1.5 flex items-center justify-between gap-2">
-                                <span className="text-[11px] text-muted-foreground">
-                                  {formatMetric(adSetMetric, ad.metrics?.[adSetMetric] ?? 0)}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "rounded px-1.5 py-0.5 text-[10px]",
-                                    isSelected
-                                      ? "bg-primary/20 text-primary"
-                                      : "bg-muted text-muted-foreground"
-                                  )}
-                                >
-                                  {isSelected ? "Selected" : "Select"}
-                                </span>
-                              </div>
-                            </button>
-                            </CreativeHoverCard>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
             </div>
 
@@ -2973,83 +2835,44 @@ export function CampaignAdSetWorkspace({
                   </SidebarGroupContent>
                 </SidebarGroup>
 
-                <SidebarSeparator />
-
-                <SidebarGroup className="pt-1">
-                  <SidebarGroupLabel className="mb-1 h-auto px-2 py-0 text-[11px] uppercase tracking-wide text-sidebar-foreground/70">
-                    Ads ({selectedAdIds.length}/3 selected)
-                  </SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <ScrollArea className="h-[220px] px-1 pb-1">
-                      {!focusedScopedAdSet ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
-                          Select an ad set to browse ads.
-                        </div>
-                      ) : focusedAdSetAdsState?.status === "loading" ? (
-                        <div className="grid grid-cols-2 gap-1.5 px-1">
-                          {Array.from({ length: 6 }).map((_, idx) => (
-                            <Skeleton
-                              key={`ad-list-skeleton-${idx}`}
-                              className="h-20 w-full rounded bg-sidebar-accent/50"
-                            />
-                          ))}
-                        </div>
-                      ) : focusedAdSetAdsState?.status === "error" ? (
-                        <div className="space-y-1 px-2 py-1.5 text-[11px] text-destructive">
-                          <div>{focusedAdSetAdsState.errorMessage ?? "Failed to load ads"}</div>
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            className="h-6 border-sidebar-border/70 bg-sidebar text-[10px]"
-                            onClick={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
-                          >
-                            Retry
-                          </Button>
-                        </div>
-                      ) : focusedAdSetAds.length === 0 ? (
-                        <div className="px-2 py-1.5 text-[11px] text-sidebar-foreground/60">
-                          No ads returned for this ad set.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-1.5 px-1">
-                          {focusedAdSetAds.map((ad) => {
-                            const isSelected = selectedAdIdSet.has(ad.id);
-                            const atSelectionLimit = selectedAdIds.length >= 3 && !isSelected;
-                            const imageUrl = ad.creative?.thumbnailUrl || ad.creative?.imageUrl || null;
-                            return (
-                              <button
-                                key={`rail-ad-${ad.id}`}
-                                type="button"
-                                disabled={atSelectionLimit}
-                                onClick={() => toggleAdSelection(ad.id)}
-                                className={cn(
-                                  "rounded border p-1 text-left transition-colors",
-                                  isSelected
-                                    ? "border-sidebar-ring bg-sidebar-accent/80"
-                                    : "border-sidebar-border/70 bg-sidebar-accent/35 hover:bg-sidebar-accent/55",
-                                  atSelectionLimit && "cursor-not-allowed opacity-55"
-                                )}
-                              >
-                                <div className="h-12 overflow-hidden rounded bg-sidebar-accent/50">
-                                  {imageUrl ? (
-                                    <img src={imageUrl} alt={ad.name} className="h-full w-full object-cover" loading="lazy" />
-                                  ) : (
-                                    <div className="flex h-full items-center justify-center text-[10px] text-sidebar-foreground/60">
-                                      No image
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="mt-1 line-clamp-2 text-[10px] leading-tight">{ad.name}</div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </ScrollArea>
-                  </SidebarGroupContent>
-                </SidebarGroup>
               </SidebarContent>
             </aside>
+            </div>
+
+            <AnimatePresence initial={false}>
+              {focusedScopedAdSet ? (
+                <motion.div
+                  key="creative-gallery"
+                  initial={prefersReducedMotion ? false : { opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                  transition={{
+                    duration: prefersReducedMotion ? 0 : 0.28,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                  className="overflow-hidden"
+                >
+                  <CreativeGallery
+                    ads={focusedAdSetAds}
+                    focusedAdSetName={focusedScopedAdSet.name}
+                    loadState={focusedAdSetAdsState?.status ?? "idle"}
+                    errorCode={focusedAdSetAdsState?.errorCode}
+                    errorMessage={focusedAdSetAdsState?.errorMessage}
+                    retryAfter={focusedAdSetAdsState?.retryAfter}
+                    onRetry={() => void loadAdsForAdSet(focusedScopedAdSet.id, { force: true })}
+                    selectedIds={selectedAdIdSet}
+                    selectionCount={selectedAdIds.length}
+                    selectionLimit={3}
+                    onToggleSelect={toggleAdSelection}
+                    activeMetric={adSetMetric}
+                    formatMetric={formatMetric}
+                    labelForMetric={labelForMetric}
+                    logs={actionLogs}
+                    onOpenDetail={setOpenCreativeDetail}
+                  />
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </section>
         )}
       </CardContent>

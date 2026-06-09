@@ -2,7 +2,9 @@ import type {
   OrganicMetrics,
   OrganicPost,
   OrganicPostBreakdownPoint,
+  OrganicTrendPoint,
 } from "@/lib/schemas/organicMetrics";
+import { formatWatchTime } from "./organic-metrics-utils";
 
 export type PostWindowTotals = {
   views: number;
@@ -105,6 +107,73 @@ export function summarizePostWindowBreakdown(post: OrganicPost): PostWindowBreak
   };
 }
 
+function isReelPost(post: OrganicPost): boolean {
+  const mediaType = (post.mediaType ?? "").toUpperCase();
+  const productType = (post.mediaProductType ?? "").toUpperCase();
+  return mediaType === "VIDEO" || productType === "REELS" || productType === "REEL";
+}
+
+// CSV uses raw seconds (analysis-friendly); HTML uses formatWatchTime for display.
+function watchSecondsCell(ms: number | undefined): string | number {
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0) return "";
+  return Math.round(ms / 1000);
+}
+
+export type ReelsWatchSummary = {
+  count: number;
+  totalWatchMs: number;
+  avgWatchMs: number;
+};
+
+export function summarizeReelsWatchTime(posts: OrganicPost[], now = new Date()): ReelsWatchSummary {
+  const sevenDaysAgoMs = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const reels = posts.filter(
+    (post) =>
+      isReelPost(post) &&
+      typeof post.timestamp === "string" &&
+      Date.parse(post.timestamp) >= sevenDaysAgoMs,
+  );
+
+  const totalWatchMs = reels.reduce(
+    (sum, post) => sum + (post.metrics?.reelsVideoViewTotalTime ?? 0),
+    0,
+  );
+  const avgValues = reels
+    .map((post) => post.metrics?.reelsAvgWatchTime)
+    .filter((value): value is number => typeof value === "number" && value > 0);
+  const avgWatchMs =
+    avgValues.length > 0 ? avgValues.reduce((sum, value) => sum + value, 0) / avgValues.length : 0;
+
+  return { count: reels.length, totalWatchMs, avgWatchMs };
+}
+
+export function countPostsWithoutInsights(posts: OrganicPost[]): number {
+  return posts.filter((post) => {
+    const windows = summarizePostWindowBreakdown(post);
+    const lifetime = totalsFromPostLifetime(post);
+    return (
+      !hasTotals(lifetime) &&
+      !hasTotals(windows.window24h) &&
+      !hasTotals(windows.window7d) &&
+      !hasTotals(windows.window30d)
+    );
+  }).length;
+}
+
+const TREND_BREAKDOWN_ROWS: Array<{ label: string; key: keyof OrganicTrendPoint }> = [
+  { label: "Reach", key: "reach" },
+  { label: "Views", key: "views" },
+  { label: "Reels Views", key: "reelsViews" },
+  { label: "Comments", key: "comments" },
+];
+
+function last7Trends(trends: OrganicTrendPoint[] | undefined): OrganicTrendPoint[] {
+  return (trends ?? [])
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-7);
+}
+
 function csvCell(value: string | number) {
   const rendered = String(value);
   if (!/[",\n]/.test(rendered)) return rendered;
@@ -141,6 +210,7 @@ export function buildOrganicReportCsv(params: {
   accountRangeUntil: string;
   accountMetrics: OrganicMetrics;
   posts: OrganicPost[];
+  trends?: OrganicTrendPoint[];
 }) {
   const rows: Array<Array<string | number>> = [];
 
@@ -155,6 +225,27 @@ export function buildOrganicReportCsv(params: {
   ACCOUNT_METRIC_ROWS.forEach((metric) => {
     rows.push([metric.label, toNumber(params.accountMetrics[metric.key])]);
   });
+
+  const dailyTrends = last7Trends(params.trends);
+  if (dailyTrends.length > 0) {
+    rows.push([]);
+    rows.push(["Account 7-Day Daily Breakdown"]);
+    rows.push(["Date", ...TREND_BREAKDOWN_ROWS.map((row) => row.label)]);
+    dailyTrends.forEach((point) => {
+      rows.push([
+        point.date,
+        ...TREND_BREAKDOWN_ROWS.map((row) => toNumber(point[row.key] as number | undefined)),
+      ]);
+    });
+  }
+
+  const reelsWatch = summarizeReelsWatchTime(params.posts);
+  rows.push([]);
+  rows.push(["Reels Watch Time (last 7 days)"]);
+  rows.push(["Reels Counted", reelsWatch.count]);
+  rows.push(["Total Watch Time (s)", watchSecondsCell(reelsWatch.totalWatchMs)]);
+  rows.push(["Avg Watch Time (s)", watchSecondsCell(reelsWatch.avgWatchMs)]);
+  rows.push(["Note", "Meta provides watch time per reel, not as an account daily series."]);
 
   rows.push([]);
   rows.push(["Posts Published in Last 30 Days"]);
@@ -172,6 +263,8 @@ export function buildOrganicReportCsv(params: {
     "Lifetime Likes",
     "Lifetime Shares",
     "Lifetime Saved",
+    "Avg Watch Time (s)",
+    "Total Watch Time (s)",
     "24h Reach",
     "24h Views",
     "24h Engagement",
@@ -211,6 +304,8 @@ export function buildOrganicReportCsv(params: {
         toNumber(post.metrics?.likes),
         toNumber(post.metrics?.shares),
         toNumber(post.metrics?.saved),
+        watchSecondsCell(post.metrics?.reelsAvgWatchTime),
+        watchSecondsCell(post.metrics?.reelsVideoViewTotalTime),
         windows.window24h.reach,
         windows.window24h.views,
         windows.window24h.engagement,
@@ -226,6 +321,10 @@ export function buildOrganicReportCsv(params: {
         windows.coverageDays,
       ]);
     });
+
+  const missingInsights = countPostsWithoutInsights(params.posts);
+  rows.push([]);
+  rows.push(["Posts with no insights available", missingInsights]);
 
   return csvRows(rows);
 }
@@ -251,11 +350,48 @@ export function buildOrganicReportHtml(params: {
   accountRangeUntil: string;
   accountMetrics: OrganicMetrics;
   posts: OrganicPost[];
+  trends?: OrganicTrendPoint[];
 }) {
   const accountRows = ACCOUNT_METRIC_ROWS.map((metric) => {
     const value = toNumber(params.accountMetrics[metric.key]);
     return `<tr><th>${htmlCell(metric.label)}</th><td>${htmlCell(fmtNumber(value))}</td></tr>`;
   }).join("");
+
+  const dailyTrends = last7Trends(params.trends);
+  const trendSection =
+    dailyTrends.length === 0
+      ? ""
+      : `
+    <h2>Account 7-Day Daily Breakdown</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Date</th>${TREND_BREAKDOWN_ROWS.map((row) => `<th>${htmlCell(row.label)}</th>`).join("")}</tr></thead>
+        <tbody>${dailyTrends
+          .map(
+            (point) =>
+              `<tr><td>${htmlCell(point.date)}</td>${TREND_BREAKDOWN_ROWS.map(
+                (row) => `<td>${htmlCell(fmtNumber(toNumber(point[row.key] as number | undefined)))}</td>`,
+              ).join("")}</tr>`,
+          )
+          .join("")}</tbody>
+      </table>
+    </div>`;
+
+  const reelsWatch = summarizeReelsWatchTime(params.posts);
+  const reelsWatchSection = `
+    <h2>Reels Watch Time (last 7 days)</h2>
+    <div class="card">
+      <table>
+        <tbody>
+          <tr><th>Reels Counted</th><td>${htmlCell(fmtNumber(reelsWatch.count))}</td></tr>
+          <tr><th>Total Watch Time</th><td>${htmlCell(formatWatchTime(reelsWatch.totalWatchMs))}</td></tr>
+          <tr><th>Avg Watch Time</th><td>${htmlCell(formatWatchTime(reelsWatch.avgWatchMs))}</td></tr>
+        </tbody>
+      </table>
+      <p style="color:#64748b;font-size:12px;margin:8px 2px 0;">Meta provides watch time per reel, not as an account daily series.</p>
+    </div>`;
+
+  const missingInsights = countPostsWithoutInsights(params.posts);
 
   const postRows = params.posts
     .slice()
@@ -279,6 +415,8 @@ export function buildOrganicReportHtml(params: {
         <td>${htmlCell(fmtNumber(lifetime.views))}</td>
         <td>${htmlCell(fmtNumber(lifetime.engagement))}</td>
         <td>${htmlCell(fmtNumber(lifetime.comments))}</td>
+        <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsAvgWatchTime) : "-")}</td>
+        <td>${htmlCell(isReelPost(post) ? formatWatchTime(post.metrics?.reelsVideoViewTotalTime) : "-")}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.reach))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.views))}</td>
         <td>${htmlCell(fmtNumber(windows.window24h.engagement))}</td>
@@ -343,6 +481,8 @@ export function buildOrganicReportHtml(params: {
         <tbody>${accountRows}</tbody>
       </table>
     </div>
+${trendSection}
+${reelsWatchSection}
 
     <h2>Posts Published in Last 30 Days</h2>
     <div class="card">
@@ -359,6 +499,8 @@ export function buildOrganicReportHtml(params: {
             <th>Lifetime Views</th>
             <th>Lifetime Engagement</th>
             <th>Lifetime Comments</th>
+            <th>Avg Watch Time</th>
+            <th>Total Watch Time</th>
             <th>24h Reach</th>
             <th>24h Views</th>
             <th>24h Engagement</th>
@@ -377,6 +519,7 @@ export function buildOrganicReportHtml(params: {
         <tbody>${postRows}</tbody>
       </table>
     </div>
+    <p style="color:#64748b;font-size:12px;margin:12px 2px 0;">Posts with no insights available: ${htmlCell(fmtNumber(missingInsights))}</p>
   </div>
 </body>
 </html>`;

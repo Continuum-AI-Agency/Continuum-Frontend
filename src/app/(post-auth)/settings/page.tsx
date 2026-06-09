@@ -9,6 +9,8 @@ import { BrandIdentitySection } from "@/components/settings/brand/BrandIdentityS
 import { BrandInvitesSection } from "@/components/settings/brand/BrandInvitesSection";
 import { BrandDangerZone } from "@/components/settings/brand/BrandDangerZone";
 import { BrandIntegrationsSwitcher } from "@/components/settings/brand/BrandIntegrationsSwitcher";
+import { BrandGrantsSection } from "@/components/integrations/BrandGrantsSection";
+import { MyConnectionsSharingSection } from "@/components/integrations/MyConnectionsSharingSection";
 import { BrandBillingPanel } from "@/components/settings/brand/BrandBillingPanel";
 import { UserProfileSection } from "@/components/settings/account/UserProfileSection";
 import { UserConnectionsSwitcher } from "@/components/settings/account/UserConnectionsSwitcher";
@@ -22,14 +24,12 @@ import {
 } from "@/lib/integrations/userIntegrations";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { createBrandProfileRepository } from "@/lib/repositories/brandProfile";
+import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { SettingsShell } from "@/components/settings/shell/SettingsShell";
 import { SettingsSection } from "@/components/settings/shell/SettingsSection";
 import { BrandNavPill } from "@/components/settings/shell/BrandNavPill";
 import { AccountNavPill } from "@/components/settings/shell/AccountNavPill";
-import {
-  resolveSection,
-  type SectionKey,
-} from "@/components/settings/shell/sections";
+import { resolveSection } from "@/components/settings/shell/sections";
 
 type SettingsPageProps = {
   searchParams?: Promise<{ section?: string | string[] }>;
@@ -133,6 +133,7 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       fetchBrandIntegrationSummary(activeBrandId),
       repo.fetchMembers(activeBrandId),
     ]);
+    await ensureOnboardingState(activeBrandId);
 
     activeSectionSlot = (
       <>
@@ -147,6 +148,20 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
             currentUserId={user?.id ?? ""}
           />
         </SettingsSection>
+        <SettingsSection
+          title="Shared with this brand"
+          description="Connections other members have granted to this brand."
+        >
+          <BrandGrantsSection brandProfileId={activeBrandId} />
+        </SettingsSection>
+        {user?.id ? (
+          <SettingsSection
+            title="Your shared connections"
+            description="Personal connections you have shared, and the brands they reach."
+          >
+            <MyConnectionsSharingSection userId={user.id} />
+          </SettingsSection>
+        ) : null}
       </>
     );
   } else if (initialSection === "knowledge") {

@@ -37,6 +37,30 @@ const nextConfig: NextConfig = {
         destination: "/login",
         permanent: false,
       },
+      // Paid media renamed to "Scale". Query strings are preserved by Next.
+      {
+        source: "/paid-media",
+        destination: "/scale",
+        permanent: false,
+      },
+      {
+        source: "/paid-media/:path*",
+        destination: "/scale/:path*",
+        permanent: false,
+      },
+      // Integrations now live only inside Settings. The dedicated /integrations
+      // index and the /settings/integrations sub-route are gone; the OAuth
+      // callback at /integrations/callback is intentionally NOT redirected.
+      {
+        source: "/integrations",
+        destination: "/settings?section=integrations",
+        permanent: false,
+      },
+      {
+        source: "/settings/integrations",
+        destination: "/settings?section=integrations",
+        permanent: false,
+      },
     ];
   },
   async rewrites() {

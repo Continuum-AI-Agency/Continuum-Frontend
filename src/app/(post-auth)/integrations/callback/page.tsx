@@ -22,7 +22,11 @@ type PopupErrorPayload = {
 };
 
 function buildFallbackRedirect(origin: string, status: string, reason?: string | null): string {
-  const url = new URL("/integrations", origin);
+  // Integrations now live inside Settings; the dedicated /integrations page is
+  // gone. This fallback only fires when the OAuth popup has no opener to
+  // postMessage back to.
+  const url = new URL("/settings", origin);
+  url.searchParams.set("section", "integrations");
   url.searchParams.set("status", status);
   if (reason) {
     url.searchParams.set("reason", reason);

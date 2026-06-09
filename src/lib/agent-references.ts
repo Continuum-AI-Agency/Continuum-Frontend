@@ -40,6 +40,7 @@ export type AgentMentionSuggestion = {
   badge?: string;
   reference?: AgentMentionReference;
   childrenLabel?: string;
+  isFolder?: boolean;
   preview?: {
     url?: string | null;
     kind?: "image" | "video" | "canvas";
@@ -52,7 +53,8 @@ export type AgentMentionProvider = {
     query: string;
   }) => AgentMentionSuggestion[] | Promise<AgentMentionSuggestion[]>;
   getChildSuggestions?: (
-    parent: AgentMentionSuggestion
+    parent: AgentMentionSuggestion,
+    query: string
   ) => AgentMentionSuggestion[] | Promise<AgentMentionSuggestion[]>;
 };
 

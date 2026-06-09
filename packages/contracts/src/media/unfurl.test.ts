@@ -29,6 +29,14 @@ describe("unfurlMediaRequestSchema", () => {
     });
     expect(parsed.success).toBe(false);
   });
+
+  it("accepts an optional brandId (used to resolve the brand's Instagram token)", () => {
+    const parsed = unfurlMediaRequestSchema.safeParse({
+      url: "https://www.instagram.com/brandhandle/p/Cabc123/",
+      brandId: "22222222-2222-4222-8222-222222222222",
+    });
+    expect(parsed.success).toBe(true);
+  });
 });
 
 describe("unfurlMediaItemSchema", () => {
@@ -93,5 +101,15 @@ describe("unfurlMediaResponseSchema", () => {
       source: { ...valid.source, via: "puppeteer" },
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it("accepts the instagram_graph and apify via values", () => {
+    for (const via of ["instagram_graph", "apify"] as const) {
+      const parsed = unfurlMediaResponseSchema.safeParse({
+        ...valid,
+        source: { ...valid.source, via },
+      });
+      expect(parsed.success).toBe(true);
+    }
   });
 });

@@ -22,7 +22,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { FolderOpen, Link2, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AtSign, FolderOpen, Plus, ScanLine, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Canvas } from '@/components/ai-elements/canvas';
@@ -45,7 +45,7 @@ import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
 import { SaveWorkflowDialog } from './SaveWorkflowDialog';
 import { LoadWorkflowDialog } from './LoadWorkflowDialog';
-import { ImportFromLinkDialog } from './ImportFromLinkDialog';
+import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
 import type { UnfurlMediaItem } from '@continuum/contracts';
@@ -666,7 +666,7 @@ function Flow({
   const { onConnectStart, onConnectEnd } = useEdgeDropNode();
   const { show } = useToast();
   const [isLoadWorkflowOpen, setIsLoadWorkflowOpen] = useState(false);
-  const [isImportLinkOpen, setIsImportLinkOpen] = useState(false);
+  const [isInstagramBrowserOpen, setIsInstagramBrowserOpen] = useState(false);
   const hydratedPlannerSeedRef = useRef<string | null>(null);
 
   // Places unfurled media as unattached reference nodes, laid out in a centered
@@ -1073,13 +1073,21 @@ function Flow({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setIsImportLinkOpen(true)}
-                aria-label="Import media from a link"
+                onClick={() => setIsInstagramBrowserOpen((open) => !open)}
+                aria-label="Import media from Instagram"
               >
-                <Link2 className="mr-2 h-4 w-4" />
-                Import from link
+                <AtSign className="mr-2 h-4 w-4" />
+                Import from Instagram
               </Button>
             </Panel>
+
+            {isInstagramBrowserOpen && (
+              <InstagramMediaBrowser
+                brandProfileId={brandProfileId}
+                onPlace={placeImportedReferenceNodes}
+                onClose={() => setIsInstagramBrowserOpen(false)}
+              />
+            )}
 
             <Controls />
             <MiniMap className="!border !bg-background/95" />
@@ -1150,9 +1158,9 @@ function Flow({
             Load Workflow
           </ContextMenuItem>
 
-          <ContextMenuItem inset onSelect={() => setIsImportLinkOpen(true)}>
-            <Link2 className="mr-2 h-4 w-4" />
-            Import from link
+          <ContextMenuItem inset onSelect={() => setIsInstagramBrowserOpen(true)}>
+            <AtSign className="mr-2 h-4 w-4" />
+            Import from Instagram
           </ContextMenuItem>
 
           <ContextMenuSub>
@@ -1198,11 +1206,6 @@ function Flow({
         open={isLoadWorkflowOpen}
         onOpenChange={setIsLoadWorkflowOpen}
         showTrigger={false}
-      />
-      <ImportFromLinkDialog
-        open={isImportLinkOpen}
-        onOpenChange={setIsImportLinkOpen}
-        onPlace={placeImportedReferenceNodes}
       />
     </div>
   );

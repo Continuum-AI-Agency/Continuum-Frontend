@@ -18,11 +18,26 @@ export function calculateHookRate(post: OrganicPost): number | undefined {
   const productType = (post.mediaProductType ?? "").toUpperCase();
   if (mediaType !== "VIDEO" && productType !== "REELS" && productType !== "REEL") return undefined;
 
-  const threeSecViews = post.metrics?.videoThreeSecViews;
-  const impressions = post.metrics?.impressions;
-  if (threeSecViews === undefined || impressions === undefined || impressions === 0) return undefined;
+  // Meta removed 3-sec views + impressions from media insights (2025-04-21). Avg watch
+  // time is the surviving signal: avg watch >= 3s reads as ~100% hook retention.
+  const avgWatchMs = post.metrics?.reelsAvgWatchTime;
+  if (avgWatchMs === undefined || !Number.isFinite(avgWatchMs) || avgWatchMs <= 0) return undefined;
+  return Math.max(0, Math.min(100, (avgWatchMs / 3000) * 100));
+}
 
-  return (threeSecViews / impressions) * 100;
+// Reels watch time arrives from Meta in milliseconds; render it human-readable.
+export function formatWatchTime(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return "-";
+  const totalSeconds = ms / 1000;
+  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalSeconds < 3600) {
+    const seconds = Math.round(totalSeconds % 60);
+    return `${totalMinutes}m ${seconds}s`;
+  }
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes}m`;
 }
 
 export function hookRateTier(rate: number): HookRateTier {

@@ -15,11 +15,9 @@ function revalidateBrandIntegrationConsumers(brandProfileId: string) {
   // Path-based invalidation remains until consumer pages adopt cacheTag()
   // on the read side. Once tagged, drop these revalidatePath calls.
   revalidatePath("/settings");
-  revalidatePath("/settings/integrations");
-  revalidatePath("/integrations");
   revalidatePath("/dashboard");
   revalidatePath("/organic");
-  revalidatePath("/paid-media");
+  revalidatePath("/scale");
 }
 
 export async function grantIntegrationToBrandAction(

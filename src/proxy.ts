@@ -57,6 +57,7 @@ export async function proxy(request: NextRequest) {
 
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/organic") ||
+    request.nextUrl.pathname.startsWith("/scale") ||
     request.nextUrl.pathname.startsWith("/paid-media") ||
     request.nextUrl.pathname.startsWith("/ai-studio") ||
     request.nextUrl.pathname.startsWith("/integrations") ||

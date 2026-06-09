@@ -11,6 +11,8 @@ import {
   Library,
   Loader2,
   Lock,
+  Mail,
+  PlayCircle,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -96,6 +98,16 @@ type AdminAuditResponse = {
   entries?: AdminAuditLogEntry[];
 };
 
+type FirstValueReportSmokeResponse = {
+  status?: string;
+  ok?: boolean;
+  sent?: boolean;
+  resendMessageId?: string | null;
+  missing?: { reason?: string; details?: Record<string, unknown> };
+  snapshot?: Record<string, unknown>;
+  error?: string;
+};
+
 function getUserInitials(user: AdminUser) {
   return (user.name ?? user.email).slice(0, 2).toUpperCase();
 }
@@ -140,6 +152,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
   const [isWorkflowLoading, setIsWorkflowLoading] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AdminAuditLogEntry[]>([]);
   const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const [reportBrandId, setReportBrandId] = useState("");
+  const [reportRecipientEmail, setReportRecipientEmail] = useState("");
+  const [reportSmokeResult, setReportSmokeResult] = useState<FirstValueReportSmokeResponse | null>(null);
+  const [isReportSmokeLoading, setIsReportSmokeLoading] = useState(false);
 
   useEffect(() => {
     setQuery(searchQuery);
@@ -434,6 +450,53 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
     }
   }
 
+  async function handleFirstValueReportSmoke(send: boolean) {
+    const brandId = reportBrandId.trim();
+    if (!brandId) {
+      show({ title: "Brand ID required", description: "Select or paste a brand ID first.", variant: "warning" });
+      return;
+    }
+
+    setIsReportSmokeLoading(true);
+    setReportSmokeResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke<FirstValueReportSmokeResponse>(
+        "send-first-value-report",
+        {
+          method: "POST",
+          body: {
+            action: "smoke_test",
+            brandId,
+            send,
+            ...(reportRecipientEmail.trim() ? { recipientEmail: reportRecipientEmail.trim() } : {}),
+          },
+        }
+      );
+      if (error) throw new Error(error.message);
+      const result = data ?? { status: "unknown" };
+      setReportSmokeResult(result);
+      show({
+        title: send ? "Smoke email sent" : "Report is ready",
+        description: send
+          ? result.resendMessageId
+            ? `Resend message ${result.resendMessageId}`
+            : "Resend accepted the message."
+          : "One or more report sections are available.",
+        variant: "success",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to run first value report smoke test.";
+      setReportSmokeResult({ status: "failed", ok: false, error: message });
+      show({
+        title: send ? "Smoke send failed" : "Smoke validation failed",
+        description: message,
+        variant: "error",
+      });
+    } finally {
+      setIsReportSmokeLoading(false);
+    }
+  }
+
   return (
     <Tabs defaultValue="users" className="space-y-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -449,6 +512,10 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
           <TabsTrigger value="audit" className="gap-2">
             <History className="size-4" />
             Audit
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-2">
+            <Mail className="size-4" />
+            Reports
           </TabsTrigger>
         </TabsList>
         <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-4 xl:min-w-[560px]">
@@ -1055,6 +1122,131 @@ export function AdminUserList({ users, permissions, pagination, searchQuery }: P
               )}
             </TableBody>
           </Table>
+        </div>
+      </TabsContent>
+
+      <TabsContent value="reports" className="space-y-4">
+        <div className="grid gap-4 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <Card className="border-subtle bg-surface shadow-sm">
+            <CardContent className="space-y-4 p-4">
+              <div>
+                <h2 className="text-base font-semibold text-primary">First Value Report Smoke Test</h2>
+                <p className="text-xs text-muted-foreground">
+                  Validate or send the onboarding follow-up email for a specific brand without waiting for cron.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="first-value-brand-select">Brand</Label>
+                <Select
+                  value={reportBrandId || undefined}
+                  onValueChange={setReportBrandId}
+                >
+                  <SelectTrigger id="first-value-brand-select">
+                    <SelectValue placeholder="Choose a loaded brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map((brand) => (
+                      <SelectItem key={brand.id} value={brand.id}>
+                        {brand.brand_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="first-value-brand-id">Brand ID</Label>
+                <Input
+                  id="first-value-brand-id"
+                  value={reportBrandId}
+                  onChange={(event) => setReportBrandId(event.target.value)}
+                  placeholder="Paste a brand profile UUID"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="first-value-recipient">Recipient override</Label>
+                <Input
+                  id="first-value-recipient"
+                  type="email"
+                  value={reportRecipientEmail}
+                  onChange={(event) => setReportRecipientEmail(event.target.value)}
+                  placeholder="Optional: send smoke email to this address"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to send to the brand owner email stored in permissions.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  disabled={isReportSmokeLoading}
+                  onClick={() => void handleFirstValueReportSmoke(false)}
+                >
+                  {isReportSmokeLoading ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
+                  Validate
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={isReportSmokeLoading}
+                  onClick={() => void handleFirstValueReportSmoke(true)}
+                >
+                  {isReportSmokeLoading ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                  Send smoke email
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-subtle bg-surface shadow-sm">
+            <CardContent className="space-y-4 p-4">
+              <div>
+                <h2 className="text-base font-semibold text-primary">Smoke Result</h2>
+                <p className="text-xs text-muted-foreground">
+                  The report can send with any section that has renderable email content. The snapshot shows ready sections, rendered insight counts, and chart points.
+                </p>
+              </div>
+
+              {!reportSmokeResult ? (
+                <div className="rounded-lg border border-dashed border-subtle p-6 text-sm text-muted-foreground">
+                  Run validation to see section readiness and the report snapshot.
+                </div>
+              ) : reportSmokeResult.ok === false ? (
+                <Alert variant="destructive">
+                  <ShieldAlert className="size-4" />
+                  <AlertTitle>{reportSmokeResult.status ?? "Report smoke test failed"}</AlertTitle>
+                  <AlertDescription>
+                    {reportSmokeResult.error ??
+                      reportSmokeResult.missing?.reason ??
+                      "Required report data is missing."}
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="border-emerald-200 bg-emerald-50/60 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
+                  <CheckCircle2 className="size-4" />
+                  <AlertTitle>{reportSmokeResult.sent ? "Smoke email sent" : "Report ready"}</AlertTitle>
+                  <AlertDescription>
+                    {reportSmokeResult.resendMessageId
+                      ? `Resend message ID: ${reportSmokeResult.resendMessageId}`
+                      : "One or more report sections are available."}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {reportSmokeResult?.snapshot ? (
+                <pre className="max-h-[460px] overflow-auto rounded-lg border border-subtle bg-default/60 p-3 text-xs text-muted-foreground">
+                  {JSON.stringify(reportSmokeResult.snapshot, null, 2)}
+                </pre>
+              ) : reportSmokeResult?.missing ? (
+                <pre className="max-h-[280px] overflow-auto rounded-lg border border-subtle bg-default/60 p-3 text-xs text-muted-foreground">
+                  {JSON.stringify(reportSmokeResult.missing, null, 2)}
+                </pre>
+              ) : null}
+            </CardContent>
+          </Card>
         </div>
       </TabsContent>
 

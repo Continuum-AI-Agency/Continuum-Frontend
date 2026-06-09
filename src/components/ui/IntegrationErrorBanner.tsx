@@ -42,7 +42,7 @@ function getConfig(errorCode: IntegrationErrorCode | undefined, platform: string
           </>
         ),
         ctaLabel: "Reconnect in Settings",
-        ctaHref: "/settings/integrations",
+        ctaHref: "/settings?section=integrations",
       };
 
     case "PERMISSIONS_MISSING":
@@ -56,7 +56,7 @@ function getConfig(errorCode: IntegrationErrorCode | undefined, platform: string
           </>
         ),
         ctaLabel: "Reconnect in Settings",
-        ctaHref: "/settings/integrations",
+        ctaHref: "/settings?section=integrations",
       };
 
     case "INTEGRATION_NOT_LINKED":
@@ -64,7 +64,7 @@ function getConfig(errorCode: IntegrationErrorCode | undefined, platform: string
         title: `No ${platformLabel} account linked`,
         body: `No ${platformLabel} account is linked to this brand. Connect your account in Settings → Integrations to load this data.`,
         ctaLabel: `Connect ${platformLabel} Account`,
-        ctaHref: "/settings/integrations",
+        ctaHref: "/settings?section=integrations",
       };
 
     case "RATE_LIMITED":

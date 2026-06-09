@@ -216,7 +216,7 @@ export function BrandSwitcherMenu({ triggerId }: BrandSwitcherMenuProps) {
           className="flex items-center gap-2 text-[var(--popover-foreground)] data-[highlighted]:bg-[color-mix(in_srgb,var(--ring)_12%,transparent)] data-[highlighted]:text-[var(--popover-foreground)]"
           onSelect={() => {
             setMenuOpen(false);
-            router.push("/settings/integrations");
+            router.push("/settings?section=integrations");
           }}
         >
           <Plug className="h-4 w-4 stroke-[1.8] text-[color-mix(in_srgb,var(--popover-foreground)_68%,transparent)]" />

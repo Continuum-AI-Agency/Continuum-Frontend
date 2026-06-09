@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { SurfaceTourTrigger, useReadyAfterPaint } from "@/components/onboarding/v2/tour/SurfaceTourTrigger";
 import { TOUR_ORGANIC } from "@/components/onboarding/v2/tour/config";
 import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore";
+import { GenerationsPopover } from "@/components/organic/agent/GenerationsPopover";
+import { useCalendarStore } from "@/lib/organic/store";
 
 // ViewTransition ships in the React canary build bundled by Next.js (experimental.viewTransition: true).
 // Stable @types/react doesn't include it yet, so we pull it at runtime via cast.
@@ -27,6 +29,7 @@ type Props = {
   metricsSlot: React.ReactNode;
   metricsPrefetchParams?: MetricsPrefetchParams;
   agentSlot?: React.ReactNode;
+  brandId?: string | null;
 };
 
 const WORKSPACE_LABELS: Record<"planner" | "metrics" | "agent", string> = {
@@ -40,8 +43,10 @@ export function OrganicWorkspaceTabs({
   metricsSlot,
   metricsPrefetchParams,
   agentSlot,
+  brandId,
 }: Props) {
   const searchParams = useSearchParams();
+  const setSelectedDraftId = useCalendarStore((s) => s.setSelectedDraftId);
   const tabParam = searchParams.get("tab");
   const initialView: "planner" | "metrics" | "agent" =
     tabParam === "metrics" ? "metrics" : tabParam === "agent" ? "agent" : "planner";
@@ -118,6 +123,16 @@ export function OrganicWorkspaceTabs({
         <SurfaceTourTrigger tourName={TOUR_ORGANIC} ready={tourReady} />
         <h1 className="truncate text-sm font-semibold tracking-tight sm:text-base">Organic</h1>
 
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Shell-wide live generations: visible on every tab once any post is generating. */}
+          <GenerationsPopover
+            brandId={brandId ?? metricsPrefetchParams?.brandId ?? null}
+            onViewDraftAction={(draftId) => {
+              setSelectedDraftId(draftId);
+              handleValueChange("planner");
+            }}
+          />
+
         <nav className="inline-flex shrink-0 rounded-lg border bg-muted/40 p-0.5" aria-label="Organic workspace">
           {(["planner", "metrics", ...(agentSlot !== undefined ? ["agent"] : [])] as Array<"planner" | "metrics" | "agent">).map((view) => {
             const isActive = activeView === view;
@@ -139,6 +154,7 @@ export function OrganicWorkspaceTabs({
             );
           })}
         </nav>
+        </div>
       </div>
 
       <ViewTransition>

@@ -5,6 +5,8 @@ import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeftIcon } from "lucide-react"
 
+import { motion, useReducedMotion } from "motion/react"
+
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -25,8 +27,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state"
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
@@ -94,9 +94,6 @@ const SidebarProvider = React.forwardRef<
         } else {
           _setOpen(openState)
         }
-
-        // This sets the cookie to keep the sidebar state.
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
       [setOpenProp, open]
     )
@@ -207,7 +204,12 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const reduce = useReducedMotion()
     const isIconCollapsible = collapsible === "icon"
+    // Hover-expand rail: a fixed icon-width footprint with an overlay panel
+    // whose width is animated by Motion. Only for the standard icon variant.
+    const useHoverWidth =
+      isIconCollapsible && variant !== "floating" && variant !== "inset"
 
     if (collapsible === "none") {
       return (
@@ -264,7 +266,7 @@ const Sidebar = React.forwardRef<
             isIconCollapsible
               ? variant === "floating" || variant === "inset"
                 ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))] group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear"
-                : "w-(--sidebar-width-icon) group-data-[state=expanded]:w-(--sidebar-width) transition-[width] duration-200 ease-linear"
+                : "w-(--sidebar-width-icon)"
               : "w-(--sidebar-width) transition-[width] duration-200 ease-linear",
             !isIconCollapsible && "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
@@ -273,19 +275,32 @@ const Sidebar = React.forwardRef<
               : !isIconCollapsible && "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
           )}
         />
-        <div
+        <motion.div
+          animate={
+            useHoverWidth
+              ? { width: state === "expanded" ? SIDEBAR_WIDTH : SIDEBAR_WIDTH_ICON }
+              : undefined
+          }
+          initial={false}
+          transition={
+            reduce ? { duration: 0 } : { type: "spring", bounce: 0, duration: 0.3 }
+          }
           className={cn(
-            "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+            "fixed inset-y-0 z-30 hidden h-svh md:flex",
+            useHoverWidth
+              ? "w-(--sidebar-width-icon) group-data-[state=expanded]:shadow-2xl group-data-[state=expanded]:shadow-black/40"
+              : "w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            !useHoverWidth && "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
             className
           )}
-          {...props}
+          {...(props as unknown as React.ComponentProps<typeof motion.div>)}
         >
           <div
             data-sidebar="sidebar"
@@ -293,7 +308,7 @@ const Sidebar = React.forwardRef<
           >
             {children}
           </div>
-        </div>
+        </motion.div>
       </div>
     )
   }

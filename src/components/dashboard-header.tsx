@@ -24,15 +24,15 @@ function DashboardHeaderInner() {
   const currentRoute = allRoutes.find(r => r.href === pathname) 
     || allRoutes.flatMap(r => r.items || []).find(sub => sub.href === pathname);
 
-  const breadcrumbLabel = currentRoute?.label || "Dashboard";
+  const breadcrumbLabel = currentRoute?.label || "Home";
   const CurrentIcon = currentRoute?.icon;
   const shouldReduceMotion = useReducedMotion();
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-4">
       <div className="flex items-center gap-2">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4" />
+        <SidebarTrigger className="-ml-1 md:hidden" />
+        <Separator orientation="vertical" className="mr-2 h-4 md:hidden" />
         <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_76%,transparent)] px-3 py-1.5">
           <motion.span
             aria-hidden="true"

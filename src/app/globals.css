@@ -830,14 +830,15 @@ body {
 
 .mention-token,
 .link-token {
-  background-color: color-mix(in oklch, var(--primary) 20%, white);
+  background-color: color-mix(in oklch, var(--muted-foreground) 10%, transparent);
   border-radius: 2px;
-  padding-inline: 1px;
+  /* color: transparent prevents the browser UA mark{color:black} from making
+     mirror-div text visible and doubling the rendered @token appearance */
+  color: transparent;
 }
 
-.dark .mention-token,
-[data-theme="dark"] .mention-token,
-.dark .link-token,
-[data-theme="dark"] .link-token {
-  background-color: color-mix(in oklch, var(--primary) 28%, transparent);
+.mention-chip {
+  color: var(--primary);
+  font-weight: 500;
+  border-radius: 2px;
 }

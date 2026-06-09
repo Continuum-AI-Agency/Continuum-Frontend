@@ -20,7 +20,7 @@ type Props = {
  * Embedded variant: just the lane strip + focused composer. No queue list,
  * no table, no page header. Designed to fit dashboard rails and dropdowns.
  * Keyboard shortcuts are scoped to focus (no global listeners) so this can
- * coexist with the standalone /paid-media/approvals surface.
+ * coexist with the standalone /scale/approvals surface.
  */
 export function ApprovalsCompact({ brandId, className }: Props) {
   const optimistic = useApprovalsStore((s) => s.pendingDecisions);
@@ -77,7 +77,7 @@ export function ApprovalsCompact({ brandId, className }: Props) {
           </span>
         </div>
         <Link
-          href="/paid-media/approvals"
+          href="/scale/approvals"
           className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
         >
           Full surface

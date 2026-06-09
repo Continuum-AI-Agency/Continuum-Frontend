@@ -97,6 +97,9 @@ export const organicMetricsSchema = z.object({
   impressions: z.number().optional(),
   videoThreeSecViews: z.number().optional(),
   hookRate: z.number().optional(),
+  // Reels watch time in milliseconds (Meta ig_reels_avg_watch_time / ig_reels_video_view_total_time).
+  reelsAvgWatchTime: z.number().optional(),
+  reelsVideoViewTotalTime: z.number().optional(),
 });
 
 export type OrganicMetrics = z.infer<typeof organicMetricsSchema>;

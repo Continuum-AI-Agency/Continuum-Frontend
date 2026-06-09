@@ -281,6 +281,7 @@ async function OrganicContent({
         showNoTrendsMessage={showNoTrendsMessage}
       />
       <OrganicWorkspaceTabs
+        brandId={brandProfileId}
         plannerSlot={(
           <OrganicCalendarWorkspace
             trendTypes={trendTypes}

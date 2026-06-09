@@ -8,6 +8,9 @@ import { z } from "zod";
 export const unfurlMediaRequestSchema = z
   .object({
     url: z.url().max(2048),
+    // Optional: lets the Backend resolve the brand's Instagram token for the
+    // native business-discovery path (Instagram links). Ignored for other hosts.
+    brandId: z.string().min(1).optional(),
   })
   .strict();
 export type UnfurlMediaRequest = z.infer<typeof unfurlMediaRequestSchema>;
@@ -32,7 +35,7 @@ export const unfurlSourceSchema = z
     resolvedUrl: z.string().optional(),
     title: z.string().optional(),
     ogType: z.string().optional(),
-    via: z.enum(["direct", "firecrawl"]),
+    via: z.enum(["direct", "firecrawl", "instagram_graph", "apify"]),
     provider: z.string().optional(),
   })
   .strict();

@@ -21,6 +21,45 @@ describe("useOrganicAgentReducer", () => {
     expect(Object.keys(next.jobs)).toEqual(["job-1"])
   })
 
+  it("advances a queued job to running when a pipeline.stage arrives for it", () => {
+    const queued = panelReducer(initialPanelState(), {
+      type: "HYDRATE_JOBS",
+      jobs: [{ jobId: "job-1", brandId: "brand-1", status: "queued" }],
+    })
+
+    const next = panelReducer(queued, {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "job-1", brandId: "brand-1", planId: null, planItemId: null, stage: "concept", status: "active", agentName: "creative" },
+    })
+
+    expect(next.jobs["job-1"].status).toBe("running")
+    expect(next.jobs["job-1"].stage).toBe("concept")
+  })
+
+  it("does not regress a completed job back to running on a late pipeline.stage", () => {
+    const completed = panelReducer(initialPanelState(), {
+      type: "HYDRATE_JOBS",
+      jobs: [{ jobId: "job-1", brandId: "brand-1", status: "completed" }],
+    })
+
+    const next = panelReducer(completed, {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "job-1", brandId: "brand-1", planId: null, planItemId: null, stage: "merge", status: "active" },
+    })
+
+    expect(next.jobs["job-1"].status).toBe("completed")
+  })
+
+  it("does not create a phantom job for a pipeline.stage with no matching job", () => {
+    const next = panelReducer(initialPanelState(), {
+      type: "PIPELINE_STAGE",
+      event: { jobId: "ghost", brandId: "brand-1", planId: null, planItemId: null, stage: "concept", status: "active" },
+    })
+
+    expect(next.jobs).toEqual({})
+    expect(next.pipeline.ghost).toBeDefined()
+  })
+
   it("does not throw when hydrate payload is not iterable", () => {
     const state = initialPanelState()
     const next = panelReducer(state, {

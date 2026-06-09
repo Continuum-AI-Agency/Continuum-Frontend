@@ -29,7 +29,7 @@ const STATUS: Record<
   { label: string; tone: "running" | "done" | "failed" | "neutral" }
 > = {
   running: { label: "Generating", tone: "running" },
-  completed: { label: "Ready", tone: "done" },
+  completed: { label: "Drafts ready", tone: "done" },
   failed: { label: "Failed", tone: "failed" },
   cancelled: { label: "Cancelled", tone: "neutral" },
 };

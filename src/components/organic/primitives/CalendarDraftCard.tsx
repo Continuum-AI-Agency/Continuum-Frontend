@@ -206,12 +206,13 @@ export function CalendarDraftCard({
               )}
             >
               {/* Top-edge status strip */}
-              {(isStreaming || isFailed || draft.status === "published") && (
+              {(isStreaming || isFailed || draft.status === "scheduled" || draft.status === "published") && (
                 <div
                   className={cn(
                     "absolute top-0 left-0 right-0 h-0.5",
                     isStreaming && "bg-gradient-to-r from-transparent via-brand-primary to-transparent animate-shimmer",
                     isFailed && "bg-red-500",
+                    draft.status === "scheduled" && "bg-primary/60",
                     draft.status === "published" && "bg-emerald-500"
                   )}
                   style={isStreaming ? { backgroundSize: "200% 100%" } : undefined}
@@ -469,7 +470,7 @@ export function CalendarDraftCard({
                 }))
               }
             >
-              Mark as scheduled
+              Approve & Schedule
             </ContextMenuItem>
             <ContextMenuItem
               onSelect={() =>
@@ -479,7 +480,7 @@ export function CalendarDraftCard({
                 }))
               }
             >
-              Mark as draft
+              Move back to draft
             </ContextMenuItem>
             <ContextMenuSeparator />
             {onRegenerate ? (

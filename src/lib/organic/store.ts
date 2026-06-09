@@ -69,6 +69,28 @@ export interface ScheduledEvent {
   draftId?: string;
 }
 
+export type GenerationStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+
+// Live registry of in-flight/finished post generations, projected from the agent
+// panel reducer + the bulk run stream so the shell-wide GenerationsPopover can show
+// status/progress/preview from any organic tab. Ephemeral — never persisted.
+export type GenerationEntry = {
+  jobId: string;
+  planItemId?: string | null;
+  platform?: string | null;
+  scheduledAt?: string | null;
+  status: GenerationStatus;
+  stage?: string | null;
+  pct?: number | null;
+  previewUrl?: string | null;
+  quality?: number | null;
+  draftId?: string | null;
+  error?: string | null;
+  updatedAt: number;
+};
+
+export type GenerationEntryInput = Partial<GenerationEntry> & { jobId: string };
+
 interface CalendarState {
   days: OrganicCalendarDay[];
   ghosts: Record<string, number>;
@@ -94,6 +116,7 @@ interface CalendarState {
     agentName?: string;
     message?: string;
   }>;
+  generations: Record<string, GenerationEntry>;
 
   scheduledEvents: Record<string, ScheduledEvent[]>;
   viewMode: "week" | "month" | "list";
@@ -128,6 +151,9 @@ interface CalendarState {
   }) => void;
   setGridError: (error: string | null) => void;
   setGridJobId: (jobId: string | null) => void;
+  upsertGeneration: (entry: GenerationEntryInput) => void;
+  removeGeneration: (jobId: string) => void;
+  clearGenerations: () => void;
   setPlacementProgress: (placementId: string, progress: {
     percent: number;
     stage?: string;
@@ -223,6 +249,7 @@ export const useCalendarStore = create<CalendarState>()(
       gridError: null,
       gridJobId: null,
       placementProgress: {},
+      generations: {},
       scheduledEvents: {},
       viewMode: "month",
       showPlanned: true,
@@ -360,6 +387,29 @@ export const useCalendarStore = create<CalendarState>()(
           placementProgress: { ...state.placementProgress, [placementId]: progress },
         })),
       clearPlacementProgress: () => set({ placementProgress: {} }),
+      upsertGeneration: (entry) =>
+        set((state) => {
+          const prev = state.generations[entry.jobId];
+          return {
+            generations: {
+              ...state.generations,
+              [entry.jobId]: {
+                ...prev,
+                ...entry,
+                status: entry.status ?? prev?.status ?? "queued",
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        }),
+      removeGeneration: (jobId) =>
+        set((state) => {
+          if (!state.generations[jobId]) return {} as Partial<CalendarState>;
+          const next = { ...state.generations };
+          delete next[jobId];
+          return { generations: next };
+        }),
+      clearGenerations: () => set({ generations: {} }),
       addEvent: (event) =>
         set((state) => ({
           eventHistory: [...state.eventHistory, event].slice(-20),

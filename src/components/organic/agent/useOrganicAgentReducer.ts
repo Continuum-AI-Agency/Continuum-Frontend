@@ -124,6 +124,21 @@ function applyPipelineCard(
   }
 }
 
+const TERMINAL_JOB_STATUSES = new Set(["completed", "failed", "cancelled"])
+
+// Keep the coarse job status (JobGrid) in lockstep with live pipeline progress so
+// a card never reads "Queued" while its pipeline is actively advancing. Only
+// touches an existing job and never regresses one that has already finished.
+function reconcileJobFromPipeline(
+  jobs: Record<string, AgentJobState>,
+  jobId: string,
+  patch: Partial<AgentJobState>,
+): Record<string, AgentJobState> {
+  const existing = jobs[jobId]
+  if (!existing || TERMINAL_JOB_STATUSES.has(existing.status)) return jobs
+  return { ...jobs, [jobId]: { ...existing, ...patch } }
+}
+
 export function initialPanelState(): PanelState {
   return {
     sessionId: null,
@@ -278,6 +293,11 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           ...state.pipeline,
           [action.event.jobId]: applyPipelineStage(state.pipeline[action.event.jobId], action.event),
         },
+        jobs: reconcileJobFromPipeline(state.jobs, action.event.jobId, {
+          status: action.event.status === "failed" ? "failed" : "running",
+          stage: action.event.stage,
+          agentName: action.event.agentName,
+        }),
       }
 
     case "PIPELINE_CARD":
@@ -287,6 +307,13 @@ export function panelReducer(state: PanelState, action: PanelAction): PanelState
           ...state.pipeline,
           [action.card.jobId]: applyPipelineCard(state.pipeline[action.card.jobId], action.card),
         },
+        jobs:
+          action.card.status === "running"
+            ? reconcileJobFromPipeline(state.jobs, action.card.jobId, {
+                status: "running",
+                ...(action.card.currentStage ? { stage: action.card.currentStage } : {}),
+              })
+            : state.jobs,
       }
 
     case "PLAN_STATUS":

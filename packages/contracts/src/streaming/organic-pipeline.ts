@@ -304,6 +304,17 @@ export const organicCalendarSlotHeartbeatEventSchema = z.object({
   message: z.string().optional(),
 }).strict();
 
+// Emitted as soon as a placement's preview image is generated (the 512px Nano
+// Banana mockup), before the full placement completes — lets the chat surface
+// the concept image at the assets stage instead of only at completion.
+export const organicCalendarSlotAssetReadyEventSchema = z.object({
+  type: z.literal("slot_asset_ready"),
+  placementId: z.string().min(1),
+  imageUrl: z.string().nullable().optional(),
+  images: z.array(z.string()).optional(),
+  format: z.string().nullable().optional(),
+}).strict();
+
 export const organicCalendarSlotCompletedEventSchema = z.object({
   type: z.enum(["slot_completed", "placement"]),
   placement: organicCalendarPlacementSchema,
@@ -339,6 +350,7 @@ export const organicCalendarBatchGenerateStreamEventSchema = z.union([
   organicCalendarSlotStartedEventSchema,
   organicCalendarSlotStageEventSchema,
   organicCalendarSlotHeartbeatEventSchema,
+  organicCalendarSlotAssetReadyEventSchema,
   organicCalendarSlotCompletedEventSchema,
   organicCalendarSlotFailedEventSchema,
   organicCalendarErrorEventSchema,
@@ -462,6 +474,7 @@ export type OrganicCalendarProgressEvent = z.infer<typeof organicCalendarProgres
 export type OrganicCalendarSlotStartedEvent = z.infer<typeof organicCalendarSlotStartedEventSchema>;
 export type OrganicCalendarSlotStageEvent = z.infer<typeof organicCalendarSlotStageEventSchema>;
 export type OrganicCalendarSlotHeartbeatEvent = z.infer<typeof organicCalendarSlotHeartbeatEventSchema>;
+export type OrganicCalendarSlotAssetReadyEvent = z.infer<typeof organicCalendarSlotAssetReadyEventSchema>;
 export type OrganicCalendarSlotCompletedEvent = z.infer<typeof organicCalendarSlotCompletedEventSchema>;
 export type OrganicCalendarSlotFailedEvent = z.infer<typeof organicCalendarSlotFailedEventSchema>;
 export type OrganicCalendarErrorEvent = z.infer<typeof organicCalendarErrorEventSchema>;

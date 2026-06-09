@@ -11,7 +11,7 @@ export function useCalendarRunStream() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const progressRef = useRef({ completed: 0, total: 0 });
 
-  const { setGridStatus, setGridProgress, setGridError, setGridJobId, addDraft, updateDraft } =
+  const { setGridStatus, setGridProgress, setGridError, setGridJobId, addDraft, updateDraft, upsertGeneration } =
     useCalendarStore(
       useShallow((s) => ({
         setGridStatus: s.setGridStatus,
@@ -20,6 +20,7 @@ export function useCalendarRunStream() {
         setGridJobId: s.setGridJobId,
         addDraft: s.addDraft,
         updateDraft: s.updateDraft,
+        upsertGeneration: s.upsertGeneration,
       }))
     );
 
@@ -44,11 +45,26 @@ export function useCalendarRunStream() {
         case "slot_started": {
           const placementId = d.placement_id as string | undefined;
           const dayId = (d.day_id ?? d.dayId) as string | undefined;
+          const platform = (d.platform as string | undefined) ?? "instagram";
           if (placementId && dayId) {
-            const platform = (d.platform as string | undefined) ?? "instagram";
             addDraft(dayId, buildPlaceholderDraft(placementId, dayId, platform, d));
           } else if (placementId) {
             updateDraft(placementId, (dr) => ({ ...dr, status: "streaming" }));
+          }
+          if (placementId) {
+            upsertGeneration({ jobId: placementId, planItemId: placementId, platform, status: "running" });
+          }
+          break;
+        }
+
+        case "slot_stage": {
+          const placementId = d.placement_id as string | undefined;
+          if (placementId) {
+            upsertGeneration({
+              jobId: placementId,
+              status: "running",
+              stage: strOf(d.stage) ?? null,
+            });
           }
           break;
         }
@@ -57,7 +73,10 @@ export function useCalendarRunStream() {
           progressRef.current.completed += 1;
           const { completed, total } = progressRef.current;
           const placementId = d.placement_id as string | undefined;
-          if (placementId) updateDraft(placementId, (dr) => ({ ...dr, status: "draft" }));
+          if (placementId) {
+            updateDraft(placementId, (dr) => ({ ...dr, status: "draft" }));
+            upsertGeneration({ jobId: placementId, status: "completed", draftId: placementId });
+          }
           setGridProgress({
             percent: Math.round((completed / Math.max(total, 1)) * 100),
             completed,
@@ -74,6 +93,11 @@ export function useCalendarRunStream() {
               status: "failed",
               generationError: (d.error as string | undefined) ?? "Generation failed",
             }));
+            upsertGeneration({
+              jobId: placementId,
+              status: "failed",
+              error: (d.error as string | undefined) ?? "Generation failed",
+            });
           }
           break;
         }
@@ -82,6 +106,7 @@ export function useCalendarRunStream() {
           const placementId = d.placement_id as string | undefined;
           const dayId = d.day_id as string | undefined;
           if (!placementId) break;
+          upsertGeneration({ jobId: placementId, status: "completed", draftId: placementId });
           const patch = buildPlacementPatch(d);
           if (dayId) {
             addDraft(dayId, {
@@ -107,7 +132,7 @@ export function useCalendarRunStream() {
         }
       }
     },
-    [addDraft, setGridError, setGridProgress, setGridStatus, updateDraft]
+    [addDraft, setGridError, setGridProgress, setGridStatus, updateDraft, upsertGeneration]
   );
 
   const { status: streamStatus } = useRunEventStream(activeRunId, handleEvent);

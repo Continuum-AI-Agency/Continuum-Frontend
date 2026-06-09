@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Upload, ScanSearch } from "lucide-react";
@@ -52,6 +52,12 @@ export function LibraryViewer({
   const reduceMotion = useReducedMotion();
   const sourceFilter: SourceFilterValue = selectedSource ?? "all";
   const kindFilter: KindFilterValue = selectedKind ?? "all";
+  // Filtering is a soft navigation. useTransition keeps the grid visible (and
+  // dimmed) during the refetch; useOptimistic flips the active pill instantly so
+  // the bar reacts on click instead of waiting for the round-trip to commit.
+  const [isFiltering, startFilterTransition] = useTransition();
+  const [optimisticSource, setOptimisticSource] = useOptimistic(sourceFilter);
+  const [optimisticKind, setOptimisticKind] = useOptimistic(kindFilter);
   const { assets, hasMore, loadingMore, loadMore } = useMediaLibrary({
     brandId,
     collectionId: selectedCollectionId,
@@ -81,17 +87,23 @@ export function LibraryViewer({
   const pushFilters = useCallback(
     (next: { collectionId?: string | null; source?: SourceFilterValue; kind?: KindFilterValue }) => {
       setSearchResults(null);
+      const nextSource = next.source ?? sourceFilter;
+      const nextKind = next.kind ?? kindFilter;
       const params = buildLibraryQuery({
         brandId,
         collectionId: next.collectionId !== undefined ? next.collectionId : selectedCollectionId,
-        source: next.source ?? sourceFilter,
-        kind: next.kind ?? kindFilter,
+        source: nextSource,
+        kind: nextKind,
       });
       params.delete("brandId");
       const qs = params.toString();
-      router.push(qs ? `/library?${qs}` : "/library");
+      startFilterTransition(() => {
+        setOptimisticSource(nextSource);
+        setOptimisticKind(nextKind);
+        router.push(qs ? `/library?${qs}` : "/library");
+      });
     },
-    [brandId, router, selectedCollectionId, sourceFilter, kindFilter],
+    [brandId, router, selectedCollectionId, sourceFilter, kindFilter, setOptimisticSource, setOptimisticKind, startFilterTransition],
   );
 
   const onSelectCollection = useCallback(
@@ -197,8 +209,8 @@ export function LibraryViewer({
         </div>
 
         <LibraryFilterBar
-          source={sourceFilter}
-          kind={kindFilter}
+          source={optimisticSource}
+          kind={optimisticKind}
           onSourceChange={(value) => pushFilters({ source: value })}
           onKindChange={(value) => pushFilters({ kind: value })}
         />
@@ -225,15 +237,20 @@ export function LibraryViewer({
           </div>
         )}
 
-        <MediaGrid
-          assets={displayedAssets}
-          onOpenAsset={setOpenAsset}
-          showBoundingBoxes={showBoundingBoxes}
-          emptyHint={isSearching ? "No results. Try a different search." : undefined}
-          onLoadMore={isSearching ? undefined : loadMore}
-          hasMore={isSearching ? false : hasMore}
-          loadingMore={loadingMore}
-        />
+        <div
+          className={`transition-opacity ${isFiltering ? "pointer-events-none opacity-60" : ""}`}
+          aria-busy={isFiltering}
+        >
+          <MediaGrid
+            assets={displayedAssets}
+            onOpenAsset={setOpenAsset}
+            showBoundingBoxes={showBoundingBoxes}
+            emptyHint={isSearching ? "No results. Try a different search." : undefined}
+            onLoadMore={isSearching ? undefined : loadMore}
+            hasMore={isSearching ? false : hasMore}
+            loadingMore={loadingMore}
+          />
+        </div>
 
         {/* Full-area drop overlay */}
         <AnimatePresence>

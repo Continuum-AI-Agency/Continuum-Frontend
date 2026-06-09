@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { ArrowUpIcon } from "@radix-ui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ImageIcon, Paperclip, Video, Workflow, X } from "lucide-react";
+import { ChevronRight, ImageIcon, Paperclip, Video, Workflow, X } from "lucide-react";
 
 import { Attachments, type Attachment } from "./attachments";
 import { SpeechInput } from "./speech-input";
@@ -308,7 +308,7 @@ export function PromptInput({
     const load = async () => {
       const nextSuggestions = mentionParent
         ? mentionProvider.getChildSuggestions
-          ? await mentionProvider.getChildSuggestions(mentionParent)
+          ? await mentionProvider.getChildSuggestions(mentionParent, activeMention.query)
           : []
         : await mentionProvider.getSuggestions({ query: activeMention.query });
 
@@ -588,39 +588,60 @@ export function PromptInput({
                     No references found.
                   </div>
                 ) : (
-                  mentionSuggestions.map((suggestion, index) => (
-                    <button
-                      key={suggestion.key}
-                      type="button"
-                      className={cn(
-                        "flex w-full items-start justify-between gap-3 rounded px-2.5 py-2 text-left text-sm",
-                        index === highlightedMentionIndex
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-accent/70"
-                      )}
-                      onMouseEnter={() => setHighlightedMentionIndex(index)}
-                      onClick={() => selectMentionSuggestion(suggestion)}
-                    >
-                      <span className="flex min-w-0 flex-1 items-start gap-2">
-                        {suggestion.preview ? (
-                          <ReferencePreviewThumb
-                            className="h-8 w-8"
-                            label={suggestion.preview.label ?? suggestion.label}
-                            preview={suggestion.preview}
-                          />
-                        ) : null}
-                        <span className="min-w-0">
-                        <span className="block truncate font-medium">{suggestion.label}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {suggestion.description ?? suggestion.group ?? suggestion.type}
+                  mentionSuggestions.map((suggestion, index) =>
+                    suggestion.isFolder ? (
+                      <button
+                        key={suggestion.key}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 rounded px-2.5 py-2 text-left text-sm",
+                          index === highlightedMentionIndex
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/70"
+                        )}
+                        onMouseEnter={() => setHighlightedMentionIndex(index)}
+                        onClick={() => selectMentionSuggestion(suggestion)}
+                      >
+                        <span className="font-medium">{suggestion.label}</span>
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          {suggestion.childrenLabel}
+                          <ChevronRight className="size-3" />
                         </span>
+                      </button>
+                    ) : (
+                      <button
+                        key={suggestion.key}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-start justify-between gap-3 rounded px-2.5 py-2 text-left text-sm",
+                          index === highlightedMentionIndex
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/70"
+                        )}
+                        onMouseEnter={() => setHighlightedMentionIndex(index)}
+                        onClick={() => selectMentionSuggestion(suggestion)}
+                      >
+                        <span className="flex min-w-0 flex-1 items-start gap-2">
+                          {suggestion.preview ? (
+                            <ReferencePreviewThumb
+                              className="h-8 w-8"
+                              label={suggestion.preview.label ?? suggestion.label}
+                              preview={suggestion.preview}
+                            />
+                          ) : null}
+                          <span className="min-w-0">
+                          <span className="block truncate font-medium">{suggestion.label}</span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {suggestion.description ?? suggestion.group ?? suggestion.type}
+                          </span>
+                          </span>
                         </span>
-                      </span>
-                      <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                        {suggestion.badge ?? suggestion.childrenLabel ?? suggestion.type}
-                      </span>
-                    </button>
-                  ))
+                        <span className="shrink-0 rounded border border-border/70 px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                          {suggestion.badge ?? suggestion.childrenLabel ?? suggestion.type}
+                        </span>
+                      </button>
+                    )
+                  )
                 )}
               </div>
             </div>

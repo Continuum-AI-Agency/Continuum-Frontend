@@ -86,6 +86,7 @@ import { cn } from "@/lib/utils";
 import {
   buildPostMetricSeries,
   calculateHookRate,
+  formatWatchTime,
   hookRateTier,
   post24hComparisons,
   postWindowRange,
@@ -101,6 +102,11 @@ import {
   buildOrganicReportCsv,
   buildOrganicReportHtml,
 } from "@/components/organic/organic-report-utils";
+import { useShallow } from "zustand/react/shallow";
+import {
+  selectAccountPostDetails,
+  usePostAnalyticsStore,
+} from "@/lib/organic/post-analytics-store";
 
 export type OrganicAccountOption = {
   integrationAccountId: string;
@@ -259,6 +265,25 @@ function trendDirection(value: number | undefined) {
 
 function rangeLabel(preset: OrganicDateRangePreset) {
   return preset.replace(/_/g, " ");
+}
+
+const POST_INSIGHT_METRIC_KEYS = [
+  "reach",
+  "views",
+  "likes",
+  "comments",
+  "shares",
+  "saved",
+  "totalInteractions",
+] as const;
+
+function isAllZeroPost(post: OrganicPost): boolean {
+  const metrics = post.metrics;
+  if (!metrics) return true;
+  return POST_INSIGHT_METRIC_KEYS.every((key) => {
+    const value = metrics[key];
+    return typeof value !== "number" || value === 0;
+  });
 }
 
 function mergePosts(existing: OrganicPost[], incoming: OrganicPost[]) {
@@ -527,9 +552,16 @@ function PostGalleryCard({
             </Text>
             <Flex align="center" justify="between" mt="2">
               <Text size="1" className="text-white/85">{formatDateTime(post.timestamp)}</Text>
-              <Text size="1" className="text-white/85">
-                {formatNumber(previewViews)} 7d views
-              </Text>
+              <Flex align="center" gap="2">
+                {post.metrics?.reelsAvgWatchTime !== undefined ? (
+                  <Text size="1" className="text-white/85">
+                    Avg watch {formatWatchTime(post.metrics.reelsAvgWatchTime)}
+                  </Text>
+                ) : null}
+                <Text size="1" className="text-white/85">
+                  {formatNumber(previewViews)} 7d views
+                </Text>
+              </Flex>
             </Flex>
           </div>
         </div>
@@ -728,6 +760,13 @@ function PostSnapshotPanel({
               comparison={metricComparisons.comments}
               compact
             />
+            {post.metrics?.reelsAvgWatchTime !== undefined ||
+            post.metrics?.reelsVideoViewTotalTime !== undefined ? (
+              <>
+                <WatchTimeCard label="Avg Watch Time" ms={post.metrics?.reelsAvgWatchTime} />
+                <WatchTimeCard label="Total Watch Time" ms={post.metrics?.reelsVideoViewTotalTime} />
+              </>
+            ) : null}
             {(() => {
               const hookRate = calculateHookRate(post);
               if (hookRate === undefined) return null;
@@ -842,7 +881,23 @@ function HookRateCard({ hookRate, tier }: { hookRate: number; tier: HookRateTier
           {hookRate.toFixed(1)}%
         </Text>
         <Text size="1" color="gray" className="mt-0.5 leading-none">
-          3-sec views / impressions
+          avg watch time vs 3s
+        </Text>
+      </Box>
+    </Card>
+  );
+}
+
+function WatchTimeCard({ label, ms }: { label: string; ms: number | undefined }) {
+  return (
+    <Card
+      variant="surface"
+      className="border border-subtle bg-surface/95 backdrop-blur-sm shadow-sm min-h-[48px]"
+    >
+      <Box px="2" py="1">
+        <Text size="1" color="gray" className="leading-none">{label}</Text>
+        <Text size="3" weight="bold" className="leading-tight tabular-nums tracking-tight">
+          {formatWatchTime(ms)}
         </Text>
       </Box>
     </Card>
@@ -1481,7 +1536,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const [exportingReportFormat, setExportingReportFormat] = React.useState<"csv" | "html" | null>(null);
   const [reportError, setReportError] = React.useState<string | null>(null);
   const manualRefreshRef = React.useRef(false);
-  const [postDetailsById, setPostDetailsById] = React.useState<Record<string, OrganicPost>>({});
+  const setPostDetailInStore = usePostAnalyticsStore((store) => store.setPostDetail);
   const [loadingPostId, setLoadingPostId] = React.useState<string | null>(null);
   const loadedPostDetailIdsRef = React.useRef<Set<string>>(new Set());
   const loadingPostDetailIdsRef = React.useRef<Set<string>>(new Set());
@@ -1517,6 +1572,14 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const selectedAccount =
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
 
+  // Per-post insight details cached in Zustand (sessionStorage-backed), scoped to
+  // the selected account and re-keyed by post id so clicking between posts and
+  // remounting the dashboard is instant. Server Upstash/Postgres cache still backs
+  // cross-session fetches.
+  const postDetailsById = usePostAnalyticsStore(
+    useShallow((store) => selectAccountPostDetails(store.postDetailsById, selectedAccountId)),
+  );
+
   React.useEffect(() => {
     setReportError(null);
   }, [platform, selectedAccountId]);
@@ -1542,9 +1605,11 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   );
 
   React.useEffect(() => {
+    // The Zustand store deliberately persists post details across account/view
+    // switches so re-selecting a post is instant; only the in-flight gating refs
+    // and gallery scaffolding reset here.
     loadedPostDetailIdsRef.current.clear();
     loadingPostDetailIdsRef.current.clear();
-    setPostDetailsById({});
     setLoadingPostId(null);
     setPostGalleryPosts([]);
     setPostWindowOffset(0);
@@ -1555,12 +1620,20 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const requestPostDetail = React.useCallback(
     async (postId: string) => {
       if (viewMode !== "posts" || !selectedAccountId || postId.length === 0) return;
-      if (loadedPostDetailIdsRef.current.has(postId)) return;
       if (loadingPostDetailIdsRef.current.has(postId)) return;
 
-      loadingPostDetailIdsRef.current.add(postId);
-      setLoadingPostId(postId);
-      try {
+      // Store-first: instant if this post was already fetched this session.
+      const cached = usePostAnalyticsStore
+        .getState()
+        .getPostDetail({ integrationAccountId: selectedAccountId, postId });
+      if (cached) {
+        loadedPostDetailIdsRef.current.add(postId);
+        setPostGalleryPosts((current) => mergePosts(current, [cached]));
+        return;
+      }
+      if (loadedPostDetailIdsRef.current.has(postId)) return;
+
+      const fetchDetail = async (forceRefresh: boolean) => {
         const data = await fetchOrganicAnalytics({
           brandId,
           integrationAccountId: selectedAccountId,
@@ -1568,16 +1641,24 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
           range: { preset: "last_30d" },
           scope: "posts",
           selectedPostId: postId,
-          forceRefresh: false,
+          forceRefresh,
         });
+        return (data.posts ?? []).find((post) => post.id === postId) ?? null;
+      };
 
-        const detailedPost = (data.posts ?? []).find((post) => post.id === postId);
+      loadingPostDetailIdsRef.current.add(postId);
+      setLoadingPostId(postId);
+      try {
+        let detailedPost = await fetchDetail(false);
+        // Self-heal a stale cached zero: force one live refetch (the edge fn no
+        // longer caches zeros, so this returns real numbers when available).
+        if (detailedPost && isAllZeroPost(detailedPost)) {
+          const refreshed = await fetchDetail(true);
+          if (refreshed) detailedPost = refreshed;
+        }
         if (detailedPost) {
           loadedPostDetailIdsRef.current.add(postId);
-          setPostDetailsById((current) => ({
-            ...current,
-            [postId]: detailedPost,
-          }));
+          setPostDetailInStore({ integrationAccountId: selectedAccountId, post: detailedPost });
           setPostGalleryPosts((current) => mergePosts(current, [detailedPost]));
         }
       } catch (error) {
@@ -1592,6 +1673,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
       platform,
       selectedAccountId,
       viewMode,
+      setPostDetailInStore,
     ]
   );
 
@@ -1634,7 +1716,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     if (viewMode === "posts") {
       loadedPostDetailIdsRef.current.clear();
       loadingPostDetailIdsRef.current.clear();
-      setPostDetailsById({});
+      usePostAnalyticsStore.getState().clearPostDetails();
       setLoadingPostId(null);
     }
     manualRefreshRef.current = true;
@@ -1708,6 +1790,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         accountRangeUntil: accountData.range.until,
         accountMetrics: accountData.metrics,
         posts: reportPosts,
+        trends: accountData.trends,
       };
 
       const dateTag = new Date().toISOString().slice(0, 10);

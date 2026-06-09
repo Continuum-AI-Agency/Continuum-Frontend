@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useState, ElementType } from "react";
+import { Suspense, useState, useRef, useEffect, ElementType } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Badge } from "@radix-ui/themes";
+import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,11 +19,17 @@ import {
   SidebarFooter,
   SidebarSeparator,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronRight, LogOut, Moon, Search, Sun } from "lucide-react";
-import { APP_NAVIGATION, APP_NAVIGATION_FOOTER } from "./routes";
+import {
+  APP_NAVIGATION_GROUPS,
+  APP_NAVIGATION_FOOTER,
+  isRouteActive,
+  type AppNavigationItem,
+} from "./routes";
 import { CurrentUserAvatar } from "@/components/current-user-avatar";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -39,28 +46,6 @@ import { useTheme } from "@/components/theme-provider";
 import { useCommandPalette } from "./CommandPaletteProvider";
 import { useActiveBrandContext } from "@/components/providers/ActiveBrandProvider";
 
-function isRouteActive(currentPath: string, currentSearchParams: URLSearchParams, item: { href: string }) {
-  if (item.href === "/dashboard") {
-    return currentPath === item.href;
-  }
-
-  if (item.href.includes("?")) {
-    const [path, query] = item.href.split("?");
-    const itemParams = new URLSearchParams(query);
-
-    if (currentPath !== path) return false;
-
-    for (const [key, value] of itemParams.entries()) {
-      if (currentSearchParams.get(key) !== value) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  return currentPath === item.href || currentPath.startsWith(`${item.href}/`);
-}
-
 function NavIcon({ icon: Icon, active, accentColor }: { icon: ElementType<{ className?: string }>; active?: boolean; accentColor?: string }) {
   return (
     <Icon
@@ -74,6 +59,40 @@ function NavIcon({ icon: Icon, active, accentColor }: { icon: ElementType<{ clas
   );
 }
 
+// Active marker pill. Uses the single brand accent (--ring) for every item.
+// Per the Singularity system, structural nav chrome stays on one accent;
+// per-area identity is carried by the active icon tint, not a colored bar.
+// When `layoutId` is shared across a group it becomes a "magic line" that
+// glides to the newly-active item on navigation. Centered via inset/my-auto
+// (not translate) so the shared-layout animation measures a clean box.
+function ActiveMarker({
+  className,
+  layoutId,
+  animate,
+}: {
+  className?: string;
+  layoutId?: string;
+  animate?: boolean;
+}) {
+  const markerClass = cn(
+    "pointer-events-none absolute left-0 inset-y-0 my-auto rounded-full bg-[var(--ring)]",
+    className
+  );
+
+  if (animate && layoutId) {
+    return (
+      <motion.span
+        aria-hidden="true"
+        layoutId={layoutId}
+        className={markerClass}
+        transition={{ type: "spring", bounce: 0, duration: 0.32 }}
+      />
+    );
+  }
+
+  return <span aria-hidden="true" className={markerClass} />;
+}
+
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
@@ -82,11 +101,12 @@ function AppSidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isMobile, state, toggleSidebar } = useSidebar();
+  const { isMobile, state, setOpen } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
   const { setOpen: openPalette } = useCommandPalette();
+  const reduce = useReducedMotion();
   const isAdmin = isAdminUser(user);
   const userDisplayName =
     readString(user?.user_metadata?.full_name) ??
@@ -94,12 +114,272 @@ function AppSidebarInner() {
     readString(user?.email?.split("@")[0]) ??
     "User";
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
+  const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const expandOnHover = () => {
+    if (isMobile) return;
+    if (collapseTimerRef.current) {
+      clearTimeout(collapseTimerRef.current);
+      collapseTimerRef.current = null;
+    }
+    setOpen(true);
+  };
+
+  const collapseAfterDelay = () => {
+    if (isMobile) return;
+    if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+    collapseTimerRef.current = setTimeout(() => setOpen(false), 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+    };
+  }, []);
+
+  function renderNavItem(item: AppNavigationItem) {
+    if (item.disabled) {
+      const DisabledIcon = item.icon;
+      return (
+        <SidebarMenuItem key={item.href}>
+          <SidebarMenuButton
+            aria-disabled="true"
+            tabIndex={-1}
+            tooltip={item.label}
+            size="default"
+            className="group relative cursor-not-allowed opacity-50 text-[var(--sidebar-muted)] hover:bg-transparent hover:text-[var(--sidebar-muted)]"
+          >
+            <DisabledIcon className="!h-[18px] !w-[18px] stroke-[1.8] text-[var(--sidebar-muted)]" />
+            <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+              {item.label}
+            </span>
+          </SidebarMenuButton>
+          {item.badge ? (
+            <SidebarMenuBadge className="pointer-events-none opacity-60">
+              <Badge size="1" color={item.badge.tone ?? "violet"} radius="full" variant="surface">
+                {item.badge.label}
+              </Badge>
+            </SidebarMenuBadge>
+          ) : null}
+        </SidebarMenuItem>
+      );
+    }
+
+    const active = isRouteActive(pathname, searchParams, item);
+    const hasSubItems = item.items && item.items.length > 0;
+    const isSubActive = item.items?.some((sub) => isRouteActive(pathname, searchParams, sub)) ?? false;
+
+    if (hasSubItems && item.quickTabs) {
+      const showQuickTabs = state !== "collapsed" && hoveredQuickTabs === item.href;
+
+      return (
+        <SidebarMenuItem key={item.href}>
+          <div
+            onMouseEnter={() => { router.prefetch(item.href); setHoveredQuickTabs(item.href); }}
+            onMouseLeave={() => setHoveredQuickTabs((current) => (current === item.href ? null : current))}
+            onFocusCapture={() => setHoveredQuickTabs(item.href)}
+            onBlurCapture={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setHoveredQuickTabs((current) => (current === item.href ? null : current));
+              }
+            }}
+            className="group/quick-tabs"
+          >
+            <SidebarMenuButton
+              asChild
+              isActive={active || isSubActive}
+              tooltip={item.label}
+              size="default"
+              className={cn(
+                "group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
+                (active || isSubActive)
+                  ? "text-[var(--sidebar-foreground)]"
+                  : "text-[var(--sidebar-muted)]"
+              )}
+            >
+              <Link href={item.href}>
+                {active || isSubActive ? (
+                  <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
+                ) : null}
+                <NavIcon icon={item.icon} active={active || isSubActive} accentColor={item.accentColor} />
+                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                  {item.label}
+                </span>
+              </Link>
+            </SidebarMenuButton>
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows,opacity] duration-150 ease-out pl-9 pr-1 group-data-[collapsible=icon]:hidden",
+                showQuickTabs ? "grid-rows-[1fr] opacity-100 pt-1" : "grid-rows-[0fr] opacity-0"
+              )}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-wrap gap-1.5">
+                  {item.items?.map((subItem) => {
+                    const subActive = isRouteActive(pathname, searchParams, subItem);
+                    return (
+                      <Button
+                        key={subItem.href}
+                        asChild
+                        size="sm"
+                        variant={subActive ? "secondary" : "outline"}
+                        onMouseEnter={() => router.prefetch(subItem.href)}
+                        className={cn(
+                          "h-6 rounded-md px-2 text-[0.65rem] font-medium tracking-[0.01em]",
+                          subActive
+                            ? "border-[color-mix(in_srgb,var(--ring)_36%,transparent)] bg-[color-mix(in_srgb,var(--ring)_16%,transparent)] text-[var(--sidebar-foreground)]"
+                            : "border-[color-mix(in_srgb,var(--sidebar-foreground)_18%,transparent)] bg-transparent text-[color-mix(in_srgb,var(--sidebar-foreground)_76%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
+                        )}
+                      >
+                        <Link href={subItem.href}>{subItem.label}</Link>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+          {item.badge ? (
+            <SidebarMenuBadge className="pointer-events-none">
+              <Badge
+                size="1"
+                color={item.badge.tone ?? "violet"}
+                radius="full"
+                variant="surface"
+              >
+                {item.badge.label}
+              </Badge>
+            </SidebarMenuBadge>
+          ) : null}
+        </SidebarMenuItem>
+      );
+    }
+
+    if (hasSubItems) {
+      return (
+        <Collapsible
+          key={item.href}
+          asChild
+          defaultOpen={active || isSubActive}
+          className="group/collapsible"
+        >
+          <SidebarMenuItem>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton
+                    size="default"
+                    isActive={active || isSubActive}
+                    onMouseEnter={() => router.prefetch(item.href)}
+                    className={cn(
+                      "group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
+                      (active || isSubActive)
+                        ? "text-[var(--sidebar-foreground)]"
+                        : "text-[var(--sidebar-muted)]"
+                    )}
+                  >
+                    {(active || isSubActive) ? (
+                      <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
+                    ) : null}
+                    <NavIcon icon={item.icon} active={active || isSubActive} accentColor={item.accentColor} />
+                    <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
+                      {item.label}
+                    </span>
+                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+              </TooltipTrigger>
+              <TooltipContent
+                side="right"
+                align="center"
+                hidden={state !== "collapsed" || isMobile}
+              >
+                {item.label}
+              </TooltipContent>
+            </Tooltip>
+            <CollapsibleContent>
+              <SidebarMenuSub className="group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:m-0 group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:px-0">
+                {item.items?.map((subItem) => {
+                  const subActive = isRouteActive(pathname, searchParams, subItem);
+                  const SubIcon = subItem.icon;
+
+                  return (
+                    <SidebarMenuSubItem key={subItem.href} className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full">
+                      <SidebarMenuSubButton
+                        asChild
+                        isActive={subActive}
+                        size="md"
+                        onMouseEnter={() => router.prefetch(subItem.href)}
+                        className={cn(
+                          "group relative text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]",
+                          "group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+                        )}
+                      >
+                        <Link href={subItem.href}>
+                          {subActive ? (
+                            <ActiveMarker className="h-3 w-0.5" />
+                          ) : null}
+                          {SubIcon && <NavIcon icon={SubIcon} active={subActive} accentColor={item.accentColor} />}
+                          <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">{subItem.label}</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                })}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </SidebarMenuItem>
+        </Collapsible>
+      );
+    }
+
+    return (
+      <SidebarMenuItem key={item.href}>
+        <SidebarMenuButton
+          asChild
+          isActive={active}
+          tooltip={item.label}
+          size="default"
+          onMouseEnter={() => router.prefetch(item.href)}
+          className={cn(
+            "group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
+            active
+              ? "text-[var(--sidebar-foreground)]"
+              : "text-[var(--sidebar-muted)]"
+          )}
+        >
+          <Link href={item.href}>
+            {active ? (
+              <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
+            ) : null}
+            <NavIcon icon={item.icon} active={active} accentColor={item.accentColor} />
+            <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
+          </Link>
+        </SidebarMenuButton>
+        {item.badge ? (
+          <SidebarMenuBadge className="pointer-events-none">
+            <Badge
+              size="1"
+              color={item.badge.tone ?? "violet"}
+              radius="full"
+              variant="surface"
+            >
+              {item.badge.label}
+            </Badge>
+          </SidebarMenuBadge>
+        ) : null}
+      </SidebarMenuItem>
+    );
+  }
 
   return (
     <Sidebar
       collapsible="icon"
+      onMouseEnter={expandOnHover}
+      onMouseLeave={collapseAfterDelay}
       className="border-r border-[var(--color-border)] bg-[var(--sidebar)] backdrop-blur-xl"
     >
+      <LayoutGroup>
       <SidebarHeader className="flex items-center justify-between gap-1 overflow-hidden px-3">
         <div className="min-w-0 flex-1">
           <BrandSwitcher />
@@ -124,242 +404,33 @@ function AppSidebarInner() {
                 </TooltipContent>
               </Tooltip>
           )}
-          <button
-            onClick={toggleSidebar}
-            className="flex h-7 w-7 min-h-[32px] min-w-[32px] items-center justify-center rounded-md text-[var(--sidebar-muted-dim)] transition-colors hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]"
-            aria-label={state === "expanded" ? "Collapse sidebar" : "Expand sidebar"}
-          >
-            <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", state === "expanded" ? "rotate-180" : "")} />
-          </button>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-4">
-        <SidebarGroup className="p-1">
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
-              {APP_NAVIGATION.map((item) => {
-                const active = isRouteActive(pathname, searchParams, item);
-                const hasSubItems = item.items && item.items.length > 0;
-                const isSubActive = item.items?.some((sub) => isRouteActive(pathname, searchParams, sub)) ?? false;
-
-                if (hasSubItems && item.quickTabs) {
-                  const showQuickTabs = state !== "collapsed" && hoveredQuickTabs === item.href;
-
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <div
-                        onMouseEnter={() => { router.prefetch(item.href); setHoveredQuickTabs(item.href); }}
-                        onMouseLeave={() => setHoveredQuickTabs((current) => (current === item.href ? null : current))}
-                        onFocusCapture={() => setHoveredQuickTabs(item.href)}
-                        onBlurCapture={(event) => {
-                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-                            setHoveredQuickTabs((current) => (current === item.href ? null : current));
-                          }
-                        }}
-                        className="group/quick-tabs"
-                      >
-                        <SidebarMenuButton
-                          asChild
-                          isActive={active || isSubActive}
-                          tooltip={item.label}
-                          size="default"
-                          className={cn(
-                            "group relative transition-colors duration-150 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
-                            (active || isSubActive)
-                              ? "text-[var(--sidebar-foreground)]"
-                              : "text-[var(--sidebar-muted)]"
-                          )}
-                        >
-                          <Link href={item.href}>
-                            {active || isSubActive ? (
-                              <span
-                                className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
-                                aria-hidden="true"
-                              />
-                            ) : null}
-                            <NavIcon icon={item.icon} active={active || isSubActive} accentColor={item.accentColor} />
-                            <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                              {item.label}
-                            </span>
-                          </Link>
-                        </SidebarMenuButton>
-                        <div
-                          className={cn(
-                            "grid transition-[grid-template-rows,opacity] duration-150 ease-out pl-9 pr-1 group-data-[collapsible=icon]:hidden",
-                            showQuickTabs ? "grid-rows-[1fr] opacity-100 pt-1" : "grid-rows-[0fr] opacity-0"
-                          )}
-                        >
-                          <div className="overflow-hidden">
-                            <div className="flex flex-wrap gap-1.5">
-                              {item.items?.map((subItem) => {
-                                const subActive = isRouteActive(pathname, searchParams, subItem);
-                                return (
-                                  <Button
-                                    key={subItem.href}
-                                    asChild
-                                    size="sm"
-                                    variant={subActive ? "secondary" : "outline"}
-                                    onMouseEnter={() => router.prefetch(subItem.href)}
-                                    className={cn(
-                                      "h-6 rounded-md px-2 text-[0.65rem] font-medium tracking-[0.01em]",
-                                      subActive
-                                        ? "border-[color-mix(in_srgb,var(--ring)_36%,transparent)] bg-[color-mix(in_srgb,var(--ring)_16%,transparent)] text-[var(--sidebar-foreground)]"
-                                        : "border-[color-mix(in_srgb,var(--sidebar-foreground)_18%,transparent)] bg-transparent text-[color-mix(in_srgb,var(--sidebar-foreground)_76%,transparent)] hover:bg-[color-mix(in_srgb,var(--ring)_10%,transparent)] hover:text-[var(--sidebar-foreground)]"
-                                    )}
-                                  >
-                                    <Link href={subItem.href}>{subItem.label}</Link>
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      {item.badge ? (
-                        <SidebarMenuBadge className="pointer-events-none">
-                          <Badge
-                            size="1"
-                            color={item.badge.tone ?? "violet"}
-                            radius="full"
-                            variant="surface"
-                          >
-                            {item.badge.label}
-                          </Badge>
-                        </SidebarMenuBadge>
-                      ) : null}
-                    </SidebarMenuItem>
-                  );
-                }
-
-                if (hasSubItems) {
-                  return (
-                    <Collapsible
-                      key={item.href}
-                      asChild
-                      defaultOpen={active || isSubActive}
-                      className="group/collapsible"
-                    >
-                      <SidebarMenuItem>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <CollapsibleTrigger asChild>
-                              <SidebarMenuButton
-                                size="default"
-                                isActive={active || isSubActive}
-                                onMouseEnter={() => router.prefetch(item.href)}
-                                className={cn(
-                                  "group relative transition-colors duration-150 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
-                                  (active || isSubActive)
-                                    ? "text-[var(--sidebar-foreground)]"
-                                    : "text-[var(--sidebar-muted)]"
-                                )}
-                              >
-                                {(active || isSubActive) ? (
-                                  <span
-                                    className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
-                                    aria-hidden="true"
-                                  />
-                                ) : null}
-                                <NavIcon icon={item.icon} active={active || isSubActive} accentColor={item.accentColor} />
-                                <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
-                                  {item.label}
-                                </span>
-                                <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-                              </SidebarMenuButton>
-                            </CollapsibleTrigger>
-                          </TooltipTrigger>
-                          <TooltipContent
-                            side="right"
-                            align="center"
-                            hidden={state !== "collapsed" || isMobile}
-                          >
-                            {item.label}
-                          </TooltipContent>
-                        </Tooltip>
-                        <CollapsibleContent>
-                          <SidebarMenuSub className="group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:m-0 group-data-[collapsible=icon]:border-none group-data-[collapsible=icon]:px-0">
-                            {item.items?.map((subItem) => {
-                              const subActive = isRouteActive(pathname, searchParams, subItem);
-                              const SubIcon = subItem.icon;
-
-                              return (
-                                <SidebarMenuSubItem key={subItem.href} className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:w-full">
-                                  <SidebarMenuSubButton
-                                    asChild
-                                    isActive={subActive}
-                                    size="md"
-                                    onMouseEnter={() => router.prefetch(subItem.href)}
-                                    className={cn(
-                                      "group relative text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] data-[active=true]:text-[var(--sidebar-foreground)] data-[active=true]:bg-[var(--sidebar-active-bg)]",
-                                      "group-data-[collapsible=icon]:!flex group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
-                                    )}
-                                  >
-                                    <Link href={subItem.href}>
-                                      {subActive ? (
-                                        <span
-                                          className="absolute left-0 top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
-                                          aria-hidden="true"
-                                        />
-                                      ) : null}
-                                      {SubIcon && <NavIcon icon={SubIcon} active={subActive} accentColor={item.accentColor} />}
-                                      <span className="group-data-[collapsible=icon]:hidden text-[0.74rem] font-medium tracking-[0.01em]">{subItem.label}</span>
-                                    </Link>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              );
-                            })}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      </SidebarMenuItem>
-                    </Collapsible>
-                  );
-                }
-
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={active}
-                      tooltip={item.label}
-                      size="default"
-                      onMouseEnter={() => router.prefetch(item.href)}
-                      className={cn(
-                        "group relative transition-colors duration-150 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
-                        active
-                          ? "text-[var(--sidebar-foreground)]"
-                          : "text-[var(--sidebar-muted)]"
-                      )}
-                    >
-                      <Link href={item.href}>
-                        {active ? (
-                          <span
-                            className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                        <NavIcon icon={item.icon} active={active} accentColor={item.accentColor} />
-                        <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                    {item.badge ? (
-                      <SidebarMenuBadge className="pointer-events-none">
-                        <Badge
-                          size="1"
-                          color={item.badge.tone ?? "violet"}
-                          radius="full"
-                          variant="surface"
-                        >
-                          {item.badge.label}
-                        </Badge>
-                      </SidebarMenuBadge>
-                    ) : null}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <motion.div
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
+        >
+        {APP_NAVIGATION_GROUPS.map((group, index) => (
+          <SidebarGroup
+            key={group.label ?? `group-${index}`}
+            className={cn("p-1", index > 0 && "mt-3 pt-3")}
+          >
+            {group.label ? (
+              <SidebarGroupLabel className="px-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--sidebar-muted-dim)] group-data-[collapsible=icon]:hidden">
+                {group.label}
+              </SidebarGroupLabel>
+            ) : null}
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-1 group-data-[collapsible=icon]:items-center">
+                {group.items.map(renderNavItem)}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+        </motion.div>
       </SidebarContent>
 
       <SidebarFooter className="px-3 pb-3">
@@ -377,7 +448,7 @@ function AppSidebarInner() {
                   size="default"
                   onMouseEnter={() => router.prefetch(item.href)}
                   className={cn(
-                    "group relative transition-colors duration-150 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
+                    "group relative transition-[color,background-color,transform] duration-150 active:scale-[0.97] motion-reduce:active:scale-100 data-[active=true]:bg-[var(--sidebar-active-bg)] data-[active=true]:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)]",
                     active
                       ? "text-[var(--sidebar-foreground)]"
                       : "text-[var(--sidebar-muted)]"
@@ -385,10 +456,7 @@ function AppSidebarInner() {
                 >
                   <Link href={item.href}>
                     {active ? (
-                      <span
-                        className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[var(--ring)]"
-                        aria-hidden="true"
-                      />
+                      <ActiveMarker layoutId="nav-active-marker" animate={!reduce} className="h-4 w-0.5" />
                     ) : null}
                     <NavIcon icon={item.icon} active={active} />
                     <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">{item.label}</span>
@@ -423,9 +491,22 @@ function AppSidebarInner() {
               onClick={toggle}
               className="group text-[var(--sidebar-muted)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--sidebar-foreground)] transition-all duration-150"
             >
-              {appearance === "dark"
-                ? <Sun className="!h-[18px] !w-[18px] stroke-[1.8]" />
-                : <Moon className="!h-[18px] !w-[18px] stroke-[1.8]" />}
+              <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
+                <AnimatePresence initial={false} mode="popLayout">
+                  <motion.span
+                    key={appearance}
+                    initial={reduce ? false : { opacity: 0, scale: 0.25, filter: "blur(4px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.25, filter: "blur(4px)" }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+                    className="absolute inset-0 inline-flex items-center justify-center"
+                  >
+                    {appearance === "dark"
+                      ? <Sun className="!h-[18px] !w-[18px] stroke-[1.8]" />
+                      : <Moon className="!h-[18px] !w-[18px] stroke-[1.8]" />}
+                  </motion.span>
+                </AnimatePresence>
+              </span>
               <span className="group-data-[collapsible=icon]:hidden text-[0.78rem] font-medium tracking-[0.01em]">
                 {appearance === "dark" ? "Light mode" : "Dark mode"}
               </span>
@@ -446,6 +527,7 @@ function AppSidebarInner() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      </LayoutGroup>
     </Sidebar>
   );
 }

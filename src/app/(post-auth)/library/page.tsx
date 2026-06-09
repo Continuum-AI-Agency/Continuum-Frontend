@@ -77,10 +77,11 @@ export default async function LibraryPage({
 
   return (
     <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height,600px)] w-full overflow-hidden">
-      <Suspense
-        key={`${collection ?? "all"}:${source_ ?? "all"}:${kind_ ?? "all"}`}
-        fallback={<LibrarySkeleton />}
-      >
+      {/* Stable Suspense boundary (no per-filter key): filter/collection changes
+          are soft navigations, so React keeps the current grid mounted during the
+          refetch instead of tearing it down to the skeleton. The skeleton shows
+          only on the first load of the route. */}
+      <Suspense fallback={<LibrarySkeleton />}>
         <LibraryContent collectionId={collection} source={source_} kind={kind_} />
       </Suspense>
     </div>

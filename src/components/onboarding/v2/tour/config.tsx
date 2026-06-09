@@ -118,8 +118,6 @@ export const aiCanvasTour: Tour = {
       content: paragraph(
         "Compose images, video, and copy as connected blocks. We dropped in a starter flow below so you can see how it fits together."
       ),
-      selector: "[data-tour-id='studio-canvas']",
-      side: "bottom",
       showControls: true,
       showSkip: true,
     },

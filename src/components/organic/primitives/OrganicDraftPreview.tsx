@@ -203,18 +203,64 @@ function CarouselMediaArea({
   )
 }
 
+// All user-supplied text is HTML-escaped before being inserted into the HTML
+// string, so dangerouslySetInnerHTML on the mirror div is XSS-safe. The only
+// injected tags are the hardcoded <mark> wrapper and <br> — never user content.
+function buildCaptionMirrorHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return escaped
+    .replace(/@[^\s\n@&]+/g, '<mark class="mention-token">$&</mark>')
+    .replace(/\n/g, "<br>");
+}
+
 function InlinePreviewTextarea({
   className,
+  value,
+  onScroll,
   ...props
 }: React.ComponentProps<typeof Textarea>) {
+  const mirrorRef = React.useRef<HTMLDivElement>(null);
+
+  const mirrorHtml = React.useMemo(
+    () => buildCaptionMirrorHtml(String(value ?? "")),
+    [value]
+  );
+
+  const handleScroll = React.useCallback(
+    (e: React.UIEvent<HTMLTextAreaElement>) => {
+      if (mirrorRef.current) mirrorRef.current.scrollTop = e.currentTarget.scrollTop;
+      onScroll?.(e);
+    },
+    [onScroll]
+  );
+
+  // px-3 py-2 matches the Textarea base padding; className overrides (e.g. p-0) apply to both
+  const layoutClass = cn("px-3 py-2", className);
+
   return (
-    <Textarea
-      {...props}
-      className={cn(
-        "resize-none border-border/60 bg-muted/25 text-foreground placeholder:text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring/40",
-        className
-      )}
-    />
+    <div className="relative">
+      <div
+        ref={mirrorRef}
+        aria-hidden
+        className={cn(
+          layoutClass,
+          "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-transparent"
+        )}
+        dangerouslySetInnerHTML={{ __html: mirrorHtml }}
+      />
+      <Textarea
+        value={value}
+        onScroll={handleScroll}
+        {...props}
+        className={cn(
+          "relative resize-none border-border/60 bg-transparent text-foreground placeholder:text-muted-foreground shadow-none focus-visible:ring-1 focus-visible:ring-ring/40",
+          className
+        )}
+      />
+    </div>
   )
 }
 
@@ -651,7 +697,7 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
               Instagram access token expired.{" "}
               <a
-                href="/settings/integrations"
+                href="/settings?section=integrations"
                 className="underline underline-offset-2"
               >
                 Reconnect your account
@@ -672,8 +718,8 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               )}
             >
               {draft.status === "scheduled"
-                ? "Approved for Scheduling"
-                : "Approve for Scheduling"}
+                ? "Approved for posting"
+                : "Approve & Schedule"}
             </button>
           )}
 

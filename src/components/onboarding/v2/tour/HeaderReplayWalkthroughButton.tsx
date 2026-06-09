@@ -16,7 +16,7 @@ const SURFACE_TOURS: ReadonlyArray<{ prefix: string; tour: TourName }> = [
   { prefix: "/dashboard", tour: TOUR_DASHBOARD },
   { prefix: "/ai-studio", tour: TOUR_AI_CANVAS },
   { prefix: "/organic", tour: TOUR_ORGANIC },
-  { prefix: "/paid-media", tour: TOUR_PAID_MEDIA },
+  { prefix: "/scale", tour: TOUR_PAID_MEDIA },
 ];
 
 /**

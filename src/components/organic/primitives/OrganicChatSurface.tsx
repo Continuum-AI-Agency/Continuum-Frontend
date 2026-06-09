@@ -118,7 +118,7 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
       <div className="border-b border-primary/15 bg-primary/8 px-3 py-2">
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-primary/80">
-            Content Plan Proposal
+            Content Plan
           </p>
           <Badge
             variant="outline"
@@ -131,7 +131,11 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
               plan.status === "failed" && "border-destructive/30 bg-destructive/10 text-destructive",
             )}
           >
-            {plan.status}
+            {plan.status === "proposed" ? "Review" :
+             plan.status === "approved" ? "Queued" :
+             plan.status === "generating" ? "Creating" :
+             plan.status === "completed" ? "Done" :
+             plan.status}
           </Badge>
         </div>
       </div>
@@ -150,7 +154,7 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          {plan.placements.length} post{plan.placements.length !== 1 ? "s" : ""} across week of{" "}
+          {plan.placements.length} draft{plan.placements.length !== 1 ? "s" : ""} across week of{" "}
           <span className="font-medium text-foreground">{plan.week_start}</span>
         </p>
 
@@ -162,36 +166,39 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
       </div>
 
       {plan.status === "proposed" && !isTerminal ? (
-        <div className="flex gap-2 border-t border-primary/10 px-3 py-2">
-          <Button
-            size="sm"
-            className="h-7 flex-1 gap-1.5 text-xs"
-            disabled={isApproving}
-            onClick={() => onApprove(plan.id)}
-          >
-            {isApproving ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <CheckIcon className="h-3 w-3" />
-            )}
-            {isApproving ? "Generating…" : "Approve & Generate"}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-xs text-muted-foreground"
-            disabled={isApproving}
-            onClick={onCancel}
-          >
-            <XCircle className="h-3.5 w-3.5" />
-          </Button>
+        <div className="flex flex-col gap-1 border-t border-primary/10 px-3 pb-2.5 pt-2">
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="h-7 flex-1 gap-1.5 text-xs"
+              disabled={isApproving}
+              onClick={() => onApprove(plan.id)}
+            >
+              {isApproving ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CheckIcon className="h-3 w-3" />
+              )}
+              {isApproving ? "Creating drafts…" : "Generate Drafts"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-xs text-muted-foreground"
+              disabled={isApproving}
+              onClick={onCancel}
+            >
+              <XCircle className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground/50">Nothing posts until you publish.</p>
         </div>
       ) : null}
 
       {plan.status === "generating" ? (
         <div className="flex items-center gap-2 border-t border-primary/10 px-3 py-2">
           <Loader2 className="h-3 w-3 animate-spin text-primary" />
-          <p className="text-[11px] text-primary/70">Generating your content…</p>
+          <p className="text-[11px] text-primary/70">Creating your drafts…</p>
         </div>
       ) : null}
 
@@ -199,7 +206,7 @@ function PlanProposalCard({ plan, isApproving, onApprove, onCancel }: PlanPropos
         <div className="flex items-center gap-2 border-t border-emerald-500/15 bg-emerald-500/5 px-3 py-2">
           <CheckIcon className="h-3 w-3 text-emerald-600" />
           <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
-            Content generated — review your calendar
+            Drafts ready — review them on the calendar
           </p>
         </div>
       ) : null}

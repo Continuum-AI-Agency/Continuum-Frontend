@@ -17,7 +17,9 @@ type Props = {
 };
 
 /**
- * Renders a proposed plan as a 2-column grid of portrait concept cards.
+ * Renders a proposed plan as a compact, auto-filling grid of square concept
+ * cards. Cards stay bounded (they don't stretch to fill the panel) so a plan
+ * reads as "more volume available" rather than a few oversized tiles.
  * Per-card dismiss collapses individual cards; the footer controls apply
  * to the whole plan.
  */
@@ -72,7 +74,7 @@ export function ConceptPlan({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,170px))] gap-2">
         <AnimatePresence initial={false}>
           {visibleItems.map((item, i) => (
             <motion.div

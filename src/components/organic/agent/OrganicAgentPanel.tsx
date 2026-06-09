@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { AnimatePresence, motion } from "motion/react";
 import { Message } from "@/components/ai-elements/message";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
-import { LinkifiedText } from "@/components/ai-elements/linkified-text";
+import { MentionifiedText } from "@/components/ai-elements/mentionified-text";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { useCalendarStore } from "@/lib/organic/store";
@@ -12,6 +12,7 @@ import { useOrganicAgentStream } from "@/hooks/useOrganicAgentStream";
 import { useCalendarRunStream } from "@/components/organic/hooks/useCalendarRunStream";
 import { initialPanelState, panelReducer } from "./useOrganicAgentReducer";
 import { mapPlacementToDraft } from "./mapPlacementToDraft";
+import { resolveConceptPreviewUrl } from "./conceptPreview";
 import { restoreSessionFromMessages } from "./restoreSession";
 import type { AgentJobState } from "./types";
 import { JobGrid } from "./JobGrid";
@@ -258,6 +259,8 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   const { start, isStreaming } = useOrganicAgentStream(dispatch, { onRunStarted: attachRun });
   const { user } = useSession();
   const addDraft = useCalendarStore((s) => s.addDraft);
+  const upsertGeneration = useCalendarStore((s) => s.upsertGeneration);
+  const clearGenerations = useCalendarStore((s) => s.clearGenerations);
   const calendarDays = useCalendarStore((s) => s.days);
   const backlogDrafts = useCalendarStore((s) => s.backlogDrafts);
   const selectedDraftId = useCalendarStore((s) => s.selectedDraftId);
@@ -269,6 +272,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
   const [queuedMentionSuggestions, setQueuedMentionSuggestions] = useState<AgentMentionSuggestion[]>([]);
   const syncedJobsRef = useRef(new Set<string>());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Whether the user is pinned near the bottom. When they scroll up to read
+  // earlier output we stop auto-scrolling so streaming doesn't yank them down.
+  const stickToBottomRef = useRef(true);
   const newSessionIdRef = useRef<string | null>(null);
   const refreshDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -330,14 +337,62 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     }
   }, [state.jobs, addDraft]);
 
-  // Auto-scroll to bottom on new messages
+  // Mirror live job + pipeline state into the shared calendar store so the
+  // shell-wide GenerationsPopover can render status/progress/preview from any
+  // organic tab. The reducer stays the source of truth; this is a projection.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    for (const job of Object.values(state.jobs)) {
+      const pipe = state.pipeline[job.jobId];
+      upsertGeneration({
+        jobId: job.jobId,
+        planItemId: pipe?.planItemId ?? job.placement?.placementId ?? null,
+        platform: job.platform ?? pipe?.platform ?? null,
+        scheduledAt: job.scheduledAt ?? null,
+        status: job.status,
+        stage: job.stage ?? pipe?.currentStage ?? null,
+        pct: pipe?.pct ?? null,
+        previewUrl: resolveConceptPreviewUrl(pipe?.preview),
+        quality: typeof pipe?.quality?.overallScore === "number" ? pipe.quality.overallScore : null,
+        draftId: job.draftId ?? pipe?.draftId ?? null,
+        error: job.error?.message ?? pipe?.error?.message ?? null,
+      });
+    }
+    // Pipeline cards without a matching job (e.g. concept "Generate this post").
+    for (const pipe of Object.values(state.pipeline)) {
+      if (state.jobs[pipe.jobId]) continue;
+      upsertGeneration({
+        jobId: pipe.jobId,
+        planItemId: pipe.planItemId ?? null,
+        platform: pipe.platform ?? null,
+        status: pipe.status,
+        stage: pipe.currentStage ?? null,
+        pct: pipe.pct ?? null,
+        previewUrl: resolveConceptPreviewUrl(pipe.preview),
+        quality: typeof pipe.quality?.overallScore === "number" ? pipe.quality.overallScore : null,
+        draftId: pipe.draftId ?? null,
+        error: pipe.error?.message ?? null,
+      });
+    }
+  }, [state.jobs, state.pipeline, upsertGeneration]);
+
+  // Auto-scroll on new messages only while the user is near the bottom; scrolling
+  // up to read earlier output detaches the view until they return to the bottom.
+  useEffect(() => {
+    if (stickToBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [state.messages]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64;
+  }, []);
 
   const handleSelectSession = useCallback(
     async (sessionId: string) => {
       if (isStreaming) return;
+      clearGenerations();
       dispatch({ type: "LOAD_MESSAGES_START" });
       const msgs = await selectSession(sessionId);
       const restored = restoreSessionFromMessages(msgs);
@@ -345,7 +400,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       restored.pipelineCards.forEach((card) => dispatch({ type: "PIPELINE_CARD", card }));
       restored.bulkRuns.forEach((run) => dispatch({ type: "BULK_RUN_START", run }));
     },
-    [isStreaming, selectSession]
+    [isStreaming, selectSession, clearGenerations]
   );
 
   const debouncedRefreshSessions = useCallback(() => {
@@ -355,10 +410,11 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
 
   const handleNewSession = useCallback(() => {
     if (isStreaming) return;
+    clearGenerations();
     const id = startNewSession();
     newSessionIdRef.current = id;
     dispatch({ type: "SESSION_SWITCH", sessionId: id, messages: [] });
-  }, [isStreaming, startNewSession]);
+  }, [isStreaming, startNewSession, clearGenerations]);
 
   const handleSubmit = useCallback(
     (value: string, references: AgentMentionReference[] = []) => {
@@ -505,48 +561,18 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
 
   const jobs = Object.values(state.jobs);
   const inputDisabled = isStreaming || (!state.sessionId && !activeSessionId);
-  const mentionProvider = useCallback<AgentMentionProvider["getSuggestions"]>(
-    async ({ query }) => {
-      const scheduledDraftSuggestions = calendarDays.flatMap((day) =>
-        day.slots.map((draft) => {
-          const description = [
-            draft.platforms.join(", "),
-            draft.timeLabel,
-            day.dateLabel,
-            draft.status,
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          return createOrganicSuggestion(
-            {
-              id: draft.id,
-              type: "draft",
-              label: draft.title || draft.summary || draft.id,
-              source: "organic",
-              metadata: {
-                draftId: draft.id,
-                backendDraftId: draft.backendDraftId,
-                status: draft.status,
-                dayId: day.id,
-                dateLabel: day.dateLabel,
-                timeLabel: draft.timeLabel,
-                platforms: draft.platforms,
-                seedTrendId: draft.seedTrendId,
-                isSelected: draft.id === selectedDraftId,
-              },
-            },
-            {
-              key: `draft:${draft.id}`,
-              group: "Drafts",
-              description,
-              badge: draft.id === selectedDraftId ? "selected" : "draft",
-            }
-          );
-        })
-      );
-
-      const backlogDraftSuggestions = backlogDrafts.map((draft) =>
-        createOrganicSuggestion(
+  const buildAllSuggestions = useCallback(async (): Promise<AgentMentionSuggestion[]> => {
+    const scheduledDraftSuggestions = calendarDays.flatMap((day) =>
+      day.slots.map((draft) => {
+        const description = [
+          draft.platforms.join(", "),
+          draft.timeLabel,
+          day.dateLabel,
+          draft.status,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        return createOrganicSuggestion(
           {
             id: draft.id,
             type: "draft",
@@ -556,7 +582,9 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
               draftId: draft.id,
               backendDraftId: draft.backendDraftId,
               status: draft.status,
-              location: "backlog",
+              dayId: day.id,
+              dateLabel: day.dateLabel,
+              timeLabel: draft.timeLabel,
               platforms: draft.platforms,
               seedTrendId: draft.seedTrendId,
               isSelected: draft.id === selectedDraftId,
@@ -565,119 +593,184 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
           {
             key: `draft:${draft.id}`,
             group: "Drafts",
-            description: ["Backlog", draft.platforms.join(", "), draft.status].filter(Boolean).join(" · "),
-            badge: "draft",
+            description,
+            badge: draft.id === selectedDraftId ? "selected" : "draft",
           }
-        )
-      );
+        );
+      })
+    );
 
-      const trendSuggestions = (mentionContext?.trends ?? []).map((trend) =>
-        createOrganicSuggestion(
-          {
-            id: trend.id,
-            type: "trend",
-            label: trend.title,
-            source: "organic",
-            metadata: {
-              generationId: mentionContext?.generationId,
-              weekStart: mentionContext?.weekStartDate,
-              source: trend.source,
-              // Selection is single-sourced from the Zustand store so the planner
-              // selection and the agent mention context can never diverge. The
-              // server-provided trend.isSelected is intentionally not consulted.
-              isSelected: selectedTrendIds.includes(trend.id),
-            },
+    const backlogDraftSuggestions = backlogDrafts.map((draft) =>
+      createOrganicSuggestion(
+        {
+          id: draft.id,
+          type: "draft",
+          label: draft.title || draft.summary || draft.id,
+          source: "organic",
+          metadata: {
+            draftId: draft.id,
+            backendDraftId: draft.backendDraftId,
+            status: draft.status,
+            location: "backlog",
+            platforms: draft.platforms,
+            seedTrendId: draft.seedTrendId,
+            isSelected: draft.id === selectedDraftId,
           },
-          {
-            key: `trend:${trend.id}`,
-            group: "Trends",
-            description: trend.description ?? trend.relevanceToBrand,
-            badge: selectedTrendIds.includes(trend.id) ? "selected" : "trend",
-          }
-        )
-      );
+        },
+        {
+          key: `draft:${draft.id}`,
+          group: "Drafts",
+          description: ["Backlog", draft.platforms.join(", "), draft.status].filter(Boolean).join(" · "),
+          badge: "draft",
+        }
+      )
+    );
 
-      const eventSuggestions = (mentionContext?.events ?? []).map((event) =>
-        createOrganicSuggestion(
-          {
-            id: event.id,
-            type: "event",
-            label: event.title,
-            source: "organic",
-            metadata: {
-              generationId: mentionContext?.generationId,
-              weekStart: mentionContext?.weekStartDate,
-              date: event.date,
-              isSelected: event.isSelected,
-            },
+    const trendSuggestions = (mentionContext?.trends ?? []).map((trend) =>
+      createOrganicSuggestion(
+        {
+          id: trend.id,
+          type: "trend",
+          label: trend.title,
+          source: "organic",
+          metadata: {
+            generationId: mentionContext?.generationId,
+            weekStart: mentionContext?.weekStartDate,
+            source: trend.source,
+            // Selection is single-sourced from the Zustand store so the planner
+            // selection and the agent mention context can never diverge. The
+            // server-provided trend.isSelected is intentionally not consulted.
+            isSelected: selectedTrendIds.includes(trend.id),
           },
-          {
-            key: `event:${event.id}`,
-            group: "Events",
-            description: [event.date, event.description ?? event.opportunity].filter(Boolean).join(" · "),
-            badge: "event",
-          }
-        )
-      );
+        },
+        {
+          key: `trend:${trend.id}`,
+          group: "Trends",
+          description: trend.description ?? trend.relevanceToBrand,
+          badge: selectedTrendIds.includes(trend.id) ? "selected" : "trend",
+        }
+      )
+    );
 
-      const questionSuggestions = (mentionContext?.questions ?? []).map((question) =>
-        createOrganicSuggestion(
-          {
-            id: question.id,
-            type: "question",
-            label: question.question,
-            source: "organic",
-            metadata: {
-              generationId: mentionContext?.generationId,
-              weekStart: mentionContext?.weekStartDate,
-              niche: question.niche,
-              socialPlatform: question.socialPlatform,
-              contentTypeSuggestion: question.contentTypeSuggestion,
-              isSelected: question.isSelected,
-            },
+    const eventSuggestions = (mentionContext?.events ?? []).map((event) =>
+      createOrganicSuggestion(
+        {
+          id: event.id,
+          type: "event",
+          label: event.title,
+          source: "organic",
+          metadata: {
+            generationId: mentionContext?.generationId,
+            weekStart: mentionContext?.weekStartDate,
+            date: event.date,
+            isSelected: event.isSelected,
           },
-          {
-            key: `question:${question.id}`,
-            group: "Questions",
-            description: [question.niche, question.socialPlatform, question.whyRelevant].filter(Boolean).join(" · "),
-            badge: "question",
-          }
-        )
-      );
+        },
+        {
+          key: `event:${event.id}`,
+          group: "Events",
+          description: [event.date, event.description ?? event.opportunity].filter(Boolean).join(" · "),
+          badge: "event",
+        }
+      )
+    );
 
-      const canvasSuggestions = canvasNodes.map(canvasNodeToMentionSuggestion);
-      const skillSuggestions = brandSkills.map(skillToMentionSuggestion);
-      const mediaSuggestions = await searchMediaMentionSuggestions(brandId, query).catch(() => []);
+    const questionSuggestions = (mentionContext?.questions ?? []).map((question) =>
+      createOrganicSuggestion(
+        {
+          id: question.id,
+          type: "question",
+          label: question.question,
+          source: "organic",
+          metadata: {
+            generationId: mentionContext?.generationId,
+            weekStart: mentionContext?.weekStartDate,
+            niche: question.niche,
+            socialPlatform: question.socialPlatform,
+            contentTypeSuggestion: question.contentTypeSuggestion,
+            isSelected: question.isSelected,
+          },
+        },
+        {
+          key: `question:${question.id}`,
+          group: "Questions",
+          description: [question.niche, question.socialPlatform, question.whyRelevant].filter(Boolean).join(" · "),
+          badge: "question",
+        }
+      )
+    );
 
-      return [
-        ...skillSuggestions,
-        ...scheduledDraftSuggestions,
-        ...backlogDraftSuggestions,
-        ...trendSuggestions,
-        ...eventSuggestions,
-        ...questionSuggestions,
-        ...canvasSuggestions,
-        ...mediaSuggestions,
-      ].filter((suggestion) =>
-        matchesMentionQuery(query, [
-          suggestion.label,
-          suggestion.description,
-          suggestion.group,
-          suggestion.badge,
-        ])
-      );
-    },
-    [
-      backlogDrafts,
-      calendarDays,
-      canvasNodes,
-      brandSkills,
-      brandId,
-      mentionContext,
-      selectedDraftId,
-      selectedTrendIds,
-    ]
-  );
+    const canvasSuggestions = canvasNodes.map(canvasNodeToMentionSuggestion);
+    const skillSuggestions = brandSkills.map(skillToMentionSuggestion);
+
+    return [
+      ...skillSuggestions,
+      ...scheduledDraftSuggestions,
+      ...backlogDraftSuggestions,
+      ...trendSuggestions,
+      ...eventSuggestions,
+      ...questionSuggestions,
+      ...canvasSuggestions,
+    ];
+  }, [
+    backlogDrafts,
+    calendarDays,
+    canvasNodes,
+    brandSkills,
+    mentionContext,
+    selectedDraftId,
+    selectedTrendIds,
+  ]);
+
+  const mentionProviderObj = useMemo<AgentMentionProvider>(() => {
+    type FolderMeta = { type: AgentMentionSuggestion["type"]; childrenLabel: string };
+    const FOLDER_META: Record<string, FolderMeta> = {
+      Skills:           { type: "skill",       childrenLabel: "Brand skills" },
+      Drafts:           { type: "draft",        childrenLabel: "Scheduled & backlog" },
+      Trends:           { type: "trend",        childrenLabel: "Active trends" },
+      Events:           { type: "event",        childrenLabel: "Events" },
+      Questions:        { type: "question",     childrenLabel: "Questions" },
+      Canvas:           { type: "canvas_node",  childrenLabel: "Canvas nodes" },
+      "Media library":  { type: "media_asset",  childrenLabel: "Search media" },
+    };
+
+    return {
+      getSuggestions: async ({ query }) => {
+        if (!query) {
+          const all = await buildAllSuggestions();
+          const groupsSeen = new Set(all.map((s) => s.group).filter(Boolean) as string[]);
+          groupsSeen.add("Media library");
+          return [...groupsSeen]
+            .filter((g) => Boolean(FOLDER_META[g]))
+            .map((g) => ({
+              key: `folder:${g}`,
+              label: g,
+              type: FOLDER_META[g].type,
+              source: "organic" as const,
+              childrenLabel: FOLDER_META[g].childrenLabel,
+              isFolder: true,
+            }));
+        }
+        const [all, mediaSuggestions] = await Promise.all([
+          buildAllSuggestions(),
+          searchMediaMentionSuggestions(brandId, query).catch(() => [] as AgentMentionSuggestion[]),
+        ]);
+        return [...all, ...mediaSuggestions].filter((s) =>
+          matchesMentionQuery(query, [s.label, s.description, s.group, s.badge])
+        );
+      },
+      getChildSuggestions: async (parent, query) => {
+        if (parent.key === "folder:Media library") {
+          return searchMediaMentionSuggestions(brandId, query).catch(() => []);
+        }
+        const all = await buildAllSuggestions();
+        const children = all.filter((s) => s.group === parent.label);
+        return query
+          ? children.filter((s) => matchesMentionQuery(query, [s.label, s.description, s.badge]))
+          : children;
+      },
+    };
+  }, [buildAllSuggestions, brandId]);
 
   const activeStages = useMemo(() => {
     if (!state.streamingMessageId) return [];
@@ -704,7 +797,11 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1">
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleMessagesScroll}
+        className="min-h-0 flex-1 overflow-y-auto space-y-3 pr-1"
+      >
         {isLoadingMessages ? (
           <div className="space-y-3 p-1">
             <Skeleton className="h-10 w-3/4" />
@@ -737,7 +834,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                     isAnimating={msg.id === state.streamingMessageId}
                   />
                 ) : (
-                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed"><LinkifiedText text={msg.content} /></p>
+                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed"><MentionifiedText text={msg.content} references={msg.metadata?.references} /></p>
                 )}
                 <OrganicThinkingPanel
                   toolCalls={msg.toolCalls ?? []}
@@ -875,7 +972,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
           onSubmit={(value, _attachments, references) => handleSubmit(value, references)}
           disabled={inputDisabled}
           className="px-0"
-          mentionProvider={{ getSuggestions: mentionProvider }}
+          mentionProvider={mentionProviderObj}
           queuedMentionSuggestions={queuedMentionSuggestions}
           onQueuedMentionSuggestionsConsumed={() => setQueuedMentionSuggestions([])}
           actions={

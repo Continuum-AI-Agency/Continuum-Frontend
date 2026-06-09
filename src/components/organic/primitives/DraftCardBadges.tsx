@@ -75,8 +75,8 @@ const STATUS_DOT: Record<
   string,
   { color: string; label: string }
 > = {
-  draft: { color: "bg-muted-foreground/40", label: "Draft" },
-  scheduled: { color: "bg-emerald-500", label: "Scheduled" },
+  draft: { color: "bg-muted-foreground/40", label: "Draft — not yet approved for posting" },
+  scheduled: { color: "bg-emerald-500", label: "Approved — will post at scheduled time" },
   streaming: { color: "bg-amber-400", label: "Generating…" },
   failed: { color: "bg-destructive", label: "Failed" },
   placeholder: { color: "bg-brand-primary/50", label: "Seeded" },

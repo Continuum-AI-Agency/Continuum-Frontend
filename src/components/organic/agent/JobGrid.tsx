@@ -344,18 +344,41 @@ function JobCard({
   );
 }
 
+const MAX_INLINE_JOBS = 4;
+const JOB_STATUS_RANK: Record<string, number> = {
+  running: 0,
+  queued: 1,
+  failed: 2,
+  completed: 3,
+  cancelled: 4,
+};
+
 export function JobGrid({ jobs, onRetryAction, onCancelAction }: JobGridProps) {
   if (jobs.length === 0) return null;
+  // Cap inline cards at 4 (active first); the rest live in the shell-wide
+  // Generations panel so a large batch doesn't dominate the chat.
+  const ordered = [...jobs].sort(
+    (a, b) => (JOB_STATUS_RANK[a.status] ?? 9) - (JOB_STATUS_RANK[b.status] ?? 9),
+  );
+  const visible = ordered.slice(0, MAX_INLINE_JOBS);
+  const overflow = ordered.length - visible.length;
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {jobs.map((job) => (
-        <JobCard
-          key={job.jobId}
-          job={job}
-          onRetryAction={onRetryAction}
-          onCancelAction={onCancelAction}
-        />
-      ))}
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,180px))] gap-2">
+        {visible.map((job) => (
+          <JobCard
+            key={job.jobId}
+            job={job}
+            onRetryAction={onRetryAction}
+            onCancelAction={onCancelAction}
+          />
+        ))}
+      </div>
+      {overflow > 0 && (
+        <p className="px-0.5 text-[11px] text-muted-foreground">
+          +{overflow} more in the Generations panel above
+        </p>
+      )}
     </div>
   );
 }
