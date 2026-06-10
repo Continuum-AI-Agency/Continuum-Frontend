@@ -8,6 +8,7 @@ import {
   type BrandInvite,
   type BrandMember,
   type BrandRole,
+  type DocumentCategory,
   type OnboardingDocument,
   type OnboardingMetadata,
   type OnboardingPatch,
@@ -703,6 +704,28 @@ export async function removeDocument(
 
   return updateBrandState(brandId, state => {
     const documents = state.documents.filter((doc: OnboardingDocument) => doc.id !== documentId);
+    return mergeOnboardingState(state, { documents });
+  });
+}
+
+export async function updateDocumentCategory(
+  brandId: string,
+  documentId: string,
+  category: DocumentCategory
+): Promise<OnboardingState> {
+  const { supabase } = await getAuthContext();
+
+  await supabase
+    .schema("brand_profiles")
+    .from("brand_documents")
+    .update({ category, updated_at: new Date().toISOString() })
+    .eq("id", documentId)
+    .eq("brand_id", brandId);
+
+  return updateBrandState(brandId, state => {
+    const documents = state.documents.map((doc: OnboardingDocument) =>
+      doc.id === documentId ? { ...doc, category } : doc,
+    );
     return mergeOnboardingState(state, { documents });
   });
 }

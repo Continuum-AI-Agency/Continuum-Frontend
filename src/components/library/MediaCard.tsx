@@ -3,15 +3,29 @@
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Copy, Check, ImageOff, Loader2 } from "lucide-react";
-import type { MediaAsset } from "@continuum/contracts";
+import type { MediaAsset, MediaSource } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { MediaBoundingBoxes } from "./MediaBoundingBoxes";
 
 type Props = {
   asset: MediaAsset;
-  onOpen: (asset: MediaAsset) => void;
   showBoundingBoxes?: boolean;
 };
+
+const SOURCE_LABEL: Record<MediaSource, string> = {
+  upload: "Upload",
+  ai_generated: "AI",
+  canvas: "Canvas",
+  backfill: "Imported",
+};
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
 
 const BADGE_BASE =
   "absolute bottom-1.5 left-1.5 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px]";
@@ -112,7 +126,94 @@ function CopyDescriptionButton({ text }: { text: string }) {
   );
 }
 
-export function MediaCard({ asset, onOpen, showBoundingBoxes = false }: Props) {
+// Detail surfaces on hover (in context), not in a takeover modal. Data-only:
+// no per-asset actions live here.
+function MediaCardHoverDetail({ asset, formattedDate }: { asset: MediaAsset; formattedDate: string }) {
+  const dimensions = asset.width && asset.height ? `${asset.width} × ${asset.height}` : null;
+  const tags = asset.tags ?? [];
+  const objects = asset.detectedObjects ?? [];
+
+  return (
+    <HoverCardContent side="right" align="start" className="w-80">
+      <div className="flex flex-col gap-2.5">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-muted">
+          {asset.signedUrl && asset.kind === "image" ? (
+            <img
+              src={asset.signedUrl}
+              alt={asset.title ?? asset.fileName}
+              className="h-full w-full object-contain"
+            />
+          ) : asset.signedUrl && asset.kind === "video" ? (
+            <video src={asset.signedUrl} muted playsInline preload="metadata" className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <ImageOff className="size-6" />
+            </div>
+          )}
+        </div>
+
+        <p className="text-sm font-medium leading-snug">{asset.title ?? asset.fileName}</p>
+
+        {asset.description ? (
+          <p className="line-clamp-4 text-xs text-muted-foreground">{asset.description}</p>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {SOURCE_LABEL[asset.source]}
+          </span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {asset.kind}
+          </span>
+          {dimensions ? (
+            <span className="text-[10px] tabular-nums text-muted-foreground/80">{dimensions}</span>
+          ) : null}
+        </div>
+
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {tags.slice(0, 8).map((tag) => (
+              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        {objects.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {objects.slice(0, 6).map((obj, i) => (
+              <span
+                key={`${obj.label}-${i}`}
+                className="rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {obj.label}
+                {typeof obj.confidence === "number" ? ` ${Math.round(obj.confidence * 100)}%` : ""}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+          <div>
+            <dt className="inline text-muted-foreground/60">Size </dt>
+            <dd className="inline tabular-nums">{formatBytes(asset.sizeBytes ?? 0)}</dd>
+          </div>
+          <div>
+            <dt className="inline text-muted-foreground/60">Status </dt>
+            <dd className="inline">{asset.status}</dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="inline text-muted-foreground/60">Added </dt>
+            <dd className="inline">{formattedDate}</dd>
+          </div>
+        </dl>
+      </div>
+    </HoverCardContent>
+  );
+}
+
+export function MediaCard({ asset, showBoundingBoxes = false }: Props) {
   const reduceMotion = useReducedMotion();
   const formattedDate = new Date(asset.createdAt).toLocaleDateString(undefined, {
     month: "short",
@@ -121,41 +222,41 @@ export function MediaCard({ asset, onOpen, showBoundingBoxes = false }: Props) {
   });
 
   return (
-    <motion.div
-      className={cn(
-        "group flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/50 bg-card",
-        "shadow-sm transition-[box-shadow,border-color] hover:border-border",
-        "hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-12px_rgba(0,0,0,0.18)]",
-      )}
-      onClick={() => onOpen(asset)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen(asset)}
-      whileHover={reduceMotion ? undefined : { y: -2 }}
-      whileTap={reduceMotion ? undefined : { scale: 0.96 }}
-      transition={{ type: "spring", duration: 0.3, bounce: 0 }}
-    >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-        <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} />
-        <StatusBadge status={asset.status} />
-      </div>
-
-      <div className="flex flex-col gap-1.5 p-3">
-        <p className="truncate text-sm font-medium leading-snug text-balance">
-          {asset.title ?? asset.fileName}
-        </p>
-
-        {asset.description && (
-          <div className="flex items-start gap-1">
-            <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground text-pretty">
-              {asset.description}
-            </p>
-            <CopyDescriptionButton text={asset.description} />
+    <HoverCard openDelay={150} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <motion.div
+          className={cn(
+            "group flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card",
+            "shadow-sm transition-[box-shadow,border-color] hover:border-border",
+            "hover:shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_28px_-12px_rgba(0,0,0,0.18)]",
+          )}
+          whileHover={reduceMotion ? undefined : { y: -2 }}
+          transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+        >
+          <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+            <Thumbnail asset={asset} showBoundingBoxes={showBoundingBoxes} />
+            <StatusBadge status={asset.status} />
           </div>
-        )}
 
-        <p className="text-[11px] tabular-nums text-muted-foreground/60">{formattedDate}</p>
-      </div>
-    </motion.div>
+          <div className="flex flex-col gap-1.5 p-3">
+            <p className="truncate text-sm font-medium leading-snug text-balance">
+              {asset.title ?? asset.fileName}
+            </p>
+
+            {asset.description && (
+              <div className="flex items-start gap-1">
+                <p className="line-clamp-2 flex-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+                  {asset.description}
+                </p>
+                <CopyDescriptionButton text={asset.description} />
+              </div>
+            )}
+
+            <p className="text-[11px] tabular-nums text-muted-foreground/60">{formattedDate}</p>
+          </div>
+        </motion.div>
+      </HoverCardTrigger>
+      <MediaCardHoverDetail asset={asset} formattedDate={formattedDate} />
+    </HoverCard>
   );
 }

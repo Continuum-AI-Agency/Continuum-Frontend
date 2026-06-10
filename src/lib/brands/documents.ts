@@ -1,3 +1,4 @@
+import { toDocumentCategory } from "@continuum/contracts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { OnboardingDocument } from "@/lib/onboarding/state";
 
@@ -29,6 +30,7 @@ type BrandDocumentRow = {
   id: string;
   name: string | null;
   source: string | null;
+  category: string | null;
   status: string | null;
   size: number | null;
   storage_path: string | null;
@@ -42,7 +44,9 @@ export async function fetchBrandDocuments(brandId: string): Promise<OnboardingDo
   const { data, error } = await supabase
     .schema("brand_profiles")
     .from("brand_documents")
-    .select("id, name, source, status, size, storage_path, external_url, error_message, created_at")
+    .select(
+      "id, name, source, category, status, size, storage_path, external_url, error_message, created_at",
+    )
     .eq("brand_id", brandId)
     .order("created_at", { ascending: true });
 
@@ -56,6 +60,7 @@ export async function fetchBrandDocuments(brandId: string): Promise<OnboardingDo
       id: row.id,
       name: row.name?.trim() ? row.name : "Document",
       source: normalizeDocumentSource(row.source),
+      category: toDocumentCategory(row.category),
       createdAt: row.created_at,
       status: normalizeDocumentStatus(row.status),
     };

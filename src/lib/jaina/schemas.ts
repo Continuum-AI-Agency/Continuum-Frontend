@@ -697,6 +697,13 @@ export const responseRunCreatedSchema = streamEventSchema(
   })
 );
 
+export const responseHeartbeatSchema = streamEventSchema(
+  "response.heartbeat",
+  z.object({
+    ts: z.number(),
+  })
+);
+
 export const responseContentPartSchema = streamEventSchema(
   "response.content_part.added",
   z.object({
@@ -1053,6 +1060,7 @@ export type JainaStreamEvent =
   | z.infer<typeof responseCreatedSchema>
   | z.infer<typeof responseOutputItemSchema>
   | z.infer<typeof responseRunCreatedSchema>
+  | z.infer<typeof responseHeartbeatSchema>
   | z.infer<typeof responseContentPartSchema>
   | z.infer<typeof progressEventSchema>
   | z.infer<typeof stateDeltaSchema>
@@ -1085,6 +1093,7 @@ export const jainaStreamEventSchema = z.union([
   responseCreatedSchema,
   responseOutputItemSchema,
   responseRunCreatedSchema,
+  responseHeartbeatSchema,
   responseContentPartSchema,
   progressEventSchema,
   stateDeltaSchema,

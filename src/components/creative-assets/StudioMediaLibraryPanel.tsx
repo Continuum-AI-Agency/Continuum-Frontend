@@ -3,14 +3,22 @@
 
 import React from "react";
 import { Loader2, Play, Search, ImageOff } from "lucide-react";
-import type { MediaAsset } from "@continuum/contracts";
+import type { MediaAsset, MediaSource } from "@continuum/contracts";
 import { LibraryFilterBar } from "@/components/library/LibraryFilterBar";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { useStudioLibraryBrowser } from "@/lib/creative-assets/useStudioLibraryBrowser";
 import { setStudioAssetDragData } from "@/lib/creative-assets/studioAssetDrop";
 import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl";
 
 type Props = {
   brandProfileId: string;
+};
+
+const SOURCE_LABEL: Record<MediaSource, string> = {
+  upload: "Upload",
+  ai_generated: "AI",
+  canvas: "Canvas",
+  backfill: "Imported",
 };
 
 // The unified media library, surfaced inside the ai-studio sheet. Mirrors the
@@ -87,35 +95,101 @@ export function StudioMediaLibraryPanel({ brandProfileId }: Props) {
 function StudioAssetTile({ asset }: { asset: MediaAsset }) {
   const url = sanitizeCreativeAssetUrl(asset.signedUrl);
   const isVideo = asset.kind === "video";
+  const label = asset.title ?? asset.fileName;
+
+  // Detail surfaces on hover (in context), not on click. Drag-to-canvas stays
+  // on the trigger via dragstart; click is intentionally left free.
+  return (
+    <HoverCard openDelay={150} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <div
+          draggable
+          onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
+          className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
+        >
+          {url && !isVideo ? (
+            <img src={url} alt={label} className="h-full w-full object-cover" />
+          ) : url && isVideo ? (
+            <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-gray-600">
+              <ImageOff className="h-6 w-6" />
+            </div>
+          )}
+
+          {isVideo && (
+            <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
+              <Play className="h-3 w-3 text-white" />
+            </div>
+          )}
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <p className="truncate text-[11px] font-medium text-white">{label}</p>
+          </div>
+        </div>
+      </HoverCardTrigger>
+      <StudioAssetHoverDetail asset={asset} url={url} isVideo={isVideo} label={label} />
+    </HoverCard>
+  );
+}
+
+function StudioAssetHoverDetail({
+  asset,
+  url,
+  isVideo,
+  label,
+}: {
+  asset: MediaAsset;
+  url: string | null | undefined;
+  isVideo: boolean;
+  label: string;
+}) {
+  const dimensions = asset.width && asset.height ? `${asset.width} × ${asset.height}` : null;
+  const tags = asset.tags?.slice(0, 6) ?? [];
 
   return (
-    <div
-      draggable
-      onDragStart={(e) => setStudioAssetDragData(e.dataTransfer, asset)}
-      title={asset.title ?? asset.fileName}
-      className="group relative aspect-square cursor-grab overflow-hidden rounded-lg bg-black/40 outline outline-1 outline-white/10 active:scale-[0.96] [transition-property:scale]"
-    >
-      {url && !isVideo ? (
-        <img src={url} alt={asset.title ?? asset.fileName} className="h-full w-full object-cover" />
-      ) : url && isVideo ? (
-        <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
-      ) : (
-        <div className="flex h-full w-full items-center justify-center text-gray-600">
-          <ImageOff className="h-6 w-6" />
+    <HoverCardContent side="left" className="w-72">
+      <div className="flex flex-col gap-2.5">
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black/30">
+          {url && !isVideo ? (
+            <img src={url} alt={label} className="h-full w-full object-contain" />
+          ) : url && isVideo ? (
+            <video src={`${url}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-contain" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+              <ImageOff className="h-6 w-6" />
+            </div>
+          )}
         </div>
-      )}
 
-      {isVideo && (
-        <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
-          <Play className="h-3 w-3 text-white" />
+        <p className="text-sm font-medium leading-snug">{label}</p>
+
+        {asset.description ? (
+          <p className="line-clamp-3 text-xs text-muted-foreground">{asset.description}</p>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {SOURCE_LABEL[asset.source]}
+          </span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {asset.kind}
+          </span>
+          {dimensions ? (
+            <span className="text-[10px] tabular-nums text-muted-foreground/80">{dimensions}</span>
+          ) : null}
         </div>
-      )}
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-        <p className="truncate text-[11px] font-medium text-white">
-          {asset.title ?? asset.fileName}
-        </p>
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {tags.map((tag) => (
+              <span key={tag} className="rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
-    </div>
+    </HoverCardContent>
   );
 }

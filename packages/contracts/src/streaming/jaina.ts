@@ -59,6 +59,7 @@ export type JainaResponseType =
   | "response.plan.requested"
   | "response.plan.decision"
   | "response.run.created"
+  | "response.heartbeat"
   | "response.checkpoint_report"
   | "response.checkpoint_report.delta"
   | "response.checkpoint_report.error"
@@ -186,6 +187,18 @@ export type JainaStateDeltaEventData = {
 export type JainaProgressEventData = {
   stage: string;
 } & Record<string, unknown>;
+
+/**
+ * data shape for type: "response.heartbeat" — idle keepalive frame.
+ *
+ * Emitted by the Backend during otherwise-silent stretches so the Frontend
+ * stream stays active (the inactivity watchdog re-arms on any received line)
+ * and the browser body buffer never looks idle. Carries no UI state; the
+ * Frontend reducer treats it as a no-op.
+ */
+export type JainaHeartbeatEventData = {
+  ts: number;
+};
 
 /** data shape for type: "response.plan_ready". */
 export type JainaPlanReadyEventData = {

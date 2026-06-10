@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { documentCategorySchema } from "@continuum/contracts";
 import {
   compressToEncodedURIComponent,
   decompressFromEncodedURIComponent,
@@ -153,12 +154,14 @@ const onboardingDocumentSchema = z.object({
   progressStep: documentProgressStepSchema.optional(),
   progressPercent: z.number().int().min(0).max(100).optional(),
   kind: documentKindSchema.optional(),
+  category: documentCategorySchema.optional(),
   pageCount: z.number().int().positive().optional(),
   textExcerpt: z.string().optional(),
   previewPath: z.string().optional(),
 });
 
 export type DocumentKind = z.infer<typeof documentKindSchema>;
+export type { DocumentCategory } from "@continuum/contracts";
 export type DocumentProgressStep = z.infer<typeof documentProgressStepSchema>;
 export type DocumentErrorCode = z.infer<typeof documentErrorCodeSchema>;
 

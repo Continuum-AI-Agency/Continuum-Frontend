@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import { Cross2Icon } from "@radix-ui/react-icons"
 import { AnimatePresence, motion } from "motion/react"
 import { useShallow } from "zustand/react/shallow"
+import { DEFAULT_REEL_VIDEO_BATCH_MAX } from "@continuum/contracts"
 
 import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicPlatformKey } from "@/lib/organic/platforms"
@@ -615,15 +616,22 @@ export function OrganicCalendarWorkspaceClient({
 
   const handleGenerateReels = React.useCallback(() => {
     if (!brandProfileId || reelTargets.length === 0) return
+    // Cap the batch client-side (the backend also enforces this) so the user
+    // gets clear feedback instead of an opaque 400.
+    const capped = reelTargets.slice(0, DEFAULT_REEL_VIDEO_BATCH_MAX)
     if (typeof window !== "undefined") {
-      const approxClips = reelTargets.length * 4
+      const approxClips = capped.length * 4
+      const overflowNote =
+        reelTargets.length > capped.length
+          ? ` Only the first ${capped.length} of ${reelTargets.length} selected will render (max ${DEFAULT_REEL_VIDEO_BATCH_MAX} per batch).`
+          : ""
       const confirmed = window.confirm(
-        `Generate ${reelTargets.length} reel video${reelTargets.length === 1 ? "" : "s"}? ` +
-          `This renders ~${approxClips} AI video clips and may take a few minutes.`
+        `Generate ${capped.length} reel video${capped.length === 1 ? "" : "s"}? ` +
+          `This renders ~${approxClips} AI video clips and may take a few minutes.${overflowNote}`
       )
       if (!confirmed) return
     }
-    void generateReelVideos(brandProfileId, reelTargets)
+    void generateReelVideos(brandProfileId, capped)
   }, [brandProfileId, reelTargets, generateReelVideos])
 
   const isGenerating = gridStatus === "running"

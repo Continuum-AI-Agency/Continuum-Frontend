@@ -509,6 +509,7 @@ export type Database = {
       brand_documents: {
         Row: {
           brand_id: string
+          category: string
           created_at: string
           error_code: string | null
           error_message: string | null
@@ -530,6 +531,7 @@ export type Database = {
         }
         Insert: {
           brand_id: string
+          category?: string
           created_at?: string
           error_code?: string | null
           error_message?: string | null
@@ -551,6 +553,7 @@ export type Database = {
         }
         Update: {
           brand_id?: string
+          category?: string
           created_at?: string
           error_code?: string | null
           error_message?: string | null

@@ -2657,8 +2657,22 @@ export function reduceJainaStreamEvent(
         ],
       };
     }
-    case "canvas.context.loaded":
+    case "response.heartbeat":
       return nextBase;
+
+    case "canvas.context.loaded":
+      return {
+        ...nextBase,
+        progress: [
+          ...state.progress,
+          {
+            stage: "context_loaded",
+            at: new Date().toISOString(),
+            detail: "Loaded campaign context",
+            data: {},
+          },
+        ],
+      };
 
     case "thought": {
       const parsed = thoughtEventSchema.safeParse((event as { data?: unknown }).data ?? {});
@@ -2871,28 +2885,6 @@ export function reduceJainaStreamEvent(
       }
 
       return nextState;
-    }
-    case "tool.call": {
-      const parsed = toolCallSchema.safeParse((event as { data?: unknown }).data ?? {});
-      if (!parsed.success) {
-        return { ...nextBase, status: "error", error: "Malformed tool.call event" };
-      }
-
-      const hasToolCall = state.toolCalls.some((item) => item.id === parsed.data.id);
-      return hasToolCall
-        ? nextBase
-        : { ...nextBase, toolCalls: [...state.toolCalls, parsed.data] };
-    }
-    case "tool.result": {
-      const parsed = toolResultSchema.safeParse((event as { data?: unknown }).data ?? {});
-      if (!parsed.success) {
-        return { ...nextBase, status: "error", error: "Malformed tool.result event" };
-      }
-
-      const hasToolResult = state.toolResults.some((item) => item.id === parsed.data.id);
-      return hasToolResult
-        ? nextBase
-        : { ...nextBase, toolResults: [...state.toolResults, parsed.data] };
     }
     case "artifact.delta": {
       const parsed = artifactDeltaSchema.safeParse((event as { data?: unknown }).data ?? {});
@@ -3519,4 +3511,22 @@ function formatTableItems(value: unknown): string[] {
       return getNonEmptyString(record.title);
     })
     .filter((item): item is string => Boolean(item));
+}
+
+// True when the stream produced something worth rendering. Used to decide, on an
+// unexpected reader-close with no terminal frame, whether to finalize as
+// "complete" (content exists) or surface an "error" rather than a silent blank.
+export function hasRenderableStreamContent(
+  state: Pick<
+    JainaStreamState,
+    "report" | "reportAssembly" | "responseText" | "pendingClarification" | "plan"
+  >
+): boolean {
+  return Boolean(
+    state.report ||
+      state.reportAssembly ||
+      (state.responseText && state.responseText.trim().length > 0) ||
+      state.pendingClarification ||
+      state.plan
+  );
 }

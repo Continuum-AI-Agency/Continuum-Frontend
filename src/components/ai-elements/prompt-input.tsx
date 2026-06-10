@@ -247,7 +247,10 @@ export function PromptInput({
   const [references, setReferences] = React.useState<TrackedReference[]>([]);
   const [activeMention, setActiveMention] = React.useState<ActiveMention | null>(null);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<AgentMentionSuggestion[]>([]);
-  const [mentionParent, setMentionParent] = React.useState<AgentMentionSuggestion | null>(null);
+  // A stack so nested folders (e.g. Media library > Uploads > assets) can pop
+  // back one level at a time instead of jumping straight to the root.
+  const [mentionParentStack, setMentionParentStack] = React.useState<AgentMentionSuggestion[]>([]);
+  const mentionParent = mentionParentStack[mentionParentStack.length - 1] ?? null;
   const [highlightedMentionIndex, setHighlightedMentionIndex] = React.useState(0);
   const [isListening, setIsListening] = React.useState(false);
   const [isSpeechProcessing, setIsSpeechProcessing] = React.useState(false);
@@ -292,7 +295,7 @@ export function PromptInput({
       setAttachments([]);
       setReferences([]);
       setActiveMention(null);
-      setMentionParent(null);
+      setMentionParentStack([]);
       setMentionSuggestions([]);
     },
     [attachments, canSubmit, disabled, mentionSource, onSubmit, references, value]
@@ -333,7 +336,7 @@ export function PromptInput({
     const nextMention = findActiveMention(nextValue, nextCaret);
     setActiveMention(nextMention);
     if (!nextMention) {
-      setMentionParent(null);
+      setMentionParentStack([]);
     }
   }, []);
 
@@ -353,7 +356,7 @@ export function PromptInput({
       return nextValue;
     });
     setActiveMention(null);
-    setMentionParent(null);
+    setMentionParentStack([]);
     setMentionSuggestions([]);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
@@ -381,7 +384,7 @@ export function PromptInput({
         )
       );
       setActiveMention(null);
-      setMentionParent(null);
+      setMentionParentStack([]);
       setMentionSuggestions([]);
       requestAnimationFrame(() => {
         textareaRef.current?.focus();
@@ -406,13 +409,13 @@ export function PromptInput({
     setValue(nextValue);
     setReferences(pruneReferencesForValue(nextReferences, nextValue));
     setActiveMention(null);
-    setMentionParent(null);
+    setMentionParentStack([]);
   }, [references, value]);
 
   const selectMentionSuggestion = useCallback(
     (suggestion: AgentMentionSuggestion) => {
       if (suggestion.childrenLabel && mentionProvider?.getChildSuggestions) {
-        setMentionParent(suggestion);
+        setMentionParentStack((stack) => [...stack, suggestion]);
         setMentionSuggestions([]);
         setHighlightedMentionIndex(0);
         requestAnimationFrame(() => textareaRef.current?.focus());
@@ -446,7 +449,7 @@ export function PromptInput({
         if (event.key === "Escape") {
           event.preventDefault();
           if (mentionParent) {
-            setMentionParent(null);
+            setMentionParentStack((stack) => stack.slice(0, -1));
             return;
           }
           setActiveMention(null);
@@ -495,7 +498,7 @@ export function PromptInput({
       return nextValue;
     });
     setActiveMention(null);
-    setMentionParent(null);
+    setMentionParentStack([]);
   }, []);
 
   const handleAudioRecorded = useCallback(async (audioBlob: Blob) => {
@@ -570,13 +573,15 @@ export function PromptInput({
               {mentionParent ? (
                 <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
                   <div className="min-w-0">
-                    <div className="truncate text-xs font-medium">{mentionParent.label}</div>
+                    <div className="truncate text-xs font-medium">
+                      {mentionParentStack.map((p) => p.label).join(" › ")}
+                    </div>
                     <div className="text-[11px] text-muted-foreground">{mentionParent.childrenLabel}</div>
                   </div>
                   <button
                     type="button"
                     className="rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    onClick={() => setMentionParent(null)}
+                    onClick={() => setMentionParentStack((stack) => stack.slice(0, -1))}
                   >
                     Back
                   </button>

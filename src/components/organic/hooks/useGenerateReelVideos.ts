@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/ToastProvider"
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
 import { reelVideoBatchFrameSchema } from "@continuum/contracts"
 import { stitchAndFinalizeReel } from "@/lib/organic/reelClientStitch"
+import { checkSpliceSupport } from "@/StudioCanvas/utils/splice/webcodecsSupport"
 
 /** A tagged draft eligible for reel-video generation: the FE id + its persisted backend id. */
 export type ReelVideoTarget = { id: string; backendDraftId: string }
@@ -68,6 +69,18 @@ export function useGenerateReelVideos(): UseGenerateReelVideosResult {
   const generate = React.useCallback(
     async (brandId: string, targets: ReelVideoTarget[]) => {
       if (!brandId || targets.length === 0) return
+
+      // Reels are stitched in the browser — there is no server fallback. Bail
+      // before spending Veo on clips this browser can't render.
+      const support = await checkSpliceSupport()
+      if (!support.ok) {
+        show({
+          title: "Can't render reels here",
+          description: `${support.reason}. Try Chrome or Edge on desktop.`,
+          variant: "error",
+        })
+        return
+      }
 
       const feIdByBackendId = new Map(targets.map((t) => [t.backendDraftId, t.id]))
       const feIdFor = (backendDraftId: string): string | null => feIdByBackendId.get(backendDraftId) ?? null

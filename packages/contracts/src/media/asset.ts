@@ -8,7 +8,8 @@ import { z } from "zod";
 export const mediaKindSchema = z.enum(["image", "video"]);
 export type MediaKind = z.infer<typeof mediaKindSchema>;
 
-export const mediaSourceSchema = z.enum(["upload", "ai_generated", "backfill"]);
+// canvas: created in the AI Studio canvas (auto-registered into the library).
+export const mediaSourceSchema = z.enum(["upload", "ai_generated", "backfill", "canvas"]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
 // stored: persisted, not yet analyzed. analyzing: pipeline running.
@@ -114,6 +115,8 @@ export const mediaCollectionSchema = z
     brandId: z.string().min(1),
     name: z.string().min(1),
     kind: mediaCollectionKindSchema,
+    // For kind="smart": filter resolved by the library assets route. Supported
+    // keys: { source: MediaSource, kind: MediaKind }.
     smartQuery: z.record(z.string(), z.unknown()).nullable().optional(),
     coverAssetId: z.string().nullable().optional(),
     itemCount: z.number().int().nonnegative().default(0),

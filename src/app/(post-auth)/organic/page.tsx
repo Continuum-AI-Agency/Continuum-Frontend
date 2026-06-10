@@ -14,6 +14,7 @@ import {
 import { type PlatformKey } from "@/components/onboarding/platforms";
 import { ensureOnboardingState } from "@/lib/onboarding/storage";
 import { fetchBrandInsights } from "@/lib/api/brandInsights.server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Trend } from "@/lib/organic/trends";
 import type { BrandInsightsQuestion } from "@/lib/schemas/brandInsights";
 import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
@@ -50,12 +51,22 @@ async function OrganicContent({
   }
   const brandName = brandSummaries?.find(b => b.id === activeBrandId)?.name;
 
-  // Run all three in parallel — ensureOnboardingState, integration summary, and
-  // brand insights only need activeBrandId, with no dependency on each other.
-  const [onboardingResult, integrationSummaryResult, insightsResult] = await Promise.allSettled([
+  // Run all four in parallel — none depend on each other, only on activeBrandId.
+  const [onboardingResult, integrationSummaryResult, insightsResult, brandDocsResult] = await Promise.allSettled([
     ensureOnboardingState(activeBrandId),
     fetchBrandIntegrationSummary(activeBrandId),
     fetchBrandInsights(activeBrandId, { revalidateSeconds: 300 }),
+    (async () => {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase
+        .schema("brand_profiles")
+        .from("brand_documents")
+        .select("id, name, kind, text_excerpt")
+        .eq("brand_id", activeBrandId)
+        .eq("progress_step", "ready")
+        .order("created_at", { ascending: false });
+      return (data ?? []) as Array<{ id: string; name: string; kind: string | null; text_excerpt: string | null }>;
+    })(),
   ]);
 
   if (onboardingResult.status === "rejected") {
@@ -113,6 +124,7 @@ async function OrganicContent({
   let selectorTrends: Trend[] = [];
   let trendTypes: OrganicTrendType[] = [];
   let insightsError: string | null = null;
+  const brandDocuments = brandDocsResult.status === "fulfilled" ? brandDocsResult.value : [];
   let organicAgentMentionContext: OrganicAgentMentionContext | undefined;
   const insights =
     insightsResult.status === "fulfilled"
@@ -133,6 +145,7 @@ async function OrganicContent({
       trends: brandTrends,
       events: insights.data.trendsAndEvents.events,
       questions: allQuestions,
+      documents: brandDocuments,
     };
 
     selectorTrends = brandTrends.map((trend) => ({
@@ -257,6 +270,18 @@ async function OrganicContent({
     const reason = insightsResult.reason;
     insightsError =
       reason instanceof Error ? reason.message : "Unable to load brand insights for this brand.";
+  }
+
+  // If insights failed (or had no data), still surface documents if available.
+  if (!organicAgentMentionContext && brandDocuments.length > 0) {
+    organicAgentMentionContext = {
+      trends: [],
+      events: [],
+      questions: [],
+      documents: brandDocuments,
+    };
+  } else if (organicAgentMentionContext && !organicAgentMentionContext.documents) {
+    organicAgentMentionContext = { ...organicAgentMentionContext, documents: brandDocuments };
   }
 
   const showNoTrendsMessage = selectorTrends.length === 0;

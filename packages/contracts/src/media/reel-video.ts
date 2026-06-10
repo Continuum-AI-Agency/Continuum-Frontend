@@ -77,7 +77,9 @@ export const reelVideoBatchFrameSchema = z.discriminatedUnion("type", [
       draftId: z.string().min(1),
       aspectRatio: z.string().min(1),
       durationSec: z.number().nonnegative(),
-      clips: z.array(reelClipSchema).min(2),
+      // >=1: a single-scene reel is valid — the browser passes the lone clip
+      // through without splicing (which requires >=2). No server fallback.
+      clips: z.array(reelClipSchema).min(1),
     })
     .strict(),
   z

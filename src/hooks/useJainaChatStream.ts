@@ -12,6 +12,7 @@ import type { AgentMentionReference } from "@/lib/agent-references";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
 import {
   createInitialJainaStreamState,
+  hasRenderableStreamContent,
   parseJainaStreamEvent,
   reduceJainaStreamEvent,
   type JainaStreamState,
@@ -33,28 +34,49 @@ type JainaChatInput = {
 
 type StartResult = { error?: string };
 
+// Backstop for a stream that goes silent without a terminal frame. The backend
+// emits progress/tool frames (and an idle heartbeat) continuously, so this only
+// fires on a true stall (lost connection / hung run). Re-armed on every frame.
+const STREAM_INACTIVITY_TIMEOUT_MS = 120_000;
+
+// On a stall we consult the durable run row. Only a confirmed completed/failed
+// status ends the stream; a still-running row, a transient fetch failure, or a
+// missing run id re-arms — up to this many times before we surface a stall, so
+// a merely slow (but alive) run is never falsely aborted.
+const MAX_TRANSIENT_WATCHDOG_POLLS = 3;
+
 export function useJainaChatStream() {
   const [state, setState] = useState<JainaStreamState>(() => createInitialJainaStreamState());
   const stateRef = useRef(state);
   const abortRef = useRef<AbortController | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
+  const clearWatchdog = useCallback(() => {
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
+  }, []);
+
   const reset = useCallback(() => {
+    clearWatchdog();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
     abortRef.current = null;
     readerRef.current = null;
     setState(createInitialJainaStreamState());
-  }, []);
+  }, [clearWatchdog]);
 
   const cancel = useCallback(() => {
+    clearWatchdog();
     abortRef.current?.abort();
     readerRef.current?.cancel().catch(() => {});
     setState((prev) => ({ ...prev, status: "idle" }));
-  }, []);
+  }, [clearWatchdog]);
 
   useEffect(() => () => cancel(), [cancel]);
 
@@ -145,9 +167,91 @@ export function useJainaChatStream() {
         readerRef.current = reader;
         setState((prev) => ({ ...prev, status: "streaming" }));
 
+        // On prolonged silence, authoritatively check the durable run row before
+        // giving up — so we never falsely error a run that actually finished or
+        // is merely slow. Only a confirmed completed/failed status is decisive.
+        let transientWatchdogPolls = 0;
+        const armWatchdog = () => {
+          clearWatchdog();
+          watchdogRef.current = setTimeout(async () => {
+            const surfaceStall = () => {
+              controller.abort();
+              setState((prev) =>
+                prev.status === "complete" || prev.status === "error"
+                  ? prev
+                  : {
+                      ...prev,
+                      status: "error",
+                      error: "Jaina stopped responding. Please try again.",
+                    }
+              );
+            };
+
+            const reArmOrStall = () => {
+              transientWatchdogPolls += 1;
+              if (transientWatchdogPolls < MAX_TRANSIENT_WATCHDOG_POLLS) {
+                armWatchdog();
+                return;
+              }
+              surfaceStall();
+            };
+
+            const currentRunId = stateRef.current.runId;
+            if (!currentRunId) {
+              reArmOrStall();
+              return;
+            }
+
+            let runStatus: string | undefined;
+            let runErrorMessage: string | null | undefined;
+            try {
+              const res = await fetch(
+                `/api/agents/jaina/chat/runs/${encodeURIComponent(currentRunId)}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              if (res.ok) {
+                const body = (await res.json().catch(() => null)) as {
+                  run?: { status?: string; error_message?: string | null };
+                } | null;
+                runStatus = body?.run?.status;
+                runErrorMessage = body?.run?.error_message;
+              }
+            } catch {
+              // transient — handled by reArmOrStall below
+            }
+
+            if (runStatus === "completed") {
+              controller.abort();
+              setState((prev) =>
+                prev.status === "error" ? prev : { ...prev, status: "complete" }
+              );
+              return;
+            }
+            if (runStatus === "failed") {
+              controller.abort();
+              setState((prev) => ({
+                ...prev,
+                status: "error",
+                error: runErrorMessage || "Jaina run failed.",
+              }));
+              return;
+            }
+            if (runStatus === "running" || runStatus === "pending") {
+              transientWatchdogPolls = 0;
+              armWatchdog();
+              return;
+            }
+            reArmOrStall();
+          }, STREAM_INACTIVITY_TIMEOUT_MS);
+        };
+
+        armWatchdog();
+
         await readNdjsonStream({
           reader,
           onLine: (line) => {
+            transientWatchdogPolls = 0;
+            armWatchdog();
             const event = parseJainaStreamEvent(line);
             if (event) {
               setState((prev) => reduceJainaStreamEvent(prev, event));
@@ -155,10 +259,23 @@ export function useJainaChatStream() {
           },
         });
 
-        setState((prev) =>
-          prev.status === "error" ? prev : { ...prev, status: "complete" }
-        );
+        clearWatchdog();
+
+        // Reader closed. If a terminal frame already set complete/error, keep it.
+        // Otherwise finalize from whatever was streamed: render if there is content,
+        // else surface an error rather than a silent/empty "complete".
+        setState((prev) => {
+          if (prev.status === "error" || prev.status === "complete") return prev;
+          return hasRenderableStreamContent(prev)
+            ? { ...prev, status: "complete" }
+            : {
+                ...prev,
+                status: "error",
+                error: "Jaina ended unexpectedly. Please try again.",
+              };
+        });
       } catch (error) {
+        clearWatchdog();
         const message = error instanceof Error ? error.message : "Stream failed";
         if (!controller.signal.aborted) {
           setState((prev) => ({ ...prev, status: "error", error: message }));
@@ -168,7 +285,7 @@ export function useJainaChatStream() {
 
       return {};
     },
-    [getAccessToken, reset]
+    [getAccessToken, reset, clearWatchdog]
   );
 
   return {

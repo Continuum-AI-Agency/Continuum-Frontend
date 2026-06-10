@@ -4,19 +4,16 @@
 import React from "react";
 import {
   Archive,
-  ChevronRight,
   File as FileIcon,
   Folder,
   FolderPlus,
   Search,
   Upload,
-  MoreHorizontal,
   X,
   Play
 } from "lucide-react";
 import {
   Button,
-  IconButton,
   TextField,
   Tooltip,
 } from "@radix-ui/themes";
@@ -26,11 +23,6 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 
 
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   Sheet,
   SheetClose,
@@ -43,7 +35,6 @@ import { useCreativeAssetBrowser } from "@/lib/creative-assets/useCreativeAssetB
 import {
   createSignedAssetUrl,
   createSignedDownloadUrl,
-  getPublicAssetDownloadUrl,
   listCreativeAssets,
   createCreativeFolder,
 } from "@/lib/creative-assets/storageClient";
@@ -74,14 +65,13 @@ export function CreativeLibrarySidebar({
 function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { brandProfileId: string; expandedWidth: number }) {
   const [open, setOpen] = React.useState(false);
   const { show } = useToast();
-  const [tab, setTab] = React.useState<SidebarTab>("files");
+  const [tab, setTab] = React.useState<SidebarTab>("library");
   const [query, setQuery] = React.useState("");
   const browser = useCreativeAssetBrowser(brandProfileId);
   const previewCache = React.useRef<Map<string, string>>(new Map());
   const folderCache = React.useRef<Map<string, CreativeAsset[]>>(new Map());
   const folderCacheOrder = React.useRef<string[]>([]);
-  const [expandedPaths, setExpandedPaths] = React.useState<Set<string>>(() => new Set());
-  const [isDraggingAsset, setIsDraggingAsset] = React.useState(false);
+  const [, setIsDraggingAsset] = React.useState(false);
 
   React.useEffect(() => {
     const endDrag = () => setIsDraggingAsset(false);
@@ -311,24 +301,19 @@ function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { bran
               {tab === "library" ? (
                 <StudioMediaLibraryPanel brandProfileId={brandProfileId} />
               ) : (
-              <div className="p-2 h-full overflow-y-auto">
+              <div className="h-full overflow-y-auto p-3">
                 {browser.loading ? (
                   <div className="p-4 text-sm text-gray-400">Loading assets...</div>
                 ) : filteredAssets.length === 0 ? (
                   <div className="p-4 text-sm text-gray-400">No assets found.</div>
                 ) : (
-                  <TreeList
-                     brandProfileId={brandProfileId}
+                  <FilesGallery
                      assets={filteredAssets}
-                     expandedPaths={expandedPaths}
-                     setExpandedPaths={setExpandedPaths}
-                     resolvePreview={ensurePreviewUrl}
+                     onOpenFolder={browser.navigateInto}
                      onRename={browser.renameAssetPath}
                      onDelete={browser.deleteAssetPath}
                      onDragStart={handleDragStart}
-                     onCreateFolder={createFolderAt}
-                     folderCache={folderCache}
-                     folderCacheOrder={folderCacheOrder}
+                     resolvePreview={ensurePreviewUrl}
                   />
                 )}
               </div>
@@ -343,182 +328,122 @@ function CreativeLibrarySidebarContent({ brandProfileId, expandedWidth }: { bran
 }
 
 // ------------------------------------------------------------------
-// Recursive Tree Components
+// Files gallery (thumbnail grid over the storage bucket)
 // ------------------------------------------------------------------
 
-type TreeListProps = {
-  brandProfileId: string;
+type FilesGalleryProps = {
   assets: CreativeAsset[];
-  expandedPaths: Set<string>;
-  setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
-  resolvePreview: (asset: CreativeAsset) => Promise<string>;
+  onOpenFolder: (asset: CreativeAsset) => void;
   onRename: (asset: CreativeAsset, nextName: string) => Promise<string>;
   onDelete: (asset: CreativeAsset) => Promise<void>;
   onDragStart: (event: React.DragEvent<HTMLDivElement>, asset: CreativeAsset) => void;
-  onCreateFolder: (name: string, parentPath: string) => Promise<void>;
-  folderCache: React.MutableRefObject<Map<string, CreativeAsset[]>>;
-  folderCacheOrder: React.MutableRefObject<string[]>;
-};
-
-type TreeItemProps = {
-  brandProfileId: string;
-  expandedPaths: Set<string>;
-  setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>;
   resolvePreview: (asset: CreativeAsset) => Promise<string>;
-  onRename: (asset: CreativeAsset, nextName: string) => Promise<string>;
-  onDelete: (asset: CreativeAsset) => Promise<void>;
-  onDragStart: (event: React.DragEvent<HTMLDivElement>, asset: CreativeAsset) => void;
-  onCreateFolder: (name: string, parentPath: string) => Promise<void>;
-  folderCache: React.MutableRefObject<Map<string, CreativeAsset[]>>;
-  folderCacheOrder: React.MutableRefObject<string[]>;
 };
 
-function TreeList({ assets, ...props }: TreeListProps) {
+function FilesGallery({ assets, onOpenFolder, onRename, onDelete, onDragStart, resolvePreview }: FilesGalleryProps) {
   const folders = React.useMemo(() => assets.filter((a) => a.kind === "folder"), [assets]);
   const files = React.useMemo(() => assets.filter((a) => a.kind === "file"), [assets]);
 
   return (
-    <div className="space-y-1">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
       {folders.map((folder) => (
-        <FolderTreeItem key={folder.fullPath} asset={folder} {...props} />
+        <ContextMenuWrapper key={folder.fullPath} asset={folder} onRename={onRename} onDelete={onDelete}>
+          <button
+            type="button"
+            onClick={() => onOpenFolder(folder)}
+            className="group flex aspect-square flex-col items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2 text-gray-300 transition-colors hover:border-white/20 hover:bg-white/10"
+          >
+            <Folder className="h-8 w-8 text-blue-400" />
+            <span className="w-full truncate text-center text-[11px]">{folder.name}</span>
+          </button>
+        </ContextMenuWrapper>
       ))}
       {files.map((file) => (
-        <FileTreeItem key={file.fullPath} asset={file} {...props} />
+        <GalleryFileTile
+          key={file.fullPath}
+          asset={file}
+          onRename={onRename}
+          onDelete={onDelete}
+          onDragStart={onDragStart}
+          resolvePreview={resolvePreview}
+        />
       ))}
     </div>
   );
 }
 
-function FolderTreeItem({
+function GalleryFileTile({
   asset,
-  brandProfileId,
-  expandedPaths,
-  setExpandedPaths,
-  folderCache,
-  folderCacheOrder,
-  onCreateFolder,
-  ...props
-
-}: TreeItemProps & { asset: CreativeAsset }) {
-  const { show } = useToast();
-  const folderPath = stripBrandPath(asset.fullPath, brandProfileId);
-  const isExpanded = expandedPaths.has(asset.fullPath);
-  const [children, setChildren] = React.useState<CreativeAsset[] | null>(() => {
-    const cached = folderCache.current.get(folderPath);
-    return cached ?? null;
-  });
-  const [isLoading, setIsLoading] = React.useState(false);
-
-  const ensureChildren = React.useCallback(async () => {
-     const cached = folderCache.current.get(folderPath);
-     if (cached) {
-        setChildren(cached);
-        return;
-     }
-     setIsLoading(true);
-     try {
-        const listing = await listCreativeAssets(brandProfileId, folderPath);
-        folderCache.current.set(folderPath, listing.assets);
-        folderCacheOrder.current.push(folderPath);
-        if (folderCacheOrder.current.length > FOLDER_CACHE_LIMIT) {
-           const oldest = folderCacheOrder.current.shift();
-           if (oldest) folderCache.current.delete(oldest);
-        }
-        setChildren(listing.assets);
-     } catch (err) {
-        console.error("Failed to load folder", err);
-     } finally {
-        setIsLoading(false);
-     }
-  }, [brandProfileId, folderPath, folderCache, folderCacheOrder]);
-
-  const toggle = React.useCallback(async (open: boolean) => {
-     if (open) {
-        setExpandedPaths(prev => new Set(prev).add(asset.fullPath));
-        await ensureChildren();
-     } else {
-        setExpandedPaths(prev => {
-           const next = new Set(prev);
-           next.delete(asset.fullPath);
-           return next;
-        });
-     }
-  }, [asset.fullPath, ensureChildren, setExpandedPaths]);
+  onRename,
+  onDelete,
+  onDragStart,
+  resolvePreview,
+}: {
+  asset: CreativeAsset;
+  onRename: (asset: CreativeAsset, nextName: string) => Promise<string>;
+  onDelete: (asset: CreativeAsset) => Promise<void>;
+  onDragStart: (event: React.DragEvent<HTMLDivElement>, asset: CreativeAsset) => void;
+  resolvePreview: (asset: CreativeAsset) => Promise<string>;
+}) {
+  const [hoverOpen, setHoverOpen] = React.useState(false);
+  const isVideo = asset.contentType?.startsWith("video/");
 
   return (
-    <div>
-      <Collapsible
-         open={isExpanded}
-         onOpenChange={toggle}
-         className="group/collapsible"
-      >
-         <ContextMenuWrapper asset={asset} onRename={props.onRename} onDelete={props.onDelete} onCreateFolder={async () => {
-             const name = window.prompt("New folder name?");
-             if (name) {
-                await onCreateFolder(name, folderPath);
-                await ensureChildren();
-             }
-         }}>
-            <CollapsibleTrigger asChild>
-               <button className="flex items-center gap-2 w-full px-2 py-1.5 text-left text-gray-300 hover:text-white hover:bg-white/10 rounded-md transition-colors">
-                  <ChevronRight className="w-4 h-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-gray-500" />
-                  <Folder className="w-4 h-4 text-blue-400" />
-                  <span className="truncate">{asset.name}</span>
-               </button>
-            </CollapsibleTrigger>
-         </ContextMenuWrapper>
-
-         <CollapsibleContent>
-            <div className="ml-6 mt-1">
-               {isLoading ? (
-                  <div className="py-1 text-xs text-gray-500">Loading...</div>
-               ) : children && children.length > 0 ? (
-                  <TreeList
-                     assets={children}
-                     brandProfileId={brandProfileId}
-                     expandedPaths={expandedPaths}
-                     setExpandedPaths={setExpandedPaths}
-                     resolvePreview={props.resolvePreview}
-                     onRename={props.onRename}
-                     onDelete={props.onDelete}
-                     onDragStart={props.onDragStart}
-                     onCreateFolder={onCreateFolder}
-                     folderCache={folderCache}
-                     folderCacheOrder={folderCacheOrder}
-                  />
-               ) : children ? (
-                  <div className="py-1 text-xs text-gray-500">Empty</div>
-               ) : null}
+    <HoverCard.Root openDelay={200} closeDelay={100} open={hoverOpen} onOpenChange={setHoverOpen}>
+      <ContextMenuWrapper asset={asset} onRename={onRename} onDelete={onDelete}>
+        <HoverCard.Trigger asChild>
+          <div
+            draggable
+            onDragStart={(e) => onDragStart(e, asset)}
+            className="group relative aspect-square cursor-grab overflow-hidden rounded-lg border border-white/10 bg-black/40 transition-colors hover:border-white/20"
+          >
+            <GalleryThumb asset={asset} resolvePreview={resolvePreview} />
+            {isVideo && (
+              <div className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1">
+                <Play className="h-3 w-3 text-white" />
+              </div>
+            )}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100">
+              <p className="truncate text-[11px] font-medium text-white">{asset.name}</p>
             </div>
-         </CollapsibleContent>
-      </Collapsible>
-    </div>
+          </div>
+        </HoverCard.Trigger>
+      </ContextMenuWrapper>
+      <SidebarHoverContent asset={asset} resolvePreview={resolvePreview} open={hoverOpen} />
+    </HoverCard.Root>
   );
 }
 
-function FileTreeItem({ asset, resolvePreview, onDragStart, ...props }: TreeItemProps & { asset: CreativeAsset }) {
-  const [hoverOpen, setHoverOpen] = React.useState(false);
+function GalleryThumb({ asset, resolvePreview }: { asset: CreativeAsset; resolvePreview: (asset: CreativeAsset) => Promise<string> }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+  const isImage = asset.contentType?.startsWith("image/");
+  const isVideo = asset.contentType?.startsWith("video/");
 
+  React.useEffect(() => {
+    let cancelled = false;
+    if (isImage || isVideo) {
+      resolvePreview(asset)
+        .then((resolved) => {
+          if (!cancelled) setUrl(resolved);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [asset, isImage, isVideo, resolvePreview]);
+
+  const safe = sanitizeCreativeAssetUrl(url);
+  if (isImage && safe) {
+    return <img src={safe} alt={asset.name} className="h-full w-full object-cover" />;
+  }
+  if (isVideo && safe) {
+    return <video src={`${safe}#t=0.01`} preload="metadata" muted playsInline className="h-full w-full object-cover" />;
+  }
   return (
-     <div>
-        <HoverCard.Root openDelay={200} closeDelay={100} open={hoverOpen} onOpenChange={setHoverOpen}>
-           <ContextMenuWrapper asset={asset} onRename={props.onRename} onDelete={props.onDelete}>
-              <HoverCard.Trigger asChild>
-                 <div
-                    draggable
-                    onDragStart={(e) => onDragStart(e, asset)}
-                    className="w-full"
-                 >
-                    <button className="flex items-center gap-2 w-full px-2 py-1.5 text-left text-gray-300 hover:text-white hover:bg-white/10 rounded-md transition-colors">
-                       <FileThumb asset={asset} resolvePreview={resolvePreview} />
-                       <span className="truncate">{asset.name}</span>
-                    </button>
-                 </div>
-              </HoverCard.Trigger>
-           </ContextMenuWrapper>
-           <SidebarHoverContent asset={asset} resolvePreview={resolvePreview} open={hoverOpen} />
-        </HoverCard.Root>
-     </div>
+    <div className="flex h-full w-full items-center justify-center text-gray-600">
+      {isVideo ? <Play className="h-6 w-6" /> : <FileIcon className="h-6 w-6" />}
+    </div>
   );
 }
 
@@ -701,27 +626,6 @@ function SidebarHoverContent({
      </HoverCard.Content>
    );
  }
-
-function FileThumb({ asset, resolvePreview }: { asset: CreativeAsset; resolvePreview: (asset: CreativeAsset) => Promise<string> }) {
-   const [url, setUrl] = React.useState<string | null>(null);
-   const isImage = asset.contentType?.startsWith("image/");
-   const isVideo = asset.contentType?.startsWith("video/");
-   
-   React.useEffect(() => {
-      if (isImage || isVideo) {
-         resolvePreview(asset).then(setUrl).catch(() => {});
-      }
-   }, [asset, isImage, isVideo, resolvePreview]);
-
-   if (isImage && url) {
-      return <div className="h-4 w-4 rounded-sm overflow-hidden bg-white/10"><img src={url} alt="" className="h-full w-full object-cover" /></div>;
-   }
-   if (isVideo) {
-      return <Play className="h-4 w-4 text-purple-400" />;
-   }
-   return <FileIcon className="h-4 w-4 text-gray-400" />;
-}
-
 function BreadcrumbTrail({ items, onSelect }: { items: { label: string; path: string }[]; onSelect: (path: string) => void }) {
    if (!items.length) return null;
    return (
@@ -741,7 +645,3 @@ function BreadcrumbTrail({ items, onSelect }: { items: { label: string; path: st
      </div>
    );
  }
-
-function stripBrandPath(fullPath: string, brandProfileId: string) {
-  return fullPath.replace(new RegExp(`^${brandProfileId}/?`), "");
-}

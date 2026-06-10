@@ -129,6 +129,8 @@ describe("Jaina conversations proxy route", () => {
 
     const [messagesUrl, messagesInit] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(messagesUrl).toContain("/api/agents/jaina/chat/conversations/chat_abc123/messages?");
+    expect(messagesUrl).toContain("brand_id=brand-1");
+    expect(messagesUrl).toContain("ad_account_id=act-1");
     expect(messagesUrl).toContain("limit=150");
     expect(messagesInit.headers).toMatchObject({
       Authorization: "Bearer session-token",

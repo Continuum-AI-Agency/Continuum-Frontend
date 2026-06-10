@@ -1,6 +1,7 @@
 export * from "./asset";
 export * from "./preview";
 export * from "./search";
+export * from "./registerCanvas";
 export * from "./unfurl";
 export * from "./instagram";
 export * from "./hyperframe-mp4";

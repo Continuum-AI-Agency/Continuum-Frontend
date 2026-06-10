@@ -1,6 +1,7 @@
 export * from "./envelope";
 export * from "./ndjson";
 export * from "./common";
+export * from "./agent-references";
 export * from "./organic";
 export * from "./organic-pipeline";
 export * from "./bulk";

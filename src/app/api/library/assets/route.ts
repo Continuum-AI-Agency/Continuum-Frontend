@@ -8,6 +8,7 @@ import { mediaSchema } from "@/lib/media/supabase-media";
 import { rowToMediaAsset } from "@/lib/media/mapper";
 import { mintSignedUrls } from "@/lib/media/signed-urls";
 import { MEDIA_ASSET_SELECT, type MediaAssetRow } from "@/lib/media/schema";
+import { resolveSmartQueryFilter } from "@/lib/media/smart-collections";
 
 export const runtime = "nodejs";
 
@@ -54,21 +55,45 @@ export async function GET(request: Request) {
 
   const admin = createSupabaseAdminClient();
 
+  // Effective source/kind start from the explicit chip filters; a smart
+  // collection can override/augment them via its smart_query (the scaffolding
+  // for derived folders). Manual collections instead constrain by membership.
+  let effectiveSource = source;
+  let effectiveKind = kind;
   let assetIds: string[] | null = null;
+
   if (collectionId) {
-    const { data: items, error: itemsError } = await mediaSchema(admin)
-      .from("collection_items")
-      .select("asset_id")
-      .eq("collection_id", collectionId)
-      .order("position", { ascending: true })
-      .range(offset, offset + limit - 1);
-    if (itemsError) {
-      console.error("[library/assets] collection_items query failed", itemsError);
+    const { data: collection, error: collectionError } = await mediaSchema(admin)
+      .from("collections")
+      .select("kind, smart_query")
+      .eq("id", collectionId)
+      .eq("brand_id", brandId)
+      .maybeSingle();
+    if (collectionError) {
+      console.error("[library/assets] collection query failed", collectionError);
       return NextResponse.json({ error: "Query failed" }, { status: 500 });
     }
-    assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
-    if (assetIds.length === 0) {
-      return NextResponse.json({ items: [], nextOffset: null });
+    const col = collection as { kind: string; smart_query: Record<string, unknown> | null } | null;
+
+    if (col?.kind === "smart") {
+      const smart = resolveSmartQueryFilter(col.smart_query);
+      effectiveSource = smart.source ?? source;
+      effectiveKind = smart.kind ?? kind;
+    } else {
+      const { data: items, error: itemsError } = await mediaSchema(admin)
+        .from("collection_items")
+        .select("asset_id")
+        .eq("collection_id", collectionId)
+        .order("position", { ascending: true })
+        .range(offset, offset + limit - 1);
+      if (itemsError) {
+        console.error("[library/assets] collection_items query failed", itemsError);
+        return NextResponse.json({ error: "Query failed" }, { status: 500 });
+      }
+      assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
+      if (assetIds.length === 0) {
+        return NextResponse.json({ items: [], nextOffset: null });
+      }
     }
   }
 
@@ -78,8 +103,8 @@ export async function GET(request: Request) {
     .eq("brand_id", brandId)
     .is("deleted_at", null);
 
-  if (source) query = query.eq("source", source);
-  if (kind) query = query.eq("kind", kind);
+  if (effectiveSource) query = query.eq("source", effectiveSource);
+  if (effectiveKind) query = query.eq("kind", effectiveKind);
 
   if (assetIds) {
     query = query.in("id", assetIds);

@@ -6,6 +6,7 @@ import { mediaSchema } from "./supabase-media";
 import { rowToMediaAsset } from "./mapper";
 import { mintSignedUrls } from "./signed-urls";
 import { MEDIA_ASSET_SELECT, type MediaAssetRow, type MediaCollectionRow } from "./schema";
+import { resolveSmartQueryFilter } from "./smart-collections";
 
 const PAGE_SIZE = 48;
 
@@ -16,6 +17,9 @@ export async function fetchMediaAssets(
   const client = await createSupabaseServerClient();
   const limit = options.limit ?? PAGE_SIZE;
 
+  let effectiveSource = options.source;
+  let effectiveKind = options.kind;
+
   let query = mediaSchema(client)
     .from("assets")
     .select(MEDIA_ASSET_SELECT)
@@ -25,31 +29,50 @@ export async function fetchMediaAssets(
     .limit(limit);
 
   if (options.collectionId) {
-    // Join via collection_items to filter by collection
-    const { data: items, error: itemsError } = await mediaSchema(client)
-      .from("collection_items")
-      .select("asset_id")
-      .eq("collection_id", options.collectionId)
-      .order("position", { ascending: true });
-
-    if (itemsError) {
-      console.error("[media/fetchers] collection_items query failed", itemsError);
+    const { data: collection, error: collectionError } = await mediaSchema(client)
+      .from("collections")
+      .select("kind, smart_query")
+      .eq("id", options.collectionId)
+      .eq("brand_id", brandId)
+      .maybeSingle();
+    if (collectionError) {
+      console.error("[media/fetchers] collection query failed", collectionError);
       return [];
     }
+    const col = collection as { kind: string; smart_query: Record<string, unknown> | null } | null;
 
-    const assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
-    if (assetIds.length === 0) return [];
+    if (col?.kind === "smart") {
+      // Smart collection: derive by filter, not membership.
+      const smart = resolveSmartQueryFilter(col.smart_query);
+      effectiveSource = smart.source ?? options.source;
+      effectiveKind = smart.kind ?? options.kind;
+    } else {
+      // Manual collection: constrain by collection_items membership.
+      const { data: items, error: itemsError } = await mediaSchema(client)
+        .from("collection_items")
+        .select("asset_id")
+        .eq("collection_id", options.collectionId)
+        .order("position", { ascending: true });
 
-    query = mediaSchema(client)
-      .from("assets")
-      .select(MEDIA_ASSET_SELECT)
-      .in("id", assetIds)
-      .is("deleted_at", null)
-      .limit(limit);
+      if (itemsError) {
+        console.error("[media/fetchers] collection_items query failed", itemsError);
+        return [];
+      }
+
+      const assetIds = (items ?? []).map((r: { asset_id: string }) => r.asset_id);
+      if (assetIds.length === 0) return [];
+
+      query = mediaSchema(client)
+        .from("assets")
+        .select(MEDIA_ASSET_SELECT)
+        .in("id", assetIds)
+        .is("deleted_at", null)
+        .limit(limit);
+    }
   }
 
-  if (options.source) query = query.eq("source", options.source);
-  if (options.kind) query = query.eq("kind", options.kind);
+  if (effectiveSource) query = query.eq("source", effectiveSource);
+  if (effectiveKind) query = query.eq("kind", effectiveKind);
 
   const { data, error } = await query;
   if (error) {

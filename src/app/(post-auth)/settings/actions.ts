@@ -200,6 +200,22 @@ export async function createSignedDocumentUrlAction(storagePath: string): Promis
   return data.signedUrl;
 }
 
+// Inline disposition (no forced download) so the URL renders natively in a browser
+// tab or an <img> tag. Used by the document preview card's "Open" action and thumbnails.
+export async function createInlineDocumentUrlAction(storagePath: string): Promise<string> {
+  const normalizedStoragePath = normalizeBrandDocumentStoragePath(storagePath);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.storage
+    .from("brand-docs")
+    .createSignedUrl(normalizedStoragePath, 120);
+
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Failed to generate signed URL");
+  }
+
+  return data.signedUrl;
+}
+
 export async function regenerateBrandGuidelineAction(
   brandId: string,
   purpose: string = "general",

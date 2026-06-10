@@ -649,6 +649,7 @@ function PostSnapshotPanel({
   drilldownWindow,
   onWindowChange,
   series,
+  accountSeries,
   loading,
   platform = "instagram",
 }: {
@@ -658,6 +659,7 @@ function PostSnapshotPanel({
   drilldownWindow: DrilldownWindow;
   onWindowChange: (window: DrilldownWindow) => void;
   series: Array<{ date: string; value: number }>;
+  accountSeries?: Array<{ date: string; value: number }>;
   loading: boolean;
   platform?: MetricsPlatform;
 }) {
@@ -666,6 +668,9 @@ function PostSnapshotPanel({
   const video = !isTikTok && isVideoPost(post);
   const metricComparisons = post24hComparisons(post);
   const recent7dMetrics = summarizePost7dMetrics(post);
+  // Per-post history accrues one day-over-day delta per day tracked (Meta serves no
+  // media-level history). Surface how far along the 7-day walk is.
+  const trendDays = post.breakdown7d?.length ?? 0;
 
   return (
     <motion.aside
@@ -822,26 +827,50 @@ function PostSnapshotPanel({
                 </button>
               </div>
             </Flex>
-            {series.length === 0 ? (
-              <Text size="1" color="gray">No metric trend data is available for this post yet.</Text>
+            {series.length > 0 ? (
+              <>
+                <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
+                  <LineChart data={series}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis dataKey="date" hide />
+                    <YAxis hide />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="value" stroke="var(--color-value)" strokeWidth={2} dot={false} />
+                    {post.boostedAt ? (
+                      <ReferenceLine
+                        x={post.boostedAt.slice(0, 10)}
+                        stroke="#ef4444"
+                        strokeDasharray="4 4"
+                        label={{ value: "Boost", position: "top", fill: "#ef4444", fontSize: 10 }}
+                      />
+                    ) : null}
+                  </LineChart>
+                </ChartContainer>
+                {trendDays < 7 ? (
+                  <Text size="1" color="gray" className="mt-1 block">
+                    Building per-post history — {trendDays}/7 days tracked.
+                  </Text>
+                ) : null}
+              </>
+            ) : accountSeries && accountSeries.length > 0 ? (
+              <div className="space-y-1">
+                <Text size="1" color="gray" className="block">
+                  Per-post trend builds over time ({trendDays}/7 days). Showing the account trend meanwhile.
+                </Text>
+                <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
+                  <LineChart data={accountSeries}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis dataKey="date" hide />
+                    <YAxis hide />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line type="monotone" dataKey="value" stroke="var(--color-value)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ChartContainer>
+              </div>
             ) : (
-              <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
-                <LineChart data={series}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line type="monotone" dataKey="value" stroke="var(--color-value)" strokeWidth={2} dot={false} />
-                  {post.boostedAt ? (
-                    <ReferenceLine
-                      x={post.boostedAt.slice(0, 10)}
-                      stroke="#ef4444"
-                      strokeDasharray="4 4"
-                      label={{ value: "Boost", position: "top", fill: "#ef4444", fontSize: 10 }}
-                    />
-                  ) : null}
-                </LineChart>
-              </ChartContainer>
+              <Text size="1" color="gray">
+                Per-post trend builds over time — re-open this post tomorrow once a day-over-day delta is available.
+              </Text>
             )}
           </Box>
 
@@ -1511,6 +1540,7 @@ function Dashboard({
                           drilldownWindow={drilldownWindow}
                           onWindowChange={setDrilldownWindow}
                           series={postSeries}
+                          accountSeries={accountSeries}
                           loading={loadingPostId === selectedPost.id}
                           platform={platform}
                         />

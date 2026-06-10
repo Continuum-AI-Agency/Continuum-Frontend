@@ -1,3 +1,8 @@
+import {
+  DOCUMENT_CATEGORY_DEFAULT,
+  DOCUMENT_CATEGORY_LABELS,
+  type DocumentCategory,
+} from "@continuum/contracts";
 import type {
   DocumentErrorCode,
   DocumentKind,
@@ -79,23 +84,26 @@ export function kindLabel(doc: DocumentView): string {
   return "Document";
 }
 
-export function isPreviewSupported(doc: DocumentView): boolean {
-  if (!doc.storagePath) return false;
-  const kind = doc.kind ?? inferKindFromName(doc.name);
-  return kind !== "unknown";
+export function documentCategoryOf(doc: DocumentView): DocumentCategory {
+  return doc.category ?? DOCUMENT_CATEGORY_DEFAULT;
 }
 
-function inferKindFromName(name: string): DocumentKind {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".pdf")) return "pdf";
-  if (lower.endsWith(".docx")) return "docx";
-  if (lower.endsWith(".pptx")) return "pptx";
-  if (lower.endsWith(".xlsx")) return "xlsx";
-  if (/\.(png|jpe?g|webp|gif)$/.test(lower)) return "image";
-  if (lower.endsWith(".md")) return "markdown";
-  if (lower.endsWith(".csv")) return "csv";
-  if (lower.endsWith(".json")) return "json";
-  if (lower.endsWith(".html") || lower.endsWith(".htm")) return "html";
-  if (lower.endsWith(".txt")) return "text";
-  return "unknown";
+export function categoryLabel(category: DocumentCategory): string {
+  return DOCUMENT_CATEGORY_LABELS[category];
+}
+
+export type CategoryFilter = DocumentCategory | "all";
+
+export function filterDocumentsByCategory(
+  documents: DocumentView[],
+  filter: CategoryFilter,
+): DocumentView[] {
+  if (filter === "all") return documents;
+  return documents.filter((doc) => documentCategoryOf(doc) === filter);
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

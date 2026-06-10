@@ -1,15 +1,20 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { DOCUMENT_CATEGORY_DEFAULT, type DocumentCategory } from "@continuum/contracts";
 import type { OnboardingDocument, OnboardingState } from "@/lib/onboarding/state";
-import { removeDocumentAction } from "@/app/onboarding/actions";
-import { createSignedDocumentUrlAction } from "@/app/(post-auth)/settings/actions";
+import { removeDocumentAction, updateDocumentCategoryAction } from "@/app/onboarding/actions";
+import {
+  createInlineDocumentUrlAction,
+  createSignedDocumentUrlAction,
+} from "@/app/(post-auth)/settings/actions";
 
 export type UploadEntry = {
   key: string;
   file: File;
   status: "uploading" | "error";
   error?: string;
+  category: DocumentCategory;
 };
 
 type UploadResponse = {
@@ -19,11 +24,21 @@ type UploadResponse = {
 
 export type DocumentMutationsHandle = {
   uploads: UploadEntry[];
-  uploadFiles: (files: File[], onApplied?: (state: OnboardingState) => void) => Promise<{ succeeded: number; failed: number }>;
+  uploadFiles: (
+    files: File[],
+    onApplied?: (state: OnboardingState) => void,
+    category?: DocumentCategory,
+  ) => Promise<{ succeeded: number; failed: number }>;
   retryUpload: (key: string, onApplied?: (state: OnboardingState) => void) => Promise<boolean>;
   discardUpload: (key: string) => void;
   removeDocument: (documentId: string, onApplied?: (state: OnboardingState) => void) => Promise<void>;
+  updateCategory: (
+    documentId: string,
+    category: DocumentCategory,
+    onApplied?: (state: OnboardingState) => void,
+  ) => Promise<void>;
   openSignedUrl: (storagePath: string) => Promise<string>;
+  openInlineUrl: (storagePath: string) => Promise<string>;
 };
 
 export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
@@ -39,6 +54,7 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
         formData.append("brandId", brandId);
         formData.append("file", entry.file);
         formData.append("source", "upload");
+        formData.append("category", entry.category);
 
         const response = await fetch("/api/onboarding/documents", {
           method: "POST",
@@ -64,12 +80,13 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
   );
 
   const uploadFiles = useCallback<DocumentMutationsHandle["uploadFiles"]>(
-    async (files, onApplied) => {
+    async (files, onApplied, category = DOCUMENT_CATEGORY_DEFAULT) => {
       if (files.length === 0) return { succeeded: 0, failed: 0 };
       const fresh: UploadEntry[] = files.map((file, idx) => ({
         key: `${Date.now()}-${idx}-${file.name}`,
         file,
         status: "uploading",
+        category,
       }));
       setUploads((prev) => [...prev, ...fresh]);
       let succeeded = 0;
@@ -105,8 +122,21 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     [brandId],
   );
 
+  const updateCategory = useCallback<DocumentMutationsHandle["updateCategory"]>(
+    async (documentId, category, onApplied) => {
+      const nextState = await updateDocumentCategoryAction(brandId, documentId, category);
+      onApplied?.(nextState);
+    },
+    [brandId],
+  );
+
   const openSignedUrl = useCallback<DocumentMutationsHandle["openSignedUrl"]>(
     async (storagePath) => createSignedDocumentUrlAction(storagePath),
+    [],
+  );
+
+  const openInlineUrl = useCallback<DocumentMutationsHandle["openInlineUrl"]>(
+    async (storagePath) => createInlineDocumentUrlAction(storagePath),
     [],
   );
 
@@ -116,6 +146,8 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
     retryUpload,
     discardUpload,
     removeDocument,
+    updateCategory,
     openSignedUrl,
+    openInlineUrl,
   };
 }

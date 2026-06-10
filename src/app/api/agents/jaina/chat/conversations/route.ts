@@ -154,8 +154,14 @@ function buildListQueryString(query: JainaConversationListQuery) {
   return params.toString();
 }
 
-function buildMessagesQueryString(limit: number) {
-  const params = new URLSearchParams({ limit: String(limit) });
+function buildMessagesQueryString(query: JainaConversationListQuery) {
+  const params = new URLSearchParams({
+    brand_id: query.brandId,
+    limit: String(query.messagesLimit),
+  });
+  if (query.adAccountId) {
+    params.set("ad_account_id", query.adAccountId);
+  }
   return params.toString();
 }
 
@@ -227,7 +233,7 @@ export async function GET(request: Request) {
       accessToken: auth.accessToken,
       method: "GET",
       paths: buildConversationMessagesPaths(parsedQuery.data.sessionId),
-      query: buildMessagesQueryString(parsedQuery.data.messagesLimit),
+      query: buildMessagesQueryString(parsedQuery.data),
       failureMessage: "Failed to load conversation messages.",
     });
     if (!messagesResult.ok) return messagesResult.errorResponse;

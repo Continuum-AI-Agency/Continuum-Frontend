@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   createInitialJainaStreamState,
+  hasRenderableStreamContent,
   parseJainaStreamEvent,
   reduceJainaStreamEvent,
   type JainaStreamState,
@@ -14,6 +15,46 @@ function asStructuredReport(state: JainaStreamState): FrontendCheckpointReport {
   }
   return report as FrontendCheckpointReport;
 }
+
+describe("reduceJainaStreamEvent heartbeat", () => {
+  it("parses a response.heartbeat frame without warning", () => {
+    const event = parseJainaStreamEvent(
+      JSON.stringify({ type: "response.heartbeat", data: { ts: 123 } })
+    );
+    expect(event).not.toBeNull();
+    expect(event?.type).toBe("response.heartbeat");
+  });
+
+  it("is a no-op that leaves progress and status untouched", () => {
+    let state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+      type: "thought",
+      data: { text: "considering options" },
+    });
+    const progressBefore = state.progress.length;
+    const statusBefore = state.status;
+
+    state = reduceJainaStreamEvent(state, {
+      type: "response.heartbeat",
+      data: { ts: 999 },
+    });
+
+    expect(state.progress.length).toBe(progressBefore);
+    expect(state.status).toBe(statusBefore);
+  });
+});
+
+describe("reduceJainaStreamEvent canvas.context.loaded", () => {
+  it("records a context_loaded progress entry instead of dropping the frame", () => {
+    const state = reduceJainaStreamEvent(createInitialJainaStreamState(), {
+      type: "canvas.context.loaded",
+      data: {},
+    });
+
+    const entry = state.progress.find((p) => p.stage === "context_loaded");
+    expect(entry).toBeDefined();
+    expect(entry?.detail).toBe("Loaded campaign context");
+  });
+});
 
 describe("reduceJainaStreamEvent report artifact jobs", () => {
   it("tracks the forced report artifact job from the structured stream event", () => {
@@ -2567,5 +2608,33 @@ describe("reduceJainaStreamEvent text delta routing", () => {
 
     expect(state.plan?.id).toBe("fresh_bar");
     expect(state.plan?.title).toBe("Analysis plan");
+  });
+});
+
+describe("hasRenderableStreamContent", () => {
+  const base = createInitialJainaStreamState();
+
+  it("is false for an empty stream state", () => {
+    expect(hasRenderableStreamContent(base)).toBe(false);
+  });
+
+  it("is false when responseText is only whitespace", () => {
+    expect(hasRenderableStreamContent({ ...base, responseText: "   " })).toBe(false);
+  });
+
+  it("is true when a report is present", () => {
+    expect(
+      hasRenderableStreamContent({ ...base, report: { type: "direct_answer", answer: "hi" } as any })
+    ).toBe(true);
+  });
+
+  it("is true when responseText has content", () => {
+    expect(hasRenderableStreamContent({ ...base, responseText: "partial answer" })).toBe(true);
+  });
+
+  it("is true when a pending clarification is present", () => {
+    expect(
+      hasRenderableStreamContent({ ...base, pendingClarification: { question: "which campaign?" } })
+    ).toBe(true);
   });
 });

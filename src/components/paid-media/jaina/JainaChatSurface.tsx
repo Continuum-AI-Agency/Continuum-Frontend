@@ -22,6 +22,11 @@ const AnimatedShaderBackground = dynamic(
 );
 import { useToast } from "@/components/ui/ToastProvider";
 import { useJainaChatStream } from "@/hooks/useJainaChatStream";
+import {
+  useJainaRunStatusRealtime,
+  isTerminalRunStatus,
+  type JainaRunStatusRow,
+} from "@/hooks/useJainaRunStatusRealtime";
 import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
 import { PromptInput } from "@/components/ai-elements/prompt-input";
 import type { Attachment } from "@/components/ai-elements/attachments";
@@ -1149,6 +1154,9 @@ export function JainaChatSurface({
   const [isConversationSwitching, setIsConversationSwitching] = React.useState(false);
   const [deletingSessionId, setDeletingSessionId] = React.useState<string | null>(null);
   const [activeResponseId, setActiveResponseId] = React.useState<string | null>(null);
+  const [generatingSessionIds, setGeneratingSessionIds] = React.useState<Set<string>>(
+    () => new Set()
+  );
   const [queuedMessages, setQueuedMessages] = React.useState<QueuedJainaMessage[]>([]);
   const [editingQueueMessageId, setEditingQueueMessageId] = React.useState<string | null>(
     null
@@ -1160,6 +1168,8 @@ export function JainaChatSurface({
   const persistedAssistantResponseIdsRef = React.useRef<Set<string>>(new Set());
   const conversationChannelRef = React.useRef<RealtimeChannel | null>(null);
   const activeSessionIdRef = React.useRef(sessionId);
+  const activeResponseIdRef = React.useRef<string | null>(null);
+  const activeRunIdRef = React.useRef<string | undefined>(undefined);
   const streamBusyRef = React.useRef(false);
   const queueDispatchInFlightRef = React.useRef(false);
   const promptInputWrapperRef = React.useRef<HTMLDivElement>(null);
@@ -1924,6 +1934,69 @@ export function JainaChatSurface({
     state.toolResults,
     updateMessage,
   ]);
+
+  // Mirror the active run/response into refs so the realtime run-status handler
+  // (which fires outside React's render) can match the in-flight run.
+  React.useEffect(() => {
+    activeResponseIdRef.current = activeResponseId;
+  }, [activeResponseId]);
+  React.useEffect(() => {
+    activeRunIdRef.current = state.runId;
+  }, [state.runId]);
+
+  // Recovery channel: even when the live NDJSON stream is lost, the durable run
+  // row still transitions to completed/failed. Render the persisted result from
+  // that signal, and drive the per-session "generating" indicator in the sidebar.
+  const handleRunStatusRow = React.useCallback(
+    (row: JainaRunStatusRow) => {
+      setGeneratingSessionIds((previous) => {
+        const next = new Set(previous);
+        if (row.status === "running" || row.status === "pending") {
+          next.add(row.sessionId);
+        } else {
+          next.delete(row.sessionId);
+        }
+        return next;
+      });
+
+      if (!isTerminalRunStatus(row.status)) return;
+
+      const isActiveRun = Boolean(row.runId) && row.runId === activeRunIdRef.current;
+      const responseId = activeResponseIdRef.current;
+      if (
+        !isActiveRun ||
+        !responseId ||
+        persistedAssistantResponseIdsRef.current.has(responseId)
+      ) {
+        return;
+      }
+
+      persistedAssistantResponseIdsRef.current.add(responseId);
+      if (row.status === "failed") {
+        updateMessage(responseId, {
+          status: "error",
+          title: "Jaina error",
+          content: row.errorMessage || "Jaina run failed.",
+        });
+      }
+      void refreshConversationSnapshot(activeSessionIdRef.current);
+      setActiveResponseId(null);
+      cancel();
+    },
+    [cancel, refreshConversationSnapshot, updateMessage]
+  );
+
+  useJainaRunStatusRealtime({
+    enabled: Boolean(adAccountId),
+    onRunStatus: handleRunStatusRow,
+  });
+
+  const generatingSessionIdsForSidebar = React.useMemo(() => {
+    if (!isStreaming && !activeResponseId) return generatingSessionIds;
+    const next = new Set(generatingSessionIds);
+    next.add(sessionId);
+    return next;
+  }, [generatingSessionIds, isStreaming, activeResponseId, sessionId]);
 
   React.useEffect(() => {
     if (state.toolResults.length === 0 && state.canvasActions.length === 0) return;
@@ -2809,6 +2882,7 @@ export function JainaChatSurface({
           sessions={conversationSessions}
           activeSessionId={sessionId}
           sessionTitleById={sessionTitleById}
+          generatingSessionIds={generatingSessionIdsForSidebar}
           isLoading={isHistoryLoading}
           isInteractionDisabled={
             isStreaming || isConversationSwitching || Boolean(deletingSessionId)

@@ -11,6 +11,7 @@ type RealtimeRow = {
   name: string;
   source: OnboardingDocument["source"];
   status?: "processing" | "ready" | "error";
+  category?: OnboardingDocument["category"] | null;
   progress_step?: OnboardingDocument["progressStep"];
   progress_percent?: number | null;
   error_code?: OnboardingDocument["errorCode"] | null;
@@ -33,6 +34,7 @@ function rowToView(row: RealtimeRow): DocumentView {
     source: row.source,
     createdAt: row.created_at ?? new Date().toISOString(),
     status: (row.status as OnboardingDocument["status"]) ?? "processing",
+    category: row.category ?? undefined,
     progressStep: row.progress_step ?? undefined,
     progressPercent: typeof row.progress_percent === "number" ? row.progress_percent : undefined,
     errorCode: row.error_code ?? undefined,

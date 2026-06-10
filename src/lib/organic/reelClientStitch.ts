@@ -30,13 +30,35 @@ async function downloadClip(url: string, signal?: AbortSignal): Promise<Blob> {
 /**
  * Download the verified scene clips, stitch them into one MP4 in the splice
  * worker (mediabunny), and persist + link the result via `link-reel-mp4`. The
- * worker's object URL is revoked once the bytes are uploaded.
+ * worker's object URL is revoked once the bytes are uploaded. A single-scene
+ * reel is passed through unstitched (the splice worker requires >=2 clips).
  */
 export async function stitchAndFinalizeReel(
   params: StitchAndFinalizeReelParams,
 ): Promise<StitchAndFinalizeReelResult> {
   const { brandId, draftId, clips, durationSec, signal, onStage } = params
   const ordered = [...clips].sort((a, b) => a.index - b.index)
+  if (ordered.length === 0) throw new Error("No scene clips to finalize")
+
+  // Single-scene reel: nothing to splice — the lone Veo clip is already an MP4,
+  // so download it and finalize directly.
+  if (ordered.length === 1) {
+    onStage?.("Finalizing…")
+    const soleBlob = await downloadClip(ordered[0].signedClipUrl, signal)
+    const mp4Base64 = await blobToBase64(soleBlob)
+    const linked = await finalizeReelMp4({
+      brandId,
+      draftId,
+      mp4Base64,
+      durationSec: durationSec || ordered[0].durationSec,
+    })
+    return {
+      bucket: linked.bucket,
+      path: linked.path,
+      signedUrl: linked.signedUrl,
+      durationSec: durationSec || ordered[0].durationSec,
+    }
+  }
 
   onStage?.("Stitching reel…")
   const blobs = await Promise.all(ordered.map((clip) => downloadClip(clip.signedClipUrl, signal)))

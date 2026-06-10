@@ -24,6 +24,8 @@ import {
 import type { JainaChatMessage } from "../types";
 import { ObjectivesQueue } from "./ObjectivesQueue";
 import { LatestJainaThought, ThinkingWindow } from "./ThinkingWindow";
+import { SparkleSpinner } from "./SparkleSpinner";
+import { deriveLiveStatusLabel } from "./thinkingUtils";
 import { PlanSection, type PlanFeedbackPayload } from "./PlanSection";
 import { ClarificationBanner } from "./ClarificationBanner";
 import { MessageActionBar } from "./MessageActionBar";
@@ -98,42 +100,6 @@ type JainaMessageItemProps = {
   onFocusInput?: () => void;
 };
 
-const JAINA_LOADING_MESSAGES = [
-  "Pulling performance signals...",
-  "Synthesizing campaign data...",
-  "Connecting the dots...",
-  "Building your brief...",
-  "Analyzing spend patterns...",
-  "Identifying opportunities...",
-] as const;
-
-function RotatingMessage() {
-  const [index, setIndex] = React.useState(0);
-
-  React.useEffect(() => {
-    const id = setInterval(() => {
-      setIndex((i) => (i + 1) % JAINA_LOADING_MESSAGES.length);
-    }, 2500);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <AnimatePresence mode="wait">
-      <motion.span
-        key={index}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="block text-sm text-muted-foreground"
-      >
-        {JAINA_LOADING_MESSAGES[index]}
-      </motion.span>
-    </AnimatePresence>
-  );
-}
-
-
 export function JainaMessageItem({
   message,
   activeResponseId,
@@ -183,16 +149,15 @@ export function JainaMessageItem({
     );
   }, [isStructuredJsonContent, message.content, report, reportV2, shouldRenderInlineReport]);
 
-  const hasThinkingContent =
-    (reasoning?.length ?? 0) > 0 || (toolCalls?.length ?? 0) > 0;
+  const liveStatusLabel = React.useMemo(
+    () => (isStreaming ? deriveLiveStatusLabel(reasoning ?? []) ?? "Working" : null),
+    [isStreaming, reasoning]
+  );
 
-  const showStreamingPlaceholder =
+  const showLiveStatus =
     isStreaming &&
     message.role === "assistant" &&
-    !hasRenderableContent &&
-    !structuredFallbackContent &&
-    !hasStructuredChild &&
-    !hasThinkingContent;
+    (state.status === "starting" || state.status === "streaming");
 
   const showStaticFallback =
     !isStreaming &&
@@ -247,7 +212,18 @@ export function JainaMessageItem({
               </div>
             ) : null}
 
-            {showStreamingPlaceholder ? <RotatingMessage /> : null}
+            {showLiveStatus ? (
+              <motion.div
+                key={liveStatusLabel}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="flex items-center gap-2 text-sm text-muted-foreground"
+              >
+                <SparkleSpinner isActive className="text-foreground/60" />
+                <span className="font-medium">{liveStatusLabel}</span>
+              </motion.div>
+            ) : null}
 
             {showStaticFallback ? (
               <Text size="2" className="text-muted-foreground">

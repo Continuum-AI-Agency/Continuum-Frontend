@@ -16,7 +16,6 @@ import { LibrarySidebar } from "./LibrarySidebar";
 import { LibraryFilterBar } from "./LibraryFilterBar";
 import { MediaGrid } from "./MediaGrid";
 import { MediaSearchBar } from "./MediaSearchBar";
-import { MediaDetailDialog } from "./MediaDetailDialog";
 import { UploadStrip } from "./UploadStrip";
 import { useMediaLibrary } from "./useMediaLibrary";
 import { useMediaUpload } from "./useMediaUpload";
@@ -68,7 +67,6 @@ export function LibraryViewer({
   const { uploads, uploadFiles } = useMediaUpload(brandId);
 
   const [view, setView] = useState<"media" | "inspiration">("media");
-  const [openAsset, setOpenAsset] = useState<MediaAsset | null>(null);
   const [searchResults, setSearchResults] = useState<MediaSearchResultItem[] | null>(null);
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -106,8 +104,16 @@ export function LibraryViewer({
     [brandId, router, selectedCollectionId, sourceFilter, kindFilter, setOptimisticSource, setOptimisticKind, startFilterTransition],
   );
 
+  // Selecting a real collection clears the source filter (membership spans
+  // sources); selecting a derived "Browse" folder sets source + clears the
+  // collection. Both share state so sidebar + chip bar stay in sync.
   const onSelectCollection = useCallback(
-    (id: string | null) => pushFilters({ collectionId: id }),
+    (id: string | null) => pushFilters({ collectionId: id, source: "all" }),
+    [pushFilters],
+  );
+
+  const onSelectSource = useCallback(
+    (value: SourceFilterValue) => pushFilters({ collectionId: null, source: value }),
     [pushFilters],
   );
 
@@ -160,6 +166,8 @@ export function LibraryViewer({
         collections={initialCollections}
         selectedCollectionId={selectedCollectionId}
         onSelectCollection={onSelectCollection}
+        selectedSource={optimisticSource}
+        onSelectSource={onSelectSource}
         storageUsedBytes={storageUsedBytes}
       />
 
@@ -243,7 +251,6 @@ export function LibraryViewer({
         >
           <MediaGrid
             assets={displayedAssets}
-            onOpenAsset={setOpenAsset}
             showBoundingBoxes={showBoundingBoxes}
             emptyHint={isSearching ? "No results. Try a different search." : undefined}
             onLoadMore={isSearching ? undefined : loadMore}
@@ -270,13 +277,6 @@ export function LibraryViewer({
           )}
         </AnimatePresence>
       </div>
-
-          <MediaDetailDialog
-            asset={openAsset}
-            onClose={() => setOpenAsset(null)}
-            brandId={brandId}
-            collections={initialCollections}
-          />
         </div>
       )}
     </div>

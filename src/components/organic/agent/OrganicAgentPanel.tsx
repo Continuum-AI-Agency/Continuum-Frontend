@@ -40,8 +40,14 @@ import type {
   AgentMentionReference,
   AgentMentionSuggestion,
 } from "@/lib/agent-references";
-import type { MediaSearchResultItem, Skill } from "@continuum/contracts";
+import type { Skill } from "@continuum/contracts";
 import { useBrandSkills } from "@/lib/organic/skills";
+import {
+  fetchMediaLibraryFolders,
+  fetchMediaMentionAssets,
+  mediaAssetToMentionSuggestion,
+  parseMediaFolderKey,
+} from "@/lib/agent/media-mentions";
 
 type OrganicAgentPanelProps = {
   brandId: string;
@@ -76,6 +82,12 @@ export type OrganicAgentMentionContext = {
     contentTypeSuggestion?: string;
     whyRelevant?: string;
     isSelected?: boolean;
+  }>;
+  documents?: Array<{
+    id: string;
+    name: string;
+    kind: string | null;
+    text_excerpt: string | null;
   }>;
 };
 
@@ -145,38 +157,6 @@ function getCanvasPreview(node: StudioNode): AgentMentionSuggestion["preview"] {
   return { url, kind, label: readStringField(data, "label") ?? node.type ?? node.id };
 }
 
-function mediaAssetToMentionSuggestion(item: MediaSearchResultItem): AgentMentionSuggestion {
-  const asset = item.asset;
-  return createOrganicSuggestion(
-    {
-      id: asset.id,
-      type: "media_asset",
-      label: asset.title ?? asset.storagePath.split("/").pop() ?? asset.id,
-      source: "organic",
-      metadata: {
-        assetId: asset.id,
-        kind: asset.kind,
-        title: asset.title,
-        description: asset.description,
-        tags: asset.tags,
-        mimeType: asset.mimeType,
-        source: asset.source,
-      },
-    },
-    {
-      key: `media:${asset.id}`,
-      group: "Media library",
-      description: [asset.kind, asset.description].filter(Boolean).join(" · "),
-      badge: asset.kind,
-      preview: {
-        url: asset.signedUrl ?? asset.thumbnailUrl,
-        kind: asset.kind,
-        label: asset.title ?? asset.id,
-      },
-    }
-  );
-}
-
 function skillToMentionSuggestion(skill: Skill): AgentMentionSuggestion {
   return createOrganicSuggestion(
     {
@@ -228,29 +208,6 @@ function canvasNodeToMentionSuggestion(node: StudioNode): AgentMentionSuggestion
       preview,
     }
   );
-}
-
-async function searchMediaMentionSuggestions(
-  brandId: string,
-  query: string,
-): Promise<AgentMentionSuggestion[]> {
-  const trimmed = query.trim();
-  if (trimmed.length < 2) return [];
-
-  const response = await fetch("/api/library/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      brandId,
-      mode: "text",
-      query: trimmed,
-      limit: 6,
-    }),
-  });
-
-  if (!response.ok) return [];
-  const payload = (await response.json()) as { items?: MediaSearchResultItem[] };
-  return (payload.items ?? []).map(mediaAssetToMentionSuggestion);
 }
 
 export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext }: OrganicAgentPanelProps) {
@@ -433,17 +390,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       monday.setDate(now.getDate() - daysToMonday);
       const weekStart = monday.toISOString().slice(0, 10);
 
-      const existingMessages = state.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-      }));
-
       start({
         brandId,
         sessionId: currentSessionId,
-        messages: [...existingMessages, { id: messageId, role: "user" as const, content, metadata }],
+        messages: [{ id: messageId, role: "user" as const, content, metadata }],
         references,
         weekStart,
         timezone,
@@ -467,13 +417,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       monday.setDate(now.getDate() - daysToMonday);
       const weekStart = monday.toISOString().slice(0, 10);
 
-      const existingMessages = state.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-      }));
-
       const decisionContent =
         decision.decision === "approve"
           ? decision.itemId
@@ -485,7 +428,6 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         brandId,
         sessionId: currentSessionId,
         messages: [
-          ...existingMessages,
           {
             id: crypto.randomUUID(),
             role: "user" as const,
@@ -517,17 +459,10 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
       monday.setDate(now.getDate() - daysToMonday);
       const weekStart = monday.toISOString().slice(0, 10);
 
-      const existingMessages = state.messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        metadata: m.metadata,
-      }));
-
       start({
         brandId,
         sessionId: currentSessionId,
-        messages: existingMessages,
+        messages: [],
         approvals: [{ id: approval.approvalId, approved }],
         weekStart,
         timezone,
@@ -702,9 +637,27 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
 
     const canvasSuggestions = canvasNodes.map(canvasNodeToMentionSuggestion);
     const skillSuggestions = brandSkills.map(skillToMentionSuggestion);
+    const docSuggestions = (mentionContext?.documents ?? []).map((doc) =>
+      createOrganicSuggestion(
+        {
+          id: doc.id,
+          type: "document",
+          label: doc.name,
+          source: "organic",
+          metadata: { kind: doc.kind ?? "unknown" },
+        },
+        {
+          key: `document:${doc.id}`,
+          group: "Brain",
+          description: doc.text_excerpt?.slice(0, 80) ?? undefined,
+          badge: doc.kind?.toUpperCase() ?? "DOC",
+        }
+      )
+    );
 
     return [
       ...skillSuggestions,
+      ...docSuggestions,
       ...scheduledDraftSuggestions,
       ...backlogDraftSuggestions,
       ...trendSuggestions,
@@ -726,12 +679,13 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     type FolderMeta = { type: AgentMentionSuggestion["type"]; childrenLabel: string };
     const FOLDER_META: Record<string, FolderMeta> = {
       Skills:           { type: "skill",       childrenLabel: "Brand skills" },
+      Brain:            { type: "document",    childrenLabel: "Brand documents" },
       Drafts:           { type: "draft",        childrenLabel: "Scheduled & backlog" },
       Trends:           { type: "trend",        childrenLabel: "Active trends" },
       Events:           { type: "event",        childrenLabel: "Events" },
       Questions:        { type: "question",     childrenLabel: "Questions" },
       Canvas:           { type: "canvas_node",  childrenLabel: "Canvas nodes" },
-      "Media library":  { type: "media_asset",  childrenLabel: "Search media" },
+      "Media library":  { type: "media_asset",  childrenLabel: "Sources & collections" },
     };
 
     return {
@@ -753,15 +707,24 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         }
         const [all, mediaSuggestions] = await Promise.all([
           buildAllSuggestions(),
-          searchMediaMentionSuggestions(brandId, query).catch(() => [] as AgentMentionSuggestion[]),
+          fetchMediaMentionAssets({ brandId, query, limit: 6 }).catch(() => [] as AgentMentionSuggestion[]),
         ]);
         return [...all, ...mediaSuggestions].filter((s) =>
           matchesMentionQuery(query, [s.label, s.description, s.group, s.badge])
         );
       },
       getChildSuggestions: async (parent, query) => {
+        // Media library drills two levels: root -> source/collection subfolders
+        // -> assets. A typed query at the root searches across all sources; a
+        // query inside a subfolder scopes the search to it.
         if (parent.key === "folder:Media library") {
-          return searchMediaMentionSuggestions(brandId, query).catch(() => []);
+          return query.trim().length >= 2
+            ? fetchMediaMentionAssets({ brandId, query, limit: 12 }).catch(() => [])
+            : fetchMediaLibraryFolders(brandId).catch(() => []);
+        }
+        const mediaFolder = parseMediaFolderKey(parent.key);
+        if (mediaFolder) {
+          return fetchMediaMentionAssets({ brandId, query, limit: 24, ...mediaFolder }).catch(() => []);
         }
         const all = await buildAllSuggestions();
         const children = all.filter((s) => s.group === parent.label);
@@ -854,7 +817,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
                         onUseAsset={(item) =>
                           setQueuedMentionSuggestions((current) => [
                             ...current,
-                            mediaAssetToMentionSuggestion(item),
+                            mediaAssetToMentionSuggestion(item.asset),
                           ])
                         }
                       />

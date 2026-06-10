@@ -13,6 +13,7 @@ export const SOURCE_FILTERS: FilterOption<SourceFilterValue>[] = [
   { value: "all", label: "All" },
   { value: "upload", label: "Uploads" },
   { value: "ai_generated", label: "AI Creations" },
+  { value: "canvas", label: "Canvas" },
   { value: "backfill", label: "Imported" },
 ];
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { toDocumentCategory } from "@continuum/contracts";
 import { appendDocument, ensureOnboardingState } from "@/lib/onboarding/storage";
 import type { OnboardingDocument } from "@/lib/onboarding/state";
 import { createBrandId } from "@/lib/onboarding/state";
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
   await ensureOnboardingState(brandId);
 
   const source = (formData.get("source") as OnboardingDocument["source"] | null) ?? "upload";
+  const category = toDocumentCategory(formData.get("category"));
 
   const supabase = await createSupabaseServerClient();
 
@@ -79,6 +81,7 @@ export async function POST(request: Request) {
       brandId,
       documentId,
       source,
+      category,
       storagePath: finalStoragePath,
       fileName: sanitizedFileName,
       mimeType: incoming.type,
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
     id: documentId,
     name: incoming.name,
     source,
+    category,
     createdAt: new Date().toISOString(),
     status: "processing",
     progressStep: "uploading",

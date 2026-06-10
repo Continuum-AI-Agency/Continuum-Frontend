@@ -395,15 +395,41 @@ function useDraftWithFreshMedia(
     }
   }, [brandProfileId, signables])
 
-  return React.useMemo(() => {
-    if (Object.keys(freshByPath).length === 0 || !draft.publishingAssets) return draft
-    return {
-      ...draft,
-      publishingAssets: draft.publishingAssets.map((asset) =>
-        freshByPath[asset.storagePath] ? { ...asset, storageUrl: freshByPath[asset.storagePath] } : asset,
-      ),
+  // Reels finalize to a durable bucket+path (link-reel-mp4) with a 1h signedUrl;
+  // re-sign it on read so a reel opened later still plays.
+  const reel = draft.mediaSuggestion?.reel
+  const reelBucket = reel?.generated === true && hasText(reel.url) ? (reel.bucket ?? null) : null
+  const reelPath = reel?.generated === true ? (reel.url ?? null) : null
+  const [freshReelUrl, setFreshReelUrl] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (!brandProfileId || !reelBucket || !reelPath) return
+    let cancelled = false
+    void signOrganicMediaAsset({ brandId: brandProfileId, bucket: reelBucket, path: reelPath }).then((url) => {
+      if (!cancelled && url) setFreshReelUrl(url)
+    })
+    return () => {
+      cancelled = true
     }
-  }, [draft, freshByPath])
+  }, [brandProfileId, reelBucket, reelPath])
+
+  return React.useMemo(() => {
+    const freshPublishing = Object.keys(freshByPath).length > 0 && draft.publishingAssets
+    if (!freshPublishing && !freshReelUrl) return draft
+    const next: OrganicCalendarDraft = { ...draft }
+    if (freshPublishing && draft.publishingAssets) {
+      next.publishingAssets = draft.publishingAssets.map((asset) =>
+        freshByPath[asset.storagePath] ? { ...asset, storageUrl: freshByPath[asset.storagePath] } : asset,
+      )
+    }
+    if (freshReelUrl && draft.mediaSuggestion?.reel) {
+      next.mediaSuggestion = {
+        ...draft.mediaSuggestion,
+        reel: { ...draft.mediaSuggestion.reel, signedUrl: freshReelUrl },
+      }
+    }
+    return next
+  }, [draft, freshByPath, freshReelUrl])
 }
 
 export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprove }: OrganicDraftPreviewProps) {

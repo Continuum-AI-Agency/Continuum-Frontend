@@ -5,7 +5,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Download,
-  Eye,
   FileSpreadsheet,
   FileText,
   FileType,
@@ -16,8 +15,11 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { DocumentCategory } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
-import { describeStep, isPreviewSupported, kindLabel } from "./types";
+import { DocumentPreviewCard } from "./DocumentPreviewCard";
+import { DocumentCategorySelect } from "./DocumentCategorySelect";
+import { describeStep, documentCategoryOf, formatBytes, kindLabel } from "./types";
 import type { DocumentView } from "./types";
 import type { UploadEntry } from "./useDocumentMutations";
 
@@ -46,12 +48,6 @@ function iconFor(doc: DocumentView): LucideIcon {
   if (lower.endsWith(".xlsx") || lower.endsWith(".csv")) return FileSpreadsheet;
   if (/\.(png|jpe?g|webp|gif)$/.test(lower)) return ImageIcon;
   return FileText;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function PendingRow({
@@ -121,18 +117,23 @@ export function PendingRow({
 
 export function DocumentRow({
   doc,
-  onPreview,
+  isPinned,
+  onPinnedChange,
+  onOpenInline,
   onDownload,
   onRemove,
+  onCategoryChange,
 }: {
   doc: DocumentView;
-  onPreview: (doc: DocumentView) => void;
+  isPinned: boolean;
+  onPinnedChange: (pinned: boolean) => void;
+  onOpenInline: (storagePath: string) => void;
   onDownload: (storagePath: string) => Promise<void>;
   onRemove: (documentId: string) => void;
+  onCategoryChange?: (documentId: string, category: DocumentCategory) => void;
 }) {
   const reduceMotion = useReducedMotion();
   const label = describeStep(doc);
-  const canPreview = isPreviewSupported(doc);
   const Icon = iconFor(doc);
   const codeParts: string[] = [kindLabel(doc).toUpperCase()];
   if (doc.pageCount) codeParts.push(`${doc.pageCount} pp`);
@@ -158,38 +159,59 @@ export function DocumentRow({
       aria-busy={label.tone === "progress" ? true : undefined}
       className="group flex min-h-12 items-center justify-between gap-3 border-b border-border/70 py-2.5 last:border-0"
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Icon className="h-4 w-4" />
-        </span>
-        <span className="shrink-0 font-mono text-sm text-muted-foreground">
-          {codeParts.join(" · ")}
-        </span>
-        <span className="min-w-0 flex-1 truncate">
-          <span className="block truncate text-sm font-medium text-primary">{doc.name}</span>
-          <span
-            className={cn(
-              "block truncate text-[11px]",
-              label.tone === "error" ? "text-rose-600" : "text-muted-foreground",
-            )}
-          >
-            {subtitle}
+      <DocumentPreviewCard
+        doc={doc}
+        isPinned={isPinned}
+        onPinnedChange={onPinnedChange}
+        onOpenInline={onOpenInline}
+        onDownload={(storagePath) => void onDownload(storagePath)}
+        onRemove={onRemove}
+      >
+        <button
+          type="button"
+          aria-label={`Preview ${doc.name}`}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <Icon className="h-4 w-4" />
           </span>
-          {label.tone === "progress" && typeof doc.progressPercent === "number" ? (
+          <span className="shrink-0 font-mono text-sm text-muted-foreground">
+            {codeParts.join(" · ")}
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="block truncate text-sm font-medium text-primary">{doc.name}</span>
             <span
-              aria-hidden
-              className="mt-1 block h-[2px] w-full overflow-hidden rounded-full bg-muted"
+              className={cn(
+                "block truncate text-[11px]",
+                label.tone === "error" ? "text-rose-600" : "text-muted-foreground",
+              )}
             >
-              <span
-                className="block h-full rounded-full bg-emerald-500/60 transition-[width]"
-                style={{ width: `${Math.max(2, doc.progressPercent)}%` }}
-              />
+              {subtitle}
             </span>
-          ) : null}
-        </span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {/* Preview, download, remove — revealed on hover (always visible for errors) */}
+            {label.tone === "progress" && typeof doc.progressPercent === "number" ? (
+              <span
+                aria-hidden
+                className="mt-1 block h-[2px] w-full overflow-hidden rounded-full bg-muted"
+              >
+                <span
+                  className="block h-full rounded-full bg-emerald-500/60 transition-[width]"
+                  style={{ width: `${Math.max(2, doc.progressPercent)}%` }}
+                />
+              </span>
+            ) : null}
+          </span>
+        </button>
+      </DocumentPreviewCard>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {/* Category tag — always visible so brand_guidelines can be set/seen at a glance */}
+        {onCategoryChange ? (
+          <DocumentCategorySelect
+            value={documentCategoryOf(doc)}
+            onChange={(category) => onCategoryChange(doc.id, category)}
+            ariaLabel={`Category for ${doc.name}`}
+          />
+        ) : null}
+        {/* Download, remove — revealed on hover (always visible for errors) */}
         <div
           className={cn(
             "flex items-center gap-0.5 motion-safe:transition-opacity",
@@ -198,14 +220,6 @@ export function DocumentRow({
               : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
           )}
         >
-          {canPreview && (
-            <CircleAction
-              ariaLabel="Preview document"
-              tone="muted"
-              icon={Eye}
-              onClick={() => onPreview(doc)}
-            />
-          )}
           {doc.storagePath ? (
             <CircleAction
               ariaLabel="Download"

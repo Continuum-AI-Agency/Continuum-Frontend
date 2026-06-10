@@ -1,17 +1,31 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FileText, Loader2, Plus, Upload } from "lucide-react";
+import {
+  DOCUMENT_CATEGORY_DEFAULT,
+  DOCUMENT_CATEGORY_LABELS,
+  DOCUMENT_CATEGORY_VALUES,
+  type DocumentCategory,
+} from "@continuum/contracts";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/ToastProvider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useDocuments } from "./useDocuments";
 import { useDocumentMutations } from "./useDocumentMutations";
+import { DocumentCategorySelect } from "./DocumentCategorySelect";
 import { DocumentRow, PendingRow, ROW_EASE } from "./DocumentRow";
-import { DocumentPreviewDialog } from "./DocumentPreviewDialog";
-import type { DocumentDensity, DocumentView } from "./types";
+import { filterDocumentsByCategory } from "./types";
+import type { CategoryFilter, DocumentDensity, DocumentView } from "./types";
 import type { OnboardingState } from "@/lib/onboarding/state";
 
 const ACCEPT =
@@ -39,11 +53,17 @@ export function DocumentManager({
   const documents = useDocuments(brandId, seed);
   const mutations = useDocumentMutations(brandId);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [previewDoc, setPreviewDoc] = useState<DocumentView | null>(null);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [uploadCategory, setUploadCategory] = useState<DocumentCategory>(DOCUMENT_CATEGORY_DEFAULT);
 
   const compact = density === "compact";
-  const hasItems = documents.length > 0 || mutations.uploads.length > 0;
+  const visibleDocuments = useMemo(
+    () => filterDocumentsByCategory(documents, categoryFilter),
+    [documents, categoryFilter],
+  );
+  const hasItems = visibleDocuments.length > 0 || mutations.uploads.length > 0;
   const anyUploading = mutations.uploads.some((u) => u.status === "uploading");
   const readyCount = documents.filter((d) => (d.progressStep ?? d.status) === "ready").length;
   const processingCount =
@@ -52,7 +72,7 @@ export function DocumentManager({
 
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
-    const result = await mutations.uploadFiles(files, onStateChange);
+    const result = await mutations.uploadFiles(files, onStateChange, uploadCategory);
     if (result.succeeded > 0) {
       show({
         title: result.succeeded === 1 ? "Document uploaded" : `${result.succeeded} documents uploaded`,
@@ -80,12 +100,32 @@ export function DocumentManager({
     }
   };
 
+  const handleOpenInline = async (storagePath: string) => {
+    if (!storagePath) return;
+    try {
+      const url = await mutations.openInlineUrl(storagePath);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to open document.";
+      show({ title: "Open failed", description: message, variant: "error" });
+    }
+  };
+
   const handleRemove = async (documentId: string) => {
     try {
       await mutations.removeDocument(documentId, onStateChange);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not remove document.";
       show({ title: "Remove failed", description: message, variant: "error" });
+    }
+  };
+
+  const handleCategoryChange = async (documentId: string, category: DocumentCategory) => {
+    try {
+      await mutations.updateCategory(documentId, category, onStateChange);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update category.";
+      show({ title: "Update failed", description: message, variant: "error" });
     }
   };
 
@@ -141,6 +181,10 @@ export function DocumentManager({
             ready={readyCount}
             processing={processingCount}
             errors={errorCount}
+            categoryFilter={categoryFilter}
+            onCategoryFilterChange={setCategoryFilter}
+            uploadCategory={uploadCategory}
+            onUploadCategoryChange={setUploadCategory}
           />
           <ItemPanel
             hasItems={hasItems}
@@ -164,13 +208,16 @@ export function DocumentManager({
                     onDiscard={mutations.discardUpload}
                   />
                 ))}
-                {documents.map((doc) => (
+                {visibleDocuments.map((doc) => (
                   <DocumentRow
                     key={doc.id}
                     doc={doc}
-                    onPreview={setPreviewDoc}
+                    isPinned={pinnedId === doc.id}
+                    onPinnedChange={(pinned) => setPinnedId(pinned ? doc.id : null)}
+                    onOpenInline={(storagePath) => void handleOpenInline(storagePath)}
                     onDownload={handleDownload}
                     onRemove={(id) => void handleRemove(id)}
+                    onCategoryChange={(id, category) => void handleCategoryChange(id, category)}
                   />
                 ))}
               </AnimatePresence>
@@ -178,14 +225,6 @@ export function DocumentManager({
           </ItemPanel>
         </CardContent>
       </Card>
-      <DocumentPreviewDialog
-        document={previewDoc}
-        open={previewDoc !== null}
-        onOpenChange={(open) => {
-          if (!open) setPreviewDoc(null);
-        }}
-        onResolveSignedUrl={mutations.openSignedUrl}
-      />
     </div>
   );
 }
@@ -196,35 +235,83 @@ function SyncBar({
   ready,
   processing,
   errors,
+  categoryFilter,
+  onCategoryFilterChange,
+  uploadCategory,
+  onUploadCategoryChange,
 }: {
   onUploadClick: () => void;
   uploading: boolean;
   ready: number;
   processing: number;
   errors: number;
+  categoryFilter: CategoryFilter;
+  onCategoryFilterChange: (filter: CategoryFilter) => void;
+  uploadCategory: DocumentCategory;
+  onUploadCategoryChange: (category: DocumentCategory) => void;
 }) {
   const summary = formatSummary({ ready, processing, errors });
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-muted/30 px-3 py-2">
-      <span className="truncate text-xs text-muted-foreground">{summary}</span>
-      <button
-        type="button"
-        onClick={onUploadClick}
-        disabled={uploading}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors",
-          "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
-          uploading && "cursor-wait opacity-70",
-        )}
-      >
-        {uploading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Plus className="h-3.5 w-3.5" />
-        )}
-        {uploading ? "Uploading…" : "Upload document"}
-      </button>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-muted/30 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
+        <CategoryFilterSelect value={categoryFilter} onChange={onCategoryFilterChange} />
+        <span className="truncate text-xs text-muted-foreground">{summary}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <DocumentCategorySelect
+          value={uploadCategory}
+          onChange={onUploadCategoryChange}
+          ariaLabel="Category for new uploads"
+        />
+        <button
+          type="button"
+          onClick={onUploadClick}
+          disabled={uploading}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-sm outline-none transition-colors",
+            "hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+            uploading && "cursor-wait opacity-70",
+          )}
+        >
+          {uploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
+          {uploading ? "Uploading…" : "Upload document"}
+        </button>
+      </div>
     </div>
+  );
+}
+
+function CategoryFilterSelect({
+  value,
+  onChange,
+}: {
+  value: CategoryFilter;
+  onChange: (filter: CategoryFilter) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={(next) => onChange(next as CategoryFilter)}>
+      <SelectTrigger
+        size="sm"
+        aria-label="Filter documents by category"
+        className="h-7 gap-1 rounded-full px-2.5 text-[11px] font-medium"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all" className="text-xs">
+          All categories
+        </SelectItem>
+        {DOCUMENT_CATEGORY_VALUES.map((category) => (
+          <SelectItem key={category} value={category} className="text-xs">
+            {DOCUMENT_CATEGORY_LABELS[category]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

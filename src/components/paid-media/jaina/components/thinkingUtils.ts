@@ -43,6 +43,56 @@ export function formatToolLabel(toolName: string): string {
     : toolName.replace(/_/g, " ");
 }
 
+// Human-readable labels for the backend progress stages the run emits. Used for
+// both the collapsed-window stage pill and the always-visible live status line.
+export const STAGE_LABELS: Record<string, string> = {
+  thinking: "Thinking",
+  context_loaded: "Context loaded",
+  tool_start: "Gathering data",
+  tool_complete: "Reviewing data",
+  delegation_start: "Delegating",
+  delegation_complete: "Delegation complete",
+  handoff_start: "Delegating",
+  handoff_complete: "Handoff complete",
+  agent_spawn: "Sub-agent working",
+  agent_complete: "Sub-agent complete",
+  synthesis_start: "Writing report",
+  synthesis_complete: "Report ready",
+  assembly_start: "Assembling report",
+  report_ready: "Report ready",
+  canvas_start: "Updating canvas",
+  canvas_complete: "Canvas updated",
+};
+
+export function humanizeStage(stage: string): string {
+  const normalized = stage.replace(/[_-]+/g, " ").trim();
+  if (!normalized) return "Working";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function stageEntryToLiveLabel(entry: JainaProgressEntry): string | null {
+  const stage = entry.stage;
+  if (!stage) return null;
+  const data = (entry.data ?? {}) as Record<string, unknown>;
+  const toolName = typeof data.tool_name === "string" ? data.tool_name : undefined;
+  if ((stage === "tool_start" || stage === "tool_complete") && toolName) {
+    const friendly = formatToolLabel(toolName);
+    return stage === "tool_start" ? `Pulling ${friendly}` : `Reviewing ${friendly}`;
+  }
+  return STAGE_LABELS[stage] ?? humanizeStage(stage);
+}
+
+// The most recent meaningful activity, surfaced as the live status line. Reads
+// the latest progress entry so the label tracks what Jaina is doing right now
+// (a tool name, a delegation, "Writing report") instead of a generic spinner.
+export function deriveLiveStatusLabel(reasoning: JainaProgressEntry[]): string | null {
+  for (let i = reasoning.length - 1; i >= 0; i -= 1) {
+    const label = stageEntryToLiveLabel(reasoning[i]);
+    if (label) return label;
+  }
+  return null;
+}
+
 const KNOWN_AGENT_LABELS: Record<string, string> = {
   l2_worker_agent: "Worker Agent",
   strategist: "Strategist",

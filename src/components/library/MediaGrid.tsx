@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   assets: MediaAsset[];
-  onOpenAsset: (asset: MediaAsset) => void;
   showBoundingBoxes?: boolean;
   emptyHint?: string;
   onLoadMore?: () => void;
@@ -29,7 +28,6 @@ const GRID_CLASS = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid
 
 export function MediaGrid({
   assets,
-  onOpenAsset,
   showBoundingBoxes = false,
   emptyHint,
   onLoadMore,
@@ -70,7 +68,7 @@ export function MediaGrid({
       {reduceMotion ? (
         <div className={cn(GRID_CLASS, className)}>
           {assets.map((asset) => (
-            <MediaCard key={asset.id} asset={asset} onOpen={onOpenAsset} showBoundingBoxes={showBoundingBoxes} />
+            <MediaCard key={asset.id} asset={asset} showBoundingBoxes={showBoundingBoxes} />
           ))}
         </div>
       ) : (
@@ -83,7 +81,7 @@ export function MediaGrid({
           <AnimatePresence mode="popLayout" initial={false}>
             {assets.map((asset) => (
               <motion.div key={asset.id} layout variants={cardVariants} exit="exit">
-                <MediaCard asset={asset} onOpen={onOpenAsset} showBoundingBoxes={showBoundingBoxes} />
+                <MediaCard asset={asset} showBoundingBoxes={showBoundingBoxes} />
               </motion.div>
             ))}
           </AnimatePresence>

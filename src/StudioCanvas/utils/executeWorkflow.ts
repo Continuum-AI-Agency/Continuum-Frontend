@@ -14,6 +14,7 @@ import { resolveClipSources } from "./splice/resolveClipSources";
 import { checkSpliceSupport } from "./splice/webcodecsSupport";
 import { runSpliceInWorker } from "../workers/spliceWorkerClient";
 import type { ClipSlot, VideoEditorNodeData } from "../types";
+import { registerCanvasOutput } from "@/lib/creative-assets/registerCanvasAsset";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
 
@@ -350,6 +351,7 @@ type ExecuteWorkflowOptions = {
   targetNodeId?: string;
   clearDownstream?: boolean;
   brandId?: string;
+  roomId?: string;
 };
 
 export async function executeWorkflow(
@@ -498,6 +500,37 @@ export async function executeWorkflow(
     }
   };
 
+  // Auto-register a durable canvas creation into the media library (source=
+  // "canvas") with provenance. Fire-and-forget: never blocks or throws into the
+  // generation flow. Skips base64-only / in-memory results and anonymous brands.
+  const registerCanvasIfDurable = (
+    nodeId: string,
+    asset: { kind: "image" | "video"; bucket?: string; storagePath?: string; url?: string; mimeType: string },
+  ) => {
+    const brandProfileId = options.brandId;
+    if (!brandProfileId || brandProfileId === "default-brand") return;
+    if (!asset.url || asset.url.startsWith("data:") || !asset.bucket || !asset.storagePath) return;
+    const node = nodeById.get(nodeId);
+    const data = (node?.data ?? {}) as { prompt?: unknown; model?: unknown };
+    const fileName = asset.storagePath.split("/").pop() || `canvas-${asset.kind}`;
+    void registerCanvasOutput({
+      brandProfileId,
+      kind: asset.kind,
+      bucket: asset.bucket,
+      storagePath: asset.storagePath,
+      fileName,
+      mimeType: asset.mimeType,
+      originRef: {
+        kind: "canvas",
+        roomId: options.roomId ?? null,
+        nodeId,
+        prompt: typeof data.prompt === "string" ? data.prompt : null,
+        model: typeof data.model === "string" ? data.model : null,
+        generator: node?.type ?? null,
+      },
+    });
+  };
+
   const setNodeOutput = (nodeId: string, output: NodeOutput) => {
     resolvedOutputs.set(nodeId, output);
     if (output.type === 'image') {
@@ -530,6 +563,13 @@ export async function executeWorkflow(
           ? (updatedNode?.data as any).generatedImage.slice(0, 48)
           : undefined,
       });
+      registerCanvasIfDurable(nodeId, {
+        kind: "image",
+        bucket: output.storageBucket,
+        storagePath: output.storagePath,
+        url: persistentUrl,
+        mimeType,
+      });
     } else if (output.type === 'video') {
       const persistentUrl = output.url && !output.url.startsWith("data:") ? output.url : undefined;
       useStudioStore.getState().updateNodeData(nodeId, {
@@ -541,6 +581,13 @@ export async function executeWorkflow(
         isExecuting: false
       });
       useStudioStore.getState().triggerSave();
+      registerCanvasIfDurable(nodeId, {
+        kind: "video",
+        bucket: output.storageBucket,
+        storagePath: output.storagePath,
+        url: persistentUrl,
+        mimeType: "video/mp4",
+      });
     } else if (output.type === 'text') {
       useStudioStore.getState().updateNodeData(nodeId, { 
         value: output.value,

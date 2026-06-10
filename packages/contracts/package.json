@@ -18,6 +18,7 @@
     "./streaming/media": "./src/streaming/media.ts",
     "./streaming/competitor-spy": "./src/streaming/competitor-spy.ts",
     "./media": "./src/media/index.ts",
+    "./documents": "./src/documents/index.ts",
     "./competitor-spy": "./src/competitor-spy/index.ts"
   },
   "peerDependencies": {

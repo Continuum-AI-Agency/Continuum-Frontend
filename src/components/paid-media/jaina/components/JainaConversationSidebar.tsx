@@ -12,6 +12,7 @@ type JainaConversationSidebarProps = {
   sessions: JainaConversationSession[];
   activeSessionId: string;
   sessionTitleById?: Record<string, string>;
+  generatingSessionIds?: ReadonlySet<string>;
   isLoading: boolean;
   isInteractionDisabled: boolean;
   deletingSessionId?: string | null;
@@ -53,6 +54,7 @@ export function JainaConversationSidebar({
   sessions,
   activeSessionId,
   sessionTitleById,
+  generatingSessionIds,
   isLoading,
   isInteractionDisabled,
   deletingSessionId,
@@ -97,6 +99,7 @@ export function JainaConversationSidebar({
           {sessions.map((session) => {
             const isActive = session.sessionId === activeSessionId;
             const isDeleting = deletingSessionId === session.sessionId;
+            const isGenerating = generatingSessionIds?.has(session.sessionId) ?? false;
             return (
               <div
                 key={session.sessionId}
@@ -127,9 +130,18 @@ export function JainaConversationSidebar({
                     {getSessionTitle(session, sessionTitleById)}
                   </Text>
                   <div className="flex w-full items-center justify-between gap-2">
-                    <Text size="1" className="uppercase tracking-wide text-muted-foreground">
-                      {session.lastMessageRole ?? "session"}
-                    </Text>
+                    {isGenerating ? (
+                      <span className="inline-flex items-center gap-1 text-primary">
+                        <Loader2Icon className="size-3 animate-spin" />
+                        <Text size="1" className="uppercase tracking-wide">
+                          Working
+                        </Text>
+                      </span>
+                    ) : (
+                      <Text size="1" className="uppercase tracking-wide text-muted-foreground">
+                        {session.lastMessageRole ?? "session"}
+                      </Text>
+                    )}
                     <Text size="1" className="text-muted-foreground">
                       {formatSessionTimestamp(session.lastMessageAt)}
                     </Text>

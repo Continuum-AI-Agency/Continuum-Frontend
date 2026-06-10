@@ -8,7 +8,9 @@ import {
   fetchOnboardingState,
   removeDocument,
   resetOnboardingState,
+  updateDocumentCategory,
 } from "@/lib/onboarding/storage";
+import { documentCategorySchema } from "@continuum/contracts";
 import type {
   OnboardingDocument,
   OnboardingPatch,
@@ -242,6 +244,18 @@ export async function removeDocumentAction(
   documentId: string
 ): Promise<OnboardingState> {
   return removeDocument(brandId, documentId);
+}
+
+export async function updateDocumentCategoryAction(
+  brandId: string,
+  documentId: string,
+  category: string
+): Promise<OnboardingState> {
+  const parsed = documentCategorySchema.safeParse(category);
+  if (!parsed.success) {
+    throw new Error(`Invalid document category: ${category}`);
+  }
+  return updateDocumentCategory(brandId, documentId, parsed.data);
 }
 
 export async function enqueueDocumentEmbedAction(

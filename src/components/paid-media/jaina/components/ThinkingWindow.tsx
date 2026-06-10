@@ -30,6 +30,7 @@ import {
   resolveToolResultFromRef,
   resolveToolCallFromRef,
   toMarkdownDetail,
+  STAGE_LABELS,
   type AgentLifecycleSegment,
 } from "./thinkingUtils";
 import type { JainaProgressEntry, JainaStreamState } from "@/lib/jaina/stream";
@@ -43,14 +44,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-
-const STAGE_LABELS: Record<string, string> = {
-  synthesis_start: "Writing report",
-  delegation_start: "Delegating",
-  canvas_start: "Updating canvas",
-  assembly_start: "Assembling",
-  delegation_complete: "Delegation complete",
-};
 
 type ThinkingWindowProps = {
   reasoning: JainaProgressEntry[];
@@ -198,7 +191,10 @@ export function ThinkingWindow({
   toolResults,
   isStreaming,
 }: ThinkingWindowProps) {
-  const [isOpen, setIsOpen] = React.useState(false);
+  // Auto-expand the live timeline while streaming; collapse once the run ends.
+  // A manual toggle overrides both (sticks for this message's lifetime).
+  const [userOverride, setUserOverride] = React.useState<boolean | null>(null);
+  const isOpen = userOverride ?? isStreaming;
 
   const safeToolCalls = React.useMemo(() => toolCalls ?? [], [toolCalls]);
   const safeToolResults = React.useMemo(() => toolResults ?? [], [toolResults]);
@@ -217,7 +213,7 @@ export function ThinkingWindow({
     if (!isStreaming) return null;
     for (let i = reasoning.length - 1; i >= 0; i--) {
       const stage = reasoning[i].stage;
-      if (stage && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
+      if (stage && stage !== "thinking" && STAGE_LABELS[stage]) return STAGE_LABELS[stage];
     }
     return null;
   }, [reasoning, isStreaming]);
@@ -236,7 +232,7 @@ export function ThinkingWindow({
   if (segments.length === 0) return null;
 
   return (
-    <ChainOfThought open={isOpen} onOpenChange={setIsOpen} className="space-y-0">
+    <ChainOfThought open={isOpen} onOpenChange={setUserOverride} className="space-y-0">
       <CollapsibleTrigger asChild>
         <button
           type="button"

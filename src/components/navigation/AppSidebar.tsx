@@ -101,7 +101,7 @@ function AppSidebarInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { isMobile, state, setOpen } = useSidebar();
+  const { isMobile, state, open, setOpen } = useSidebar();
   const { logout, isPending } = useAuth();
   const { user } = useActiveBrandContext();
   const { appearance, toggle } = useTheme();
@@ -115,27 +115,53 @@ function AppSidebarInner() {
     "User";
   const [hoveredQuickTabs, setHoveredQuickTabs] = useState<string | null>(null);
   const collapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const expandOnHover = () => {
-    if (isMobile) return;
-    if (collapseTimerRef.current) {
-      clearTimeout(collapseTimerRef.current);
-      collapseTimerRef.current = null;
-    }
-    setOpen(true);
-  };
-
-  const collapseAfterDelay = () => {
-    if (isMobile) return;
-    if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
-    collapseTimerRef.current = setTimeout(() => setOpen(false), 150);
-  };
+  const openRef = useRef(open);
+  openRef.current = open;
 
   useEffect(() => {
-    return () => {
-      if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
+    if (isMobile) return;
+
+    const root = document.documentElement;
+    const remPx = parseFloat(getComputedStyle(root).fontSize) || 16;
+    const iconPx = 3 * remPx;  // --sidebar-width-icon: 3rem
+    const fullPx = 16 * remPx; // --sidebar-width: 16rem
+
+    const cancelCollapse = () => {
+      if (collapseTimerRef.current) {
+        clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = null;
+      }
     };
-  }, []);
+
+    const startCollapse = () => {
+      if (collapseTimerRef.current) return;
+      collapseTimerRef.current = setTimeout(() => {
+        collapseTimerRef.current = null;
+        setOpen(false);
+      }, 400);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (e.clientX < iconPx) {
+        cancelCollapse();
+        if (!openRef.current) setOpen(true);
+      } else if (e.clientX <= fullPx) {
+        cancelCollapse();
+      } else {
+        startCollapse();
+      }
+    };
+
+    const onDocLeave = () => startCollapse();
+
+    document.addEventListener("pointermove", onMove, { passive: true });
+    document.addEventListener("mouseleave", onDocLeave);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("mouseleave", onDocLeave);
+      cancelCollapse();
+    };
+  }, [isMobile, setOpen]);
 
   function renderNavItem(item: AppNavigationItem) {
     if (item.disabled) {
@@ -375,8 +401,6 @@ function AppSidebarInner() {
   return (
     <Sidebar
       collapsible="icon"
-      onMouseEnter={expandOnHover}
-      onMouseLeave={collapseAfterDelay}
       className="border-r border-[var(--color-border)] bg-[var(--sidebar)] backdrop-blur-xl"
     >
       <LayoutGroup>
