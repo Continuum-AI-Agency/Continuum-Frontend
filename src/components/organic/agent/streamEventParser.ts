@@ -11,6 +11,7 @@ import {
 import type { UiFetchedPost } from "@continuum/contracts";
 import type {
   AgentJobState,
+  CheckpointState,
   PipelineCardState,
   PipelineQuality,
   PipelineStage,
@@ -397,6 +398,22 @@ function parsePipelineStage(event: Record<string, unknown>): ParsedPipelineStage
   };
 }
 
+const MEDIA_STATUS_VALUES = new Set(["pending", "generating", "ready", "user_supplied", "skipped"])
+
+function parseCheckpoint(raw: unknown): CheckpointState | undefined {
+  if (!isRecord(raw)) return undefined
+  const mediaStatus =
+    typeof raw.mediaStatus === "string" && MEDIA_STATUS_VALUES.has(raw.mediaStatus)
+      ? (raw.mediaStatus as CheckpointState["mediaStatus"])
+      : undefined
+  return {
+    textReady: raw.textReady === true ? true : raw.textReady === false ? false : undefined,
+    blueprintReady: raw.blueprintReady === true ? true : raw.blueprintReady === false ? false : undefined,
+    mediaStatus,
+    awaitingMediaChoice: raw.awaitingMediaChoice === true ? true : undefined,
+  }
+}
+
 function parsePipelineQuality(raw: unknown): PipelineQuality | null {
   if (!isRecord(raw)) return null;
   const num = (v: unknown): number | undefined =>
@@ -455,6 +472,7 @@ function parsePipelineCard(
           message: readNonEmptyString(payload.error.message) ?? "Pipeline failed",
         }
       : undefined,
+    checkpoint: parseCheckpoint(payload.checkpoint),
   };
 }
 
@@ -538,7 +556,7 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
           source: platform,
           platform: typeof result.platform === "string" ? result.platform : null,
           caption: readNonEmptyString(item.caption_snippet),
-          mediaUrl: null,
+          mediaUrl: readNonEmptyString(item.thumbnail_url),
           permalink: readNonEmptyString(item.permalink),
           postedAt: readNonEmptyString(item.posted_at),
           scheduledAt: null,
@@ -638,6 +656,45 @@ export function normalizePostToolResult(toolName: string, result: unknown): UiFe
       });
     }
 
+    case "getCompetitorInstagramTopPosts": {
+      if (!isRecord(result) || !result.found) return [];
+      return extractArray(result, "posts").flatMap((item) => {
+        if (!isRecord(item)) return [];
+        const postId = readNonEmptyString(item.id);
+        if (!postId) return [];
+        const creative = isRecord(item.creative) ? item.creative : null;
+        const children = Array.isArray(creative?.children) ? (creative.children as unknown[]) : [];
+        const firstChild = children.length > 0 && isRecord(children[0]) ? (children[0] as Record<string, unknown>) : null;
+        const firstChildMedia = firstChild
+          ? (readNonEmptyString(firstChild.mediaUrl) ?? readNonEmptyString(firstChild.thumbnailUrl))
+          : null;
+        const resolvedMediaUrl =
+          firstChildMedia ??
+          readNonEmptyString(creative?.mediaUrl as unknown) ??
+          readNonEmptyString(creative?.thumbnailUrl as unknown);
+        return [{
+          postId,
+          source: "instagram" as const,
+          platform: "instagram",
+          caption: readNonEmptyString(item.captionSnippet),
+          mediaUrl: resolvedMediaUrl,
+          permalink: readNonEmptyString(item.permalink),
+          postedAt: readNonEmptyString(item.timestamp),
+          scheduledAt: null,
+          format: readNonEmptyString(item.mediaType),
+          status: null,
+          topic: null,
+          metrics: {
+            likes: typeof item.likes === "number" ? item.likes : null,
+            comments: typeof item.comments === "number" ? item.comments : null,
+            engagement: typeof item.engagement === "number" ? item.engagement : null,
+          },
+          rank: null,
+          quality: null,
+        }];
+      });
+    }
+
     default:
       return [];
   }
@@ -713,6 +770,7 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "job.enqueued":
     case "job.progress":
     case "draft.ready":
+    case "draft.text_ready":
     case "job.completed":
     case "job.failed":
     case "job.cancelled": {

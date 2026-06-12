@@ -11,7 +11,7 @@ import type { IntegrationErrorCode } from "@continuum/contracts";
 export type OrganicAnalyticsRequest = {
   brandId: string;
   integrationAccountId: string;
-  platform: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok">;
+  platform: Extract<OrganicPlatform, "instagram" | "facebook" | "tiktok" | "youtube">;
   range: {
     preset: OrganicDateRangePreset;
     custom?: { from: string; to: string };

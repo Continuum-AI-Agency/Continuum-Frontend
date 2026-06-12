@@ -7,6 +7,8 @@ import type {
   TimelineEntry,
   AwarenessReportPayload,
   MetaPageSearchResult,
+  InstagramCompetitorSearchResult,
+  CompetitorOrganicPost,
 } from "@continuum/contracts";
 
 const BASE = "/api/competitor-ad-spy";
@@ -45,10 +47,32 @@ export async function fetchTimeline(params: TimelineParams): Promise<TimelineEnt
   return res.items;
 }
 
+export async function fetchInstagramPosts(params: {
+  brandId: string;
+  competitorId?: string;
+  limit?: number;
+}): Promise<CompetitorOrganicPost[]> {
+  const qs = new URLSearchParams({ brandId: params.brandId });
+  if (params.competitorId) qs.set("competitorId", params.competitorId);
+  qs.set("limit", String(params.limit ?? 12));
+  const res = await request<{ items: CompetitorOrganicPost[] }>({
+    path: `${BASE}/instagram/posts?${qs.toString()}`,
+  });
+  return res.items;
+}
+
 export async function searchMetaPages(brandId: string, q: string): Promise<MetaPageSearchResult[]> {
   const qs = new URLSearchParams({ brandId, q });
   const res = await request<{ pages: MetaPageSearchResult[] }>({ path: `${BASE}/pages/search?${qs.toString()}` });
   return res.pages;
+}
+
+export async function searchInstagramCompetitors(
+  brandId: string,
+  q: string,
+): Promise<InstagramCompetitorSearchResult> {
+  const qs = new URLSearchParams({ brandId, q });
+  return request<InstagramCompetitorSearchResult>({ path: `${BASE}/instagram/search?${qs.toString()}` });
 }
 
 export async function fetchAwareness(brandId: string): Promise<AwarenessReportPayload | null> {
@@ -71,6 +95,10 @@ export async function createCompetitor(input: {
   brandId: string;
   name: string;
   metaPageId?: string;
+  instagramUsername?: string;
+  instagramUserId?: string;
+  instagramName?: string;
+  instagramFollowersCount?: number;
 }): Promise<Competitor> {
   const res = await request<{ competitor: Competitor }>({
     path: `${BASE}/competitors`,
@@ -109,6 +137,9 @@ const keys = {
   awareness: (brandId: string) => ["competitor-spy", "awareness", brandId] as const,
   creative: (snapshotId: string) => ["competitor-spy", "creative", snapshotId] as const,
   pageSearch: (brandId: string, q: string) => ["competitor-spy", "page-search", brandId, q] as const,
+  instagramSearch: (brandId: string, q: string) => ["competitor-spy", "instagram-search", brandId, q] as const,
+  instagramPosts: (brandId: string, competitorId?: string, limit?: number) =>
+    ["competitor-spy", "instagram-posts", brandId, competitorId ?? null, limit ?? null] as const,
 };
 
 export function useCompetitors(brandId: string) {
@@ -127,6 +158,16 @@ export function useAdTimeline(params: TimelineParams) {
   });
 }
 
+export function useInstagramPosts(params: { brandId: string; competitorId?: string; limit?: number }) {
+  return useQuery({
+    queryKey: keys.instagramPosts(params.brandId, params.competitorId, params.limit),
+    queryFn: () => fetchInstagramPosts(params),
+    enabled: Boolean(params.brandId),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
 // Meta Page autocomplete for the competitor tagger. Caller debounces `q`; the
 // query only fires for terms of length >= 2.
 export function useMetaPageSearch(brandId: string, q: string) {
@@ -136,6 +177,17 @@ export function useMetaPageSearch(brandId: string, q: string) {
     queryFn: () => searchMetaPages(brandId, term),
     enabled: Boolean(brandId) && term.length >= 2,
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useInstagramCompetitorSearch(brandId: string, q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: keys.instagramSearch(brandId, term),
+    queryFn: () => searchInstagramCompetitors(brandId, term),
+    enabled: Boolean(brandId) && term.length >= 2,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 }
 
@@ -159,8 +211,18 @@ export function useCreativeUrl(snapshotId: string, enabled: boolean) {
 export function useCreateCompetitor(brandId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; metaPageId?: string }) => createCompetitor({ brandId, ...input }),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.competitors(brandId) }),
+    mutationFn: (input: {
+      name: string;
+      metaPageId?: string;
+      instagramUsername?: string;
+      instagramUserId?: string;
+      instagramName?: string;
+      instagramFollowersCount?: number;
+    }) => createCompetitor({ brandId, ...input }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
+      void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+    },
   });
 }
 
@@ -168,7 +230,10 @@ export function useDeleteCompetitor(brandId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCompetitor(id),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.competitors(brandId) }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
+      void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
+    },
   });
 }
 
@@ -179,6 +244,7 @@ export function useCompetitorSync(brandId: string) {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: keys.competitors(brandId) });
       void qc.invalidateQueries({ queryKey: ["competitor-spy", "timeline", brandId] });
+      void qc.invalidateQueries({ queryKey: ["competitor-spy", "instagram-posts", brandId] });
       void qc.invalidateQueries({ queryKey: keys.awareness(brandId) });
     },
   });

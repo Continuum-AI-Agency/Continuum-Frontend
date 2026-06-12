@@ -2638,3 +2638,52 @@ describe("hasRenderableStreamContent", () => {
     ).toBe(true);
   });
 });
+
+describe("reduceJainaStreamEvent data_table progressive preview", () => {
+  const dataTableDelta = (sequence: number, blockCategory: string) => ({
+    type: "response.block.delta",
+    data: {
+      sequence,
+      source: "thought",
+      agent: "synthesis_agent",
+      block_category: blockCategory,
+      block: {
+        block_id: "tbl_1",
+        category: "data_table",
+        scope: "account",
+        title: "Campaign spend",
+        priority: "primary",
+        columns: [
+          { key: "campaign", label: "Campaign", format: "text", align: "left" },
+          { key: "spend", label: "Spend", format: "currency", align: "right" },
+        ],
+        rows: [
+          { campaign: "Camacho", spend: 84274 },
+          { campaign: "Valle", spend: 12000 },
+        ],
+      },
+    },
+  });
+
+  it("now streams a data_table block into reportV2 (previously chart-only)", () => {
+    const state = reduceJainaStreamEvent(
+      createInitialJainaStreamState(),
+      dataTableDelta(1, "data_table") as never,
+    );
+    expect(state.status).not.toBe("error");
+    expect(state.reportV2?.blocks?.[0]?.category).toBe("data_table");
+    expect(state.reportV2?.blocks?.[0]?.title).toBe("Campaign spend");
+  });
+
+  it("still skips non-streamable categories (e.g. metric_grid) mid-stream", () => {
+    // The gate is the `block_category` tag (the Backend sets it from the block's
+    // category). A non-streamable tag is ignored during streaming and only
+    // arrives in the final checkpoint report.
+    const state = reduceJainaStreamEvent(
+      createInitialJainaStreamState(),
+      dataTableDelta(1, "metric_grid") as never,
+    );
+    expect(state.status).not.toBe("error");
+    expect(state.reportV2 ?? null).toBeNull();
+  });
+});

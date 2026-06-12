@@ -153,6 +153,10 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
           .from("brand_profiles")
           .select("id, brand_name, logo_path, tier, completed_at")
           .in("id", allBrandIds)
+          // Exclude soft-deleted brands (delete_brand_profile sets active=false).
+          // Without this, a deleted brand reappears because its permissions row
+          // is retained. `active` is non-nullable, so eq(true) is safe.
+          .eq("active", true)
       : Promise.resolve({ data: [] as Array<{ id: string; brand_name: string | null; logo_path: string | null; tier: number; completed_at: string | null }>, error: null }),
     permittedIds.length > 0
       ? supabase.schema("brand_profiles").rpc("get_active_brand_id")
@@ -174,6 +178,12 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
       ])
     );
   }
+
+  // Permissions can outlive a soft-deleted brand, so resolve "what the user can
+  // see" against the brands that actually came back active (brandMap). This keeps
+  // a deleted brand from lingering as the active pointer or blocking the
+  // onboarding redirect when it was the user's only brand.
+  const visiblePermittedIds = permittedIds.filter((id) => brandMap.has(id));
 
   // Batch logo signing: one request for all brands instead of N individual calls.
   const pathsToSign = allBrandIds
@@ -213,7 +223,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
     }];
   });
 
-  if (permittedIds.length === 0) {
+  if (visiblePermittedIds.length === 0) {
     return {
       activeBrandId: null,
       brandSummaries,
@@ -231,7 +241,7 @@ export const getActiveBrandContext = cache(async (): Promise<ActiveBrandContext>
 
   const { activeBrandId, shouldPersist } = resolveActiveBrandId({
     candidateBrandId: typeof activeBrandData === "string" ? activeBrandData : null,
-    permittedBrandIds: permittedIds,
+    permittedBrandIds: visiblePermittedIds,
   });
 
   if (activeBrandId && shouldPersist) {

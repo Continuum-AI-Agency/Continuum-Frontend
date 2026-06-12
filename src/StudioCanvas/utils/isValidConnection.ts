@@ -22,6 +22,10 @@ const isVideoProducingSource = (node: StudioNode): boolean =>
   node.type === 'videoEditor' ||
   isVideoGeneratorNodeType(node.type);
 
+// Nodes whose output is consumable as a text input (a `text` source handle).
+const isTextProducingSource = (node: StudioNode): boolean =>
+  node.type === 'string' || node.type === 'videoDecode';
+
 export const isClipSlotHandle = (handleId?: string | null): boolean =>
   typeof handleId === 'string' && handleId.startsWith('clip-');
 
@@ -71,6 +75,8 @@ export const getAllowedTargetHandles = (node: StudioNode): string[] => {
     }
     case 'string':
       return ['image', 'audio', 'document', 'video'];
+    case 'videoDecode':
+      return ['video'];
     case 'image':
     case 'video':
     case 'audio':
@@ -87,6 +93,8 @@ export const getAllowedTargetHandles = (node: StudioNode): string[] => {
 export const getAllowedSourceHandles = (node: StudioNode): string[] => {
   switch (node.type) {
     case 'string':
+      return ['text'];
+    case 'videoDecode':
       return ['text'];
     case 'image':
       return ['image'];
@@ -129,6 +137,10 @@ export function getTargetHandleConnectionLimit(
   }
 
   if (node.type === 'extendVideo' && targetHandle === 'video') {
+    return 1;
+  }
+
+  if (node.type === 'videoDecode' && targetHandle === 'video') {
     return 1;
   }
 
@@ -186,7 +198,7 @@ export function isValidConnection(
 
   if (!sourceNode || !targetNode) return false;
 
-  if (sourceNode.type === 'string' && ['prompt', 'prompt-in', 'negative'].includes(targetHandle)) {
+  if (isTextProducingSource(sourceNode) && ['prompt', 'prompt-in', 'negative'].includes(targetHandle)) {
     return !hasExistingTargetConnection(edges, connection.target, targetHandle);
   }
 
@@ -208,7 +220,7 @@ export function isValidConnection(
     if (isImageReferenceHandle(targetHandle)) {
       if (sourceNode.type !== 'image' && sourceNode.type !== 'nanoGen') return false;
     } else if (targetHandle === 'prompt') {
-      if (sourceNode.type !== 'string') return false;
+      if (!isTextProducingSource(sourceNode)) return false;
     } else {
       return false;
     }
@@ -218,17 +230,20 @@ export function isValidConnection(
         return false;
       }
     } else if (targetHandle === 'prompt') {
-      if (sourceNode.type !== 'string') return false;
+      if (!isTextProducingSource(sourceNode)) return false;
     } else {
       return false;
     }
   } else if (targetNode.type === 'videoEditor') {
     if (!isClipSlotHandle(targetHandle)) return false;
     if (!isVideoProducingSource(sourceNode)) return false;
+  } else if (targetNode.type === 'videoDecode') {
+    if (targetHandle !== 'video') return false;
+    if (!isVideoProducingSource(sourceNode)) return false;
   } else if (isVideoGeneratorNode(targetNode)) {
     const model = resolveVideoGeneratorModel(targetNode);
 
-    if (sourceNode.type === 'string') {
+    if (isTextProducingSource(sourceNode)) {
       if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
     } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
       if (model === 'veo-3.1-fast' || model === 'veo-3.1-lite') {
@@ -243,7 +258,7 @@ export function isValidConnection(
     } else {
       return false;
     }
-  } else if (sourceNode.type === 'string') {
+  } else if (isTextProducingSource(sourceNode)) {
     if (!['prompt', 'prompt-in', 'negative'].includes(targetHandle)) return false;
   } else if (sourceNode.type === 'image' || sourceNode.type === 'nanoGen') {
     if (!isImageReferenceHandle(targetHandle)) return false;

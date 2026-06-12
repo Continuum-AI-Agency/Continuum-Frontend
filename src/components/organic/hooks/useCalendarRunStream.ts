@@ -125,6 +125,16 @@ export function useCalendarRunStream() {
           break;
         }
 
+        case "slot_asset_ready": {
+          const placementId = (d.placement_id ?? d.placementId) as string | undefined;
+          const imageUrl = (d.image_url ?? d.imageUrl) as string | undefined;
+          const images = d.images as string[] | undefined;
+          if (placementId) {
+            upsertGeneration({ jobId: placementId, previewUrl: images?.[0] ?? imageUrl ?? undefined });
+          }
+          break;
+        }
+
         case "error": {
           setGridStatus("error");
           setGridError((d.message as string | undefined) ?? "Generation failed");

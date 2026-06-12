@@ -389,6 +389,20 @@ export const valueFormatSchema = z.enum([
   "text",
 ]);
 
+// Table columns additionally allow "creative" (a lazy-loaded creative preview
+// cell, per the contract). Scoped to table columns so it never leaks into chart
+// `value_format` or metric `format`, which must stay numeric/text only.
+export const tableColumnFormatSchema = z.enum([
+  "currency",
+  "percent",
+  "multiplier",
+  "number",
+  "integer",
+  "compact",
+  "text",
+  "creative",
+]);
+
 export const checkpointBlockCategoryV2Schema = z.enum([
   "narrative",
   "metric_grid",
@@ -462,7 +476,7 @@ export const chartBlockV2Schema = contractChartBlockBaseSchema.extend({
 export type ChartBlockV2 = z.infer<typeof chartBlockV2Schema>;
 
 export const tableColumnV2Schema = contractTableColumnSchema.extend({
-  format: valueFormatSchema.nullish(),
+  format: tableColumnFormatSchema.nullish(),
 });
 export type TableColumnV2 = z.infer<typeof tableColumnV2Schema>;
 

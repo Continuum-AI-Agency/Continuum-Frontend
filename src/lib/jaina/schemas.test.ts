@@ -16,6 +16,8 @@ import {
   responseObjectiveUpdatedSchema,
   responseObjectivesSchema,
   responseReportArtifactJobStartedSchema,
+  dataTableBlockV2Schema,
+  chartBlockV2Schema,
 } from "./schemas";
 
 
@@ -520,5 +522,43 @@ describe("hasReportContent helper", () => {
         graphs: [],
       })
     ).toBe(true);
+  });
+});
+
+describe("tableColumnV2Schema creative format", () => {
+  it('parses a data_table whose column uses format "creative" (no degrade)', () => {
+    const parsed = dataTableBlockV2Schema.safeParse({
+      block_id: "tbl_1",
+      category: "data_table",
+      scope: "account",
+      title: "Top creatives",
+      priority: "primary",
+      columns: [
+        { key: "creative", label: "Creative", format: "creative", align: "left" },
+        { key: "spend", label: "Spend", format: "currency", align: "right" },
+      ],
+      rows: [{ creative: "Ad 1", spend: 100 }],
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.columns[0].format).toBe("creative");
+    }
+  });
+
+  it('scopes "creative" to table columns — chart value_format still rejects it', () => {
+    const chart = (valueFormat: string) => ({
+      block_id: "c1",
+      category: "chart",
+      scope: "account",
+      title: "Spend",
+      priority: "primary",
+      chart_type: "line",
+      data: [{ date: "Mon", spend: 1 }],
+      chart_config: { spend: { label: "Spend", color: "#000" } },
+      category_key: "date",
+      value_format: valueFormat,
+    });
+    expect(chartBlockV2Schema.safeParse(chart("currency")).success).toBe(true);
+    expect(chartBlockV2Schema.safeParse(chart("creative")).success).toBe(false);
   });
 });

@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   competitorAdAnalysisSchema,
 } from "./analysis";
+import { instagramAccountSchema, instagramPostSchema } from "../media/instagram";
 
 export * from "./analysis";
 
@@ -23,6 +24,10 @@ export const competitorSchema = z.object({
   slug: z.string().min(1).max(140),
   source: competitorSourceSchema,
   metaPageId: z.string().nullable(),
+  instagramUsername: z.string().nullable().optional(),
+  instagramUserId: z.string().nullable().optional(),
+  instagramName: z.string().nullable().optional(),
+  instagramFollowersCount: z.number().int().nonnegative().nullable().optional(),
   status: competitorStatusSchema,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -37,6 +42,35 @@ export const metaPageSearchResultSchema = z.object({
   pageName: z.string(),
 });
 export type MetaPageSearchResult = z.infer<typeof metaPageSearchResultSchema>;
+
+export const instagramCompetitorSearchWarningSchema = z.enum([
+  "meta_page_search_failed",
+  "meta_page_not_found",
+  "instagram_handle_resolved_by_fallback",
+]);
+export type InstagramCompetitorSearchWarning = z.infer<typeof instagramCompetitorSearchWarningSchema>;
+
+export const instagramCompetitorSearchResultSchema = z
+  .object({
+    query: z.string(),
+    resolvedUsername: z.string(),
+    account: instagramAccountSchema,
+    posts: z.array(instagramPostSchema),
+    metaPageCandidates: z.array(metaPageSearchResultSchema),
+    warnings: z.array(instagramCompetitorSearchWarningSchema).default([]),
+  })
+  .strict();
+export type InstagramCompetitorSearchResult = z.infer<typeof instagramCompetitorSearchResultSchema>;
+
+export const competitorOrganicPostSchema = z
+  .object({
+    competitorId: z.string().uuid(),
+    competitorName: z.string(),
+    instagramUsername: z.string(),
+    post: instagramPostSchema,
+  })
+  .strict();
+export type CompetitorOrganicPost = z.infer<typeof competitorOrganicPostSchema>;
 
 export const competitorAdSchema = z.object({
   sourceAdId: z.string(),

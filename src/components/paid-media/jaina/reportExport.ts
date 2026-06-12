@@ -1,8 +1,4 @@
-import type {
-  CheckpointBlockV2,
-  CheckpointReportV2,
-  FrontendCheckpointReport,
-} from "@/lib/jaina/schemas";
+import type { FrontendCheckpointReport } from "@/lib/jaina/schemas";
 
 export type PdfTable = {
   headers: string[];
@@ -572,60 +568,93 @@ export function renderReportPdf(
   }
 }
 
+// Walk up from the report node to the nearest non-transparent background so the
+// captured PDF matches the on-screen theme (light or dark) instead of a guess.
+function resolveExportBackground(node: HTMLElement | null): string {
+  if (!node || typeof window === "undefined") return "#ffffff";
+  let element: HTMLElement | null = node;
+  while (element) {
+    const background = window.getComputedStyle(element).backgroundColor;
+    if (background && background !== "transparent" && background !== "rgba(0, 0, 0, 0)") {
+      return background;
+    }
+    element = element.parentElement;
+  }
+  return "#ffffff";
+}
+
+// Capture a LIVE rendered report node (the real React/Recharts output) into a
+// multi-page PDF. The front-end owns rendering; this only snapshots it — there
+// is no second charting implementation to drift from what the user sees.
+async function captureNodeToPdf(
+  exportNode: HTMLElement,
+  options: { backgroundColor: string; fileName: string },
+): Promise<void> {
+  const { jsPDF } = await import("jspdf");
+  const html2canvas = (await import("html2canvas")).default;
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+  const canvas = await html2canvas(exportNode, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: options.backgroundColor,
+    logging: false,
+  });
+
+  const margin = 24;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const usableWidth = pageWidth - margin * 2;
+  const usableHeight = pageHeight - margin * 2;
+  const imageHeight = (canvas.height * usableWidth) / canvas.width;
+  const imageData = canvas.toDataURL("image/png");
+
+  let renderedHeight = 0;
+  while (renderedHeight < imageHeight) {
+    if (renderedHeight > 0) doc.addPage();
+    doc.addImage(imageData, "PNG", margin, margin - renderedHeight, usableWidth, imageHeight, undefined, "FAST");
+    renderedHeight += usableHeight;
+  }
+  doc.save(options.fileName);
+}
+
 export async function downloadJainaReportPdf({
   report,
   fallbackTables,
   exportNode,
   backgroundColor = "#0b0b0b",
 }: DownloadJainaReportPdfOptions): Promise<void> {
-  const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
-
   if (exportNode) {
     try {
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(exportNode, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor,
-        logging: false,
-      });
-
-      const margin = 24;
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const usableWidth = pageWidth - margin * 2;
-      const usableHeight = pageHeight - margin * 2;
-      const imageHeight = (canvas.height * usableWidth) / canvas.width;
-      const imageData = canvas.toDataURL("image/png");
-
-      let renderedHeight = 0;
-      while (renderedHeight < imageHeight) {
-        if (renderedHeight > 0) {
-          doc.addPage();
-        }
-        const yOffset = margin - renderedHeight;
-        doc.addImage(
-          imageData,
-          "PNG",
-          margin,
-          yOffset,
-          usableWidth,
-          imageHeight,
-          undefined,
-          "FAST"
-        );
-        renderedHeight += usableHeight;
-      }
-      doc.save(createJainaReportFilename());
+      await captureNodeToPdf(exportNode, { backgroundColor, fileName: createJainaReportFilename() });
       return;
     } catch {
       // Fall back to deterministic text/pdf rendering if canvas export fails.
     }
   }
 
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
   renderReportPdf(doc, report, fallbackTables);
   doc.save(createJainaReportFilename());
+}
+
+// V2 report export: capture the live rendered report (real Recharts charts),
+// theme-matched, as a multi-page PDF. No server-side chart regeneration.
+export async function downloadJainaReportV2Pdf({
+  exportNode,
+  backgroundColor,
+}: {
+  exportNode: HTMLElement | null;
+  backgroundColor?: string;
+}): Promise<void> {
+  if (!exportNode) {
+    throw new Error("No rendered report available to export.");
+  }
+  await captureNodeToPdf(exportNode, {
+    backgroundColor: backgroundColor ?? resolveExportBackground(exportNode),
+    fileName: createJainaReportFilename(),
+  });
 }
 
 function renderLegacyChartSpecs(report: FrontendCheckpointReport): string {
@@ -758,102 +787,7 @@ export function buildJainaReportHtml({
   });
 }
 
-function renderV2Block(block: CheckpointBlockV2): string {
-  const heading = `<h2>${escapeHtml(block.title)}</h2><span class="pill">${escapeHtml(block.scope)}</span><span class="pill">${escapeHtml(block.category)}</span>`;
-
-  if (block.category === "narrative") {
-    return `<section class="card">${heading}${renderParagraph(block.body)}${
-      block.highlights.length > 0
-        ? `<ul>${block.highlights.map((item) => `<li>${escapeHtml(item.category || "Highlight")}: ${escapeHtml(item.text)}</li>`).join("")}</ul>`
-        : ""
-    }</section>`;
-  }
-
-  if (block.category === "metric_grid") {
-    return `<section class="card">${heading}<div class="grid">${block.metrics
-      .map(
-        (metric) => `
-          <div class="metric">
-            <div class="label">${escapeHtml(metric.label)}</div>
-            <div class="value">${escapeHtml(metric.value)}${metric.unit ? ` ${escapeHtml(metric.unit)}` : ""}</div>
-            ${metric.change !== null && metric.change !== undefined ? `<p>Change: ${escapeHtml(metric.change)}</p>` : ""}
-          </div>
-        `
-      )
-      .join("")}</div></section>`;
-  }
-
-  if (block.category === "chart") {
-    return `<section class="card chart-spec">${heading}${renderChartFigure({
-      title: block.title,
-      type: block.chart_type,
-      payload: {
-        chart_type: block.chart_type,
-        category_key: block.category_key,
-        value_key: block.value_key,
-        value_format: block.value_format,
-        data: block.data,
-        chart_config: block.chart_config,
-      },
-    })}${renderKeyValueList([
-      ["Chart type", block.chart_type],
-      ["Category key", block.category_key],
-      ["Value key", block.value_key],
-      ["Value format", block.value_format],
-    ])}<pre>${escapeHtml(JSON.stringify(block.data, null, 2))}</pre></section>`;
-  }
-
-  if (block.category === "data_table") {
-    return renderHtmlTable(block.title, {
-      headers: block.columns.map((column) => column.label),
-      rows: block.rows.map((row) => block.columns.map((column) => String(row[column.key] ?? ""))),
-    });
-  }
-
-  if (block.category === "insight_list") {
-    return `<section class="card">${heading}<ul>${block.items
-      .map(
-        (item) => `
-          <li>
-            <strong>${escapeHtml(item.title)}</strong>
-            ${item.priority ? `<span class="pill">${escapeHtml(item.priority)}</span>` : ""}
-            ${renderParagraph(item.summary)}
-            ${item.rationale ? renderParagraph(item.rationale) : ""}
-            ${item.impact ? `<p>Impact: ${escapeHtml(item.impact)}</p>` : ""}
-          </li>
-        `
-      )
-      .join("")}</ul></section>`;
-  }
-
-  return `<section class="card">${heading}${renderKeyValueList([
-    ["Before", block.before_label],
-    ["After", block.after_label],
-  ])}<ul>${block.pairs.map((pair) => `<li>${escapeHtml(pair.label)}: ${escapeHtml(pair.before)} → ${escapeHtml(pair.after)}${pair.change !== null && pair.change !== undefined ? ` (${escapeHtml(pair.change)})` : ""}</li>`).join("")}</ul></section>`;
-}
-
-export function buildJainaReportV2Html(report: CheckpointReportV2): string {
-  const body = `
-    ${
-      report.executive_summary
-        ? `<section class="card"><h2>Executive Summary</h2>${renderParagraph(report.executive_summary)}</section>`
-        : ""
-    }
-    ${[...report.blocks].sort((a, b) => a.priority - b.priority).map(renderV2Block).join("")}
-    ${
-      report.follow_up_questions.length > 0
-        ? `<section class="card"><h2>Follow-up Questions</h2><ul>${report.follow_up_questions.map((question) => `<li>${escapeHtml(question)}</li>`).join("")}</ul></section>`
-        : ""
-    }
-  `;
-
-  return renderReportShell({
-    title: "Jaina Performance Analysis",
-    language: report.language,
-    body,
-  });
-}
-
+// ---------------------------------------------------------------------------
 function downloadHtmlFile(filename: string, html: string) {
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -871,8 +805,4 @@ export function downloadJainaReportHtml(options: {
   fallbackTables: PdfTable[];
 }) {
   downloadHtmlFile(createJainaReportHtmlFilename(), buildJainaReportHtml(options));
-}
-
-export function downloadJainaReportV2Html(report: CheckpointReportV2) {
-  downloadHtmlFile(createJainaReportHtmlFilename(), buildJainaReportV2Html(report));
 }

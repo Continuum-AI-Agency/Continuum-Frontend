@@ -66,6 +66,7 @@ export interface ImageNodeData extends BaseNodeData {
   originalImage?: string;
   markupLayer?: string;
   hasMarkup?: boolean;
+  referenceStatus?: 'processing' | 'ready' | 'error';
 }
 
 export interface VideoNodeData extends BaseNodeData {
@@ -133,7 +134,11 @@ export interface VideoEditorNodeData extends BaseNodeData {
   unsupportedReason?: string;
 }
 
-export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | VideoEditorNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData;
+export interface VideoDecodeNodeData extends BaseNodeData {
+  value: string;
+}
+
+export type StudioNodeData = StringNodeData | NanoGenNodeData | VideoGenNodeData | ExtendVideoNodeData | VideoEditorNodeData | ImageNodeData | VideoNodeData | AudioNodeData | DocumentNodeData | VideoDecodeNodeData;
 export type StudioNode = Node & { data: StudioNodeData };
 
 export type ExecutionStatus = 'idle' | 'running' | 'completed' | 'failed';

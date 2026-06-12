@@ -19,7 +19,8 @@
     "./streaming/competitor-spy": "./src/streaming/competitor-spy.ts",
     "./media": "./src/media/index.ts",
     "./documents": "./src/documents/index.ts",
-    "./competitor-spy": "./src/competitor-spy/index.ts"
+    "./competitor-spy": "./src/competitor-spy/index.ts",
+    "./organic": "./src/organic/index.ts"
   },
   "peerDependencies": {
     "zod": "^3.22.0 || ^4.0.0"

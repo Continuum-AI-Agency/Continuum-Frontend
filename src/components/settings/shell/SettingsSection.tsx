@@ -18,10 +18,10 @@ export function SettingsSection({
   children,
 }: SettingsSectionProps) {
   return (
-    <GlassPanel className={cn("p-6 md:p-7", className)}>
-      <header className="mb-5 flex items-start justify-between gap-4">
+    <GlassPanel className={cn("p-[var(--card-pad)]", className)}>
+      <header className="mb-3 flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="text-base font-semibold tracking-tight text-foreground">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">
             {title}
           </h2>
           {description ? (
@@ -30,7 +30,7 @@ export function SettingsSection({
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </header>
-      <div className="space-y-4">{children}</div>
+      <div className="space-y-3">{children}</div>
     </GlassPanel>
   );
 }

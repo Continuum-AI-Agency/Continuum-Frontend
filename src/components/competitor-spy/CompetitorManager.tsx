@@ -115,6 +115,8 @@ export function CompetitorManager({ brandId }: { brandId: string }) {
               <div>
                 <div className="text-sm font-medium">{c.name}</div>
                 <div className="text-xs text-muted-foreground">
+                  {c.instagramUsername ? `@${c.instagramUsername}` : null}
+                  {c.instagramUsername && c.metaPageId ? " · " : null}
                   {c.metaPageId ? `Page ${c.metaPageId}` : `name match`} · {c.status} · {c.source}
                 </div>
               </div>

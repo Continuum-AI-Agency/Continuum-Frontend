@@ -56,6 +56,17 @@ export type OrganicCalendarDraft = {
     assetUrl?: string | null
     alt?: string | null
     assetBase64?: string | null
+    bucket?: string | null
+    mediaStatus?: "pending" | "generating" | "ready" | "user_supplied" | "skipped" | null
+    textReady?: boolean | null
+    blueprintReady?: boolean | null
+    audioConcept?: {
+      audioMode?: string | null
+      trackSuggestion?: string | null
+      soundDesign?: string | null
+      voiceover?: string | null
+      notes?: string[] | null
+    } | null
     hyperframe?: {
       generated?: boolean | null
       compositionId?: string | null
@@ -98,6 +109,11 @@ export type OrganicCalendarDraft = {
       prompt?: string | null
       width?: number | null
       height?: number | null
+      assetUrl?: string | null
+      url?: string | null
+      signedUrl?: string | null
+      bucket?: string | null
+      generated?: boolean | null
       assetBase64?: string | null
       mimeType?: string | null
       error?: string | null

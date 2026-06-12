@@ -22,7 +22,7 @@ export function HorizontalRow({
         key={idx}
         className={cn(
           layout === "grid"
-            ? "flex w-full flex-col"
+            ? "flex h-full w-full flex-col"
             : "flex max-h-[440px] w-[clamp(320px,30vw,440px)] shrink-0 snap-start flex-col overflow-y-auto",
           itemClassName,
         )}

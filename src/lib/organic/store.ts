@@ -71,6 +71,14 @@ export interface ScheduledEvent {
 
 export type GenerationStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
+// Three-step checkpoint state for the run-progress surfaces. Ephemeral.
+export type GenerationCheckpoint = {
+  textReady?: boolean;
+  blueprintReady?: boolean;
+  mediaStatus?: "pending" | "generating" | "ready" | "user_supplied" | "skipped";
+  awaitingMediaChoice?: boolean;
+};
+
 // Live registry of in-flight/finished post generations, projected from the agent
 // panel reducer + the bulk run stream so the shell-wide GenerationsPopover can show
 // status/progress/preview from any organic tab. Ephemeral — never persisted.
@@ -86,6 +94,7 @@ export type GenerationEntry = {
   quality?: number | null;
   draftId?: string | null;
   error?: string | null;
+  checkpoint?: GenerationCheckpoint | null;
   updatedAt: number;
 };
 

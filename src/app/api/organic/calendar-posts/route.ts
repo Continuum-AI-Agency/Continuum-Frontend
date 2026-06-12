@@ -190,7 +190,7 @@ async function fetchExternalPosts(params: {
   const posts: OrganicCalendarPostedContent[] = []
   const { supabase, brandId, start, end, accountsByPlatform, forceRefresh } = params
 
-  for (const platform of ["instagram", "facebook"] as const) {
+  for (const platform of ["instagram", "facebook", "youtube"] as const) {
     for (const account of accountsByPlatform[platform]) {
       const { data, error } = await supabase.functions.invoke("fetch-organic-analytics", {
         body: {

@@ -3,6 +3,7 @@
 import type { DataTableBlockV2 } from "@/lib/jaina/schemas";
 import { formatValue } from "@/lib/jaina/formatValue";
 import { MediaText } from "./mediaText";
+import { CreativeCell } from "./CreativeCell";
 
 type DataTableBlockProps = { block: DataTableBlockV2; isStreaming: boolean };
 
@@ -39,7 +40,12 @@ export function DataTableBlock({ block }: DataTableBlockProps) {
                       className="px-3 py-2 tabular-nums"
                       style={{ textAlign: column.align ?? "left" }}
                     >
-                      {!column.format || column.format === "text" ? (
+                      {column.format === "creative" ? (
+                        <CreativeCell
+                          label={String(displayValue)}
+                          creative={block.row_meta?.[rowIndex]?.creative}
+                        />
+                      ) : !column.format || column.format === "text" ? (
                         <MediaText>{displayValue}</MediaText>
                       ) : (
                         displayValue

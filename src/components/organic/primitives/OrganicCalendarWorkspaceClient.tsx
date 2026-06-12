@@ -36,6 +36,8 @@ import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
 import { useGenerateReelVideos } from "@/components/organic/hooks/useGenerateReelVideos"
+import { useGenerateDraftMedia } from "@/components/organic/hooks/useGenerateDraftMedia"
+import { OrganicCreativesPicker } from "./OrganicCreativesPicker"
 import { OrganicDraftPreview } from "./OrganicDraftPreview"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,12 +49,19 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { TrendWorkbench } from "./TrendWorkbench"
 import { useAiStudioHandoff } from "../hooks/useAiStudioHandoff"
 import { brandStorageKeyAiStudioLastDraft } from "@/lib/organic/ai-studio-bridge"
 import { getLocalStorageJSON } from "@/lib/storage"
 import { CalendarToolbar } from "./CalendarToolbar"
 import { AiStudioHandoffProvider } from "./AiStudioHandoffContext"
+import { ORGANIC_PLANNER_TOUR_VIEWPORT_ID } from "@/components/onboarding/v2/tour/config"
 import { useTourTabStore } from "@/components/onboarding/v2/tour/tourTabStore"
 import {
   Tooltip,
@@ -271,6 +280,7 @@ export function OrganicCalendarWorkspaceClient({
       instagram: postedContentAccountsByPlatform?.instagram ?? [],
       facebook: postedContentAccountsByPlatform?.facebook ?? [],
       tiktok: postedContentAccountsByPlatform?.tiktok ?? [],
+      youtube: postedContentAccountsByPlatform?.youtube ?? [],
     }),
     [postedContentAccountsByPlatform]
   )
@@ -634,6 +644,64 @@ export function OrganicCalendarWorkspaceClient({
     void generateReelVideos(brandProfileId, capped)
   }, [brandProfileId, reelTargets, generateReelVideos])
 
+  // Bulk "Generate media" — opt-in Step-3 realization for image/carousel/reel drafts.
+  const { generateDraftMedia, isGenerating: isGeneratingMedia } = useGenerateDraftMedia()
+
+  const mediaGenerationTargets = React.useMemo(() => {
+    const selected = new Set(selectedIds)
+    return drafts
+      .filter((d) => selected.has(d.id) && Boolean(d.backendDraftId))
+      .filter((d) => {
+        // Only include drafts pending media generation (not already ready or user-supplied).
+        const ms = d.mediaSuggestion?.mediaStatus
+        return !ms || ms === "pending" || ms === "generating"
+      })
+      .map((d) => ({ feId: d.id, backendDraftId: d.backendDraftId as string, format: d.format ?? "" }))
+  }, [drafts, selectedIds])
+
+  const handleBulkGenerateMedia = React.useCallback(() => {
+    if (!brandProfileId || mediaGenerationTargets.length === 0) return
+    void generateDraftMedia(brandProfileId, mediaGenerationTargets)
+  }, [brandProfileId, mediaGenerationTargets, generateDraftMedia])
+
+  // Bulk "Attach creative…" — open a library picker once, apply the selection to
+  // all selected drafts. The picker's onAttach gives us a resolved PublishingAsset[]
+  // that we spread onto every target draft.
+  const [attachPickerOpen, setAttachPickerOpen] = React.useState(false)
+
+  const attachTargetDraftIds = React.useMemo(() => {
+    return selectedIds.filter((id) => drafts.some((d) => d.id === id && Boolean(d.backendDraftId)))
+  }, [drafts, selectedIds])
+
+  const handlePickerAttach = React.useCallback(
+    (publishingAssets: OrganicCalendarDraft["publishingAssets"]) => {
+      if (!publishingAssets?.length || attachTargetDraftIds.length === 0) return
+      // Derive a mediaSuggestion patch from the publishing assets so
+      // assertPublishable + stageMediaForPublish both see consistent data.
+      const primary = publishingAssets[0]
+      const mediaPatch: OrganicCalendarDraft["mediaSuggestion"] = {
+        mediaStatus: "user_supplied",
+        kind: primary?.kind ?? undefined,
+        bucket: primary?.bucket ?? undefined,
+        url: primary?.storagePath ?? undefined,
+      }
+      for (const draftId of attachTargetDraftIds) {
+        updateDraftById(draftId, (draft) => ({
+          ...draft,
+          publishingAssets,
+          mediaSuggestion: { ...draft.mediaSuggestion, ...mediaPatch },
+        }))
+      }
+      setAttachPickerOpen(false)
+    },
+    [attachTargetDraftIds, updateDraftById],
+  )
+
+  const handleBulkAttachCreative = React.useCallback(() => {
+    if (attachTargetDraftIds.length === 0 || !brandProfileId) return
+    setAttachPickerOpen(true)
+  }, [attachTargetDraftIds, brandProfileId])
+
   const isGenerating = gridStatus === "running"
   const slotProgress = React.useMemo(() => {
     const completed = gridProgress.completed
@@ -696,7 +764,8 @@ export function OrganicCalendarWorkspaceClient({
           <motion.section
             layout
             transition={layoutTransition}
-            className="flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
+            id={ORGANIC_PLANNER_TOUR_VIEWPORT_ID}
+            className="relative flex h-full min-h-0 flex-1 flex-col gap-2 overflow-hidden"
           >
             <motion.div layout transition={layoutTransition}>
               <CalendarToolbar
@@ -721,7 +790,12 @@ export function OrganicCalendarWorkspaceClient({
               />
             </motion.div>
 
-            <motion.div layout transition={layoutTransition} data-tour-id="organic-list" className="min-h-0 flex-1 overflow-hidden">
+            <motion.div
+              layout
+              transition={layoutTransition}
+              data-tour-id="organic-list-content"
+              className="min-h-0 flex-1 overflow-hidden"
+            >
               <AnimatePresence mode="wait">
                 {viewMode === "week" && (
                   <motion.div
@@ -930,7 +1004,28 @@ export function OrganicCalendarWorkspaceClient({
         reelCount={reelTargets.length}
         onGenerateReels={brandProfileId ? handleGenerateReels : undefined}
         isGeneratingReels={isGeneratingReels}
+        onAttachCreative={brandProfileId && attachTargetDraftIds.length > 0 ? handleBulkAttachCreative : undefined}
+        onGenerateMedia={brandProfileId && mediaGenerationTargets.length > 0 ? handleBulkGenerateMedia : undefined}
+        isGeneratingMedia={isGeneratingMedia}
       />
+      {/* Bulk attach creative — one picker selection applied to all selected drafts. */}
+      {brandProfileId && (
+        <Dialog open={attachPickerOpen} onOpenChange={setAttachPickerOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                Attach creative to {attachTargetDraftIds.length} draft{attachTargetDraftIds.length === 1 ? "" : "s"}
+              </DialogTitle>
+            </DialogHeader>
+            <OrganicCreativesPicker
+              brandProfileId={brandProfileId}
+              draftId=""
+              attached={[]}
+              onAttach={handlePickerAttach}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
     </AiStudioHandoffProvider>
   )

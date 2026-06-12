@@ -14,6 +14,7 @@ export const calendarPostAccountsByPlatformSchema = z.object({
   instagram: z.array(calendarPostAccountSchema).default([]),
   facebook: z.array(calendarPostAccountSchema).default([]),
   tiktok: z.array(calendarPostAccountSchema).default([]),
+  youtube: z.array(calendarPostAccountSchema).default([]),
 })
 
 export type CalendarPostAccount = z.infer<typeof calendarPostAccountSchema>

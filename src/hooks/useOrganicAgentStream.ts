@@ -19,6 +19,7 @@ const POST_TOOL_LABELS: Record<string, string> = {
   listOwnInstagramMedia: "Recent Media",
   getCalendarPostedContent: "Posted Content",
   rankPostPerformers: "Top Performers",
+  getCompetitorInstagramTopPosts: "Competitor Posts",
 };
 const MAX_RECONNECT_ATTEMPTS = 5;
 

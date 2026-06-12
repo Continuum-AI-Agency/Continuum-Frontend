@@ -1,6 +1,6 @@
 export function DashboardLayoutFallback() {
   return (
-    <div className="flex h-screen w-full">
+    <div className="flex h-dvh w-full">
       <div className="hidden w-64 shrink-0 border-r border-[var(--color-border)] bg-zinc-50 dark:bg-zinc-950 md:block">
         <div className="flex h-16 items-center gap-3 border-b border-[var(--color-border)] px-4">
           <div className="h-8 w-8 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />

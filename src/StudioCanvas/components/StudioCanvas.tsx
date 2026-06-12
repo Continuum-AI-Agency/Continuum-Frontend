@@ -40,6 +40,7 @@ import { ImageNode } from '../nodes/ImageNode';
 import { AudioNode } from '../nodes/AudioNode';
 import { DocumentNode } from '../nodes/DocumentNode';
 import { VideoReferenceNode } from '../nodes/VideoReferenceNode';
+import { VideoDecoderBlock } from '../nodes/VideoDecoderBlock';
 import { VideoEditorBlock } from '../nodes/VideoEditorBlock';
 import { Toolbar } from './Toolbar';
 import { InteractionModeToggle } from './InteractionModeToggle';
@@ -48,6 +49,8 @@ import { LoadWorkflowDialog } from './LoadWorkflowDialog';
 import { InstagramMediaBrowser } from './InstagramMediaBrowser';
 import { layoutInRow } from '../utils/layoutImportedNodes';
 import { buildReferenceNodes } from '../utils/buildReferenceNodes';
+import { inlineReferenceImageNodes } from '../utils/inlineReferenceImageNodes';
+import { inlineRemoteImage } from '@/lib/ai-studio/inlineRemoteImage';
 import type { UnfurlMediaItem } from '@continuum/contracts';
 import { WorkflowLibrary } from '@/components/ai-studio/WorkflowLibrary';
 import { useEdgeDropNode } from '../hooks/useEdgeDropNode';
@@ -105,7 +108,8 @@ type StudioCanvasNodeType =
   | 'image'
   | 'audio'
   | 'document'
-  | 'video';
+  | 'video'
+  | 'videoDecode';
 
 type LibraryItem = {
   type: StudioCanvasNodeType;
@@ -170,6 +174,12 @@ const LIBRARY_SECTIONS: LibrarySection[] = [
         desc: 'Video file input',
         tag: 'Utility',
       },
+      {
+        type: 'videoDecode',
+        label: 'Video Decoder',
+        desc: 'Frame-by-frame creative breakdown',
+        tag: 'Intelligence',
+      },
     ],
   },
   {
@@ -210,6 +220,7 @@ const NODE_TYPES = new Set<StudioCanvasNodeType>([
   'audio',
   'document',
   'video',
+  'videoDecode',
 ]);
 
 const isStudioCanvasNodeType = (value: string): value is StudioCanvasNodeType =>
@@ -263,6 +274,10 @@ const createNodeConfig = (
     return { data: { value: '' } };
   }
 
+  if (type === 'videoDecode') {
+    return { data: { value: '' }, style: { width: 360, height: 320 } };
+  }
+
   if (type === 'image') {
     return {
       data: { image: undefined, aspectRatio: '1:1' },
@@ -302,6 +317,7 @@ const nodeTypes = {
   audio: AudioNode,
   document: DocumentNode,
   video: VideoReferenceNode,
+  videoDecode: VideoDecoderBlock,
 };
 
 const edgeTypes = {
@@ -635,6 +651,7 @@ function Flow({
     setInteractionMode,
     triggerSave,
     setBrandId,
+    updateNodeData,
   } = useStudioStore();
 
   const { remoteCursors, updateCursor, isLoading } = realtime;
@@ -693,8 +710,16 @@ function Flow({
       );
       setNodes(nodes.concat(newNodes));
       triggerSave();
+
+      // Remote-URL image references (e.g. Instagram CDN) are invisible to the
+      // generation model until inlined to base64. Convert via the server-side
+      // proxy in the background, surfacing processing/ready status on each node.
+      void inlineReferenceImageNodes(built, {
+        inline: inlineRemoteImage,
+        updateNodeData,
+      });
     },
-    [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave],
+    [nodes, screenToFlowPosition, setNodes, takeSnapshot, triggerSave, updateNodeData],
   );
 
   const handleMouseMove = useCallback(

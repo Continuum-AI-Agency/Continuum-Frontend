@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { consumePrefetchedIndexes } from "@/lib/prefetch/paid-media-cache";
 import { type CampaignIndexRecord } from "@/lib/paid-media/campaign-indexes";
 import { usePaidMediaPerformanceStore } from "@/lib/paid-media/performance-store";
-import type { CampaignPerformanceRow } from "@/lib/paid-media/performance-types";
+import type { CampaignPerformanceRow, PaidMediaPlatform } from "@/lib/paid-media/performance-types";
 import { AccountInsightsPanel } from "./AccountInsightsPanel";
 import { CampaignInsightsPanel } from "./CampaignInsightsPanel";
 import { CampaignAdSetWorkspace } from "./CampaignAdSetWorkspace";
@@ -40,12 +40,14 @@ import {
 
 type Campaign = CampaignPerformanceRow;
 
-type Platform = "meta" | "google-ads" | "dv360";
+type Platform = PaidMediaPlatform;
 type TimelineResolution = "daily" | "hourly";
 
 type PaidMediaDashboardProps = {
   brandId: string;
   adAccountId: string | null;
+  platform: PaidMediaPlatform;
+  onPlatformChange: (platform: PaidMediaPlatform) => void;
 };
 
 type LoadState =
@@ -63,9 +65,10 @@ type IndexSaveDraft = {
 export function PaidMediaDashboard({
   brandId,
   adAccountId,
+  platform,
+  onPlatformChange,
 }: PaidMediaDashboardProps) {
   const loadCampaignPerformance = usePaidMediaPerformanceStore((state) => state.loadCampaignPerformance);
-  const [platform, setPlatform] = React.useState<Platform>("meta");
   const defaultCustomRange = React.useMemo(() => buildDefaultCustomRange(), []);
   const [timeRangePreset, setTimeRangePreset] = React.useState<TimePreset>("last_7d");
   const [customSince, setCustomSince] = React.useState(defaultCustomRange.since);
@@ -207,7 +210,7 @@ export function PaidMediaDashboard({
   };
 
   const handlePlatformChange = (value: Platform) => {
-    setPlatform(value);
+    onPlatformChange(value);
     setCampaigns([]);
   };
 
@@ -323,9 +326,7 @@ export function PaidMediaDashboard({
         <Select.Trigger placeholder="Select platform" className="min-h-8 min-w-[110px] text-xs" />
         <Select.Content>
           <Select.Item value="meta">Meta</Select.Item>
-          <Select.Item value="google-ads" disabled>
-            Google Ads
-          </Select.Item>
+          <Select.Item value="google-ads">Google Ads</Select.Item>
           <Select.Item value="dv360" disabled>
             DV360
           </Select.Item>
@@ -486,6 +487,7 @@ export function PaidMediaDashboard({
             <CampaignAdSetWorkspace
               brandId={brandId}
               accountId={adAccountId}
+              platform={platform}
               campaigns={campaigns}
               campaignIndexes={campaignIndexes}
               selectedCampaignIndexId={selectedCampaignIndexId}

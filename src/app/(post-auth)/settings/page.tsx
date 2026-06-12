@@ -235,9 +235,9 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
   }
 
   return (
-    <div className="w-full max-w-none px-3 py-10 sm:px-4 lg:px-6">
-      <header className="mb-8 space-y-1">
-        <Heading size="7" className="text-white">
+    <div className="w-full max-w-none px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
+      <header className="mb-4 space-y-1">
+        <Heading size="5" className="text-white">
           Settings
         </Heading>
         <Text color="gray">

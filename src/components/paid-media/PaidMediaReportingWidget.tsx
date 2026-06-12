@@ -699,10 +699,10 @@ function MetricsPanel({
                 >
                   <Box p="2" className="w-full">
                     <Flex direction="column" gap="0" align="center" justify="center" className="text-center w-full">
-                      <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>{item.label}</Text>
-                      <Heading weight="bold" className="truncate w-full leading-tight tabular-nums" style={{ fontSize: "clamp(10px, 1vw, 12px)" }}>{formatValue(item.value, item.format)}</Heading>
+                      <Text color="gray" weight="medium" className="truncate w-full leading-none" style={{ fontSize: "0.66rem" }}>{item.label}</Text>
+                      <Heading weight="bold" className="truncate w-full leading-tight tabular-nums" style={{ fontSize: "0.8rem" }}>{formatValue(item.value, item.format)}</Heading>
                       {formattedDelta ? (
-                        <Text color={deltaTone} weight="bold" className="leading-none tabular-nums" style={{ fontSize: "clamp(8px, 0.8vw, 10px)" }}>
+                        <Text color={deltaTone} weight="bold" className="leading-none tabular-nums" style={{ fontSize: "0.66rem" }}>
                           {formattedDelta}
                         </Text>
                       ) : (

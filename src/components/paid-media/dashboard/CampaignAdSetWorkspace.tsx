@@ -91,6 +91,7 @@ const ObservabilityLightweightChart = dynamic(
 );
 import type { PaidMetricsComparison, PaidMetricsTrendPoint } from "./PerformanceDetails";
 import { resolveTimeRangeWindow, toMetricsRange, type PaidMediaTimeRange } from "./timeRange";
+import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
 
 type TimelineResolution = "daily" | "hourly";
 type MetricKey = "spend" | "roas" | "ctr" | "cpc" | "cpa" | "impressions" | "clicks";
@@ -155,6 +156,8 @@ type CompareEntity = {
 type CampaignAdSetWorkspaceProps = {
   brandId: string;
   accountId: string;
+  /** Ad platform; ad-set/ad drill-in and DCO markers are Meta-only. */
+  platform?: PaidMediaPlatform;
   campaigns: Campaign[];
   campaignIndexes: CampaignIndexRecord[];
   selectedCampaignIndexId: string;
@@ -578,6 +581,7 @@ export function toHourlySliceSeconds(slice: HourlySliceOption): number | null {
 export function CampaignAdSetWorkspace({
   brandId,
   accountId,
+  platform = "meta",
   campaigns,
   campaignIndexes,
   selectedCampaignIndexId,
@@ -633,6 +637,9 @@ export function CampaignAdSetWorkspace({
   const timeWindow = React.useMemo(() => resolveTimeRangeWindow(timeRange), [timeRange]);
   const metricsRange = React.useMemo(() => toMetricsRange(timeRange), [timeRange]);
 
+  // Ad-set/ad drill-in and DCO action markers are Meta-only edge functions.
+  const isMeta = platform === "meta";
+
   const startDateIso = React.useMemo(() => `${timeWindow.since}T00:00:00.000Z`, [timeWindow.since]);
   const endDateIso = React.useMemo(() => `${timeWindow.until}T23:59:59.999Z`, [timeWindow.until]);
 
@@ -651,7 +658,7 @@ export function CampaignAdSetWorkspace({
 
   const { logs: actionLogs, setFilters: setActionLogFilters, refresh: refreshActionLogs } = useDCOActionLogs({
     brandId,
-    metaAccountId: accountId,
+    metaAccountId: isMeta ? accountId : undefined,
     initialPageSize: 120,
     initialDateRangeDays: timeWindow.dayCount,
   });
@@ -668,13 +675,13 @@ export function CampaignAdSetWorkspace({
 
   React.useEffect(() => {
     setActionLogFilters({
-      metaAccountId: accountId,
+      metaAccountId: isMeta ? accountId : undefined,
       campaignId: undefined,
       scopeType: undefined,
       status: undefined,
       actionType: undefined,
     });
-  }, [accountId, setActionLogFilters]);
+  }, [accountId, isMeta, setActionLogFilters]);
 
   const timelineFallbackByCampaign = React.useMemo(() => {
     return timelineCampaigns.reduce<Record<string, ScopedAdSet[]>>((acc, campaign) => {
@@ -951,6 +958,16 @@ export function CampaignAdSetWorkspace({
 
   const loadCampaignAdSets = React.useCallback(
     async (campaign: Campaign) => {
+      // Ad-set drill-in is served by Meta-only edge functions; non-Meta
+      // platforms stay at campaign-level observability.
+      if (!isMeta) {
+        setAdSetsByCampaign((prev) => ({
+          ...prev,
+          [campaign.id]: { status: "success", adSets: [], source: undefined },
+        }));
+        return;
+      }
+
       const existing = adSetsByCampaign[campaign.id];
       if (existing?.status === "loading" || existing?.status === "success") {
         return;
@@ -1071,12 +1088,12 @@ export function CampaignAdSetWorkspace({
         }));
       }
     },
-    [accountId, adSetsByCampaign, brandId, metricsRange, timelineFallbackByCampaign]
+    [accountId, adSetsByCampaign, brandId, isMeta, metricsRange, timelineFallbackByCampaign]
   );
 
   const loadAdsForAdSet = React.useCallback(
     async (adSetId: string, options?: { force?: boolean }) => {
-      if (!adSetId) return;
+      if (!adSetId || !isMeta) return;
       const force = options?.force === true;
       const existing = adsByAdSet[adSetId];
       if (!force && (existing?.status === "loading" || existing?.status === "success")) {
@@ -1169,7 +1186,7 @@ export function CampaignAdSetWorkspace({
         inFlightAdLoadsRef.current.delete(adSetId);
       }
     },
-    [accountId, adsByAdSet, brandId, metricsRange]
+    [accountId, adsByAdSet, brandId, isMeta, metricsRange]
   );
 
   React.useEffect(() => {

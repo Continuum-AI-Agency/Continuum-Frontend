@@ -144,6 +144,14 @@ export const chartBlockBaseSchema = blockBaseSchema.extend({
   value_format: z.enum(["number", "currency", "percent", "multiplier"]).default("number"),
   annotation: z.string().nullable().default(null),
   description: z.string().nullable().default(null),
+  // Data-harness provenance: when set, `data` was deterministically materialized
+  // from the referenced dataset (see `@continuum/contracts` dataset.ts) rather
+  // than authored by the model. Null on legacy/model-authored charts.
+  dataset_id: z.string().nullable().default(null),
+  // Per-point metadata aligned to `data` (entity ids, source, exact timestamp).
+  // The Frontend looks these up by the row's `category_key` value to render
+  // datapoint tooltips. Null when no dataset backs the chart.
+  data_meta: z.array(z.record(z.string(), z.unknown())).nullable().default(null),
 });
 
 /**
@@ -205,7 +213,9 @@ export type ChartBlock = z.infer<typeof chartBlockBaseSchema>;
 export const tableColumnSchema = z.object({
   key: z.string(),
   label: z.string(),
-  format: z.enum(["text", "number", "currency", "percent", "multiplier"]).default("text"),
+  // "creative" renders a lazy-loaded creative preview cell (hover) using the
+  // matching `row_meta[i].creative` ref; all other formats render as values.
+  format: z.enum(["text", "number", "currency", "percent", "multiplier", "creative"]).default("text"),
   align: z.enum(["left", "center", "right"]).default("left"),
 });
 export type TableColumn = z.infer<typeof tableColumnSchema>;
@@ -215,6 +225,10 @@ export const dataTableBlockSchema = blockBaseSchema.extend({
   columns: z.array(tableColumnSchema).min(1),
   rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.null()]))).min(1),
   notes: z.string().nullable().default(null),
+  // Data-harness provenance: when set, `rows` were materialized from the dataset.
+  dataset_id: z.string().nullable().default(null),
+  // Per-row metadata aligned by index to `rows` (entity id, `creative` ref).
+  row_meta: z.array(z.record(z.string(), z.unknown())).nullable().default(null),
 });
 export type DataTableBlock = z.infer<typeof dataTableBlockSchema>;
 

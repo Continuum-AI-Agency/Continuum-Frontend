@@ -39,6 +39,10 @@ export const instagramPostSchema = z
     permalink: z.url(),
     kind: instagramPostKindSchema,
     coverUrl: z.url().nullable(),
+    caption: z.string().nullable().optional(),
+    timestamp: z.string().nullable().optional(),
+    likeCount: z.number().int().nonnegative().nullable().optional(),
+    commentsCount: z.number().int().nonnegative().nullable().optional(),
     mediaCount: z.number().int().positive(),
     items: z.array(instagramMediaItemSchema),
   })
@@ -47,9 +51,12 @@ export type InstagramPost = z.infer<typeof instagramPostSchema>;
 
 export const instagramAccountSchema = z
   .object({
+    id: z.string().nullable().optional(),
     username: z.string(),
     name: z.string().nullable(),
     followersCount: z.number().int().nonnegative().nullable(),
+    mediaCount: z.number().int().nonnegative().nullable().optional(),
+    profilePictureUrl: z.url().nullable().optional(),
   })
   .strict();
 export type InstagramAccount = z.infer<typeof instagramAccountSchema>;

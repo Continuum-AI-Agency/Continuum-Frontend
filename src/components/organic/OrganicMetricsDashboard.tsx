@@ -43,6 +43,7 @@ const OrganicAudienceLocationMapCard = dynamic(
   { ssr: false }
 );
 import { useOrganicInsights } from "@/hooks/useOrganicInsights";
+import { OrganicAwarenessReportView } from "@/components/organic/OrganicAwarenessReportView";
 import type { OrganicComputedInsight } from "@/lib/organic/organic-insights.types";
 import {
   Popover,
@@ -76,6 +77,7 @@ import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
 import type { IntegrationErrorCode } from "@continuum/contracts";
 import { consumePrefetched } from "@/lib/prefetch/organic-metrics-cache";
 import type {
+  ContentTypePerformance,
   MetricComparison,
   OrganicDateRangePreset,
   OrganicMetrics,
@@ -86,18 +88,31 @@ import { cn } from "@/lib/utils";
 import {
   buildPostMetricSeries,
   calculateHookRate,
+  filterPostsByYoutubeType,
   formatWatchTime,
   hookRateTier,
+  isYouTubeShort,
   post24hComparisons,
   postWindowRange,
   POST_GALLERY_WINDOW_DAYS,
   sortPosts,
   summarizePost7dMetrics,
+  summarizeYoutubeTypeMetrics,
   type DrilldownWindow,
   type HookRateTier,
   type PostMetricKey,
   type PostSortKey,
+  type YoutubePostTypeFilter,
 } from "@/components/organic/organic-metrics-utils";
+import {
+  formatDateTime,
+  formatNumber,
+  formatPercentChange,
+  formatShortDate,
+  trendDirection,
+} from "@/components/organic/organic-format";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { PostQuickLook } from "@/components/organic/cards/PostQuickLook";
 import {
   buildOrganicReportCsv,
   buildOrganicReportHtml,
@@ -107,6 +122,7 @@ import {
   selectAccountPostDetails,
   usePostAnalyticsStore,
 } from "@/lib/organic/post-analytics-store";
+import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
 
 export type OrganicAccountOption = {
   integrationAccountId: string;
@@ -118,9 +134,10 @@ type AccountsByPlatform = {
   instagram: OrganicAccountOption[];
   facebook: OrganicAccountOption[];
   tiktok: OrganicAccountOption[];
+  youtube: OrganicAccountOption[];
 };
 
-type MetricsPlatform = "instagram" | "facebook" | "tiktok";
+type MetricsPlatform = "instagram" | "facebook" | "tiktok" | "youtube";
 type MetricsViewMode = "account" | "posts";
 
 type Props = {
@@ -148,12 +165,17 @@ type DemographicsSlice = {
 const DEFAULT_RANGE_PRESET: OrganicDateRangePreset = "last_7d";
 
 const RANGE_OPTIONS: OrganicDateRangePreset[] = [
+  "today",
   "yesterday",
   "last_7d",
   "last_14d",
   "last_30d",
   "last_month",
 ];
+
+const RANGE_LABEL_OVERRIDES: Partial<Record<OrganicDateRangePreset, string>> = {
+  today: "Today (24h)",
+};
 
 type KpiMetric = { key: keyof OrganicMetrics; label: string };
 
@@ -180,8 +202,20 @@ const TIKTOK_KPI_CONFIG: KpiMetric[] = [
   { key: "shares", label: "Shares" },
 ];
 
+const YOUTUBE_KPI_CONFIG: KpiMetric[] = [
+  { key: "subscribers", label: "Subscribers" },
+  { key: "views", label: "Views" },
+  { key: "videoCount", label: "Videos" },
+  { key: "newFollowers", label: "New Subs" },
+  { key: "likes", label: "Likes" },
+  { key: "comments", label: "Comments" },
+  { key: "hookRate", label: "Avg View %" },
+];
+
 function getKpiConfig(platform: MetricsPlatform): KpiMetric[] {
-  return platform === "tiktok" ? TIKTOK_KPI_CONFIG : META_KPI_CONFIG;
+  if (platform === "tiktok") return TIKTOK_KPI_CONFIG;
+  if (platform === "youtube") return YOUTUBE_KPI_CONFIG;
+  return META_KPI_CONFIG;
 }
 
 const audienceChartConfig = {
@@ -247,24 +281,8 @@ const POST_METRIC_LABELS: Record<PostMetricKey, string> = {
   comments: "Comments",
 };
 
-function formatNumber(value: number | undefined) {
-  if (value === undefined) return "-";
-  return new Intl.NumberFormat().format(value);
-}
-
-function formatPercentChange(value: number | undefined) {
-  if (value === undefined || Number.isNaN(value)) return "24h --";
-  const formatted = `${Math.abs(value).toFixed(1)}%`;
-  return `${value >= 0 ? "+" : "-"}${formatted} 24h`;
-}
-
-function trendDirection(value: number | undefined) {
-  if (value === undefined || Number.isNaN(value) || value === 0) return "flat";
-  return value > 0 ? "up" : "down";
-}
-
 function rangeLabel(preset: OrganicDateRangePreset) {
-  return preset.replace(/_/g, " ");
+  return RANGE_LABEL_OVERRIDES[preset] ?? preset.replace(/_/g, " ");
 }
 
 const POST_INSIGHT_METRIC_KEYS = [
@@ -295,26 +313,6 @@ function mergePosts(existing: OrganicPost[], incoming: OrganicPost[]) {
     const dateA = a.timestamp ? Date.parse(a.timestamp) : 0;
     const dateB = b.timestamp ? Date.parse(b.timestamp) : 0;
     return dateB - dateA;
-  });
-}
-
-function formatShortDate(date: string | undefined) {
-  if (!date) return "-";
-  const parsed = new Date(date);
-  if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatDateTime(value: string | undefined) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
 }
 
@@ -454,11 +452,11 @@ function PostGalleryCard({
   platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
-  const isTikTok = platform === "tiktok";
-  const video = !isTikTok && isVideoPost(post);
+  // TikTok and YouTube only expose a thumbnail (no playable file), so they render
+  // as a still + permalink rather than an inline <video>.
+  const isThumbnailOnlyVideo = platform === "tiktok" || platform === "youtube";
+  const video = !isThumbnailOnlyVideo && isVideoPost(post);
   const carousel = isCarouselPost(post);
-  const recent7dMetrics = summarizePost7dMetrics(post);
-  const previewViews = recent7dMetrics.views ?? post.metrics?.views ?? post.metrics?.reach;
   const mediaHeightClass = selected
     ? video
       ? "h-[280px] sm:h-[320px]"
@@ -500,7 +498,7 @@ function PostGalleryCard({
     >
       <Box className={cn("relative flex w-full items-center justify-center overflow-hidden bg-black/90 ring-1 ring-black/10 dark:ring-white/10", mediaHeightClass)}>
         {preview ? (
-          video && !isTikTok ? (
+          video && !isThumbnailOnlyVideo ? (
             <Reel className="h-full w-full" data={reelData} defaultMuted>
               <ReelContent>
                 {(item) => (
@@ -522,7 +520,7 @@ function PostGalleryCard({
                 alt={post.title ?? post.caption ?? "Post media"}
                 className="h-full w-full object-contain outline outline-1 outline-black/10 dark:outline-white/10"
               />
-              {isTikTok && post.permalink ? (
+              {isThumbnailOnlyVideo && post.permalink ? (
                 <a
                   href={post.permalink}
                   target="_blank"
@@ -545,31 +543,16 @@ function PostGalleryCard({
           </Box>
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <div className="absolute inset-x-0 bottom-0 p-3">
-            <Text size="1" className="line-clamp-5 text-white">
-              {post.caption?.trim().length ? post.caption : "Caption unavailable"}
-            </Text>
-            <Flex align="center" justify="between" mt="2">
-              <Text size="1" className="text-white/85">{formatDateTime(post.timestamp)}</Text>
-              <Flex align="center" gap="2">
-                {post.metrics?.reelsAvgWatchTime !== undefined ? (
-                  <Text size="1" className="text-white/85">
-                    Avg watch {formatWatchTime(post.metrics.reelsAvgWatchTime)}
-                  </Text>
-                ) : null}
-                <Text size="1" className="text-white/85">
-                  {formatNumber(previewViews)} 7d views
-                </Text>
-              </Flex>
-            </Flex>
-          </div>
-        </div>
-
         <div className="absolute left-2 top-2 flex items-center gap-1">
-          <Badge color={video ? "violet" : carousel ? "orange" : "gray"} variant="solid">
-            {video ? "Reel/Video" : carousel ? "Carousel" : "Post"}
-          </Badge>
+          {platform === "youtube" ? (
+            <Badge color={isYouTubeShort(post) ? "pink" : "violet"} variant="solid">
+              {isYouTubeShort(post) ? "Short" : "Video"}
+            </Badge>
+          ) : (
+            <Badge color={video ? "violet" : carousel ? "orange" : "gray"} variant="solid">
+              {video ? "Reel/Video" : carousel ? "Carousel" : "Post"}
+            </Badge>
+          )}
           {carousel ? (
             <Badge color="gray" variant="soft">
               {(post.carouselMedia?.length ?? 0) || 1} slides
@@ -586,17 +569,6 @@ function PostGalleryCard({
             Loading details...
           </Badge>
         ) : null}
-        {(() => {
-          const hookRate = video ? calculateHookRate(post) : undefined;
-          if (hookRate === undefined) return null;
-          const tier = hookRateTier(hookRate);
-          const color = tier === "elite" ? "green" : tier === "good" ? "blue" : tier === "average" ? "yellow" : "red";
-          return (
-            <Badge className="absolute bottom-2 left-2" color={color} variant="solid">
-              {hookRate.toFixed(1)}% hook
-            </Badge>
-          );
-        })()}
       </Box>
     </motion.button>
   );
@@ -646,8 +618,6 @@ function PostSnapshotPanel({
   post,
   selectedMetric,
   onMetricSelect,
-  drilldownWindow,
-  onWindowChange,
   series,
   accountSeries,
   loading,
@@ -656,16 +626,16 @@ function PostSnapshotPanel({
   post: OrganicPost;
   selectedMetric: PostMetricKey;
   onMetricSelect: (metric: PostMetricKey) => void;
-  drilldownWindow: DrilldownWindow;
-  onWindowChange: (window: DrilldownWindow) => void;
   series: Array<{ date: string; value: number }>;
   accountSeries?: Array<{ date: string; value: number }>;
   loading: boolean;
   platform?: MetricsPlatform;
 }) {
   const preview = getPostPreviewUrl(post);
-  const isTikTok = platform === "tiktok";
-  const video = !isTikTok && isVideoPost(post);
+  // TikTok and YouTube only expose a thumbnail (no playable file), so they render
+  // as a still + permalink rather than an inline <video>.
+  const isThumbnailOnlyVideo = platform === "tiktok" || platform === "youtube";
+  const video = !isThumbnailOnlyVideo && isVideoPost(post);
   const metricComparisons = post24hComparisons(post);
   const recent7dMetrics = summarizePost7dMetrics(post);
   // Per-post history accrues one day-over-day delta per day tracked (Meta serves no
@@ -695,7 +665,7 @@ function PostSnapshotPanel({
           </Flex>
 
           <Box className="mb-3 overflow-hidden rounded-lg border border-subtle bg-black/90">
-            {isTikTok && post.permalink ? (
+            {isThumbnailOnlyVideo && post.permalink ? (
               <TikTokEmbed videoId={post.id} permalink={post.permalink} />
             ) : preview ? (
               video ? (
@@ -775,7 +745,13 @@ function PostSnapshotPanel({
             {(() => {
               const hookRate = calculateHookRate(post);
               if (hookRate === undefined) return null;
-              return <HookRateCard hookRate={hookRate} tier={hookRateTier(hookRate)} />;
+              return (
+                <HookRateCard
+                  hookRate={hookRate}
+                  tier={hookRateTier(hookRate)}
+                  skipRate={post.metrics?.reelsSkipRate}
+                />
+              );
             })()}
           </div>
 
@@ -800,32 +776,9 @@ function PostSnapshotPanel({
                   </button>
                 ))}
               </div>
-              <div className="inline-flex rounded-md border border-subtle bg-muted/20 p-0.5">
-                <button
-                  type="button"
-                  className={cn(
-                    "h-8 rounded px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
-                    drilldownWindow === "7d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
-                  )}
-                  onClick={() => onWindowChange("7d")}
-                  aria-label="Show seven day window"
-                  aria-pressed={drilldownWindow === "7d"}
-                >
-                  7d
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "h-8 rounded px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60",
-                    drilldownWindow === "30d" ? "bg-accent/20 text-foreground" : "text-muted-foreground"
-                  )}
-                  onClick={() => onWindowChange("30d")}
-                  aria-label="Show thirty day window"
-                  aria-pressed={drilldownWindow === "30d"}
-                >
-                  30d
-                </button>
-              </div>
+              <Text size="1" color="gray" className="px-1">
+                Last 7 days
+              </Text>
             </Flex>
             {series.length > 0 ? (
               <>
@@ -892,7 +845,15 @@ const HOOK_RATE_TIER_CONFIG: Record<HookRateTier, { label: string; className: st
   poor:    { label: "Poor",    className: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
 };
 
-function HookRateCard({ hookRate, tier }: { hookRate: number; tier: HookRateTier }) {
+function HookRateCard({
+  hookRate,
+  tier,
+  skipRate,
+}: {
+  hookRate: number;
+  tier: HookRateTier;
+  skipRate?: number;
+}) {
   const { label, className } = HOOK_RATE_TIER_CONFIG[tier];
   return (
     <Card
@@ -910,7 +871,9 @@ function HookRateCard({ hookRate, tier }: { hookRate: number; tier: HookRateTier
           {hookRate.toFixed(1)}%
         </Text>
         <Text size="1" color="gray" className="mt-0.5 leading-none">
-          avg watch time vs 3s
+          {skipRate !== undefined
+            ? `100 − ${skipRate.toFixed(1)}% skipped in first 3s`
+            : "share who watched past the first 3s"}
         </Text>
       </Box>
     </Card>
@@ -1070,6 +1033,72 @@ function MetricCard({
   );
 }
 
+// Per-type analytics shown above the filtered YouTube gallery so the headline
+// reflects the selected Shorts/Videos slice rather than the channel-wide KPIs.
+function YoutubeTypeSummaryStrip({
+  posts,
+  filter,
+}: {
+  posts: OrganicPost[];
+  filter: YoutubePostTypeFilter;
+}) {
+  const summary = summarizeYoutubeTypeMetrics(posts);
+  const countLabel = filter === "shorts" ? "Shorts" : filter === "videos" ? "Videos" : "Posts";
+  const stats: Array<{ label: string; value: string }> = [
+    { label: countLabel, value: `${summary.count}` },
+    { label: "Views", value: formatNumber(summary.views) },
+    { label: "Likes", value: formatNumber(summary.likes) },
+    { label: "Comments", value: formatNumber(summary.comments) },
+    { label: "Avg view %", value: summary.avgHookRate !== undefined ? `${summary.avgHookRate.toFixed(1)}%` : "-" },
+  ];
+  return (
+    <Card variant="surface" className="mb-3 border border-subtle bg-surface">
+      <Box p="3">
+        <Flex gap="6" wrap="wrap">
+          {stats.map((stat) => (
+            <div key={stat.label} className="min-w-0">
+              <Text size="1" color="gray" className="block">{stat.label}</Text>
+              <Text size="3" weight="bold" className="tabular-nums">{stat.value}</Text>
+            </div>
+          ))}
+        </Flex>
+      </Box>
+    </Card>
+  );
+}
+
+// Account-level Shorts-vs-Videos performance split (data.contentTypePerformance,
+// from the Analytics creatorContentType dimension).
+function YoutubeContentTypeSplitCard({ performance }: { performance: ContentTypePerformance[] }) {
+  if (performance.length === 0) return null;
+  const maxViews = Math.max(1, ...performance.map((row) => row.views ?? 0));
+  return (
+    <Card variant="surface" className="border border-subtle bg-surface">
+      <Box p="3">
+        <Text size="2" weight="medium" className="mb-2 block">Shorts vs Videos</Text>
+        <Flex direction="column" gap="3">
+          {performance.map((row) => (
+            <div key={row.contentType}>
+              <Flex align="center" justify="between" mb="1">
+                <Text size="2">{row.contentType}</Text>
+                <Text size="1" color="gray" className="tabular-nums">
+                  {formatNumber(row.views ?? 0)} views · {formatNumber(row.engagement ?? 0)} eng
+                </Text>
+              </Flex>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                <div
+                  className={cn("h-full rounded-full", row.contentType === "Shorts" ? "bg-pink-500" : "bg-violet-500")}
+                  style={{ width: `${Math.round(((row.views ?? 0) / maxViews) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </Flex>
+      </Box>
+    </Card>
+  );
+}
+
 function Dashboard({
   data,
   viewMode,
@@ -1084,6 +1113,7 @@ function Dashboard({
   integrationAccountId,
   platform,
   rangePreset,
+  youtubePostType,
 }: {
   data: OrganicMetricsResponse;
   viewMode: MetricsViewMode;
@@ -1098,6 +1128,7 @@ function Dashboard({
   integrationAccountId: string;
   platform: MetricsPlatform;
   rangePreset: OrganicDateRangePreset;
+  youtubePostType: YoutubePostTypeFilter;
 }) {
   const [selectedPostId, setSelectedPostId] = React.useState<string | null>(null);
   const [selectedAccountMetric, setSelectedAccountMetric] = React.useState<keyof OrganicMetrics>("reach");
@@ -1105,8 +1136,8 @@ function Dashboard({
   const [drilldownWindow, setDrilldownWindow] = React.useState<DrilldownWindow>("7d");
   const [postSortKey, setPostSortKey] = React.useState<PostSortKey>("recent");
 
-  // Fetch organic insights for KPI tooltips
-  const { insights: organicInsights } = useOrganicInsights({
+  // Fetch organic insights (KPI tooltips) + the assembled AI-Awareness report.
+  const { insights: organicInsights, awareness: awarenessReport } = useOrganicInsights({
     brandId,
     integrationAccountId,
     platform,
@@ -1162,12 +1193,17 @@ function Dashboard({
   const postSeries = buildPostMetricSeries({
     post: selectedPost,
     metricKey: selectedPostMetric,
-    window: drilldownWindow,
   });
   const selectedAccountMetricLabel =
     getKpiConfig(platform).find((metric) => metric.key === selectedAccountMetric)?.label ?? String(selectedAccountMetric);
   const isAccountView = viewMode === "account";
   const isPostsView = viewMode === "posts";
+
+  // YouTube gallery is filterable by Shorts vs Videos; other platforms show all.
+  const visiblePosts = React.useMemo(() => {
+    const posts = data.posts ?? [];
+    return platform === "youtube" ? filterPostsByYoutubeType(posts, youtubePostType) : posts;
+  }, [data.posts, platform, youtubePostType]);
 
   const audienceTotal = Math.max(0, audienceBreakdown.followers + audienceBreakdown.nonFollowers);
   const audienceRadialData = [
@@ -1229,6 +1265,11 @@ function Dashboard({
       gap="2"
       className="min-h-0 pb-6"
     >
+      {isAccountView && rangePreset === "today" ? (
+        <Text size="1" color="gray" className="mb-1 block">
+          Today so far — deltas compare today (partial) against yesterday.
+        </Text>
+      ) : null}
       {isAccountView ? (
         <motion.div
           key={`kpi-${data.range.since}-${data.range.until}`}
@@ -1320,7 +1361,7 @@ function Dashboard({
             </Box>
           </Card>
 
-          <Card variant="surface" className={cn("border border-subtle bg-surface", platform === "tiktok" && "!hidden")}>
+          <Card variant="surface" className={cn("border border-subtle bg-surface", (platform === "tiktok" || platform === "youtube") && "!hidden")}>
             <Box p="3">
               <Heading size="3" mb="2">Followers Breakdown</Heading>
               <ChartContainer config={audienceChartConfig} className="h-52 w-full">
@@ -1387,7 +1428,7 @@ function Dashboard({
             </Box>
           </Card>
 
-          <Card variant="surface" className={cn("border border-subtle bg-surface", platform === "tiktok" && "!hidden")}>
+          <Card variant="surface" className={cn("border border-subtle bg-surface", (platform === "tiktok" || platform === "youtube") && "!hidden")}>
             <Box p="3">
               <Heading size="3" mb="2">Audience Demographics</Heading>
 
@@ -1448,6 +1489,12 @@ function Dashboard({
         </div>
       ) : null}
 
+      {isAccountView && platform === "youtube" && (data.contentTypePerformance?.length ?? 0) > 0 ? (
+        <YoutubeContentTypeSplitCard performance={data.contentTypePerformance ?? []} />
+      ) : null}
+
+      {isAccountView ? <OrganicAwarenessReportView report={awarenessReport} /> : null}
+
       {isAccountView && platform !== "tiktok" ? (
         <OrganicAudienceLocationMapCard
           countryEntries={countryDemographics}
@@ -1458,10 +1505,17 @@ function Dashboard({
 
       {isPostsView ? (
         <>
+          {platform === "youtube" ? (
+            <YoutubeTypeSummaryStrip posts={visiblePosts} filter={youtubePostType} />
+          ) : null}
           <Card variant="surface" className="border border-subtle bg-surface">
             <Box p="3">
-              {(data.posts ?? []).length === 0 ? (
-                <Text size="2" color="gray">No posts were found for this account in the selected window.</Text>
+              {visiblePosts.length === 0 ? (
+                <Text size="2" color="gray">
+                  {platform === "youtube" && youtubePostType !== "all"
+                    ? `No ${youtubePostType === "shorts" ? "Shorts" : "videos"} were found for this channel in the selected window.`
+                    : "No posts were found for this account in the selected window."}
+                </Text>
               ) : (
                 <div className="mx-auto w-full">
                   <motion.div
@@ -1497,26 +1551,52 @@ function Dashboard({
                             "[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]"
                           )}
                         >
-                          {sortPosts(data.posts ?? [], postSortKey).map((post) => (
-                            <motion.div
-                              layout
-                              key={post.id}
-                              ref={(node) => {
-                                postCardRefs.current[post.id] = node;
-                              }}
-                              className="min-w-0"
-                            >
-                              <PostGalleryCard
-                                post={post}
-                                selected={selectedPostId === post.id}
-                                loading={loadingPostId === post.id}
-                                onSelect={() => {
-                                  setSelectedPostId(post.id);
+                          {sortPosts(visiblePosts, postSortKey).map((post) => {
+                            // Prefer the store-hydrated detail (richer metrics +
+                            // breakdowns) so the quick-look fills in after a fetch.
+                            const detailed = postDetailsById?.[post.id] ?? post;
+                            return (
+                              <motion.div
+                                layout
+                                key={post.id}
+                                ref={(node) => {
+                                  postCardRefs.current[post.id] = node;
                                 }}
-                                platform={platform}
-                              />
-                            </motion.div>
-                          ))}
+                                className="min-w-0"
+                              >
+                                <HoverCard
+                                  openDelay={150}
+                                  closeDelay={120}
+                                  onOpenChange={(open) => {
+                                    // Hovering pre-fetches the post's full detail
+                                    // (fetch-on-view); the request is de-duped upstream.
+                                    if (open) onRequestPostDetail?.(post.id);
+                                  }}
+                                >
+                                  <HoverCardTrigger asChild>
+                                    <div className="w-full">
+                                      <PostGalleryCard
+                                        post={detailed}
+                                        selected={selectedPostId === post.id}
+                                        loading={loadingPostId === post.id}
+                                        onSelect={() => {
+                                          setSelectedPostId(post.id);
+                                        }}
+                                        platform={platform}
+                                      />
+                                    </div>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent side="right" align="start" className="w-[340px] p-3">
+                                    <PostQuickLook
+                                      post={detailed}
+                                      accountSeries={accountSeries}
+                                      loading={loadingPostId === post.id}
+                                    />
+                                  </HoverCardContent>
+                                </HoverCard>
+                              </motion.div>
+                            );
+                          })}
                         </div>
                         <div ref={postsLoadSentinelRef} className="h-2 w-full" aria-hidden />
                         <div className="flex items-center justify-center py-4">
@@ -1537,8 +1617,6 @@ function Dashboard({
                           post={selectedPost}
                           selectedMetric={selectedPostMetric}
                           onMetricSelect={setSelectedPostMetric}
-                          drilldownWindow={drilldownWindow}
-                          onWindowChange={setDrilldownWindow}
                           series={postSeries}
                           accountSeries={accountSeries}
                           loading={loadingPostId === selectedPost.id}
@@ -1561,12 +1639,14 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
   const [isPending, startTransition] = React.useTransition();
   const [platform, setPlatform] = React.useState<MetricsPlatform>(initialPlatform);
   const [viewMode, setViewMode] = React.useState<MetricsViewMode>("account");
+  const [youtubePostType, setYoutubePostType] = React.useState<YoutubePostTypeFilter>("all");
   const [rangePreset, setRangePreset] = React.useState<OrganicDateRangePreset>(DEFAULT_RANGE_PRESET);
   const [reloadTick, setReloadTick] = React.useState(0);
   const [exportingReportFormat, setExportingReportFormat] = React.useState<"csv" | "html" | null>(null);
   const [reportError, setReportError] = React.useState<string | null>(null);
   const manualRefreshRef = React.useRef(false);
   const setPostDetailInStore = usePostAnalyticsStore((store) => store.setPostDetail);
+  const setSelection = useAccountSelectionStore((s) => s.setSelection);
   const [loadingPostId, setLoadingPostId] = React.useState<string | null>(null);
   const loadedPostDetailIdsRef = React.useRef<Set<string>>(new Set());
   const loadingPostDetailIdsRef = React.useRef<Set<string>>(new Set());
@@ -1578,10 +1658,20 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     instagram: string | null;
     facebook: string | null;
     tiktok: string | null;
-  }>({
-    instagram: accountsByPlatform.instagram[0]?.integrationAccountId ?? null,
-    facebook: accountsByPlatform.facebook[0]?.integrationAccountId ?? null,
-    tiktok: accountsByPlatform.tiktok[0]?.integrationAccountId ?? null,
+    youtube: string | null;
+  }>(() => {
+    const store = useAccountSelectionStore.getState();
+    const resolve = (platform: string, accounts: OrganicAccountOption[]) => {
+      const stored = store.getSelection(brandId, platform);
+      const isValid = stored !== null && accounts.some((a) => a.integrationAccountId === stored);
+      return isValid ? stored : (accounts[0]?.integrationAccountId ?? null);
+    };
+    return {
+      instagram: resolve("instagram", accountsByPlatform.instagram),
+      facebook: resolve("facebook", accountsByPlatform.facebook),
+      tiktok: resolve("tiktok", accountsByPlatform.tiktok),
+      youtube: resolve("youtube", accountsByPlatform.youtube),
+    };
   });
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
   const [kpisState, setKpisState] = React.useState<SectionState<OrganicMetricsResponse>>({ status: "idle" });
@@ -1591,13 +1681,17 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
     ? accountsByPlatform.facebook
     : platform === "tiktok"
       ? accountsByPlatform.tiktok
-      : accountsByPlatform.instagram;
+      : platform === "youtube"
+        ? accountsByPlatform.youtube
+        : accountsByPlatform.instagram;
 
   const selectedAccountId = platform === "facebook"
     ? selectedAccountByPlatform.facebook
     : platform === "tiktok"
       ? selectedAccountByPlatform.tiktok
-      : selectedAccountByPlatform.instagram;
+      : platform === "youtube"
+        ? selectedAccountByPlatform.youtube
+        : selectedAccountByPlatform.instagram;
 
   const selectedAccount =
     platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
@@ -1869,13 +1963,23 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
       return;
     }
 
+    if (platform === "youtube") {
+      if (
+        !selectedAccountByPlatform.youtube ||
+        !platformAccounts.some((item) => item.integrationAccountId === selectedAccountByPlatform.youtube)
+      ) {
+        setSelectedAccountByPlatform((current) => ({ ...current, youtube: firstPlatformAccountId }));
+      }
+      return;
+    }
+
     if (
       !selectedAccountByPlatform.instagram ||
       !platformAccounts.some((item) => item.integrationAccountId === selectedAccountByPlatform.instagram)
     ) {
       setSelectedAccountByPlatform((current) => ({ ...current, instagram: firstPlatformAccountId }));
     }
-  }, [platform, platformAccounts, selectedAccountByPlatform.facebook, selectedAccountByPlatform.instagram, selectedAccountByPlatform.tiktok]);
+  }, [platform, platformAccounts, selectedAccountByPlatform.facebook, selectedAccountByPlatform.instagram, selectedAccountByPlatform.tiktok, selectedAccountByPlatform.youtube]);
 
   React.useEffect(() => {
     if (!selectedAccountId) {
@@ -2001,12 +2105,13 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <Select.Root value={platform} onValueChange={(value) => startTransition(() => setPlatform(value as MetricsPlatform))}>
               <Select.Trigger variant="surface" radius="large" className="h-8 w-[8.75rem] text-xs">
-                {{ instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" }[platform]}
+                {{ instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", youtube: "YouTube" }[platform]}
               </Select.Trigger>
               <Select.Content>
                 <Select.Item value="instagram">Instagram</Select.Item>
                 <Select.Item value="facebook">Facebook Pages</Select.Item>
                 <Select.Item value="tiktok">TikTok</Select.Item>
+                <Select.Item value="youtube">YouTube</Select.Item>
               </Select.Content>
             </Select.Root>
 
@@ -2038,6 +2143,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                   ...current,
                   [platform]: value,
                 }));
+                setSelection(brandId, platform, value);
               }}
             >
               <Select.Trigger
@@ -2069,6 +2175,20 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                 <TabsTrigger value="posts" className="px-3 text-xs">Posts</TabsTrigger>
               </TabsList>
             </Tabs>
+
+            {platform === "youtube" && viewMode === "posts" ? (
+              <Tabs
+                value={youtubePostType}
+                onValueChange={(value) => setYoutubePostType(value as YoutubePostTypeFilter)}
+                className="w-auto gap-0"
+              >
+                <TabsList className="inline-flex h-8 w-auto rounded-lg border border-subtle bg-muted/20 p-0.5">
+                  <TabsTrigger value="all" className="px-3 text-xs">All</TabsTrigger>
+                  <TabsTrigger value="shorts" className="px-3 text-xs">Shorts</TabsTrigger>
+                  <TabsTrigger value="videos" className="px-3 text-xs">Videos</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            ) : null}
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -2184,6 +2304,7 @@ export function OrganicMetricsDashboard({ brandId, accountsByPlatform, initialPl
                     integrationAccountId={selectedAccountId ?? ""}
                     platform={platform}
                     rangePreset={rangePreset}
+                    youtubePostType={youtubePostType}
                   />
                 </motion.div>
               ) : (

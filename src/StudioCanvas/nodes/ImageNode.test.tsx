@@ -282,4 +282,74 @@ describe('ImageNode', () => {
     const markupButton = screen.getByLabelText('Markup image');
     expect(markupButton.className).toContain('text-amber-500');
   });
+
+  it('should display a processing badge while a reference image is inlining', () => {
+    const props = {
+      ...defaultProps,
+      data: { image: 'https://scontent.cdninstagram.com/a.jpg', referenceStatus: 'processing' as const },
+    };
+
+    render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...props} />
+        </ReactFlowProvider>
+      </ToastProvider>
+    );
+
+    expect(screen.getByText('Processing')).toBeTruthy();
+  });
+
+  it('should display a ready badge when a reference image is inlined', () => {
+    const props = {
+      ...defaultProps,
+      data: { image: 'data:image/jpeg;base64,abc', referenceStatus: 'ready' as const },
+    };
+
+    render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...props} />
+        </ReactFlowProvider>
+      </ToastProvider>
+    );
+
+    expect(screen.getByText('Ready')).toBeTruthy();
+  });
+
+  it('should display a failed badge when reference inlining errors', () => {
+    const props = {
+      ...defaultProps,
+      data: { image: 'https://scontent.cdninstagram.com/a.jpg', referenceStatus: 'error' as const },
+    };
+
+    render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...props} />
+        </ReactFlowProvider>
+      </ToastProvider>
+    );
+
+    expect(screen.getByText('Failed')).toBeTruthy();
+  });
+
+  it('should not display a reference status badge when status is unset', () => {
+    const props = {
+      ...defaultProps,
+      data: { image: 'data:image/png;base64,abc' },
+    };
+
+    render(
+      <ToastProvider>
+        <ReactFlowProvider>
+          <ImageNode {...props} />
+        </ReactFlowProvider>
+      </ToastProvider>
+    );
+
+    expect(screen.queryByText('Processing')).toBeNull();
+    expect(screen.queryByText('Ready')).toBeNull();
+    expect(screen.queryByText('Failed')).toBeNull();
+  });
 });

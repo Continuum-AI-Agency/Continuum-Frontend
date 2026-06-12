@@ -118,27 +118,44 @@
   --bg-galaxy-vignette-light: rgba(255,255,255,0.06);
   --bg-galaxy-c1-overlay-light: rgba(255,210,238,0.10);
 
-  /* Layout and viewport density tokens */
-  --font-size-root: clamp(13px, 0.55vw + 9px, 15px);
+  /* Layout and viewport density tokens.
+     Sizing is FIXED across resolutions (1080p renders identically to 4K) so
+     density stays consistent; a gentle downscale applies only on short
+     viewports (the hybrid model) to keep dense pages fitting without scroll. */
+  --font-size-root: 15px;
   --layout-density: 1;
 
-  /* Shell scale — single source of truth for fluid app layout */
-  --shell-sidebar-w: clamp(13rem, 14vw, 17rem);
-  --shell-sidebar-w-icon: clamp(3rem, 3.5vw, 3.75rem);
-  --shell-secondary-w: clamp(14rem, 18vw, 22rem);
-  --shell-secondary-w-min: clamp(11rem, 14vw, 15rem);
-  --shell-gutter: clamp(0.75rem, 1.25vw, 1.5rem);
-  --shell-gutter-tight: clamp(0.5rem, 0.75vw, 0.875rem);
-  --shell-content-max: clamp(64rem, 90vw, 110rem);
-  --shell-stack-gap: clamp(0.75rem, 1vw, 1.25rem);
+  /* App chrome heights — single source of truth for viewport scroll math.
+     The header is DashboardHeader (h-16 = 4rem). Pages that fill the viewport
+     use --app-content-h instead of re-deriving a magic offset per page. */
+  --app-header-h: 4rem;
+  --app-content-h: calc(100dvh - var(--app-header-h));
 
-  --app-shell-gap: clamp(0.25rem, 0.4vw, 0.375rem);
-  --app-shell-gap-compact: clamp(0.125rem, 0.2vw, 0.25rem);
+  /* Shell scale — fixed rem (no viewport-width fluidity). */
+  --shell-sidebar-w: 15rem;
+  --shell-sidebar-w-icon: 3rem;
+  --shell-secondary-w: 20rem;
+  --shell-secondary-w-min: 13rem;
+  --shell-gutter: 1.25rem;
+  --shell-gutter-tight: 0.75rem;
+  --shell-content-max: 110rem;
+  --shell-stack-gap: 1rem;
+
+  --app-shell-gap: 0.375rem;
+  --app-shell-gap-compact: 0.25rem;
   --app-shell-pad-inline: var(--shell-gutter);
-  --app-shell-pad-block: clamp(0.125rem, 0.25vw, 0.25rem);
+  --app-shell-pad-block: 0.25rem;
   --app-shell-pad-inline-tight: var(--shell-gutter-tight);
-  --app-shell-pad-inline-compact: clamp(0.25rem, 0.4vw, 0.5rem);
-  --app-shell-pad-block-compact: clamp(0.25rem, 0.4vw, 0.5rem);
+  --app-shell-pad-inline-compact: 0.5rem;
+  --app-shell-pad-block-compact: 0.5rem;
+
+  /* Document-style page rhythm (Settings, Admin and similar) — compact and
+     shared so every content page uses the same spacing language. */
+  --page-pad-inline: var(--shell-gutter);
+  --page-pad-block: 1rem;
+  --page-section-gap: 1rem;
+  --card-pad: 1rem;
+
   --ai-chat-shell-offset: 1.5rem;
   --ai-chat-shell-min-height: 40rem;
   --ai-chat-row-min-height: 30rem;
@@ -154,36 +171,37 @@ html {
   text-size-adjust: 100%;
 }
 
-@media (max-width: 1536px) {
+/* Hybrid downscale: triggered by viewport HEIGHT only (never width) so that
+   1080p and 4K stay identical, while short laptops get just enough shrink to
+   avoid overflow on dense pages. */
+@media (max-height: 860px) {
   :root {
-    --ai-chat-shell-offset: 1rem;
-    --ai-chat-shell-min-height: 36rem;
-    --ai-chat-row-min-height: 26rem;
-    --ai-chat-panel-min-width: 22rem;
-    --ai-chat-preview-min-width: 24rem;
+    --ai-chat-shell-min-height: 34rem;
+    --ai-chat-row-min-height: 24rem;
     --workspace-min-height: 28rem;
     --dashboard-min-panel-height: 22rem;
   }
 }
 
-@media (max-width: 1366px), (max-height: 820px) {
+@media (max-height: 768px) {
   :root {
+    --font-size-root: 13.5px;
     --layout-density: 0.92;
-    --ai-chat-shell-offset: 0.5rem;
-    --ai-chat-shell-min-height: 30rem;
-    --ai-chat-row-min-height: 22rem;
-    --ai-chat-panel-min-width: 18rem;
-    --ai-chat-preview-min-width: 20rem;
+    --page-pad-block: 0.75rem;
+    --page-section-gap: 0.75rem;
+    --shell-stack-gap: 0.875rem;
+    --ai-chat-shell-offset: 0.75rem;
+    --ai-chat-shell-min-height: 28rem;
+    --ai-chat-row-min-height: 20rem;
     --workspace-min-height: 24rem;
     --dashboard-min-panel-height: 20rem;
   }
 }
 
-@media (max-height: 740px) {
+@media (max-height: 680px) {
   :root {
+    --font-size-root: 13px;
     --layout-density: 0.88;
-    --ai-chat-shell-min-height: 26rem;
-    --ai-chat-row-min-height: 18rem;
     --workspace-min-height: 22rem;
     --dashboard-min-panel-height: 18rem;
   }

@@ -1,4 +1,5 @@
 import type { OrganicCalendarDraft } from "@/components/organic/primitives/types"
+import { buildInstagramCaption } from "@continuum/contracts"
 
 export function inferPostType(draft: OrganicCalendarDraft): "POST" | "REEL" | "CAROUSEL" {
   if (draft.format === "Reel" || draft.format === "Video") return "REEL"
@@ -41,28 +42,11 @@ export type PublishRequestBody = PostPublishBody | ReelPublishBody | CarouselPub
 
 // ── Caption builder ───────────────────────────────────────────────────────────
 
-export function flattenHashtags(
-  hashtags: OrganicCalendarDraft["hashtags"]
-): string[] {
-  if (!hashtags) return []
-  return [
-    ...(hashtags.high ?? []),
-    ...(hashtags.medium ?? []),
-    ...(hashtags.low ?? []),
-  ]
-    .filter(Boolean)
-    .map((tag) => (tag.startsWith("#") ? tag : `#${tag}`))
-}
-
+// Delegates to the shared @continuum/contracts builder so the caption rendered in
+// the preview is byte-identical to the one the backend publishes (IG 2200-char /
+// 30-hashtag limits enforced there).
 export function buildFullCaption(draft: OrganicCalendarDraft): string {
-  const body = (draft.captionPreview ?? "").trim()
-  const tags = flattenHashtags(draft.hashtags)
-  if (!tags.length) return body
-  return body ? `${body}\n\n${tags.join(" ")}` : tags.join(" ")
-}
-
-function buildCaption(draft: OrganicCalendarDraft): string {
-  return buildFullCaption(draft)
+  return buildInstagramCaption(draft.captionPreview, draft.hashtags)
 }
 
 // ── Main builder ──────────────────────────────────────────────────────────────
@@ -73,7 +57,7 @@ export function buildPublishBody(
   brandId: string | null
 ): PublishRequestBody {
   const postType = inferPostType(draft)
-  const caption = buildCaption(draft) || undefined
+  const caption = buildFullCaption(draft) || undefined
   const assets = draft.publishingAssets ?? []
 
   const accountFields = {

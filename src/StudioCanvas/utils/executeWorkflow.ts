@@ -14,6 +14,7 @@ import { resolveClipSources } from "./splice/resolveClipSources";
 import { checkSpliceSupport } from "./splice/webcodecsSupport";
 import { runSpliceInWorker } from "../workers/spliceWorkerClient";
 import type { ClipSlot, VideoEditorNodeData } from "../types";
+import { inlineRemoteImage } from "@/lib/ai-studio/inlineRemoteImage";
 import { registerCanvasOutput } from "@/lib/creative-assets/registerCanvasAsset";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
@@ -65,6 +66,10 @@ const resolveTextInput = (
       }
       return undefined;
     }
+    return normalizeText((sourceNode.data as any).value);
+  }
+
+  if (sourceNode?.type === 'videoDecode') {
     return normalizeText((sourceNode.data as any).value);
   }
 
@@ -290,6 +295,18 @@ const getNodeReadiness = (
     return { ready: false, reason: 'Upstream dependency failed' };
   }
 
+  if (node.type === 'videoDecode') {
+    const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
+    if (videoEdges.length === 0) {
+      return { ready: false, reason: 'Missing required video input' };
+    }
+    const hasVideo = videoEdges.some((edge) => resolveVideoInput(edge, resolvedOutputs, nodeById, { allowUri: true }));
+    if (!hasVideo) {
+      return { ready: false, reason: 'Missing connected input for video' };
+    }
+    return { ready: true };
+  }
+
   if (node.type === 'extendVideo') {
     const videoEdges = incomingEdges.filter((edge) => edge.targetHandle === 'video');
     if (videoEdges.length === 0) {
@@ -370,7 +387,7 @@ export async function executeWorkflow(
   const targetNode = options.targetNodeId ? nodeById.get(options.targetNodeId) : undefined;
 
   const executableNodes = targetNode
-    ? (targetNode.type === 'string' || isMediaNodeType(targetNode.type)
+    ? (targetNode.type === 'string' || targetNode.type === 'videoDecode' || isMediaNodeType(targetNode.type)
         ? [targetNode]
         : [])
     : nodes.filter((node) => isMediaNodeType(node.type));
@@ -388,7 +405,7 @@ export async function executeWorkflow(
   const nodesToReset = new Set(executableNodeIds);
 
   const resetNodeIds = nodes
-    .filter((node) => (node.type === 'string' || isMediaNodeType(node.type)) && nodesToReset.has(node.id))
+    .filter((node) => (node.type === 'string' || node.type === 'videoDecode' || isMediaNodeType(node.type)) && nodesToReset.has(node.id))
     .map((node) => node.id);
 
   for (const nodeId of resetNodeIds) {
@@ -422,6 +439,13 @@ export async function executeWorkflow(
       }
     }
 
+    if (node.type === 'videoDecode') {
+      const value = normalizeText((node.data as any).value);
+      if (value) {
+        resolvedOutputs.set(node.id, { type: 'text', value });
+      }
+    }
+
     if (node.type === 'image') {
       const imageData = node.data as ImageNodeData;
       
@@ -446,6 +470,23 @@ export async function executeWorkflow(
         const parsed = parseDataUrl(imageData.image);
         if (parsed?.base64) {
           resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
+        } else if (typeof imageData.image === 'string' && /^https?:\/\//i.test(imageData.image)) {
+          // Remote-URL reference (e.g. an Instagram grab not yet inlined): convert
+          // server-side so the model receives base64. Guarantees correctness even if
+          // placement-time inlining is still running, failed, or the node was loaded
+          // from a saved canvas.
+          const remoteUrl = imageData.image;
+          const promise = inlineRemoteImage(remoteUrl)
+            .then(({ dataUrl }) => {
+              const inlined = parseDataUrl(dataUrl);
+              if (inlined?.base64) {
+                resolvedOutputs.set(node.id, { type: 'image', base64: inlined.base64, mimeType: inlined.mimeType });
+              }
+            })
+            .catch((error) => {
+              console.error('Failed to inline remote reference image:', error);
+            });
+          imageNodePromises.push(promise);
         }
       }
     }
@@ -744,6 +785,117 @@ export async function executeWorkflow(
              updateNodeStatus(nodeId, 'completed');
              return true;
         }
+      }
+
+      if (node.type === 'videoDecode') {
+        const incoming = getIncomingEdges(edges, nodeId);
+        const videoEdge = incoming.find((edge) => edge.targetHandle === 'video');
+        const resolvedVideo = videoEdge
+          ? resolveVideoInput(videoEdge, resolvedOutputs, nodeById, { allowUri: true })
+          : undefined;
+
+        if (!resolvedVideo) {
+          updateNodeStatus(nodeId, 'failed', 'Missing connected video input');
+          return false;
+        }
+
+        const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+        const supabase = createSupabaseBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) {
+          updateNodeStatus(nodeId, 'failed', 'Authentication session required for video decode');
+          return false;
+        }
+
+        const requestBody: Record<string, unknown> = {};
+        if (options.brandId && options.brandId !== 'default-brand') {
+          requestBody.brandId = options.brandId;
+        }
+        if ('base64' in resolvedVideo) {
+          requestBody.videoBase64 = resolvedVideo.base64;
+          requestBody.mimeType = resolvedVideo.mimeType;
+        } else {
+          requestBody.videoUrl = resolvedVideo.uri;
+        }
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/video-decoder`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+            'Accept': 'text/event-stream',
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          console.error('[studio] video decode HTTP error', response.status, err);
+          updateNodeStatus(nodeId, 'failed', err || 'Video decode failed');
+          return false;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          updateNodeStatus(nodeId, 'failed', 'No response body');
+          return false;
+        }
+
+        // Clear any prior breakdown so the streamed result replaces it.
+        useStudioStore.getState().updateNodeData(nodeId, { value: '' });
+
+        let accumulatedValue = '';
+        let streamError: string | undefined;
+
+        await readServerSentEvents({
+          reader,
+          onEvent: (eventName, data) => {
+            const payloadText = data.trimStart();
+
+            if (eventName === 'delta' || eventName === 'message') {
+              try {
+                const parsed = JSON.parse(payloadText) as { delta?: string };
+                if (typeof parsed.delta === 'string' && parsed.delta.length > 0) {
+                  accumulatedValue += parsed.delta;
+                  useStudioStore.getState().updateNodeData(nodeId, { value: accumulatedValue });
+                }
+              } catch {
+                console.warn('[studio] failed to parse video decode delta', {
+                  nodeId,
+                  payloadPreview: payloadText.slice(0, 120),
+                });
+              }
+              return;
+            }
+
+            if (eventName === 'error') {
+              try {
+                const parsed = JSON.parse(payloadText) as { message?: string; error?: string };
+                streamError = parsed.message || parsed.error || payloadText || 'Video decode failed';
+              } catch {
+                streamError = payloadText || 'Video decode failed';
+              }
+            }
+          },
+        });
+
+        if (streamError) {
+          console.error('[studio] video decode stream error', { nodeId, streamError });
+          updateNodeStatus(nodeId, 'failed', streamError);
+          return false;
+        }
+
+        if (!accumulatedValue.trim()) {
+          updateNodeStatus(nodeId, 'failed', 'Video decode returned empty output');
+          return false;
+        }
+
+        setNodeOutput(nodeId, { type: 'text', value: accumulatedValue });
+        updateNodeStatus(nodeId, 'completed');
+        console.info('[studio] video decode complete', { nodeId, length: accumulatedValue.length });
+        return true;
       }
 
       if (node.type === 'extendVideo') {

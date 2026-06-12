@@ -1,6 +1,21 @@
 import { z } from "zod";
+import {
+  metricComparisonSchema,
+  organicMetricsSchema,
+  organicPostBreakdownPointSchema,
+} from "@continuum/contracts";
+
+// Canonical cross-boundary metric shapes live in @continuum/contracts; re-exported
+// here so existing `@/lib/schemas/organicMetrics` import sites keep working.
+export { metricComparisonSchema, organicMetricsSchema, organicPostBreakdownPointSchema };
+export type {
+  MetricComparison,
+  OrganicMetrics,
+  OrganicPostBreakdownPoint,
+} from "@continuum/contracts";
 
 export const organicDateRangePresetSchema = z.enum([
+  "today",
   "yesterday",
   "previous_day",
   "last_7d",
@@ -11,14 +26,6 @@ export const organicDateRangePresetSchema = z.enum([
 ]);
 
 export type OrganicDateRangePreset = z.infer<typeof organicDateRangePresetSchema>;
-
-export const metricComparisonSchema = z.object({
-  current: z.number(),
-  previous: z.number(),
-  percentageChange: z.number(),
-});
-
-export type MetricComparison = z.infer<typeof metricComparisonSchema>;
 
 export const organicRangeSchema = z.object({
   preset: organicDateRangePresetSchema,
@@ -72,37 +79,6 @@ export const instagramOrganicMetricsSchema = z.object({
 });
 
 export type InstagramOrganicMetrics = z.infer<typeof instagramOrganicMetricsSchema>;
-
-export const organicMetricsSchema = z.object({
-  newFollowers: z.number().optional(),
-  reach: z.number().optional(),
-  views: z.number().optional(),
-  accountsEngaged: z.number().optional(),
-  reelsViews: z.number().optional(),
-  postViews: z.number().optional(),
-  storiesViews: z.number().optional(),
-  profileVisits24h: z.number().optional(),
-  profileVisitsYesterday: z.number().optional(),
-  nonFollowerReach: z.number().optional(),
-  followerReach: z.number().optional(),
-  likes: z.number().optional(),
-  comments: z.number().optional(),
-  replies: z.number().optional(),
-  shares: z.number().optional(),
-  saved: z.number().optional(),
-  totalInteractions: z.number().optional(),
-  subscribers: z.number().optional(),
-  following: z.number().optional(),
-  videoCount: z.number().optional(),
-  impressions: z.number().optional(),
-  videoThreeSecViews: z.number().optional(),
-  hookRate: z.number().optional(),
-  // Reels watch time in milliseconds (Meta ig_reels_avg_watch_time / ig_reels_video_view_total_time).
-  reelsAvgWatchTime: z.number().optional(),
-  reelsVideoViewTotalTime: z.number().optional(),
-});
-
-export type OrganicMetrics = z.infer<typeof organicMetricsSchema>;
 
 export const organicPlatformSchema = z.enum(["instagram", "facebook", "youtube", "x", "tiktok", "linkedin"]);
 export type OrganicPlatform = z.infer<typeof organicPlatformSchema>;
@@ -177,18 +153,6 @@ export const contentTypePerformanceSchema = z.object({
 });
 
 export type ContentTypePerformance = z.infer<typeof contentTypePerformanceSchema>;
-
-export const organicPostBreakdownPointSchema = z.object({
-  date: z.string().optional(),
-  timestamp: z.string().optional(),
-  hour: z.number().int().min(0).max(23).optional(),
-  reach: z.number().optional(),
-  views: z.number().optional(),
-  engagement: z.number().optional(),
-  comments: z.number().optional(),
-});
-
-export type OrganicPostBreakdownPoint = z.infer<typeof organicPostBreakdownPointSchema>;
 
 const organicCommentReplySchema = z.object({
   id: z.string(),

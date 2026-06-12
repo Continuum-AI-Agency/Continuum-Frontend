@@ -4,6 +4,7 @@
 import * as React from "react"
 import { Play, Search, ImageOff } from "lucide-react"
 import type { MediaAsset } from "@continuum/contracts"
+import { creativeRefFromAsset, shapeUserSuppliedMedia } from "@continuum/contracts"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -95,8 +96,10 @@ function AssetTile({
 
 // Browse the unified media library (uploads + AI + Canvas, image and video,
 // folders/search) and attach the selection to the draft. Selection order maps
-// to carousel slide order. Each attached asset carries its assetId so the
-// preview re-signs durably on read (useDraftWithFreshMedia).
+// to carousel slide order.
+// handleAttach routes through shapeUserSuppliedMedia so the emitted assets
+// are always publishable (mediaSuggestion + publishingAssets in the correct
+// shape, mediaStatus='user_supplied').
 export function OrganicCreativesPicker({
   brandProfileId,
   onAttach,
@@ -134,20 +137,14 @@ export function OrganicCreativesPicker({
     const selected = selectedIds
       .map((id) => byId.get(id))
       .filter((a): a is MediaAsset => !!a)
-    const multi = selected.length > 1
-    const publishingAssets: PublishingAsset[] = selected.map((a, index) => ({
-      role: "primary",
-      kind: a.kind,
-      slideIndex: multi ? index : undefined,
-      assetId: a.id,
-      bucket: a.bucket,
-      storagePath: a.storagePath,
-      storageUrl: a.signedUrl ?? "",
-      mimeType: a.mimeType,
-      width: a.width ?? undefined,
-      height: a.height ?? undefined,
-    }))
-    onAttach(publishingAssets)
+
+    if (selected.length === 0) return
+
+    // Route through shapeUserSuppliedMedia so the result is always
+    // publishable: both publishingAssets and mediaSuggestion are populated.
+    const refs = selected.map(creativeRefFromAsset)
+    const { publishingAssets } = shapeUserSuppliedMedia(refs)
+    onAttach(publishingAssets as PublishingAsset[])
   }
 
   return (

@@ -22,7 +22,7 @@ export default async function ApprovalsPage() {
     brandSummaries.find((brand) => brand.id === activeBrandId)?.name ?? "Untitled brand";
 
   return (
-    <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full overflow-hidden">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full overflow-hidden">
       <ApprovalsClient brandProfileId={activeBrandId} brandName={brandName} />
     </div>
   );

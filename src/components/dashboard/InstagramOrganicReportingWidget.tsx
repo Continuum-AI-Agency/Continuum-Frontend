@@ -3,7 +3,6 @@
 import {
   Badge,
   Box,
-  Callout,
   Card,
   Flex,
   Grid,
@@ -21,10 +20,11 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { fetchOrganicMetrics, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
-import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicMetrics } from "@/lib/schemas/organicMetrics";
+import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicTrendPoint } from "@/lib/schemas/organicMetrics";
 import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
 import type { IntegrationErrorCode } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
+import { useAccountSelectionStore } from "@/lib/integrations/accountSelectionStore";
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
 import { PlatformIcon } from "@/components/onboarding/PlatformIcons";
 
@@ -37,11 +37,13 @@ export type InstagramAccountOption = {
 type Props = {
   brandId: string;
   accounts: InstagramAccountOption[];
+  youtubeAccounts?: InstagramAccountOption[];
   initialPlatform?: OrganicPlatform;
   className?: string;
 };
 
-type ViewMode = "overview" | "trends";
+// Platforms this widget can fetch real organic metrics for; others show a placeholder.
+const SUPPORTED_WIDGET_PLATFORMS: ReadonlySet<OrganicPlatform> = new Set(["instagram", "youtube"]);
 
 type LoadState =
   | { status: "idle" }
@@ -58,11 +60,6 @@ type MetricCard = {
   label: string;
   value: number;
 };
-
-type TrendDataPoint = {
-  date: string;
-  value?: number;
-} & Partial<Record<MetricKey, number>>;
 
 const METRIC_LABELS: Record<string, string> = {
   reach: "Reach",
@@ -99,208 +96,22 @@ function formatPercent(value?: number) {
   return `${value >= 0 ? "+" : "-"}${rounded}%`;
 }
 
-function generateSampleTrendData(range: { since: string; until: string }, metrics: OrganicMetrics, specificMetric?: MetricKey) {
-  const days = [];
-  const startDate = new Date(range.since);
-  const endDate = new Date(range.until);
-  const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-
-  for (let i = 0; i <= daysDiff; i++) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    const dateStr = date.toISOString().split('T')[0];
-    const baseMultiplier = 0.7 + Math.random() * 0.6; 
-
-    const dayData: TrendDataPoint = { date: dateStr };
-    
-    if (specificMetric) {
-       const totalValue = metrics[specificMetric as keyof typeof metrics] as number | undefined;
-       if (totalValue !== undefined) {
-          dayData[specificMetric] = Math.round((totalValue / (daysDiff + 1)) * baseMultiplier);
-          dayData.value = dayData[specificMetric]; 
-       } else {
-          dayData.value = 0;
-       }
-    } else {
-       if (metrics.reach !== undefined) dayData.reach = Math.round((metrics.reach / (daysDiff + 1)) * baseMultiplier);
-       if (metrics.views !== undefined) dayData.views = Math.round((metrics.views / (daysDiff + 1)) * baseMultiplier);
-       if (metrics.likes !== undefined) dayData.likes = Math.round((metrics.likes / (daysDiff + 1)) * baseMultiplier);
-       if (metrics.comments !== undefined) dayData.comments = Math.round((metrics.comments / (daysDiff + 1)) * baseMultiplier);
-       if (metrics.shares !== undefined) dayData.shares = Math.round((metrics.shares / (daysDiff + 1)) * baseMultiplier);
-    }
-
-    days.push(dayData);
-  }
-  return days;
-}
-
-function TrendsPanel({ data }: { data: OrganicMetricsResponse }) {
-  const { insights, range } = data;
-
-  const trendData = React.useMemo(() => generateSampleTrendData(range, data.metrics), [range, data.metrics]);
-
-  const chartConfig = {
-    reach: {
-      label: "Reach",
-      color: "var(--color-primary)",
-    },
-    views: {
-      label: "Views",
-      color: "var(--color-secondary)",
-    },
-    likes: {
-      label: "Likes",
-      color: "var(--color-accent)",
-    },
-  } satisfies ChartConfig;
-
-  const trendChartConfig = {
-    ...chartConfig,
-    reach: { ...chartConfig.reach, color: "var(--color-reach)" },
-    views: { ...chartConfig.views, color: "var(--color-views)" },
-  };
-
-  return (
-    <Box pt="4">
-      <Flex align="center" justify="between" mb="3">
-        <Box>
-          <Heading size="4">Daily Trends</Heading>
-          <Text size="2" color="gray">
-            {range.since} → {range.until} ({rangeLabel(range.preset)})
-          </Text>
-        </Box>
-        {(!insights || insights.length === 0) && (
-          <Badge color="blue" variant="soft">Sample Data</Badge>
-        )}
-      </Flex>
-
-      <Text size="2" color="gray" mb="4">
-        Mouse over the chart to see values for specific dates
-      </Text>
-
-      <Grid columns={{ initial: "1", lg: "2" }} gap="4">
-        {/* Reach and Views Trend */}
-        <Card variant="surface" className="border border-subtle bg-surface">
-          <Box p="3">
-            <Text size="2" color="gray" mb="2">Reach & Views Trend</Text>
-            <ChartContainer config={trendChartConfig} className="aspect-auto h-[200px] w-full">
-              <LineChart data={trendData}>
-                <CartesianGrid vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                />
-                <YAxis tickLine={false} axisLine={false} />
-                <ChartTooltip
-                  content={<ChartTooltipContent
-                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  />}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="reach"
-                  stroke="var(--color-reach)"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="views"
-                  stroke="var(--color-views)"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ChartContainer>
-          </Box>
-        </Card>
-
-        {/* Engagement Trend */}
-        {(data.metrics.likes || data.metrics.comments || data.metrics.shares) && (
-          <Card variant="surface" className="border border-subtle bg-surface">
-            <Box p="3">
-              <Text size="2" color="gray" mb="2">Engagement Trend</Text>
-              <ChartContainer config={{
-                likes: { label: "Likes", color: "var(--color-likes)" },
-                comments: { label: "Comments", color: "var(--color-comments)" },
-                shares: { label: "Shares", color: "var(--color-shares)" },
-              }} className="aspect-auto h-[200px] w-full">
-                <LineChart data={trendData}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  />
-                  <YAxis tickLine={false} axisLine={false} />
-                  <ChartTooltip
-                    content={<ChartTooltipContent
-                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    />}
-                  />
-                  {data.metrics.likes && (
-                    <Line
-                      type="monotone"
-                      dataKey="likes"
-                      stroke="var(--color-likes)"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  )}
-                  {data.metrics.comments && (
-                    <Line
-                      type="monotone"
-                      dataKey="comments"
-                      stroke="var(--color-comments)"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  )}
-                  {data.metrics.shares && (
-                    <Line
-                      type="monotone"
-                      dataKey="shares"
-                      stroke="var(--color-shares)"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      activeDot={{ r: 6 }}
-                    />
-                  )}
-                </LineChart>
-              </ChartContainer>
-            </Box>
-          </Card>
-        )}
-      </Grid>
-
-      {(!insights || insights.length === 0) && (
-        <Box pt="4">
-          <Callout.Root color="blue" variant="surface">
-            <Callout.Text>
-              This shows sample trend data. When the backend daily data endpoint becomes available, you&apos;ll see real day-by-day metrics with interactive hover details.
-            </Callout.Text>
-          </Callout.Root>
-        </Box>
-      )}
-    </Box>
-  );
+// Maps the response's real per-day trend points to a single-series dataset for
+// the selected KPI, so the chart tooltip shows the actual value on each date.
+// Returns null when the response carries no daily series for that metric
+// (OrganicTrendPoint only covers a subset of metric keys).
+function buildDailySeries(
+  trends: OrganicTrendPoint[] | undefined,
+  metricKey: MetricKey,
+): Array<{ date: string; value: number }> | null {
+  if (!trends || trends.length === 0) return null;
+  const series = trends
+    .map((point) => {
+      const value = (point as Record<string, unknown>)[metricKey];
+      return typeof value === "number" ? { date: point.date, value } : null;
+    })
+    .filter((entry): entry is { date: string; value: number } => entry !== null);
+  return series.length > 0 ? series : null;
 }
 
 function InteractionBreakdownCharts({ breakdowns }: { breakdowns: Record<string, Record<string, number>> }) {
@@ -359,27 +170,36 @@ function getColorForType(type: string): string {
   }
 }
 
-export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlatform = "instagram", className }: Props) {
+export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAccounts = [], initialPlatform = "instagram", className }: Props) {
   const [platform, setPlatform] = React.useState<OrganicPlatform>(initialPlatform);
-  const firstAccountId = accounts[0]?.integrationAccountId ?? null;
-  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(firstAccountId);
-  const [viewMode, setViewMode] = React.useState<ViewMode>("overview");
+  const { getSelection, setSelection } = useAccountSelectionStore();
+  const platformAccounts = platform === "youtube" ? youtubeAccounts : accounts;
+  const isSupportedPlatform = SUPPORTED_WIDGET_PLATFORMS.has(platform);
+  const [selectedAccountId, setSelectedAccountId] = React.useState<string | null>(
+    () => {
+      const stored = useAccountSelectionStore.getState().getSelection(brandId, initialPlatform);
+      const isValid = stored !== null && accounts.some((a) => a.integrationAccountId === stored);
+      return isValid ? stored : (accounts[0]?.integrationAccountId ?? null);
+    }
+  );
   const [state, setState] = React.useState<LoadState>({ status: "idle" });
   const [expandedMetric, setExpandedMetric] = React.useState<MetricKey | null>(null);
 
-  // Reset when brand changes (new accounts arrive from server)
+  // Re-resolve the selected account when the brand or platform changes (each
+  // platform keeps its own remembered selection and its own account list).
   React.useEffect(() => {
-    const newFirst = accounts[0]?.integrationAccountId ?? null;
-    setSelectedAccountId(newFirst);
+    const stored = getSelection(brandId, platform);
+    const isValid = stored !== null && platformAccounts.some((a) => a.integrationAccountId === stored);
+    setSelectedAccountId(isValid ? stored : (platformAccounts[0]?.integrationAccountId ?? null));
     setState({ status: "idle" });
     setExpandedMetric(null);
-  }, [brandId, accounts]);
+  }, [brandId, platform, platformAccounts, getSelection]);
 
-  const selectedAccount = accounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
+  const selectedAccount = platformAccounts.find((account) => account.integrationAccountId === selectedAccountId) ?? null;
 
   React.useEffect(() => {
-    if (selectedAccountId === null || platform !== "instagram") {
-      if (platform !== "instagram") {
+    if (selectedAccountId === null || !isSupportedPlatform) {
+      if (!isSupportedPlatform) {
         setState({ status: "idle" });
       }
       return;
@@ -397,19 +217,6 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
           range: { preset: DEFAULT_RANGE_PRESET },
         };
 
-        // Request time series data for trends view
-        if (viewMode === "trends") {
-          request.insightsRequests = [
-            {
-              metrics: ["reach", "views", "accounts_engaged", "likes", "comments", "shares"],
-              metric_type: "time_series",
-              period: "day",
-              since: "2025-12-01", // Would be calculated from range
-              until: "2025-12-07", // Would be calculated from range
-            },
-          ];
-        }
-
         const data = await fetchOrganicMetrics(request);
         if (cancelled) return;
         setState({ status: "success", data });
@@ -426,7 +233,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
     return () => {
       cancelled = true;
     };
-  }, [brandId, selectedAccountId, viewMode, platform]);
+  }, [brandId, selectedAccountId, platform]);
 
   return (
     <Card data-tour-id="dashboard-organic-metrics" variant="surface" className={cn("border border-subtle bg-surface flex flex-col gap-0 overflow-hidden py-0", className)}>
@@ -445,8 +252,8 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
                   <Text>Instagram</Text>
                 </Flex>
               </Select.Item>
-              <Select.Item value="youtube" disabled>
-                <Flex align="center" gap="2" style={{ opacity: 0.5 }}>
+              <Select.Item value="youtube">
+                <Flex align="center" gap="2">
                   <PlatformIcon platform="youtube" />
                   <Text>YouTube</Text>
                 </Flex>
@@ -467,38 +274,26 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
           </Select.Root>
           <h3 className="truncate text-xs font-semibold capitalize sm:text-sm">{platform} reporting</h3>
           <span className="hidden whitespace-nowrap rounded border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline-block">
-            {rangeLabel(DEFAULT_RANGE_PRESET)} · {viewMode}
+            {rangeLabel(DEFAULT_RANGE_PRESET)}
           </span>
         </div>
 
         <div className="flex items-center gap-1">
-          <div className="inline-flex rounded-md border border-border/70 bg-background p-0.5">
-            {(["overview", "trends"] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setViewMode(mode)}
-                className={cn(
-                  "h-6 rounded px-2 text-[11px] font-medium capitalize transition-colors active:scale-[0.96]",
-                  viewMode === mode ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:text-foreground",
-                )}
-                style={{ transitionProperty: "background-color, color, scale" }}
-                aria-pressed={viewMode === mode}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-
           <div data-tour-id="dashboard-account-selector" className="inline-flex">
-            <Select.Root value={selectedAccountId ?? ""} onValueChange={(value) => setSelectedAccountId(value)}>
+            <Select.Root
+              value={selectedAccountId ?? ""}
+              onValueChange={(value) => {
+                setSelectedAccountId(value);
+                setSelection(brandId, platform, value);
+              }}
+            >
               <Select.Trigger variant="surface" radius="medium" className="h-7 text-[11px]">
                 {selectedAccount?.name ?? `Select ${platform} account`}
               </Select.Trigger>
               <Select.Content position="popper" variant="solid" highContrast>
                 <Select.Group>
                   <Select.Label>{platform} accounts</Select.Label>
-                  {accounts.map((account) => (
+                  {platformAccounts.map((account) => (
                     <Select.Item key={account.integrationAccountId} value={account.integrationAccountId}>
                       {account.name}
                     </Select.Item>
@@ -512,7 +307,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
 
       <Box p="2" className="min-h-0 flex flex-col">
         <Box pt="0" className="min-h-0">
-          {platform !== "instagram" ? (
+          {!isSupportedPlatform ? (
              <Box py="8">
                 <Flex direction="column" align="center" justify="center" gap="3">
                   <PlatformIcon platform={platform === "x" ? "threads" : platform} size={48} className="opacity-20" />
@@ -522,7 +317,7 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
                   </Text>
                 </Flex>
              </Box>
-          ) : accounts.length === 0 ? (
+          ) : platformAccounts.length === 0 ? (
             <Text color="gray" size="2">
               No {platform} accounts are linked to this brand profile.
             </Text>
@@ -536,15 +331,11 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, initialPlat
           ) : state.status === "loading" ? (
             <OrganicMetricsWidgetSkeleton />
            ) : state.status === "success" ? (
-             viewMode === "overview" ? (
-               <MetricsPanel
-                 data={state.data}
-                 expandedMetric={expandedMetric}
-                 onMetricSelect={setExpandedMetric}
-               />
-             ) : (
-               <TrendsPanel data={state.data} />
-             )
+             <MetricsPanel
+               data={state.data}
+               expandedMetric={expandedMetric}
+               onMetricSelect={setExpandedMetric}
+             />
            ) : (
             <Text color="gray" size="2">
               Select a {platform} account to view organic reporting.
@@ -570,7 +361,7 @@ function MetricsPanel({
   const interactionBreakdowns = rawBreakdowns as Record<string, Record<string, number>> | undefined;
 
   const metricCards: MetricCard[] = [];
-  
+
   if (metrics.views !== undefined) metricCards.push({ key: "views", label: METRIC_LABELS.views, value: metrics.views });
   if (metrics.reach !== undefined) metricCards.push({ key: "reach", label: METRIC_LABELS.reach, value: metrics.reach });
   if (metrics.newFollowers !== undefined) metricCards.push({ key: "newFollowers", label: METRIC_LABELS.newFollowers, value: metrics.newFollowers });
@@ -580,10 +371,11 @@ function MetricsPanel({
 
   const expandedKey = expandedMetric ?? "views";
   const expandedLabel = expandedKey ? METRIC_LABELS[expandedKey] : "";
-  
-  const chartData = React.useMemo(() => {
-    return generateSampleTrendData(range, metrics, expandedKey);
-  }, [range, metrics, expandedKey]);
+
+  const chartData = React.useMemo(
+    () => buildDailySeries(data.trends, expandedKey),
+    [data.trends, expandedKey],
+  );
 
   const chartConfig = {
     value: {
@@ -653,40 +445,48 @@ function MetricsPanel({
               </Flex>
 
               <Box className="flex-1 min-h-0 overflow-hidden">
-                <ChartContainer config={chartConfig} className="h-[250px] w-full aspect-auto">
-                  <LineChart data={chartData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date" 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      minTickGap={30}
-                    />
-                    <YAxis 
-                      tickLine={false} 
-                      axisLine={false} 
-                      domain={['auto', 'auto']}
-                      width={40}
-                      tickFormatter={(value) => {
-                         if (typeof value !== 'number') return String(value);
-                         return value >= 1000 ? (value/1000).toFixed(1) + 'k' : String(value);
-                      }}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent 
-                      labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-                    />} />
-                    <Line
-                      type="monotone"
-                      dataKey="value"
-                      stroke="var(--color-primary)"
-                      strokeWidth={2}
-                      dot={{ r: 4, fill: "var(--color-primary)" }}
-                      activeDot={{ r: 6 }}
-                      animationDuration={500}
-                    />
-                  </LineChart>
-                </ChartContainer>
+                {chartData ? (
+                  <ChartContainer config={chartConfig} className="h-[250px] w-full aspect-auto">
+                    <LineChart data={chartData} margin={{ left: 0, right: 8, top: 10, bottom: 0 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="date"
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        minTickGap={30}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        domain={['auto', 'auto']}
+                        width={40}
+                        tickFormatter={(value) => {
+                           if (typeof value !== 'number') return String(value);
+                           return value >= 1000 ? (value/1000).toFixed(1) + 'k' : String(value);
+                        }}
+                      />
+                      <ChartTooltip content={<ChartTooltipContent
+                        labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+                      />} />
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="var(--color-primary)"
+                        strokeWidth={2}
+                        dot={{ r: 4, fill: "var(--color-primary)" }}
+                        activeDot={{ r: 6 }}
+                        animationDuration={500}
+                      />
+                    </LineChart>
+                  </ChartContainer>
+                ) : (
+                  <Flex align="center" justify="center" className="h-[250px]">
+                    <Text color="gray" size="2" align="center">
+                      Daily breakdown unavailable for {expandedLabel}.
+                    </Text>
+                  </Flex>
+                )}
               </Box>
             </Box>
           </Card>

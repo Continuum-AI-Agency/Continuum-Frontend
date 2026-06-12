@@ -12,9 +12,9 @@ import type {
 import { useBackgroundJobs } from "../state/BackgroundJobsProvider";
 
 const DIRECTION_LABEL: Record<GenerationDirection, string> = {
-  product: "Product-led",
-  brand_awareness: "Brand awareness",
-  hybrid: "Hybrid",
+  brand_awareness: "Brand values",
+  product: "Promo",
+  hybrid: "Social proof",
 };
 
 type Phase = "generating" | "done" | "error";

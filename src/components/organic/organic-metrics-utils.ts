@@ -11,18 +11,12 @@ export type PostSortKey = "recent" | "hookRate" | "views" | "reach" | "engagemen
 
 const HOOK_RATE_THRESHOLDS = { elite: 40, good: 25, average: 15 } as const;
 
+// Hook rate is the native organic signal only: hookRate = 100 - reels_skip_rate,
+// computed edge-side and delivered on metrics.hookRate. There is no watch-time
+// proxy fallback — when Meta omits the (in-development) skip-rate metric the card
+// simply does not render.
 export function calculateHookRate(post: OrganicPost): number | undefined {
-  if (post.metrics?.hookRate !== undefined) return post.metrics.hookRate;
-
-  const mediaType = (post.mediaType ?? "").toUpperCase();
-  const productType = (post.mediaProductType ?? "").toUpperCase();
-  if (mediaType !== "VIDEO" && productType !== "REELS" && productType !== "REEL") return undefined;
-
-  // Meta removed 3-sec views + impressions from media insights (2025-04-21). Avg watch
-  // time is the surviving signal: avg watch >= 3s reads as ~100% hook retention.
-  const avgWatchMs = post.metrics?.reelsAvgWatchTime;
-  if (avgWatchMs === undefined || !Number.isFinite(avgWatchMs) || avgWatchMs <= 0) return undefined;
-  return Math.max(0, Math.min(100, (avgWatchMs / 3000) * 100));
+  return post.metrics?.hookRate;
 }
 
 // Reels watch time arrives from Meta in milliseconds; render it human-readable.
@@ -68,6 +62,59 @@ export function sortPosts(posts: OrganicPost[], key: PostSortKey): OrganicPost[]
   });
 }
 
+// YouTube post-type filter for the gallery: Shorts, regular videos, or both.
+export type YoutubePostTypeFilter = "all" | "shorts" | "videos";
+
+// The edge fetcher classifies each YouTube video as a Short or a regular video
+// (Analytics creatorContentType, duration <=180s fallback) and emits it on
+// mediaProductType, mirroring how Instagram uses mediaProductType for REELS/FEED.
+export function isYouTubeShort(post: OrganicPost): boolean {
+  return (post.mediaProductType ?? "").toUpperCase() === "SHORTS";
+}
+
+export function filterPostsByYoutubeType(
+  posts: OrganicPost[],
+  filter: YoutubePostTypeFilter
+): OrganicPost[] {
+  if (filter === "all") return posts;
+  const wantShort = filter === "shorts";
+  return posts.filter((post) => isYouTubeShort(post) === wantShort);
+}
+
+export type YoutubeTypeSummary = {
+  count: number;
+  views: number;
+  likes: number;
+  comments: number;
+  avgHookRate: number | undefined;
+};
+
+// Aggregate the per-type analytics shown above the filtered YouTube gallery.
+export function summarizeYoutubeTypeMetrics(posts: OrganicPost[]): YoutubeTypeSummary {
+  const totals = posts.reduce(
+    (acc, post) => {
+      acc.count += 1;
+      acc.views += post.metrics?.views ?? 0;
+      acc.likes += post.metrics?.likes ?? 0;
+      acc.comments += post.metrics?.comments ?? 0;
+      const hook = post.metrics?.hookRate;
+      if (typeof hook === "number") {
+        acc.hookSum += hook;
+        acc.hookCount += 1;
+      }
+      return acc;
+    },
+    { count: 0, views: 0, likes: 0, comments: 0, hookSum: 0, hookCount: 0 }
+  );
+  return {
+    count: totals.count,
+    views: totals.views,
+    likes: totals.likes,
+    comments: totals.comments,
+    avgHookRate: totals.hookCount > 0 ? Number((totals.hookSum / totals.hookCount).toFixed(1)) : undefined,
+  };
+}
+
 export const POST_GALLERY_WINDOW_DAYS = 30;
 export const POST_GALLERY_MAX_DAYS = 90;
 
@@ -104,6 +151,10 @@ export function postWindowRange(windowOffset: number, now = new Date()) {
   };
 }
 
+// Keys that support a day-over-day comparison: the 4 charted metrics plus the
+// raw engagement counts the snapshot deltas also carry (likes/shares/saved).
+export type PostComparisonKey = PostMetricKey | "likes" | "shares" | "saved";
+
 export function normalizeDailyBreakdown(points: OrganicPostBreakdownPoint[] | undefined) {
   return (points ?? [])
     .map((point) => ({
@@ -112,6 +163,9 @@ export function normalizeDailyBreakdown(points: OrganicPostBreakdownPoint[] | un
       views: point.views ?? 0,
       engagement: point.engagement ?? 0,
       comments: point.comments ?? 0,
+      likes: point.likes ?? 0,
+      shares: point.shares ?? 0,
+      saved: point.saved ?? 0,
     }))
     .filter((point) => point.date.length > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -122,33 +176,50 @@ function metricValueFromBreakdownPoint(point: {
   views?: number;
   engagement?: number;
   comments?: number;
-}, metricKey: PostMetricKey) {
-  if (metricKey === "reach") return point.reach ?? 0;
-  if (metricKey === "views") return point.views ?? 0;
-  if (metricKey === "engagement") return point.engagement ?? 0;
-  return point.comments ?? 0;
+  likes?: number;
+  shares?: number;
+  saved?: number;
+}, metricKey: PostComparisonKey) {
+  switch (metricKey) {
+    case "reach":
+      return point.reach ?? 0;
+    case "views":
+      return point.views ?? 0;
+    case "engagement":
+      return point.engagement ?? 0;
+    case "comments":
+      return point.comments ?? 0;
+    case "likes":
+      return point.likes ?? 0;
+    case "shares":
+      return point.shares ?? 0;
+    case "saved":
+      return point.saved ?? 0;
+    default:
+      return 0;
+  }
 }
 
-function recentPostBreakdown(post: OrganicPost | null, window: DrilldownWindow) {
+// Per-post trends are capped to the 7-day window. Meta serves no media-level
+// history, so per-post data is only our forward-accruing daily snapshots (which
+// fill in over ~7 days); a deeper window would just render empty/partial data, so
+// we don't offer one.
+function recentPostBreakdown(post: OrganicPost | null) {
   if (!post) return [];
   const today = toYmd(new Date());
-  const sourcePoints =
-    window === "30d"
-      ? post.breakdown30d ?? post.breakdown7d
-      : post.breakdown7d ?? post.breakdown30d;
+  const sourcePoints = post.breakdown7d ?? post.breakdown30d;
 
   return normalizeDailyBreakdown(sourcePoints)
     .filter((point) => point.date <= today)
-    .slice(-(window === "30d" ? 30 : 7));
+    .slice(-7);
 }
 
 export function buildPostMetricSeries(params: {
   post: OrganicPost | null;
   metricKey: PostMetricKey;
-  window: DrilldownWindow;
 }) {
-  const { post, metricKey, window } = params;
-  const breakdown = recentPostBreakdown(post, window);
+  const { post, metricKey } = params;
+  const breakdown = recentPostBreakdown(post);
 
   return breakdown.map((point) => ({
     date: point.date,
@@ -161,15 +232,15 @@ function percentageChange(current: number, previous: number) {
   return Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1));
 }
 
-export function post24hComparisons(post: OrganicPost | null): Partial<Record<PostMetricKey, MetricComparison>> {
-  const daily = recentPostBreakdown(post, "7d");
+export function post24hComparisons(post: OrganicPost | null): Partial<Record<PostComparisonKey, MetricComparison>> {
+  const daily = recentPostBreakdown(post);
   if (daily.length < 2) return {};
 
   const currentDay = daily[daily.length - 1];
   const previousDay = daily[daily.length - 2];
   if (!currentDay || !previousDay) return {};
 
-  const keys: PostMetricKey[] = ["reach", "views", "engagement", "comments"];
+  const keys: PostComparisonKey[] = ["reach", "views", "engagement", "comments", "likes", "shares", "saved"];
   const entries = keys.map((key) => {
     const current = metricValueFromBreakdownPoint(currentDay, key);
     const previous = metricValueFromBreakdownPoint(previousDay, key);
@@ -187,7 +258,7 @@ export function post24hComparisons(post: OrganicPost | null): Partial<Record<Pos
 }
 
 export function summarizePost7dMetrics(post: OrganicPost | null): Partial<Record<PostMetricKey, number>> {
-  const recent = recentPostBreakdown(post, "7d");
+  const recent = recentPostBreakdown(post);
   if (recent.length === 0) return {};
 
   return recent.reduce<Partial<Record<PostMetricKey, number>>>(

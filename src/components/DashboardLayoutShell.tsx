@@ -62,7 +62,7 @@ export default function DashboardLayoutShell({
 
           <SidebarProvider defaultOpen={false}>
             <AppSidebar />
-            <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-screen">
+            <SidebarInset className="bg-transparent overflow-hidden flex flex-col h-dvh">
               <TourProvider>
                 <DashboardHeader />
                 <main className="@container/app-main flex-1 min-h-0 overflow-y-auto px-[var(--shell-gutter)] pb-[var(--shell-stack-gap)]">

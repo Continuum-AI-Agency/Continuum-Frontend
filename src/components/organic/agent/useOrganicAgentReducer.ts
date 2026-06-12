@@ -121,6 +121,11 @@ function applyPipelineCard(
     pct: card.status === "completed" ? 100 : base.pct,
     quality: card.quality ?? base.quality,
     preview: card.preview ?? base.preview,
+    // Merge checkpoint fields so a later card update that omits checkpoint
+    // doesn't wipe out textReady/blueprintReady received on an earlier frame.
+    checkpoint: card.checkpoint
+      ? { ...base.checkpoint, ...card.checkpoint }
+      : base.checkpoint,
   }
 }
 

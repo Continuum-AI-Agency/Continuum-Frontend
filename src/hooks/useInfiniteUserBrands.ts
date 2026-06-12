@@ -125,7 +125,10 @@ async function fetchUserBrandPage({
     .schema("brand_profiles")
     .from("brand_profiles")
     .select("id, brand_name, logo_path, completed_at")
-    .in("id", brandIds);
+    .in("id", brandIds)
+    // Exclude soft-deleted brands (active=false) so a deleted brand does not
+    // reappear in the paginated brand list.
+    .eq("active", true);
 
   if (brandsError) {
     throw brandsError;

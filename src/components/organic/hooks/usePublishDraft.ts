@@ -14,10 +14,24 @@ type StartedEvent = { type: "started"; postType: string }
 type ProcessingEvent =
   | { type: "processing"; stage: "container_created"; containerId: string; itemIndex?: number }
   | { type: "processing"; stage: "polling"; attempt: number; statusCode: string; containerId: string }
+  | { type: "processing"; stage: "carousel_retry"; attempt: number }
 type PublishedEvent = { type: "published"; postId: string | null; postType: string; igUserId: string }
 type FailedEvent = { type: "failed"; error: string; code: string }
 
 type PublishSSEEvent = StartedEvent | ProcessingEvent | PublishedEvent | FailedEvent
+
+// User-facing copy for the precise publish failure codes the backend now maps
+// from Instagram's fbErrorCode + the staging gate. Falls back to the raw message.
+const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
+  token_expired: "Your Instagram connection expired. Reconnect your account, then try again.",
+  rate_limited: "Instagram is temporarily rate-limiting requests. Wait a few minutes and try again.",
+  media_processing_error: "Instagram couldn't process this media. Check the file and try again.",
+  media_staging_failed: "We couldn't prepare your media for Instagram. Re-attach the creative and try again.",
+}
+
+function describePublishError(code: string, fallback: string): string {
+  return PUBLISH_ERROR_MESSAGES[code] ?? fallback
+}
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -191,8 +205,9 @@ export function usePublishDraft(): UsePublishDraftResult {
               ) {
                 setTokenExpired(true)
               }
-              setError(ev.error)
-              show({ title: "Publishing failed", description: ev.error, variant: "error" })
+              const description = describePublishError(ev.code, ev.error)
+              setError(description)
+              show({ title: "Publishing failed", description, variant: "error" })
             }
           }
         }

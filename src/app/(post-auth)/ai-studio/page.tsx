@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 function AIStudioSkeleton() {
   return (
-    <div className="fixed inset-x-0 top-0 flex h-screen h-[100dvh] items-center justify-center bg-slate-950 text-white md:left-[var(--app-sidebar-width,5.5rem)]">
+    <div className="fixed inset-x-0 top-0 flex h-dvh items-center justify-center bg-slate-950 text-white md:left-[var(--app-sidebar-width,5.5rem)]">
       <div className="rounded-2xl border border-white/10 bg-slate-900/70 px-6 py-4 shadow-xl">
         Loading AI Studio...
       </div>

@@ -3,15 +3,17 @@
 import { useState } from "react";
 import { useAwarenessReport, useCompetitors } from "@/lib/api/competitorSpy";
 import { AdSnapshotGrid } from "./AdSnapshotGrid";
+import { InstagramPostGrid } from "./InstagramPostGrid";
 import { CompetitorSpyFilters } from "./CompetitorSpyFilters";
 import { AwarenessReportView } from "./AwarenessReportView";
 import { CompetitorManager } from "./CompetitorManager";
 
-type TabId = "overview" | "feed" | "competitors";
+type TabId = "overview" | "organic" | "paid" | "competitors";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
-  { id: "feed", label: "Ad Feed" },
+  { id: "organic", label: "Instagram Posts" },
+  { id: "paid", label: "Paid Ads" },
   { id: "competitors", label: "Competitors" },
 ];
 
@@ -32,9 +34,9 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
   return (
     <div className="flex h-full flex-col gap-4 p-4 md:p-6">
       <header>
-        <h1 className="text-xl font-semibold">Competitor Spy</h1>
+        <h1 className="text-xl font-semibold">Brand Spy</h1>
         <p className="text-sm text-muted-foreground">
-          Track competitors&apos; paid ad creatives and how they evolve over time.
+          Track competitor Instagram posts and paid ad creatives in one Ad Spy workspace.
         </p>
       </header>
 
@@ -48,7 +50,18 @@ export function CompetitorSpyClient({ brandId }: { brandId: string }) {
 
       <div className="flex-1 overflow-auto">
         {tab === "overview" ? <AwarenessReportView report={awareness ?? null} /> : null}
-        {tab === "feed" ? (
+        {tab === "organic" ? (
+          <div className="space-y-4">
+            <CompetitorSpyFilters
+              competitors={competitors ?? []}
+              competitorId={competitorId}
+              onCompetitorChange={setCompetitorId}
+              showStatus={false}
+            />
+            <InstagramPostGrid brandId={brandId} competitorId={competitorId} />
+          </div>
+        ) : null}
+        {tab === "paid" ? (
           <div className="space-y-4">
             <CompetitorSpyFilters
               competitors={competitors ?? []}

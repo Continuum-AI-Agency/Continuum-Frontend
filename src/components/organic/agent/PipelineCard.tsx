@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { AlertCircle, Check, Loader2 } from "lucide-react";
+import { AlertCircle, Check, Clock, ImageOff, Loader2, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { useCalendarStore } from "@/lib/organic/store";
 import {
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { AgentCard, MetaRow, PlatformTag, StatusLabel } from "./agentCardKit";
-import type { PipelineCardState, PipelinePreview, PipelineStage, PipelineStageNode } from "./types";
+import type { CheckpointState, PipelineCardState, PipelinePreview, PipelineStage, PipelineStageNode } from "./types";
 
 const STAGE_LABELS: Record<PipelineStage, string> = {
   strategist: "Strategy",
@@ -113,6 +113,94 @@ function StageNode({ node, index }: { node: PipelineStageNode; index: number }) 
   );
 }
 
+// Three-step media checkpoint labels shown once text-ready is received.
+const CHECKPOINT_STEPS = [
+  { key: "caption" as const, label: "Caption" },
+  { key: "creative" as const, label: "Creative direction" },
+  { key: "media" as const, label: "Media" },
+] as const;
+
+type CheckpointStepKey = typeof CHECKPOINT_STEPS[number]["key"];
+
+function checkpointStepStatus(
+  key: CheckpointStepKey,
+  cp: CheckpointState,
+): "done" | "active" | "awaiting" | "generating" | "ready" | "user_supplied" | "pending" {
+  if (key === "caption") return cp.textReady ? "done" : "active";
+  if (key === "creative") {
+    if (!cp.textReady) return "pending";
+    return cp.blueprintReady ? "done" : "active";
+  }
+  // media step
+  if (!cp.blueprintReady) return "pending";
+  if (cp.awaitingMediaChoice) return "awaiting";
+  if (cp.mediaStatus === "generating") return "generating";
+  if (cp.mediaStatus === "ready") return "ready";
+  if (cp.mediaStatus === "user_supplied") return "user_supplied";
+  return "pending";
+}
+
+function CheckpointStepNode({ stepKey, label, checkpoint }: {
+  stepKey: CheckpointStepKey;
+  label: string;
+  checkpoint: CheckpointState;
+}) {
+  const status = checkpointStepStatus(stepKey, checkpoint);
+
+  const dot =
+    status === "done" ? (
+      <Check className="h-3 w-3 text-emerald-500" />
+    ) : status === "active" || status === "generating" ? (
+      <Loader2 className="h-3 w-3 animate-spin text-amber-500" />
+    ) : status === "awaiting" ? (
+      <Clock className="h-3 w-3 text-muted-foreground" />
+    ) : status === "ready" || status === "user_supplied" ? (
+      <Sparkles className="h-3 w-3 text-emerald-500" />
+    ) : (
+      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+    );
+
+  const sublabel =
+    status === "awaiting"
+      ? "Awaiting your choice"
+      : status === "generating"
+        ? "Generating…"
+        : status === "user_supplied"
+          ? "Your creative"
+          : status === "ready"
+            ? "Ready"
+            : null;
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center gap-1">
+      <div className="flex h-4 items-center justify-center">{dot}</div>
+      <span
+        className={cn(
+          "text-center text-[10px] leading-none",
+          status === "pending" ? "text-muted-foreground/40" : "text-muted-foreground",
+        )}
+      >
+        {label}
+      </span>
+      {sublabel && (
+        <span className="text-center text-[9px] leading-none text-muted-foreground/70">
+          {sublabel}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CheckpointStepper({ checkpoint }: { checkpoint: CheckpointState }) {
+  return (
+    <div className="flex items-start gap-1">
+      {CHECKPOINT_STEPS.map(({ key, label }) => (
+        <CheckpointStepNode key={key} stepKey={key} label={label} checkpoint={checkpoint} />
+      ))}
+    </div>
+  );
+}
+
 export function PipelineCard({ card }: { card: PipelineCardState }) {
   const status = STATUS[card.status];
   const quality = qualityPercent(card.quality?.overallScore);
@@ -143,11 +231,15 @@ export function PipelineCard({ card }: { card: PipelineCardState }) {
         </StatusLabel>
       </div>
 
-      <div className="flex items-start gap-1">
-        {card.stages.map((node, idx) => (
-          <StageNode key={node.stage} node={node} index={idx} />
-        ))}
-      </div>
+      {card.checkpoint ? (
+        <CheckpointStepper checkpoint={card.checkpoint} />
+      ) : (
+        <div className="flex items-start gap-1">
+          {card.stages.map((node, idx) => (
+            <StageNode key={node.stage} node={node} index={idx} />
+          ))}
+        </div>
+      )}
 
       {isRunning && (
         <div className="h-0.5 w-full overflow-hidden rounded-full bg-muted">

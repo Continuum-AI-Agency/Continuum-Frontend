@@ -4,8 +4,8 @@ import { getActiveBrandContext } from "@/lib/brands/active-brand-context";
 import { CompetitorSpyClient } from "@/components/competitor-spy/CompetitorSpyClient";
 
 export const metadata: Metadata = {
-  title: "Competitor Spy | Continuum AI",
-  description: "Track competitors' paid ad creatives and how they evolve over time.",
+  title: "Brand Spy | Continuum AI",
+  description: "Track competitor Instagram posts and paid ad creatives in one Ad Spy workspace.",
 };
 
 export default async function CompetitorSpyPage() {
@@ -15,7 +15,7 @@ export default async function CompetitorSpyPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height,600px)] w-full overflow-hidden">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height,600px)] w-full overflow-hidden">
       <CompetitorSpyClient brandId={activeBrandId} />
     </div>
   );

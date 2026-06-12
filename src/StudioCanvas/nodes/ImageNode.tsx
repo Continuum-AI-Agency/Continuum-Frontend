@@ -42,10 +42,11 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Copy, Trash2 } from 'lucide-react';
+import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from 'lucide-react';
 import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { ImageMarkupDialog, ImageMarkupSaveResult } from '@/components/ai-studio/markup/ImageMarkupDialog';
 import { parseDataUrl } from '../utils/dataUrl';
+import { referenceStatusBadge } from './referenceStatusBadge';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -81,6 +82,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
+  const refBadge = referenceStatusBadge(data.referenceStatus);
 
   const handleRefTypeChange = useCallback((value: string) => {
     setRefType(value);
@@ -419,6 +421,21 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
                   <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm">
                     <Pencil2Icon className="h-2.5 w-2.5" />
                     <span>Marked up</span>
+                  </div>
+                )}
+                {refBadge && (
+                  <div
+                    className={cn(
+                      "absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium text-white shadow-sm",
+                      refBadge.tone === "processing" && "bg-blue-500/90",
+                      refBadge.tone === "ready" && "bg-emerald-500/90",
+                      refBadge.tone === "error" && "bg-red-500/90",
+                    )}
+                  >
+                    {refBadge.tone === "processing" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                    {refBadge.tone === "ready" && <CheckCircle2 className="h-2.5 w-2.5" />}
+                    {refBadge.tone === "error" && <XCircle className="h-2.5 w-2.5" />}
+                    <span>{refBadge.label}</span>
                   </div>
                 )}
               </div>

@@ -28,7 +28,7 @@ export default async function PaidMediaPage() {
   const firstAccountId = initialAccounts[0]?.id ?? null;
 
   return (
-    <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full overflow-hidden">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full overflow-hidden">
       <PaidMediaClientPage
         brandProfileId={activeBrandId}
         brandName={brandName}

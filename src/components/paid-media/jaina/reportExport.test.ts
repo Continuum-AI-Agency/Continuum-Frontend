@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 
 import {
   buildJainaReportHtml,
-  buildJainaReportV2Html,
   createJainaReportFilename,
   createJainaReportHtmlFilename,
   formatMetricValueForPdf,
@@ -112,54 +111,5 @@ describe("buildJainaReportHtml", () => {
     expect(html).toContain("Shift budget");
     expect(html).toContain("Summary &lt;script&gt;");
     expect(html).not.toContain("Summary <script>");
-  });
-});
-
-describe("buildJainaReportV2Html", () => {
-  it("renders block-based reports with chart metadata and data tables", () => {
-    const html = buildJainaReportV2Html({
-      language: "en",
-      executive_summary: "Executive summary",
-      blocks: [
-        {
-          block_id: "chart-1",
-          category: "chart",
-          scope: "campaign",
-          title: "ROAS chart",
-          priority: 1,
-          chart_type: "line",
-          category_key: "date",
-          value_key: "roas",
-          value_format: "multiplier",
-          data: [{ date: "2026-01-01", roas: 2.5 }],
-          chart_config: { roas: { label: "ROAS", color: "#000" } },
-        },
-        {
-          block_id: "table-1",
-          category: "data_table",
-          scope: "campaign",
-          title: "Campaign table",
-          priority: 2,
-          columns: [{ key: "name", label: "Name", format: "text", align: "left" }],
-          rows: [{ name: "Campaign A" }],
-          notes: null,
-        },
-      ],
-      follow_up_questions: ["Next question?"],
-      media_map: {},
-      _meta: {
-        schema_version: "2",
-        block_count: 2,
-        has_charts: true,
-        has_media: false,
-        primary_scope: "campaign",
-      },
-    });
-
-    expect(html).toContain("ROAS chart");
-    expect(html).toContain("data-jaina-chart");
-    expect(html).toContain("Chart type");
-    expect(html).toContain("Campaign table");
-    expect(html).toContain("Campaign A");
   });
 });

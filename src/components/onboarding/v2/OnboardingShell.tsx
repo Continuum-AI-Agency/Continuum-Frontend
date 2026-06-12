@@ -29,7 +29,7 @@ export function OnboardingShell({
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
       <header className="border-b border-border bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-card/80">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-8 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <ContinuumWordmark />
           <div className="flex items-center gap-3">
             <p className="hidden text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground md:block">
@@ -38,13 +38,13 @@ export function OnboardingShell({
             {headerRight}
           </div>
         </div>
-        <div className="mx-auto max-w-6xl px-8 pb-5">
+        <div className="mx-auto max-w-6xl px-6 pb-4">
           <OnboardingStepper steps={steps} onStepClick={onStepClick} />
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       <footer className="border-t border-border bg-white dark:bg-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-8 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {onStartOver ? <StartOverButton onConfirm={onStartOver} disabled={startOverDisabled} /> : null}
             <span className="truncate text-[12px] leading-snug text-muted-foreground">{bottomHint}</span>

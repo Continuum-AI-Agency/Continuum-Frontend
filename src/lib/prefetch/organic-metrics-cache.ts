@@ -17,7 +17,7 @@ const cache = new Map<CacheKey, CacheEntry>();
 function buildKey(
   brandId: string,
   integrationAccountId: string,
-  platform: "instagram" | "facebook" | "tiktok",
+  platform: "instagram" | "facebook" | "tiktok" | "youtube",
   rangePreset: string,
   scope: string,
 ): CacheKey {
@@ -35,7 +35,7 @@ function isStale(entry: CacheEntry): boolean {
 export function prefetchMetricsDashboard(params: {
   brandId: string;
   integrationAccountId: string;
-  platform: "instagram" | "facebook" | "tiktok";
+  platform: "instagram" | "facebook" | "tiktok" | "youtube";
   rangePreset?: string;
 }): void {
   const { brandId, integrationAccountId, platform, rangePreset = "last_7d" } = params;
@@ -78,7 +78,7 @@ export function prefetchMetricsDashboard(params: {
 export function consumePrefetched(
   brandId: string,
   integrationAccountId: string,
-  platform: "instagram" | "facebook" | "tiktok",
+  platform: "instagram" | "facebook" | "tiktok" | "youtube",
   rangePreset: string,
   scope: string,
 ): Promise<InstagramOrganicMetricsResponse> | null {

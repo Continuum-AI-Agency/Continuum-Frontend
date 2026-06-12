@@ -293,9 +293,10 @@ async function OrganicContent({
       tiktok: onboarding.connections.tiktok,
     },
   });
-  const initialMetricsPlatform: "instagram" | "facebook" | "tiktok" =
+  const initialMetricsPlatform: "instagram" | "facebook" | "tiktok" | "youtube" =
     metricAccountsByPlatform.instagram.length > 0 ? "instagram"
     : metricAccountsByPlatform.tiktok.length > 0 ? "tiktok"
+    : metricAccountsByPlatform.youtube.length > 0 ? "youtube"
     : "facebook";
 
   return (
@@ -368,7 +369,7 @@ export default async function OrganicPage({ searchParams }: OrganicPageProps) {
       : "month";
 
   return (
-    <div className="h-[calc(100dvh-4.25rem)] min-h-[var(--workspace-min-height)] w-full overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
+    <div className="h-[var(--app-content-h)] min-h-[var(--workspace-min-height)] w-full overflow-hidden px-2 pb-2 sm:px-3 lg:px-4">
       <Suspense fallback={<OrganicContentSkeleton />}>
         <OrganicContent
           initialSelectedDraftId={initialSelectedDraftId}

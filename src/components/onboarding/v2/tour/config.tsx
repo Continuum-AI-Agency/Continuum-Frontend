@@ -4,6 +4,7 @@ export const TOUR_DASHBOARD = "walkthrough-dashboard";
 export const TOUR_AI_CANVAS = "walkthrough-ai-canvas";
 export const TOUR_ORGANIC = "walkthrough-organic";
 export const TOUR_PAID_MEDIA = "walkthrough-paid-media";
+export const ORGANIC_PLANNER_TOUR_VIEWPORT_ID = "organic-planner-tour-viewport";
 
 export type TourName =
   | typeof TOUR_DASHBOARD
@@ -188,8 +189,11 @@ export const organicTour: Tour = {
       content: paragraph(
         "Schedule and move posts across every channel from a single calendar. Drag to reschedule, click to refine."
       ),
-      selector: "[data-tour-id='organic-calendar']",
-      side: "top",
+      selector: "[data-tour-id='organic-calendar-controls']",
+      side: "bottom",
+      viewportID: ORGANIC_PLANNER_TOUR_VIEWPORT_ID,
+      pointerPadding: 8,
+      pointerRadius: 10,
       showControls: true,
       showSkip: true,
     },
@@ -201,6 +205,9 @@ export const organicTour: Tour = {
       ),
       selector: "[data-tour-id='organic-list-view']",
       side: "bottom",
+      viewportID: ORGANIC_PLANNER_TOUR_VIEWPORT_ID,
+      pointerPadding: 8,
+      pointerRadius: 10,
       showControls: true,
       showSkip: true,
     },
@@ -210,8 +217,11 @@ export const organicTour: Tour = {
       content: paragraph(
         "The list groups everything by status — backlog, drafts, scheduled, and published — so you can sweep through each pile in order."
       ),
-      selector: "[data-tour-id='organic-list']",
+      selector: "[data-tour-id='organic-list-content']",
       side: "top",
+      viewportID: ORGANIC_PLANNER_TOUR_VIEWPORT_ID,
+      pointerPadding: 8,
+      pointerRadius: 10,
       showControls: true,
       showSkip: true,
     },

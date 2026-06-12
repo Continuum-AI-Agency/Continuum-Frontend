@@ -99,6 +99,19 @@ export const streamInspirations = async (params: {
   await readFrames(response, onboardingInspirationsStreamFrameSchema, params.onFrame);
 };
 
+// The generation stream runs on a Supabase edge function
+// (onboarding-inspirations-generate), called directly from the browser with the
+// user's JWT — not the Backend. apikey routes through the Supabase gateway; the
+// function self-verifies the JWT and checks brand access via RLS.
+const getSupabaseFunctionsConfig = (): { url: string; anonKey: string } => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) throw new Error("supabase_functions_not_configured");
+  return { url: url.replace(/\/+$/, ""), anonKey };
+};
+
 export const streamGeneration = async (params: {
   brandId: string;
   referenceImageUrl?: string | null;
@@ -106,14 +119,24 @@ export const streamGeneration = async (params: {
   signal?: AbortSignal;
   onFrame: (frame: OnboardingGenerationStreamFrame) => void;
 }): Promise<void> => {
-  const response = await postStream(
-    "/api/onboarding/inspirations/generate",
-    {
+  const token = await getBrowserAccessToken();
+  const { url, anonKey } = getSupabaseFunctionsConfig();
+  const response = await fetch(`${url}/functions/v1/onboarding-inspirations-generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: anonKey,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
       brandId: params.brandId,
       referenceImageUrl: params.referenceImageUrl ?? null,
       competitorName: params.competitorName ?? null,
-    },
-    params.signal,
-  );
+    }),
+    signal: params.signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`onboarding_stream_failed_${response.status}`);
+  }
   await readFrames(response, onboardingGenerationStreamFrameSchema, params.onFrame);
 };

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { TrashIcon, MixerHorizontalIcon, Cross2Icon, CheckIcon, VideoIcon } from "@radix-ui/react-icons";
+import { Image, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +16,11 @@ interface BulkActionToolbarProps {
   reelCount?: number;
   onGenerateReels?: () => void;
   isGeneratingReels?: boolean;
+  /** Open library picker and apply selection to all selected drafts. */
+  onAttachCreative?: () => void;
+  /** Trigger opt-in headless media generation across selected drafts. */
+  onGenerateMedia?: () => void;
+  isGeneratingMedia?: boolean;
   className?: string;
 }
 
@@ -27,6 +33,9 @@ export function BulkActionToolbar({
   reelCount = 0,
   onGenerateReels,
   isGeneratingReels = false,
+  onAttachCreative,
+  onGenerateMedia,
+  isGeneratingMedia = false,
   className,
 }: BulkActionToolbarProps) {
   if (selectedCount === 0) return null;
@@ -54,6 +63,29 @@ export function BulkActionToolbar({
         </div>
 
         <div className="flex items-center gap-2">
+          {onAttachCreative ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAttachCreative}
+              className="h-8 gap-2 text-secondary hover:text-primary"
+            >
+              <Image className="w-4 h-4" />
+              Attach creative…
+            </Button>
+          ) : null}
+          {onGenerateMedia ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onGenerateMedia}
+              disabled={isGeneratingMedia}
+              className="h-8 gap-2 text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary"
+            >
+              <Sparkles className="w-4 h-4" />
+              {isGeneratingMedia ? "Generating…" : "Generate media"}
+            </Button>
+          ) : null}
           {onGenerateReels && reelCount > 0 ? (
             <Button
               variant="ghost"

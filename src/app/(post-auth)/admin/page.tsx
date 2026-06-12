@@ -115,16 +115,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const { users, permissions, pagination, loadError } = await fetchAdminUsers({ page, pageSize, query });
 
   return (
-    <div className="w-full max-w-none px-3 py-10 sm:px-4 lg:px-6">
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold text-primary">Admin</h1>
+    <div className="w-full max-w-none px-[var(--page-pad-inline)] py-[var(--page-pad-block)]">
+      <div className="space-y-[var(--page-section-gap)]">
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold text-primary">Admin</h1>
           <p className="text-sm text-muted-foreground">
             Manage users, brand access, global workflow library promotion, and brand canvas workflow transfers.
           </p>
         </div>
         <Card className="glass-panel border-subtle shadow-brand-glow py-0">
-          <CardContent className="p-6 lg:p-8">
+          <CardContent className="p-[var(--card-pad)]">
             {loadError ? (
               <Alert variant="destructive" className="mb-4">
                 <AlertTitle>Unable to load admin data</AlertTitle>

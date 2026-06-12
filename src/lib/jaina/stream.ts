@@ -72,6 +72,11 @@ import {
   unwrapReportEnvelope,
 } from "./unwrapping";
 
+// Block categories the Backend streams progressively as `response.block.delta`
+// previews. Others (metric_grid/insight_list/comparison) arrive only in the
+// final checkpoint report, so they are ignored mid-stream.
+const STREAMABLE_V2_DELTA_CATEGORIES = new Set(["chart", "data_table"]);
+
 export type JainaStreamStatus = "idle" | "starting" | "streaming" | "complete" | "error";
 
 export type ActiveWorkerInfo = {
@@ -1887,8 +1892,11 @@ export function reduceJainaStreamEvent(
       const v2Parsed = responseBlockDeltaV2Schema.safeParse(event);
       if (v2Parsed.success && v2Parsed.data.data) {
         const v2Payload = v2Parsed.data.data;
-        // Contract: only "chart" blocks are streamed; skip anything else
-        if (v2Payload.block_category && v2Payload.block_category !== "chart") {
+        // Contract: chart + data_table blocks stream progressively; skip others.
+        if (
+          v2Payload.block_category &&
+          !STREAMABLE_V2_DELTA_CATEGORIES.has(v2Payload.block_category)
+        ) {
           return nextBase;
         }
         if (state.blockDeltasV2.some((entry) => entry.sequence === v2Payload.sequence)) {
@@ -1937,7 +1945,10 @@ export function reduceJainaStreamEvent(
       const tolerant = responseBlockDeltaV2TolerantSchema.safeParse(event);
       if (tolerant.success && tolerant.data.data) {
         const tolerantPayload = tolerant.data.data;
-        if (tolerantPayload.block_category && tolerantPayload.block_category !== "chart") {
+        if (
+          tolerantPayload.block_category &&
+          !STREAMABLE_V2_DELTA_CATEGORIES.has(tolerantPayload.block_category)
+        ) {
           return nextBase;
         }
         if (state.blockDeltasV2.some((entry) => entry.sequence === tolerantPayload.sequence)) {

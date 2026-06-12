@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { NextStepProvider, NextStep } from "nextstepjs";
 import { allTours, TOUR_DASHBOARD, TOUR_ORGANIC, TOUR_PAID_MEDIA } from "./config";
+import { TourCard } from "./TourCard";
 import {
   useTourTabStore,
   type DashboardTourView,
@@ -15,15 +16,22 @@ import "./seenFlags";
 
 // Step index -> tab. Keep in sync with the step order in config.tsx.
 // Organic: 0 calendar, 1 list-view toggle, 2 list, 3 metrics tab, 4 metrics, 5 agent.
+// We switch a tab/view ONE STEP EARLY for steps whose target is deferred-mounted
+// (list content at step 2, metrics dashboard at step 4) so the element is painted
+// before nextstepjs queries it — otherwise the spotlight jumps off-screen.
 function organicTabForStep(step: number): OrganicTourTab {
-  if (step === 4) return "metrics";
+  // Pre-mount the metrics dashboard at the "metrics tab" step (3) so step 4's
+  // deferred dashboard target exists before it is highlighted.
+  if (step === 3 || step === 4) return "metrics";
   if (step === 5) return "agent";
   return "planner";
 }
 
 function organicCalendarViewForStep(step: number): OrganicTourCalendarView | null {
-  if (step === 0 || step === 1) return "week";
-  if (step === 2) return "list";
+  if (step === 0) return "week";
+  // Switch to list at the "list view" step (1) so step 2's deferred list content
+  // is mounted before it is highlighted.
+  if (step === 1 || step === 2) return "list";
   return null;
 }
 
@@ -73,6 +81,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     <NextStepProvider>
       <NextStep
         steps={allTours}
+        cardComponent={TourCard}
         clickThroughOverlay={false}
         displayArrow
         onStepChange={handleStepChange}

@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { Button, Text } from "@radix-ui/themes";
-import { FileCode2Icon } from "lucide-react";
+import { FileDownIcon } from "lucide-react";
 import type { CheckpointReportV2, ExecutionObjective } from "@/lib/jaina/schemas";
 import { SafeMarkdown } from "@/components/ui/SafeMarkdownLazy";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { useToast } from "@/components/ui/ToastProvider";
 import { cn } from "@/lib/utils";
-import { downloadJainaReportV2Html } from "../reportExport";
+import { downloadJainaReportV2Pdf } from "../reportExport";
 import { BlockRenderer } from "../blocks/BlockRenderer";
 import { MediaMapProvider } from "../blocks/mediaText";
 
@@ -95,43 +95,48 @@ export function JainaReportV2({
   onSuggestionClick,
 }: JainaReportV2Props) {
   const { show } = useToast();
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const sortedBlocks = useMemo(
     () => [...report.blocks].sort((a, b) => a.priority - b.priority),
     [report.blocks],
   );
 
   const hasMedia = report._meta.has_media && Object.keys(report.media_map).length > 0;
-  const handleHtmlExport = useCallback(() => {
+  // Export the LIVE rendered report (real Recharts charts) as a theme-matched
+  // PDF — the front-end is the single source of rendering truth.
+  const handlePdfExport = useCallback(async () => {
     try {
-      downloadJainaReportV2Html(report);
+      await downloadJainaReportV2Pdf({ exportNode: reportRef.current });
     } catch {
       show({
         title: "Export failed",
-        description: "Unable to generate HTML report right now.",
+        description: "Unable to generate the report PDF right now.",
         variant: "error",
       });
     }
-  }, [report, show]);
+  }, [show]);
 
   const content = (
     <section className="mt-4 space-y-4">
-      {report.executive_summary ? (
-        <SafeMarkdown
-          content={report.executive_summary}
-          className="text-sm leading-relaxed text-muted-foreground"
-          mode={isStreaming ? "streaming" : "static"}
-        />
-      ) : null}
+      <div ref={reportRef} className="space-y-4">
+        {report.executive_summary ? (
+          <SafeMarkdown
+            content={report.executive_summary}
+            className="text-sm leading-relaxed text-muted-foreground"
+            mode={isStreaming ? "streaming" : "static"}
+          />
+        ) : null}
 
-      {sortedBlocks.map((block) => (
-        <BlockRenderer
-          key={block.block_id}
-          block={block}
-          isStreaming={isStreaming}
-        />
-      ))}
+        {sortedBlocks.map((block) => (
+          <BlockRenderer
+            key={block.block_id}
+            block={block}
+            isStreaming={isStreaming}
+          />
+        ))}
 
-      {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
+        {!isStreaming ? <ReportSupplementaryDetails report={report} /> : null}
+      </div>
 
       {report.follow_up_questions.length > 0 ? (
         <div className="space-y-2 pt-2">
@@ -149,19 +154,19 @@ export function JainaReportV2({
 
       <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
         <Text size="1" className="text-muted-foreground">
-          Export includes narrative, metrics, chart specs, tables, comparisons, and recommendations.
+          Export a PDF of this report exactly as shown.
         </Text>
         <Button
           type="button"
           size="1"
           variant="surface"
           color="gray"
-          onClick={handleHtmlExport}
+          onClick={handlePdfExport}
           disabled={isStreaming}
-          aria-label="Export response as HTML"
+          aria-label="Export report as PDF"
         >
-          <FileCode2Icon className="size-3.5" />
-          Export HTML
+          <FileDownIcon className="size-3.5" />
+          Export PDF
         </Button>
       </footer>
     </section>

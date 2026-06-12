@@ -89,11 +89,19 @@ export const documentsSummarySchema = z.object({
 });
 export type DocumentsSummary = z.infer<typeof documentsSummarySchema>;
 
+export const competitorSnapshotSchema = z.object({
+  name: z.string().min(1).max(120),
+  reason: z.string().max(300).nullable().optional(),
+  source: z.enum(["generated", "retrieval", "scrape", "manual"]).default("generated"),
+});
+export type CompetitorSnapshot = z.infer<typeof competitorSnapshotSchema>;
+
 export const onboardingReportStructuredSchema = z.object({
   connected_accounts: z.array(connectedAccountSchema).default([]),
   website: websiteSummarySchema,
   documents: documentsSummarySchema,
   target_audience: targetAudienceSchema.default({}),
+  competitors: z.array(competitorSnapshotSchema).max(8).default([]),
   business: businessSummarySchema.nullable().optional(),
 });
 export type OnboardingReportStructured = z.infer<typeof onboardingReportStructuredSchema>;

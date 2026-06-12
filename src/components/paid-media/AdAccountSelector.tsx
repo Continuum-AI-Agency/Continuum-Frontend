@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBrandIntegrations } from "@/hooks/useBrandIntegrations";
+import type { BrandIntegrationAccountSummary } from "@/lib/integrations/brandProfile";
+import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
 import { cn } from "@/lib/utils";
 
 export type AdAccount = {
@@ -27,6 +29,8 @@ type AdAccountSelectorProps = {
   brandId: string;
   selectedAccountId: string | null;
   onSelect: (accountId: string) => void;
+  /** Which ad platform's accounts to surface. Defaults to Meta. */
+  platform?: PaidMediaPlatform;
   /** Server-provided initial accounts to avoid a client-side fetch waterfall. */
   initialTimelineAccounts?: AdAccount[];
 };
@@ -35,8 +39,10 @@ export function AdAccountSelector({
   brandId,
   selectedAccountId,
   onSelect,
+  platform = "meta",
   initialTimelineAccounts,
 }: AdAccountSelectorProps) {
+  const isGoogleAds = platform === "google-ads";
   const { integrations, isLoading, isError } = useBrandIntegrations(brandId);
   const [open, setOpen] = React.useState(false);
   const hasInitialAccounts = initialTimelineAccounts && initialTimelineAccounts.length > 0;
@@ -51,30 +57,43 @@ export function AdAccountSelector({
     const seen = new Set<string>();
     const merged: AdAccount[] = [];
 
+    const pushIntegrationAccounts = (accounts: BrandIntegrationAccountSummary[] | undefined) => {
+      (accounts ?? []).forEach((account) => {
+        const id = account.externalAccountId ?? account.integrationAccountId;
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        merged.push({ id, name: account.name });
+      });
+    };
+
+    // Google Ads accounts come straight from the brand integration summary —
+    // the Meta-only timeline endpoint has no Google equivalent.
+    if (isGoogleAds) {
+      pushIntegrationAccounts(integrations?.googleAds?.accounts);
+      return merged;
+    }
+
     timelineAccounts.forEach((account) => {
       if (seen.has(account.id)) return;
       seen.add(account.id);
       merged.push(account);
     });
-
-    if (!integrations) return merged;
-    const facebookAccounts = integrations.facebook?.accounts ?? [];
-    facebookAccounts.forEach((account) => {
-      const id = account.externalAccountId ?? account.integrationAccountId;
-      if (!id || seen.has(id)) return;
-      seen.add(id);
-      merged.push({
-        id,
-        name: account.name,
-      });
-    });
+    pushIntegrationAccounts(integrations?.facebook?.accounts);
 
     return merged;
-  }, [integrations, timelineAccounts]);
+  }, [integrations, timelineAccounts, isGoogleAds]);
 
   const initialAccountsUsedRef = React.useRef(hasInitialAccounts);
 
   React.useEffect(() => {
+    // Google Ads has no timeline endpoint — accounts come from integrations only.
+    if (isGoogleAds) {
+      initialAccountsUsedRef.current = false;
+      setTimelineAccounts([]);
+      setTimelineAccountsLoaded(true);
+      return;
+    }
+
     // Skip client-side fetch on first render when server-provided data exists
     if (initialAccountsUsedRef.current) {
       initialAccountsUsedRef.current = false;
@@ -122,7 +141,7 @@ export function AdAccountSelector({
     return () => {
       isCancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, isGoogleAds]);
 
   // Auto-select first account if none selected
   React.useEffect(() => {

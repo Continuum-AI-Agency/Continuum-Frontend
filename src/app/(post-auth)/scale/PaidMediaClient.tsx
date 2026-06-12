@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type AdAccount, AdAccountSelector } from "@/components/paid-media/AdAccountSelector";
+import type { PaidMediaPlatform } from "@/lib/paid-media/performance-types";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ReactFlowProvider } from "@xyflow/react";
@@ -115,7 +116,14 @@ export default function PaidMediaClientPage({
   const [selectedAdAccount, setSelectedAdAccount] = React.useState<string | null>(
     initialAdAccountId ?? null
   );
+  const [platform, setPlatform] = React.useState<PaidMediaPlatform>("meta");
   const [selectedCampaign, setSelectedCampaign] = React.useState<string | null>(null);
+
+  // Switching ad platform clears the account so the selector auto-picks one for it.
+  const handlePlatformChange = React.useCallback((next: PaidMediaPlatform) => {
+    setPlatform(next);
+    setSelectedAdAccount(null);
+  }, []);
   const [activeTab, setActiveTab] = React.useState<PaidMediaTab>(
     normalizedTabParam ?? "dashboard"
   );
@@ -134,6 +142,7 @@ export default function PaidMediaClientPage({
   React.useEffect(() => {
     setSelectedAdAccount(initialAdAccountId ?? null);
     setSelectedCampaign(null);
+    setPlatform("meta");
   }, [brandProfileId, initialAdAccountId]);
 
   React.useEffect(() => {
@@ -304,6 +313,7 @@ export default function PaidMediaClientPage({
           <div data-tour-id="paid-account-selector" className="inline-flex">
             <AdAccountSelector
               brandId={brandProfileId}
+              platform={platform}
               selectedAccountId={selectedAdAccount}
               onSelect={setSelectedAdAccount}
               initialTimelineAccounts={initialAccounts}
@@ -371,6 +381,8 @@ export default function PaidMediaClientPage({
           <PaidMediaDashboard
             brandId={brandProfileId}
             adAccountId={selectedAdAccount}
+            platform={platform}
+            onPlatformChange={handlePlatformChange}
           />
         </TabsContent>
 

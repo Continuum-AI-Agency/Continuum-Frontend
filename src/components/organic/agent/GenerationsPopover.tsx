@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, X, XCircle } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, Clock, Loader2, X, XCircle } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getApiBaseUrl } from "@/lib/api/config";
 import { getBrowserAccessToken } from "@/lib/auth/getBrowserAccessToken";
-import { useCalendarStore, type GenerationEntry, type GenerationStatus } from "@/lib/organic/store";
+import { useCalendarStore, type GenerationCheckpoint, type GenerationEntry, type GenerationStatus } from "@/lib/organic/store";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -58,6 +58,51 @@ function StatusIcon({ status }: { status: GenerationStatus }) {
   return <XCircle className="h-3.5 w-3.5 text-muted-foreground" />;
 }
 
+// Compact 3-dot checkpoint indicator for the popover row (no labels, just dots +
+// icons). Shown when a checkpoint exists so the user can see which step is active
+// without expanding the full pipeline card.
+function CompactCheckpointDots({ checkpoint }: { checkpoint: GenerationCheckpoint }) {
+  const steps: Array<{ key: string; done: boolean; active: boolean; awaiting: boolean; supplied: boolean }> = [
+    {
+      key: "caption",
+      done: checkpoint.textReady === true,
+      active: checkpoint.textReady !== true,
+      awaiting: false,
+      supplied: false,
+    },
+    {
+      key: "creative",
+      done: checkpoint.blueprintReady === true,
+      active: checkpoint.textReady === true && checkpoint.blueprintReady !== true,
+      awaiting: false,
+      supplied: false,
+    },
+    {
+      key: "media",
+      done: checkpoint.mediaStatus === "ready" || checkpoint.mediaStatus === "user_supplied",
+      active: checkpoint.mediaStatus === "generating",
+      awaiting: checkpoint.awaitingMediaChoice === true,
+      supplied: checkpoint.mediaStatus === "user_supplied",
+    },
+  ];
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {steps.map((step) =>
+        step.done ? (
+          <Check key={step.key} className="h-2.5 w-2.5 text-emerald-500" />
+        ) : step.active ? (
+          <Loader2 key={step.key} className="h-2.5 w-2.5 animate-spin text-amber-500" />
+        ) : step.awaiting ? (
+          <Clock key={step.key} className="h-2.5 w-2.5 text-muted-foreground" />
+        ) : (
+          <span key={step.key} className="h-1.5 w-1.5 rounded-full bg-muted-foreground/25" />
+        ),
+      )}
+    </div>
+  );
+}
+
 function GenerationRow({
   entry,
   brandId,
@@ -83,6 +128,9 @@ function GenerationRow({
                 {entry.platform ?? "post"}
               </Badge>
               <span className="truncate text-[11px] capitalize text-muted-foreground">{label}</span>
+              {entry.checkpoint && (
+                <CompactCheckpointDots checkpoint={entry.checkpoint} />
+              )}
             </div>
             {active && <Progress value={pct} className="h-1" />}
           </div>

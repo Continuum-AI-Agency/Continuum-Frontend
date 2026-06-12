@@ -57,7 +57,7 @@ export function SettingsShell({
         orientation="vertical"
         value={section}
         onValueChange={handleChange}
-        className="grid grid-cols-1 gap-[var(--shell-stack-gap)] @[56rem]/settings:grid-cols-[minmax(var(--shell-secondary-w-min),18%)_minmax(0,1fr)] @[56rem]/settings:gap-[clamp(1.5rem,2.5vw,2.5rem)]"
+        className="grid grid-cols-1 gap-[var(--shell-stack-gap)] @[56rem]/settings:grid-cols-[minmax(var(--shell-secondary-w-min),18%)_minmax(0,1fr)] @[56rem]/settings:gap-[var(--page-section-gap)]"
       >
         <SwitchingIndicator />
         <div className="flex items-center justify-between @[56rem]/settings:hidden">
@@ -76,7 +76,7 @@ export function SettingsShell({
         </div>
 
         <aside className="hidden @[56rem]/settings:block">
-          <div className="sticky top-24">
+          <div className="sticky top-4">
             <SettingsNav brandPill={brandPill} accountPill={accountPill} />
           </div>
         </aside>
@@ -85,7 +85,7 @@ export function SettingsShell({
           <Tabs.Content
             key={activeSection}
             value={section}
-            className="space-y-6 outline-none data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
+            className="space-y-[var(--page-section-gap)] outline-none data-[state=active]:animate-in data-[state=active]:fade-in-50 data-[state=active]:duration-200"
           >
             {section === activeSection ? activeSectionSlot : <SettingsSectionSkeleton />}
           </Tabs.Content>
@@ -97,8 +97,8 @@ export function SettingsShell({
 
 function SettingsSectionSkeleton() {
   return (
-    <div className="rounded-xl border border-border/60 bg-card/30 p-6">
-      <div className="mb-5 space-y-2">
+    <div className="rounded-xl border border-border/60 bg-card/30 p-[var(--card-pad)]">
+      <div className="mb-3 space-y-2">
         <Skeleton className="h-5 w-48 bg-muted/70" />
         <Skeleton className="h-4 w-72 bg-muted/70" />
       </div>

@@ -152,6 +152,16 @@ export type PipelineQuality = {
 
 export type PipelineCardStatus = "running" | "completed" | "failed" | "cancelled"
 
+// Three-step checkpoint state surfaced on pipeline cards and the
+// GenerationsPopover rows. Derived from `ui.pipeline_card.data.checkpoint` and
+// from the `draft.text_ready` frame.
+export type CheckpointState = {
+  textReady?: boolean
+  blueprintReady?: boolean
+  mediaStatus?: "pending" | "generating" | "ready" | "user_supplied" | "skipped"
+  awaitingMediaChoice?: boolean
+}
+
 export type PipelineCardState = {
   jobId: string
   brandId?: string
@@ -166,6 +176,7 @@ export type PipelineCardState = {
   quality?: PipelineQuality | null
   draftId?: string | null
   error?: { code?: string; message: string }
+  checkpoint?: CheckpointState
 }
 
 export type ToolApproval = {

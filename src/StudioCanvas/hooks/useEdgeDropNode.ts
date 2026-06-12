@@ -11,7 +11,7 @@ import {
   resolveVideoGeneratorModel,
 } from '../utils/videoModel';
 
-export type NodeType = 'nanoGen' | 'videoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video' | 'audio' | 'document';
+export type NodeType = 'nanoGen' | 'videoGen' | 'veoDirector' | 'extendVideo' | 'string' | 'image' | 'video' | 'audio' | 'document' | 'videoDecode';
 
 export interface SmartNodeContext {
   sourceHandle: string | null;
@@ -126,6 +126,14 @@ export function getDefaultNodeData(type: NodeType): { data: Record<string, unkno
             },
             style: { width: 200, height: 200 }
         }
+    case 'videoDecode':
+        return {
+            data: {
+                value: '',
+                label: 'Video Decoder',
+            },
+            style: { width: 360, height: 320 }
+        };
     case 'string':
     default:
       return {
@@ -164,6 +172,10 @@ function getTargetHandleForNodeType(nodeType: NodeType, sourceHandle: string | n
     if (nodeType === 'extendVideo') {
       if (sourceHandle === 'video') return 'video';
       return 'prompt';
+    }
+
+    if (nodeType === 'videoDecode') {
+      return 'video';
     }
 
     if (nodeType === 'videoGen' || nodeType === 'veoDirector') {

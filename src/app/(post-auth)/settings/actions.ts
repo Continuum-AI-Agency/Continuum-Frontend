@@ -173,6 +173,10 @@ export async function deleteBrandProfileAction(brandId: string): Promise<{ nextB
   const repo = createBrandProfileRepository();
   const nextBrandId = await repo.deleteBrand(brandId);
 
+  // Invalidate the layout-level brand list so the soft-deleted brand drops from
+  // the switcher/settings on the server render, not just via client refresh.
+  revalidatePath("/", "layout");
+
   if (user?.id) {
     const posthog = getPostHogClient();
     posthog.capture({

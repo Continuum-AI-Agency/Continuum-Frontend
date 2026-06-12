@@ -1,0 +1,196 @@
+"use client";
+
+// Rich hover quick-look shown in the gallery HoverCard. Surfaces the adaptive
+// metric set for the post's media type, a 7-day per-post trend sparkline (with a
+// "building history" hint while the local snapshot walk fills in), and the
+// caption. Each tile carries a tooltip (definition + 24h delta). The full deep
+// dive still lives in the side panel that opens on click.
+
+import * as React from "react";
+import { ExternalLink } from "lucide-react";
+
+import type { OrganicPost } from "@/lib/schemas/organicMetrics";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { buildPostMetricSeries, post24hComparisons, type PostMetricKey } from "../organic-metrics-utils";
+import { deltaTone, formatDateTime } from "../organic-format";
+import { getCardMetricSet, resolveCardMediaKind } from "./cardMetricSet";
+import { StatTile } from "./StatTile";
+import { Sparkline } from "./Sparkline";
+
+const MEDIA_KIND_LABEL = {
+  reel: "Reel",
+  image: "Post",
+  carousel: "Carousel",
+} as const;
+
+const SERIES_KEYS: PostMetricKey[] = ["views", "reach", "engagement", "comments"];
+
+// Picks the chartable metric to sparkline: the first primary metric that has a
+// per-day series, defaulting to views.
+export function resolveSeriesKey(descriptorKeys: Array<string | undefined>): PostMetricKey {
+  const match = descriptorKeys.find(
+    (key): key is PostMetricKey => key !== undefined && SERIES_KEYS.includes(key as PostMetricKey)
+  );
+  return match ?? "views";
+}
+
+export type QuickLookTrendState = "post" | "account" | "empty";
+
+// Chooses which trend to show: the per-post series when it has enough points,
+// otherwise the account trend as context, otherwise an empty hint.
+export function resolveTrendState(seriesLength: number, accountSeriesLength: number): QuickLookTrendState {
+  if (seriesLength > 1) return "post";
+  if (accountSeriesLength > 1) return "account";
+  return "empty";
+}
+
+export function PostQuickLook({
+  post,
+  accountSeries,
+  loading = false,
+}: {
+  post: OrganicPost;
+  accountSeries?: Array<{ date: string; value: number }>;
+  loading?: boolean;
+}) {
+  const kind = resolveCardMediaKind(post);
+  const descriptors = React.useMemo(() => getCardMetricSet(post), [post]);
+  const comparisons = React.useMemo(() => post24hComparisons(post), [post]);
+
+  const primary = descriptors.filter((d) => d.emphasis === "primary");
+  const secondary = descriptors.filter((d) => d.emphasis === "secondary");
+  const hasAnyValue = descriptors.some((d) => typeof d.value === "number");
+
+  const seriesKey = resolveSeriesKey(primary.map((d) => d.comparisonKey));
+  const series = React.useMemo(
+    () => buildPostMetricSeries({ post, metricKey: seriesKey }),
+    [post, seriesKey]
+  );
+  const trendDays = post.breakdown7d?.length ?? 0;
+  const tone = deltaTone(comparisons[seriesKey]?.percentageChange);
+  const trendState = resolveTrendState(series.length, accountSeries?.length ?? 0);
+
+  return (
+    <TooltipProvider delayDuration={150}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {MEDIA_KIND_LABEL[kind]}
+            </span>
+            {post.isBoosted ? (
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Boosted
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-muted-foreground">{formatDateTime(post.timestamp)}</span>
+            {post.permalink ? (
+              <a
+                href={post.permalink}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open post on platform"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ExternalLink className="size-3.5" aria-hidden />
+              </a>
+            ) : null}
+          </div>
+        </div>
+
+        {loading && !hasAnyValue ? (
+          <div className="grid grid-cols-3 gap-1.5">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-14 rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className={cn("grid gap-1.5", primary.length >= 3 ? "grid-cols-3" : "grid-cols-2")}>
+              {primary.map((d) => (
+                <StatTile
+                  key={d.key}
+                  label={d.label}
+                  value={d.value}
+                  format={d.format}
+                  iconKey={d.iconKey}
+                  tier={d.tier}
+                  comparison={d.comparisonKey ? comparisons[d.comparisonKey] : undefined}
+                  tooltip={d.tooltip}
+                  emphasis="primary"
+                />
+              ))}
+            </div>
+
+            {secondary.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-subtle pt-2">
+                {secondary.map((d) => (
+                  <StatTile
+                    key={d.key}
+                    label={d.label}
+                    value={d.value}
+                    format={d.format}
+                    iconKey={d.iconKey}
+                    comparison={d.comparisonKey ? comparisons[d.comparisonKey] : undefined}
+                    tooltip={d.tooltip}
+                    emphasis="secondary"
+                  />
+                ))}
+              </div>
+            ) : null}
+          </>
+        )}
+
+        <div className="border-t border-subtle pt-2">
+          {trendState === "post" ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-muted-foreground">7-day trend</span>
+                <span className="text-[10px] text-muted-foreground">{seriesKey}</span>
+              </div>
+              <Sparkline
+                values={series.map((point) => point.value)}
+                tone={tone}
+                width={300}
+                height={36}
+                className="w-full"
+                ariaLabel={`${seriesKey} 7-day trend`}
+              />
+              {trendDays < 7 ? (
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Building per-post history ({trendDays}/7 days tracked).
+                </p>
+              ) : null}
+            </div>
+          ) : trendState === "account" ? (
+            <div className="space-y-1">
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Per-post trend builds over time ({trendDays}/7 days). Showing the account trend meanwhile.
+              </p>
+              <Sparkline
+                values={(accountSeries ?? []).map((point) => point.value)}
+                tone="flat"
+                width={300}
+                height={36}
+                className="w-full"
+                ariaLabel="account trend"
+              />
+            </div>
+          ) : (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Per-post trend builds over time. Re-open this post tomorrow for a day-over-day delta.
+            </p>
+          )}
+        </div>
+
+        {post.caption?.trim().length ? (
+          <p className="line-clamp-3 text-pretty text-[11px] leading-snug text-secondary">{post.caption}</p>
+        ) : null}
+      </div>
+    </TooltipProvider>
+  );
+}

@@ -5,7 +5,7 @@
 // 10 at a time, pick a post, then choose which slides to drop onto the canvas as
 // unattached reference nodes. Replaces the old paste-a-link modal.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Panel } from "@xyflow/react";
 import { AtSign, Loader2, X } from "lucide-react";
 
@@ -64,10 +64,11 @@ export function InstagramMediaBrowser({ brandProfileId, onPlace, onClose }: Inst
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
   const [selectedSlides, setSelectedSlides] = useState<Set<number>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
+  const hasAutoLoadedRef = useRef(false);
 
-  const handleSearch = useCallback(async () => {
-    const handle = normalizeHandle(username);
-    if (!handle) return;
+  // Loads media for a specific handle, or the brand's OWN account when handle is
+  // undefined (auto-resolve). Shared by the auto-load on open and manual search.
+  const runLoad = useCallback(async (handle: string | undefined) => {
     if (!brandProfileId) {
       setErrorKind("viewer");
       setStatus("error");
@@ -92,7 +93,22 @@ export function InstagramMediaBrowser({ brandProfileId, onPlace, onClose }: Inst
       setErrorKind(errorKindFor(error));
       setStatus("error");
     }
-  }, [username, brandProfileId]);
+  }, [brandProfileId]);
+
+  const handleSearch = useCallback(() => {
+    const handle = normalizeHandle(username);
+    if (!handle) return;
+    void runLoad(handle);
+  }, [username, runLoad]);
+
+  // Auto-resolve the brand's own connected Instagram account on open, so the
+  // user sees their posts immediately without typing a handle. The search box
+  // stays available for looking up other accounts.
+  useEffect(() => {
+    if (hasAutoLoadedRef.current || !brandProfileId) return;
+    hasAutoLoadedRef.current = true;
+    void runLoad(undefined);
+  }, [brandProfileId, runLoad]);
 
   const openPost = useCallback((post: InstagramPost) => {
     setSelectedPost(post);
@@ -143,7 +159,7 @@ export function InstagramMediaBrowser({ brandProfileId, onPlace, onClose }: Inst
           >
             <Input
               aria-label="Instagram username"
-              placeholder="@username"
+              placeholder="Search another account"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               disabled={status === "loading"}

@@ -40,8 +40,10 @@ export async function fetchCampaignPerformanceRows(
   params: CampaignPerformanceParams
 ): Promise<CampaignPerformanceRow[]> {
   const supabase = createSupabaseBrowserClient();
+  const campaignsFunction =
+    params.platform === "google-ads" ? "fetch-google-ads-campaigns" : "fetch-meta-campaigns";
   const { data, error } = await supabase.functions.invoke(
-    `fetch-meta-campaigns?brandId=${params.brandId}&adAccountId=${params.adAccountId}`,
+    `${campaignsFunction}?brandId=${params.brandId}&adAccountId=${params.adAccountId}`,
     {
       method: "POST",
       body: {

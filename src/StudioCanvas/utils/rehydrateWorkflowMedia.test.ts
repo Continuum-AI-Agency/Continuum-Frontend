@@ -4,10 +4,8 @@ import { rehydrateWorkflowMediaNodes } from "./rehydrateWorkflowMedia";
 
 describe("rehydrateWorkflowMediaNodes", () => {
   it("rehydrates image and video nodes from stored source metadata", async () => {
-    // IMAGE_REFERENCE_MAX_BYTES = 12.5 MiB, VIDEO_REFERENCE_MAX_BYTES = 50 MiB
-    // Threshold at 20 MiB cleanly separates the two.
-    const resolver = mock(async (_parsed, maxBytes: number) => {
-      if (maxBytes > 20 * 1024 * 1024) {
+    const resolver = mock(async (parsed) => {
+      if (parsed.mimeType?.startsWith("video/")) {
         return { base64: "video_base64", sourceName: "asset.mp4", byteLength: 1024 };
       }
       return { base64: "image_base64", sourceName: "asset.png", byteLength: 512 };

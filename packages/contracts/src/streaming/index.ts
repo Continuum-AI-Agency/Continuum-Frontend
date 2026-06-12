@@ -8,6 +8,7 @@ export * from "./bulk";
 export * from "./trends";
 export * from "./jaina";
 export * from "./jaina-report";
+export * from "./dataset";
 export * from "./media";
 export * from "./onboarding-inspirations";
 export * from "./hyperframes";

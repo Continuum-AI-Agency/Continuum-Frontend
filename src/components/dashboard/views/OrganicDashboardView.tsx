@@ -18,6 +18,7 @@ const InstagramOrganicReportingWidget = dynamic(
 type OrganicDashboardViewProps = {
   brandId: string;
   instagramAccounts: InstagramAccountOption[];
+  youtubeAccounts?: InstagramAccountOption[];
   trendsAndEvents: BrandInsightsTrendsAndEvents;
   questionsByNiche?: BrandInsightsQuestionsByNiche;
   insightsGeneratedAt?: string;
@@ -27,6 +28,7 @@ type OrganicDashboardViewProps = {
 export function OrganicDashboardView({
   brandId,
   instagramAccounts,
+  youtubeAccounts,
   trendsAndEvents,
   questionsByNiche,
   insightsGeneratedAt,
@@ -38,6 +40,7 @@ export function OrganicDashboardView({
         <InstagramOrganicReportingWidget
           brandId={brandId}
           accounts={instagramAccounts}
+          youtubeAccounts={youtubeAccounts}
           className="min-h-[var(--dashboard-min-panel-height)]"
         />
       </section>

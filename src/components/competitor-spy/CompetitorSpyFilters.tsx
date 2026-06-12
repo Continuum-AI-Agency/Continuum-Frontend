@@ -9,14 +9,16 @@ export function CompetitorSpyFilters({
   competitors,
   competitorId,
   status,
+  showStatus = true,
   onCompetitorChange,
   onStatusChange,
 }: {
   competitors: Competitor[];
   competitorId?: string;
   status?: "active" | "paused";
+  showStatus?: boolean;
   onCompetitorChange: (id: string | undefined) => void;
-  onStatusChange: (status: "active" | "paused" | undefined) => void;
+  onStatusChange?: (status: "active" | "paused" | undefined) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -33,16 +35,18 @@ export function CompetitorSpyFilters({
           </option>
         ))}
       </select>
-      <select
-        className={SELECT_CLASS}
-        value={status ?? ""}
-        onChange={(e) => onStatusChange((e.target.value || undefined) as "active" | "paused" | undefined)}
-        aria-label="Filter by status"
-      >
-        <option value="">All statuses</option>
-        <option value="active">Active</option>
-        <option value="paused">Paused</option>
-      </select>
+      {showStatus ? (
+        <select
+          className={SELECT_CLASS}
+          value={status ?? ""}
+          onChange={(e) => onStatusChange?.((e.target.value || undefined) as "active" | "paused" | undefined)}
+          aria-label="Filter by status"
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+        </select>
+      ) : null}
     </div>
   );
 }

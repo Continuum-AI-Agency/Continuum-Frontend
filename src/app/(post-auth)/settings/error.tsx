@@ -14,7 +14,7 @@ export default function SettingsError({
   }, [error]);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
+    <div className="flex min-h-full flex-col items-center justify-center gap-4 p-6">
       <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
         Something went wrong
       </h2>

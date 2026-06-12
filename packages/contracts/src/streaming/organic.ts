@@ -304,6 +304,15 @@ const draftReadySchema = z.object({
   data: jobEventDataSchema,
 });
 
+// Step-1 checkpoint of the three-step pipeline: the post's caption/text is
+// persisted as a draft (status placeholder) BEFORE the creative director
+// (blueprint) and the opt-in headless media generation. Carries the draftId so
+// the FE can surface a real, placeable draft mid-run.
+const draftTextReadySchema = z.object({
+  type: z.literal("draft.text_ready"),
+  data: jobEventDataSchema,
+});
+
 const pipelineStageSchema = z.object({
   type: z.literal("pipeline.stage"),
   data: z.object({
@@ -346,6 +355,16 @@ const uiPipelineCardSchema = z.object({
     }).loose().optional(),
     quality: pipelineQualitySchema.nullable().optional(),
     draftId: z.string().nullable().optional(),
+    // Three-step checkpoint state for the run-progress steppers: step 1 (text) =
+    // textReady, step 2 (creative director / blueprint) = blueprintReady, step 3
+    // (headless media generation) = mediaStatus. `awaitingMediaChoice` is true
+    // once text+blueprint are done and the token-heavy generation is opt-in.
+    checkpoint: z.object({
+      textReady: z.boolean().optional(),
+      blueprintReady: z.boolean().optional(),
+      mediaStatus: z.enum(["pending", "generating", "ready", "user_supplied", "skipped"]).optional(),
+      awaitingMediaChoice: z.boolean().optional(),
+    }).loose().optional(),
   }).loose(),
 });
 
@@ -376,6 +395,7 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   jobFailedSchema,
   jobCancelledSchema,
   draftReadySchema,
+  draftTextReadySchema,
   pipelineStageSchema,
   uiPipelineCardSchema,
   mediaSearchResultsFrameSchema,
@@ -425,6 +445,7 @@ export const POST_FETCHING_TOOL_NAMES = [
   "listOwnInstagramMedia",
   "getCalendarPostedContent",
   "rankPostPerformers",
+  "getCompetitorInstagramTopPosts",
 ] as const
 
 export type PostFetchingToolName = (typeof POST_FETCHING_TOOL_NAMES)[number]

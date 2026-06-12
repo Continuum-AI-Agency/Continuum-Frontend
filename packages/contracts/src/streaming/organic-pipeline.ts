@@ -118,6 +118,99 @@ export const organicHyperframeAssetSchema = z.object({
   spec: z.unknown().nullable().optional(),
 }).strict();
 
+/**
+ * Realization tier of a draft's media in the checkpointed pipeline. The TEXT
+ * checkpoint delivers a draft at `pending`; the user then either attaches their
+ * own library creative (`user_supplied`) or triggers headless generation
+ * (`generating` → `ready`). `skipped` = media intentionally left empty.
+ */
+export const organicDraftMediaStatusSchema = z.enum([
+  "pending",
+  "generating",
+  "ready",
+  "user_supplied",
+  "skipped",
+]);
+
+/** Audio direction produced by the background blueprint phase (audio_technical). */
+export const organicMediaAudioConceptSchema = z.object({
+  audioMode: z.string().nullable().optional(),
+  trackSuggestion: z.string().nullable().optional(),
+  soundDesign: z.string().nullable().optional(),
+  voiceover: z.string().nullable().optional(),
+  notes: z.array(z.string()).optional(),
+}).strict();
+
+/**
+ * Durable, re-signable storage reference for one published media slot. The FE
+ * re-signs via /api/library/sign (assetId) or the bucket+storagePath. Written by
+ * the generation pipeline (source 'ai_generated') AND by user-supplied attach
+ * (`shapeUserSuppliedMedia`), so both paths render and publish identically.
+ */
+export const organicPublishingAssetSchema = z.object({
+  role: z.string(),
+  kind: z.enum(["image", "video"]),
+  slideIndex: z.number().int().min(0).optional(),
+  assetId: z.string().optional(),
+  bucket: z.string().optional(),
+  storagePath: z.string(),
+  storageUrl: z.string(),
+  mimeType: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+}).strict();
+
+export const organicMediaSuggestionSchema = z.object({
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  kind: z.string().optional(),
+  prompt: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  assetUrl: z.string().optional(),
+  assetBase64: z.string().optional(),
+  url: z.string().optional(),
+  signedUrl: z.string().optional(),
+  mimeType: z.string().optional(),
+  alt: z.string().optional(),
+  // Durable storage bucket for the primary asset (mirrors a publishingAsset's
+  // bucket) so publish staging can re-stage a user-supplied creative from any
+  // private bucket, not just the default.
+  bucket: z.string().optional(),
+  // Realization-tier readiness (checkpointed pipeline). `mediaStatus` gates the
+  // expensive media step: text + blueprint land first (`pending`), then the user
+  // attaches (`user_supplied`) or generates (`generating` → `ready`).
+  mediaStatus: organicDraftMediaStatusSchema.optional(),
+  textReady: z.boolean().optional(),
+  blueprintReady: z.boolean().optional(),
+  audioConcept: organicMediaAudioConceptSchema.optional(),
+  generationContext: organicMediaGenerationContextSchema.optional(),
+  assets: z.array(z.object({
+    role: z.string(),
+    order: z.number().int().min(1).optional(),
+    slideRole: z.string().optional(),
+    headline: z.string().optional(),
+    body: z.string().optional(),
+    overlayText: z.string().optional(),
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    prompt: z.string().optional(),
+    width: z.number().optional(),
+    height: z.number().optional(),
+    assetUrl: z.string().optional(),
+    assetBase64: z.string().optional(),
+    url: z.string().nullable().optional(),
+    signedUrl: z.string().nullable().optional(),
+    bucket: z.string().nullable().optional(),
+    generated: z.boolean().optional(),
+    mimeType: z.string().optional(),
+    error: z.string().nullable().optional(),
+    generationContext: organicMediaGenerationContextSchema.optional(),
+  }).strict()).optional(),
+  reel: organicReelAssetSchema.optional(),
+  hyperframe: organicHyperframeAssetSchema.optional(),
+}).strict();
+
 export const organicCalendarPlacementSchema = z.object({
   placementId: z.string().min(1),
   schedule: z.object({
@@ -165,44 +258,7 @@ export const organicCalendarPlacementSchema = z.object({
         visualPrompt: z.string().optional(),
       }).strict()),
     }).strict().optional(),
-    mediaSuggestion: z.object({
-      provider: z.string().optional(),
-      model: z.string().optional(),
-      kind: z.string().optional(),
-      prompt: z.string().optional(),
-      width: z.number().optional(),
-      height: z.number().optional(),
-      assetUrl: z.string().optional(),
-      assetBase64: z.string().optional(),
-      url: z.string().optional(),
-      signedUrl: z.string().optional(),
-      mimeType: z.string().optional(),
-      alt: z.string().optional(),
-      generationContext: organicMediaGenerationContextSchema.optional(),
-      assets: z.array(z.object({
-        role: z.string(),
-        order: z.number().int().min(1).optional(),
-        slideRole: z.string().optional(),
-        headline: z.string().optional(),
-        body: z.string().optional(),
-        overlayText: z.string().optional(),
-        provider: z.string().optional(),
-        model: z.string().optional(),
-        prompt: z.string().optional(),
-        width: z.number().optional(),
-        height: z.number().optional(),
-        assetUrl: z.string().optional(),
-        assetBase64: z.string().optional(),
-        url: z.string().nullable().optional(),
-        signedUrl: z.string().nullable().optional(),
-        generated: z.boolean().optional(),
-        mimeType: z.string().optional(),
-        error: z.string().nullable().optional(),
-        generationContext: organicMediaGenerationContextSchema.optional(),
-      }).strict()).optional(),
-      reel: organicReelAssetSchema.optional(),
-      hyperframe: organicHyperframeAssetSchema.optional(),
-    }).strict().optional(),
+    mediaSuggestion: organicMediaSuggestionSchema.optional(),
   }).strict().optional(),
   copy: z.object({
     caption: z.string().nullable().optional(),
@@ -229,20 +285,7 @@ export const organicCalendarPlacementSchema = z.object({
   // upload their bytes during generation (the raw base64 is stripped before persist),
   // so the calendar/list previews read a durable `storagePath`+`bucket` and re-sign on
   // read rather than relying on the 1h upload-time signed URL or large base64 blobs.
-  publishingAssets: z.array(z.object({
-    role: z.string(),
-    kind: z.enum(["image", "video"]),
-    slideIndex: z.number().int().min(0).optional(),
-    // media.assets registry id (source 'ai_generated') — the durable handle the FE
-    // re-signs via /api/library/sign for lazy-loaded preview.
-    assetId: z.string().optional(),
-    bucket: z.string().optional(),
-    storagePath: z.string(),
-    storageUrl: z.string(),
-    mimeType: z.string().optional(),
-    width: z.number().optional(),
-    height: z.number().optional(),
-  }).strict()).optional(),
+  publishingAssets: z.array(organicPublishingAssetSchema).optional(),
 }).strict();
 
 const organicPipelineStageSchema = z.enum([
@@ -315,6 +358,15 @@ export const organicCalendarSlotAssetReadyEventSchema = z.object({
   format: z.string().nullable().optional(),
 }).strict();
 
+// Step-1 checkpoint: the placement's TEXT (caption + hashtags + concept) is ready
+// and gets persisted as a placeholder draft BEFORE the creative director
+// (blueprint) and the opt-in headless media generation run. The placement here is
+// text-only (media pending); the terminal slot_completed carries the full draft.
+export const organicCalendarSlotTextReadyEventSchema = z.object({
+  type: z.literal("slot_text_ready"),
+  placement: organicCalendarPlacementSchema,
+}).strict();
+
 export const organicCalendarSlotCompletedEventSchema = z.object({
   type: z.enum(["slot_completed", "placement"]),
   placement: organicCalendarPlacementSchema,
@@ -351,6 +403,7 @@ export const organicCalendarBatchGenerateStreamEventSchema = z.union([
   organicCalendarSlotStageEventSchema,
   organicCalendarSlotHeartbeatEventSchema,
   organicCalendarSlotAssetReadyEventSchema,
+  organicCalendarSlotTextReadyEventSchema,
   organicCalendarSlotCompletedEventSchema,
   organicCalendarSlotFailedEventSchema,
   organicCalendarErrorEventSchema,
@@ -469,12 +522,17 @@ export type OrganicHyperframeAsset = z.infer<typeof organicHyperframeAssetSchema
 export type OrganicHyperframeStylePreset = z.infer<typeof organicHyperframeStylePresetSchema>;
 export type OrganicHyperframeTone = z.infer<typeof organicHyperframeToneSchema>;
 export type OrganicHyperframeAspectRatio = z.infer<typeof organicHyperframeAspectRatioSchema>;
+export type OrganicDraftMediaStatus = z.infer<typeof organicDraftMediaStatusSchema>;
+export type OrganicMediaAudioConcept = z.infer<typeof organicMediaAudioConceptSchema>;
+export type OrganicMediaSuggestion = z.infer<typeof organicMediaSuggestionSchema>;
+export type OrganicPublishingAsset = z.infer<typeof organicPublishingAssetSchema>;
 export type OrganicCalendarPlacement = z.infer<typeof organicCalendarPlacementSchema>;
 export type OrganicCalendarProgressEvent = z.infer<typeof organicCalendarProgressEventSchema>;
 export type OrganicCalendarSlotStartedEvent = z.infer<typeof organicCalendarSlotStartedEventSchema>;
 export type OrganicCalendarSlotStageEvent = z.infer<typeof organicCalendarSlotStageEventSchema>;
 export type OrganicCalendarSlotHeartbeatEvent = z.infer<typeof organicCalendarSlotHeartbeatEventSchema>;
 export type OrganicCalendarSlotAssetReadyEvent = z.infer<typeof organicCalendarSlotAssetReadyEventSchema>;
+export type OrganicCalendarSlotTextReadyEvent = z.infer<typeof organicCalendarSlotTextReadyEventSchema>;
 export type OrganicCalendarSlotCompletedEvent = z.infer<typeof organicCalendarSlotCompletedEventSchema>;
 export type OrganicCalendarSlotFailedEvent = z.infer<typeof organicCalendarSlotFailedEventSchema>;
 export type OrganicCalendarErrorEvent = z.infer<typeof organicCalendarErrorEventSchema>;

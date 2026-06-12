@@ -3,6 +3,8 @@ import { describe, expect, it } from "bun:test";
 import {
   competitorAdAnalysisSchema,
   competitorSchema,
+  instagramCompetitorSearchResultSchema,
+  competitorOrganicPostSchema,
   timelineEntrySchema,
   adLifecycleEventSchema,
 } from "./index";
@@ -113,6 +115,25 @@ describe("competitorSpyStreamFrameSchema", () => {
 });
 
 describe("competitorSchema", () => {
+  it("accepts optional Instagram identity fields", () => {
+    const parsed = competitorSchema.parse({
+      id: "55555555-5555-4555-8555-555555555555",
+      brandId: "66666666-6666-4666-8666-666666666666",
+      name: "Acme",
+      slug: "acme",
+      source: "user",
+      metaPageId: "123",
+      instagramUsername: "acme",
+      instagramUserId: "17841400000000000",
+      instagramName: "Acme Co",
+      instagramFollowersCount: 1200,
+      status: "active",
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z",
+    });
+    expect(parsed.instagramUsername).toBe("acme");
+  });
+
   it("requires a uuid brandId", () => {
     expect(() =>
       competitorSchema.parse({
@@ -127,5 +148,68 @@ describe("competitorSchema", () => {
         updatedAt: "2026-06-01T00:00:00.000Z",
       }),
     ).toThrow();
+  });
+});
+
+describe("instagramCompetitorSearchResultSchema", () => {
+  it("validates an Instagram identity plus page candidates", () => {
+    const parsed = instagramCompetitorSearchResultSchema.parse({
+      query: "Apple",
+      resolvedUsername: "apple",
+      account: {
+        id: "17841400000000000",
+        username: "apple",
+        name: "Apple",
+        followersCount: 100,
+        mediaCount: 10,
+        profilePictureUrl: "https://example.com/apple.jpg",
+      },
+      posts: [
+        {
+          id: "ig-media-1",
+          shortcode: "ABC123",
+          permalink: "https://www.instagram.com/p/ABC123/",
+          kind: "post",
+          coverUrl: "https://example.com/cover.jpg",
+          caption: "Think different.",
+          timestamp: "2026-06-01T00:00:00+0000",
+          likeCount: 1200,
+          commentsCount: 34,
+          mediaCount: 1,
+          items: [{ kind: "image", url: "https://example.com/cover.jpg" }],
+        },
+      ],
+      metaPageCandidates: [{ pageId: "123", pageName: "Apple" }],
+      warnings: ["meta_page_search_failed"],
+    });
+
+    expect(parsed.account.username).toBe("apple");
+    expect(parsed.metaPageCandidates[0]?.pageId).toBe("123");
+  });
+});
+
+describe("competitorOrganicPostSchema", () => {
+  it("validates an organic Instagram post tied to a tracked competitor", () => {
+    const parsed = competitorOrganicPostSchema.parse({
+      competitorId: "22222222-2222-4222-8222-222222222222",
+      competitorName: "Apple",
+      instagramUsername: "apple",
+      post: {
+        id: "ig-media-1",
+        shortcode: "ABC123",
+        permalink: "https://www.instagram.com/p/ABC123/",
+        kind: "post",
+        coverUrl: "https://example.com/cover.jpg",
+        caption: "Think different.",
+        timestamp: "2026-06-01T00:00:00+0000",
+        likeCount: 1200,
+        commentsCount: 34,
+        mediaCount: 1,
+        items: [{ kind: "image", url: "https://example.com/cover.jpg" }],
+      },
+    });
+
+    expect(parsed.post.caption).toBe("Think different.");
+    expect(parsed.post.likeCount).toBe(1200);
   });
 });

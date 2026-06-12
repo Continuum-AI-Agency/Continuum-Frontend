@@ -19,6 +19,12 @@ export async function OrganicDashboardDataWrapper({ brandId }: { brandId: string
     externalAccountId: account.externalAccountId,
   }));
 
+  const youtubeAccounts = integrationSummary.youtube.accounts.map((account) => ({
+    integrationAccountId: account.integrationAccountId,
+    name: account.name,
+    externalAccountId: account.externalAccountId,
+  }));
+
   let insights = null;
   if (!("error" in insightsResult)) {
     insights = insightsResult.data;
@@ -46,6 +52,7 @@ export async function OrganicDashboardDataWrapper({ brandId }: { brandId: string
     <OrganicDashboardView
       brandId={brandId}
       instagramAccounts={instagramAccounts}
+      youtubeAccounts={youtubeAccounts}
       trendsAndEvents={trendsAndEvents}
       questionsByNiche={questionsByNiche}
       insightsGeneratedAt={insights?.generatedAt}

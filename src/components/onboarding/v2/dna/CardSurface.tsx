@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { motion } from "motion/react";
 import { WarningCircle, MinusCircle } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +16,9 @@ type CardSurfaceProps = {
   status?: SectionStatus | "indeterminate";
   isEmpty: boolean;
   minBodyHeight?: number;
+  // When set, the body is capped at this height and scrolls — so a long
+  // completed section can never stretch the card (or its grid row).
+  maxBodyHeight?: number;
   skeleton?: ReactNode;
   errorMessage?: string;
   children: ReactNode;
@@ -31,6 +35,7 @@ export function CardSurface({
   status = "indeterminate",
   isEmpty,
   minBodyHeight = DEFAULT_MIN_BODY_HEIGHT,
+  maxBodyHeight,
   skeleton,
   errorMessage,
   children,
@@ -61,6 +66,11 @@ export function CardSurface({
     body = children;
   }
 
+  // Cross-fade the body when it transitions between phases (skeleton → content,
+  // etc.) so the swap reveals cleanly instead of snapping. The bounded
+  // min/max-height keeps the card from resizing during the fade.
+  const phaseKey = isLoading ? "loading" : isError ? "error" : isSkipped ? "skipped" : "content";
+
   return (
     <Card className={cn("border-border bg-card shadow-sm text-foreground", className)}>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
@@ -83,10 +93,24 @@ export function CardSurface({
         ) : null}
       </CardHeader>
       <CardContent
-        className="space-y-3 text-[13px] leading-relaxed text-muted-foreground"
-        style={{ minHeight: minBodyHeight }}
+        className={cn(
+          "space-y-3 text-[13px] leading-relaxed text-muted-foreground",
+          maxBodyHeight ? "overflow-y-auto" : undefined,
+        )}
+        style={{
+          minHeight: minBodyHeight,
+          ...(maxBodyHeight ? { maxHeight: maxBodyHeight } : {}),
+        }}
       >
-        {body}
+        <motion.div
+          key={phaseKey}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+          className="space-y-3"
+        >
+          {body}
+        </motion.div>
         {findings}
       </CardContent>
     </Card>

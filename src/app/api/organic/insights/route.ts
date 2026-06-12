@@ -9,7 +9,15 @@ const requestSchema = z.object({
   integrationAccountId: z.string(),
   platform: z.enum(["instagram", "facebook", "tiktok"]),
   range: z.object({
-    preset: z.enum(["yesterday", "last_7d", "last_14d", "last_30d", "last_month"]),
+    preset: z.enum([
+      "today",
+      "yesterday",
+      "previous_day",
+      "last_7d",
+      "last_14d",
+      "last_30d",
+      "last_month",
+    ]),
   }),
   forceRefresh: z.boolean().optional(),
 });

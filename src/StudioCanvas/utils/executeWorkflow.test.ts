@@ -689,4 +689,51 @@ describe('executeWorkflow', () => {
     const payload = executeGeneration.mock.calls[0][1];
     expect(payload.reference_images?.[0]?.data).toBe('original_only');
   });
+
+  it('inlines a remote-url image reference via the proxy before generation', async () => {
+    mock.module('@/lib/ai-studio/inlineRemoteImage', () => ({
+      inlineRemoteImage: mock(async () => ({
+        dataUrl: 'data:image/jpeg;base64,proxied_base64',
+        mimeType: 'image/jpeg',
+      })),
+    }));
+
+    const remoteUrl = 'https://scontent.cdninstagram.com/a.jpg';
+    const nodes: StudioNode[] = [
+      {
+        id: 'img',
+        position: { x: 0, y: 0 },
+        data: { image: remoteUrl, sourceUrl: remoteUrl },
+        type: 'image',
+      },
+      {
+        id: 'nano',
+        position: { x: 0, y: 0 },
+        data: { model: 'nano-banana', positivePrompt: 'use this' },
+        type: 'nanoGen',
+      },
+    ];
+
+    const edges: Edge[] = [
+      { id: 'e1', source: 'img', sourceHandle: 'image', target: 'nano', targetHandle: 'ref-image' },
+    ];
+
+    useStudioStore.getState().setNodes(nodes);
+    useStudioStore.getState().setEdges(edges);
+
+    const executeGeneration = mock(async (_nodeId, payload) => ({
+      success: true,
+      output: { type: 'image', base64: 'out', mimeType: 'image/png' },
+      payload,
+    }));
+
+    const controls = buildControls(executeGeneration);
+
+    await executeWorkflow(controls as any);
+
+    expect(executeGeneration).toHaveBeenCalledTimes(1);
+    const payload = executeGeneration.mock.calls[0][1];
+    expect(payload.reference_images?.[0]?.data).toBe('proxied_base64');
+    expect(payload.reference_images?.[0]?.mime_type).toBe('image/jpeg');
+  });
 });

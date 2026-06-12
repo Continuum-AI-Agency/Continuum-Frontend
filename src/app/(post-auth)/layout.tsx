@@ -48,7 +48,7 @@ export default function DashboardLayout({
 }>) {
   return (
     <div
-      className="min-h-screen overflow-hidden"
+      className="min-h-dvh overflow-hidden"
       style={{
         backgroundColor: "var(--background)",
         color: "var(--foreground)",

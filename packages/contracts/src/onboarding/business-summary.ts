@@ -32,6 +32,7 @@ export const businessSummarySchema = z.object({
   business_description: z.string().max(600),
   business_features: z.array(z.string().max(330)).max(15).default([]),
   business_benefits: z.array(z.string().max(330)).max(15).default([]),
+  competitor_names: z.array(z.string().min(1).max(120)).max(8).default([]),
   business_cta: businessCtaSchema,
   // Positioning depth — what makes this brand distinct from named alternatives.
   // Each entry should reference an actual competitor or category from RAG/scrape.

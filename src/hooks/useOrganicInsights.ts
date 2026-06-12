@@ -6,18 +6,20 @@ import type {
   OrganicInsightsResponse,
   OrganicComputedInsight,
 } from "@/lib/organic/organic-insights.types";
+import type { OrganicAwarenessReportPayload } from "@continuum/contracts";
 import type { OrganicDateRangePreset } from "@/lib/schemas/organicMetrics";
 
 type UseOrganicInsightsParams = {
   brandId: string;
   integrationAccountId: string | null;
-  platform: "instagram" | "facebook" | "tiktok";
+  platform: "instagram" | "facebook" | "tiktok" | "youtube";
   rangePreset: OrganicDateRangePreset;
   enabled?: boolean;
 };
 
 type UseOrganicInsightsReturn = {
   insights: OrganicComputedInsight[];
+  awareness: OrganicAwarenessReportPayload | null;
   generatedAt: string | null;
   expiresAt: string | null;
   isLoading: boolean;
@@ -102,6 +104,7 @@ export function useOrganicInsights(
 
   return {
     insights: data?.insights ?? [],
+    awareness: data?.awareness ?? null,
     generatedAt: data?.generated_at ?? null,
     expiresAt: data?.expires_at ?? null,
     isLoading,
