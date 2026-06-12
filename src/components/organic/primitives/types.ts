@@ -33,6 +33,9 @@ export type OrganicCalendarDraft = {
   location?: string
   mediaCount: number
   seedTrendId?: string
+  // Provenance: "manual" = authored from scratch via the calendar + button;
+  // "agent" / undefined = produced by the generation pipeline (legacy default).
+  origin?: "manual" | "agent"
   // Non-null when this draft belongs to a bulk content plan ("planned" provenance).
   contentPlanId?: string | null
   targetAccountId?: string

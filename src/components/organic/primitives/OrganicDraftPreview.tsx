@@ -4,7 +4,7 @@ import * as React from "react"
 import Image from "next/image"
 import { ChevronLeftIcon, ChevronRightIcon, Cross2Icon } from "@radix-ui/react-icons"
 
-import { Loader2, Send, Wand2, ImagePlus } from "lucide-react"
+import { CheckCircle2, Circle, Loader2, Send, Wand2, ImagePlus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDraft } from "./types"
@@ -43,6 +43,7 @@ import { LibraryPlacementRail } from "./LibraryPlacementRail"
 import { useDraftMediaPlacement } from "@/components/organic/hooks/useDraftMediaPlacement"
 import type { MediaAsset } from "@continuum/contracts"
 import { useGenerateDraftMedia } from "@/components/organic/hooks/useGenerateDraftMedia"
+import { evaluateDraftReadiness } from "@/lib/organic/draftReadiness"
 
 interface OrganicDraftPreviewProps {
   draft: OrganicCalendarDraft
@@ -586,8 +587,17 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
   // Active carousel slide index (shared between preview and strip).
   const [activeSlideIndex, setActiveSlideIndex] = React.useState(0)
 
-  // Whether the library rail is focused for placement.
-  const [railFocused, setRailFocused] = React.useState(false)
+  // Manually-authored drafts lead with upload + Library; agent drafts default to
+  // the creatives surface. Tracks provenance so the editor can tailor media steps.
+  const isManual = draft.origin === "manual"
+
+  // Whether the library rail is focused for placement. Defaults open for manual
+  // drafts and resets to the per-draft default whenever a different draft loads
+  // (the preview panel instance is reused across selections).
+  const [railFocused, setRailFocused] = React.useState(isManual)
+  React.useEffect(() => {
+    setRailFocused(draft.origin === "manual")
+  }, [draft.id, draft.origin])
 
   const { generateDraftMedia, isGenerating } = useGenerateDraftMedia()
 
@@ -613,6 +623,9 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
 
   const isApproveDisabled =
     draft.status === "scheduled" || draft.status === "streaming"
+
+  // Bare-minimum gate for scheduling/publishing: caption + at least one media asset.
+  const readiness = React.useMemo(() => evaluateDraftReadiness(draft), [draft])
 
   const handleCaptionChange = React.useCallback(
     (value: string) => patchDraft({ captionPreview: value }),
@@ -749,8 +762,9 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
                   Attach
                 </button>
 
-                {/* Generate — explicit opt-in, token-heavy headless gen */}
-                {mediaIsPending && !mediaIsUserSupplied && (
+                {/* Generate — explicit opt-in, token-heavy headless gen. Hidden for
+                    manual drafts: from-scratch posts use upload + Library, not AI. */}
+                {mediaIsPending && !mediaIsUserSupplied && !isManual && (
                   <button
                     type="button"
                     aria-label="Generate media for this post"
@@ -1033,14 +1047,36 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
               </div>
             )}
 
+            {!isPublished && !readiness.ready && (
+              <div className="rounded-lg border border-border/70 bg-muted/40 px-3 py-2">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Needed to schedule
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {readiness.checks.map((check) => (
+                    <li key={check.id} className="flex items-center gap-2 text-[12px]">
+                      {check.met ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                      )}
+                      <span className={check.met ? "text-muted-foreground line-through" : "text-foreground"}>
+                        {check.label}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {onApprove && (
               <button
                 type="button"
-                disabled={isApproveDisabled}
+                disabled={isApproveDisabled || !readiness.ready}
                 onClick={() => onApprove(draft.id)}
                 className={cn(
                   "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
-                  isApproveDisabled
+                  isApproveDisabled || !readiness.ready
                     ? "cursor-not-allowed bg-muted text-muted-foreground"
                     : "bg-primary text-primary-foreground hover:bg-primary/90"
                 )}
@@ -1054,11 +1090,11 @@ export function OrganicDraftPreview({ draft, brandName, brandProfileId, onApprov
             {canPublish && (
               <button
                 type="button"
-                disabled={isPublishing}
+                disabled={isPublishing || !readiness.ready}
                 onClick={() => publish(draft)}
                 className={cn(
                   "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors",
-                  isPublishing
+                  isPublishing || !readiness.ready
                     ? "cursor-not-allowed bg-muted text-muted-foreground"
                     : "bg-primary text-primary-foreground hover:bg-primary/90"
                 )}

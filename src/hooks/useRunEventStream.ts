@@ -17,8 +17,20 @@ export type ParsedRunEvent = {
 export type RunStreamStatus = "idle" | "connecting" | "live" | "completed" | "failed" | "timed_out";
 
 const TERMINAL_TYPES = new Set(["run_completed", "run_failed", "complete", "error"]);
-// 5 minutes — if no terminal event arrives, mark timed_out and unsubscribe
+// 5 minutes — if no terminal event arrives, the watchdog fires and unsubscribes
 const STREAM_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Decide how to terminate a run when the watchdog fires (no terminal event
+ * arrived in time). A run that emitted at least one event produced real work
+ * (drafts/placements landed); a missing terminal row is a backend gap, not a
+ * user-facing failure — resolve it as `completed` (partial) so the consumer does
+ * not surface "Generation run did not complete". A run that emitted nothing at
+ * all is a genuine stall and stays `timed_out`.
+ */
+export function resolveWatchdogStatus(receivedAnyEvent: boolean): RunStreamStatus {
+  return receivedAnyEvent ? "completed" : "timed_out";
+}
 
 /**
  * Subscribes to run events for a given runId using Supabase Realtime (INSERT on
@@ -47,6 +59,9 @@ export function useRunEventStream(
     let cancelled = false;
     let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
     let highestSeq = -1;
+    // Tracks whether this run delivered any event. Drives the watchdog's decision
+    // to resolve as completed-partial vs hard timeout (see resolveWatchdogStatus).
+    let receivedAnyEvent = false;
 
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel(`run-events:${runId}`);
@@ -63,6 +78,7 @@ export function useRunEventStream(
       if (cancelled) return;
       if (event.seq <= highestSeq) return;
       highestSeq = event.seq;
+      receivedAnyEvent = true;
 
       onEventRef.current(event);
 
@@ -71,7 +87,10 @@ export function useRunEventStream(
       }
     };
 
-    timeoutHandle = setTimeout(() => terminateWith("timed_out"), STREAM_TIMEOUT_MS);
+    timeoutHandle = setTimeout(
+      () => terminateWith(resolveWatchdogStatus(receivedAnyEvent)),
+      STREAM_TIMEOUT_MS
+    );
 
     // Subscribe first, then hydrate — ensures no events are lost in the window
     // between hydration completing and the subscription activating.

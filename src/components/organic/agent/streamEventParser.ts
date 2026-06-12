@@ -3,6 +3,7 @@ import {
   bulkContentPlanSchema,
   mediaSearchResultsFrameSchema,
   organicStreamFrameSchema,
+  POST_FETCHING_TOOL_NAMES,
   proposedPlanSchema,
   type BulkContentPlan,
   type MediaSearchResultsFrame,
@@ -25,6 +26,29 @@ import type {
   UiTrendChart,
 } from "./types";
 import { PIPELINE_STAGES } from "./types";
+
+// Labels for the post_list card synthesized from a post-fetching tool's result.
+// Shared by the live stream hook AND the session-restore path so both build the
+// same card from a tool result — one source, no drift.
+export const POST_TOOL_LABELS: Record<string, string> = {
+  listDrafts: "Drafts",
+  getTopPosts: "Top Posts",
+  listOwnInstagramMedia: "Recent Media",
+  getCalendarPostedContent: "Posted Content",
+  rankPostPerformers: "Top Performers",
+  getCompetitorInstagramTopPosts: "Competitor Posts",
+};
+
+/**
+ * The post_list UiCard a post-fetching tool result should surface, or null if the
+ * tool is not a post-fetcher or returned no posts. Used live and on reload.
+ */
+export function postListCardFromToolResult(toolName: string, result: unknown): UiCard | null {
+  if (!(POST_FETCHING_TOOL_NAMES as readonly string[]).includes(toolName)) return null;
+  const posts = normalizePostToolResult(toolName, result);
+  if (posts.length === 0) return null;
+  return { type: "post_list", data: posts, label: POST_TOOL_LABELS[toolName] };
+}
 
 export type ParsedPipelineStage = {
   jobId: string;

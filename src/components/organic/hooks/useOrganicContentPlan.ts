@@ -155,6 +155,15 @@ function handleRunEvent(
       });
       break;
     }
+    case "slot_text_ready": {
+      // Phase-1 checkpoint: the placement's text (caption/concept/hashtags) is
+      // ready before media realization. Surface it on the existing placeholder
+      // card immediately without counting it toward completion (the terminal
+      // slot_completed carries the full populated draft).
+      const placementId = event.placement.placementId;
+      ctx.updateDraft(placementId, (d) => ({ ...d, ...placementPatch(event.placement) }));
+      break;
+    }
     case "slot_completed": {
       completed += 1;
       const placementId = event.placement.placementId;
@@ -229,6 +238,8 @@ function adaptLegacyEvent(event: OrganicCalendarBatchGenerateStreamEvent): Organ
       };
     case "slot_heartbeat":
       return null;
+    case "slot_text_ready":
+      return { type: "slot_text_ready", placement: event.placement };
     case "slot_completed":
     case "placement":
       return { type: "slot_completed", placement: event.placement };

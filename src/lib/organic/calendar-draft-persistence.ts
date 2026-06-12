@@ -370,6 +370,10 @@ export function mapPersistedRowToCalendarEntry(
     tags: readStringArray(snapshot.tags),
     mediaCount: readNumber(snapshot.mediaCount) ?? 1,
     seedTrendId: readString(snapshot.seedTrendId) ?? undefined,
+    origin:
+      snapshot.origin === "manual" || snapshot.origin === "agent"
+        ? snapshot.origin
+        : undefined,
     targetAccountId: readString(snapshot.targetAccountId) ?? readString(row.platform_account_id) ?? undefined,
     creativeIdea: readString(snapshot.creativeIdea) ?? undefined,
     titleTopic: readString(snapshot.titleTopic) ?? undefined,

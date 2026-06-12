@@ -417,7 +417,11 @@ export type Database = {
           brand_id: string
           created_at: string | null
           id: string
+          instagram_followers_count: number | null
           instagram_handle: string | null
+          instagram_name: string | null
+          instagram_user_id: string | null
+          instagram_username: string | null
           is_user_tagged: boolean
           is_verified: boolean | null
           last_resolved_at: string | null
@@ -432,7 +436,11 @@ export type Database = {
           brand_id: string
           created_at?: string | null
           id?: string
+          instagram_followers_count?: number | null
           instagram_handle?: string | null
+          instagram_name?: string | null
+          instagram_user_id?: string | null
+          instagram_username?: string | null
           is_user_tagged?: boolean
           is_verified?: boolean | null
           last_resolved_at?: string | null
@@ -447,7 +455,11 @@ export type Database = {
           brand_id?: string
           created_at?: string | null
           id?: string
+          instagram_followers_count?: number | null
           instagram_handle?: string | null
+          instagram_name?: string | null
+          instagram_user_id?: string | null
+          instagram_username?: string | null
           is_user_tagged?: boolean
           is_verified?: boolean | null
           last_resolved_at?: string | null
@@ -3462,6 +3474,16 @@ export type Database = {
         Args: { metadata: Json }
         Returns: string
       }
+      resolve_google_integration_token_context: {
+        Args: { p_brand_profile_id: string; p_customer_id?: string }
+        Returns: {
+          access_token: string
+          expires_at: string
+          integration_id: string
+          login_customer_id: string
+          refresh_token: string
+        }[]
+      }
       revoke_integration_from_brand: {
         Args: { p_grant_id: string }
         Returns: undefined
@@ -5050,6 +5072,42 @@ export type Database = {
   }
   organic: {
     Tables: {
+      awareness_reports: {
+        Row: {
+          brand_id: string
+          created_at: string
+          external_account_id: string
+          generated_at: string
+          id: string
+          payload: Json
+          run_id: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          external_account_id: string
+          generated_at?: string
+          id?: string
+          payload: Json
+          run_id: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          external_account_id?: string
+          generated_at?: string
+          id?: string
+          payload?: Json
+          run_id?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       hyperframe_mp4_renders: {
         Row: {
           brand_id: string
@@ -5792,6 +5850,63 @@ export type Database = {
           updated_at?: string
           user_id?: string
           worker_id?: string | null
+        }
+        Relationships: []
+      }
+      post_metric_snapshots: {
+        Row: {
+          brand_id: string | null
+          captured_date: string
+          comments: number | null
+          external_account_id: string
+          fetched_at: string
+          id: string
+          likes: number | null
+          media_id: string
+          reach: number | null
+          reels_avg_watch_time: number | null
+          reels_skip_rate: number | null
+          reels_video_view_total_time: number | null
+          saved: number | null
+          shares: number | null
+          total_interactions: number | null
+          views: number | null
+        }
+        Insert: {
+          brand_id?: string | null
+          captured_date: string
+          comments?: number | null
+          external_account_id: string
+          fetched_at?: string
+          id?: string
+          likes?: number | null
+          media_id: string
+          reach?: number | null
+          reels_avg_watch_time?: number | null
+          reels_skip_rate?: number | null
+          reels_video_view_total_time?: number | null
+          saved?: number | null
+          shares?: number | null
+          total_interactions?: number | null
+          views?: number | null
+        }
+        Update: {
+          brand_id?: string | null
+          captured_date?: string
+          comments?: number | null
+          external_account_id?: string
+          fetched_at?: string
+          id?: string
+          likes?: number | null
+          media_id?: string
+          reach?: number | null
+          reels_avg_watch_time?: number | null
+          reels_skip_rate?: number | null
+          reels_video_view_total_time?: number | null
+          saved?: number | null
+          shares?: number | null
+          total_interactions?: number | null
+          views?: number | null
         }
         Relationships: []
       }

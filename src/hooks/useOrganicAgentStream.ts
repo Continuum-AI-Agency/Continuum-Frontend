@@ -6,21 +6,11 @@ import { readNdjsonStream } from "@/lib/streaming/readNdjsonStream";
 import type { AgentChatInput } from "@/components/organic/agent/types";
 import type { PanelAction } from "@/components/organic/agent/useOrganicAgentReducer";
 import {
-  normalizePostToolResult,
   parseOrganicStreamEvent,
+  postListCardFromToolResult,
 } from "@/components/organic/agent/streamEventParser";
-import { POST_FETCHING_TOOL_NAMES } from "@continuum/contracts";
 
 const RECONNECT_BACKOFF_MS = 750;
-
-const POST_TOOL_LABELS: Record<string, string> = {
-  listDrafts: "Drafts",
-  getTopPosts: "Top Posts",
-  listOwnInstagramMedia: "Recent Media",
-  getCalendarPostedContent: "Posted Content",
-  rankPostPerformers: "Top Performers",
-  getCompetitorInstagramTopPosts: "Competitor Posts",
-};
 const MAX_RECONNECT_ATTEMPTS = 5;
 
 export function useOrganicAgentStream(
@@ -84,12 +74,8 @@ export function useOrganicAgentStream(
               toolCallId: parsed.toolCallId,
               result: parsed.result,
             });
-            if ((POST_FETCHING_TOOL_NAMES as readonly string[]).includes(parsed.toolName)) {
-              const posts = normalizePostToolResult(parsed.toolName, parsed.result);
-              if (posts.length > 0) {
-                dispatch({ type: "STREAM_UI_CARD", card: { type: "post_list", data: posts, label: POST_TOOL_LABELS[parsed.toolName] } });
-              }
-            }
+            const postCard = postListCardFromToolResult(parsed.toolName, parsed.result);
+            if (postCard) dispatch({ type: "STREAM_UI_CARD", card: postCard });
             break;
           }
           case "error":

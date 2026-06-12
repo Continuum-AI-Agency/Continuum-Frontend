@@ -142,6 +142,34 @@ export const organicMediaAudioConceptSchema = z.object({
 }).strict();
 
 /**
+ * Concept + strategist brief captured at the text checkpoint (Phase 1) so the
+ * gated realize step (Phase 2) can reconstruct the blueprint inputs faithfully
+ * without re-deriving them. This is distinct from `generationContext`, which is
+ * the realized-blueprint context and ALWAYS carries a `finalPrompt` (the absence
+ * of `generationContext.finalPrompt` is the "media not yet realized" signal).
+ */
+export const organicMediaCheckpointContextSchema = z.object({
+  strategist: z.object({
+    objective: z.string().nullable(),
+    funnelStage: z.string().nullable(),
+    targetAudience: z.string().nullable(),
+    tone: z.string().nullable(),
+    angle: z.string().nullable(),
+    postType: z.string().nullable(),
+    postSize: z.string().nullable(),
+  }).strict(),
+  creativeDirection: z.object({
+    conceptTitle: z.string().nullable(),
+    creativeDirection: z.string().nullable(),
+    storyHook: z.string().nullable(),
+    trendIntegration: z.string().nullable(),
+    visualMode: z.string().nullable(),
+    audioMode: z.string().nullable(),
+    productionNotes: z.array(z.string()),
+  }).strict(),
+}).strict();
+
+/**
  * Durable, re-signable storage reference for one published media slot. The FE
  * re-signs via /api/library/sign (assetId) or the bucket+storagePath. Written by
  * the generation pipeline (source 'ai_generated') AND by user-supplied attach
@@ -184,6 +212,10 @@ export const organicMediaSuggestionSchema = z.object({
   textReady: z.boolean().optional(),
   blueprintReady: z.boolean().optional(),
   audioConcept: organicMediaAudioConceptSchema.optional(),
+  // Concept + brief captured at the text checkpoint so gated realization can
+  // reconstruct blueprint inputs without re-deriving them. Distinct from
+  // `generationContext` (the realized-blueprint context, which carries finalPrompt).
+  checkpointContext: organicMediaCheckpointContextSchema.optional(),
   generationContext: organicMediaGenerationContextSchema.optional(),
   assets: z.array(z.object({
     role: z.string(),
@@ -454,6 +486,15 @@ export const organicGenerationRunSlotStageEventSchema = z.object({
   message: z.string().optional(),
 }).strict();
 
+// V2 mirror of the generator-family `slot_text_ready` checkpoint. Emitted on the
+// V2/bulk path so the calendar surfaces the cheap text checkpoint (caption +
+// hashtags + concept) immediately, before the gated media realization runs. The
+// placement here is text-only (mediaSuggestion.mediaStatus = 'pending').
+export const organicGenerationRunSlotTextReadyEventSchema = z.object({
+  type: z.literal("slot_text_ready"),
+  placement: organicCalendarPlacementSchema,
+}).strict();
+
 export const organicGenerationRunSlotCompletedEventSchema = z.object({
   type: z.literal("slot_completed"),
   placement: organicCalendarPlacementSchema,
@@ -499,6 +540,7 @@ export const organicGenerationRunEventSchema = z.discriminatedUnion("type", [
   organicGenerationRunProgressEventSchema,
   organicGenerationRunSlotStartedEventSchema,
   organicGenerationRunSlotStageEventSchema,
+  organicGenerationRunSlotTextReadyEventSchema,
   organicGenerationRunSlotCompletedEventSchema,
   organicGenerationRunSlotFailedEventSchema,
   organicGenerationRunWarningEventSchema,
@@ -524,6 +566,7 @@ export type OrganicHyperframeTone = z.infer<typeof organicHyperframeToneSchema>;
 export type OrganicHyperframeAspectRatio = z.infer<typeof organicHyperframeAspectRatioSchema>;
 export type OrganicDraftMediaStatus = z.infer<typeof organicDraftMediaStatusSchema>;
 export type OrganicMediaAudioConcept = z.infer<typeof organicMediaAudioConceptSchema>;
+export type OrganicMediaCheckpointContext = z.infer<typeof organicMediaCheckpointContextSchema>;
 export type OrganicMediaSuggestion = z.infer<typeof organicMediaSuggestionSchema>;
 export type OrganicPublishingAsset = z.infer<typeof organicPublishingAssetSchema>;
 export type OrganicCalendarPlacement = z.infer<typeof organicCalendarPlacementSchema>;
@@ -538,6 +581,7 @@ export type OrganicCalendarSlotFailedEvent = z.infer<typeof organicCalendarSlotF
 export type OrganicCalendarErrorEvent = z.infer<typeof organicCalendarErrorEventSchema>;
 export type OrganicCalendarCompleteEvent = z.infer<typeof organicCalendarCompleteEventSchema>;
 export type OrganicCalendarBatchGenerateStreamEvent = z.infer<typeof organicCalendarBatchGenerateStreamEventSchema>;
+export type OrganicGenerationRunSlotTextReadyEvent = z.infer<typeof organicGenerationRunSlotTextReadyEventSchema>;
 export type OrganicGenerationRunEvent = z.infer<typeof organicGenerationRunEventSchema>;
 export type OrganicGenerationRunEventEnvelope = z.infer<typeof organicGenerationRunEventEnvelopeSchema>;
 

@@ -13,6 +13,17 @@ import type { OrganicCalendarDay, OrganicPlatformTag } from "./types"
 
 export type PlannerPlatformKey = OrganicPlatformTag | "x"
 
+// Whether the + button seeds a manual from-scratch draft or an agent placeholder.
+export type CreatePostMode = "manual" | "ai"
+
+// Shared shape for every calendar + button (week planner, month, list).
+export type CreatePostOptions = {
+  dayId: string
+  platformKey: PlannerPlatformKey
+  status?: "draft" | "scheduled" | "placeholder"
+  mode?: CreatePostMode
+}
+
 export type PlannerPlatform = {
   key: PlannerPlatformKey
   label: string

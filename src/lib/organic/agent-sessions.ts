@@ -1,4 +1,9 @@
-import { z } from "zod";
+import {
+  organicChatMessageDtoSchema,
+  organicChatSessionDtoSchema,
+  type OrganicChatMessageDto,
+  type OrganicChatSessionDto,
+} from "@continuum/contracts";
 import { request } from "@/lib/api/http";
 import { agentMentionMetadataSchema, type AgentMentionMetadata } from "@/lib/agent-references";
 
@@ -34,30 +39,11 @@ export function invalidateMessageCache(sessionId: string): void {
   messageCache.delete(sessionId);
 }
 
-const backendSessionSchema = z.object({
-  session_id: z.string(),
-  brand_id: z.string().nullable().optional(),
-  title: z.string().nullable().optional(),
-  last_message_role: z.enum(["user", "assistant"]).nullable().optional(),
-  last_message_preview: z.string().nullable().optional(),
-  last_message_at: z.string().nullable().optional(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-// The backend GET messages route sends the store ChatMessage shape
-// ({ role, content, metadata, uiCards }); id/session_id/created_at are not
-// guaranteed. Keep them optional with fallbacks so a missing field never
-// drops the whole message (which previously blanked reloaded conversations).
-const backendMessageSchema = z.object({
-  id: z.union([z.string(), z.number()]).transform(String).optional(),
-  session_id: z.string().optional(),
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-  metadata: agentMentionMetadataSchema.optional(),
-  uiCards: z.array(z.unknown()).optional(),
-  created_at: z.string().optional(),
-});
+// Wire shapes come from @continuum/contracts (organicChatSessionDtoSchema /
+// organicChatMessageDtoSchema). These are CAMELCASE to match what the Backend
+// conversation store emits. A prior snake_case parser silently dropped every
+// session row and blanked the conversations sidebar — parsing both sides against
+// the shared contract is what prevents that drift recurring.
 
 function extractSessions(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
@@ -79,32 +65,40 @@ function extractMessages(raw: unknown): unknown[] {
   return [];
 }
 
-function mapSession(row: z.infer<typeof backendSessionSchema>): OrganicSession {
+function mapSession(row: OrganicChatSessionDto): OrganicSession {
   return {
-    sessionId: row.session_id,
-    brandId: row.brand_id ?? null,
+    sessionId: row.sessionId,
+    brandId: row.brandId ?? null,
     title: row.title ?? null,
-    lastMessageRole: row.last_message_role ?? null,
-    lastMessagePreview: row.last_message_preview ?? null,
-    lastMessageAt: row.last_message_at ?? null,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    lastMessageRole: row.lastMessageRole ?? null,
+    lastMessagePreview: row.lastMessagePreview ?? null,
+    lastMessageAt: row.lastMessageAt ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt ?? row.lastMessageAt ?? row.createdAt,
   };
 }
 
+// metadata is loose (unknown) in the contract; narrow it to the Frontend's
+// agent-mention shape here, dropping it if it doesn't match rather than failing.
+function narrowMetadata(metadata: unknown): AgentMentionMetadata | undefined {
+  if (metadata === undefined || metadata === null) return undefined;
+  const parsed = agentMentionMetadataSchema.safeParse(metadata);
+  return parsed.success ? parsed.data : undefined;
+}
+
 function mapMessage(
-  row: z.infer<typeof backendMessageSchema>,
+  row: OrganicChatMessageDto,
   index: number,
   sessionId: string
 ): OrganicSessionMessage {
   return {
-    id: row.id ?? `${sessionId}:msg:${index}`,
-    sessionId: row.session_id ?? sessionId,
+    id: row.id != null ? String(row.id) : `${sessionId}:msg:${index}`,
+    sessionId: row.sessionId ?? sessionId,
     role: row.role,
     content: row.content,
-    metadata: row.metadata,
+    metadata: narrowMetadata(row.metadata),
     uiCardFrames: Array.isArray(row.uiCards) ? row.uiCards : [],
-    createdAt: row.created_at ?? "",
+    createdAt: row.createdAt ?? "",
   };
 }
 
@@ -116,7 +110,7 @@ export async function fetchOrganicSessions(
       path: `/api/organic/agent/sessions?brand_id=${encodeURIComponent(brandId)}`,
     });
     return extractSessions(raw)
-      .map((row) => backendSessionSchema.safeParse(row))
+      .map((row) => organicChatSessionDtoSchema.safeParse(row))
       .filter((result) => result.success)
       .map((result) => mapSession(result.data));
   } catch (error) {
@@ -144,7 +138,7 @@ export async function fetchOrganicSessionMessages(
       signal: controller.signal,
     });
     const messages = extractMessages(raw)
-      .map((row) => backendMessageSchema.safeParse(row))
+      .map((row) => organicChatMessageDtoSchema.safeParse(row))
       .filter((result) => result.success)
       .map((result, index) => mapMessage(result.data, index, sessionId));
     messageCache.set(sessionId, { messages, fetchedAt: Date.now() });

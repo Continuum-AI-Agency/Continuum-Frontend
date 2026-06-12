@@ -12,7 +12,7 @@ import type {
   OrganicSeedDragPayload,
   OrganicPlatformTag,
 } from "./types"
-import type { PlannerPlatform } from "./planner-platforms"
+import type { CreatePostOptions, PlannerPlatform } from "./planner-platforms"
 import { PlannerCell } from "./PlannerCell"
 import { parseTimeLabelToMinutes } from "./calendar-utils"
 
@@ -32,11 +32,7 @@ type PlannerMatrixProps = {
     data: OrganicSeedDragPayload,
     platformKey?: OrganicPlatformTag
   ) => void
-  onCreatePost: (options: {
-    dayId: string
-    platformKey: PlannerPlatform["key"]
-    status?: "draft" | "scheduled" | "placeholder"
-  }) => void
+  onCreatePost: (options: CreatePostOptions) => void
 }
 
 const EMPTY_DRAFTS: OrganicCalendarDraft[] = []

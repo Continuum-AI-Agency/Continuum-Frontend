@@ -11,7 +11,8 @@ import type {
   OrganicPlatformTag,
 } from "./types"
 import { DraggableDraftCard } from "./DraggableDraftCard"
-import type { PlannerPlatform } from "./planner-platforms"
+import { AddPostMenu } from "./AddPostMenu"
+import type { CreatePostOptions, PlannerPlatform } from "./planner-platforms"
 
 type PlannerCellProps = {
   dayId: string
@@ -34,11 +35,7 @@ type PlannerCellProps = {
     data: OrganicSeedDragPayload,
     platformKey?: OrganicPlatformTag
   ) => void
-  onCreatePost: (options: {
-    dayId: string
-    platformKey: PlannerPlatform["key"]
-    status?: "draft" | "scheduled" | "placeholder"
-  }) => void
+  onCreatePost: (options: CreatePostOptions) => void
 }
 
 export const PlannerCell = React.memo(function PlannerCell({
@@ -147,18 +144,17 @@ export const PlannerCell = React.memo(function PlannerCell({
             Soon
           </div>
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon-sm"
-            className={cn("mx-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150", compact ? "h-6 w-6" : "h-7 w-7")}
-            aria-label={`Add placeholder for ${dayId} ${platform.label}`}
-            onClick={() =>
-              onCreatePost({ dayId, platformKey: platform.key, status: "placeholder" })
-            }
-          >
-            <Plus className="size-3.5" />
-          </Button>
+          <AddPostMenu dayId={dayId} platformKey={platform.key} onCreatePost={onCreatePost}>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              className={cn("mx-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150", compact ? "h-6 w-6" : "h-7 w-7")}
+              aria-label={`Add post for ${dayId} ${platform.label}`}
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          </AddPostMenu>
         )}
 
       </div>

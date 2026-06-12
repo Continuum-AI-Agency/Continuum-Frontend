@@ -15,7 +15,8 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { cn } from "@/lib/utils"
 import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicCalendarPostedContent } from "./types"
-import type { PlannerPlatform } from "./planner-platforms"
+import type { CreatePostOptions, PlannerPlatform } from "./planner-platforms"
+import { AddPostMenu } from "./AddPostMenu"
 import { formatDayId } from "./calendar-utils"
 import { DraftHoverCardContent } from "./DraftHoverCardContent"
 import { statusFrameClasses } from "./draft-card-styles"
@@ -37,7 +38,7 @@ type OrganicMonthlyCalendarProps = {
   postedContent: OrganicCalendarPostedContent[]
   selectedDraftId: string | null
   onSelectDraft: (id: string) => void
-  onCreatePost: (options: { dayId: string; platformKey: string }) => void
+  onCreatePost: (options: CreatePostOptions) => void
   onPreviousMonth: () => void
   onNextMonth: () => void
   onRegenerate?: (draftId: string) => void
@@ -324,14 +325,15 @@ export function OrganicMonthlyCalendar({
                       {date.getDate()}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    aria-label="Add post"
-                    onClick={() => onCreatePost({ dayId, platformKey: "instagram" })}
-                    className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-                  >
-                    <Plus className="size-3 text-muted-foreground" />
-                  </button>
+                  <AddPostMenu dayId={dayId} platformKey="instagram" onCreatePost={onCreatePost} align="start">
+                    <button
+                      type="button"
+                      aria-label="Add post"
+                      className="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                    >
+                      <Plus className="size-3 text-muted-foreground" />
+                    </button>
+                  </AddPostMenu>
                 </div>
 
                 <div className="flex flex-col gap-0.5">

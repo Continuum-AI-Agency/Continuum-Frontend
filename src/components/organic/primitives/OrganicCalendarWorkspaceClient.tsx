@@ -42,6 +42,7 @@ import { OrganicDraftPreview } from "./OrganicDraftPreview"
 import { Button } from "@/components/ui/button"
 import {
   buildPlannerPlatforms,
+  type CreatePostMode,
   type PlannerPlatformKey,
 } from "./planner-platforms"
 import {
@@ -70,6 +71,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { CalendarPostAccountsByPlatform } from "@/lib/organic/calendar-posts"
+import { evaluateDraftReadiness } from "@/lib/organic/draftReadiness"
 
 const OrganicMonthlyCalendar = dynamic(
   () => import("./OrganicMonthlyCalendar").then((m) => m.OrganicMonthlyCalendar)
@@ -494,6 +496,7 @@ export function OrganicCalendarWorkspaceClient({
       platform?: PlannerPlatformKey
       status?: "draft" | "scheduled" | "placeholder"
       trendId?: string
+      mode?: CreatePostMode
     }) => {
       const selectedPlatform =
         (isSchedulablePlannerPlatform(context?.platform) && context?.platform) ||
@@ -506,8 +509,8 @@ export function OrganicCalendarWorkspaceClient({
         ? calendarDays.find((day) => day.id === context.dayId) ?? null
         : (calendarDays[0] ?? null)
       if (!targetDay) return null
-      const requestedStatus = context?.status ?? "draft"
-      const status = requestedStatus
+      const isManual = context?.mode === "manual"
+      const status = context?.status ?? "draft"
       const trendTag = context?.trendId
       const targetAccountId = platformAccountIds[selectedPlatform as OrganicPlatformKey]
 
@@ -528,11 +531,12 @@ export function OrganicCalendarWorkspaceClient({
         status,
         platforms: [selectedPlatform],
         format: "Post",
-        objective: "Draft",
+        objective: isManual ? "Manual" : "Draft",
+        origin: isManual ? "manual" : undefined,
         creativeIdea: "",
         captionPreview: "",
         tags: [],
-        mediaCount: 1,
+        mediaCount: isManual ? 0 : 1,
         seedTrendId: status === "placeholder" ? trendTag : undefined,
         targetAccountId,
       }
@@ -550,12 +554,16 @@ export function OrganicCalendarWorkspaceClient({
       platform?: PlannerPlatformKey
       trendId?: string
       status?: "draft" | "scheduled" | "placeholder"
+      mode?: CreatePostMode
     }) => {
+      const mode = context?.mode ?? "ai"
+      const status = context?.status ?? (mode === "manual" ? "draft" : "placeholder")
       const createdDraftId = createQuickDraft({
         dayId: context?.dayId,
         platform: context?.platform,
-        status: context?.status ?? "placeholder",
+        status,
         trendId: context?.trendId,
+        mode,
       })
       if (!createdDraftId) return
     },
@@ -588,7 +596,13 @@ export function OrganicCalendarWorkspaceClient({
   )
 
   const handleBulkApprove = React.useCallback(() => {
-    selectedIds.forEach((id) => updateDraftById(id, (d) => ({ ...d, status: "scheduled" as const })))
+    // Only schedule drafts that meet the bare minimum (caption + media); leave the
+    // rest as drafts so the readiness gate can't be bypassed in bulk.
+    selectedIds.forEach((id) =>
+      updateDraftById(id, (d) =>
+        evaluateDraftReadiness(d).ready ? { ...d, status: "scheduled" as const } : d
+      )
+    )
     clearAll()
   }, [selectedIds, updateDraftById, clearAll])
 
@@ -824,6 +838,8 @@ export function OrganicCalendarWorkspaceClient({
                               handleGoDraft({
                                 dayId: context?.dayId,
                                 platform: context?.platform,
+                                status: context?.status,
+                                mode: context?.mode,
                               })
                             }
                             onSelectDraft={(id) => handleSelect(id, false)}
@@ -869,8 +885,8 @@ export function OrganicCalendarWorkspaceClient({
                       postedContent={postedContent}
                       selectedDraftId={selectedId}
                       onSelectDraft={(id) => handleSelect(id, false)}
-                      onCreatePost={({ dayId, platformKey }) =>
-                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined })
+                      onCreatePost={({ dayId, platformKey, status, mode }) =>
+                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status, mode })
                       }
                       onPreviousMonth={handlePreviousMonth}
                       onNextMonth={handleNextMonth}
@@ -897,8 +913,8 @@ export function OrganicCalendarWorkspaceClient({
                       onSelectDraft={(id) => handleSelect(id, false)}
                       onToggleSelection={(id) => handleSelect(id, true)}
                       onRegenerate={handleRegenerate}
-                      onCreatePost={({ dayId, platformKey, status }) =>
-                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status })
+                      onCreatePost={({ dayId, platformKey, status, mode }) =>
+                        handleGoDraft({ dayId, platform: platformKey as PlannerPlatformKey | undefined, status, mode })
                       }
                       brandProfileId={brandProfileId}
                       backlogDrafts={backlogDrafts}

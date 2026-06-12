@@ -18,7 +18,10 @@ export type InstagramPostKind = z.infer<typeof instagramPostKindSchema>;
 export const instagramTopMediaRequestSchema = z
   .object({
     brandId: z.string().uuid(),
-    username: z.string().min(1).max(64),
+    // Optional: when omitted, the Backend returns the brand's OWN connected
+    // Instagram account's top media (auto-resolve, no handle to type). When
+    // present, it searches that public business/creator account instead.
+    username: z.string().min(1).max(64).optional(),
     limit: z.number().int().min(1).max(50).default(50),
   })
   .strict();

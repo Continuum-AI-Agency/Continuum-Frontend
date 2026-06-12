@@ -36,6 +36,11 @@ export const creativeBriefSchema = z.object({
   angle: z.string(),
   trendIntegration: z.string().nullable(),
   toneAndVoice: z.string(),
+  // Optional funnel stage the upstream agent can delegate. When present the
+  // generation engine builds the placement brief deterministically (and skips
+  // platform_strategist); when absent it defaults. Kept optional so older peers
+  // and plan items without it keep parsing under a rolling deploy.
+  funnelStage: z.enum(["top", "middle", "bottom", "retention"]).optional(),
   formatSuggestion: z.enum(["reel", "post", "carousel", "story", "hyperframe"]),
   productionNotes: z.array(z.string()),
 });

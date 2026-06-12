@@ -36,6 +36,30 @@ describe("calendar draft persistence utils", () => {
     expect(normalizePersistedStatus(null)).toBe("draft")
   })
 
+  it("preserves the placeholder status for text-checkpoint drafts", () => {
+    // A Phase-1 checkpoint row lands as `placeholder` and may stay that way if the
+    // terminal merge never promotes it; it must round-trip (not collapse to draft)
+    // so the planned post renders on the grid.
+    expect(normalizePersistedStatus("placeholder")).toBe("placeholder")
+
+    const days = buildWeekDays(new Date("2026-04-20T12:00:00"))
+    const row: PersistedOrganicDraftRow = {
+      id: "checkpoint-1",
+      status: "placeholder",
+      scheduled_date: "2026-04-21",
+      platform_account_id: "acct-1",
+      slot_data: {
+        dayId: "2026-04-21",
+        timeLabel: "9:00 AM",
+        draftSnapshot: makeDraft({ id: "local-cp", status: "placeholder" }),
+      },
+    }
+
+    const mapped = mapPersistedRowToCalendarEntry(row, days)
+    expect(mapped).not.toBeNull()
+    expect(mapped?.draft.status).toBe("placeholder")
+  })
+
   it("builds persistence payload and normalizes transient status", () => {
     const payload = buildPersistedDraftPayload({
       brandId: "11111111-1111-4111-8111-111111111111",

@@ -33,6 +33,7 @@ const backendPctChangeInstagramOrganicMetricsResponseSchema = z.object({
     nonFollowerReach: z.number(),
     followerReach: z.number(),
   }),
+  trends: z.array(z.unknown()).optional(),
   comparison: z.record(z.string(), backendMetricComparisonPctSchema).nullable().optional(),
 });
 
@@ -308,6 +309,7 @@ export function normalizeInstagramOrganicMetricsResponse(payload: unknown): Inst
 
     return instagramOrganicMetricsResponseSchema.parse({
       ...backendPct.data,
+      trends: backendPct.data.trends,
       comparison,
     });
   }

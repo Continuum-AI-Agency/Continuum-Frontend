@@ -5,7 +5,7 @@ import * as React from "react"
 import { formatDayId } from "./calendar-utils"
 import { PlannerHeader } from "./PlannerHeader"
 import { PlannerMatrix } from "./PlannerMatrix"
-import type { PlannerPlatform, PlannerPlatformKey } from "./planner-platforms"
+import type { CreatePostMode, PlannerPlatform, PlannerPlatformKey } from "./planner-platforms"
 import type {
   OrganicCalendarDay,
   OrganicPlatformTag,
@@ -27,6 +27,7 @@ type TimeGridCanvasProps = {
     dayId?: string
     platform?: PlannerPlatformKey
     status?: "draft" | "scheduled" | "placeholder"
+    mode?: CreatePostMode
   }) => void
   onSelectDraft: (id: string) => void
   onToggleSelection: (id: string) => void
@@ -87,11 +88,12 @@ export function TimeGridCanvas({
         onRegenerate={onRegenerate}
         onClearFailure={onClearFailure}
         onNativeDrop={onNativeDrop}
-        onCreatePost={({ dayId, platformKey, status }) =>
+        onCreatePost={({ dayId, platformKey, status, mode }) =>
           onCreatePost({
             dayId,
             platform: platformKey,
             status,
+            mode,
           })
         }
       />

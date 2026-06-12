@@ -19,7 +19,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { useCalendarStore } from "@/lib/organic/store"
 import type { OrganicCalendarDay, OrganicCalendarDraft, OrganicDraftStatus } from "./types"
-import type { PlannerPlatform } from "./planner-platforms"
+import type { CreatePostMode, PlannerPlatform } from "./planner-platforms"
 import { DraftHoverCardContent } from "./DraftHoverCardContent"
 import { resolveDraftMediaAssetUrl } from "./DraftCardMedia"
 import { statusFrameClasses } from "./draft-card-styles"
@@ -36,6 +36,7 @@ type OnCreatePost = (options: {
   dayId?: string
   platformKey?: string
   status?: "draft" | "scheduled" | "placeholder"
+  mode?: CreatePostMode
 }) => void
 
 type OrganicListViewProps = {
@@ -411,7 +412,7 @@ export function OrganicListView({
           {creating === "draft" && (
             <QuickCreateRow
               onSubmit={(_title) => {
-                onCreatePost({ status: "placeholder" })
+                onCreatePost({ status: "draft", mode: "manual" })
                 setCreating(null)
               }}
               onCancel={() => setCreating(null)}

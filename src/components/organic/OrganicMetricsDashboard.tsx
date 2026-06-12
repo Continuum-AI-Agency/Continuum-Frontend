@@ -35,6 +35,7 @@ import {
 } from "recharts";
 
 import { OrganicMetricsWidgetSkeleton } from "@/components/organic/MetricsSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PostCommentsPanel } from "@/components/organic/primitives/PostCommentsPanel";
 import dynamic from "next/dynamic";
 
@@ -307,7 +308,18 @@ function isAllZeroPost(post: OrganicPost): boolean {
 function mergePosts(existing: OrganicPost[], incoming: OrganicPost[]) {
   const map = new Map(existing.map((post) => [post.id, post]));
   incoming.forEach((post) => {
-    map.set(post.id, { ...(map.get(post.id) ?? {}), ...post });
+    const prev = map.get(post.id);
+    const merged = { ...(prev ?? {}), ...post };
+    if (prev) {
+      // Reuse the media URLs already loaded/displayed in the gallery. The
+      // per-post detail fetch returns freshly-signed URLs for identical media;
+      // swapping them in would force the browser to re-download and flash.
+      // Metrics still hydrate from the incoming detail; only media stays put.
+      merged.mediaUrl = prev.mediaUrl ?? post.mediaUrl;
+      merged.thumbnailUrl = prev.thumbnailUrl ?? post.thumbnailUrl;
+      merged.carouselMedia = prev.carouselMedia ?? post.carouselMedia;
+    }
+    map.set(post.id, merged);
   });
   return Array.from(map.values()).sort((a, b) => {
     const dateA = a.timestamp ? Date.parse(a.timestamp) : 0;
@@ -641,6 +653,9 @@ function PostSnapshotPanel({
   // Per-post history accrues one day-over-day delta per day tracked (Meta serves no
   // media-level history). Surface how far along the 7-day walk is.
   const trendDays = post.breakdown7d?.length ?? 0;
+  // Show skeletons only while the detail fetch is in flight AND the base post has
+  // no metrics yet, so an already-populated post is never hidden behind a loader.
+  const metricsPending = loading && isAllZeroPost(post);
 
   return (
     <motion.aside
@@ -711,48 +726,56 @@ function PostSnapshotPanel({
           </Box>
 
           <div className="mb-3 grid grid-cols-2 gap-1.5">
-            <MetricCard
-              label="Reach (7d)"
-              value={recent7dMetrics.reach ?? post.metrics?.reach}
-              comparison={metricComparisons.reach}
-              compact
-            />
-            <MetricCard
-              label="Views (7d)"
-              value={recent7dMetrics.views ?? post.metrics?.views}
-              comparison={metricComparisons.views}
-              compact
-            />
-            <MetricCard
-              label="Engagement (7d)"
-              value={recent7dMetrics.engagement ?? post.metrics?.totalInteractions}
-              comparison={metricComparisons.engagement}
-              compact
-            />
-            <MetricCard
-              label="Comments (7d)"
-              value={recent7dMetrics.comments ?? post.metrics?.comments}
-              comparison={metricComparisons.comments}
-              compact
-            />
-            {post.metrics?.reelsAvgWatchTime !== undefined ||
-            post.metrics?.reelsVideoViewTotalTime !== undefined ? (
+            {metricsPending ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-[48px] rounded-lg" />
+              ))
+            ) : (
               <>
-                <WatchTimeCard label="Avg Watch Time" ms={post.metrics?.reelsAvgWatchTime} />
-                <WatchTimeCard label="Total Watch Time" ms={post.metrics?.reelsVideoViewTotalTime} />
-              </>
-            ) : null}
-            {(() => {
-              const hookRate = calculateHookRate(post);
-              if (hookRate === undefined) return null;
-              return (
-                <HookRateCard
-                  hookRate={hookRate}
-                  tier={hookRateTier(hookRate)}
-                  skipRate={post.metrics?.reelsSkipRate}
+                <MetricCard
+                  label="Reach (7d)"
+                  value={recent7dMetrics.reach ?? post.metrics?.reach}
+                  comparison={metricComparisons.reach}
+                  compact
                 />
-              );
-            })()}
+                <MetricCard
+                  label="Views (7d)"
+                  value={recent7dMetrics.views ?? post.metrics?.views}
+                  comparison={metricComparisons.views}
+                  compact
+                />
+                <MetricCard
+                  label="Engagement (7d)"
+                  value={recent7dMetrics.engagement ?? post.metrics?.totalInteractions}
+                  comparison={metricComparisons.engagement}
+                  compact
+                />
+                <MetricCard
+                  label="Comments (7d)"
+                  value={recent7dMetrics.comments ?? post.metrics?.comments}
+                  comparison={metricComparisons.comments}
+                  compact
+                />
+                {post.metrics?.reelsAvgWatchTime !== undefined ||
+                post.metrics?.reelsVideoViewTotalTime !== undefined ? (
+                  <>
+                    <WatchTimeCard label="Avg Watch Time" ms={post.metrics?.reelsAvgWatchTime} />
+                    <WatchTimeCard label="Total Watch Time" ms={post.metrics?.reelsVideoViewTotalTime} />
+                  </>
+                ) : null}
+                {(() => {
+                  const hookRate = calculateHookRate(post);
+                  if (hookRate === undefined) return null;
+                  return (
+                    <HookRateCard
+                      hookRate={hookRate}
+                      tier={hookRateTier(hookRate)}
+                      skipRate={post.metrics?.reelsSkipRate}
+                    />
+                  );
+                })()}
+              </>
+            )}
           </div>
 
           <Box className="mb-3">
@@ -780,7 +803,9 @@ function PostSnapshotPanel({
                 Last 7 days
               </Text>
             </Flex>
-            {series.length > 0 ? (
+            {metricsPending ? (
+              <Skeleton className="h-24 w-full rounded-lg" />
+            ) : series.length > 0 ? (
               <>
                 <ChartContainer config={drilldownChartConfig} className="h-24 w-full">
                   <LineChart data={series}>
@@ -1178,10 +1203,19 @@ function Dashboard({
   }, [data.posts, selectedPostId]);
 
   const selectedPostBase = (data.posts ?? []).find((post) => post.id === selectedPostId) ?? null;
-  const selectedPost =
-    (selectedPostId ? postDetailsById?.[selectedPostId] : undefined) ??
-    selectedPostBase ??
-    null;
+  const selectedPostDetail = (selectedPostId ? postDetailsById?.[selectedPostId] : undefined) ?? null;
+  // Detail supplies the richer metrics, but the media URLs come from the base
+  // gallery post (already loaded) so opening the panel never re-downloads or
+  // flashes the media.
+  const selectedPost: OrganicPost | null =
+    selectedPostDetail && selectedPostBase
+      ? {
+          ...selectedPostDetail,
+          mediaUrl: selectedPostBase.mediaUrl ?? selectedPostDetail.mediaUrl,
+          thumbnailUrl: selectedPostBase.thumbnailUrl ?? selectedPostDetail.thumbnailUrl,
+          carouselMedia: selectedPostBase.carouselMedia ?? selectedPostDetail.carouselMedia,
+        }
+      : selectedPostDetail ?? selectedPostBase;
   const postCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
   const postsScrollerRef = React.useRef<HTMLDivElement | null>(null);
   const postsLoadSentinelRef = React.useRef<HTMLDivElement | null>(null);
@@ -1552,8 +1586,12 @@ function Dashboard({
                           )}
                         >
                           {sortPosts(visiblePosts, postSortKey).map((post) => {
-                            // Prefer the store-hydrated detail (richer metrics +
-                            // breakdowns) so the quick-look fills in after a fetch.
+                            // Quick-look uses the store-hydrated detail (richer
+                            // metrics + breakdowns) so it fills in after a fetch.
+                            // The gallery card itself uses the base post so its
+                            // already-loaded media URL stays put — the detail
+                            // fetch returns freshly-signed URLs that would
+                            // otherwise force a re-download/flash.
                             const detailed = postDetailsById?.[post.id] ?? post;
                             return (
                               <motion.div
@@ -1576,7 +1614,7 @@ function Dashboard({
                                   <HoverCardTrigger asChild>
                                     <div className="w-full">
                                       <PostGalleryCard
-                                        post={detailed}
+                                        post={post}
                                         selected={selectedPostId === post.id}
                                         loading={loadingPostId === post.id}
                                         onSelect={() => {
