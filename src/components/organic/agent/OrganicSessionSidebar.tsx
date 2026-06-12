@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { OrganicSession } from "@/lib/organic/agent-sessions"
-import { PlusIcon } from "lucide-react"
+import { PlusIcon, Trash2Icon } from "lucide-react"
 
 type OrganicSessionSidebarProps = {
   sessions: OrganicSession[]
@@ -13,6 +13,7 @@ type OrganicSessionSidebarProps = {
   isInteractionDisabled: boolean
   onNewSession: () => void
   onSelectSession: (sessionId: string) => void
+  onDeleteSession: (sessionId: string) => void
 }
 
 function formatSessionTime(value: string | null): string {
@@ -40,6 +41,7 @@ export function OrganicSessionSidebar({
   isInteractionDisabled,
   onNewSession,
   onSelectSession,
+  onDeleteSession,
 }: OrganicSessionSidebarProps) {
   return (
     <aside className="@container/agent-sidebar flex w-full shrink-0 flex-col border-b border-border/60 bg-background/60 backdrop-blur md:w-[var(--shell-secondary-w)] md:max-w-[22rem] md:min-w-[var(--shell-secondary-w-min)] md:border-b-0 md:border-r">
@@ -73,31 +75,57 @@ export function OrganicSessionSidebar({
           {sessions.map((session) => {
             const isActive = session.sessionId === activeSessionId
             return (
-              <button
+              <div
                 key={session.sessionId}
-                type="button"
-                onClick={() => onSelectSession(session.sessionId)}
-                disabled={isInteractionDisabled || isActive}
                 className={cn(
-                  "flex min-w-[14rem] flex-col items-start gap-1 rounded-md border px-3 py-2 text-left transition-colors md:min-w-0",
+                  "group/session relative flex min-w-[14rem] flex-col rounded-md border transition-colors md:min-w-0",
                   isActive
                     ? "border-primary/70 bg-primary/10"
                     : "border-border/60 bg-background/40 hover:border-border hover:bg-background/70",
-                  isInteractionDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                  isInteractionDisabled && "opacity-60"
                 )}
               >
-                <span className="line-clamp-2 w-full text-xs font-medium text-primary">
-                  {getSessionTitle(session)}
-                </span>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {session.lastMessageRole ?? "session"}
+                <button
+                  type="button"
+                  onClick={() => onSelectSession(session.sessionId)}
+                  disabled={isInteractionDisabled || isActive}
+                  className={cn(
+                    "flex w-full flex-col items-start gap-1 px-3 py-2 pr-8 text-left",
+                    isInteractionDisabled
+                      ? "cursor-not-allowed"
+                      : isActive
+                        ? "cursor-default"
+                        : "cursor-pointer"
+                  )}
+                >
+                  <span className="line-clamp-2 w-full text-xs font-medium text-primary">
+                    {getSessionTitle(session)}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {formatSessionTime(session.lastMessageAt ?? session.createdAt)}
-                  </span>
-                </div>
-              </button>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {session.lastMessageRole ?? "session"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {formatSessionTime(session.lastMessageAt ?? session.createdAt)}
+                    </span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete conversation"
+                  title="Delete conversation"
+                  onClick={() => onDeleteSession(session.sessionId)}
+                  disabled={isInteractionDisabled}
+                  className={cn(
+                    "absolute right-1 top-1 inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40",
+                    isActive
+                      ? "opacity-100"
+                      : "opacity-0 group-hover/session:opacity-100"
+                  )}
+                >
+                  <Trash2Icon className="size-3.5" />
+                </button>
+              </div>
             )
           })}
         </div>

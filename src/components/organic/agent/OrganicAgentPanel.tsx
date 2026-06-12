@@ -244,6 +244,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     startNewSession,
     selectSession,
     refreshSessions,
+    deleteSession,
   } = useOrganicSessions(brandId, user?.id ?? null);
 
   // Load messages when activeSessionId is set by the hook on initial fetch
@@ -372,6 +373,25 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
     newSessionIdRef.current = id;
     dispatch({ type: "SESSION_SWITCH", sessionId: id, messages: [] });
   }, [isStreaming, startNewSession, clearGenerations]);
+
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      if (isStreaming) return;
+      if (typeof window !== "undefined" && !window.confirm("Delete this conversation? This cannot be undone.")) {
+        return;
+      }
+      const wasActive = (state.sessionId ?? activeSessionId) === sessionId;
+      try {
+        await deleteSession(sessionId);
+      } catch {
+        if (typeof window !== "undefined") window.alert("Could not delete the conversation. Please try again.");
+        return;
+      }
+      // If the open conversation was removed, reset to a fresh empty session.
+      if (wasActive) handleNewSession();
+    },
+    [isStreaming, state.sessionId, activeSessionId, deleteSession, handleNewSession]
+  );
 
   const handleSubmit = useCallback(
     (value: string, references: AgentMentionReference[] = []) => {
@@ -751,6 +771,7 @@ export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext 
         isInteractionDisabled={isStreaming}
         onNewSession={handleNewSession}
         onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">

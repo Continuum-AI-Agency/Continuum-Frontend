@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
+  deleteOrganicSession,
   fetchOrganicSessions,
   fetchOrganicSessionMessages,
   type OrganicSession,
@@ -20,6 +21,7 @@ export function useOrganicSessions(
   startNewSession: () => string;
   selectSession: (id: string) => Promise<OrganicSessionMessage[]>;
   refreshSessions: () => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
 } {
   const [sessions, setSessions] = useState<OrganicSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
@@ -77,6 +79,21 @@ export function useOrganicSessions(
     setSessions(fetched);
   }, [brandId]);
 
+  // Hard-deletes the conversation and drops it from the list + store. The caller
+  // (panel) owns active-session reassignment so it can reset the transcript when
+  // the deleted session was the open one.
+  const deleteSession = useCallback(
+    async (sessionId: string): Promise<void> => {
+      await deleteOrganicSession(sessionId, brandId);
+      setSessions((prev) => {
+        const remaining = prev.filter((s) => s.sessionId !== sessionId);
+        useOrganicSessionStore.getState().setSessions(brandId, remaining);
+        return remaining;
+      });
+    },
+    [brandId]
+  );
+
   return {
     sessions,
     isLoadingSessions,
@@ -85,5 +102,6 @@ export function useOrganicSessions(
     startNewSession,
     selectSession,
     refreshSessions,
+    deleteSession,
   };
 }

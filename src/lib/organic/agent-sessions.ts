@@ -149,3 +149,16 @@ export async function fetchOrganicSessionMessages(
     return [];
   }
 }
+
+/**
+ * Hard-deletes a conversation (messages + session + runs + run-events) on the
+ * Backend. Throws on failure so callers can keep the row in the UI; clears the
+ * local message cache on success.
+ */
+export async function deleteOrganicSession(sessionId: string, brandId: string): Promise<void> {
+  await request({
+    path: `/api/organic/agent/sessions/${encodeURIComponent(sessionId)}?brand_id=${encodeURIComponent(brandId)}`,
+    method: "DELETE",
+  });
+  invalidateMessageCache(sessionId);
+}
