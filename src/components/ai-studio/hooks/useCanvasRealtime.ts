@@ -481,9 +481,13 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         lastUpdateRef.current = resolvedTimestamp;
         lastRevisionRef.current = resolvedRevision;
 
+        // Broadcast the same base64-stripped snapshot we persist — never the raw
+        // store nodes. Inlined media (base64 data URIs) would blow past Realtime's
+        // max message size and close the shared socket with code 1009. Receivers
+        // keep their own local media via mergeNodes when remote omits these fields.
         const syncPayload: CanvasUpdatePayload = {
-          nodes: currentNodes as any[],
-          edges: currentEdges as any[],
+          nodes: serialized.nodes as any[],
+          edges: serialized.edges as any[],
           deleted_node_ids: deletedNodeIds,
           deleted_edge_ids: deletedEdgeIds,
           updated_at: resolvedTimestamp,

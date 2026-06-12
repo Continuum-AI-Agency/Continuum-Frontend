@@ -5,6 +5,7 @@ import { useCanvasRealtime } from "./useCanvasRealtime";
 let subscribeStatusSequence: string[] = ["SUBSCRIBED"];
 let maybeSingleResponses: any[] = [null];
 let maybeSingleCallCount = 0;
+let upsertSingleResponse: any = null;
 
 const mockChannel = {
   on: mock(() => mockChannel),
@@ -30,7 +31,7 @@ const createMockQueryBuilder = () => {
       const nextValue = maybeSingleResponses.length > 0 ? maybeSingleResponses.shift() : null;
       return Promise.resolve({ data: nextValue ?? null, error: null });
     }),
-    single: mock(() => Promise.resolve({ data: null, error: null })),
+    single: mock(() => Promise.resolve({ data: upsertSingleResponse, error: null })),
     upsert: mock(() => queryBuilder),
   };
   return queryBuilder;
@@ -55,11 +56,15 @@ mock.module("@/hooks/useSession", () => ({
 
 const mockSetNodes = mock(() => {});
 const mockSetEdges = mock(() => {});
-const mockStore = {
+const mockStore: any = {
   nodes: [],
   edges: [],
+  defaultEdgeType: "bezier",
   setNodes: mockSetNodes,
   setEdges: mockSetEdges,
+  getDeletedNodeIds: () => [] as string[],
+  getDeletedEdgeIds: () => [] as string[],
+  clearDeletedIds: () => {},
 };
 const useStudioStoreMock: any = () => mockStore;
 useStudioStoreMock.getState = () => mockStore;
@@ -73,6 +78,7 @@ describe("useCanvasRealtime", () => {
     subscribeStatusSequence = ["SUBSCRIBED"];
     maybeSingleResponses = [null];
     maybeSingleCallCount = 0;
+    upsertSingleResponse = null;
     mockStore.nodes = [];
     mockStore.edges = [];
     mockSetNodes.mockClear();
@@ -493,5 +499,47 @@ describe("useCanvasRealtime", () => {
     const latestSetNodesPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
     expect(latestSetNodesPayload?.[0]?.data?.value).toBe("rev-3");
     expect(latestSetNodesPayload?.[0]?.position).toEqual({ x: 30, y: 30 });
+  });
+
+  it("does not broadcast base64 media over realtime and leaves local store state intact", async () => {
+    const base64Image = `data:image/png;base64,${"A".repeat(128)}`;
+    mockStore.nodes = [
+      {
+        id: "img-1",
+        type: "image",
+        position: { x: 0, y: 0 },
+        data: { image: base64Image, fileName: "big.png", sourceUrl: "https://cdn.continuum.test/big.png" },
+      },
+    ];
+    mockStore.edges = [];
+    upsertSingleResponse = {
+      updated_at: "2026-02-18T10:00:05.000Z",
+      revision: 2,
+      editor_session_id: "sess-x",
+    };
+
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    mockChannel.send.mockClear();
+
+    await act(async () => {
+      await result.current.saveCanvasToDatabase();
+    });
+
+    const canvasUpdate = (mockChannel.send as any).mock.calls
+      .map((c: any) => c[0])
+      .find((payload: any) => payload?.event === "canvas_updated");
+
+    expect(canvasUpdate).toBeDefined();
+    expect(JSON.stringify(canvasUpdate.payload)).not.toContain("base64");
+    const broadcastImageNode = canvasUpdate.payload.nodes.find((n: any) => n.id === "img-1");
+    expect(broadcastImageNode?.data?.image).toBeUndefined();
+    expect(broadcastImageNode?.data?.sourceUrl).toBe("https://cdn.continuum.test/big.png");
+
+    expect((mockStore.nodes[0] as any).data.image).toBe(base64Image);
   });
 });
