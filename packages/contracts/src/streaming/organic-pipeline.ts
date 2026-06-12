@@ -48,7 +48,7 @@ export const organicMediaGenerationContextSchema = z.object({
   }).strict(),
   trend: z.object({
     trendId: z.string().nullable(),
-    seedSource: z.string().nullable(),
+    seedSource: organicPipelineSeedSourceSchema.nullable(),
   }).strict(),
 }).strict();
 

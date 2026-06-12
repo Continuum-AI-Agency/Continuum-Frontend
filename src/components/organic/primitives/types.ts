@@ -54,6 +54,9 @@ export type OrganicCalendarDraft = {
     width?: number | null
     height?: number | null
     assetUrl?: string | null
+    url?: string | null
+    signedUrl?: string | null
+    mimeType?: string | null
     alt?: string | null
     assetBase64?: string | null
     bucket?: string | null
