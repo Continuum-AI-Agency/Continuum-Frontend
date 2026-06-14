@@ -48,6 +48,7 @@ import {
   mediaAssetToMentionSuggestion,
   parseMediaFolderKey,
 } from "@/lib/agent/media-mentions";
+import { buildCanvasReference, getCanvasPreview } from "./canvasMentions";
 
 type OrganicAgentPanelProps = {
   brandId: string;
@@ -120,43 +121,6 @@ function createOrganicSuggestion(
   };
 }
 
-function readStringField(record: Record<string, unknown>, key: string): string | null {
-  const value = record[key];
-  return typeof value === "string" && value.trim() ? value : null;
-}
-
-function inferCanvasOutputKind(node: StudioNode): "image" | "video" | "canvas" {
-  const data = node.data as Record<string, unknown>;
-  if (readStringField(data, "generatedVideoUrl") ?? readStringField(data, "generatedVideo")) return "video";
-  if (readStringField(data, "video") ?? readStringField(data, "sourceUrl")) {
-    return node.type === "video" ? "video" : "canvas";
-  }
-  if (
-    readStringField(data, "generatedImageUrl") ??
-    readStringField(data, "generatedImage") ??
-    readStringField(data, "image")
-  ) {
-    return "image";
-  }
-  return "canvas";
-}
-
-function getCanvasPreview(node: StudioNode): AgentMentionSuggestion["preview"] {
-  const data = node.data as Record<string, unknown>;
-  const kind = inferCanvasOutputKind(node);
-  const url =
-    kind === "video"
-      ? readStringField(data, "generatedVideoUrl") ??
-        readStringField(data, "generatedVideo") ??
-        readStringField(data, "video") ??
-        readStringField(data, "sourceUrl")
-      : readStringField(data, "generatedImageUrl") ??
-        readStringField(data, "generatedImage") ??
-        readStringField(data, "image") ??
-        readStringField(data, "sourceUrl");
-  return { url, kind, label: readStringField(data, "label") ?? node.type ?? node.id };
-}
-
 function skillToMentionSuggestion(skill: Skill): AgentMentionSuggestion {
   return createOrganicSuggestion(
     {
@@ -184,30 +148,14 @@ function skillToMentionSuggestion(skill: Skill): AgentMentionSuggestion {
 }
 
 function canvasNodeToMentionSuggestion(node: StudioNode): AgentMentionSuggestion {
-  const data = node.data as Record<string, unknown>;
-  const label = readStringField(data, "label") ?? node.type ?? node.id;
   const preview = getCanvasPreview(node);
-  return createOrganicSuggestion(
-    {
-      id: node.id,
-      type: "canvas_node",
-      label,
-      source: "organic",
-      metadata: {
-        nodeId: node.id,
-        nodeType: node.type,
-        outputKind: preview?.kind ?? "canvas",
-        label,
-      },
-    },
-    {
-      key: `canvas:${node.id}`,
-      group: "Canvas",
-      description: [node.type, preview?.kind].filter(Boolean).join(" · "),
-      badge: "canvas",
-      preview,
-    }
-  );
+  return createOrganicSuggestion(buildCanvasReference(node), {
+    key: `canvas:${node.id}`,
+    group: "Canvas",
+    description: [node.type, preview?.kind].filter(Boolean).join(" · "),
+    badge: "canvas",
+    preview,
+  });
 }
 
 export function OrganicAgentPanel({ brandId, platformAccountIds, mentionContext }: OrganicAgentPanelProps) {

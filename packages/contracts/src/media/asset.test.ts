@@ -7,6 +7,7 @@ import {
   mediaAnalysisResultSchema,
   mediaAssetSchema,
   mediaCollectionSchema,
+  mediaSourceSchema,
 } from "./asset";
 import {
   mediaSearchRequestSchema,
@@ -110,6 +111,37 @@ describe("mediaAssetSchema", () => {
 
   it("rejects an unknown status", () => {
     expect(mediaAssetSchema.safeParse({ ...base, status: "queued" }).success).toBe(false);
+  });
+});
+
+describe("mediaSourceSchema", () => {
+  it("accepts the original sources plus the composited orphan-bucket sources", () => {
+    expect(mediaSourceSchema.options).toEqual([
+      "upload",
+      "ai_generated",
+      "backfill",
+      "canvas",
+      "inspiration",
+      "hyperframe",
+      "chat_upload",
+    ]);
+  });
+
+  it("accepts a media asset registered from a competitor/inspiration bucket", () => {
+    const parsed = mediaAssetSchema.safeParse({
+      id: "a1",
+      brandId: "b1",
+      kind: "image",
+      bucket: "competitor-ad-creatives",
+      storagePath: "b1/snap/creative.jpg",
+      fileName: "creative.jpg",
+      mimeType: "image/jpeg",
+      source: "inspiration",
+      status: "ready",
+      createdAt: "2026-06-14T00:00:00Z",
+      updatedAt: "2026-06-14T00:00:00Z",
+    });
+    expect(parsed.success).toBe(true);
   });
 });
 

@@ -3,22 +3,16 @@
 
 import React from "react";
 import { Loader2, Play, Search, ImageOff } from "lucide-react";
-import type { MediaAsset, MediaSource } from "@continuum/contracts";
+import type { MediaAsset } from "@continuum/contracts";
 import { LibraryFilterBar } from "@/components/library/LibraryFilterBar";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { useStudioLibraryBrowser } from "@/lib/creative-assets/useStudioLibraryBrowser";
 import { setStudioAssetDragData } from "@/lib/creative-assets/studioAssetDrop";
 import { sanitizeCreativeAssetUrl } from "@/lib/creative-assets/assetUrl";
+import { SOURCE_LABEL } from "@/lib/media/filters";
 
 type Props = {
   brandProfileId: string;
-};
-
-const SOURCE_LABEL: Record<MediaSource, string> = {
-  upload: "Upload",
-  ai_generated: "AI",
-  canvas: "Canvas",
-  backfill: "Imported",
 };
 
 // The unified media library, surfaced inside the ai-studio sheet. Mirrors the

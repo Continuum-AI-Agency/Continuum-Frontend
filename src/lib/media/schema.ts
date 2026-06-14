@@ -2,11 +2,13 @@
 // yet include the `media` schema. Kept in sync with the migration manually.
 // Map to the camelCase MediaAsset contract shape via rowToMediaAsset().
 
+import type { MediaKind, MediaSource } from "@continuum/contracts";
+
 export type MediaAssetRow = {
   id: string;
   brand_id: string;
   created_by: string | null;
-  kind: "image" | "video";
+  kind: MediaKind;
   bucket: string;
   storage_path: string;
   file_name: string;
@@ -15,7 +17,7 @@ export type MediaAssetRow = {
   width: number | null;
   height: number | null;
   duration_ms: number | null;
-  source: "upload" | "ai_generated" | "backfill";
+  source: MediaSource;
   origin_ref: Record<string, unknown> | null;
   status: "stored" | "analyzing" | "ready" | "error" | "skipped_free";
   progress_step: string | null;

@@ -1,5 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { buildLibraryQuery, toContractKind, toContractSource } from "../filters";
+import type { MediaSource } from "@continuum/contracts";
+import { mediaSourceSchema } from "@continuum/contracts";
+import {
+  buildLibraryQuery,
+  MEDIA_SOURCES,
+  SOURCE_FILTERS,
+  SOURCE_LABEL,
+  toContractKind,
+  toContractSource,
+} from "../filters";
+
+describe("canonical source vocabulary", () => {
+  it("MEDIA_SOURCES covers every contract MediaSource value (no drift)", () => {
+    const vocab = new Set(MEDIA_SOURCES.map((s) => s.value));
+    for (const value of mediaSourceSchema.options as MediaSource[]) {
+      expect(vocab.has(value)).toBe(true);
+    }
+  });
+
+  it("includes the composited orphan-bucket sources", () => {
+    const vocab = MEDIA_SOURCES.map((s) => s.value);
+    expect(vocab).toContain("inspiration");
+    expect(vocab).toContain("hyperframe");
+    expect(vocab).toContain("chat_upload");
+  });
+
+  it("SOURCE_FILTERS leads with 'all' then the canonical sources", () => {
+    expect(SOURCE_FILTERS[0]).toEqual({ value: "all", label: "All" });
+    expect(SOURCE_FILTERS.slice(1)).toEqual(MEDIA_SOURCES);
+  });
+
+  it("SOURCE_LABEL has a label for every MediaSource", () => {
+    for (const value of mediaSourceSchema.options as MediaSource[]) {
+      expect(typeof SOURCE_LABEL[value]).toBe("string");
+    }
+  });
+});
 
 describe("buildLibraryQuery", () => {
   it("includes brandId always", () => {

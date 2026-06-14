@@ -64,11 +64,12 @@ describe("organic pipeline frames", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("exposes the six canonical stages in order", () => {
+  it("exposes the canonical stages in order, including the Stage-2 blueprint", () => {
     expect(pipelineStageEnum.options).toEqual([
       "strategist",
       "concept",
       "draft",
+      "blueprint",
       "assets",
       "quality",
       "merge",
@@ -108,6 +109,38 @@ describe("organic pipeline frames", () => {
     expect(parsed.success).toBe(true);
     if (parsed.success && parsed.data.type === "media.search_results") {
       expect(parsed.data.data.items).toHaveLength(1);
+    }
+  });
+
+  it("accepts a context.media_resolution frame reporting partial grab resolution", () => {
+    const frame = {
+      type: "context.media_resolution",
+      data: {
+        requested: 3,
+        resolvedImages: 1,
+        resolvedVideos: 1,
+        textOnly: 1,
+        failed: [
+          { refId: "asset_9", type: "media_asset", reason: "storage_miss" },
+        ],
+      },
+    };
+    const parsed = organicStreamFrameSchema.safeParse(frame);
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.type === "context.media_resolution") {
+      expect(parsed.data.data.requested).toBe(3);
+      expect(parsed.data.data.failed).toHaveLength(1);
+    }
+  });
+
+  it("accepts a context.media_resolution frame with no failures (defaults failed to [])", () => {
+    const parsed = organicStreamFrameSchema.safeParse({
+      type: "context.media_resolution",
+      data: { requested: 2, resolvedImages: 2, resolvedVideos: 0, textOnly: 0 },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success && parsed.data.type === "context.media_resolution") {
+      expect(parsed.data.data.failed).toEqual([]);
     }
   });
 

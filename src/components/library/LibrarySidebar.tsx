@@ -12,12 +12,15 @@ import {
   Upload,
   Sparkles,
   PenTool,
+  Telescope,
+  Film,
+  MessageSquare,
 } from "lucide-react";
-import type { MediaCollection } from "@continuum/contracts";
+import type { MediaCollection, MediaSource } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import type { SourceFilterValue } from "@/lib/media/filters";
+import { MEDIA_SOURCES, type SourceFilterValue } from "@/lib/media/filters";
 
 type Props = {
   brandId: string;
@@ -29,14 +32,29 @@ type Props = {
   storageUsedBytes: number;
 };
 
+// Per-source sidebar icon. Keyed by source so a new source added to the canonical
+// MEDIA_SOURCES vocabulary just needs an icon here to appear as a Browse folder.
+const SOURCE_ICONS: Record<MediaSource, typeof Folder> = {
+  upload: Upload,
+  ai_generated: Sparkles,
+  canvas: PenTool,
+  inspiration: Telescope,
+  hyperframe: Film,
+  chat_upload: MessageSquare,
+  backfill: Folder,
+};
+
 // Built-in derived folders. These set the source filter (collection cleared);
-// they are virtual (no media.collections rows). Imported/backfill stays
+// they are virtual (no media.collections rows). Derived from the canonical
+// MEDIA_SOURCES so every composited bucket shows up. Imported/backfill stays
 // reachable via the filter chips but is intentionally not a sidebar folder.
 const BROWSE_FOLDERS: { value: SourceFilterValue; label: string; icon: typeof Folder }[] = [
   { value: "all", label: "All Media", icon: LayoutGrid },
-  { value: "upload", label: "Uploads", icon: Upload },
-  { value: "ai_generated", label: "AI Creations", icon: Sparkles },
-  { value: "canvas", label: "Canvas", icon: PenTool },
+  ...MEDIA_SOURCES.filter((s) => s.value !== "backfill").map((s) => ({
+    value: s.value,
+    label: s.label,
+    icon: SOURCE_ICONS[s.value],
+  })),
 ];
 
 function formatBytes(bytes: number): string {

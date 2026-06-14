@@ -8,12 +8,13 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   strategist: "Strategizing",
   concept: "Concepting",
   draft: "Drafting",
+  blueprint: "Storyboarding",
   assets: "Generating assets",
   quality: "Reviewing",
   merge: "Merging",
 };
 
-const TOTAL_STAGES = 6;
+const TOTAL_STAGES = 7;
 
 type StageRowProps = {
   node: PipelineStageNode;

@@ -1,1 +1,2 @@
-export { CreativeAssetLibrary } from "./CreativeAssetLibrary";
+export { CreativeLibrarySidebar } from "./CreativeLibrarySidebar";
+export { StudioMediaLibraryPanel } from "./StudioMediaLibraryPanel";

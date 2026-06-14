@@ -94,6 +94,22 @@ describe("source + collection folders", () => {
     expect(folder.childrenLabel).toBe("Browse creatives");
   });
 
+  it("surfaces the composited orphan-bucket sources as grabber folders", () => {
+    const values = MEDIA_SOURCE_FOLDERS.map((f) => f.value);
+    expect(values[0]).toBe("all");
+    expect(values).toContain("inspiration");
+    expect(values).toContain("hyperframe");
+    expect(values).toContain("chat_upload");
+    // backfill stays folded into "All media" (no first-class folder).
+    expect(values).not.toContain("backfill");
+  });
+
+  it("round-trips an inspiration source folder key", () => {
+    const folder = MEDIA_SOURCE_FOLDERS.find((f) => f.value === "inspiration")!;
+    const suggestion = sourceFolderToSuggestion(folder);
+    expect(parseMediaFolderKey(suggestion.key)).toEqual({ source: "inspiration" });
+  });
+
   it("labels smart vs manual collections distinctly", () => {
     expect(collectionToSuggestion(makeCollection()).childrenLabel).toBe("Collection");
     expect(collectionToSuggestion(makeCollection({ kind: "smart" })).childrenLabel).toBe(

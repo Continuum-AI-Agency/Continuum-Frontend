@@ -3,21 +3,15 @@
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Copy, Check, ImageOff, Loader2 } from "lucide-react";
-import type { MediaAsset, MediaSource } from "@continuum/contracts";
+import type { MediaAsset } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { SOURCE_LABEL } from "@/lib/media/filters";
 import { MediaBoundingBoxes } from "./MediaBoundingBoxes";
 
 type Props = {
   asset: MediaAsset;
   showBoundingBoxes?: boolean;
-};
-
-const SOURCE_LABEL: Record<MediaSource, string> = {
-  upload: "Upload",
-  ai_generated: "AI",
-  canvas: "Canvas",
-  backfill: "Imported",
 };
 
 function formatBytes(bytes: number): string {

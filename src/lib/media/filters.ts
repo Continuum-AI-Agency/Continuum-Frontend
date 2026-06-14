@@ -9,13 +9,32 @@ export type KindFilterValue = MediaKind | "all";
 
 export type FilterOption<T extends string> = { value: T; label: string };
 
-export const SOURCE_FILTERS: FilterOption<SourceFilterValue>[] = [
-  { value: "all", label: "All" },
+// Canonical, ordered creative-source vocabulary — the single source of truth.
+// Every library/grabber surface (filter chips, sidebar Browse folders, the
+// grabber's source subfolders, badge labels) derives from this list, so adding a
+// source (with its contract enum value + migration) lights it up everywhere at
+// once. Each value is a delineated folder; the bytes may live in different
+// storage buckets but composite into the one media.assets registry.
+export const MEDIA_SOURCES: FilterOption<MediaSource>[] = [
   { value: "upload", label: "Uploads" },
   { value: "ai_generated", label: "AI Creations" },
   { value: "canvas", label: "Canvas" },
+  { value: "inspiration", label: "Inspiration" },
+  { value: "hyperframe", label: "HyperFrames" },
+  { value: "chat_upload", label: "Chat Uploads" },
   { value: "backfill", label: "Imported" },
 ];
+
+export const SOURCE_FILTERS: FilterOption<SourceFilterValue>[] = [
+  { value: "all", label: "All" },
+  ...MEDIA_SOURCES,
+];
+
+// Per-source display label keyed by source value. Derived from MEDIA_SOURCES so
+// it can never drift out of completeness with the contract enum.
+export const SOURCE_LABEL: Record<MediaSource, string> = Object.fromEntries(
+  MEDIA_SOURCES.map((s) => [s.value, s.label]),
+) as Record<MediaSource, string>;
 
 export const KIND_FILTERS: FilterOption<KindFilterValue>[] = [
   { value: "all", label: "All" },

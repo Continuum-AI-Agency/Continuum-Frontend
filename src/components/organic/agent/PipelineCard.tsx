@@ -19,6 +19,7 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   strategist: "Strategy",
   concept: "Concept",
   draft: "Draft",
+  blueprint: "Blueprint",
   assets: "Assets",
   quality: "Quality",
   merge: "Merge",

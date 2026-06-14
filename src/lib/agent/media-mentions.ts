@@ -16,6 +16,7 @@ import type {
 import type { AgentMentionSuggestion } from "@/lib/agent-references";
 import {
   buildLibraryQuery,
+  MEDIA_SOURCES,
   toContractSource,
   type SourceFilterValue,
 } from "@/lib/media/filters";
@@ -26,13 +27,12 @@ const MIN_SEMANTIC_QUERY = 2;
 export type MediaSourceFolder = { value: SourceFilterValue; label: string };
 
 // The browsable source folders shown when the user opens "Media library" with
-// no query. Mirrors the Library sidebar's Browse group ("backfill" is folded
-// into All media — it has no first-class folder there either).
+// no query. Derived from the canonical MEDIA_SOURCES so every composited bucket
+// gets a folder automatically. "backfill" is folded into All media — it has no
+// first-class folder (same as the Library sidebar Browse group).
 export const MEDIA_SOURCE_FOLDERS: MediaSourceFolder[] = [
   { value: "all", label: "All media" },
-  { value: "upload", label: "Uploads" },
-  { value: "ai_generated", label: "AI creations" },
-  { value: "canvas", label: "Canvas" },
+  ...MEDIA_SOURCES.filter((s) => s.value !== "backfill"),
 ];
 
 export const MEDIA_SOURCE_FOLDER_PREFIX = "media-source:";

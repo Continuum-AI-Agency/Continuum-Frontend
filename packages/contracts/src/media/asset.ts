@@ -8,8 +8,25 @@ import { z } from "zod";
 export const mediaKindSchema = z.enum(["image", "video"]);
 export type MediaKind = z.infer<typeof mediaKindSchema>;
 
-// canvas: created in the AI Studio canvas (auto-registered into the library).
-export const mediaSourceSchema = z.enum(["upload", "ai_generated", "backfill", "canvas"]);
+// Where a library asset originated. Each value is a delineated "source" folder in
+// the unified library/grabber; physically the bytes may live in different storage
+// buckets (the asset's `bucket` column), but they composite into one registry.
+//   upload:       user-uploaded into media-library.
+//   ai_generated: produced by AI Studio / organic generation.
+//   backfill:     migrated rows (no live writer).
+//   canvas:       created in the AI Studio canvas (auto-registered in place).
+//   inspiration:  re-hosted competitor ad creatives (competitor-ad-spy).
+//   hyperframe:   HyperFrames composition covers / rendered reels.
+//   chat_upload:  files users dropped into a chat surface (chat-uploads bucket).
+export const mediaSourceSchema = z.enum([
+  "upload",
+  "ai_generated",
+  "backfill",
+  "canvas",
+  "inspiration",
+  "hyperframe",
+  "chat_upload",
+]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 
 // stored: persisted, not yet analyzed. analyzing: pipeline running.

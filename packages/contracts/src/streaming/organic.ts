@@ -10,13 +10,16 @@ const uiCardDataSchema = z.record(z.string(), z.unknown());
 
 /**
  * Canonical ordered content-creation pipeline timeline. The backend content
- * runner's raw stages collapse onto these six steps; the Frontend renders one
- * timeline node per member, in this order.
+ * runner's raw stages collapse onto these steps; the Frontend renders one
+ * timeline node per member, in this order. `blueprint` is the Stage-2 creative
+ * expansion (creative direction + storyboard + 512px scene frames) that runs
+ * after the text draft and before the gated media realization (`assets`).
  */
 export const pipelineStageEnum = z.enum([
   "strategist",
   "concept",
   "draft",
+  "blueprint",
   "assets",
   "quality",
   "merge",
@@ -318,6 +321,16 @@ const draftTextReadySchema = z.object({
   data: jobEventDataSchema,
 });
 
+// Step-2 checkpoint of the three-step pipeline: the creative director has
+// produced the blueprint (creative direction + storyboard + 512px scene frames)
+// and persisted it onto the draft (blueprintReady=true, mediaStatus still
+// pending). Carries the draftId so the FE can surface the storyboard / preview
+// frames mid-run, before the gated media realization (Stage 3).
+const draftBlueprintReadySchema = z.object({
+  type: z.literal("draft.blueprint_ready"),
+  data: jobEventDataSchema,
+});
+
 const pipelineStageSchema = z.object({
   type: z.literal("pipeline.stage"),
   data: z.object({
@@ -373,6 +386,33 @@ const uiPipelineCardSchema = z.object({
   }).loose(),
 });
 
+/**
+ * Non-fatal report of how the user's @-mention "context grabber" references
+ * resolved for a turn. Emitted once after media resolution when at least one
+ * reference was grabbed. This is the LOUD-failure channel: an asset that could
+ * not become model-visible content (storage miss, unreachable canvas preview,
+ * unanalyzed video) is reported under `failed` and surfaced to the user instead
+ * of being silently dropped. The turn never throws on a grab miss.
+ */
+const contextMediaResolutionSchema = z.object({
+  type: z.literal("context.media_resolution"),
+  data: z.object({
+    requested: z.number().int().nonnegative(),
+    resolvedImages: z.number().int().nonnegative(),
+    resolvedVideos: z.number().int().nonnegative(),
+    textOnly: z.number().int().nonnegative(),
+    failed: z
+      .array(
+        z.object({
+          refId: z.string(),
+          type: z.string(),
+          reason: z.string(),
+        }),
+      )
+      .default([]),
+  }).loose(),
+});
+
 export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   responseCreatedSchema,
   responseOutputTextDeltaSchema,
@@ -401,12 +441,16 @@ export const organicStreamFrameSchema = z.discriminatedUnion("type", [
   jobCancelledSchema,
   draftReadySchema,
   draftTextReadySchema,
+  draftBlueprintReadySchema,
   pipelineStageSchema,
   uiPipelineCardSchema,
   mediaSearchResultsFrameSchema,
+  contextMediaResolutionSchema,
 ]);
 
 export type OrganicStreamFrame = z.infer<typeof organicStreamFrameSchema>;
+
+export type OrganicContextMediaResolutionFrame = z.infer<typeof contextMediaResolutionSchema>;
 
 export type OrganicJobEventData = z.infer<typeof jobEventDataSchema>;
 
