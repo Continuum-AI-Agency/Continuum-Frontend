@@ -17,6 +17,7 @@ import {
   Package,
   CircleCheck,
   Images,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +86,11 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
         label: "Observability",
         href: "/paid-media?tab=dashboard",
         icon: Activity,
+      },
+      {
+        label: "Budget Optimizer",
+        href: "/paid-media/optimizer",
+        icon: Scale,
       },
       {
         label: "Approvals",

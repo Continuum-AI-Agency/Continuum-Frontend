@@ -1,0 +1,16 @@
+{
+  "name": "@continuum/optimization-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portfolio budget reallocation engine (Meta, ad-set level). Pure, dependency-free except Zod at the IO edge.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schemas": "./src/schemas.ts"
+  },
+  "peerDependencies": {
+    "zod": "^3.22.0 || ^4.0.0"
+  }
+}
