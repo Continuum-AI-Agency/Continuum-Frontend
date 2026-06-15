@@ -72,11 +72,6 @@ export function moneyMoved(r: ReallocationResult): number {
   return r.items.reduce((acc, i) => (i.changeAbs > 0 ? acc + i.changeAbs : acc), 0);
 }
 
-/** Pending actions for a portfolio = 1 reallocation + N pause recommendations. */
-export function pendingCount(result: CycleResult): number {
-  return 1 + result.recommendations.length;
-}
-
 /** Stable keys for a portfolio's proposed actions (used for approval tracking). */
 export function reallocationKey(portfolioId: string): string {
   return `realloc:${portfolioId}`;
