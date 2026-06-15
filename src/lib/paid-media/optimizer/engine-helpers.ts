@@ -77,6 +77,32 @@ export function pendingCount(result: CycleResult): number {
   return 1 + result.recommendations.length;
 }
 
+/** Stable keys for a portfolio's proposed actions (used for approval tracking). */
+export function reallocationKey(portfolioId: string): string {
+  return `realloc:${portfolioId}`;
+}
+export function pauseKey(portfolioId: string, adSetId: string): string {
+  return `pause:${portfolioId}:${adSetId}`;
+}
+export function portfolioActionKeys(
+  portfolioId: string,
+  result: CycleResult,
+): string[] {
+  return [
+    reallocationKey(portfolioId),
+    ...result.recommendations.map((rec) => pauseKey(portfolioId, rec.adSetId)),
+  ];
+}
+
+/** Count of a portfolio's actions still awaiting approval. */
+export function pendingRemaining(
+  portfolioId: string,
+  result: CycleResult,
+  isApproved: (key: string) => boolean,
+): number {
+  return portfolioActionKeys(portfolioId, result).filter((k) => !isApproved(k)).length;
+}
+
 export const TRIGGER_LABELS: Record<string, string> = {
   P1_zero_upper_funnel: "Zero upper funnel",
   P2_sustained_poor: "Sustained poor performance",

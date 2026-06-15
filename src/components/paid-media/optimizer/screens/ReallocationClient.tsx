@@ -19,7 +19,9 @@ import {
 import {
   capitalize,
   fmt,
+  pauseKey,
   projectSpend,
+  reallocationKey,
   runPortfolioCycle,
   shortName,
 } from "@/lib/paid-media/optimizer/engine-helpers";
@@ -39,15 +41,13 @@ import {
 const BASE = "/paid-media/optimizer";
 
 export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
-  const { getPortfolio, updateConfig } = useOptimizer();
+  const { getPortfolio, updateConfig, isActionApproved, approveAction } = useOptimizer();
   const router = useRouter();
   const pf = getPortfolio(portfolioId);
 
-  // Overrides apply to THIS reallocation only until "Save edits" persists them.
+  // Overrides apply to THIS reallocation's preview until "Apply to portfolio" persists them.
   const [daily, setDaily] = useState<number>(pf?.config.dailyBudget ?? 0);
   const [cap, setCap] = useState<number>(pf?.config.velocityCap ?? 30);
-  const [approved, setApproved] = useState(false);
-  const [approvedPauses, setApprovedPauses] = useState<Set<string>>(new Set());
 
   if (!pf) return null;
   if (pf.snapshots.length === 0) {
@@ -62,12 +62,15 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
   const maxBar = Math.max(1, ...items.map((i) => Math.max(i.finalBudget, i.currentBudget)));
   const byId = new Map(pf.snapshots.map((s) => [s.id, s]));
 
+  const reallocApproved = isActionApproved(reallocationKey(pf.id));
+
   const discard = () => {
     setDaily(pf.config.dailyBudget);
     setCap(pf.config.velocityCap);
     router.push(`${BASE}/${pf.id}`);
   };
-  const saveEdits = () => updateConfig(pf.id, { dailyBudget: daily, velocityCap: cap });
+  const applyToPortfolio = () =>
+    updateConfig(pf.id, { dailyBudget: daily, velocityCap: cap });
 
   return (
     <Card>
@@ -82,10 +85,10 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
               Jun 14, 2026 · {pf.snapshots.length} ad sets · {capitalize(pf.config.mode)} mode
             </p>
           </div>
-          {approved ? (
+          {reallocApproved ? (
             <Badge variant="success">✓ Approved</Badge>
           ) : (
-            <Badge variant="outline" className="text-amber-600 dark:text-amber-500">
+            <Badge variant="outline" className="text-amber-700 dark:text-amber-500">
               Pending review
             </Badge>
           )}
@@ -190,7 +193,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
             <h3 className="text-sm font-semibold">Pause recommendations</h3>
             {result.recommendations.map((rec) => {
               const snap = byId.get(rec.adSetId);
-              const isApproved = approvedPauses.has(rec.adSetId);
+              const isApproved = isActionApproved(pauseKey(pf.id, rec.adSetId));
               return (
                 <div
                   key={rec.adSetId}
@@ -206,9 +209,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          setApprovedPauses((prev) => new Set(prev).add(rec.adSetId))
-                        }
+                        onClick={() => approveAction(pauseKey(pf.id, rec.adSetId))}
                       >
                         Approve pause
                       </Button>
@@ -229,7 +230,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
           <h3 className="text-sm font-semibold">
             Review &amp; edit{" "}
             <span className="font-normal text-muted-foreground">
-              — overrides this reallocation only
+              — previews this proposal; &ldquo;Apply to portfolio&rdquo; saves it to Settings
             </span>
           </h3>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
@@ -262,13 +263,13 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
           <Button variant="ghost" onClick={discard}>
             Discard
           </Button>
-          <Button variant="outline" onClick={saveEdits}>
-            Save edits
+          <Button variant="outline" onClick={applyToPortfolio}>
+            Apply to portfolio
           </Button>
           <Button
             variant="success"
-            onClick={() => setApproved(true)}
-            disabled={approved}
+            onClick={() => approveAction(reallocationKey(pf.id))}
+            disabled={reallocApproved}
           >
             ✓ Approve reallocation
           </Button>

@@ -27,6 +27,9 @@ type OptimizerContextValue = {
   renamePortfolio: (id: string, name: string) => void;
   toggleAdSet: (id: string, adSetId: string) => void;
   addPortfolio: () => string;
+  /** Whether a proposed action (by stable key) has been approved this session. */
+  isActionApproved: (key: string) => boolean;
+  approveAction: (key: string) => void;
 };
 
 const OptimizerContext = createContext<OptimizerContextValue | null>(null);
@@ -104,6 +107,22 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
     return id;
   }, []);
 
+  // Approval state lives here so approving in Actions or Reallocation reflects
+  // everywhere (the other screen, the nav "pending" badge). Session-only.
+  const [approvedActions, setApprovedActions] = useState<Set<string>>(() => new Set());
+  const isActionApproved = useCallback(
+    (key: string) => approvedActions.has(key),
+    [approvedActions],
+  );
+  const approveAction = useCallback((key: string) => {
+    setApprovedActions((prev) => {
+      if (prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }, []);
+
   const value = useMemo<OptimizerContextValue>(
     () => ({
       portfolios,
@@ -113,8 +132,19 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
       renamePortfolio,
       toggleAdSet,
       addPortfolio,
+      isActionApproved,
+      approveAction,
     }),
-    [portfolios, getPortfolio, updateConfig, renamePortfolio, toggleAdSet, addPortfolio],
+    [
+      portfolios,
+      getPortfolio,
+      updateConfig,
+      renamePortfolio,
+      toggleAdSet,
+      addPortfolio,
+      isActionApproved,
+      approveAction,
+    ],
   );
 
   return <OptimizerContext.Provider value={value}>{children}</OptimizerContext.Provider>;

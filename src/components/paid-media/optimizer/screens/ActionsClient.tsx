@@ -8,8 +8,10 @@ import { useOptimizer } from "../OptimizerProvider";
 import {
   TRIGGER_LABELS,
   fmt,
+  pauseKey,
   portfolioShortLabel,
   projectSpend,
+  reallocationKey,
   runPortfolioCycle,
   shortName,
 } from "@/lib/paid-media/optimizer/engine-helpers";
@@ -32,9 +34,8 @@ type FeedAction = {
 type Filter = "all" | "pending" | "applied";
 
 export function ActionsClient() {
-  const { portfolios } = useOptimizer();
+  const { portfolios, isActionApproved, approveAction } = useOptimizer();
   const [filter, setFilter] = useState<Filter>("all");
-  const [approved, setApproved] = useState<Set<string>>(new Set());
 
   const actions = useMemo<FeedAction[]>(() => {
     const list: FeedAction[] = [];
@@ -44,7 +45,7 @@ export function ActionsClient() {
       const result = runPortfolioCycle(pf);
       const proj = projectSpend(pf);
       list.push({
-        key: `realloc-${pf.id}`,
+        key: reallocationKey(pf.id),
         kind: "reallocation",
         title: `Budget reallocation · ${pf.snapshots.length} ad sets`,
         subtitle: `${portfolioShortLabel(pf.name)} · Jun 14 · total $${fmt(
@@ -56,7 +57,7 @@ export function ActionsClient() {
       for (const rec of result.recommendations) {
         const snap = pf.snapshots.find((s) => s.id === rec.adSetId);
         list.push({
-          key: `pause-${pf.id}-${rec.adSetId}`,
+          key: pauseKey(pf.id, rec.adSetId),
           kind: "pause",
           title: `Pause · ${shortName(snap?.name ?? rec.adSetId)}`,
           subtitle: `${portfolioShortLabel(pf.name)} · ${
@@ -88,7 +89,9 @@ export function ActionsClient() {
   }, [portfolios]);
 
   const visible = actions.filter((a) => filter === "all" || a.status === filter);
-  const pendingTotal = actions.filter((a) => a.status === "pending").length;
+  const pendingTotal = actions.filter(
+    (a) => a.status === "pending" && !isActionApproved(a.key),
+  ).length;
 
   const filters: { key: Filter; label: string }[] = [
     { key: "all", label: "All" },
@@ -129,14 +132,14 @@ export function ActionsClient() {
       <Card>
         <CardContent className="flex flex-col divide-y p-0">
           {visible.map((action) => {
-            const isApproved = approved.has(action.key);
+            const isApproved = isActionApproved(action.key);
             const Icon = action.kind === "reallocation" ? ArrowRightLeft : CirclePause;
             const iconTone =
               action.status === "applied"
                 ? "bg-muted text-muted-foreground"
                 : action.kind === "reallocation"
                   ? "bg-[var(--cs-violet,#5a39ff)]/10 text-[var(--cs-violet,#5a39ff)]"
-                  : "bg-amber-500/10 text-amber-600 dark:text-amber-500";
+                  : "bg-amber-500/10 text-amber-700 dark:text-amber-500";
             return (
               <div key={action.key} className="flex items-center gap-3 px-4 py-3">
                 <div
@@ -156,7 +159,7 @@ export function ActionsClient() {
                 ) : isApproved ? (
                   <Badge variant="success">✓ Approved</Badge>
                 ) : (
-                  <Badge variant="outline" className="text-amber-600 dark:text-amber-500">
+                  <Badge variant="outline" className="text-amber-700 dark:text-amber-500">
                     Pending
                   </Badge>
                 )}
@@ -169,9 +172,7 @@ export function ActionsClient() {
                       <Button
                         size="sm"
                         variant="success"
-                        onClick={() =>
-                          setApproved((prev) => new Set(prev).add(action.key))
-                        }
+                        onClick={() => approveAction(action.key)}
                       >
                         Approve
                       </Button>

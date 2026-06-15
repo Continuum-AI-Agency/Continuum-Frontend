@@ -8,7 +8,7 @@ import { KpiCard, ModeChip } from "../OptimizerBits";
 import {
   fmt,
   moneyMoved,
-  pendingCount,
+  pendingRemaining,
   portfolioCpi,
   portfolioShortLabel,
   projectSpend,
@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 const BASE = "/paid-media/optimizer";
 
 export function OverviewClient() {
-  const { portfolios } = useOptimizer();
+  const { portfolios, isActionApproved } = useOptimizer();
 
   const data = useMemo(() => {
     const rows = portfolios.map((pf) => {
@@ -45,8 +45,9 @@ export function OverviewClient() {
         cpi,
         ratio,
         proj: projectSpend(pf),
-        // 1 reallocation + N pause recommendations (0 for an empty portfolio).
-        pendingActions: hasAdSets ? pendingCount(result) : 0,
+        // Unapproved actions: 1 reallocation + N pauses, minus what's been approved
+        // (0 for an empty portfolio).
+        pendingActions: hasAdSets ? pendingRemaining(pf.id, result, isActionApproved) : 0,
         moved: hasAdSets ? moneyMoved(result.reallocation) : 0,
       };
     });
@@ -91,13 +92,14 @@ export function OverviewClient() {
       pending,
       moved,
       onTarget,
+      activeCount: active.length,
       effIndex,
       projPct,
       topMover,
       mostEff,
       maxDaily,
     };
-  }, [portfolios]);
+  }, [portfolios, isActionApproved]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -130,7 +132,7 @@ export function OverviewClient() {
         <p className="text-sm">
           <span className="text-[var(--cs-success,#53a88a)]">✓</span>{" "}
           <span className="font-medium">
-            {data.onTarget} of {portfolios.length} portfolios on target
+            {data.onTarget} of {data.activeCount} portfolios on target
           </span>{" "}
           · efficiency index {data.effIndex.toFixed(2)}× · every reallocation preserves its
           total exactly.
@@ -202,7 +204,7 @@ export function OverviewClient() {
                     <TableCell
                       className={cn(
                         "text-right tabular-nums",
-                        r.proj.pctVsPlan > 3 ? "text-amber-600 dark:text-amber-500" : "",
+                        r.proj.pctVsPlan > 3 ? "text-amber-700 dark:text-amber-500" : "",
                       )}
                     >
                       {r.proj.pctVsPlan >= 0 ? "+" : ""}
@@ -210,7 +212,7 @@ export function OverviewClient() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {r.pendingActions > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-500">
+                        <span className="text-amber-700 dark:text-amber-500">
                           {r.pendingActions}
                         </span>
                       ) : (

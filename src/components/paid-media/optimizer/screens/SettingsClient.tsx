@@ -80,6 +80,7 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or ad set ID…"
+              aria-label="Search ad sets by name or ad set ID"
               className="pl-8"
             />
           </div>
@@ -120,8 +121,9 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
         <div className="flex flex-col gap-2">
           <div className="text-sm font-semibold">Budget &amp; schedule</div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={`Period total budget (${pf.currency})`}>
+            <Field label={`Period total budget (${pf.currency})`} htmlFor="pf-period-budget">
               <NumberField
+                id="pf-period-budget"
                 value={pf.config.periodBudget}
                 onCommit={(n) => updateConfig(pf.id, { periodBudget: n })}
               />
@@ -129,8 +131,9 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
             <Field label="Period">
               <Input value="Jun 1 – Jun 30, 2026" disabled />
             </Field>
-            <Field label={`Daily budget (${pf.currency})`}>
+            <Field label={`Daily budget (${pf.currency})`} htmlFor="pf-daily-budget">
               <NumberField
+                id="pf-daily-budget"
                 value={pf.config.dailyBudget}
                 onCommit={(n) => updateConfig(pf.id, { dailyBudget: n })}
               />
@@ -159,8 +162,9 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
           />
         </Field>
 
-        <Field label={`Target CPA / CPI (${pf.currency})`}>
+        <Field label={`Target CPA / CPI (${pf.currency})`} htmlFor="pf-target">
           <NumberField
+            id="pf-target"
             value={pf.config.cpaTarget}
             onCommit={(n) => updateConfig(pf.id, { cpaTarget: n })}
             className="max-w-40"
@@ -168,12 +172,20 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
         </Field>
 
         <div className="flex flex-col gap-2">
-          <div className="text-sm font-semibold">Optimization mode</div>
-          <div className="inline-flex w-full rounded-lg border bg-muted/40 p-1">
+          <div className="text-sm font-semibold" id="optimization-mode-label">
+            Optimization mode
+          </div>
+          <div
+            role="radiogroup"
+            aria-labelledby="optimization-mode-label"
+            className="inline-flex w-full rounded-lg border bg-muted/40 p-1"
+          >
             {MODES.map((m) => (
               <button
                 key={m.value}
                 type="button"
+                role="radio"
+                aria-checked={pf.config.mode === m.value}
                 onClick={() => updateConfig(pf.id, { mode: m.value })}
                 className={cn(
                   "flex flex-1 flex-col items-center rounded-md px-2 py-1.5 text-xs transition-colors",
@@ -203,10 +215,24 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
   );
 }
 
-function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+function Field({
+  label,
+  children,
+  htmlFor,
+}: {
+  label: ReactNode;
+  children: ReactNode;
+  htmlFor?: string;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+          {label}
+        </label>
+      ) : (
+        <span className="text-xs text-muted-foreground">{label}</span>
+      )}
       {children}
     </div>
   );

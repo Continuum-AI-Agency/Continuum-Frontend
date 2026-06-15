@@ -15,7 +15,7 @@ type Tone = "default" | "ok" | "warn" | "bad";
 const toneClass: Record<Tone, string> = {
   default: "text-foreground",
   ok: "text-[var(--cs-success,#53a88a)]",
-  warn: "text-amber-600 dark:text-amber-500",
+  warn: "text-amber-700 dark:text-amber-500",
   bad: "text-destructive",
 };
 
@@ -61,7 +61,7 @@ export function AudienceChip({ type }: { type?: string }) {
 export function StatusChip({ status }: { status: string }) {
   if (status === "starved") {
     return (
-      <span className="shrink-0 text-[11px] font-semibold text-amber-600 dark:text-amber-500">
+      <span className="shrink-0 text-[11px] font-semibold text-amber-700 dark:text-amber-500">
         starved
       </span>
     );
@@ -76,14 +76,6 @@ export function TrajectoryChip({ state }: { state: ItemDiagnostics["trajectorySt
   if (state === "positive") return <Badge variant="success">↑ improving</Badge>;
   if (state === "negative") return <Badge variant="destructive">↓ declining</Badge>;
   return <Badge variant="secondary">→ stable</Badge>;
-}
-
-export function ConservationBadge({ conserved }: { conserved: boolean }) {
-  return conserved ? (
-    <Badge variant="success">✓ exact</Badge>
-  ) : (
-    <Badge variant="destructive">⚠ check</Badge>
-  );
 }
 
 export function DeltaPct({ pct }: { pct: number }) {
@@ -140,9 +132,12 @@ export function NumberField({
 }) {
   const [text, setText] = useState(() => String(value));
 
-  // Re-sync when the value changes from outside (e.g. switching portfolios).
+  // Re-sync only when the external value differs from what the buffer already
+  // represents. Our own per-keystroke commits round-trip back through `value`,
+  // and a blind setText would clobber partial input like "10." or "007".
   useEffect(() => {
-    setText(String(value));
+    if (Number(text) !== value) setText(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   return (

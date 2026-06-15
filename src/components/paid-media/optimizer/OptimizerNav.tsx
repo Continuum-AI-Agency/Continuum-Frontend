@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useOptimizer } from "./OptimizerProvider";
-import { pendingCount, runPortfolioCycle } from "@/lib/paid-media/optimizer/engine-helpers";
+import { pendingRemaining, runPortfolioCycle } from "@/lib/paid-media/optimizer/engine-helpers";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -13,16 +13,18 @@ const BASE = "/paid-media/optimizer";
 
 export function OptimizerNav() {
   const pathname = usePathname();
-  const { portfolios } = useOptimizer();
+  const { portfolios, isActionApproved } = useOptimizer();
 
   const pending = useMemo(
     () =>
       portfolios.reduce(
         (acc, pf) =>
-          pf.snapshots.length > 0 ? acc + pendingCount(runPortfolioCycle(pf)) : acc,
+          pf.snapshots.length > 0
+            ? acc + pendingRemaining(pf.id, runPortfolioCycle(pf), isActionApproved)
+            : acc,
         0,
       ),
-    [portfolios],
+    [portfolios, isActionApproved],
   );
 
   const tabs: { href: string; label: string; active: boolean; showPending?: boolean }[] = [
