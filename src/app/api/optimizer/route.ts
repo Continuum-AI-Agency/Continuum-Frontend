@@ -34,7 +34,10 @@ const configSchema = z
 
 const bodySchema = z
   .object({
-    snapshots: z.array(snapshotSchema).min(1, "At least one ad set snapshot is required."),
+    snapshots: z
+      .array(snapshotSchema)
+      .min(1, "At least one ad set snapshot is required.")
+      .max(1000, "Too many ad sets in a single request."),
     mode: z.enum(["balanced", "efficiency", "scale"]).default("balanced"),
     total: z.number().positive().optional(),
     maxBudget: z.number().positive().optional(),

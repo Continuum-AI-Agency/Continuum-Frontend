@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,9 +15,14 @@ export function OptimizerNav() {
   const pathname = usePathname();
   const { portfolios } = useOptimizer();
 
-  const pending = portfolios.reduce(
-    (acc, pf) => acc + pendingCount(runPortfolioCycle(pf)),
-    0,
+  const pending = useMemo(
+    () =>
+      portfolios.reduce(
+        (acc, pf) =>
+          pf.snapshots.length > 0 ? acc + pendingCount(runPortfolioCycle(pf)) : acc,
+        0,
+      ),
+    [portfolios],
   );
 
   const tabs: { href: string; label: string; active: boolean; showPending?: boolean }[] = [

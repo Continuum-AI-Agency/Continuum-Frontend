@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
 import { useOptimizer } from "../OptimizerProvider";
-import { AudienceChip } from "../OptimizerBits";
+import { AudienceChip, NumberField } from "../OptimizerBits";
 import { fmt, shortName } from "@/lib/paid-media/optimizer/engine-helpers";
 import { MONTH, type OptimizationMode } from "@/lib/paid-media/optimizer/types";
 import type { AdSetSnapshot } from "@continuum/optimization-engine";
@@ -120,25 +120,19 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
         <div className="flex flex-col gap-2">
           <div className="text-sm font-semibold">Budget &amp; schedule</div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Period total budget (MXN)">
-              <Input
-                type="number"
+            <Field label={`Period total budget (${pf.currency})`}>
+              <NumberField
                 value={pf.config.periodBudget}
-                onChange={(e) =>
-                  updateConfig(pf.id, { periodBudget: Number(e.target.value) || 0 })
-                }
+                onCommit={(n) => updateConfig(pf.id, { periodBudget: n })}
               />
             </Field>
             <Field label="Period">
               <Input value="Jun 1 – Jun 30, 2026" disabled />
             </Field>
-            <Field label="Daily budget (MXN)">
-              <Input
-                type="number"
+            <Field label={`Daily budget (${pf.currency})`}>
+              <NumberField
                 value={pf.config.dailyBudget}
-                onChange={(e) =>
-                  updateConfig(pf.id, { dailyBudget: Number(e.target.value) || 0 })
-                }
+                onCommit={(n) => updateConfig(pf.id, { dailyBudget: n })}
               />
             </Field>
             <Field label="Implied from plan">
@@ -165,11 +159,10 @@ export function SettingsClient({ portfolioId }: { portfolioId: string }) {
           />
         </Field>
 
-        <Field label="Target CPA / CPI (MXN)">
-          <Input
-            type="number"
+        <Field label={`Target CPA / CPI (${pf.currency})`}>
+          <NumberField
             value={pf.config.cpaTarget}
-            onChange={(e) => updateConfig(pf.id, { cpaTarget: Number(e.target.value) || 0 })}
+            onCommit={(n) => updateConfig(pf.id, { cpaTarget: n })}
             className="max-w-40"
           />
         </Field>

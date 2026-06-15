@@ -6,6 +6,7 @@ import { ArrowRightLeft } from "lucide-react";
 import { useOptimizer } from "../OptimizerProvider";
 import {
   AudienceChip,
+  EmptyPortfolioState,
   KpiCard,
   ShareBar,
   StatusChip,
@@ -36,6 +37,9 @@ export function DashboardClient({ portfolioId }: { portfolioId: string }) {
   const { getPortfolio } = useOptimizer();
   const pf = getPortfolio(portfolioId);
   if (!pf) return null;
+  if (pf.snapshots.length === 0) {
+    return <EmptyPortfolioState settingsHref={`${BASE}/${pf.id}/settings`} />;
+  }
 
   const reallocation = runPortfolioCycle(pf).reallocation;
   const proj = projectSpend(pf);
@@ -49,7 +53,11 @@ export function DashboardClient({ portfolioId }: { portfolioId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <KpiCard label="Daily budget" value={`$${fmt(pf.config.dailyBudget)}`} sub="MXN / day" />
+        <KpiCard
+          label="Daily budget"
+          value={`$${fmt(pf.config.dailyBudget)}`}
+          sub={`${pf.currency} / day`}
+        />
         <KpiCard
           label="Spent (14d)"
           value={`$${fmt(spent)}`}

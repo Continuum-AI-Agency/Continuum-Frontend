@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -43,6 +44,8 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
   const [portfolios, setPortfolios] = useState<OptimizerPortfolio[]>(() =>
     deepClone(SAMPLE_PORTFOLIOS),
   );
+  // Monotonic counter for new-portfolio ids (avoids Date.now() collisions on fast clicks).
+  const newPortfolioCounter = useRef(0);
 
   const getPortfolio = useCallback(
     (id: string) => portfolios.find((p) => p.id === id),
@@ -81,7 +84,8 @@ export function OptimizerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addPortfolio = useCallback(() => {
-    const id = `pf-new-${Math.round(Date.now())}`;
+    newPortfolioCounter.current += 1;
+    const id = `pf-new-${newPortfolioCounter.current}`;
     const fresh: OptimizerPortfolio = {
       id,
       name: "New portfolio",

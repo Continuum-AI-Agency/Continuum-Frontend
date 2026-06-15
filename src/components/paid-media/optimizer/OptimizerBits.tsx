@@ -1,9 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { ItemDiagnostics } from "@continuum/optimization-engine";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type Tone = "default" | "ok" | "warn" | "bad";
@@ -113,6 +117,72 @@ export function ShareBar({
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Numeric input that keeps a local string buffer so the field can be cleared
+ * and edited freely (a controlled `value={number}` would snap back to 0 on
+ * empty). Commits a parsed number only for valid input.
+ */
+export function NumberField({
+  value,
+  onCommit,
+  id,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  value: number;
+  onCommit: (next: number) => void;
+  id?: string;
+  className?: string;
+  "aria-label"?: string;
+}) {
+  const [text, setText] = useState(() => String(value));
+
+  // Re-sync when the value changes from outside (e.g. switching portfolios).
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  return (
+    <Input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      value={text}
+      className={className}
+      aria-label={ariaLabel}
+      onChange={(e) => {
+        const next = e.target.value;
+        if (next === "" || /^-?\d*\.?\d*$/.test(next)) {
+          setText(next);
+          if (next !== "" && next !== "-" && next !== "." && Number.isFinite(Number(next))) {
+            onCommit(Number(next));
+          }
+        }
+      }}
+    />
+  );
+}
+
+/** Empty state shown when a portfolio has no ad sets selected yet. */
+export function EmptyPortfolioState({ settingsHref }: { settingsHref: string }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-start gap-3 pt-6">
+        <div>
+          <p className="text-sm font-medium">No ad sets yet</p>
+          <p className="text-sm text-muted-foreground">
+            This portfolio has no ad sets selected, so there is nothing to reallocate.
+            Add ad sets in Settings to generate a proposal.
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link href={settingsHref}>Go to Settings</Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -16,7 +16,9 @@ export function runPortfolioCycle(
   overrides?: ComputeOverrides,
 ): CycleResult {
   const c = pf.config;
-  const total = Math.round(overrides?.dailyBudget ?? c.dailyBudget);
+  // `|| c.x` (not `??`): a cleared / 0 override falls back to the configured value,
+  // so an empty budget field never collapses the whole proposal to zero.
+  const total = Math.round(overrides?.dailyBudget || c.dailyBudget);
   return runCycle(pf.snapshots, {
     mode: c.mode,
     total,
@@ -24,7 +26,7 @@ export function runPortfolioCycle(
     weeklyGrowthPct: 0.05,
     config: {
       cpaTarget: c.cpaTarget,
-      velocityCapPct: (overrides?.velocityCap ?? c.velocityCap) / 100,
+      velocityCapPct: (overrides?.velocityCap || c.velocityCap) / 100,
     },
   });
 }
@@ -39,7 +41,7 @@ export type Projection = {
 };
 
 export function projectSpend(pf: OptimizerPortfolio, dailyOverride?: number): Projection {
-  const daily = dailyOverride ?? pf.config.dailyBudget;
+  const daily = dailyOverride || pf.config.dailyBudget;
   const month30 = daily * 30;
   const remainingDays = MONTH.days - MONTH.day + 1;
   const toMonthEnd = daily * remainingDays;

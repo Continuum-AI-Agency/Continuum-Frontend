@@ -36,9 +36,10 @@ export function PortfoliosClient() {
       </div>
 
       {portfolios.map((pf) => {
+        const hasAdSets = pf.snapshots.length > 0;
         const cpi = portfolioCpi(pf);
         const over = cpi > pf.config.cpaTarget * 1.05;
-        const pending = runPortfolioCycle(pf).recommendations.length;
+        const pending = hasAdSets ? runPortfolioCycle(pf).recommendations.length : 0;
         return (
           <Card key={pf.id}>
             <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
@@ -54,17 +55,25 @@ export function PortfoliosClient() {
                   <div className="font-semibold tabular-nums">${fmt(pf.config.dailyBudget)}</div>
                   <div className="text-xs text-muted-foreground">
                     CPI{" "}
-                    <span
-                      className={cn(
-                        over ? "text-destructive" : "text-[var(--cs-success,#53a88a)]",
-                      )}
-                    >
-                      ${cpi.toFixed(0)}
-                    </span>
-                    /${pf.config.cpaTarget}
+                    {hasAdSets ? (
+                      <>
+                        <span
+                          className={cn(
+                            over ? "text-destructive" : "text-[var(--cs-success,#53a88a)]",
+                          )}
+                        >
+                          ${cpi.toFixed(0)}
+                        </span>
+                        /${pf.config.cpaTarget}
+                      </>
+                    ) : (
+                      <span>—</span>
+                    )}
                   </div>
                 </div>
-                {pending > 0 ? (
+                {!hasAdSets ? (
+                  <Badge variant="secondary">No ad sets</Badge>
+                ) : pending > 0 ? (
                   <Badge variant="outline" className="text-amber-600 dark:text-amber-500">
                     {pending} pending
                   </Badge>

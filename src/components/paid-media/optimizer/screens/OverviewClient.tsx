@@ -34,32 +34,39 @@ export function OverviewClient() {
 
   const data = useMemo(() => {
     const rows = portfolios.map((pf) => {
+      const hasAdSets = pf.snapshots.length > 0;
       const result = runPortfolioCycle(pf);
       const cpi = portfolioCpi(pf);
       const ratio = cpi > 0 ? pf.config.cpaTarget / cpi : 1;
       return {
         pf,
+        hasAdSets,
         result,
         cpi,
         ratio,
         proj: projectSpend(pf),
-        pending: result.recommendations.length,
-        moved: moneyMoved(result.reallocation),
+        // 1 reallocation + N pause recommendations (0 for an empty portfolio).
+        pendingActions: hasAdSets ? pendingCount(result) : 0,
+        moved: hasAdSets ? moneyMoved(result.reallocation) : 0,
       };
     });
 
+    // Efficiency/on-target metrics only make sense for portfolios with ad sets.
+    const active = rows.filter((r) => r.hasAdSets);
     const totalDaily = rows.reduce((a, r) => a + r.pf.config.dailyBudget, 0);
     const totalPlan = rows.reduce((a, r) => a + r.pf.config.periodBudget, 0);
     const projSpend = rows.reduce((a, r) => a + r.pf.config.dailyBudget * 30, 0);
-    const pending = rows.reduce((a, r) => a + pendingCount(r.result), 0);
+    const pending = rows.reduce((a, r) => a + r.pendingActions, 0);
     const moved = rows.reduce((a, r) => a + r.moved, 0);
-    const onTarget = rows.filter((r) => r.ratio >= 0.98).length;
-    const effIndex = rows.length ? rows.reduce((a, r) => a + r.ratio, 0) / rows.length : 0;
+    const onTarget = active.filter((r) => r.ratio >= 0.98).length;
+    const effIndex = active.length
+      ? active.reduce((a, r) => a + r.ratio, 0) / active.length
+      : 0;
     const projPct = totalPlan > 0 ? ((projSpend - totalPlan) / totalPlan) * 100 : 0;
 
     let topMover: { name: string; pct: number; pf: string } | null = null;
     let mostEff: { name: string; ratio: number } | null = null;
-    for (const r of rows) {
+    for (const r of active) {
       if (!mostEff || r.ratio > mostEff.ratio) {
         mostEff = { name: portfolioShortLabel(r.pf.name), ratio: r.ratio };
       }
@@ -173,16 +180,24 @@ export function OverviewClient() {
                       ${fmt(r.pf.config.dailyBudget)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      <span
-                        className={cn(
-                          over
-                            ? "text-destructive"
-                            : "text-[var(--cs-success,#53a88a)]",
-                        )}
-                      >
-                        ${r.cpi.toFixed(0)}
-                      </span>{" "}
-                      <span className="text-muted-foreground">/${r.pf.config.cpaTarget}</span>
+                      {r.hasAdSets ? (
+                        <>
+                          <span
+                            className={cn(
+                              over
+                                ? "text-destructive"
+                                : "text-[var(--cs-success,#53a88a)]",
+                            )}
+                          >
+                            ${r.cpi.toFixed(0)}
+                          </span>{" "}
+                          <span className="text-muted-foreground">
+                            /${r.pf.config.cpaTarget}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">–</span>
+                      )}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -194,8 +209,10 @@ export function OverviewClient() {
                       {r.proj.pctVsPlan.toFixed(0)}%
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {r.pending > 0 ? (
-                        <span className="text-amber-600 dark:text-amber-500">{r.pending}</span>
+                      {r.pendingActions > 0 ? (
+                        <span className="text-amber-600 dark:text-amber-500">
+                          {r.pendingActions}
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">–</span>
                       )}

@@ -39,6 +39,8 @@ export function ActionsClient() {
   const actions = useMemo<FeedAction[]>(() => {
     const list: FeedAction[] = [];
     for (const pf of portfolios) {
+      // Nothing to reallocate for a portfolio with no ad sets.
+      if (pf.snapshots.length === 0) continue;
       const result = runPortfolioCycle(pf);
       const proj = projectSpend(pf);
       list.push({

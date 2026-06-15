@@ -7,9 +7,10 @@ import { ArrowRightLeft } from "lucide-react";
 import { useOptimizer } from "../OptimizerProvider";
 import {
   AudienceChip,
-  ConservationBadge,
   DeltaPct,
+  EmptyPortfolioState,
   KpiCard,
+  NumberField,
   PacingBar,
   ShareBar,
   StatusChip,
@@ -24,8 +25,7 @@ import {
 } from "@/lib/paid-media/optimizer/engine-helpers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import {
   Table,
@@ -50,6 +50,9 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
   const [approvedPauses, setApprovedPauses] = useState<Set<string>>(new Set());
 
   if (!pf) return null;
+  if (pf.snapshots.length === 0) {
+    return <EmptyPortfolioState settingsHref={`${BASE}/${pf.id}/settings`} />;
+  }
 
   const result = runPortfolioCycle(pf, { dailyBudget: daily, velocityCap: cap });
   const reallocation = result.reallocation;
@@ -89,7 +92,7 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
         </div>
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <KpiCard label="Daily total" value={`$${fmt(daily)}`} sub="MXN / day" />
+          <KpiCard label="Daily total" value={`$${fmt(daily)}`} sub={`${pf.currency} / day`} />
           <KpiCard
             label="30-day projection"
             value={`$${fmt(proj.month30)}`}
@@ -104,8 +107,20 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
           <Card>
             <CardContent className="flex flex-col gap-1 pt-6">
               <span className="text-xs text-muted-foreground">Conservation</span>
-              <ConservationBadge conserved={reallocation.conserved} />
-              <span className="text-[11px] text-muted-foreground">total preserved</span>
+              {!reallocation.conserved ? (
+                <Badge variant="destructive">⚠ check</Badge>
+              ) : reallocation.residual < 0.5 ? (
+                <Badge variant="success">✓ exact</Badge>
+              ) : (
+                <Badge variant="success">✓ within ceiling</Badge>
+              )}
+              <span className="text-[11px] text-muted-foreground">
+                {!reallocation.conserved
+                  ? "needs reconcile"
+                  : reallocation.residual < 0.5
+                    ? "total preserved"
+                    : `$${fmt(reallocation.residual)} unspent (ceiling)`}
+              </span>
             </CardContent>
           </Card>
         </div>
@@ -220,14 +235,9 @@ export function ReallocationClient({ portfolioId }: { portfolioId: string }) {
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="realloc-daily" className="text-xs text-muted-foreground">
-                Daily budget (MXN)
+                Daily budget ({pf.currency})
               </label>
-              <Input
-                id="realloc-daily"
-                type="number"
-                value={daily}
-                onChange={(e) => setDaily(Number(e.target.value) || 0)}
-              />
+              <NumberField id="realloc-daily" value={daily} onCommit={setDaily} />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">
