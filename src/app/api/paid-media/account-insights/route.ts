@@ -53,12 +53,12 @@ export async function POST(request: Request) {
 
   try {
     const { data, error } = await supabase.functions.invoke(
-      "get-account-insights",
+      "paid-media-reporting/account-insights",
       { body: parsed.data }
     );
 
     if (error) {
-      console.error("Error invoking get-account-insights:", error);
+      console.error("Error invoking paid-media-reporting/account-insights:", error);
       return NextResponse.json(
         { error: "Failed to fetch account insights from edge function" },
         { status: 500 }
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     const validated = AccountInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
       console.error(
-        "Invalid response from get-account-insights:",
+        "Invalid response from paid-media-reporting/account-insights:",
         validated.error
       );
       return NextResponse.json(

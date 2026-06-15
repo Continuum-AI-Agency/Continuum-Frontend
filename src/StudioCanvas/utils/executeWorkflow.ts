@@ -14,7 +14,6 @@ import { resolveClipSources } from "./splice/resolveClipSources";
 import { checkSpliceSupport } from "./splice/webcodecsSupport";
 import { runSpliceInWorker } from "../workers/spliceWorkerClient";
 import type { ClipSlot, VideoEditorNodeData } from "../types";
-import { inlineRemoteImage } from "@/lib/ai-studio/inlineRemoteImage";
 import { registerCanvasOutput } from "@/lib/creative-assets/registerCanvasAsset";
 
 type ExecutorControls = ReturnType<typeof useWorkflowExecution>;
@@ -76,21 +75,30 @@ const resolveTextInput = (
   return undefined;
 };
 
+const isHttpUrl = (value?: string | null): value is string =>
+  typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+
+// Readiness/availability check for an image reference. A signed URL counts as
+// available (the Backend resolves it to bytes), so base64 may be empty.
 const resolveImageInput = (
   edge: Edge,
   resolvedOutputs: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>
 ): { base64: string; mimeType: string } | undefined => {
   const output = resolvedOutputs.get(edge.source);
-  if (output?.type === 'image' && output.base64) {
-    return { base64: output.base64, mimeType: output.mimeType };
+  if (output?.type === 'image' && (output.base64 || isHttpUrl(output.url))) {
+    return { base64: output.base64 ?? '', mimeType: output.mimeType };
   }
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'image') {
-    const parsed = parseDataUrl((sourceNode.data as any).image as string | undefined);
+    const value = (sourceNode.data as any).image as string | undefined;
+    const parsed = parseDataUrl(value);
     if (parsed?.base64) {
       return { base64: parsed.base64, mimeType: parsed.mimeType };
+    }
+    if (isHttpUrl(value)) {
+      return { base64: '', mimeType: 'image/png' };
     }
   }
 
@@ -470,23 +478,19 @@ export async function executeWorkflow(
         const parsed = parseDataUrl(imageData.image);
         if (parsed?.base64) {
           resolvedOutputs.set(node.id, { type: 'image', base64: parsed.base64, mimeType: parsed.mimeType });
-        } else if (typeof imageData.image === 'string' && /^https?:\/\//i.test(imageData.image)) {
-          // Remote-URL reference (e.g. an Instagram grab not yet inlined): convert
-          // server-side so the model receives base64. Guarantees correctness even if
-          // placement-time inlining is still running, failed, or the node was loaded
-          // from a saved canvas.
-          const remoteUrl = imageData.image;
-          const promise = inlineRemoteImage(remoteUrl)
-            .then(({ dataUrl }) => {
-              const inlined = parseDataUrl(dataUrl);
-              if (inlined?.base64) {
-                resolvedOutputs.set(node.id, { type: 'image', base64: inlined.base64, mimeType: inlined.mimeType });
-              }
-            })
-            .catch((error) => {
-              console.error('Failed to inline remote reference image:', error);
-            });
-          imageNodePromises.push(promise);
+        } else if (isHttpUrl(imageData.image)) {
+          // URL reference (uploaded asset signed URL, or an Instagram grab not yet
+          // inlined): pass the URL to the Backend, which resolves it to bytes for
+          // the model. No client-side fetch/inlining — the signed URL is the source
+          // of truth and works even when loaded from a saved canvas.
+          resolvedOutputs.set(node.id, {
+            type: 'image',
+            base64: '',
+            mimeType: 'image/png',
+            url: imageData.image,
+            storagePath: imageData.sourcePath,
+            storageBucket: (imageData as any).bucket,
+          });
         }
       }
     }
@@ -575,11 +579,14 @@ export async function executeWorkflow(
   const setNodeOutput = (nodeId: string, output: NodeOutput) => {
     resolvedOutputs.set(nodeId, output);
     if (output.type === 'image') {
-      const parsed = output.base64.startsWith("data:") ? parseDataUrl(output.base64) : null;
+      const rawBase64 = output.base64 ?? "";
+      const parsed = rawBase64.startsWith("data:") ? parseDataUrl(rawBase64) : null;
       const mimeType = parsed?.mimeType ?? output.mimeType;
-      const base64 = (parsed?.base64 ?? output.base64).replace(/\s+/g, "");
-      const dataUrl = buildDataUrl(mimeType, base64);
+      const base64 = (parsed?.base64 ?? rawBase64).replace(/\s+/g, "");
       const persistentUrl = output.url && !output.url.startsWith("data:") ? output.url : undefined;
+      // URL-first: the signed URL is the source of truth. Only build a base64
+      // data-URL preview when the generation fell back to inline bytes.
+      const previewImage = persistentUrl ?? (base64 ? buildDataUrl(mimeType, base64) : undefined);
       console.info("[studio] setting generatedImage", {
         nodeId,
         mimeType,
@@ -587,7 +594,7 @@ export async function executeWorkflow(
         hasUrl: Boolean(persistentUrl),
       });
       useStudioStore.getState().updateNodeData(nodeId, {
-        generatedImage: dataUrl,
+        generatedImage: previewImage,
         generatedImageUrl: persistentUrl,
         generatedImageStoragePath: output.storagePath,
         generatedImageBucket: output.storageBucket,

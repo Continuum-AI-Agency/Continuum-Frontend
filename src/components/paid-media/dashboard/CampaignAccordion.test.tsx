@@ -5,11 +5,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { CampaignAccordion } from "./CampaignAccordion";
 
 const mockInvoke = mock((endpoint: string) => {
-  if (endpoint.includes("fetch-meta-adsets")) {
+  if (endpoint.includes("paid-media-reporting/adsets")) {
     return Promise.resolve({ data: { adsets: [] }, error: null });
   }
 
-  if (endpoint.includes("fetch-meta-ads")) {
+  if (endpoint.includes("paid-media-reporting/ads")) {
     return Promise.resolve({ data: { ads: [] }, error: null });
   }
 

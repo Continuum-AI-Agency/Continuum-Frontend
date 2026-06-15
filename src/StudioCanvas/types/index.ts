@@ -60,6 +60,8 @@ export interface ImageNodeData extends BaseNodeData {
   image?: string;
   fileName?: string;
   sourcePath?: string;
+  // Storage bucket for sourcePath, so a reference URL can be re-signed on load.
+  bucket?: string;
   sourceUrl?: string;
   referenceType?: ImageReferenceType;
   aspectRatio?: string;
@@ -73,7 +75,9 @@ export interface VideoNodeData extends BaseNodeData {
   video?: string;
   fileName?: string;
   sourcePath?: string;
+  bucket?: string;
   sourceUrl?: string;
+  referenceStatus?: 'processing' | 'ready' | 'error';
 }
 
 export interface AudioNodeData extends BaseNodeData {

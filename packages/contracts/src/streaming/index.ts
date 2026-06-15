@@ -13,3 +13,5 @@ export * from "./media";
 export * from "./onboarding-inspirations";
 export * from "./hyperframes";
 export * from "./competitor-spy";
+export * from "./ai-studio";
+export * from "./clip";

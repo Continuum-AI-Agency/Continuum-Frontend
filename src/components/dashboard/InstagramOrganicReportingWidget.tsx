@@ -19,7 +19,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { fetchOrganicMetrics, type OrganicMetricsRequest } from "@/lib/api/organicMetrics.client";
+import { fetchOrganicAnalytics } from "@/lib/api/organicAnalytics.client";
 import type { OrganicMetricsResponse, OrganicDateRangePreset, OrganicPlatform, MetricComparison, OrganicTrendPoint } from "@/lib/schemas/organicMetrics";
 import { IntegrationErrorBanner } from "@/components/ui/IntegrationErrorBanner";
 import type { IntegrationErrorCode } from "@continuum/contracts";
@@ -210,14 +210,13 @@ export function InstagramOrganicReportingWidget({ brandId, accounts, youtubeAcco
     async function run() {
       setState({ status: "loading" });
       try {
-        const request: OrganicMetricsRequest = {
+        const data = await fetchOrganicAnalytics({
           brandId,
           integrationAccountId: accountId,
-          platform,
+          platform: platform as "instagram" | "youtube",
           range: { preset: DEFAULT_RANGE_PRESET },
-        };
-
-        const data = await fetchOrganicMetrics(request);
+          scope: "kpis",
+        });
         if (cancelled) return;
         setState({ status: "success", data });
       } catch (error) {

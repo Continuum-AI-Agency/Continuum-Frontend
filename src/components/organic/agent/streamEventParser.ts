@@ -795,6 +795,7 @@ export function parseOrganicStreamEvent(raw: unknown): ParsedOrganicStreamEvent 
     case "job.progress":
     case "draft.ready":
     case "draft.text_ready":
+    case "draft.blueprint_ready":
     case "job.completed":
     case "job.failed":
     case "job.cancelled": {

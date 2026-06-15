@@ -25,12 +25,12 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
 
   try {
-    const { data, error } = await supabase.functions.invoke("get-budget-pacing", {
+    const { data, error } = await supabase.functions.invoke("paid-media-reporting/budget-pacing", {
       body: parsed.data,
     });
 
     if (error) {
-      console.error("Error invoking get-budget-pacing:", error);
+      console.error("Error invoking paid-media-reporting/budget-pacing:", error);
       return NextResponse.json(
         { error: "Failed to fetch budget pacing from edge function" },
         { status: 500 }
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
     const validated = BudgetPacingResponseSchema.safeParse(data);
     if (!validated.success) {
-      console.error("Invalid response from get-budget-pacing:", validated.error);
+      console.error("Invalid response from paid-media-reporting/budget-pacing:", validated.error);
       return NextResponse.json(
         { error: "Invalid response format from backend" },
         { status: 502 }

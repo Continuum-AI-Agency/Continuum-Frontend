@@ -124,6 +124,7 @@ describe("mediaSourceSchema", () => {
       "inspiration",
       "hyperframe",
       "chat_upload",
+      "clip",
     ]);
   });
 

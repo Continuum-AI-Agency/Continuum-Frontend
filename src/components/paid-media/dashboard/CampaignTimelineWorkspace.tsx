@@ -1294,7 +1294,7 @@ export function CampaignTimelineWorkspace({
       try {
         const supabase = createSupabaseBrowserClient();
         const invokePromise = supabase.functions.invoke(
-          `fetch-meta-adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}`,
+          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}`,
           {
             method: "POST",
             body: {
@@ -1406,7 +1406,7 @@ export function CampaignTimelineWorkspace({
       try {
         const supabase = createSupabaseBrowserClient();
         const invokePromise = supabase.functions.invoke(
-          `fetch-meta-ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRangePreset}`,
+          `paid-media-reporting/ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRangePreset}`,
           {
             method: "POST",
             body: {

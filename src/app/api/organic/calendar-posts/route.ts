@@ -192,7 +192,7 @@ async function fetchExternalPosts(params: {
 
   for (const platform of ["instagram", "facebook", "youtube"] as const) {
     for (const account of accountsByPlatform[platform]) {
-      const { data, error } = await supabase.functions.invoke("fetch-organic-analytics", {
+      const { data, error } = await supabase.functions.invoke("organic-reporting/analytics", {
         body: {
           brandId,
           integrationAccountId: account.integrationAccountId,
@@ -220,7 +220,7 @@ async function fetchExternalPosts(params: {
   }
 
   for (const account of accountsByPlatform.tiktok) {
-    const { data, error } = await supabase.functions.invoke("fetch-tiktok-data", {
+    const { data, error } = await supabase.functions.invoke("organic-reporting/tiktok", {
       body: {
         brandId,
         integrationAccountId: account.integrationAccountId,

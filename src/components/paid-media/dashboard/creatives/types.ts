@@ -60,7 +60,7 @@ export type CreativeAdMetrics = {
 
 // Canonical first-party (Meta) ad shape shared between CampaignAdSetWorkspace and
 // the creative gallery. `format`/`videoId` are optional so the UI degrades
-// gracefully until fetch-meta-ads starts returning them.
+// gracefully until paid-media-reporting/ads starts returning them.
 export type CreativeAd = {
   id: string;
   name: string;

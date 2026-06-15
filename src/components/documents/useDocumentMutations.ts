@@ -3,11 +3,21 @@
 import { useCallback, useState } from "react";
 import { DOCUMENT_CATEGORY_DEFAULT, type DocumentCategory } from "@continuum/contracts";
 import type { OnboardingDocument, OnboardingState } from "@/lib/onboarding/state";
+import { createBrandId } from "@/lib/onboarding/state";
 import { removeDocumentAction, updateDocumentCategoryAction } from "@/app/onboarding/actions";
 import {
   createInlineDocumentUrlAction,
   createSignedDocumentUrlAction,
 } from "@/app/(post-auth)/settings/actions";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { sanitizeStorageFileName } from "@/lib/storage/sanitize";
+import {
+  MAX_DOCUMENT_BYTES,
+  MAX_DOCUMENT_MB,
+  isAcceptedDocumentMime,
+} from "@/lib/documents/uploadLimits";
+
+const STORAGE_BUCKET = "brand-docs";
 
 export type UploadEntry = {
   key: string;
@@ -49,16 +59,52 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
       setUploads((prev) =>
         prev.map((p) => (p.key === entry.key ? { ...p, status: "uploading", error: undefined } : p)),
       );
-      try {
-        const formData = new FormData();
-        formData.append("brandId", brandId);
-        formData.append("file", entry.file);
-        formData.append("source", "upload");
-        formData.append("category", entry.category);
 
+      const fail = (message: string): false => {
+        setUploads((prev) =>
+          prev.map((p) => (p.key === entry.key ? { ...p, status: "error", error: message } : p)),
+        );
+        return false;
+      };
+
+      const { file } = entry;
+      if (file.size > MAX_DOCUMENT_BYTES) {
+        return fail(`File exceeds ${MAX_DOCUMENT_MB} MB limit`);
+      }
+      if (!isAcceptedDocumentMime(file.type)) {
+        return fail(`Unsupported file type: ${file.type || "unknown"}`);
+      }
+
+      const supabase = createSupabaseBrowserClient();
+      const documentId = createBrandId();
+      const sanitizedFileName = sanitizeStorageFileName(file.name);
+      const storagePath = `${brandId}/${documentId}/${sanitizedFileName}`;
+
+      // Upload bytes straight to storage so large files (e.g. PDFs > 4.5 MB)
+      // bypass the Vercel Function request-body cap. The route only records
+      // metadata afterwards.
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, file, { contentType: file.type || undefined, upsert: false });
+      if (uploadError) {
+        return fail(uploadError.message || `Failed to upload ${file.name}`);
+      }
+
+      try {
         const response = await fetch("/api/onboarding/documents", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            brandId,
+            documentId,
+            storagePath,
+            fileName: sanitizedFileName,
+            displayName: file.name,
+            mimeType: file.type,
+            size: file.size,
+            source: "upload",
+            category: entry.category,
+          }),
         });
         if (!response.ok) {
           const text = await response.text().catch(() => "");
@@ -69,11 +115,13 @@ export function useDocumentMutations(brandId: string): DocumentMutationsHandle {
         setUploads((prev) => prev.filter((p) => p.key !== entry.key));
         return true;
       } catch (err) {
-        const message = err instanceof Error ? err.message : `Failed to upload ${entry.file.name}`;
-        setUploads((prev) =>
-          prev.map((p) => (p.key === entry.key ? { ...p, status: "error", error: message } : p)),
-        );
-        return false;
+        // Recording failed after the bytes landed; remove the orphaned object.
+        await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove([storagePath])
+          .catch(() => undefined);
+        const message = err instanceof Error ? err.message : `Failed to upload ${file.name}`;
+        return fail(message);
       }
     },
     [brandId],

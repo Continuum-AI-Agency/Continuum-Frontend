@@ -256,14 +256,20 @@ export const ReelVideo = ({ className, ...props }: ReelVideoProps) => {
     }
   }, [duration, setDuration, isTransitioning]);
 
-  // Handle muting
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-    video.muted = isMuted;
-  }, [isMuted]);
+  // Force-mute imperatively on attach. React's `muted` JSX attribute does not
+  // reliably set the underlying DOM property, and this <video> is remounted per
+  // slide (keyed inside AnimatePresence), so a fresh node would otherwise rely on
+  // that unreliable path. Setting `.muted` in the ref callback guarantees every
+  // mounted node honors the muted state before playback starts.
+  const setVideoRef = useCallback(
+    (node: HTMLVideoElement | null) => {
+      videoRef.current = node;
+      if (node) {
+        node.muted = isMuted;
+      }
+    },
+    [isMuted]
+  );
 
   // Store progress when pausing
   useEffect(() => {
@@ -340,7 +346,7 @@ export const ReelVideo = ({ className, ...props }: ReelVideoProps) => {
       loop
       muted={isMuted}
       playsInline
-      ref={videoRef}
+      ref={setVideoRef}
       {...props}
     />
   );

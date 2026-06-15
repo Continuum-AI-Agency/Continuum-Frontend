@@ -39,12 +39,12 @@ export async function POST(request: Request) {
 
   try {
     const { data, error } = await supabase.functions.invoke(
-      "get-organic-insights",
+      "organic-reporting/insights",
       { body: parsed.data }
     );
 
     if (error) {
-      console.error("Error invoking get-organic-insights:", error);
+      console.error("Error invoking organic-reporting/insights:", error);
       return NextResponse.json(
         { error: "Failed to fetch organic insights from edge function" },
         { status: 500 }
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const validated = OrganicInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
-      console.error("Invalid response from get-organic-insights:", validated.error);
+      console.error("Invalid response from organic-reporting/insights:", validated.error);
       return NextResponse.json(
         { error: "Invalid response format from backend" },
         { status: 502 }

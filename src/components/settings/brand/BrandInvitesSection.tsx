@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
+  Badge,
   Button,
   Callout,
   Flex,
@@ -127,7 +128,7 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
                   </Select.Content>
                 </Select.Root>
               </Flex>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" disabled={isPending} className="min-h-10 w-full md:w-auto">
                 Generate magic link
               </Button>
             </Grid>
@@ -148,38 +149,74 @@ export function BrandInvitesSection({ invites, canEdit }: BrandInvitesSectionPro
         {invites.length === 0 ? (
           <Text color="gray">No pending invitations.</Text>
         ) : (
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell />
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
+          <>
+            <div className="space-y-2 md:hidden">
               {invites.map((invite) => (
-                <Table.Row key={invite.id}>
-                  <Table.Cell>{invite.email}</Table.Cell>
-                  <Table.Cell>{invite.role}</Table.Cell>
-                  <Table.Cell>{formatDate(invite.createdAt)}</Table.Cell>
-                  <Table.Cell className="text-right">
-                    {canEdit ? (
-                      <Button
-                        size="1"
-                        variant="ghost"
-                        color="red"
-                        onClick={() => handleRevoke(invite.id)}
-                        disabled={isPending}
-                      >
-                        Revoke
-                      </Button>
-                    ) : null}
-                  </Table.Cell>
-                </Table.Row>
+                <div
+                  key={invite.id}
+                  className="rounded-lg border border-border/60 bg-card/20 p-3"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Text as="p" size="2" weight="medium" className="break-all">
+                        {invite.email}
+                      </Text>
+                      <Text as="p" size="1" color="gray" className="mt-1">
+                        Created {formatDate(invite.createdAt)}
+                      </Text>
+                    </div>
+                    <Badge variant="soft">{invite.role}</Badge>
+                  </div>
+                  {canEdit ? (
+                    <Button
+                      size="2"
+                      variant="ghost"
+                      color="red"
+                      onClick={() => handleRevoke(invite.id)}
+                      disabled={isPending}
+                      className="mt-3 min-h-10"
+                    >
+                      Revoke
+                    </Button>
+                  ) : null}
+                </div>
               ))}
-            </Table.Body>
-          </Table.Root>
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <Table.Root className="min-w-[40rem]">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell />
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {invites.map((invite) => (
+                    <Table.Row key={invite.id}>
+                      <Table.Cell>{invite.email}</Table.Cell>
+                      <Table.Cell>{invite.role}</Table.Cell>
+                      <Table.Cell>{formatDate(invite.createdAt)}</Table.Cell>
+                      <Table.Cell className="text-right">
+                        {canEdit ? (
+                          <Button
+                            size="1"
+                            variant="ghost"
+                            color="red"
+                            onClick={() => handleRevoke(invite.id)}
+                            disabled={isPending}
+                          >
+                            Revoke
+                          </Button>
+                        ) : null}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            </div>
+          </>
         )}
       </Box>
     </Flex>

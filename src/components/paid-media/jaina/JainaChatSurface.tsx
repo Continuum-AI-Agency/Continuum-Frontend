@@ -1220,7 +1220,7 @@ export function JainaChatSurface({
           cached ??
           (await supabase.functions
             .invoke(
-              `fetch-meta-adsets?brandId=${brandProfileId}&adAccountId=${adAccountId}&campaignId=${campaignId}`,
+              `paid-media-reporting/adsets?brandId=${brandProfileId}&adAccountId=${adAccountId}&campaignId=${campaignId}`,
               {
                 method: "POST",
                 body: {

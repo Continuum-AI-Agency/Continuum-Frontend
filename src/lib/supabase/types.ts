@@ -5318,6 +5318,7 @@ export type Database = {
           created_at: string
           id: string
           instagram_post_id: string | null
+          platform: string | null
           platform_account_id: string
           position: Json | null
           published_at: string | null
@@ -5336,6 +5337,7 @@ export type Database = {
           created_at?: string
           id?: string
           instagram_post_id?: string | null
+          platform?: string | null
           platform_account_id: string
           position?: Json | null
           published_at?: string | null
@@ -5354,6 +5356,7 @@ export type Database = {
           created_at?: string
           id?: string
           instagram_post_id?: string | null
+          platform?: string | null
           platform_account_id?: string
           position?: Json | null
           published_at?: string | null

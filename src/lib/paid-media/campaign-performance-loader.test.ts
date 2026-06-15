@@ -34,7 +34,7 @@ describe("fetchCampaignPerformanceRows", () => {
     });
 
     const fnName = invokeMock.mock.calls[0][0] as string;
-    expect(fnName.startsWith("fetch-meta-campaigns")).toBe(true);
+    expect(fnName.startsWith("paid-media-reporting/campaigns")).toBe(true);
   });
 
   it("invokes the Google Ads campaign function for the google-ads platform", async () => {

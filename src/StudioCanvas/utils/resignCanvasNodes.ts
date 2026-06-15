@@ -8,6 +8,8 @@ function collectSignItems(nodes: StudioNode[]): SignItem[] {
   const items: SignItem[] = [];
   for (const node of nodes) {
     const data = node.data as Record<string, unknown>;
+
+    // Generated outputs (nanoGen / video generators).
     const imgPath = data.generatedImageStoragePath;
     const imgBucket = data.generatedImageBucket;
     if (typeof imgPath === "string" && typeof imgBucket === "string") {
@@ -18,6 +20,15 @@ function collectSignItems(nodes: StudioNode[]): SignItem[] {
     if (typeof vidPath === "string" && typeof vidBucket === "string") {
       items.push({ bucket: vidBucket, path: vidPath });
     }
+
+    // Uploaded reference nodes (image/video). sourcePath + bucket re-sign into the
+    // node's media value so a saved/broadcast reference renders after its signed
+    // URL has expired.
+    const refPath = data.sourcePath;
+    const refBucket = data.bucket;
+    if (typeof refPath === "string" && typeof refBucket === "string") {
+      items.push({ bucket: refBucket, path: refPath });
+    }
   }
   return items;
 }
@@ -27,15 +38,20 @@ function applySignedUrls(nodes: StudioNode[], urlMap: Map<string, string>): Stud
     const data = node.data as Record<string, unknown>;
     const imgPath = data.generatedImageStoragePath;
     const vidPath = data.generatedVideoStoragePath;
+    const refPath = data.sourcePath;
     const imgUrl = typeof imgPath === "string" ? urlMap.get(imgPath) : undefined;
     const vidUrl = typeof vidPath === "string" ? urlMap.get(vidPath) : undefined;
-    if (!imgUrl && !vidUrl) return node;
+    const refUrl = typeof refPath === "string" ? urlMap.get(refPath) : undefined;
+    if (!imgUrl && !vidUrl && !refUrl) return node;
+
+    const refField = node.type === "video" ? "video" : "image";
     return {
       ...node,
       data: {
         ...data,
         ...(imgUrl ? { generatedImageUrl: imgUrl } : {}),
         ...(vidUrl ? { generatedVideoUrl: vidUrl } : {}),
+        ...(refUrl ? { [refField]: refUrl, sourceUrl: refUrl } : {}),
       } as StudioNode["data"],
     };
   });

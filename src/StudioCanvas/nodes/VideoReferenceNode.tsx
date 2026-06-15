@@ -22,13 +22,17 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { Copy, Trash2 } from 'lucide-react';
+import { CheckCircle2, Copy, Loader2, Trash2, XCircle } from 'lucide-react';
+import { referenceStatusBadge } from './referenceStatusBadge';
+import { isUploadOnDropEnabled, uploadReferenceFile } from '../utils/uploadReferenceFile';
 
 export interface VideoNodeData extends BaseNodeData {
   video?: string;
   fileName?: string;
   sourcePath?: string;
+  bucket?: string;
   sourceUrl?: string;
+  referenceStatus?: 'processing' | 'ready' | 'error';
 }
 
 import {
@@ -48,13 +52,22 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.video);
   const { show } = useToast();
   const { isSelectedByOther, selectingUser } = useNodeSelection(id);
+  const refBadge = referenceStatusBadge(data.referenceStatus);
 
   // Calculate connection counts for tooltips
   const videoConnections = edges.filter(edge => edge.source === id && edge.sourceHandle === 'video').length;
+
+  // Upload the local file to durable storage and swap to its signed URL. The
+  // base64 preview remains the emergency fallback if the upload fails.
+  const uploadLocalReference = useCallback((file: File) => {
+    if (!isUploadOnDropEnabled() || !brandId) return;
+    void uploadReferenceFile({ nodeId: id, file, brandId, field: 'video' }, { updateNodeData });
+  }, [brandId, id, updateNodeData]);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -70,10 +83,11 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
           sourceUrl: undefined,
         });
         triggerSave();
+        uploadLocalReference(file);
       };
       reader.readAsDataURL(file);
     }
-  }, [id, triggerSave, updateNodeData]);
+  }, [id, triggerSave, updateNodeData, uploadLocalReference]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -112,6 +126,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
           sourceUrl: undefined,
         });
         triggerSave();
+        uploadLocalReference(file);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -157,7 +172,7 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
       sourceUrl: resolved.sourceUrl,
     });
     triggerSave();
-  }, [fileToDataUrl, id, triggerSave, updateNodeData, show]);
+  }, [fileToDataUrl, id, triggerSave, updateNodeData, show, uploadLocalReference]);
 
   return (
     <TooltipProvider>
@@ -186,6 +201,21 @@ export function VideoReferenceNode({ id, data, selected }: NodeProps<ReactFlowNo
         className="relative h-full w-full min-w-0 overflow-hidden border-border/60 bg-background p-0 shadow-sm transition-shadow hover:shadow-md"
       >
         <NodeContent className="relative flex-1 min-h-0 p-0 nodrag bg-muted/30 group/preview">
+            {refBadge && (
+              <div
+                className={cn(
+                  "absolute left-2 top-2 z-20 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm",
+                  refBadge.tone === 'processing' && "bg-blue-500/90 text-white",
+                  refBadge.tone === 'ready' && "bg-emerald-500/90 text-white",
+                  refBadge.tone === 'error' && "bg-red-500/90 text-white",
+                )}
+              >
+                {refBadge.tone === 'processing' && <Loader2 className="h-3 w-3 animate-spin" />}
+                {refBadge.tone === 'ready' && <CheckCircle2 className="h-3 w-3" />}
+                {refBadge.tone === 'error' && <XCircle className="h-3 w-3" />}
+                {refBadge.label}
+              </div>
+            )}
             <label
               htmlFor={`video-file-${id}`}
               className="absolute right-2 top-2 z-20 cursor-pointer rounded bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/preview:opacity-100 focus-visible:opacity-100"

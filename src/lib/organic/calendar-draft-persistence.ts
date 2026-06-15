@@ -158,6 +158,9 @@ export type PersistedOrganicDraftRow = {
 
 export type PersistedDraftWritePayload = {
   brand_id: string
+  // First-class platform keying column (mirrors the backend persist path) so the
+  // planner can key drafts by (brand_id, platform, scheduled_date).
+  platform: string
   platform_account_id: string
   status: PersistedDraftStatus
   scheduled_date: string | null
@@ -281,6 +284,7 @@ export function buildPersistedDraftPayload(args: {
 
   return {
     brand_id: brandId,
+    platform: primaryPlatform,
     platform_account_id: platformAccountId,
     status,
     scheduled_date: dayId,

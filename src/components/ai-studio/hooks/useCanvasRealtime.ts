@@ -8,7 +8,7 @@ import type { StudioNode } from "@/StudioCanvas/types";
 import type { Edge } from "@xyflow/react";
 import { stringToColor } from "@/lib/utils/color";
 import { mergeNodes, mergeEdges } from "./merge-strategy";
-import { serializeWorkflowSnapshot } from "@/StudioCanvas/utils/workflowSerialization";
+import { serializeForBroadcast, serializeWorkflowSnapshot } from "@/StudioCanvas/utils/workflowSerialization";
 import { resignCanvasNodes } from "@/StudioCanvas/utils/resignCanvasNodes";
 
 type CanvasSession = {
@@ -450,6 +450,7 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       const deletedNodeIds = state.getDeletedNodeIds();
       const deletedEdgeIds = state.getDeletedEdgeIds();
 
+      // Persist: base64 + expiring signed URLs stripped (re-signed on load).
       const serialized = serializeWorkflowSnapshot(currentNodes, currentEdges, defaultEdgeType);
 
       const { data, error } = await supabase
@@ -481,13 +482,16 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         lastUpdateRef.current = resolvedTimestamp;
         lastRevisionRef.current = resolvedRevision;
 
-        // Broadcast the same base64-stripped snapshot we persist — never the raw
-        // store nodes. Inlined media (base64 data URIs) would blow past Realtime's
-        // max message size and close the shared socket with code 1009. Receivers
-        // keep their own local media via mergeNodes when remote omits these fields.
+        // Broadcast a base64-stripped snapshot that KEEPS signed URLs — never the
+        // raw store nodes. Inlined media (base64 data URIs) would blow past
+        // Realtime's max message size and close the shared socket with code 1009.
+        // Keeping the signed URLs lets peers render media instantly (no re-sign
+        // round-trip); base64-only nodes fall back to mergeNodes preserving local
+        // media when the field is omitted.
+        const broadcastSnapshot = serializeForBroadcast(currentNodes, currentEdges, defaultEdgeType);
         const syncPayload: CanvasUpdatePayload = {
-          nodes: serialized.nodes as any[],
-          edges: serialized.edges as any[],
+          nodes: broadcastSnapshot.nodes as any[],
+          edges: broadcastSnapshot.edges as any[],
           deleted_node_ids: deletedNodeIds,
           deleted_edge_ids: deletedEdgeIds,
           updated_at: resolvedTimestamp,

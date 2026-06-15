@@ -55,12 +55,12 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
 
   try {
-    const { data, error } = await supabase.functions.invoke("paid-media-metrics", {
+    const { data, error } = await supabase.functions.invoke("paid-media-reporting/metrics", {
       body: parsed.data,
     });
 
     if (error) {
-      console.error("Error invoking paid-media-metrics:", error);
+      console.error("Error invoking paid-media-reporting/metrics:", error);
       return NextResponse.json(
         { error: "Failed to fetch paid metrics from edge function" },
         { status: 500 }
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
     const validated = PaidMetricsResponseSchema.safeParse(data);
     if (!validated.success) {
-      console.error("Invalid response from paid-media-metrics:", validated.error);
+      console.error("Invalid response from paid-media-reporting/metrics:", validated.error);
       return NextResponse.json(
           { error: "Invalid response format from backend" }, 
           { status: 502 }

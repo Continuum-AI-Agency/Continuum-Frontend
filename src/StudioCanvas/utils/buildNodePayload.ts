@@ -14,13 +14,35 @@ import {
   resolveVideoGeneratorModel,
 } from './videoModel';
 
+// A reference image for a generation/enrich payload. A signed `imageUrl` is the
+// source of truth; base64 `data` is the emergency fallback (un-uploaded media).
+// The Backend resolves the URL to bytes for the provider.
+type ImageRef = { data?: string; imageUrl?: string; mimeType: string };
+
+const isHttpUrl = (value?: string | null): value is string =>
+  typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+
+const imageRefFromOutput = (output: NodeOutput | undefined): ImageRef | undefined => {
+  if (output?.type !== 'image') return undefined;
+  if (output.base64) return { data: output.base64, mimeType: output.mimeType };
+  if (isHttpUrl(output.url)) return { imageUrl: output.url.trim(), mimeType: output.mimeType };
+  return undefined;
+};
+
+const imageRefFromValue = (value: string | undefined, fallbackMime = 'image/png'): ImageRef | undefined => {
+  const parsed = parseDataUrl(value);
+  if (parsed?.base64) return { data: parsed.base64, mimeType: parsed.mimeType };
+  if (isHttpUrl(value)) return { imageUrl: value.trim(), mimeType: fallbackMime };
+  return undefined;
+};
+
 function resolveInputValue(
   nodeId: string,
   handleId: string,
   resolvedData: Map<string, NodeOutput>,
   nodes: StudioNode[],
   edges: Edge[]
-): { text?: string; image?: string; fileName?: string } | undefined {
+): { text?: string; image?: string; imageUrl?: string; fileName?: string } | undefined {
   const incomingEdge = edges.find(
     (e) => e.target === nodeId && e.targetHandle === handleId
   );
@@ -33,7 +55,8 @@ function resolveInputValue(
       return { text: sourceOutput.value };
     }
     if (sourceOutput.type === 'image') {
-      return { image: sourceOutput.base64 };
+      const ref = imageRefFromOutput(sourceOutput);
+      return ref ? { image: ref.data, imageUrl: ref.imageUrl } : undefined;
     }
     return undefined;
   }
@@ -44,10 +67,11 @@ function resolveInputValue(
       return { text: sourceNode.data.value as string };
     }
     if (sourceNode.type === 'image') {
-      const parsed = parseDataUrl((sourceNode.data as any).image as string | undefined);
-      if (parsed) {
+      const ref = imageRefFromValue((sourceNode.data as any).image as string | undefined);
+      if (ref) {
         return {
-          image: parsed.base64,
+          image: ref.data,
+          imageUrl: ref.imageUrl,
           fileName: (sourceNode.data as any).fileName,
         };
       }
@@ -158,21 +182,22 @@ async function resolveImageInput(
   edge: Edge,
   resolvedData: Map<string, NodeOutput>,
   nodeById: Map<string, StudioNode>
-): Promise<{ base64: string; mimeType: string; sourcePath?: string; sourceUrl?: string } | undefined> {
+): Promise<{ data?: string; imageUrl?: string; mimeType: string; sourcePath?: string; sourceUrl?: string } | undefined> {
   const output = resolvedData.get(edge.source);
-  if (output?.type === 'image' && output.base64) {
-    return { base64: output.base64, mimeType: output.mimeType };
+  const outputRef = imageRefFromOutput(output);
+  if (outputRef) {
+    return { data: outputRef.data, imageUrl: outputRef.imageUrl, mimeType: outputRef.mimeType };
   }
 
   const sourceNode = nodeById.get(edge.source);
   if (sourceNode?.type === 'image') {
     const imageData = sourceNode.data as ImageNodeData;
-    
+
     if (imageData.markupLayer && imageData.originalImage) {
       try {
         const composited = await compositeImages(imageData.originalImage, imageData.markupLayer);
         return {
-          base64: composited.base64,
+          data: composited.base64,
           mimeType: composited.mimeType,
           sourcePath: imageData.sourcePath,
           sourceUrl: imageData.sourceUrl,
@@ -181,12 +206,13 @@ async function resolveImageInput(
         console.error('Failed to composite image with markup:', error);
       }
     }
-    
-    const parsed = parseDataUrl(imageData.image);
-    if (parsed?.base64) {
+
+    const ref = imageRefFromValue(imageData.image);
+    if (ref) {
       return {
-        base64: parsed.base64,
-        mimeType: parsed.mimeType,
+        data: ref.data,
+        imageUrl: ref.imageUrl,
+        mimeType: ref.mimeType,
         sourcePath: imageData.sourcePath,
         sourceUrl: imageData.sourceUrl,
       };
@@ -299,8 +325,9 @@ export async function buildEnrichPayload(
     context: {
       images: images.length > 0
         ? images.map((img) => ({
-            type: 'base64' as const,
-            data: img!.base64,
+            type: (img!.imageUrl ? 'url' : 'base64') as 'url' | 'base64',
+            data: img!.data,
+            imageUrl: img!.imageUrl,
             mimeType: img!.mimeType,
             sourcePath: img!.sourcePath,
             sourceUrl: img!.sourceUrl,
@@ -365,10 +392,12 @@ export function buildNanoGenPayload(
           }
       }
 
-      if (output?.type === 'image') {
+      const ref = imageRefFromOutput(output);
+      if (ref) {
         return {
-          data: output.base64,
-          mimeType: output.mimeType,
+          data: ref.data,
+          imageUrl: ref.imageUrl,
+          mimeType: ref.mimeType,
           weight: 1,
           referenceType: 'asset' as const,
         };
@@ -457,36 +486,49 @@ export function buildVeoPayload(
   let referenceVideo: GenerationPayload['referenceVideo'] = undefined;
   let imageReferences: GenerationPayload['imageReferences'] = undefined;
 
+  const frameFromInput = (
+    input: { image?: string; imageUrl?: string; fileName?: string } | undefined,
+    filename: string,
+  ): GenerationPayload['firstFrame'] | undefined => {
+    if (input?.image) return { data: input.image, mimeType: 'image/png', filename: input.fileName || filename };
+    if (input?.imageUrl) return { imageUrl: input.imageUrl, mimeType: 'image/png', filename: input.fileName || filename };
+    return undefined;
+  };
+
+  const frameFromValue = (value: string | undefined, filename: string): GenerationPayload['firstFrame'] | undefined => {
+    const ref = imageRefFromValue(value);
+    if (!ref) return undefined;
+    return { data: ref.data, imageUrl: ref.imageUrl, mimeType: 'image/png', filename };
+  };
+
   if (supportsVideoGeneratorFrameInputs(model)) {
     const frame0Input = resolveInputValue(node.id, 'frame-0', resolvedData, allNodes, allEdges);
-    firstFrame = frame0Input?.image
-      ? { data: frame0Input.image, mimeType: 'image/png', filename: frame0Input.fileName || 'frame-0.png' }
-      : undefined;
+    firstFrame = frameFromInput(frame0Input, 'frame-0.png');
 
     if (!firstFrame) {
         const legacyFirst = resolveInputValue(node.id, 'first-frame', resolvedData, allNodes, allEdges);
-        if (legacyFirst?.image) {
-            firstFrame = { data: legacyFirst.image, mimeType: 'image/png', filename: legacyFirst.fileName || 'frame-0.png' };
-        }
+        firstFrame = frameFromInput(legacyFirst, 'frame-0.png');
     }
 
     const frameList = (data as any).frameList || [];
     if (!firstFrame && frameList[0]?.src) {
-        firstFrame = { data: frameList[0].src, mimeType: 'image/png', filename: 'frame-0.png' };
+        firstFrame = frameFromValue(frameList[0].src, 'frame-0.png') ?? undefined;
     }
 
     const legacyLast = resolveInputValue(node.id, 'last-frame', resolvedData, allNodes, allEdges);
-    if (legacyLast?.image) {
-        lastFrame = { data: legacyLast.image, mimeType: 'image/png', filename: legacyLast.fileName || 'frame-last.png' };
+    const legacyLastFrame = frameFromInput(legacyLast, 'frame-last.png');
+    if (legacyLastFrame) {
+        lastFrame = legacyLastFrame;
     } else {
         for (let i = 8; i > 0; i--) {
             const frameInput = resolveInputValue(node.id, `frame-${i}`, resolvedData, allNodes, allEdges);
-            if (frameInput?.image) {
-                lastFrame = { data: frameInput.image, mimeType: 'image/png', filename: frameInput.fileName || `frame-${i}.png` };
+            const frameFrame = frameFromInput(frameInput, `frame-${i}.png`);
+            if (frameFrame) {
+                lastFrame = frameFrame;
                 break;
             }
             if (frameList[i]?.src) {
-                lastFrame = { data: frameList[i].src, mimeType: 'image/png', filename: `frame-${i}.png` };
+                lastFrame = frameFromValue(frameList[i].src, `frame-${i}.png`) ?? undefined;
                 break;
             }
         }
@@ -525,10 +567,12 @@ export function buildVeoPayload(
               }
           }
 
-          if (output?.type === 'image') {
+          const ref = imageRefFromOutput(output);
+          if (ref) {
             return {
-              data: output.base64,
-              mimeType: output.mimeType,
+              data: ref.data,
+              imageUrl: ref.imageUrl,
+              mimeType: ref.mimeType,
               weight: 1,
               referenceType: 'asset' as const,
             };
@@ -546,6 +590,7 @@ export function buildVeoPayload(
   if (model === 'seedance-2.0') {
     const mappedImageReferences = referenceImages?.map((image, index) => ({
       data: image.data,
+      imageUrl: image.imageUrl,
       mimeType: image.mimeType,
       filename: image.filename ?? `seedance-ref-${index + 1}.png`,
     }));
@@ -615,21 +660,23 @@ export function toBackendPayload(payload: GenerationPayload): BackendChatImageRe
     duration_seconds: payload.durationSeconds ? String(payload.durationSeconds) as "4" | "6" | "8" : undefined,
     negative_prompt: payload.negativePrompt,
     first_frame: payload.firstFrame
-      ? { data: payload.firstFrame.data, mime_type: payload.firstFrame.mimeType, filename: payload.firstFrame.filename }
+      ? { data: payload.firstFrame.data, image_url: payload.firstFrame.imageUrl, mime_type: payload.firstFrame.mimeType, filename: payload.firstFrame.filename }
       : undefined,
     last_frame: payload.lastFrame
-      ? { data: payload.lastFrame.data, mime_type: payload.lastFrame.mimeType, filename: payload.lastFrame.filename }
+      ? { data: payload.lastFrame.data, image_url: payload.lastFrame.imageUrl, mime_type: payload.lastFrame.mimeType, filename: payload.lastFrame.filename }
       : undefined,
     reference_video: payload.referenceVideo
       ? { data: payload.referenceVideo.data, mime_type: payload.referenceVideo.mimeType, filename: payload.referenceVideo.filename }
       : undefined,
     image_references: payload.imageReferences?.map((image) => ({
       data: image.data,
+      image_url: image.imageUrl,
       mime_type: image.mimeType,
       filename: image.filename,
     })),
     reference_images: payload.referenceImages?.map((img) => ({
       data: img.data,
+      image_url: img.imageUrl,
       mime_type: img.mimeType,
       filename: img.filename,
       weight: img.weight,

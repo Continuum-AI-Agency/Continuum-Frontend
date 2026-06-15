@@ -1,11 +1,12 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Handle, Position, NodeProps, Node as ReactFlowNode, NodeResizer, HandleProps, useEdges, useNodeId } from '@xyflow/react';
 import { useStudioStore } from '../stores/useStudioStore';
-import { NanoGenNodeData } from '../types';
+import { NanoGenNodeData, StudioNode } from '../types';
 import { ImageIcon } from '@radix-ui/react-icons';
 import { cn } from '@/lib/utils';
 import { useWorkflowExecution } from '../hooks/useWorkflowExecution';
 import { executeWorkflow } from '../utils/executeWorkflow';
+import { resignCanvasNodes } from '../utils/resignCanvasNodes';
 import { useToast } from '@/components/ui/ToastProvider';
 import { downloadAsset } from '../utils/downloadAsset';
 import { Button } from '@/components/ui/button';
@@ -147,6 +148,26 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
   }, [executionControls, id, brandId]);
 
   const previewImage = (data.generatedImage as string | Blob | undefined) ?? data.generatedImageUrl;
+
+  // Expiry recovery: a signed URL can expire while the canvas is open. On an image
+  // load error, re-sign this node once from its durable storage path/bucket.
+  const resignAttemptedRef = useRef(false);
+  const handleImageError = useCallback(async () => {
+    if (resignAttemptedRef.current) return;
+    if (!data.generatedImageStoragePath || !data.generatedImageBucket) return;
+    resignAttemptedRef.current = true;
+    try {
+      const [resigned] = await resignCanvasNodes([
+        { id, type: 'nanoGen', position: { x: 0, y: 0 }, data } as unknown as StudioNode,
+      ]);
+      const url = (resigned?.data as Record<string, unknown> | undefined)?.generatedImageUrl;
+      if (typeof url === 'string' && url) {
+        useStudioStore.getState().updateNodeData(id, { generatedImage: url, generatedImageUrl: url });
+      }
+    } catch (err) {
+      console.warn('[studio] failed to re-sign expired image url', err);
+    }
+  }, [data, id]);
   const refImageLimit = data.maxReferenceImages ?? 14;
   const aspectRatio = data.aspectRatio || '16:9';
   const ratio = getAspectRatioValue(aspectRatio);
@@ -234,6 +255,7 @@ export function ImageGenBlock({ id, data, selected }: NodeProps<ReactFlowNode<Na
                       src={previewImage as string}
                       alt="Generated Image"
                       className="h-full w-full object-contain"
+                      onError={handleImageError}
                     />
                   </AspectRatio>
                 </div>

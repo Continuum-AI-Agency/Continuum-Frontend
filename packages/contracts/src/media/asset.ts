@@ -18,6 +18,7 @@ export type MediaKind = z.infer<typeof mediaKindSchema>;
 //   inspiration:  re-hosted competitor ad creatives (competitor-ad-spy).
 //   hyperframe:   HyperFrames composition covers / rendered reels.
 //   chat_upload:  files users dropped into a chat surface (chat-uploads bucket).
+//   clip:         a section cut from a long-form video (OpusClip-style pipeline).
 export const mediaSourceSchema = z.enum([
   "upload",
   "ai_generated",
@@ -26,6 +27,7 @@ export const mediaSourceSchema = z.enum([
   "inspiration",
   "hyperframe",
   "chat_upload",
+  "clip",
 ]);
 export type MediaSource = z.infer<typeof mediaSourceSchema>;
 

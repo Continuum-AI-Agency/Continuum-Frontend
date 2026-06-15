@@ -68,7 +68,7 @@ export function SettingsShell({
                 Sections
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[var(--shell-secondary-w)] px-3 py-6">
+            <SheetContent side="left" className="w-[min(var(--shell-secondary-w),calc(100vw-1rem))] px-3 py-6">
               <SheetTitle className="sr-only">Settings sections</SheetTitle>
               <SettingsNav brandPill={brandPill} accountPill={accountPill} />
             </SheetContent>

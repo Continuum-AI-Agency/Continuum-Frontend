@@ -76,6 +76,10 @@ export function useCalendarDraftPersistence({
 }: UseCalendarDraftPersistenceOptions) {
   const hydratedKeyRef = React.useRef<string | null>(null)
   const knownBackendIdsRef = React.useRef<Set<string>>(new Set())
+  // Rows THIS hook inserted in-session. The autosave may only delete drafts it
+  // created itself — never agent-/server-created rows it merely fetched — so the
+  // browser writer can't clobber what the organic agent persists server-side.
+  const feCreatedIdsRef = React.useRef<Set<string>>(new Set())
   const lastSyncedSignatureRef = React.useRef<string>("")
   const syncInFlightRef = React.useRef(false)
   const supabase = React.useMemo(() => createSupabaseBrowserClient(), [])
@@ -179,7 +183,10 @@ export function useCalendarDraftPersistence({
           if (!user) return
 
           const organicSchema = supabase.schema("organic" as never) as any
-          const idsToDelete = [...knownBackendIdsRef.current].filter((id) => !allBackendIds.has(id))
+          // Only delete rows THIS hook created (and that are now gone locally) —
+          // never agent-/server-created rows. Prevents the browser autosave from
+          // racing the backend writer and removing agent-drafted posts.
+          const idsToDelete = [...feCreatedIdsRef.current].filter((id) => !allBackendIds.has(id))
           for (const draftId of idsToDelete) {
             const { error } = await organicSchema
               .from("organic_calendar_drafts")
@@ -188,6 +195,7 @@ export function useCalendarDraftPersistence({
               .eq("user_id", user.id)
             if (!error) {
               knownBackendIdsRef.current.delete(draftId)
+              feCreatedIdsRef.current.delete(draftId)
             }
           }
 
@@ -205,6 +213,7 @@ export function useCalendarDraftPersistence({
                 .from("organic_calendar_drafts")
                 .insert({
                   brand_id: payload.brand_id,
+                  platform: payload.platform,
                   platform_account_id: payload.platform_account_id,
                   status: payload.status,
                   scheduled_date: payload.scheduled_date,
@@ -217,6 +226,7 @@ export function useCalendarDraftPersistence({
               if (!created.id) continue
 
               knownBackendIdsRef.current.add(created.id)
+              feCreatedIdsRef.current.add(created.id)
               updateDraftById(entry.draft.id, (draft) => ({
                 ...draft,
                 backendDraftId: created.id,
@@ -228,6 +238,7 @@ export function useCalendarDraftPersistence({
               .from("organic_calendar_drafts")
               .update({
                 brand_id: payload.brand_id,
+                platform: payload.platform,
                 platform_account_id: payload.platform_account_id,
                 status: payload.status,
                 scheduled_date: payload.scheduled_date,

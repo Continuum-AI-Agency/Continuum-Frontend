@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { serializeWorkflowSnapshot, normalizeWorkflowSnapshot } from './workflowSerialization';
+import { serializeWorkflowSnapshot, serializeForBroadcast, normalizeWorkflowSnapshot } from './workflowSerialization';
 import type { StudioNode } from '../types';
 import type { Edge } from '@xyflow/react';
 
@@ -235,5 +235,59 @@ describe('workflowSerialization', () => {
     expect(snapshot.nodes[0].style).toEqual({ width: 400, height: 400 });
     expect(snapshot.nodes[0].width).toBe(392);
     expect(snapshot.nodes[0].height).toBe(398);
+  });
+
+  it('persist mode strips expiring signed URLs but keeps durable storage pointers', () => {
+    const node = buildNode({
+      id: 'gen',
+      type: 'nanoGen',
+      data: {
+        generatedImage: 'https://x.supabase.co/sign/a.png?token=t',
+        generatedImageUrl: 'https://x.supabase.co/sign/a.png?token=t',
+        generatedImageStoragePath: 'brand/a.png',
+        generatedImageBucket: 'brand-profile-assets',
+      },
+    });
+    const snapshot = serializeWorkflowSnapshot([node], [], 'bezier');
+    const data = snapshot.nodes[0].data as Record<string, unknown>;
+    expect(data.generatedImageUrl).toBeUndefined();
+    expect(data.generatedImage).toBeUndefined();
+    expect(data.generatedImageStoragePath).toBe('brand/a.png');
+    expect(data.generatedImageBucket).toBe('brand-profile-assets');
+  });
+
+  it('broadcast mode keeps signed URLs (and durable pointers) but still drops base64', () => {
+    const node = buildNode({
+      id: 'gen',
+      type: 'nanoGen',
+      data: {
+        generatedImage: 'https://x.supabase.co/sign/a.png?token=t',
+        generatedImageUrl: 'https://x.supabase.co/sign/a.png?token=t',
+        generatedImageStoragePath: 'brand/a.png',
+        generatedImageBucket: 'brand-profile-assets',
+      },
+    });
+    const snapshot = serializeForBroadcast([node], [], 'bezier');
+    const data = snapshot.nodes[0].data as Record<string, unknown>;
+    expect(data.generatedImageUrl).toBe('https://x.supabase.co/sign/a.png?token=t');
+    expect(data.generatedImage).toBe('https://x.supabase.co/sign/a.png?token=t');
+    expect(data.generatedImageStoragePath).toBe('brand/a.png');
+  });
+
+  it('broadcast mode still strips inline base64 (avoids WS 1009)', () => {
+    const node = buildNode({
+      id: 'ref',
+      type: 'image',
+      data: {
+        image: 'data:image/png;base64,' + 'A'.repeat(64),
+        sourcePath: 'brand/ref.png',
+        bucket: 'media-library',
+      },
+    });
+    const snapshot = serializeForBroadcast([node], [], 'bezier');
+    const data = snapshot.nodes[0].data as Record<string, unknown>;
+    expect(data.image).toBeUndefined();
+    expect(data.sourcePath).toBe('brand/ref.png');
+    expect(data.bucket).toBe('media-library');
   });
 });

@@ -47,6 +47,7 @@ import { snapNodeDimensionsToAspectRatio } from '../utils/aspectRatioSizing';
 import { ImageMarkupDialog, ImageMarkupSaveResult } from '@/components/ai-studio/markup/ImageMarkupDialog';
 import { parseDataUrl } from '../utils/dataUrl';
 import { referenceStatusBadge } from './referenceStatusBadge';
+import { isUploadOnDropEnabled, uploadReferenceFile } from '../utils/uploadReferenceFile';
 
 const RF_DRAG_MIME = 'application/reactflow-node-data';
 const TEXT_MIME = 'text/plain';
@@ -75,6 +76,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
   const triggerSave = useStudioStore((state) => state.triggerSave);
   const duplicateNode = useStudioStore((state) => state.duplicateNode);
   const deleteNode = useStudioStore((state) => state.deleteNode);
+  const brandId = useStudioStore((state) => state.brandId);
   const edges = useEdges();
   const [preview, setPreview] = useState<string | undefined>(data.image);
   const [refType, setRefType] = useState<string>(data.referenceType || 'default');
@@ -218,6 +220,14 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
     };
   }, [data.aspectRatio, detectAspectRatioFromImage, preview, snapNodeToAspectRatio, triggerSave]);
 
+  // Upload the local file to durable storage and swap the node to its signed URL
+  // (processing -> ready/error badge). The base64 preview set by applyPreviewImage
+  // remains the emergency fallback if the upload fails.
+  const uploadLocalReference = useCallback((file: File) => {
+    if (!isUploadOnDropEnabled() || !brandId) return;
+    void uploadReferenceFile({ nodeId: id, file, brandId, field: 'image' }, { updateNodeData });
+  }, [brandId, id, updateNodeData]);
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -225,10 +235,11 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       reader.onloadend = () => {
         const result = reader.result as string;
         void applyPreviewImage({ src: result, fileName: file.name });
+        uploadLocalReference(file);
       };
       reader.readAsDataURL(file);
     }
-  }, [applyPreviewImage]);
+  }, [applyPreviewImage, uploadLocalReference]);
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -260,6 +271,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       try {
         const result = await fileToDataUrl(file);
         applyPreviewImage({ src: result, fileName: file.name });
+        uploadLocalReference(file);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to read dropped file';
         show({
@@ -303,7 +315,7 @@ export function ImageNode({ id, data, selected }: NodeProps<ReactFlowNode<ImageN
       sourcePath: resolved.sourcePath,
       sourceUrl: resolved.sourceUrl,
     });
-  }, [applyPreviewImage, fileToDataUrl, show]);
+  }, [applyPreviewImage, fileToDataUrl, show, uploadLocalReference]);
 
   return (
     <TooltipProvider>

@@ -194,19 +194,23 @@ export function useWorkflowExecution() {
                         : undefined;
               const persistentImageUrl = imageUrl && !imageUrl.startsWith("data:") ? imageUrl : undefined;
 
-              if (eventName === "image" && normalizedImageBase64) {
+              if (eventName === "image" && (normalizedImageBase64 || persistentImageUrl)) {
                 console.info("[studio] image event received", {
                   nodeId,
                   mimeType: imageMimeType,
-                  base64Length: normalizedImageBase64.length,
+                  base64Length: normalizedImageBase64?.length ?? 0,
                   hasUrl: Boolean(persistentImageUrl),
                 });
                 if (expectedMedium === "image") {
+                  // URL-first: the signed URL is the source of truth; base64 is
+                  // present only on the upload/sign fallback path.
                   finalOutput = {
                     type: "image",
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
                     url: persistentImageUrl,
+                    storagePath: typeof parsed.path === "string" ? parsed.path : undefined,
+                    storageBucket: typeof parsed.bucket === "string" ? parsed.bucket : undefined,
                   };
                 }
               }
@@ -267,12 +271,14 @@ export function useWorkflowExecution() {
               }
 
               if (eventName === "complete" && !finalOutput) {
-                if (expectedMedium === "image" && normalizedImageBase64) {
+                if (expectedMedium === "image" && (normalizedImageBase64 || persistentImageUrl)) {
                   finalOutput = {
                     type: "image",
                     base64: normalizedImageBase64,
                     mimeType: imageMimeType,
                     url: persistentImageUrl,
+                    storagePath: typeof parsed.path === "string" ? parsed.path : undefined,
+                    storageBucket: typeof parsed.bucket === "string" ? parsed.bucket : undefined,
                   };
                 } else if (expectedMedium === "video" && videoUrl) {
                   finalOutput = {

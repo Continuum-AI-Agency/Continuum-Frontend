@@ -32,6 +32,7 @@ import { useCalendarSelection } from "../hooks/useCalendarSelection"
 import { useCalendarDnD } from "../hooks/useCalendarDnD"
 import { useDraftGeneration } from "../hooks/useDraftGeneration"
 import { useCalendarDraftPersistence } from "../hooks/useCalendarDraftPersistence"
+import { useCalendarRealtimeSync } from "../hooks/useCalendarRealtimeSync"
 import { useCalendarPostedContent } from "../hooks/useCalendarPostedContent"
 import { useBrandInsightsRefresh } from "@/lib/brand-insights/useBrandInsightsRefresh"
 import { BulkActionToolbar } from "./BulkActionToolbar"
@@ -261,6 +262,11 @@ export function OrganicCalendarWorkspaceClient({
     updateDraftById,
     platformAccountIds,
   })
+
+  // Server-authoritative freshness: subscribe to Realtime draft writes for this
+  // brand so out-of-band agent drafts (chat tools, Stage-2 blueprint worker) hit
+  // the planner instantly via the same nonce-refetch path below.
+  useCalendarRealtimeSync({ brandProfileId })
 
   // Reconcile against the backend when agent-side work completes (bulk run done,
   // single draft ready) so en-masse generated drafts appear without a manual reload.

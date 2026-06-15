@@ -5,6 +5,7 @@ import {
   IdCard,
   Link2,
   Plug,
+  ScrollText,
   User,
   type LucideIcon,
 } from "lucide-react";
@@ -26,6 +27,7 @@ export const BRAND_SECTIONS = [
 export const ACCOUNT_SECTIONS = [
   { key: "profile", label: "Profile", icon: User, scope: "account" },
   { key: "connections", label: "Connections", icon: Link2, scope: "account" },
+  { key: "activity", label: "Activity", icon: ScrollText, scope: "account" },
   { key: "brands", label: "Brands", icon: Building2, scope: "account" },
 ] as const satisfies readonly SectionDef[];
 
@@ -36,6 +38,7 @@ export const ALL_SECTION_KEYS = [
   "billing",
   "profile",
   "connections",
+  "activity",
   "brands",
 ] as const;
 

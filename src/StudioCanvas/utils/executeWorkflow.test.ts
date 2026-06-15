@@ -690,20 +690,13 @@ describe('executeWorkflow', () => {
     expect(payload.reference_images?.[0]?.data).toBe('original_only');
   });
 
-  it('inlines a remote-url image reference via the proxy before generation', async () => {
-    mock.module('@/lib/ai-studio/inlineRemoteImage', () => ({
-      inlineRemoteImage: mock(async () => ({
-        dataUrl: 'data:image/jpeg;base64,proxied_base64',
-        mimeType: 'image/jpeg',
-      })),
-    }));
-
-    const remoteUrl = 'https://scontent.cdninstagram.com/a.jpg';
+  it('passes a remote-url image reference through as image_url (backend resolves to bytes)', async () => {
+    const remoteUrl = 'https://x.supabase.co/storage/v1/object/sign/media-library/a.jpg?token=t';
     const nodes: StudioNode[] = [
       {
         id: 'img',
         position: { x: 0, y: 0 },
-        data: { image: remoteUrl, sourceUrl: remoteUrl },
+        data: { image: remoteUrl, sourceUrl: remoteUrl, sourcePath: 'brand/a.jpg', bucket: 'media-library' },
         type: 'image',
       },
       {
@@ -733,7 +726,7 @@ describe('executeWorkflow', () => {
 
     expect(executeGeneration).toHaveBeenCalledTimes(1);
     const payload = executeGeneration.mock.calls[0][1];
-    expect(payload.reference_images?.[0]?.data).toBe('proxied_base64');
-    expect(payload.reference_images?.[0]?.mime_type).toBe('image/jpeg');
+    expect(payload.reference_images?.[0]?.image_url).toBe(remoteUrl);
+    expect(payload.reference_images?.[0]?.data).toBeUndefined();
   });
 });

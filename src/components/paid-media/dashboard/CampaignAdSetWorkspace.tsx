@@ -986,7 +986,7 @@ export function CampaignAdSetWorkspace({
       try {
         const supabase = createSupabaseBrowserClient();
         const { data, error } = await supabase.functions.invoke(
-          `fetch-meta-adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaign.id}`,
+          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaign.id}`,
           {
             method: "POST",
             body: {
@@ -1135,7 +1135,7 @@ export function CampaignAdSetWorkspace({
           );
         }
 
-        const { data, error } = await supabase.functions.invoke(`fetch-meta-ads?${params.toString()}`, {
+        const { data, error } = await supabase.functions.invoke(`paid-media-reporting/ads?${params.toString()}`, {
           method: "POST",
           body: {
             brandId,

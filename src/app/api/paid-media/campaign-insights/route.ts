@@ -68,12 +68,12 @@ export async function POST(request: Request) {
 
   try {
     const { data, error } = await supabase.functions.invoke(
-      "get-campaign-insights",
+      "paid-media-reporting/campaign-insights",
       { body: parsed.data }
     );
 
     if (error) {
-      console.error("Error invoking get-campaign-insights:", error);
+      console.error("Error invoking paid-media-reporting/campaign-insights:", error);
       return NextResponse.json(
         { error: "Failed to fetch campaign insights from edge function" },
         { status: 500 }
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     const validated = CampaignInsightsResponseSchema.safeParse(data);
     if (!validated.success) {
       console.error(
-        "Invalid response from get-campaign-insights:",
+        "Invalid response from paid-media-reporting/campaign-insights:",
         validated.error
       );
       return NextResponse.json(

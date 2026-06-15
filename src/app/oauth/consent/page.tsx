@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase/client'
+import { confirmMcpRegistrationAction } from './actions'
 
 type AuthorizationDetails = {
   authorization_id: string
@@ -56,8 +57,21 @@ function ConsentContent() {
   }, [authorizationId, router])
 
   async function approve() {
-    if (!authorizationId || submitting) return
+    if (!authorizationId || submitting || !details) return
     setSubmitting(true)
+    // Record the connector registration app-side BEFORE approving: the Supabase
+    // SDK redirects the browser on success, so no post-redirect JS would run.
+    const confirmation = await confirmMcpRegistrationAction({
+      authorizationId,
+      clientId: details.client.id,
+      clientName: details.client.name,
+      scope: details.scope,
+    })
+    if (!confirmation.registered) {
+      setError('Could not register this connection. Please try again.')
+      setSubmitting(false)
+      return
+    }
     const supabase = createSupabaseBrowserClient()
     const { error: approveError } = await supabase.auth.oauth.approveAuthorization(authorizationId)
     if (approveError) {

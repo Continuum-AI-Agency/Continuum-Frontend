@@ -15,6 +15,7 @@ import {
   Telescope,
   Film,
   MessageSquare,
+  Scissors,
 } from "lucide-react";
 import type { MediaCollection, MediaSource } from "@continuum/contracts";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ const SOURCE_ICONS: Record<MediaSource, typeof Folder> = {
   inspiration: Telescope,
   hyperframe: Film,
   chat_upload: MessageSquare,
+  clip: Scissors,
   backfill: Folder,
 };
 

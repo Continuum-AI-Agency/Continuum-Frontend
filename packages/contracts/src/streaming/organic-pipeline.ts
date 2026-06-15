@@ -132,6 +132,44 @@ export const organicDraftMediaStatusSchema = z.enum([
   "skipped",
 ]);
 
+/**
+ * How strongly brand assets are imprinted on the GENERATED media for a concept.
+ * Chosen contextually by the blueprint stage (visual_technical): brand-aligned
+ * media should match the brand's vision/voice/aesthetic, NOT always stamp the
+ * logo. `palette-only` (the default) grounds via palette + voice guidance with
+ * no literal brand asset; `logo` seeds the brand mark; `reference-creative`
+ * seeds prior on-brand creatives as references; `none` = no brand imprint.
+ */
+export const organicBrandTreatmentSchema = z.enum([
+  "logo",
+  "palette-only",
+  "reference-creative",
+  "none",
+]);
+
+/** A durable storage handle for a brand asset seeded into media generation. */
+export const organicBrandReferenceSchema = z.object({
+  kind: z.enum(["logo", "creative"]),
+  assetId: z.string().optional(),
+  bucket: z.string().optional(),
+  storagePath: z.string().min(1),
+}).strict();
+
+/**
+ * Contextual brand grounding the blueprint stage records for media generation.
+ * `treatment` drives whether `references` (logo / prior on-brand creative) are
+ * seeded into the model; `palette` is carried forward as soft guidance — NOT a
+ * hard color snap, so organic creative stays free to be innovative/non-slop.
+ * The authoritative grounding text (voice, vision, brand-guideline rules) is
+ * baked into the generation prompt at gen time, not stored here.
+ */
+export const organicMediaBrandGroundingSchema = z.object({
+  treatment: organicBrandTreatmentSchema,
+  references: z.array(organicBrandReferenceSchema).optional(),
+  palette: z.array(z.string()).optional(),
+  rationale: z.string().nullable().optional(),
+}).strict();
+
 /** Audio direction produced by the background blueprint phase (audio_technical). */
 export const organicMediaAudioConceptSchema = z.object({
   audioMode: z.string().nullable().optional(),
@@ -211,6 +249,10 @@ export const organicMediaSuggestionSchema = z.object({
   mediaStatus: organicDraftMediaStatusSchema.optional(),
   textReady: z.boolean().optional(),
   blueprintReady: z.boolean().optional(),
+  // Contextual brand grounding for media generation, decided by the blueprint
+  // (Stage 2). Drives whether the logo / prior on-brand creatives are seeded as
+  // references; palette + voice/vision/guideline text ground every concept.
+  brandGrounding: organicMediaBrandGroundingSchema.optional(),
   audioConcept: organicMediaAudioConceptSchema.optional(),
   // Concept + brief captured at the text checkpoint so gated realization can
   // reconstruct blueprint inputs without re-deriving them. Distinct from
@@ -565,6 +607,9 @@ export type OrganicHyperframeStylePreset = z.infer<typeof organicHyperframeStyle
 export type OrganicHyperframeTone = z.infer<typeof organicHyperframeToneSchema>;
 export type OrganicHyperframeAspectRatio = z.infer<typeof organicHyperframeAspectRatioSchema>;
 export type OrganicDraftMediaStatus = z.infer<typeof organicDraftMediaStatusSchema>;
+export type OrganicBrandTreatment = z.infer<typeof organicBrandTreatmentSchema>;
+export type OrganicBrandReference = z.infer<typeof organicBrandReferenceSchema>;
+export type OrganicMediaBrandGrounding = z.infer<typeof organicMediaBrandGroundingSchema>;
 export type OrganicMediaAudioConcept = z.infer<typeof organicMediaAudioConceptSchema>;
 export type OrganicMediaCheckpointContext = z.infer<typeof organicMediaCheckpointContextSchema>;
 export type OrganicMediaSuggestion = z.infer<typeof organicMediaSuggestionSchema>;

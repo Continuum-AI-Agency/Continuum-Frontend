@@ -7,7 +7,12 @@ export type WorkflowSnapshot = {
   edges: Edge[];
 };
 
-export type SerializeWorkflowSnapshotOptions = Record<string, never>;
+// 'persist' (default): strip base64 AND expiring signed URLs (re-signed on load
+// from the durable storage path/bucket). 'broadcast': strip base64 only and keep
+// signed URLs so workspace peers display media instantly without a re-sign call.
+export type SerializeMode = 'persist' | 'broadcast';
+
+export type SerializeWorkflowSnapshotOptions = { mode?: SerializeMode };
 
 const runtimeNodeKeys = [
   'isExecuting',
@@ -82,8 +87,9 @@ const expiringOutputKeys = [
 
 function stripRuntimeNodeData(
   data: StudioNodeData,
-  _options: SerializeWorkflowSnapshotOptions = {}
+  options: SerializeWorkflowSnapshotOptions = {}
 ): StudioNodeData {
+  const mode: SerializeMode = options.mode ?? 'persist';
   const next = { ...data } as Record<string, unknown>;
   const droppedPaths: string[] = [];
 
@@ -91,12 +97,15 @@ function stripRuntimeNodeData(
     delete next[key];
   });
 
-  // Strip generated output blobs and expiring signed URLs — durable storage paths
-  // (generatedImageStoragePath, generatedImageBucket, generatedVideoStoragePath,
-  // generatedVideoBucket) are intentionally kept for re-sign on load.
-  expiringOutputKeys.forEach((key) => {
-    delete next[key];
-  });
+  // Persist: strip generated output blobs and expiring signed URLs — durable
+  // storage paths (generated*StoragePath/Bucket) are kept for re-sign on load.
+  // Broadcast: keep the signed URLs so peers display media without re-signing
+  // (base64 is still dropped below by the generic encoded-payload strip).
+  if (mode === 'persist') {
+    expiringOutputKeys.forEach((key) => {
+      delete next[key];
+    });
+  }
 
   if (Array.isArray(next.inputs)) {
     next.inputs = next.inputs
@@ -164,7 +173,7 @@ function stripRuntimeNodeData(
   return next as StudioNodeData;
 }
 
-function sanitizeNode(node: StudioNode): StudioNode {
+function sanitizeNode(node: StudioNode, options: SerializeWorkflowSnapshotOptions = {}): StudioNode {
   const width = node.width ?? node.measured?.width;
   const height = node.height ?? node.measured?.height;
 
@@ -175,7 +184,7 @@ function sanitizeNode(node: StudioNode): StudioNode {
     style: node.style,
     width,
     height,
-    data: stripRuntimeNodeData(node.data),
+    data: stripRuntimeNodeData(node.data, options),
   };
 }
 
@@ -215,8 +224,9 @@ function sanitizeEdge(edge: Edge, defaultEdgeType: EdgeType): Edge {
 export function normalizeWorkflowSnapshot(
   snapshot: WorkflowSnapshot,
   defaultEdgeType: EdgeType,
+  options: SerializeWorkflowSnapshotOptions = {},
 ): WorkflowSnapshot {
-  const nodes = snapshot.nodes.map((node) => sanitizeNode(node));
+  const nodes = snapshot.nodes.map((node) => sanitizeNode(node, options));
   const nodeIds = new Set(nodes.map((node) => node.id));
 
   const edges = snapshot.edges
@@ -226,10 +236,22 @@ export function normalizeWorkflowSnapshot(
   return { nodes, edges };
 }
 
+// Persist variant (default): safe to store in canvas_sessions — base64 and
+// expiring signed URLs removed, durable paths kept (re-signed on load).
 export function serializeWorkflowSnapshot(
   nodes: StudioNode[],
   edges: Edge[],
   defaultEdgeType: EdgeType,
 ): WorkflowSnapshot {
-  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType);
+  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, { mode: 'persist' });
+}
+
+// Broadcast variant: base64 dropped (avoids WS 1009) but signed URLs kept so
+// other workspace members render media immediately.
+export function serializeForBroadcast(
+  nodes: StudioNode[],
+  edges: Edge[],
+  defaultEdgeType: EdgeType,
+): WorkflowSnapshot {
+  return normalizeWorkflowSnapshot({ nodes, edges }, defaultEdgeType, { mode: 'broadcast' });
 }

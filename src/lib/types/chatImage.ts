@@ -120,11 +120,11 @@ export type BackendChatImageRequestPayload = {
   resolution?: string;
   duration_seconds?: "4" | "6" | "8";
   image_size?: "512px" | "1K" | "2K" | "4K";
-  reference_images?: { data: string; mime_type: string; filename?: string; weight?: number; referenceType?: "asset" | "style" }[];
-  first_frame?: { data: string; mime_type: string; filename?: string };
-  last_frame?: { data: string; mime_type: string; filename?: string };
+  reference_images?: { data?: string; image_url?: string; mime_type: string; filename?: string; weight?: number; referenceType?: "asset" | "style" }[];
+  first_frame?: { data?: string; image_url?: string; mime_type: string; filename?: string };
+  last_frame?: { data?: string; image_url?: string; mime_type: string; filename?: string };
   reference_video?: { data: string; mime_type: string; filename?: string };
-  image_references?: { data: string; mime_type: string; filename?: string }[];
+  image_references?: { data?: string; image_url?: string; mime_type: string; filename?: string }[];
   negative_prompt?: string;
   seed?: number;
   cfg_scale?: number;

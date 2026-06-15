@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get("Authorization");
 
     const functionName =
-      platform === "google-ads" ? "fetch-google-ads-campaigns" : "fetch-meta-campaigns";
+      platform === "google-ads" ? "fetch-google-ads-campaigns" : "paid-media-reporting/campaigns";
 
     // Call the Supabase edge function
     const response = await fetch(

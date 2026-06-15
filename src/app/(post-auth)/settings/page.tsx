@@ -14,6 +14,8 @@ import { MyConnectionsSharingSection } from "@/components/integrations/MyConnect
 import { BrandBillingPanel } from "@/components/settings/brand/BrandBillingPanel";
 import { UserProfileSection } from "@/components/settings/account/UserProfileSection";
 import { UserConnectionsSwitcher } from "@/components/settings/account/UserConnectionsSwitcher";
+import { McpConnectionsSection } from "@/components/settings/account/McpConnectionsSection";
+import { McpActivityTable } from "@/components/settings/account/McpActivityTable";
 import { UserBrandsPanel } from "@/components/settings/account/UserBrandsPanel";
 import { fetchBrandIntegrationSummary } from "@/lib/integrations/brandProfile";
 import { fetchBrandProfileDetails } from "@/lib/brands/profile";
@@ -216,11 +218,28 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
       : createEmptyUserIntegrationSummary();
 
     activeSectionSlot = (
+      <>
+        <SettingsSection
+          title="Personal connections"
+          description="OAuth providers tied to your account. Assign these to brands from the brand integrations panel."
+        >
+            <UserConnectionsSwitcher integrations={userIntegrationSummary} />
+        </SettingsSection>
+        <SettingsSection
+          title="Connected apps"
+          description="MCP connectors (like Claude) you have authorized with your Continuum login. Revoke any you no longer use."
+        >
+          <McpConnectionsSection />
+        </SettingsSection>
+      </>
+    );
+  } else if (initialSection === "activity") {
+    activeSectionSlot = (
       <SettingsSection
-        title="Personal connections"
-        description="OAuth providers tied to your account. Assign these to brands from the brand integrations panel."
+        title="MCP activity"
+        description="Every tool call made through your connected MCP apps — which client, which tool, when, and whether it succeeded."
       >
-          <UserConnectionsSwitcher integrations={userIntegrationSummary} />
+        <McpActivityTable />
       </SettingsSection>
     );
   } else {

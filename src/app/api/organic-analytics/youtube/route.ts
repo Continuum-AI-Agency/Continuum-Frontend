@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { data, error } = await supabase.functions.invoke("fetch-organic-analytics", {
+    const { data, error } = await supabase.functions.invoke("organic-reporting/analytics", {
       body: {
         brandId: parsed.data.brandId,
         integrationAccountId: parsed.data.integrationAccountId,

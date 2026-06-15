@@ -212,7 +212,7 @@ export function CampaignAccordion({
         const supabase = createSupabaseBrowserClient();
 
         const { data, error: fetchError } = await supabase.functions.invoke(
-          `fetch-meta-adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}`,
+          `paid-media-reporting/adsets?brandId=${brandId}&adAccountId=${accountId}&campaignId=${campaignId}`,
           {
             method: "POST",
             body: {
@@ -340,7 +340,7 @@ export function CampaignAccordion({
         const supabase = createSupabaseBrowserClient();
 
         const { data, error: fetchError } = await supabase.functions.invoke(
-          `fetch-meta-ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRange.preset}`,
+          `paid-media-reporting/ads?brandId=${brandId}&adAccountId=${accountId}&adSetId=${adSetId}&datePreset=${timeRange.preset}`,
           {
             method: "POST",
             body: {

@@ -70,6 +70,7 @@ describe("calendar draft persistence utils", () => {
     })
 
     expect(payload.status).toBe("draft")
+    expect(payload.platform).toBe("instagram")
     expect(payload.platform_account_id).toBe("acct-123")
     expect(payload.scheduled_date).toBe("2026-04-21")
     expect(payload.slot_data.dayId).toBe("2026-04-21")

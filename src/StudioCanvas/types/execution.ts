@@ -12,7 +12,9 @@ export type NodeExecutionState = {
 
 export type NodeOutput =
   | { type: 'text'; value: string }
-  | { type: 'image'; base64: string; mimeType: string; url?: string; storagePath?: string; storageBucket?: string }
+  // base64 is optional: under URL-first generation an image output carries only a
+  // signed URL (+ storage path/bucket). base64 is the emergency fallback.
+  | { type: 'image'; base64?: string; mimeType: string; url?: string; storagePath?: string; storageBucket?: string }
   | { type: 'video'; url: string; posterBase64?: string; storagePath?: string; storageBucket?: string };
 
 export interface WorkflowExecutionContext {
@@ -38,17 +40,21 @@ export interface EnrichPromptPayload {
   prompt: string;
   brandId?: string;
   context: {
+    // A reference carries a signed `imageUrl` (preferred) OR inline base64 `data`
+    // (fallback). The backend resolves the URL to bytes for the model.
     images?: Array<{
-      type: 'base64';
-      data: string;
+      type: 'base64' | 'url';
+      data?: string;
+      imageUrl?: string;
       mimeType: string;
       sourcePath?: string;
       sourceUrl?: string;
     }>;
     audio?: { type: 'base64'; data: string; mimeType: string };
     video?: {
-      type: 'base64';
-      data: string;
+      type: 'base64' | 'url';
+      data?: string;
+      imageUrl?: string;
       mimeType: string;
       sourcePath?: string;
       sourceUrl?: string;
@@ -68,19 +74,22 @@ export interface GenerationPayload {
   imageSize?: '512px' | '1K' | '2K' | '4K';
   durationSeconds?: number;
   referenceImages?: Array<{
-    data: string;
+    data?: string;
+    imageUrl?: string;
     mimeType: string;
     filename?: string;
     weight?: number;
     referenceType?: 'asset' | 'style';
   }>;
   firstFrame?: {
-    data: string;
+    data?: string;
+    imageUrl?: string;
     mimeType: string;
     filename?: string;
   };
   lastFrame?: {
-    data: string;
+    data?: string;
+    imageUrl?: string;
     mimeType: string;
     filename?: string;
   };
@@ -90,7 +99,8 @@ export interface GenerationPayload {
     filename?: string;
   };
   imageReferences?: Array<{
-    data: string;
+    data?: string;
+    imageUrl?: string;
     mimeType: string;
     filename?: string;
   }>;

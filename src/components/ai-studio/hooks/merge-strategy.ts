@@ -20,6 +20,16 @@ const richInputDataKeys = [
   'fileName',
   'sourcePath',
   'sourceUrl',
+  // Durable media pointers + signed URLs. Remote (broadcast) keeps signed URLs so
+  // they propagate via the base spread; these fallbacks preserve a peer's local
+  // value only when a remote update omits the field (e.g. a base64-only node).
+  'bucket',
+  'generatedImageUrl',
+  'generatedImageStoragePath',
+  'generatedImageBucket',
+  'generatedVideoUrl',
+  'generatedVideoStoragePath',
+  'generatedVideoBucket',
 ] as const;
 
 const richTextDataKeys = ['positivePrompt', 'prompt', 'negativePrompt'] as const;
