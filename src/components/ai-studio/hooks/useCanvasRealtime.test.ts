@@ -6,6 +6,9 @@ let subscribeStatusSequence: string[] = ["SUBSCRIBED"];
 let maybeSingleResponses: any[] = [null];
 let maybeSingleCallCount = 0;
 let upsertSingleResponse: any = null;
+let lastUpsertPayload: any = null;
+
+const mockSignRequest = mock(async () => [] as any[]);
 
 const mockChannel = {
   on: mock(() => mockChannel),
@@ -32,7 +35,10 @@ const createMockQueryBuilder = () => {
       return Promise.resolve({ data: nextValue ?? null, error: null });
     }),
     single: mock(() => Promise.resolve({ data: upsertSingleResponse, error: null })),
-    upsert: mock(() => queryBuilder),
+    upsert: mock((payload: any) => {
+      lastUpsertPayload = Array.isArray(payload) ? payload[0] : payload;
+      return queryBuilder;
+    }),
   };
   return queryBuilder;
 };
@@ -40,8 +46,8 @@ const createMockQueryBuilder = () => {
 const mockSupabase: any = {
   channel: mock(() => mockChannel),
   removeChannel: mock(() => {}),
-  schema: mock((name: string) => mockSupabase),
-  from: mock((table: string) => createMockQueryBuilder()),
+  schema: mock(() => mockSupabase),
+  from: mock(() => createMockQueryBuilder()),
 };
 
 mock.module("@/lib/supabase/client", () => ({
@@ -52,6 +58,10 @@ mock.module("@/hooks/useSession", () => ({
   useSession: () => ({
     user: { id: "user-1", email: "test@example.com", user_metadata: { full_name: "Test User" } },
   }),
+}));
+
+mock.module("@/lib/api/http", () => ({
+  request: mockSignRequest,
 }));
 
 const mockSetNodes = mock(() => {});
@@ -65,6 +75,7 @@ const mockStore: any = {
   getDeletedNodeIds: () => [] as string[],
   getDeletedEdgeIds: () => [] as string[],
   clearDeletedIds: () => {},
+  triggerSave: mock(() => {}),
 };
 const useStudioStoreMock: any = () => mockStore;
 useStudioStoreMock.getState = () => mockStore;
@@ -79,6 +90,9 @@ describe("useCanvasRealtime", () => {
     maybeSingleResponses = [null];
     maybeSingleCallCount = 0;
     upsertSingleResponse = null;
+    lastUpsertPayload = null;
+    mockSignRequest.mockReset();
+    mockSignRequest.mockImplementation(async () => [] as any[]);
     mockStore.nodes = [];
     mockStore.edges = [];
     mockSetNodes.mockClear();
@@ -86,6 +100,7 @@ describe("useCanvasRealtime", () => {
     mockChannel.send.mockClear();
     mockSupabase.channel.mockClear();
     mockChannel.on.mockClear();
+    (mockStore.triggerSave as any).mockClear();
   });
 
   afterEach(() => {
@@ -541,5 +556,184 @@ describe("useCanvasRealtime", () => {
     expect(broadcastImageNode?.data?.sourceUrl).toBe("https://cdn.continuum.test/big.png");
 
     expect((mockStore.nodes[0] as any).data.image).toBe(base64Image);
+  });
+
+  it("drops the client's own postgres echo (self editor_session_id)", async () => {
+    mockStore.nodes = [
+      { id: "n1", type: "string", position: { x: 0, y: 0 }, data: { value: "local" } },
+    ] as any;
+    upsertSingleResponse = { updated_at: "2026-02-18T10:00:05.000Z", revision: 5, editor_session_id: "db-echo" };
+
+    const { result } = renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+    await act(async () => {
+      await result.current.saveCanvasToDatabase();
+    });
+
+    const ownSession = lastUpsertPayload?.editor_session_id;
+    expect(typeof ownSession).toBe("string");
+
+    const dbHandler = (mockChannel.on as any).mock.calls.find((c: any) => c[0] === "postgres_changes")[2];
+    mockSetNodes.mockClear();
+
+    await act(async () => {
+      dbHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          nodes: [{ id: "n1", type: "string", position: { x: 99, y: 99 }, data: { value: "echo" } }],
+          edges: [],
+          updated_at: "2026-02-18T10:30:00.000Z",
+          revision: null,
+          editor_session_id: ownSession,
+        },
+      });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(mockSetNodes).not.toHaveBeenCalled();
+  });
+
+  it("applies a peer's postgres update (different editor_session_id)", async () => {
+    mockStore.nodes = [
+      { id: "n1", type: "string", position: { x: 0, y: 0 }, data: { value: "local" } },
+    ] as any;
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const dbHandler = (mockChannel.on as any).mock.calls.find((c: any) => c[0] === "postgres_changes")[2];
+    mockSetNodes.mockClear();
+
+    await act(async () => {
+      dbHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          nodes: [{ id: "n1", type: "string", position: { x: 12, y: 12 }, data: { value: "peer-edit" } }],
+          edges: [],
+          updated_at: "2026-02-18T10:30:00.000Z",
+          revision: null,
+          editor_session_id: "peer-session-xyz",
+        },
+      });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(mockSetNodes).toHaveBeenCalled();
+  });
+
+  it("re-signs merged media missing its signed url, once per durable pointer", async () => {
+    mockSignRequest.mockImplementation(async () => [
+      { bucket: "canvas", path: "gen/img.png", signedUrl: "https://signed.test/img" },
+    ]);
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const dbHandler = (mockChannel.on as any).mock.calls.find((c: any) => c[0] === "postgres_changes")[2];
+    mockSetNodes.mockClear();
+    mockSignRequest.mockClear();
+
+    const strippedNode = {
+      id: "gen-img",
+      type: "nanoGen",
+      position: { x: 0, y: 0 },
+      data: { generatedImageStoragePath: "gen/img.png", generatedImageBucket: "canvas" },
+    };
+
+    await act(async () => {
+      dbHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          nodes: [strippedNode],
+          edges: [],
+          updated_at: "2026-02-18T11:00:00.000Z",
+          revision: null,
+          editor_session_id: "peer-1",
+        },
+      });
+      await new Promise((r) => setTimeout(r, 40));
+    });
+
+    const resignedPayload = (mockSetNodes as any).mock.calls.at(-1)?.[0];
+    const resignedNode = resignedPayload?.find((n: any) => n.id === "gen-img");
+    expect(resignedNode?.data?.generatedImageUrl).toBe("https://signed.test/img");
+    expect(mockSignRequest).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      dbHandler({
+        eventType: "UPDATE",
+        new: {
+          brand_profile_id: "brand-1",
+          room_id: "room-1",
+          nodes: [strippedNode],
+          edges: [],
+          updated_at: "2026-02-18T11:05:00.000Z",
+          revision: null,
+          editor_session_id: "peer-1",
+        },
+      });
+      await new Promise((r) => setTimeout(r, 40));
+    });
+
+    expect(mockSignRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not wipe a non-empty local canvas when no persisted row exists (solo)", async () => {
+    mockStore.nodes = [
+      { id: "solo-1", type: "string", position: { x: 0, y: 0 }, data: { value: "unsynced" } },
+    ] as any;
+    maybeSingleResponses = [null];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const emptyCall = (mockSetNodes as any).mock.calls.find(
+      (c: any) => Array.isArray(c[0]) && c[0].length === 0
+    );
+    expect(emptyCall).toBeUndefined();
+  });
+
+  it("preserves local work on a canvas_sessions DELETE instead of wiping", async () => {
+    mockStore.nodes = [
+      { id: "keep-1", type: "string", position: { x: 0, y: 0 }, data: { value: "survive" } },
+    ] as any;
+    maybeSingleResponses = [
+      { nodes: mockStore.nodes, edges: [], updated_at: "2026-02-18T10:00:00.000Z" },
+      null,
+    ];
+
+    renderHook(() => useCanvasRealtime("brand-1", "room-1"));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60));
+    });
+
+    const dbHandler = (mockChannel.on as any).mock.calls.find((c: any) => c[0] === "postgres_changes")[2];
+    mockSetNodes.mockClear();
+    (mockStore.triggerSave as any).mockClear();
+
+    await act(async () => {
+      dbHandler({ eventType: "DELETE", old: { brand_profile_id: "brand-1", room_id: "room-1" } });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    const emptyCall = (mockSetNodes as any).mock.calls.find(
+      (c: any) => Array.isArray(c[0]) && c[0].length === 0
+    );
+    expect(emptyCall).toBeUndefined();
+    expect(mockStore.triggerSave as any).toHaveBeenCalled();
   });
 });

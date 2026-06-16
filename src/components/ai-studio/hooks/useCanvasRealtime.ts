@@ -10,6 +10,7 @@ import { stringToColor } from "@/lib/utils/color";
 import { mergeNodes, mergeEdges } from "./merge-strategy";
 import { serializeForBroadcast, serializeWorkflowSnapshot } from "@/StudioCanvas/utils/workflowSerialization";
 import { resignCanvasNodes } from "@/StudioCanvas/utils/resignCanvasNodes";
+import { nodeNeedsResign, resignKey } from "@/StudioCanvas/utils/canvasMediaResign";
 
 type CanvasSession = {
   brand_profile_id: string;
@@ -86,6 +87,9 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const [dbStatus, setDbStatus] = useState<RealtimeStatus>("INITIALIZING");
   const [isSaving, setIsSaving] = useState(false);
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
+  // Collaborative === another participant is present on the room. Solo edits stay
+  // local-authoritative; this only drives status copy, not channel mounting.
+  const [isCollaborative, setIsCollaborative] = useState(false);
 
   const localSessionIdRef = useRef<string>(buildCanvasSessionId());
   const lastUpdateRef = useRef<string | null>(null);
@@ -101,6 +105,13 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
   const saveInFlightRef = useRef<boolean>(false);
   const pendingBroadcastPayloadRef = useRef<CanvasUpdatePayload | null>(null);
   const syncLatestCanvasSessionRef = useRef<(() => Promise<void>) | null>(null);
+  const refillMediaRef = useRef<((nodes: StudioNode[]) => Promise<void>) | null>(null);
+  // Durable pointers (bucket\npath) already re-signed this mount — guards against
+  // re-signing the same media on every catch-up.
+  const resignedPathsRef = useRef<Set<string>>(new Set());
+  // True only while another participant is present on the room; solo edits stay
+  // local-authoritative. Derived from presence, kept in a ref for stable callbacks.
+  const isCollaborativeRef = useRef<boolean>(false);
 
   const handleRemoteUpdate = useCallback(
     (payload: CanvasUpdatePayload, source: RemoteUpdateSource = "realtime") => {
@@ -108,6 +119,21 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       const localTimestamp = lastUpdateRef.current;
       const remoteRevision = toFiniteNumber(payload.revision);
       const localRevision = lastRevisionRef.current;
+
+      // Self-echo immunity: postgres_changes has no self-filter, so this client
+      // receives its OWN persist-stripped UPDATE. Applying it would merge a row
+      // with the media fields removed over the freshly generated local node. Drop
+      // any live event we authored. Catch-up is an explicit re-read we still want
+      // (its missing URLs are refilled by the re-sign pass below).
+      const incomingEditorSessionId = payload.editor_session_id ?? null;
+      if (
+        source !== "catchup" &&
+        incomingEditorSessionId !== null &&
+        incomingEditorSessionId === localSessionIdRef.current
+      ) {
+        return;
+      }
+
       const hasNodeArray = Array.isArray(payload.nodes);
       const hasEdgeArray = Array.isArray(payload.edges);
       if (!hasNodeArray || !hasEdgeArray) {
@@ -188,6 +214,10 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
       isRemoteChangeRef.current = true;
       store.setNodes(mergedNodes);
       store.setEdges(mergedEdges);
+      // A merged row may carry durable storage pointers but no signed URL (the
+      // persisted snapshot strips expiring URLs). Re-sign those so generated media
+      // never renders blank after a sync round-trip.
+      void refillMediaRef.current?.(mergedNodes);
       lastUpdateRef.current = remoteTimestamp;
       lastRevisionRef.current = remoteRevision;
 
@@ -237,6 +267,53 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     };
   }, [syncLatestCanvasSession]);
 
+  // Re-sign generated/reference media that arrived from a sync merge with its
+  // signed URL stripped. Batched (one POST) and de-duped per durable pointer so
+  // repeated catch-ups never trigger a re-sign storm.
+  const refillMissingMediaUrls = useCallback(async (mergedNodes: StudioNode[]) => {
+    const pending = mergedNodes.filter((node) => {
+      if (!nodeNeedsResign(node)) return false;
+      const key = resignKey(node);
+      return key ? !resignedPathsRef.current.has(key) : false;
+    });
+    if (pending.length === 0) return;
+
+    const resigned = await resignCanvasNodes(pending);
+    const resignedById = new Map(resigned.map((node) => [node.id, node]));
+
+    let changed = false;
+    const next = mergedNodes.map((node) => {
+      const updated = resignedById.get(node.id);
+      // resignCanvasNodes returns a new node object only when a URL was applied;
+      // an unchanged reference means the sign failed — leave it for a later retry.
+      if (!updated || updated.data === node.data) return node;
+      const key = resignKey(updated);
+      if (key) resignedPathsRef.current.add(key);
+      changed = true;
+      return updated;
+    });
+    if (!changed) return;
+
+    isRemoteChangeRef.current = true;
+    useStudioStore.getState().setNodes(next);
+    setTimeout(() => {
+      isRemoteChangeRef.current = false;
+    }, 100);
+  }, []);
+
+  useEffect(() => {
+    refillMediaRef.current = refillMissingMediaUrls;
+    return () => {
+      refillMediaRef.current = null;
+    };
+  }, [refillMissingMediaUrls]);
+
+  useEffect(() => {
+    const collaborative = onlineUsers.some((participant) => participant.user_id !== user?.id);
+    isCollaborativeRef.current = collaborative;
+    setIsCollaborative(collaborative);
+  }, [onlineUsers, user?.id]);
+
   useEffect(() => {
     if (!brandProfileId || !roomId) {
       pendingBroadcastPayloadRef.current = null;
@@ -265,6 +342,10 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         return;
       }
 
+      // Unsaved local work (drawn before a room existed, or before this load
+      // resolved) must never be clobbered by a hard load of an older/empty row.
+      const hadLocalContent = useStudioStore.getState().nodes.length > 0;
+
       if (data) {
         const session = data as unknown as CanvasSession;
         isRemoteChangeRef.current = true;
@@ -274,11 +355,20 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
         const resignedNodes = await resignCanvasNodes(rawNodes);
 
         const store = useStudioStore.getState();
-        store.setNodes(resignedNodes);
-        store.setEdges((session.edges || []) as Edge[]);
+        if (hadLocalContent) {
+          // Adopt-up: merge the persisted baseline into the live local canvas so
+          // freshly generated media survives the room being adopted.
+          store.setNodes(mergeNodes(store.nodes, resignedNodes, [], lastRemoteNodeIdsRef.current));
+          store.setEdges(
+            mergeEdges(store.edges, (session.edges || []) as Edge[], [], lastRemoteEdgeIdsRef.current)
+          );
+        } else {
+          store.setNodes(resignedNodes);
+          store.setEdges((session.edges || []) as Edge[]);
+        }
         lastUpdateRef.current = session.updated_at;
         lastRevisionRef.current = toFiniteNumber(session.revision);
-        
+
         lastRemoteNodeIdsRef.current = new Set((session.nodes || []).map((n: any) => n.id));
         lastRemoteEdgeIdsRef.current = new Set((session.edges || []).map((e: any) => e.id));
 
@@ -286,6 +376,14 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
           isRemoteChangeRef.current = false;
           setIsLoading(false);
         }, 100);
+      } else if (hadLocalContent) {
+        // No persisted row yet but the user has local work: adopt it as this
+        // room's first revision instead of wiping. The pending-save drain
+        // persists it once loading flips false.
+        hasLoadedInitialDataRef.current = true;
+        lastRevisionRef.current = null;
+        pendingSaveRef.current = true;
+        setIsLoading(false);
       } else {
         hasLoadedInitialDataRef.current = true;
         setIsLoading(false);
@@ -392,7 +490,18 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
               editor_session_id: payload.new.editor_session_id,
             });
           } else if (payload.eventType === "DELETE") {
-            window.location.reload();
+            const store = useStudioStore.getState();
+            if (store.nodes.length === 0 && store.edges.length === 0) {
+              lastRemoteNodeIdsRef.current = new Set();
+              lastRemoteEdgeIdsRef.current = new Set();
+              lastRevisionRef.current = null;
+            } else {
+              // Keep unsaved local work (which may include freshly generated
+              // media) and re-persist it instead of hard-reloading the page.
+              console.warn("[Canvas Sync] Ignoring canvas_sessions DELETE; preserving local work");
+              lastRevisionRef.current = null;
+              store.triggerSave?.();
+            }
           }
         }
       )
@@ -598,7 +707,8 @@ export function useCanvasRealtime(brandProfileId: string, roomId?: string) {
     onlineUsers, 
     status,
     dbStatus,
+    isCollaborative,
     isSaving,
-    saveCanvasToDatabase 
+    saveCanvasToDatabase
   };
 }

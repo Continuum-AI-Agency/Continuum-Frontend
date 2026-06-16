@@ -1563,7 +1563,7 @@ export function StudioCanvas({
               <div className="hidden h-4 w-px bg-border opacity-20 sm:block" />
               <div data-tour-id="studio-multiplayer" className="flex items-center gap-4">
                 <div className="flex h-10 items-center rounded-lg border border-primary/20 bg-primary/10 px-2 shadow-[0_0_15px_rgba(90,72,249,0.1)]">
-                  <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} />
+                  <CanvasSyncStatus status={realtime.status} dbStatus={realtime.dbStatus} isSaving={realtime.isSaving} isCollaborative={realtime.isCollaborative} />
                   <div className="mx-1 h-4 w-px bg-primary/20" />
                   <ActiveUsersStack onlineUsers={realtime.onlineUsers} status={realtime.status as never} />
                 </div>
